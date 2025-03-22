@@ -179,7 +179,7 @@ pub struct QueryLogElement {
     // Transaction
     pub txn_state: String,
     pub txn_id: String,
-    pub peek_memory_usage: HashMap<String, usize>,
+    pub peak_memory_usage: HashMap<String, usize>,
 }
 
 impl SystemLogElement for QueryLogElement {
@@ -575,7 +575,7 @@ impl SystemLogElement for QueryLogElement {
         columns.next().unwrap().push(
             Scalar::Variant(
                 jsonb::Value::from(jsonb::Object::from_iter(
-                    self.peek_memory_usage
+                    self.peak_memory_usage
                         .iter()
                         .map(|(k, v)| (k.clone(), jsonb::Value::from(*v))),
                 ))

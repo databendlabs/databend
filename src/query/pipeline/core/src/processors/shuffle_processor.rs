@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::cmp::Ordering;
 use std::sync::Arc;
 
+use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
@@ -25,6 +27,7 @@ use crate::processors::OutputPort;
 use crate::processors::Processor;
 use crate::processors::ProcessorPtr;
 
+#[derive(Eq, PartialEq)]
 pub enum MultiwayStrategy {
     Random,
     Custom,
@@ -32,13 +35,34 @@ pub enum MultiwayStrategy {
 
 pub trait Exchange: Send + Sync + 'static {
     const NAME: &'static str;
+    const MULTIWAY_SORT: bool = false;
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
-    const STRATEGY: MultiwayStrategy = MultiwayStrategy::Random;
 
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>>;
 
-    fn multiway_pick(&self, _partitions: &[Option<DataBlock>]) -> Result<usize> {
+    fn init_way(&self, _index: usize, _first_data: &DataBlock) -> Result<()> {
+        Ok(())
+    }
+
+    fn sorting_function(_: &DataBlock, _: &DataBlock) -> Ordering {
         unimplemented!()
+    }
+
+    fn multiway_pick(&self, data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
+        let position =
+            data_blocks
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, x)| x.as_ref().map(|d| (idx, d)))
+                .min_by(|(left_idx, left_block), (right_idx, right_block)| {
+                    match Self::sorting_function(left_block, right_block) {
+                        Ordering::Less => Ordering::Less,
+                        Ordering::Greater => Ordering::Greater,
+                        Ordering::Equal => left_idx.cmp(right_idx),
+                    }
+                });
+
+        position.map(|(idx, _)| idx)
     }
 }
 
@@ -166,6 +190,10 @@ pub struct PartitionProcessor<T: Exchange> {
     exchange: Arc<T>,
     input_data: Option<DataBlock>,
     partitioned_data: Vec<Option<DataBlock>>,
+
+    index: usize,
+    initialized: bool,
+    barrier: Arc<Barrier>,
 }
 
 impl<T: Exchange> PartitionProcessor<T> {
@@ -173,6 +201,8 @@ impl<T: Exchange> PartitionProcessor<T> {
         input: Arc<InputPort>,
         outputs: Vec<Arc<OutputPort>>,
         exchange: Arc<T>,
+        index: usize,
+        barrier: Arc<Barrier>,
     ) -> ProcessorPtr {
         let partitioned_data = vec![None; outputs.len()];
         ProcessorPtr::create(Box::new(PartitionProcessor {
@@ -181,10 +211,14 @@ impl<T: Exchange> PartitionProcessor<T> {
             exchange,
             partitioned_data,
             input_data: None,
+            initialized: false,
+            index,
+            barrier,
         }))
     }
 }
 
+#[async_trait::async_trait]
 impl<T: Exchange> Processor for PartitionProcessor<T> {
     fn name(&self) -> String {
         format!("ShufflePartition({})", T::NAME)
@@ -221,7 +255,11 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
 
         if all_output_finished {
             self.input.finish();
-            return Ok(Event::Finished);
+
+            return match self.initialized {
+                true => Ok(Event::Finished),
+                false => Ok(Event::Async),
+            };
         }
 
         if !all_data_pushed_output {
@@ -229,9 +267,20 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
             return Ok(Event::NeedConsume);
         }
 
+        if self.input_data.is_some() {
+            return match self.initialized {
+                true => Ok(Event::Sync),
+                false => Ok(Event::Async),
+            };
+        }
+
         if self.input.has_data() {
             self.input_data = Some(self.input.pull_data().unwrap()?);
-            return Ok(Event::Sync);
+
+            return match self.initialized {
+                true => Ok(Event::Sync),
+                false => Ok(Event::Async),
+            };
         }
 
         if self.input.is_finished() {
@@ -239,7 +288,10 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
                 output.finish();
             }
 
-            return Ok(Event::Finished);
+            return match self.initialized {
+                true => Ok(Event::Finished),
+                false => Ok(Event::Async),
+            };
         }
 
         self.input.set_need_data();
@@ -254,25 +306,35 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
 
             let partitioned = self.exchange.partition(block, self.outputs.len())?;
 
-            for (index, block) in partitioned.into_iter().enumerate() {
-                if block.is_empty() && block.get_meta().is_none() {
-                    continue;
-                }
+            if partitioned.is_empty() {
+                return Ok(());
+            }
 
+            assert_eq!(partitioned.len(), self.outputs.len());
+            for (index, block) in partitioned.into_iter().enumerate() {
                 self.partitioned_data[index] = Some(block);
             }
         }
 
         Ok(())
     }
+
+    async fn async_process(&mut self) -> Result<()> {
+        self.initialized = true;
+        if let Some(data_block) = self.input_data.as_ref() {
+            self.exchange.init_way(self.index, data_block)?;
+        }
+
+        self.barrier.wait().await;
+        Ok(())
+    }
 }
 
 pub struct MergePartitionProcessor<T: Exchange> {
-    exchange: Arc<T>,
-
     output: Arc<OutputPort>,
     inputs: Vec<Arc<InputPort>>,
     inputs_data: Vec<Option<DataBlock>>,
+    exchange: Arc<T>,
 }
 
 impl<T: Exchange> MergePartitionProcessor<T> {
@@ -282,11 +344,11 @@ impl<T: Exchange> MergePartitionProcessor<T> {
         exchange: Arc<T>,
     ) -> ProcessorPtr {
         let inputs_data = vec![None; inputs.len()];
-        ProcessorPtr::create(Box::new(MergePartitionProcessor {
+        ProcessorPtr::create(Box::new(MergePartitionProcessor::<T> {
             output,
             inputs,
-            exchange,
             inputs_data,
+            exchange,
         }))
     }
 }
@@ -314,7 +376,7 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
         }
 
         let mut all_inputs_finished = true;
-        let mut need_pick_block_to_push = matches!(T::STRATEGY, MultiwayStrategy::Custom);
+        let mut need_pick_block_to_push = T::MULTIWAY_SORT;
 
         for (index, input) in self.inputs.iter().enumerate() {
             if input.is_finished() {
@@ -324,13 +386,13 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
             all_inputs_finished = false;
 
             if input.has_data() {
-                match T::STRATEGY {
-                    MultiwayStrategy::Random => {
+                match T::MULTIWAY_SORT {
+                    false => {
                         if self.output.can_push() {
                             self.output.push_data(Ok(input.pull_data().unwrap()?));
                         }
                     }
-                    MultiwayStrategy::Custom => {
+                    true => {
                         if self.inputs_data[index].is_none() {
                             self.inputs_data[index] = Some(input.pull_data().unwrap()?);
                         }
@@ -345,18 +407,18 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
             input.set_need_data();
         }
 
+        if need_pick_block_to_push {
+            if let Some(pick_index) = self.exchange.multiway_pick(&mut self.inputs_data) {
+                if let Some(block) = self.inputs_data[pick_index].take() {
+                    self.output.push_data(Ok(block));
+                    return Ok(Event::NeedConsume);
+                }
+            }
+        }
+
         if all_inputs_finished {
             self.output.finish();
             return Ok(Event::Finished);
-        }
-
-        if need_pick_block_to_push {
-            let pick_index = self.exchange.multiway_pick(&self.inputs_data)?;
-
-            if let Some(block) = self.inputs_data[pick_index].take() {
-                self.output.push_data(Ok(block));
-                return Ok(Event::NeedConsume);
-            }
         }
 
         Ok(Event::NeedData)

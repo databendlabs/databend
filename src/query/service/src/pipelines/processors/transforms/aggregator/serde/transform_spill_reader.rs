@@ -15,30 +15,25 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_exception::ErrorCode;
+use byteorder::BigEndian;
+use byteorder::ReadBytesExt;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use itertools::Itertools;
-use log::info;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
+use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 
 type DeserializingMeta = (AggregateMeta, VecDeque<Vec<u8>>);
 
@@ -48,7 +43,8 @@ pub struct TransformSpillReader {
 
     operator: Operator,
     semaphore: Arc<Semaphore>,
-    deserialized_meta: Option<BlockMetaInfoPtr>,
+    params: Arc<AggregatorParams>,
+    output_data: Option<DataBlock>,
     reading_meta: Option<AggregateMeta>,
     deserializing_meta: Option<DeserializingMeta>,
 }
@@ -74,9 +70,8 @@ impl Processor for TransformSpillReader {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(deserialized_meta) = self.deserialized_meta.take() {
-            self.output
-                .push_data(Ok(DataBlock::empty_with_meta(deserialized_meta)));
+        if let Some(output_data) = self.output_data.take() {
+            self.output.push_data(Ok(output_data));
             return Ok(Event::NeedConsume);
         }
 
@@ -97,23 +92,11 @@ impl Processor for TransformSpillReader {
                 .get_meta()
                 .and_then(AggregateMeta::downcast_ref_from)
             {
-                if matches!(block_meta, AggregateMeta::BucketSpilled(_)) {
+                if matches!(block_meta, AggregateMeta::SpilledPayload(_)) {
                     self.input.set_not_need_data();
                     let block_meta = data_block.take_meta().unwrap();
                     self.reading_meta = AggregateMeta::downcast_from(block_meta);
                     return Ok(Event::Async);
-                }
-
-                if let AggregateMeta::Partitioned { data, .. } = block_meta {
-                    if data
-                        .iter()
-                        .any(|meta| matches!(meta, AggregateMeta::BucketSpilled(_)))
-                    {
-                        self.input.set_not_need_data();
-                        let block_meta = data_block.take_meta().unwrap();
-                        self.reading_meta = AggregateMeta::downcast_from(block_meta);
-                        return Ok(Event::Async);
-                    }
                 }
             }
 
@@ -133,35 +116,14 @@ impl Processor for TransformSpillReader {
     fn process(&mut self) -> Result<()> {
         if let Some((meta, mut read_data)) = self.deserializing_meta.take() {
             match meta {
-                AggregateMeta::Spilled(_) => unreachable!(),
-                AggregateMeta::AggregatePayload(_) => unreachable!(),
-                AggregateMeta::AggregateSpilling(_) => unreachable!(),
-                AggregateMeta::Serialized(_) => unreachable!(),
-                AggregateMeta::BucketSpilled(payload) => {
+                AggregateMeta::SpilledPayload(payload) => {
                     debug_assert!(read_data.len() == 1);
                     let data = read_data.pop_front().unwrap();
-
-                    self.deserialized_meta = Some(Box::new(Self::deserialize(payload, data)));
+                    self.output_data = Some(DataBlock::empty_with_meta(Box::new(
+                        self.deserialize(payload, data),
+                    )));
                 }
-                AggregateMeta::Partitioned { bucket, data } => {
-                    let mut new_data = Vec::with_capacity(data.len());
-
-                    for meta in data {
-                        if matches!(&meta, AggregateMeta::BucketSpilled(_)) {
-                            if let AggregateMeta::BucketSpilled(payload) = meta {
-                                let data = read_data.pop_front().unwrap();
-                                new_data.push(Self::deserialize(payload, data));
-                            }
-
-                            continue;
-                        }
-
-                        new_data.push(meta);
-                    }
-
-                    self.deserialized_meta =
-                        Some(AggregateMeta::create_partitioned(bucket, new_data));
-                }
+                _ => unreachable!(),
             }
         }
 
@@ -172,13 +134,8 @@ impl Processor for TransformSpillReader {
     async fn async_process(&mut self) -> Result<()> {
         if let Some(block_meta) = self.reading_meta.take() {
             match &block_meta {
-                AggregateMeta::Spilled(_) => unreachable!(),
-                AggregateMeta::AggregatePayload(_) => unreachable!(),
-                AggregateMeta::AggregateSpilling(_) => unreachable!(),
-                AggregateMeta::Serialized(_) => unreachable!(),
-                AggregateMeta::BucketSpilled(payload) => {
+                AggregateMeta::SpilledPayload(payload) => {
                     let _guard = self.semaphore.acquire().await;
-                    let instant = Instant::now();
                     let data = self
                         .operator
                         .read_with(&payload.location)
@@ -186,89 +143,15 @@ impl Processor for TransformSpillReader {
                         .await?
                         .to_vec();
 
-                    info!(
-                        "Read aggregate spill {} successfully, elapsed: {:?}",
-                        &payload.location,
-                        instant.elapsed()
-                    );
+                    // info!(
+                    //     "Read aggregate spill {} successfully, elapsed: {:?}",
+                    //     &payload.location,
+                    //     instant.elapsed()
+                    // );
 
                     self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
                 }
-                AggregateMeta::Partitioned { data, .. } => {
-                    // For log progress.
-                    let mut total_elapsed = Duration::default();
-                    let log_interval = 100;
-                    let mut processed_count = 0;
-
-                    let mut read_data = Vec::with_capacity(data.len());
-                    for meta in data {
-                        if let AggregateMeta::BucketSpilled(payload) = meta {
-                            let location = payload.location.clone();
-                            let operator = self.operator.clone();
-                            let data_range = payload.data_range.clone();
-                            let semaphore = self.semaphore.clone();
-                            read_data.push(databend_common_base::runtime::spawn(async move {
-                                let _guard = semaphore.acquire().await;
-                                let instant = Instant::now();
-                                let data = operator
-                                    .read_with(&location)
-                                    .range(data_range)
-                                    .await?
-                                    .to_vec();
-
-                                // perf
-                                {
-                                    Profile::record_usize_profile(
-                                        ProfileStatisticsName::RemoteSpillReadCount,
-                                        1,
-                                    );
-                                    Profile::record_usize_profile(
-                                        ProfileStatisticsName::RemoteSpillReadBytes,
-                                        data.len(),
-                                    );
-                                    Profile::record_usize_profile(
-                                        ProfileStatisticsName::RemoteSpillReadTime,
-                                        instant.elapsed().as_millis() as usize,
-                                    );
-                                }
-
-                                total_elapsed += instant.elapsed();
-                                processed_count += 1;
-
-                                // log the progress
-                                if processed_count % log_interval == 0 {
-                                    info!(
-                                        "Read aggregate {}/{} spilled buckets, elapsed: {:?}",
-                                        processed_count,
-                                        data.len(),
-                                        total_elapsed
-                                    );
-                                }
-
-                                Ok(data)
-                            }));
-                        }
-                    }
-
-                    match futures::future::try_join_all(read_data).await {
-                        Err(_) => {
-                            return Err(ErrorCode::TokioError("Cannot join tokio job"));
-                        }
-                        Ok(read_data) => {
-                            let read_data: std::result::Result<VecDeque<Vec<u8>>, opendal::Error> =
-                                read_data.into_iter().try_collect();
-
-                            self.deserializing_meta = Some((block_meta, read_data?));
-                        }
-                    };
-
-                    if processed_count != 0 {
-                        info!(
-                            "Read {} aggregate spills successfully, total elapsed: {:?}",
-                            processed_count, total_elapsed
-                        );
-                    }
-                }
+                _ => unreachable!(),
             }
         }
 
@@ -282,31 +165,47 @@ impl TransformSpillReader {
         output: Arc<OutputPort>,
         operator: Operator,
         semaphore: Arc<Semaphore>,
+        params: Arc<AggregatorParams>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(TransformSpillReader {
             input,
             output,
             operator,
             semaphore,
-            deserialized_meta: None,
+            params,
+            output_data: None,
             reading_meta: None,
             deserializing_meta: None,
         })))
     }
 
-    fn deserialize(payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta {
-        let mut begin = 0;
-        let mut columns = Vec::with_capacity(payload.columns_layout.len());
+    fn deserialize(&self, payload: SpilledPayload, data: Vec<u8>) -> AggregateMeta {
+        let columns = self.params.group_data_types.len() + self.params.aggregate_functions.len();
 
-        for column_layout in payload.columns_layout {
-            columns.push(deserialize_column(&data[begin..begin + column_layout as usize]).unwrap());
-            begin += column_layout as usize;
+        let mut blocks = vec![];
+        let mut cursor = data.as_slice();
+
+        while !cursor.is_empty() {
+            let mut block_columns = Vec::with_capacity(columns);
+
+            for _idx in 0..columns {
+                let column_size = cursor.read_u64::<BigEndian>().unwrap();
+                let (left, right) = cursor.split_at(column_size as usize);
+                block_columns.push(deserialize_column(left).unwrap());
+                cursor = right;
+            }
+
+            let block1 = DataBlock::new_from_columns(block_columns);
+            blocks.push(block1);
         }
 
+        let block = DataBlock::concat(&blocks).unwrap();
+
         AggregateMeta::Serialized(SerializedPayload {
-            bucket: payload.bucket,
-            data_block: DataBlock::new_from_columns(columns),
-            max_partition_count: payload.max_partition_count,
+            bucket: payload.partition,
+            data_block: block,
+            max_partition: payload.max_partition,
+            global_max_partition: payload.global_max_partition,
         })
     }
 }

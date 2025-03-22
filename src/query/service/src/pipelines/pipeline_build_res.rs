@@ -24,8 +24,6 @@ use databend_common_pipeline_sources::OneBlockSource;
 
 use crate::interpreters::CreateTableInterpreter;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
-use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
-use crate::servers::flight::v1::exchange::ExchangeInjector;
 
 #[derive(Clone)]
 pub struct PipelineBuilderData {
@@ -38,7 +36,8 @@ pub struct PipelineBuildResult {
     // Containing some sub queries pipelines, must be complete pipeline
     pub sources_pipelines: Vec<Pipeline>,
 
-    pub exchange_injector: Arc<dyn ExchangeInjector>,
+    pub enable_multiway_sort: bool,
+    // pub exchange_injector: Arc<dyn ExchangeInjector>,
     /// for local fragment data sharing
     pub builder_data: PipelineBuilderData,
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
@@ -49,7 +48,7 @@ impl PipelineBuildResult {
         PipelineBuildResult {
             main_pipeline: Pipeline::create(),
             sources_pipelines: vec![],
-            exchange_injector: DefaultExchangeInjector::create(),
+            enable_multiway_sort: false,
             builder_data: PipelineBuilderData {
                 input_join_state: None,
                 input_probe_schema: None,
@@ -72,7 +71,7 @@ impl PipelineBuildResult {
         Ok(PipelineBuildResult {
             main_pipeline,
             sources_pipelines: vec![],
-            exchange_injector: DefaultExchangeInjector::create(),
+            enable_multiway_sort: false,
             builder_data: PipelineBuilderData {
                 input_join_state: None,
                 input_probe_schema: None,

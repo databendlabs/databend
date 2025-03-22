@@ -33,8 +33,6 @@ use crate::interpreters::CreateTableInterpreter;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
-use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
-use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 
 pub struct PipelineBuilder {
@@ -49,7 +47,7 @@ pub struct PipelineBuilder {
     pub merge_into_probe_data_fields: Option<Vec<DataField>>,
     pub join_state: Option<Arc<HashJoinBuildState>>,
 
-    pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
+    pub(crate) enable_multiway_sort: bool,
 
     pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
 
@@ -72,13 +70,13 @@ impl PipelineBuilder {
             settings,
             pipelines: vec![],
             main_pipeline: Pipeline::with_scopes(scopes),
-            exchange_injector: DefaultExchangeInjector::create(),
             merge_into_probe_data_fields: None,
             join_state: None,
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
             is_exchange_neighbor: false,
             contain_sink_processor: false,
+            enable_multiway_sort: false,
         }
     }
 
@@ -105,12 +103,12 @@ impl PipelineBuilder {
         Ok(PipelineBuildResult {
             main_pipeline: self.main_pipeline,
             sources_pipelines: self.pipelines,
-            exchange_injector: self.exchange_injector,
             builder_data: PipelineBuilderData {
                 input_join_state: self.join_state,
                 input_probe_schema: self.merge_into_probe_data_fields,
             },
             r_cte_scan_interpreters: self.r_cte_scan_interpreters,
+            enable_multiway_sort: self.enable_multiway_sort,
         })
     }
 
