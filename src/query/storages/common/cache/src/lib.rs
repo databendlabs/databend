@@ -31,6 +31,8 @@ pub use caches::CachedObject;
 pub use caches::SegmentBlockMetasCache;
 pub use caches::SizedColumnArray;
 pub use manager::CacheManager;
+// Unfortunately, criterion benchmarks need it to be pub
+pub use providers::disk_cache::disk_cache_lru::read_cache_content;
 pub use providers::DiskCacheError;
 pub use providers::DiskCacheKey;
 pub use providers::DiskCacheResult;

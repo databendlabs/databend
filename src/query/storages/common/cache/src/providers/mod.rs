@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod disk_cache;
+pub mod disk_cache;
 mod memory_cache;
 mod table_data_cache;
 

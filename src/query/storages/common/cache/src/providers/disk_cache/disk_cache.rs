@@ -321,12 +321,12 @@ impl DiskCache {
         self.cache.contains(&cache_key.0)
     }
 
-    pub fn get_cache_path(&mut self, key: &str) -> Option<PathBuf> {
+    pub fn get_cache_item_path_and_size(&mut self, key: &str) -> Option<(PathBuf, u64)> {
         let cache_key = self.cache_key(key);
         self.cache
             .get(&cache_key.0)
-            .map(|_| ()) // release the &mut self
-            .map(|_| self.abs_path_of_cache_key(&cache_key))
+            .map(|item| item.get_inner().0)
+            .map(|size| (self.abs_path_of_cache_key(&cache_key), size))
     }
 
     /// Remove the given key from the cache.
