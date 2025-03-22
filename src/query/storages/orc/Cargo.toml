@@ -9,10 +9,6 @@ edition = { workspace = true }
 [package.metadata.cargo-machete]
 ignored = ["serde"]
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
