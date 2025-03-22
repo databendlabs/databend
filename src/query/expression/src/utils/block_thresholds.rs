@@ -142,7 +142,7 @@ impl BlockThresholds {
         }
 
         let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
-        let block_num_by_compressed = total_compressed / self.max_bytes_per_file;
+        let block_num_by_compressed = total_compressed.div_ceil(self.max_bytes_per_file);
         // If row-based block count exceeds compressed-based block count, use max rows per block.
         if block_num_by_rows >= block_num_by_compressed {
             return self.max_rows_per_block;
@@ -152,7 +152,7 @@ impl BlockThresholds {
         // Adjust the number of blocks based on block size thresholds.
         let block_nums = if bytes_per_block > 4 * self.max_bytes_per_block {
             // Case 1: If the block size exceeds 400MB
-            total_bytes / (4 * self.max_bytes_per_block)
+            total_bytes.div_ceil(4 * self.max_bytes_per_block)
         } else if bytes_per_block < self.max_bytes_per_block / 2 {
             // Case 2: If the block size is smaller than 50MB
             total_bytes * 2 / self.max_bytes_per_block
