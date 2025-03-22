@@ -65,6 +65,9 @@ otlp_protocol = "http"
 pkey1 = "pvalue1"
 pkey2 = "pvalue2"
 
+[log.persistentlog]
+on = true
+
 [meta]
 endpoints = ["0.0.0.0:9191"]
 username = "root"

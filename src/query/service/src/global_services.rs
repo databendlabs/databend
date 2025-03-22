@@ -45,6 +45,7 @@ use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
+use crate::persistent_log::GlobalPersistentLog;
 #[cfg(feature = "enable_queries_executor")]
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -168,6 +169,9 @@ impl GlobalServices {
             DummyResourcesManagement::init()?;
         }
 
+        if config.log.persistentlog.on {
+            GlobalPersistentLog::init(config).await?;
+        }
         Ok(())
     }
 }

@@ -31,6 +31,7 @@ pub struct Config {
     pub profile: ProfileLogConfig,
     pub structlog: StructLogConfig,
     pub tracing: TracingConfig,
+    pub persistentlog: PersistentLogConfig,
 }
 
 impl Config {
@@ -337,6 +338,39 @@ impl Default for OTLPEndpointConfig {
             endpoint: "http://127.0.0.1:4317".to_string(),
             protocol: OTLPProtocol::Grpc,
             labels: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PersistentLogConfig {
+    pub on: bool,
+    pub interval: usize,
+    pub stage_name: String,
+    pub level: String,
+    pub retention: usize,
+    pub retention_frequency: usize,
+}
+
+impl Display for PersistentLogConfig {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "enabled={}, interval={}, stage_name={}, level={}, retention={}, retention_frequency={}",
+            self.on, self.interval, self.stage_name, self.level, self.retention, self.retention_frequency
+        )
+    }
+}
+
+impl Default for PersistentLogConfig {
+    fn default() -> Self {
+        Self {
+            on: false,
+            interval: 8,
+            stage_name: "log_1f93b76af0bd4b1d8e018667865fbc65".to_string(),
+            retention: 24,
+            level: "WARN".to_string(),
+            retention_frequency: 40,
         }
     }
 }

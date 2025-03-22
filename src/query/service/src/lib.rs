@@ -51,6 +51,7 @@ pub mod databases;
 pub mod interpreters;
 pub mod local;
 pub mod locks;
+pub mod persistent_log;
 pub mod pipelines;
 pub mod schedulers;
 pub mod servers;
