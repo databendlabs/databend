@@ -139,7 +139,7 @@ pub struct FuseTable {
     pub(crate) bloom_index_cols: BloomIndexColumns,
 
     pub(crate) operator: Operator,
-    pub(crate) data_metrics: Arc<StorageMetrics>,
+    pub data_metrics: Arc<StorageMetrics>,
 
     table_type: FuseTableType,
 
@@ -759,7 +759,8 @@ impl Table for FuseTable {
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
     ) -> Result<Option<Pipeline>> {
-        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline)
+        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, false)
+            .map(|(pipeline, _)| pipeline)
     }
 
     fn commit_insertion(
