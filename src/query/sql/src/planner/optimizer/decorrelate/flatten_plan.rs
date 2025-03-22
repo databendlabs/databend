@@ -53,84 +53,84 @@ impl SubqueryRewriter {
     #[recursive::recursive]
     pub fn flatten_plan(
         &mut self,
-        left: &SExpr,
-        plan: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
         need_cross_join: bool,
     ) -> Result<SExpr> {
-        let prop = plan.derive_relational_prop()?;
+        let prop = subquery.derive_relational_prop()?;
         if prop.outer_columns.is_empty() {
             if !need_cross_join {
-                return Ok(plan.clone());
+                return Ok(subquery.clone());
             }
-            return self.flatten_left(left, plan, correlated_columns);
+            return self.flatten_outer(outer, subquery, correlated_columns);
         }
 
-        match plan.plan() {
-            RelOperator::EvalScalar(eval_scalar) => self.flatten_right_eval_scalar(
-                left,
-                plan,
+        match subquery.plan() {
+            RelOperator::EvalScalar(eval_scalar) => self.flatten_sub_eval_scalar(
+                outer,
+                subquery,
                 eval_scalar,
                 correlated_columns,
                 flatten_info,
                 need_cross_join,
             ),
-            RelOperator::ProjectSet(project_set) => self.flatten_right_project_set(
-                left,
-                plan,
+            RelOperator::ProjectSet(project_set) => self.flatten_sub_project_set(
+                outer,
+                subquery,
                 project_set,
                 correlated_columns,
                 flatten_info,
                 need_cross_join,
             ),
-            RelOperator::Filter(filter) => self.flatten_right_filter(
-                left,
+            RelOperator::Filter(filter) => self.flatten_sub_filter(
+                outer,
+                subquery,
                 filter,
-                plan,
                 correlated_columns,
                 flatten_info,
                 need_cross_join,
             ),
             RelOperator::Join(join) => {
-                self.flatten_right_join(left, join, plan, correlated_columns, flatten_info)
+                self.flatten_sub_join(outer, subquery, join, correlated_columns, flatten_info)
             }
-            RelOperator::Aggregate(aggregate) => self.flatten_right_aggregate(
-                left,
+            RelOperator::Aggregate(aggregate) => self.flatten_sub_aggregate(
+                outer,
+                subquery,
                 aggregate,
-                plan,
                 correlated_columns,
                 flatten_info,
                 need_cross_join,
             ),
-            RelOperator::Sort(sort) => self.flatten_right_sort(
-                left,
-                plan,
+            RelOperator::Sort(sort) => self.flatten_sub_sort(
+                outer,
+                subquery,
                 sort,
                 correlated_columns,
                 flatten_info,
                 need_cross_join,
             ),
-            RelOperator::Limit(_) => self.flatten_right_limit(
-                left,
-                plan,
+            RelOperator::Limit(_) => self.flatten_sub_limit(
+                outer,
+                subquery,
                 correlated_columns,
                 flatten_info,
                 need_cross_join,
             ),
-            RelOperator::UnionAll(op) => self.flatten_right_union_all(
-                left,
+            RelOperator::UnionAll(op) => self.flatten_sub_union_all(
+                outer,
+                subquery,
                 op,
-                plan,
                 correlated_columns,
                 flatten_info,
                 need_cross_join,
             ),
             RelOperator::Window(op) => {
-                self.flatten_right_window(left, plan, op, correlated_columns, flatten_info)
+                self.flatten_sub_window(outer, subquery, op, correlated_columns, flatten_info)
             }
             RelOperator::ExpressionScan(scan) => {
-                self.flatten_right_expression_scan(plan, scan, correlated_columns)
+                self.flatten_sub_expression_scan(subquery, scan, correlated_columns)
             }
             _ => Err(ErrorCode::SemanticError(
                 "Invalid plan type for flattening subquery",
@@ -138,10 +138,10 @@ impl SubqueryRewriter {
         }
     }
 
-    fn flatten_right_eval_scalar(
+    fn flatten_sub_eval_scalar(
         &mut self,
-        left: &SExpr,
-        plan: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         eval_scalar: &EvalScalar,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
@@ -151,8 +151,8 @@ impl SubqueryRewriter {
             need_cross_join = true;
         }
         let flatten_plan = self.flatten_plan(
-            left,
-            plan.child(0)?,
+            outer,
+            subquery.unary_child(),
             correlated_columns,
             flatten_info,
             need_cross_join,
@@ -173,7 +173,7 @@ impl SubqueryRewriter {
                 }),
                 Item::Index(old) => Ok(Self::scalar_item_from_index(
                     self.get_derived(old)?,
-                    "correlated.",
+                    "outer.",
                     &metadata,
                 )),
             })
@@ -185,10 +185,10 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_right_project_set(
+    fn flatten_sub_project_set(
         &mut self,
-        left: &SExpr,
-        plan: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         project_set: &ProjectSet,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
@@ -207,8 +207,8 @@ impl SubqueryRewriter {
             need_cross_join = true;
         }
         let flatten_plan = self.flatten_plan(
-            left,
-            plan.child(0)?,
+            outer,
+            subquery.unary_child(),
             correlated_columns,
             flatten_info,
             need_cross_join,
@@ -225,7 +225,7 @@ impl SubqueryRewriter {
         let scalar_items = self
             .derived_columns
             .values()
-            .map(|index| Self::scalar_item_from_index(*index, "correlated.", &metadata))
+            .map(|index| Self::scalar_item_from_index(*index, "outer.", &metadata))
             .collect();
         Ok(SExpr::create_unary(
             Arc::new(ProjectSet { srfs }.into()),
@@ -241,11 +241,11 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_right_filter(
+    fn flatten_sub_filter(
         &mut self,
-        left: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         filter: &Filter,
-        plan: &SExpr,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
         mut need_cross_join: bool,
@@ -258,8 +258,8 @@ impl SubqueryRewriter {
             }
         }
         let flatten_plan = self.flatten_plan(
-            left,
-            plan.child(0)?,
+            outer,
+            subquery.unary_child(),
             correlated_columns,
             flatten_info,
             need_cross_join,
@@ -275,11 +275,11 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_right_join(
+    fn flatten_sub_join(
         &mut self,
-        left: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         join: &Join,
-        plan: &SExpr,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
     ) -> Result<SExpr> {
@@ -332,7 +332,7 @@ impl SubqueryRewriter {
         let mut right_need_cross_join =
             needs_cross_join(&join.equi_conditions, correlated_columns, false);
 
-        let join_rel_expr = RelExpr::with_s_expr(plan);
+        let join_rel_expr = RelExpr::with_s_expr(subquery);
         let left_prop = join_rel_expr.derive_relational_prop_child(0)?;
         let right_prop = join_rel_expr.derive_relational_prop_child(1)?;
 
@@ -349,15 +349,15 @@ impl SubqueryRewriter {
         }
 
         let left_flatten_plan = self.flatten_plan(
-            left,
-            plan.child(0)?,
+            outer,
+            subquery.left_child(),
             correlated_columns,
             flatten_info,
             left_need_cross_join,
         )?;
         let right_flatten_plan = self.flatten_plan(
-            left,
-            plan.child(1)?,
+            outer,
+            subquery.right_child(),
             correlated_columns,
             flatten_info,
             right_need_cross_join,
@@ -416,11 +416,11 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_right_aggregate(
+    fn flatten_sub_aggregate(
         &mut self,
-        left: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         aggregate: &Aggregate,
-        plan: &SExpr,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
         mut need_cross_join: bool,
@@ -429,8 +429,8 @@ impl SubqueryRewriter {
             need_cross_join = true;
         }
         let flatten_plan = self.flatten_plan(
-            left,
-            plan.child(0)?,
+            outer,
+            subquery.unary_child(),
             correlated_columns,
             flatten_info,
             need_cross_join,
@@ -453,7 +453,7 @@ impl SubqueryRewriter {
                 }
                 Item::Index(old) => Ok(Self::scalar_item_from_index(
                     self.get_derived(old)?,
-                    "correlated.",
+                    "outer.",
                     &metadata,
                 )),
             })
@@ -494,10 +494,10 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_right_sort(
+    fn flatten_sub_sort(
         &mut self,
-        left: &SExpr,
-        plan: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         sort: &Sort,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
@@ -505,8 +505,8 @@ impl SubqueryRewriter {
     ) -> Result<SExpr> {
         // Currently, we don't support sort contain subquery.
         let flatten_plan = self.flatten_plan(
-            left,
-            plan.child(0)?,
+            outer,
+            subquery.unary_child(),
             correlated_columns,
             flatten_info,
             need_cross_join,
@@ -525,37 +525,37 @@ impl SubqueryRewriter {
             flatten_info.from_count_func = false;
         }
         Ok(SExpr::create_unary(
-            Arc::new(plan.plan().clone()),
+            subquery.plan.clone(),
             Arc::new(flatten_plan),
         ))
     }
 
-    fn flatten_right_limit(
+    fn flatten_sub_limit(
         &mut self,
-        left: &SExpr,
-        plan: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
         need_cross_join: bool,
     ) -> Result<SExpr> {
         // Currently, we don't support limit contain subquery.
         let flatten_plan = self.flatten_plan(
-            left,
-            plan.child(0)?,
+            outer,
+            subquery.unary_child(),
             correlated_columns,
             flatten_info,
             need_cross_join,
         )?;
         Ok(SExpr::create_unary(
-            Arc::new(plan.plan().clone()),
+            subquery.plan.clone(),
             Arc::new(flatten_plan),
         ))
     }
 
-    fn flatten_right_window(
+    fn flatten_sub_window(
         &mut self,
-        left: &SExpr,
-        plan: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         window: &Window,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
@@ -565,8 +565,13 @@ impl SubqueryRewriter {
                 "correlated columns in window functions not supported",
             ));
         }
-        let flatten_plan =
-            self.flatten_plan(left, plan.child(0)?, correlated_columns, flatten_info, true)?;
+        let flatten_plan = self.flatten_plan(
+            outer,
+            subquery.unary_child(),
+            correlated_columns,
+            flatten_info,
+            true,
+        )?;
         let metadata = self.metadata.read();
         let partition_by = window
             .partition_by
@@ -576,7 +581,7 @@ impl SubqueryRewriter {
             .chain(sorted_iter(correlated_columns).map(|old| {
                 Ok(Self::scalar_item_from_index(
                     self.get_derived(old)?,
-                    "correlated.",
+                    "outer.",
                     &metadata,
                 ))
             }))
@@ -601,11 +606,11 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_right_union_all(
+    fn flatten_sub_union_all(
         &mut self,
-        left: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         union_all: &UnionAll,
-        plan: &SExpr,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
         mut need_cross_join: bool,
@@ -616,8 +621,8 @@ impl SubqueryRewriter {
 
         let mut union_all = union_all.clone();
         let left_flatten_plan = self.flatten_plan(
-            left,
-            plan.child(0)?,
+            outer,
+            subquery.left_child(),
             correlated_columns,
             flatten_info,
             need_cross_join,
@@ -634,8 +639,8 @@ impl SubqueryRewriter {
             .retain(|_, derived_column| union_all.output_indexes.contains(derived_column));
 
         let right_flatten_plan = self.flatten_plan(
-            left,
-            plan.child(1)?,
+            outer,
+            subquery.right_child(),
             correlated_columns,
             flatten_info,
             need_cross_join,
@@ -658,9 +663,9 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_right_expression_scan(
+    fn flatten_sub_expression_scan(
         &mut self,
-        plan: &SExpr,
+        subquery: &SExpr,
         scan: &ExpressionScan,
         correlated_columns: &ColumnSet,
     ) -> Result<SExpr> {
@@ -672,16 +677,16 @@ impl SubqueryRewriter {
             self.derived_columns
                 .insert(*correlated_column, derived_column_index);
         }
-        Ok(plan.clone())
+        Ok(subquery.clone())
     }
 
-    fn flatten_left(
+    fn flatten_outer(
         &mut self,
-        left: &SExpr,
-        plan: &SExpr,
+        outer: &SExpr,
+        subquery: &SExpr,
         correlated_columns: &ColumnSet,
     ) -> Result<SExpr> {
-        let left = self.flatten_left_recursive(left)?;
+        let outer = self.flatten_outer_recursive(outer)?;
 
         // Wrap logical get with distinct to eliminate duplicates rows.
         let metadata = self.metadata.read();
@@ -689,7 +694,7 @@ impl SubqueryRewriter {
             .map(|old| {
                 Ok(Self::scalar_item_from_index(
                     self.get_derived(old)?,
-                    "correlated.",
+                    "",
                     &metadata,
                 ))
             })
@@ -704,25 +709,25 @@ impl SubqueryRewriter {
                 }
                 .into(),
             ),
-            Arc::new(left),
+            Arc::new(outer),
         );
 
         Ok(SExpr::create_binary(
             Arc::new(Join::default().into()),
             Arc::new(aggr),
-            Arc::new(plan.clone()),
+            Arc::new(subquery.clone()),
         ))
     }
 
-    fn flatten_left_recursive(&mut self, expr: &SExpr) -> Result<SExpr> {
-        let children = expr
+    fn flatten_outer_recursive(&mut self, outer: &SExpr) -> Result<SExpr> {
+        let children = outer
             .children
             .iter()
-            .map(|child| Ok(self.flatten_left_recursive(child)?.into()))
+            .map(|child| Ok(self.flatten_outer_recursive(child)?.into()))
             .collect::<Result<_>>()?;
 
         Ok(SExpr {
-            plan: Arc::new(self.flatten_left_plan(&expr.plan)?),
+            plan: Arc::new(self.flatten_outer_plan(outer.plan())?),
             children,
             original_group: None,
             rel_prop: Default::default(),
@@ -731,11 +736,11 @@ impl SubqueryRewriter {
         })
     }
 
-    fn flatten_left_plan(&mut self, plan: &RelOperator) -> Result<RelOperator> {
+    fn flatten_outer_plan(&mut self, plan: &RelOperator) -> Result<RelOperator> {
         let op = match plan {
             RelOperator::DummyTableScan(_) => DummyTableScan.into(),
-            RelOperator::Scan(scan) => self.flatten_left_scan(scan),
-            RelOperator::EvalScalar(eval) => self.flatten_left_eval_scalar(eval)?,
+            RelOperator::Scan(scan) => self.flatten_outer_scan(scan),
+            RelOperator::EvalScalar(eval) => self.flatten_outer_eval_scalar(eval)?,
             RelOperator::Limit(limit) => limit.clone().into(),
             RelOperator::Sort(sort) => {
                 let mut sort = sort.clone();
@@ -774,10 +779,10 @@ impl SubqueryRewriter {
                 let metadata = self.metadata.clone();
                 let mut metadata = metadata.write();
                 for item in &mut aggregate.group_items {
-                    *item = self.flatten_left_scalar_item(item, &mut metadata)?;
+                    *item = self.flatten_outer_scalar_item(item, &mut metadata)?;
                 }
                 for func in &mut aggregate.aggregate_functions {
-                    *func = self.flatten_left_scalar_item(func, &mut metadata)?;
+                    *func = self.flatten_outer_scalar_item(func, &mut metadata)?;
                 }
                 aggregate.rank_limit = None;
                 if aggregate.grouping_sets.is_some() {
@@ -797,7 +802,7 @@ impl SubqueryRewriter {
         Ok(op)
     }
 
-    fn flatten_left_scan(&mut self, scan: &Scan) -> RelOperator {
+    fn flatten_outer_scan(&mut self, scan: &Scan) -> RelOperator {
         let mut metadata = self.metadata.write();
         let columns = sorted_iter(&scan.columns)
             .map(|col| {
@@ -820,18 +825,18 @@ impl SubqueryRewriter {
         .into()
     }
 
-    fn flatten_left_eval_scalar(&mut self, eval: &EvalScalar) -> Result<RelOperator> {
+    fn flatten_outer_eval_scalar(&mut self, eval: &EvalScalar) -> Result<RelOperator> {
         let metadata = self.metadata.clone();
         let mut metadata = metadata.write();
         let items = eval
             .items
             .iter()
-            .map(|item| self.flatten_left_scalar_item(item, &mut metadata))
+            .map(|item| self.flatten_outer_scalar_item(item, &mut metadata))
             .collect::<Result<_>>()?;
         Ok(EvalScalar { items }.into())
     }
 
-    fn flatten_left_scalar_item(
+    fn flatten_outer_scalar_item(
         &mut self,
         ScalarItem { scalar, index }: &ScalarItem,
         metadata: &mut Metadata,

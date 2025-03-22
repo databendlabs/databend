@@ -261,7 +261,7 @@ impl SubqueryRewriter {
 
     pub fn try_decorrelate_subquery(
         &mut self,
-        left: &SExpr,
+        outer: &SExpr,
         subquery: &SubqueryExpr,
         flatten_info: &mut FlattenInfo,
         is_conjunctive_predicate: bool,
@@ -270,7 +270,7 @@ impl SubqueryRewriter {
             SubqueryType::Scalar => {
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan = self.flatten_plan(
-                    left,
+                    outer,
                     &subquery.subquery,
                     &correlated_columns,
                     flatten_info,
@@ -316,20 +316,20 @@ impl SubqueryRewriter {
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
-                    Arc::new(left.clone()),
+                    Arc::new(outer.clone()),
                     Arc::new(flatten_plan),
                 );
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
                 if is_conjunctive_predicate {
-                    if let Some(result) = self.try_decorrelate_simple_subquery(left, subquery)? {
+                    if let Some(result) = self.try_decorrelate_simple_subquery(outer, subquery)? {
                         return Ok((result, UnnestResult::SimpleJoin { output_index: None }));
                     }
                 }
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan = self.flatten_plan(
-                    left,
+                    outer,
                     &subquery.subquery,
                     &correlated_columns,
                     flatten_info,
@@ -381,7 +381,7 @@ impl SubqueryRewriter {
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
-                    Arc::new(left.clone()),
+                    Arc::new(outer.clone()),
                     Arc::new(flatten_plan),
                 );
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
@@ -389,7 +389,7 @@ impl SubqueryRewriter {
             SubqueryType::Any => {
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan = self.flatten_plan(
-                    left,
+                    outer,
                     &subquery.subquery,
                     &correlated_columns,
                     flatten_info,
@@ -453,7 +453,7 @@ impl SubqueryRewriter {
                 Ok((
                     SExpr::create_binary(
                         Arc::new(mark_join),
-                        Arc::new(left.clone()),
+                        Arc::new(outer.clone()),
                         Arc::new(flatten_plan),
                     ),
                     UnnestResult::MarkJoin { marker_index },

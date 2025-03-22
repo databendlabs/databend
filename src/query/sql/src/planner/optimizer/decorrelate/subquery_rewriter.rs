@@ -274,6 +274,7 @@ impl SubqueryRewriter {
                         is_conjunctive_predicate,
                     )?
                 } else {
+                    // todo: optimize outer before decorrelate subquery
                     self.try_decorrelate_subquery(
                         s_expr,
                         &subquery,

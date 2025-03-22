@@ -119,6 +119,21 @@ impl SExpr {
             .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
     }
 
+    pub fn unary_child(&self) -> &SExpr {
+        assert_eq!(self.children.len(), 1);
+        &self.children[0]
+    }
+
+    pub fn left_child(&self) -> &SExpr {
+        assert_eq!(self.children.len(), 2);
+        &self.children[0]
+    }
+
+    pub fn right_child(&self) -> &SExpr {
+        assert_eq!(self.children.len(), 2);
+        &self.children[1]
+    }
+
     pub fn arity(&self) -> usize {
         self.children.len()
     }

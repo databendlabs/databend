@@ -1413,7 +1413,7 @@ HashJoin
 │           ├── estimated rows: 0.00
 │           └── Filter
 │               ├── output columns: [t1.a (#3), t1.c (#5)]
-│               ├── filters: [is_true(correlated.a (#3) = correlated.a (#3))]
+│               ├── filters: [is_true(outer.a (#3) = outer.a (#3))]
 │               ├── estimated rows: 0.00
 │               └── TableScan
 │                   ├── table: default.default.t1

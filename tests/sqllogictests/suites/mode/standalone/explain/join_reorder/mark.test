@@ -108,7 +108,7 @@ EvalScalar
     │       ├── estimated rows: 4.00
     │       ├── Filter(Build)
     │       │   ├── output columns: [t1.a (#2)]
-    │       │   ├── filters: [is_true(correlated.a (#2) = correlated.a (#2))]
+    │       │   ├── filters: [is_true(outer.a (#2) = outer.a (#2))]
     │       │   ├── estimated rows: 0.60
     │       │   └── TableScan
     │       │       ├── table: default.default.t1

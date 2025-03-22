@@ -175,7 +175,7 @@ HashJoin
 │       ├── estimated rows: 0.00
 │       └── Filter
 │           ├── output columns: [t.a (#3), t.b (#4)]
-│           ├── filters: [correlated.b (#4) > 3]
+│           ├── filters: [outer.b (#4) > 3]
 │           ├── estimated rows: 0.00
 │           └── TableScan
 │               ├── table: default.test_index_db.t1

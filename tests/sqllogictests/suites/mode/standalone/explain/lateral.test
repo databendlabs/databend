@@ -120,7 +120,7 @@ HashJoin
             ├── output columns: [number (#4), t1.number (#1)]
             ├── join type: INNER
             ├── build keys: [t1.a (#1)]
-            ├── probe keys: [correlated.number (#4)]
+            ├── probe keys: [outer.number (#4)]
             ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 100.00

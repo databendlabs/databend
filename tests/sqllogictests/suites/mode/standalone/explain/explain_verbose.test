@@ -292,7 +292,7 @@ EvalScalar
     │   ├── precise cardinality: N/A
     │   └── statistics
     └── EvalScalar
-        ├── scalars: [numbers.number (#2) AS (#2), correlated.b (#5) AS (#5)]
+        ├── scalars: [numbers.number (#2) AS (#2), outer.b (#5) AS (#5)]
         ├── output columns: [derived.b, system.numbers.number]
         ├── outer columns: []
         ├── used columns: [derived.a, derived.b, system.numbers.number]
@@ -318,7 +318,7 @@ EvalScalar
                 ├── precise cardinality: N/A
                 ├── statistics
                 ├── Aggregate(Initial)
-                │   ├── group items: [correlated.b (#5)]
+                │   ├── group items: [b (#5)]
                 │   ├── aggregate functions: []
                 │   ├── output columns: [derived.b]
                 │   ├── outer columns: []
