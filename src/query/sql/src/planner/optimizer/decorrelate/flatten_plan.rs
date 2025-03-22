@@ -30,6 +30,7 @@ use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
+use crate::plans::ConstantTableScan;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::ExpressionScan;
@@ -686,7 +687,7 @@ impl SubqueryRewriter {
         subquery: &SExpr,
         correlated_columns: &ColumnSet,
     ) -> Result<SExpr> {
-        let outer = self.flatten_outer_recursive(outer)?;
+        let outer = self.clone_outer_recursive(outer)?;
 
         // Wrap logical get with distinct to eliminate duplicates rows.
         let metadata = self.metadata.read();
@@ -719,15 +720,15 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_outer_recursive(&mut self, outer: &SExpr) -> Result<SExpr> {
+    fn clone_outer_recursive(&mut self, outer: &SExpr) -> Result<SExpr> {
         let children = outer
             .children
             .iter()
-            .map(|child| Ok(self.flatten_outer_recursive(child)?.into()))
+            .map(|child| Ok(self.clone_outer_recursive(child)?.into()))
             .collect::<Result<_>>()?;
 
         Ok(SExpr {
-            plan: Arc::new(self.flatten_outer_plan(outer.plan())?),
+            plan: Arc::new(self.clone_outer_plan(outer.plan())?),
             children,
             original_group: None,
             rel_prop: Default::default(),
@@ -736,11 +737,12 @@ impl SubqueryRewriter {
         })
     }
 
-    fn flatten_outer_plan(&mut self, plan: &RelOperator) -> Result<RelOperator> {
+    fn clone_outer_plan(&mut self, plan: &RelOperator) -> Result<RelOperator> {
         let op = match plan {
             RelOperator::DummyTableScan(_) => DummyTableScan.into(),
-            RelOperator::Scan(scan) => self.flatten_outer_scan(scan),
-            RelOperator::EvalScalar(eval) => self.flatten_outer_eval_scalar(eval)?,
+            RelOperator::ConstantTableScan(scan) => self.clone_outer_constant_table_scan(scan),
+            RelOperator::Scan(scan) => self.clone_outer_scan(scan),
+            RelOperator::EvalScalar(eval) => self.clone_outer_eval_scalar(eval)?,
             RelOperator::Limit(limit) => limit.clone().into(),
             RelOperator::Sort(sort) => {
                 let mut sort = sort.clone();
@@ -779,10 +781,10 @@ impl SubqueryRewriter {
                 let metadata = self.metadata.clone();
                 let mut metadata = metadata.write();
                 for item in &mut aggregate.group_items {
-                    *item = self.flatten_outer_scalar_item(item, &mut metadata)?;
+                    *item = self.clone_outer_scalar_item(item, &mut metadata)?;
                 }
                 for func in &mut aggregate.aggregate_functions {
-                    *func = self.flatten_outer_scalar_item(func, &mut metadata)?;
+                    *func = self.clone_outer_scalar_item(func, &mut metadata)?;
                 }
                 aggregate.rank_limit = None;
                 if aggregate.grouping_sets.is_some() {
@@ -802,7 +804,30 @@ impl SubqueryRewriter {
         Ok(op)
     }
 
-    fn flatten_outer_scan(&mut self, scan: &Scan) -> RelOperator {
+    fn clone_outer_constant_table_scan(&mut self, scan: &ConstantTableScan) -> RelOperator {
+        let mut metadata = self.metadata.write();
+        let columns = sorted_iter(&scan.columns)
+            .map(|col| {
+                let column_entry = metadata.column(col).clone();
+                let derived_index = metadata.add_derived_column(
+                    column_entry.name(),
+                    column_entry.data_type(),
+                    None,
+                );
+                self.derived_columns.insert(col, derived_index);
+                derived_index
+            })
+            .collect();
+        ConstantTableScan {
+            values: scan.values.clone(),
+            num_rows: scan.num_rows,
+            schema: scan.schema.clone(),
+            columns,
+        }
+        .into()
+    }
+
+    fn clone_outer_scan(&mut self, scan: &Scan) -> RelOperator {
         let mut metadata = self.metadata.write();
         let columns = sorted_iter(&scan.columns)
             .map(|col| {
@@ -825,18 +850,18 @@ impl SubqueryRewriter {
         .into()
     }
 
-    fn flatten_outer_eval_scalar(&mut self, eval: &EvalScalar) -> Result<RelOperator> {
+    fn clone_outer_eval_scalar(&mut self, eval: &EvalScalar) -> Result<RelOperator> {
         let metadata = self.metadata.clone();
         let mut metadata = metadata.write();
         let items = eval
             .items
             .iter()
-            .map(|item| self.flatten_outer_scalar_item(item, &mut metadata))
+            .map(|item| self.clone_outer_scalar_item(item, &mut metadata))
             .collect::<Result<_>>()?;
         Ok(EvalScalar { items }.into())
     }
 
-    fn flatten_outer_scalar_item(
+    fn clone_outer_scalar_item(
         &mut self,
         ScalarItem { scalar, index }: &ScalarItem,
         metadata: &mut Metadata,
