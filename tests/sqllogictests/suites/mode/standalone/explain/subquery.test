@@ -698,3 +698,24 @@ EmptyResultScan
 
 statement ok
 drop table if exists t;
+
+statement ok
+create OR replace table t1(a int, b int, c varchar(20));
+
+# eliminate subquery
+query T
+explain select t3.* from t1 as t3 where t3.c = 'D' and t3.b in (select t4.b from t1 as t4 where t4.a = 7);
+----
+Filter
+├── output columns: [t3.a (#0), t3.b (#1), t3.c (#2)]
+├── filters: [is_true(t3.a (#0) = 7), is_true(t3.c (#2) = 'D')]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1), c (#2)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [and_filters(t1.a (#0) = 7, t1.c (#2) = 'D')], limit: NONE]
+    └── estimated rows: 0.00

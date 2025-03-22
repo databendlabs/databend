@@ -270,6 +270,11 @@ impl SubqueryRewriter {
                     from_count_func: false,
                 };
                 let (s_expr, result) = if prop.outer_columns.is_empty() {
+                    if let Some(scalar_expr) =
+                        self.try_eliminate_in_subquery(s_expr, &subquery, is_conjunctive_predicate)?
+                    {
+                        return Ok((scalar_expr, s_expr.clone()));
+                    }
                     self.try_rewrite_uncorrelated_subquery(
                         s_expr,
                         &subquery,
@@ -600,20 +605,22 @@ impl SubqueryRewriter {
             SubqueryType::Any => {
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
-                let left_condition = wrap_cast(
-                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: subquery.span,
-                        column: ColumnBindingBuilder::new(
-                            column_name,
-                            output_column.index,
-                            output_column.data_type,
-                            Visibility::Visible,
-                        )
-                        .table_index(output_column.table_index)
-                        .build(),
-                    }),
-                    &subquery.data_type,
-                );
+                let mut left_condition = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: subquery.span,
+                    column: ColumnBindingBuilder::new(
+                        column_name,
+                        output_column.index,
+                        output_column.data_type,
+                        Visibility::Visible,
+                    )
+                    .column_position(output_column.column_position)
+                    .table_index(output_column.table_index)
+                    .source_table_index(output_column.source_table_index)
+                    .build(),
+                });
+                if !left_condition.data_type()?.eq(&subquery.data_type) {
+                    left_condition = wrap_cast(&left_condition, &subquery.data_type)
+                }
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = *subquery.compare_op.as_ref().unwrap();
                 let (right_condition, is_non_equi_condition) =
