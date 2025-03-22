@@ -64,6 +64,26 @@ impl Sort {
             .cloned()
             .collect()
     }
+
+    pub fn replace_column(&mut self, old: IndexType, new: IndexType) {
+        for item in &mut self.items {
+            if item.index == old {
+                item.index = new
+            }
+        }
+
+        if let Some(projection) = &mut self.pre_projection {
+            for i in projection {
+                if *i == old {
+                    *i = new
+                }
+            }
+        }
+
+        if self.window_partition.is_some() {
+            unimplemented!()
+        };
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

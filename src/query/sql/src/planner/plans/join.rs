@@ -463,6 +463,25 @@ impl Join {
             },
         }))
     }
+
+    pub fn replace_column(&mut self, old: IndexType, new: IndexType) -> Result<()> {
+        for condition in &mut self.equi_conditions {
+            condition.left.replace_column(old, new)?;
+            condition.right.replace_column(old, new)?;
+        }
+
+        for condition in &mut self.non_equi_conditions {
+            condition.replace_column(old, new)?;
+        }
+
+        if self.marker_index == Some(old) {
+            self.marker_index = Some(new)
+        }
+
+        self.build_side_cache_info = None;
+
+        Ok(())
+    }
 }
 
 impl Operator for Join {

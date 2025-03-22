@@ -26,7 +26,6 @@ use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
 use crate::table_args::TableArgs;
 
-// TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DataSourcePlan {
     pub source_info: DataSourceInfo,

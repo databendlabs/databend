@@ -220,12 +220,12 @@ optimized_plan: |
                   │   ├── order by: []
                   │   └── limit: NONE
                   └── EvalScalar
-                      ├── scalars: [sr_store_sk (#103) AS (#103), multiply(divide(sum(ctr_total_return) (#145), if(eq(count(ctr_total_return) (#146), 0), 1, count(ctr_total_return) (#146))), 1.2) AS (#147)]
+                      ├── scalars: [outer.sr_store_sk (#103) AS (#103), multiply(divide(sum(ctr_total_return) (#145), if(eq(count(ctr_total_return) (#146), 0), 1, count(ctr_total_return) (#146))), 1.2) AS (#147)]
                       └── Aggregate(Final)
-                          ├── group items: [subquery_103 (#103)]
+                          ├── group items: [outer.sr_store_sk (#103)]
                           ├── aggregate functions: [sum(ctr_total_return) (#145), count(ctr_total_return) (#146)]
                           └── Aggregate(Partial)
-                              ├── group items: [subquery_103 (#103)]
+                              ├── group items: [outer.sr_store_sk (#103)]
                               ├── aggregate functions: [sum(ctr_total_return) (#145), count(ctr_total_return) (#146)]
                               └── Aggregate(Final)
                                   ├── group items: [store_returns.sr_customer_sk (#99), store_returns.sr_store_sk (#103)]

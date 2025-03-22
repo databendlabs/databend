@@ -266,17 +266,17 @@ EvalScalar
 ├── scalars: [t.a (#0) AS (#0), 3 (#3) AS (#3)]
 ├── output columns: [derived.b, derived.mark, system.numbers.number, testdb.t.a, testdb.t.b]
 ├── outer columns: []
-├── used columns: [derived.b, derived.mark, system.numbers.number, testdb.t.a, testdb.t.b]
+├── used columns: [derived.a, derived.b, derived.mark, system.numbers.number, testdb.t.a, testdb.t.b]
 ├── cardinality: 0.000
 ├── precise cardinality: N/A
 ├── statistics
 └── Join(RightMark)
-    ├── build keys: [b (#4)]
+    ├── build keys: [b (#5)]
     ├── probe keys: [b (#1)]
     ├── other filters: []
     ├── output columns: [derived.b, derived.mark, system.numbers.number, testdb.t.a, testdb.t.b]
     ├── outer columns: []
-    ├── used columns: [derived.b, system.numbers.number, testdb.t.a, testdb.t.b]
+    ├── used columns: [derived.a, derived.b, system.numbers.number, testdb.t.a, testdb.t.b]
     ├── cardinality: 0.000
     ├── precise cardinality: N/A
     ├── statistics
@@ -292,18 +292,18 @@ EvalScalar
     │   ├── precise cardinality: N/A
     │   └── statistics
     └── EvalScalar
-        ├── scalars: [numbers.number (#2) AS (#2), b (#4) AS (#4)]
+        ├── scalars: [numbers.number (#2) AS (#2), outer.b (#5) AS (#5)]
         ├── output columns: [derived.b, system.numbers.number]
         ├── outer columns: []
-        ├── used columns: [derived.b, system.numbers.number]
+        ├── used columns: [derived.a, derived.b, system.numbers.number]
         ├── cardinality: 0.000
         ├── precise cardinality: N/A
         ├── statistics
         └── Filter
-            ├── filters: [eq(modulo(numbers.number (#2), 10), b (#4))]
+            ├── filters: [eq(modulo(numbers.number (#2), 10), b (#5))]
             ├── output columns: [derived.b, system.numbers.number]
             ├── outer columns: []
-            ├── used columns: [derived.b, system.numbers.number]
+            ├── used columns: [derived.a, derived.b, system.numbers.number]
             ├── cardinality: 0.000
             ├── precise cardinality: N/A
             ├── statistics
@@ -313,16 +313,16 @@ EvalScalar
                 ├── other filters: []
                 ├── output columns: [derived.b, system.numbers.number]
                 ├── outer columns: []
-                ├── used columns: [derived.b, system.numbers.number]
+                ├── used columns: [derived.a, derived.b, system.numbers.number]
                 ├── cardinality: 0.000
                 ├── precise cardinality: N/A
                 ├── statistics
                 ├── Aggregate(Initial)
-                │   ├── group items: [ (#4)]
+                │   ├── group items: [b (#5)]
                 │   ├── aggregate functions: []
                 │   ├── output columns: [derived.b]
                 │   ├── outer columns: []
-                │   ├── used columns: [derived.b]
+                │   ├── used columns: [derived.a, derived.b]
                 │   ├── cardinality: 0.000
                 │   ├── precise cardinality: N/A
                 │   ├── statistics
@@ -331,9 +331,9 @@ EvalScalar
                 │       ├── filters: []
                 │       ├── order by: []
                 │       ├── limit: NONE
-                │       ├── output columns: [derived.b]
+                │       ├── output columns: [derived.a, derived.b]
                 │       ├── outer columns: []
-                │       ├── used columns: [derived.b]
+                │       ├── used columns: [derived.a, derived.b]
                 │       ├── cardinality: 0.000
                 │       ├── precise cardinality: N/A
                 │       └── statistics
