@@ -100,21 +100,13 @@ impl BlockThresholds {
     }
 
     #[inline]
-    pub fn calc_rows_per_block(
-        &self,
-        total_bytes: usize,
-        total_rows: usize,
-        total_compressed: usize,
-    ) -> usize {
+    pub fn calc_rows_for_compact(&self, total_bytes: usize, total_rows: usize) -> usize {
         if self.check_for_compact(total_rows, total_bytes) {
             return total_rows;
         }
 
         let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
-        let block_num_by_size = std::cmp::max(
-            total_bytes / self.max_bytes_per_block,
-            total_compressed / self.max_bytes_per_file,
-        );
+        let block_num_by_size = total_bytes / self.max_bytes_per_block;
         if block_num_by_rows >= block_num_by_size {
             return self.max_rows_per_block;
         }
@@ -126,5 +118,48 @@ impl BlockThresholds {
             rows_per_block = total_rows.div_ceil(block_num_by_size);
         }
         rows_per_block
+    }
+
+    /// Calculates the optimal number of rows per block based on total data size and row count.
+    ///
+    /// # Parameters
+    /// - `total_bytes`: The total size of the data in bytes.
+    /// - `total_rows`: The total number of rows in the data.
+    /// - `total_compressed`: The total compressed size of the data in bytes.
+    ///
+    /// # Returns
+    /// - The calculated number of rows per block that satisfies the thresholds.
+    #[inline]
+    pub fn calc_rows_for_recluster(
+        &self,
+        total_bytes: usize,
+        total_rows: usize,
+        total_compressed: usize,
+    ) -> usize {
+        // Check if the data is compact enough to skip further calculations.
+        if self.check_for_compact(total_rows, total_bytes) {
+            return total_rows;
+        }
+
+        let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
+        let block_num_by_compressed = total_compressed / self.max_bytes_per_file;
+        // If row-based block count exceeds compressed-based block count, use max rows per block.
+        if block_num_by_rows >= block_num_by_compressed {
+            return self.max_rows_per_block;
+        }
+
+        let bytes_per_block = total_bytes.div_ceil(block_num_by_compressed);
+        // Adjust the number of blocks based on block size thresholds.
+        let block_nums = if bytes_per_block > 4 * self.max_bytes_per_block {
+            // Case 1: If the block size exceeds 400MB
+            total_bytes / (4 * self.max_bytes_per_block)
+        } else if bytes_per_block < self.max_bytes_per_block / 2 {
+            // Case 2: If the block size is smaller than 50MB
+            total_bytes * 2 / self.max_bytes_per_block
+        } else {
+            // Case 3: Otherwise, use the compressed-based block count.
+            block_num_by_compressed
+        };
+        total_rows.div_ceil(block_nums.max(1)).max(1)
     }
 }
