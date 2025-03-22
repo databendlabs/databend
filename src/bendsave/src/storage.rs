@@ -90,7 +90,7 @@ pub fn load_meta_config(path: &str) -> Result<databend_meta::configs::Config> {
 pub fn init_query(cfg: &InnerConfig) -> Result<()> {
     GlobalInstance::init_production();
 
-    GlobalConfig::init(&cfg)?;
+    GlobalConfig::init(cfg)?;
     GlobalIORuntime::init(cfg.storage.num_cpus as usize)?;
 
     Ok(())
@@ -103,7 +103,7 @@ pub fn init_query(cfg: &InnerConfig) -> Result<()> {
 /// restoring.
 pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
     RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
-    SessionManager::init(&cfg)?;
+    SessionManager::init(cfg)?;
     UserApiProvider::init(
         cfg.meta.to_meta_grpc_client_conf(),
         BuiltIn::default(),
@@ -112,7 +112,7 @@ pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
     )
     .await?;
 
-    let session_manager = SessionManager::create(&cfg);
+    let session_manager = SessionManager::create(cfg);
     let session = session_manager.create_session(SessionType::Dummy).await?;
     let session = session_manager.register_session(session)?;
     let settings = session.get_settings();
