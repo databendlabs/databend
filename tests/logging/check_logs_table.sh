@@ -16,7 +16,7 @@ count=$(echo $response | jq -r '.data[0][0]')
 
 echo $count
 
-if [ $count -eq 1 ]; then
+if [ $count != "0" ]; then
   echo "Log table test passed"
   exit 0
 else

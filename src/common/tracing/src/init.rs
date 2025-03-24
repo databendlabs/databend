@@ -376,7 +376,7 @@ pub fn init_logging(
         logger = logger.dispatch(dispatch);
     }
 
-    if cfg.persistentlog.on && log_name.starts_with("databend-query") {
+    if cfg.persistentlog.on {
         let (remote_log, flush_guard) =
             RemoteLog::new(&labels, cfg).expect("initialize remote logger");
         let dispatch = Dispatch::new()

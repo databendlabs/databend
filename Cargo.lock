@@ -4568,6 +4568,7 @@ dependencies = [
  "async-channel 1.9.0",
  "backtrace",
  "chrono",
+ "concurrent-queue",
  "databend-common-base",
  "databend-common-exception",
  "defer",

@@ -14,8 +14,9 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::path::Path;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -29,7 +30,7 @@ use arrow_schema::TimeUnit;
 use async_channel::bounded;
 use async_channel::Receiver;
 use async_channel::Sender;
-use databend_common_base::base::tokio::time::interval;
+use concurrent_queue::ConcurrentQueue;
 use databend_common_base::base::uuid;
 use databend_common_base::runtime::spawn;
 use databend_common_base::runtime::Runtime;
@@ -50,21 +51,19 @@ use serde_json::Map;
 use crate::Config;
 use crate::GlobalLogger;
 
-// buffer size limit for preventing log records flooding
-// if the limit is reached, the log records will be dropped
-const MAX_BUFFER_SIZE: usize = 10000;
-
 /// An appender that sends log records to persistent storage
+#[derive(Debug)]
 pub struct RemoteLog {
-    sender: Sender<Message>,
     cluster_id: String,
     node_id: String,
-    tenant_id: String,
+    buffer: Arc<LogBuffer>,
 }
 
+#[derive(Debug)]
 pub struct RemoteLogElement {
     pub timestamp: i64,
     pub path: String,
+    pub target: String,
     pub cluster_id: String,
     pub node_id: String,
     pub query_id: Option<String>,
@@ -72,21 +71,25 @@ pub struct RemoteLogElement {
     pub messages: String,
 }
 
-pub enum Message {
-    LogElement(RemoteLogElement),
-    Shutdown,
-    Flush,
+#[derive(Debug)]
+pub struct LogBuffer {
+    queue: ConcurrentQueue<RemoteLogElement>,
+    last_collect: AtomicU64,
+    sender: Sender<Vec<RemoteLogElement>>,
+    /// interval is in microseconds
+    interval: u64,
 }
 
 /// Guard for `RemoteLog` to ensure the log is flushed before exiting
 pub struct RemoteLogGuard {
     _rt: Runtime,
-    sender: Sender<Message>,
+    buffer: Arc<LogBuffer>,
 }
 
 impl Drop for RemoteLogGuard {
     fn drop(&mut self) {
-        if self.sender.try_send(Message::Shutdown).is_ok() {
+        // buffer collect will send all logs and trigger the log flush
+        if let Ok(_) = self.buffer.collect() {
             // wait for the log to be flushed
             std::thread::sleep(Duration::from_secs(3));
         }
@@ -98,65 +101,27 @@ impl RemoteLog {
         labels: &BTreeMap<String, String>,
         cfg: &Config,
     ) -> Result<(RemoteLog, Box<RemoteLogGuard>)> {
-        let interval = cfg.persistentlog.interval;
+        let interval = Duration::from_secs(cfg.persistentlog.interval as u64).as_micros();
         let stage_name = cfg.persistentlog.stage_name.clone();
         let node_id = labels.get("node_id").cloned().unwrap_or_default();
         let rt = Runtime::with_worker_threads(2, Some("remote-log-writer".to_string()))?;
         let (tx, rx) = bounded(1);
-        let tx_cloned = tx.clone();
         let remote_log = RemoteLog {
-            sender: tx.clone(),
             cluster_id: labels.get("cluster_id").cloned().unwrap_or_default(),
             node_id: node_id.clone(),
-            tenant_id: labels.get("tenant_id").cloned().unwrap_or_default(),
+            buffer: Arc::new(LogBuffer::new(tx.clone(), interval as u64)),
         };
-        rt.spawn(async move { Self::interval_flush(interval, tx_cloned).await });
         rt.spawn(async move { RemoteLog::work(rx, &stage_name).await });
         let guard = RemoteLogGuard {
             _rt: rt,
-            sender: tx,
+            buffer: remote_log.buffer.clone(),
         };
         Ok((remote_log, Box::new(guard)))
     }
 
-    pub async fn interval_flush(interval_value: usize, sender: Sender<Message>) {
-        let mut interval = interval(Duration::from_secs(interval_value as u64));
-        loop {
-            interval.tick().await;
-            if let Err(_e) = sender.send(Message::Flush).await {
-                // Will exit if receiver is closed
-                break;
-            }
-        }
-    }
-
-    pub async fn work(receiver: Receiver<Message>, stage_name: &str) {
-        let mut buffer = Vec::with_capacity(MAX_BUFFER_SIZE);
-        while let Ok(msg) = receiver.recv().await {
-            match msg {
-                Message::LogElement(log_element) => {
-                    if buffer.len() >= MAX_BUFFER_SIZE {
-                        continue;
-                    }
-                    buffer.push(log_element);
-                }
-                Message::Shutdown => {
-                    if buffer.is_empty() {
-                        break;
-                    }
-                    let flush_buffer = std::mem::take(&mut buffer);
-
-                    RemoteLog::flush(flush_buffer, stage_name).await;
-                    break;
-                }
-                Message::Flush => {
-                    if buffer.is_empty() {
-                        continue;
-                    }
-                    let flush_buffer = std::mem::take(&mut buffer);
-                    RemoteLog::flush(flush_buffer, stage_name).await;
-                }
-            }
+    pub async fn work(receiver: Receiver<Vec<RemoteLogElement>>, stage_name: &str) {
+        while let Ok(log_element) = receiver.recv().await {
+            Self::flush(log_element, stage_name).await;
         }
         // receiver close will trigger interval_flush exit
         let _ = receiver.close();
@@ -212,6 +177,7 @@ impl RemoteLog {
         let messages = serde_json::to_string(&fields).unwrap_or_default();
         let log_level = record.level().to_string();
         let timestamp = chrono::Local::now().timestamp_micros();
+        let target = record.target().to_string();
         let path = format!(
             "{}: {}:{}",
             record.module_path().unwrap_or(""),
@@ -225,6 +191,7 @@ impl RemoteLog {
         RemoteLogElement {
             timestamp,
             path,
+            target,
             cluster_id: self.cluster_id.clone(),
             node_id: self.node_id.clone(),
             query_id: query_id.cloned(),
@@ -237,19 +204,50 @@ impl RemoteLog {
 impl Append for RemoteLog {
     fn append(&self, record: &Record) -> anyhow::Result<()> {
         let log_element = self.prepare_log_element(record);
-        self.sender
-            .send_blocking(Message::LogElement(log_element))
-            .map_err(|e| anyhow::anyhow!("Failed to send log element: {}", e))
+        self.buffer
+            .log(log_element)
+            .map_err(|e| anyhow::anyhow!("Failed to push log element: {}", e))?;
+
+        Ok(())
     }
 }
 
-impl Debug for RemoteLog {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "cluster_id: {}, node_id: {}, tenant_id: {})",
-            self.cluster_id, self.node_id, self.tenant_id
-        )
+impl LogBuffer {
+    const MAX_BUFFER_SIZE: usize = 5000;
+
+    pub fn new(sender: Sender<Vec<RemoteLogElement>>, interval: u64) -> Self {
+        Self {
+            queue: ConcurrentQueue::unbounded(),
+            last_collect: AtomicU64::new(0),
+            sender,
+            interval,
+        }
+    }
+
+    pub fn log(&self, log_element: RemoteLogElement) -> anyhow::Result<()> {
+        self.queue.push(log_element)?;
+        if self.queue.len() > Self::MAX_BUFFER_SIZE {
+            self.last_collect.store(
+                chrono::Local::now().timestamp_micros() as u64,
+                Ordering::SeqCst,
+            );
+            self.collect()?;
+        }
+        let now = chrono::Local::now().timestamp_micros() as u64;
+        let last = self.last_collect.load(Ordering::SeqCst);
+        if now - last > self.interval {
+            if self.last_collect.fetch_max(now, Ordering::SeqCst) == last {
+                self.collect()?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn collect(&self) -> anyhow::Result<()> {
+        self.sender
+            .send_blocking(Vec::from_iter(self.queue.try_iter()))
+            .map_err(|e| anyhow::anyhow!("Failed to send log element: {}", e))?;
+        Ok(())
     }
 }
 
