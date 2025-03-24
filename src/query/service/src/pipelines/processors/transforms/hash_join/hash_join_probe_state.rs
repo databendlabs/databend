@@ -258,12 +258,8 @@ impl HashJoinProbeState {
                 *col = col.remove_nullable();
             });
         let probe_keys = (&keys_columns).into();
-
-        if self.hash_join_state.hash_join_desc.join_type != JoinType::LeftMark {
-            input = input.project(&self.probe_projections);
-        }
+        input = input.project(&self.probe_projections);
         probe_state.generation_state.is_probe_projected = input.num_columns() > 0;
-
         if self.hash_join_state.fast_return.load(Ordering::Acquire)
             && matches!(
                 self.hash_join_state.hash_join_desc.join_type,
