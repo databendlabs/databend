@@ -1504,3 +1504,23 @@ SELECT id, json_object_pick(v1, 'a', 'k1') from t5
 
 statement ok
 DROP TABLE IF EXISTS t5
+
+statement ok
+CREATE OR REPLACE TABLE t6 (id INT, data VARIANT);
+
+statement ok
+INSERT INTO t6 VALUES
+(1, '{"name": "Alice", "age": 30, "address": null}'),
+(2, '{"name": "Bob", "age": null, "address": {"city": "New York", "zip": null}}'),
+(3, '{"name": "Charlie", "age": 25, "address": {"city": "San Francisco", "zip": "94107"}}');
+
+query II
+SELECT id, data:address, data:address:zip, STRIP_NULL_VALUE(data:address), STRIP_NULL_VALUE(data:address:zip) FROM t6;
+----
+1 null NULL NULL NULL
+2 {"city":"New York","zip":null} null {"city":"New York","zip":null} NULL
+3 {"city":"San Francisco","zip":"94107"} "94107" {"city":"San Francisco","zip":"94107"} "94107"
+
+
+statement ok
+DROP TABLE IF EXISTS t6

@@ -5815,3 +5815,75 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : strip_null_value(parse_json('1234'))
+raw expr       : strip_null_value(parse_json('1234'))
+checked expr   : strip_null_value<Variant NULL>(CAST(parse_json<String>("1234") AS Variant NULL))
+optimized expr : 0x20000000200000035004d2
+output type    : Variant NULL
+output domain  : Undefined
+output         : '1234'
+
+
+ast            : strip_null_value(parse_json('null'))
+raw expr       : strip_null_value(parse_json('null'))
+checked expr   : strip_null_value<Variant NULL>(CAST(parse_json<String>("null") AS Variant NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : strip_null_value(null)
+raw expr       : strip_null_value(NULL)
+checked expr   : strip_null_value<Variant NULL>(CAST(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : strip_null_value(parse_json(s))
+raw expr       : strip_null_value(parse_json(s::String))
+checked expr   : strip_null_value<Variant NULL>(CAST(parse_json<String>(s) AS Variant NULL))
+evaluation:
++--------+-------------------------------------------------------+--------------------+
+|        | s                                                     | Output             |
++--------+-------------------------------------------------------+--------------------+
+| Type   | String                                                | Variant NULL       |
+| Domain | {"[\"a\",\"b\",\"c\"]"..="{ \"a\": 1, \"b\": null }"} | Unknown            |
+| Row 0  | '{ "a": 1, "b": null }'                               | '{"a":1,"b":null}' |
+| Row 1  | 'null'                                                | NULL               |
+| Row 2  | '["a","b","c"]'                                       | '["a","b","c"]'    |
++--------+-------------------------------------------------------+--------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                         |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn[{ "a": 1, "b": null }, null, ["a","b","c"]]                                                                                                                                     |
+| Output | NullableColumn { column: BinaryColumn { data: 0x40000002100000011000000120000002000000006162500180000003100000011000000110000001616263, offsets: [0, 24, 24, 43] }, validity: [0b_____101] } |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : strip_null_value(parse_json(s))
+raw expr       : strip_null_value(parse_json(s::String NULL))
+checked expr   : strip_null_value<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+----------------------------------------------------------------+--------------------+
+|        | s                                                              | Output             |
++--------+----------------------------------------------------------------+--------------------+
+| Type   | String NULL                                                    | Variant NULL       |
+| Domain | {"[\"a\",\"b\",\"c\"]"..="{ \"a\": 1, \"b\": null }"} ∪ {NULL} | Unknown            |
+| Row 0  | '{ "a": 1, "b": null }'                                        | '{"a":1,"b":null}' |
+| Row 1  | 'null'                                                         | NULL               |
+| Row 2  | NULL                                                           | NULL               |
+| Row 3  | '["a","b","c"]'                                                | '["a","b","c"]'    |
++--------+----------------------------------------------------------------+--------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                             |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn[{ "a": 1, "b": null }, null, , ["a","b","c"]], validity: [0b____1011] }                                                                                    |
+| Output | NullableColumn { column: BinaryColumn { data: 0x40000002100000011000000120000002000000006162500180000003100000011000000110000001616263, offsets: [0, 24, 24, 24, 43] }, validity: [0b____1001] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
