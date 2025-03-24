@@ -258,7 +258,18 @@ impl HashJoinProbeState {
                 *col = col.remove_nullable();
             });
         let probe_keys = (&keys_columns).into();
+
+        let probe_has_null = if self.join_type() == JoinType::LeftMark {
+            match &input.get_by_offset(0).value {
+                Value::Scalar(Scalar::Null) => true,
+                Value::Column(Column::Nullable(c)) if c.validity.null_count() > 0 => true,
+                _ => false,
+            }
+        } else {
+            false
+        };
         input = input.project(&self.probe_projections);
+
         probe_state.generation_state.is_probe_projected = input.num_columns() > 0;
         if self.hash_join_state.fast_return.load(Ordering::Acquire)
             && matches!(
@@ -306,6 +317,7 @@ impl HashJoinProbeState {
 
                 probe_state.process_state = Some(ProcessState {
                     input,
+                    probe_has_null,
                     keys_state,
                     next_idx: 0,
                 });

@@ -1,21 +1,15 @@
 statement ok
 use default
 
-statement ok
-DROP TABLE IF EXISTS c
-
-statement ok
-DROP TABLE IF EXISTS o
-
 
 query error 1065
 SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
 
 statement ok
-CREATE TABLE c (c_id INT NULL, bill VARCHAR NULL)
+CREATE OR REPLACE TABLE c (c_id INT NULL, bill VARCHAR NULL)
 
 statement ok
-CREATE TABLE o (o_id INT NULL, c_id INT NULL, ship VARCHAR NULL)
+CREATE OR REPLACE TABLE o (o_id INT NULL, c_id INT NULL, ship VARCHAR NULL)
 
 statement ok
 INSERT INTO c VALUES
@@ -645,20 +639,16 @@ select number from numbers(10) where number in (select unnest([1,2,3]))
 2
 3
 
-statement ok
-drop table if exists t1
 
 statement ok
-create table t1 (a int, b int);
+create or replace table t1 (a int, b int);
 
 statement ok
 insert into t1 values(1, 2);
 
-statement ok
-drop table if exists t2
 
 statement ok
-create table t2 (a int, b int);
+create or replace table t2 (a int, b int);
 
 statement ok
 insert into t2 values(1, 1);
@@ -668,10 +658,7 @@ select * from t2 where t2.b < ANY(select NULL from t1 where t1.a = t1.a)
 ----
 
 statement ok
-drop table if exists t3
-
-statement ok
-create table t3(a int, b int);
+create or replace table t3(a int, b int);
 
 statement ok
 insert into t3 values(1, 2), (3, 4), (6, 5);
@@ -823,11 +810,9 @@ select (select sum(a) from t1 where t1.a >= t2.a group by t1.a) from t1 as t2;
 statement ok
 drop table t1;
 
-statement ok
-drop table if exists t;
 
 statement ok
-create table t (i int);
+create or replace table t (i int);
 
 statement ok
 insert into t values(1), (2), (3), (null);
@@ -850,14 +835,14 @@ statement ok
 drop table if exists merge_log;
 
 statement ok
-CREATE TABLE `push_log` (
+create or replace TABLE `push_log` (
   `name` VARCHAR NULL,
   `data_count` INT NULL,
   `created_at` TIMESTAMP NULL
 ) ENGINE = FUSE;
 
 statement ok
-CREATE TABLE `merge_log` (
+create or replace TABLE `merge_log` (
   `name` VARCHAR NULL,
   `file_date` VARCHAR NULL,
   `inserted_count` INT NULL,
