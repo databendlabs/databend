@@ -268,11 +268,11 @@ impl SubqueryRewriter {
     ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
             SubqueryType::Scalar => {
-                let correlated_columns = subquery.outer_columns.clone();
+                let correlated_columns = &subquery.outer_columns;
                 let flatten_plan = self.flatten_plan(
                     outer,
                     &subquery.subquery,
-                    &correlated_columns,
+                    correlated_columns,
                     flatten_info,
                     false,
                 )?;
@@ -281,23 +281,23 @@ impl SubqueryRewriter {
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
                 self.add_equi_conditions(
                     subquery.span,
-                    &correlated_columns,
+                    correlated_columns,
                     &mut right_conditions,
                     &mut left_conditions,
                 )?;
 
-                let mut join_type = JoinType::LeftSingle;
-                if matches!(subquery.contain_agg, Some(true)) {
+                let join_type = if matches!(subquery.contain_agg, Some(true)) && {
                     let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                    let card = rel_expr
+                    rel_expr
                         .derive_cardinality()?
                         .statistics
-                        .precise_cardinality;
-
-                    if card.is_some() {
-                        join_type = JoinType::Left;
-                    }
-                }
+                        .precise_cardinality
+                        .is_some()
+                } {
+                    JoinType::Left
+                } else {
+                    JoinType::LeftSingle
+                };
 
                 let join_plan = Join {
                     equi_conditions: JoinEquiCondition::new_conditions(
@@ -327,11 +327,11 @@ impl SubqueryRewriter {
                         return Ok((result, UnnestResult::SimpleJoin { output_index: None }));
                     }
                 }
-                let correlated_columns = subquery.outer_columns.clone();
+                let correlated_columns = &subquery.outer_columns;
                 let flatten_plan = self.flatten_plan(
                     outer,
                     &subquery.subquery,
-                    &correlated_columns,
+                    correlated_columns,
                     flatten_info,
                     false,
                 )?;
@@ -340,7 +340,7 @@ impl SubqueryRewriter {
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
                 self.add_equi_conditions(
                     subquery.span,
-                    &correlated_columns,
+                    correlated_columns,
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
@@ -387,11 +387,11 @@ impl SubqueryRewriter {
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             SubqueryType::Any => {
-                let correlated_columns = subquery.outer_columns.clone();
+                let correlated_columns = &subquery.outer_columns;
                 let flatten_plan = self.flatten_plan(
                     outer,
                     &subquery.subquery,
-                    &correlated_columns,
+                    correlated_columns,
                     flatten_info,
                     false,
                 )?;
@@ -399,7 +399,7 @@ impl SubqueryRewriter {
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
                 self.add_equi_conditions(
                     subquery.span,
-                    &correlated_columns,
+                    correlated_columns,
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;

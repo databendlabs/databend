@@ -990,3 +990,136 @@ WHERE t1.i1 = (
 );
 ----
 1
+
+statement ok
+CREATE OR REPLACE TABLE employees AS
+SELECT * FROM (
+    VALUES
+        (1, 1, 50000),
+        (2, 2, 60000),
+        (3, 3, 70000)
+) AS employees(employee_id, name, salary);
+
+statement ok
+CREATE OR REPLACE TABLE departments AS
+SELECT * FROM (
+    VALUES
+        (101, 1, 1),
+        (102, 2, 2),
+        (103, 3, 3)
+) AS departments(department_id, department_name, manager_id);
+
+statement ok
+CREATE OR REPLACE TABLE salaries AS
+SELECT * FROM (
+    VALUES
+        (1, 50000),
+        (2, 60000),
+        (3, 70000),
+        (4, 80000),
+        (5, 90000)
+) AS salaries(employee_id, salary);
+
+query II
+SELECT 
+    e.employee_id, 
+    d.department_name
+FROM 
+    employees e
+INNER JOIN 
+    departments d 
+ON 
+    e.employee_id = d.manager_id
+WHERE 
+    e.salary > ANY (
+        SELECT salary
+        FROM salaries
+        WHERE employee_id <> e.employee_id
+    )
+ORDER BY employee_id;
+----
+2 2
+3 3
+
+statement ok
+create or replace table tab1 as select * from (values (1), (2), (3)) tab(n);
+
+statement ok
+create or replace table tab2 as select * from (values (1, 10), (1, 20), (2, 30)) tab(n, m);
+
+statement ok
+create or replace table tab3 as select * from (values (10, 100), (20, 200), (30, 300)) tab(m, k);
+
+query II
+select t.n, t.m + t.k as result
+from (
+    select t1.n, t2.m, t3.k
+    from tab1 t1
+    join tab2 t2 on t1.n = t2.n
+    join tab3 t3 on t2.m = t3.m
+) t
+where t.k = any (select tab3.k from tab3 where tab3.k = t.n * 100 and tab3.m = t.m);
+----
+1 110
+
+onlyif fixme
+query II
+select t.n, t.m + t.k as result
+from (
+    select t1.n, t2.m, t3.k
+    from (values (1), (2), (3)) t1(n)
+    join tab2 t2 on t1.n = t2.n
+    join tab3 t3 on t2.m = t3.m
+) t
+where t.k = any (select tab3.k from tab3 where tab3.k = t.n * 100 and tab3.m = t.m);
+----
+1 110
+
+query III
+select
+  t.n,
+  t.m + t.k as result,
+  (select count(tab3.k) from tab3 where tab3.k = t.n * 100 and tab3.m = t.m) count
+from (
+    select t1.n, t2.m, t3.k
+    from tab1 t1
+    join tab2 t2 on t1.n = t2.n
+    join tab3 t3 on t2.m = t3.m
+) t order by result;
+----
+1 110 1
+1 220 0
+2 330 0
+
+onlyif fixme
+query II
+select
+  t.n,
+  t.m + t.k as result,
+  (select count(tab3.k) from tab3 where tab3.k = t.n * 100 and tab3.m = t.m) count
+from (
+    select t1.n, t2.m, t3.k
+    from (values (1), (2), (3)) t1(n)
+    join tab2 t2 on t1.n = t2.n
+    join tab3 t3 on t2.m = t3.m
+) t order by result;
+----
+1 110 1
+1 220 0
+2 330 0
+
+query II
+select t.n, t.m + x as result
+from 
+    (select * from (values (100)) const_table(x)),
+    (
+        select t1.n, t2.m
+        from tab1 t1
+        join tab2 t2 on t1.n = t2.n
+    ) t 
+where t.m = any (select t2.m from tab2 t2 where t2.n = t.n)
+order by result;
+----
+1 110
+1 120
+2 130
