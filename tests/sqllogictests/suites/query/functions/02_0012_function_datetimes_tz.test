@@ -1118,3 +1118,22 @@ select to_timestamp('1684275059752');
 
 statement ok
 unset enable_strict_datetime_parser;
+
+statement ok
+set timezone='Asia/Shanghai';
+
+query T
+select to_date('2024-03-01-1','%Y-%m-%d');
+----
+2024-03-01
+
+statement ok
+set timezone='America/Los_Angeles';
+
+query T
+select to_date('2024-03-01-1','%Y-%m-%d');
+----
+2024-03-01
+
+statement ok
+unset timezone;
