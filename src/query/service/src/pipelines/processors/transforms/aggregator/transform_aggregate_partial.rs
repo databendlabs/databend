@@ -512,6 +512,7 @@ impl HashtableSpillingState {
                     payload.states_layout.clone(),
                 );
 
+                scattered_payload.state_move_out = true;
                 scattered_payload.copy_rows(sel, rows, &flush_state.addresses);
 
                 if !self.serialize_payload(Some(scattered_payload))? {
@@ -541,6 +542,7 @@ impl HashtableSpillingState {
                     working_payload.states_layout.clone(),
                 );
 
+                scattered_payload.state_move_out = true;
                 scattered_payload.copy_rows(sel, rows, &flush_state.addresses);
 
                 if !self.serialize_payload(Some(scattered_payload))? {
@@ -561,12 +563,16 @@ impl HashtableSpillingState {
             return self.serialize_scatter_payload(None);
         }
 
-        let partition_payload = PartitionedPayload::new(
+        let mut partition_payload = PartitionedPayload::new(
             self.ht.payload.group_types.clone(),
             self.ht.payload.aggrs.clone(),
             max_partitions as u64,
             self.ht.payload.arenas.clone(),
         );
+
+        for payload in &mut partition_payload.payloads {
+            payload.state_move_out = true;
+        }
 
         // repartition and get current partition payload
         for idx in self.payload_idx..self.ht.payload.payloads.len() {
@@ -595,6 +601,7 @@ impl HashtableSpillingState {
                     working_payload.states_layout.clone(),
                 );
 
+                working_partition_payload.state_move_out = true;
                 working_partition_payload.copy_rows(selector, rows, address);
 
                 if !self.serialize_scatter_payload(Some(working_partition_payload))? {
