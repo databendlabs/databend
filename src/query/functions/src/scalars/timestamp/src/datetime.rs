@@ -300,8 +300,8 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "to_timestamp",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<TimestampType>>(
-            |timestamp, format, output, ctx| match string_to_format_timestamp(
-                timestamp, format, ctx,
+            |timestamp, format, output, ctx| match string_to_format_datetime(
+                timestamp, format, ctx, true,
             ) {
                 Ok((ts, need_null)) => {
                     if need_null {
@@ -322,8 +322,8 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "try_to_timestamp",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<TimestampType>>(
-            |timestamp, format, output, ctx| match string_to_format_timestamp(
-                timestamp, format, ctx,
+            |timestamp, format, output, ctx| match string_to_format_datetime(
+                timestamp, format, ctx, true,
             ) {
                 Ok((ts, need_null)) => {
                     if need_null {
@@ -347,7 +347,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match string_to_format_timestamp(date, format, ctx) {
+                    match string_to_format_datetime(date, format, ctx, false) {
                         Ok((res, false)) => {
                             output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
                         }
@@ -372,7 +372,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match string_to_format_timestamp(date, format, ctx) {
+                    match string_to_format_datetime(date, format, ctx, false) {
                         Ok((res, false)) => {
                             output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
                         }
@@ -386,10 +386,11 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     );
 }
 
-fn string_to_format_timestamp(
+fn string_to_format_datetime(
     timestamp: &str,
     format: &str,
     ctx: &mut EvalContext,
+    parse_timestamp: bool,
 ) -> Result<(i64, bool), Box<ErrorCode>> {
     if format.is_empty() {
         return Ok((0, true));
@@ -424,9 +425,15 @@ fn string_to_format_timestamp(
     }
 
     let z = if tm.offset().is_none() {
-        ctx.func_ctx.tz.to_zoned(tm.to_datetime().map_err(|err| {
-            ErrorCode::BadArguments(format!("{timestamp} to datetime error {err}"))
-        })?)
+        if parse_timestamp {
+            ctx.func_ctx.tz.to_zoned(tm.to_datetime().map_err(|err| {
+                ErrorCode::BadArguments(format!("{timestamp} to datetime error {err}"))
+            })?)
+        } else {
+            TimeZone::UTC.to_zoned(tm.to_datetime().map_err(|err| {
+                ErrorCode::BadArguments(format!("{timestamp} to datetime error {err}"))
+            })?)
+        }
     } else {
         tm.to_zoned()
     }

@@ -43,10 +43,10 @@ runs:
       run: |
         case ${{ inputs.target }} in
           x86_64-unknown-linux-gnu)
-            flags="-C target-feature=+sse4.2"
+            flags="-C target-feature=+sse4.2,+avx2"
             ;;
           x86_64-unknown-linux-musl)
-            flags="-C target-feature=+sse4.2"
+            flags="-C target-feature=+sse4.2,+avx2"
             ;;
           aarch64-unknown-linux-gnu)
             flags=""
@@ -68,7 +68,7 @@ runs:
       if: inputs.artifacts == 'all'
       shell: bash
       run: |
-        artifacts="meta,metactl,metabench,query,sqllogictests"
+        artifacts="meta,metactl,metabench,query,sqllogictests,bendsave"
         binaries=""
         for artifact in ${artifacts//,/ }; do
           binaries="${binaries} --bin databend-$artifact"

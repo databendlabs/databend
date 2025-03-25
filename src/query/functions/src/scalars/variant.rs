@@ -1869,6 +1869,19 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         }))
     });
+
+    registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
+        "strip_null_value",
+        |_, _| FunctionDomain::Full,
+        vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, _| {
+            val.and_then(|v| {
+                if matches!(RawJsonb::new(v).is_null(), Ok(true)) {
+                    return None;
+                }
+                Some(v.to_vec())
+            })
+        }),
+    );
 }
 
 fn json_array_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {

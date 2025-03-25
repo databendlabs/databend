@@ -119,7 +119,7 @@ echo "select * from test_vacuum_drop_4.b"  | $BENDSQL_CLIENT_CONNECT
 
 ## test vacuum table output
 echo "create table test_vacuum_drop_4.c(c int)" | $BENDSQL_CLIENT_CONNECT
-echo "INSERT INTO test_vacuum_drop_4.c VALUES (1)" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "INSERT INTO test_vacuum_drop_4.c VALUES (1),(2)" | $BENDSQL_CLIENT_OUTPUT_NULL
 count=$(echo "set data_retention_time_in_days=0; vacuum table test_vacuum_drop_4.c" | $BENDSQL_CLIENT_CONNECT | awk '{print $9}')
 if [[ "$count" != "4" ]]; then
   echo "vacuum table, count:$count"
