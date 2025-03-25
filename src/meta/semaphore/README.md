@@ -44,18 +44,17 @@ This crate implements a distributed semaphore using a meta-service as the underl
 ## Usage
 
 ```rust
-use databend_common_meta_semaphore::Semaphore;
+let client = MetaGrpcClient::try_create(/*..*/);
+let acquired_guard = Semaphore::new_acquired(
+        client,
+        "your/semaphore/name/in/meta/service",
+        2,                          // capacity: 2 acquired at most
+        "id11",                     // ID of this acquirer
+        Duration::from_secs(3)      // lease time
+).await?;
 
-// Create a semaphore instance
-let semaphore = Semaphore::new(prefix, capacity);
-
-// Acquire a semaphore
-let guard = semaphore.acquire(id, value).await?;
-
-// Use the acquired resource
-// ... your code here ...
-
-// The guard will automatically release the semaphore when dropped
+acquired_guard.await;
+// Released
 ```
 
 ## Implementation Details

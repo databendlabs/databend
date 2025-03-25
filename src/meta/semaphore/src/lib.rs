@@ -16,8 +16,23 @@
 
 //! Implement a semaphore upon meta-service watch API and upsert API
 //!
-//! Semaphore key structure:
+//! Example:
 //!
+//! ```rust,ignore
+//! let client = MetaGrpcClient::try_create(/*..*/);
+//! let acquired_guard = Semaphore::new_acquired(
+//!         client,
+//!         "your/semaphore/name/in/meta/service",
+//!         2,                          // capacity: 2 acquired at most
+//!         "id11",                     // ID of this acquirer
+//!         Duration::from_secs(3)      // lease time
+//! ).await?;
+//!
+//! acquired_guard.await;
+//! // Released
+//! ```
+//!
+//! Semaphore key structure:
 //! ```text
 //! <prefix>/meta          -> {capacity: 10} // this is not implemented in this version; 2025-03-19
 //! <prefix>/queue/<seq_1>  -> {id: "<id_1>", value: 1}
@@ -107,7 +122,6 @@
 //!       It gets Ready with an error [`ConnectionClosed`] if the stream from KV-Change-Subscriber is closed.
 //!
 //!    **Applications should poll the [`AcquiredGuard`] as a Future to detect when the semaphore is released**
-//!
 //! ```text
 //! | Semaphore -> spawn()-. (1)
 //! |     |                |
