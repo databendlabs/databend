@@ -1237,7 +1237,10 @@ impl AppErrorMessage for DuplicatedUpsertFiles {}
 
 impl AppErrorMessage for CommitTableMetaError {
     fn message(&self) -> String {
-        format!("Commit table '{}' fail", self.table_name)
+        format!(
+            "Create table '{}' failed, possibly because a table with the same name already exists",
+            self.table_name
+        )
     }
 }
 
