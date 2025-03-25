@@ -470,23 +470,23 @@ impl SubqueryRewriter {
         left_conditions: &mut Vec<ScalarExpr>,
         right_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
-        let mut correlated_columns = correlated_columns.clone().into_iter().collect::<Vec<_>>();
+        let mut correlated_columns = correlated_columns.iter().copied().collect::<Vec<_>>();
         correlated_columns.sort();
-        for correlated_column in correlated_columns.iter() {
+        for correlated_column in correlated_columns {
             let metadata = self.metadata.read();
-            let column_entry = metadata.column(*correlated_column);
+            let column_entry = metadata.column(correlated_column);
             let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
                 column: ColumnBindingBuilder::new(
                     column_entry.name(),
-                    *correlated_column,
+                    correlated_column,
                     Box::from(column_entry.data_type()),
                     Visibility::Visible,
                 )
                 .table_index(column_entry.table_index())
                 .build(),
             });
-            let Some(derive_column) = self.derived_columns.get(correlated_column) else {
+            let Some(derive_column) = self.derived_columns.get(&correlated_column) else {
                 continue;
             };
             let column_entry = metadata.column(*derive_column);

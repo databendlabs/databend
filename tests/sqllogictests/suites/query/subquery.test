@@ -1064,7 +1064,6 @@ where t.k = any (select tab3.k from tab3 where tab3.k = t.n * 100 and tab3.m = t
 ----
 1 110
 
-onlyif fixme
 query II
 select t.n, t.m + t.k as result
 from (
@@ -1093,8 +1092,7 @@ from (
 1 220 0
 2 330 0
 
-onlyif fixme
-query II
+query III
 select
   t.n,
   t.m + t.k as result,

@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
@@ -65,7 +67,7 @@ impl SubqueryRewriter {
             if !need_cross_join {
                 return Ok(subquery.clone());
             }
-            return self.flatten_outer(outer, subquery, correlated_columns);
+            return self.rewrite_to_join_then_aggr(outer, subquery, correlated_columns);
         }
 
         match subquery.plan() {
@@ -681,7 +683,7 @@ impl SubqueryRewriter {
         Ok(subquery.clone())
     }
 
-    fn flatten_outer(
+    fn rewrite_to_join_then_aggr(
         &mut self,
         outer: &SExpr,
         subquery: &SExpr,
@@ -740,7 +742,7 @@ impl SubqueryRewriter {
     fn clone_outer_plan(&mut self, plan: &RelOperator) -> Result<RelOperator> {
         let op = match plan {
             RelOperator::DummyTableScan(_) => DummyTableScan.into(),
-            RelOperator::ConstantTableScan(scan) => self.clone_outer_constant_table_scan(scan),
+            RelOperator::ConstantTableScan(scan) => self.clone_outer_constant_table_scan(scan)?,
             RelOperator::Scan(scan) => self.clone_outer_scan(scan),
             RelOperator::EvalScalar(eval) => self.clone_outer_eval_scalar(eval)?,
             RelOperator::Limit(limit) => limit.clone().into(),
@@ -804,27 +806,28 @@ impl SubqueryRewriter {
         Ok(op)
     }
 
-    fn clone_outer_constant_table_scan(&mut self, scan: &ConstantTableScan) -> RelOperator {
+    fn clone_outer_constant_table_scan(&mut self, scan: &ConstantTableScan) -> Result<RelOperator> {
         let mut metadata = self.metadata.write();
-        let columns = sorted_iter(&scan.columns)
-            .map(|col| {
-                let column_entry = metadata.column(col).clone();
-                let derived_index = metadata.add_derived_column(
-                    column_entry.name(),
-                    column_entry.data_type(),
-                    None,
-                );
-                self.derived_columns.insert(col, derived_index);
-                derived_index
+        let ((values, fields), columns) = sorted_iter(&scan.columns)
+            .map(|index| {
+                let (value, field) = scan.value(index)?;
+                let name = metadata.column(index).name();
+                let derived_index =
+                    metadata.add_derived_column(name, field.data_type().clone(), None);
+
+                let field = DataField::new(&derived_index.to_string(), field.data_type().clone());
+                self.derived_columns.insert(index, derived_index);
+                Ok(((value, field), derived_index))
             })
-            .collect();
-        ConstantTableScan {
-            values: scan.values.clone(),
+            .collect::<Result<((Vec<_>, Vec<_>), ColumnSet)>>()?;
+
+        Ok(ConstantTableScan {
+            values,
             num_rows: scan.num_rows,
-            schema: scan.schema.clone(),
+            schema: Arc::new(DataSchema::new(fields)),
             columns,
         }
-        .into()
+        .into())
     }
 
     fn clone_outer_scan(&mut self, scan: &Scan) -> RelOperator {
