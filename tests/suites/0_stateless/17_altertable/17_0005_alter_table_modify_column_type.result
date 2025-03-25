@@ -41,3 +41,22 @@ Error: APIError: QueryFailed: [1006]null value in column `a` of table `f` violat
 	2
 a	VARCHAR	NO	''	
 b	INT	NO	0	
+begin test modify column NULL to not NULL
+1
+1	1
+a	1
+b	NULL
+NULL	3
+d	4
+1
+a	1
+b	NULL
+	3
+d	4
+1
+a	1
+b	0
+	3
+d	4
+a	VARCHAR	NO	''	
+b	INT	NO	0	
