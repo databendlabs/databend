@@ -947,22 +947,22 @@ drop table test_group;
 
 # https://github.com/databendlabs/databend/issues/17476
 statement ok
-CREATE OR REPLACE TABLE t1 AS SELECT * FROM (VALUES (0)) t(i1);
+CREATE OR REPLACE TABLE t1 AS SELECT * FROM (VALUES (5),(8)) t(i1);
 
 statement ok
-CREATE OR REPLACE TABLE t2 AS SELECT * FROM (VALUES (0)) t(i1);
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM (VALUES (7),(8),(9)) t(i1);
 
-onlyif fixme
+statement ok
+CREATE OR REPLACE TABLE t3 AS SELECT * FROM (VALUES (5),(5)) t(i1);
+
 query I
-SELECT 1 FROM t1
-WHERE t1.i1 = (
-  SELECT t1.i1
-    FROM t2 UNION
-  SELECT dt1.i1
-    FROM (t1 AS dt1)
+SELECT i1 FROM t1
+WHERE t1.i1 != ANY (
+  SELECT t1.i1 FROM t2 UNION
+  SELECT t3.i1 FROM t3
 );
 ----
-1
+8
 
 statement ok
 CREATE OR REPLACE TABLE employees AS

@@ -630,16 +630,25 @@ impl SubqueryRewriter {
             flatten_info,
             need_cross_join,
         )?;
-        for (old, expr) in &mut union_all.left_outputs {
-            if let Some(new) = self.derived_columns.get(old) {
-                if let Some(expr) = expr {
-                    expr.replace_column(*old, *new)?;
+
+        union_all.left_outputs = union_all
+            .left_outputs
+            .drain(..)
+            .map(|(old, mut expr)| {
+                let Some(&new) = self.derived_columns.get(&old) else {
+                    return Ok((old, expr));
                 };
-                *old = *new
-            };
-        }
-        self.derived_columns
-            .retain(|_, derived_column| union_all.output_indexes.contains(derived_column));
+                if let Some(expr) = &mut expr {
+                    expr.replace_column(old, new)?;
+                };
+                Ok((new, expr))
+            })
+            .chain(sorted_iter(correlated_columns).map(|old| {
+                let new = *self.derived_columns.get(&old).unwrap();
+                Ok((new, None))
+            }))
+            .collect::<Result<_>>()?;
+        self.derived_columns.clear();
 
         let right_flatten_plan = self.flatten_plan(
             outer,
@@ -648,16 +657,36 @@ impl SubqueryRewriter {
             flatten_info,
             need_cross_join,
         )?;
-        for (old, expr) in &mut union_all.right_outputs {
-            if let Some(new) = self.derived_columns.get(old) {
-                if let Some(expr) = expr {
-                    expr.replace_column(*old, *new)?;
+        union_all.right_outputs = union_all
+            .right_outputs
+            .drain(..)
+            .map(|(old, mut expr)| {
+                let Some(&new) = self.derived_columns.get(&old) else {
+                    return Ok((old, expr));
                 };
-                *old = *new
-            };
-        }
-        self.derived_columns
-            .retain(|_, derived_column| union_all.output_indexes.contains(derived_column));
+                if let Some(expr) = &mut expr {
+                    expr.replace_column(old, new)?;
+                };
+                Ok((new, expr))
+            })
+            .chain(sorted_iter(correlated_columns).map(|old| {
+                let new = *self.derived_columns.get(&old).unwrap();
+                Ok((new, None))
+            }))
+            .collect::<Result<_>>()?;
+        self.derived_columns.clear();
+
+        let mut metadata = self.metadata.write();
+        union_all
+            .output_indexes
+            .extend(sorted_iter(correlated_columns).map(|old| {
+                let column_entry = metadata.column(old);
+                let name = column_entry.name();
+                let data_type = column_entry.data_type();
+                let new = metadata.add_derived_column(name, data_type, None);
+                self.derived_columns.insert(old, new);
+                new
+            }));
 
         Ok(SExpr::create_binary(
             Arc::new(union_all.clone().into()),
