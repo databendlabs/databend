@@ -912,7 +912,7 @@ CREATE TABLE `merge_log` (
   `created_at` TIMESTAMP NULL
 ) ENGINE = FUSE;
 
-query
+query 
 SELECT
   (SELECT MAX(created_at)
    FROM merge_log
@@ -962,22 +962,10 @@ drop table test_group;
 
 # https://github.com/databendlabs/databend/issues/17476
 statement ok
-DROP TABLE IF EXISTS t1;
+CREATE OR REPLACE TABLE t1 AS SELECT * FROM (VALUES (0)) t(i1);
 
 statement ok
-DROP TABLE IF EXISTS t2;
-
-statement ok
-CREATE TABLE t1 (i1 INT);
-
-statement ok
-CREATE TABLE t2 (i1 INT);
-
-statement ok
-insert into t1 values (0);
-
-statement ok
-insert into t2 values (0);
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM (VALUES (0)) t(i1);
 
 onlyif fixme
 query I
@@ -1034,12 +1022,41 @@ WHERE
     e.salary > ANY (
         SELECT salary
         FROM salaries
-        WHERE employee_id <> e.employee_id
+        WHERE employee_id != e.employee_id
     )
 ORDER BY employee_id;
 ----
 2 2
 3 3
+
+query II
+SELECT 
+    e.employee_id, 
+    d.department_name
+FROM 
+    employees e
+INNER JOIN 
+    departments d 
+ON 
+    e.employee_id = d.manager_id
+WHERE 
+    e.salary <= ALL (
+        SELECT salary
+        FROM salaries
+        WHERE employee_id != e.employee_id
+    )
+ORDER BY employee_id;
+----
+1 1
+
+statement ok
+drop table employees;
+
+statement ok
+drop table departments;
+
+statement ok
+drop table salaries;
 
 statement ok
 create or replace table tab1 as select * from (values (1), (2), (3)) tab(n);
@@ -1123,3 +1140,32 @@ order by result;
 1 110
 1 120
 2 130
+
+statement ok
+create or replace table tab1 as select * from (values (1), (2), (3)) tab(n);
+
+statement ok
+create or replace table tab2 as select * from (values (1, 10), (1, 20), (2, 30)) tab(n, m);
+
+query II
+select t.n, t.total_m
+from (
+    select n, sum(m) as total_m
+    from tab2
+    group by n
+) t
+where t.total_m = any (
+    select sum(m)+20 from tab2 
+    where tab2.n = t.n and m <= t.total_m / 2
+);
+----
+1 30
+
+statement ok
+drop table tab1;
+
+statement ok
+drop table tab2;
+
+statement ok
+drop table tab3;
