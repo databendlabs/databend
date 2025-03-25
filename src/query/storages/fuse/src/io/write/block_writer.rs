@@ -18,23 +18,17 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
-use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
-use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
@@ -42,21 +36,17 @@ use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet;
-use databend_storages_common_index::BloomIndex;
-use databend_storages_common_io::ReadSettings;
-use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
-use crate::io::block_to_inverted_index;
+use crate::io::write::InvertedIndexBuilder;
+use crate::io::write::InvertedIndexState;
 use crate::io::write::WriteSettings;
-use crate::io::BlockReader;
-use crate::io::InvertedIndexWriter;
+use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::column_parquet_metas;
 use crate::statistics::gen_columns_statistics;
@@ -127,213 +117,6 @@ pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str)
     Ok(())
 }
 
-pub struct BloomIndexState {
-    pub(crate) data: Vec<u8>,
-    pub(crate) size: u64,
-    pub(crate) location: Location,
-    pub(crate) column_distinct_count: HashMap<FieldIndex, usize>,
-}
-
-pub struct BloomIndexBuilder {
-    pub table_ctx: Arc<dyn TableContext>,
-    pub table_schema: TableSchemaRef,
-    pub table_dal: Operator,
-    pub storage_format: FuseStorageFormat,
-    pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
-}
-
-impl BloomIndexBuilder {
-    pub fn bloom_index_state_from_data_block(
-        &self,
-        block: &DataBlock,
-        bloom_location: Location,
-    ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
-        let maybe_bloom_index = BloomIndex::try_create(
-            self.table_ctx.get_function_context()?,
-            bloom_location.1,
-            block,
-            self.bloom_columns_map.clone(),
-        )?;
-
-        match maybe_bloom_index {
-            None => Ok(None),
-            Some(bloom_index) => Ok(Some((
-                BloomIndexState::from_bloom_index(&bloom_index, bloom_location)?,
-                bloom_index,
-            ))),
-        }
-    }
-
-    pub async fn bloom_index_state_from_block_meta(
-        &self,
-        bloom_index_location: &Location,
-        block_read_info: &BlockReadInfo,
-    ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
-        let ctx = self.table_ctx.clone();
-
-        let projection =
-            Projection::Columns((0..self.table_schema.fields().len()).collect::<Vec<usize>>());
-
-        let block_reader = BlockReader::create(
-            ctx,
-            self.table_dal.clone(),
-            self.table_schema.clone(),
-            projection,
-            false,
-            false,
-            false,
-        )?;
-
-        let settings = ReadSettings::from_ctx(&self.table_ctx)?;
-
-        let merge_io_read_result = block_reader
-            .read_columns_data_by_merge_io(
-                &settings,
-                &block_read_info.location,
-                &block_read_info.col_metas,
-                &None,
-            )
-            .await?;
-
-        let data_block = block_reader.deserialize_chunks_with_meta(
-            block_read_info,
-            &self.storage_format,
-            merge_io_read_result,
-        )?;
-
-        self.bloom_index_state_from_data_block(&data_block, bloom_index_location.clone())
-    }
-}
-
-impl BloomIndexState {
-    pub fn from_bloom_index(bloom_index: &BloomIndex, location: Location) -> Result<Self> {
-        let index_block = bloom_index.serialize_to_data_block()?;
-        let filter_schema = &bloom_index.filter_schema;
-        let column_distinct_count = bloom_index.column_distinct_count.clone();
-        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let index_block_schema = filter_schema;
-        let _ = blocks_to_parquet(
-            index_block_schema,
-            vec![index_block],
-            &mut data,
-            TableCompression::None,
-        )?;
-        let data_size = data.len() as u64;
-        Ok(Self {
-            data,
-            size: data_size,
-            location,
-            column_distinct_count,
-        })
-    }
-    pub fn from_data_block(
-        ctx: Arc<dyn TableContext>,
-        block: &DataBlock,
-        location: Location,
-        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
-    ) -> Result<Option<Self>> {
-        // write index
-        let maybe_bloom_index = BloomIndex::try_create(
-            ctx.get_function_context()?,
-            location.1,
-            block,
-            bloom_columns_map,
-        )?;
-        if let Some(bloom_index) = maybe_bloom_index {
-            Ok(Some(Self::from_bloom_index(&bloom_index, location)?))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct InvertedIndexBuilder {
-    pub(crate) name: String,
-    pub(crate) version: String,
-    pub(crate) schema: DataSchema,
-    pub(crate) options: BTreeMap<String, String>,
-}
-
-pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedIndexBuilder> {
-    let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
-    for index in table_meta.indexes.values() {
-        if !index.sync_creation {
-            continue;
-        }
-        let mut index_fields = Vec::with_capacity(index.column_ids.len());
-        for column_id in &index.column_ids {
-            for field in &table_meta.schema.fields {
-                if field.column_id() == *column_id {
-                    index_fields.push(DataField::from(field));
-                    break;
-                }
-            }
-        }
-        // ignore invalid index
-        if index_fields.len() != index.column_ids.len() {
-            continue;
-        }
-        let index_schema = DataSchema::new(index_fields);
-
-        let inverted_index_builder = InvertedIndexBuilder {
-            name: index.name.clone(),
-            version: index.version.clone(),
-            schema: index_schema,
-            options: index.options.clone(),
-        };
-        inverted_index_builders.push(inverted_index_builder);
-    }
-    inverted_index_builders
-}
-
-pub struct InvertedIndexState {
-    pub(crate) data: Vec<u8>,
-    pub(crate) size: u64,
-    pub(crate) location: Location,
-}
-
-impl InvertedIndexState {
-    pub fn try_create(
-        source_schema: &TableSchemaRef,
-        block: &DataBlock,
-        block_location: &Location,
-        inverted_index_builder: &InvertedIndexBuilder,
-    ) -> Result<Self> {
-        let start = Instant::now();
-        let mut writer = InvertedIndexWriter::try_create(
-            Arc::new(inverted_index_builder.schema.clone()),
-            &inverted_index_builder.options,
-        )?;
-        writer.add_block(source_schema, block)?;
-        let (index_schema, index_block) = writer.finalize()?;
-
-        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        block_to_inverted_index(&index_schema, index_block, &mut data)?;
-        let size = data.len() as u64;
-
-        // Perf.
-        {
-            metrics_inc_block_inverted_index_generate_milliseconds(
-                start.elapsed().as_millis() as u64
-            );
-        }
-
-        let inverted_index_location =
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &block_location.0,
-                &inverted_index_builder.name,
-                &inverted_index_builder.version,
-            );
-
-        Ok(Self {
-            data,
-            size,
-            location: (inverted_index_location, 0),
-        })
-    }
-}
-
 pub struct BlockSerialization {
     pub block_raw_data: Vec<u8>,
     pub size: u64, // TODO redundancy
@@ -376,7 +159,7 @@ impl BlockBuilder {
 
         let mut inverted_index_states = Vec::with_capacity(self.inverted_index_builders.len());
         for inverted_index_builder in &self.inverted_index_builders {
-            let inverted_index_state = InvertedIndexState::try_create(
+            let inverted_index_state = InvertedIndexState::from_data_block(
                 &self.source_schema,
                 &data_block,
                 &block_location,

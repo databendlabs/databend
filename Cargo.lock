@@ -4225,6 +4225,7 @@ dependencies = [
  "itertools 0.13.0",
  "jsonb",
  "log",
+ "match-template",
  "opendal",
  "parking_lot 0.12.3",
  "parquet",

@@ -21,6 +21,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::io::serialize_block;
+use databend_common_storages_fuse::io::BloomIndexBuilder;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::FuseStorageFormat;
@@ -127,12 +128,9 @@ impl<'a> BlockWriter<'a> {
         let bloom_index_cols = BloomIndexColumns::All;
         let bloom_columns_map =
             bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
-        let maybe_bloom_index = BloomIndex::try_create(
-            FunctionContext::default(),
-            location.1,
-            block,
-            bloom_columns_map,
-        )?;
+        let mut builder = BloomIndexBuilder::create(FunctionContext::default(), bloom_columns_map);
+        builder.add_block(block)?;
+        let maybe_bloom_index = builder.finalize()?;
         if let Some(bloom_index) = maybe_bloom_index {
             let index_block = bloom_index.serialize_to_data_block()?;
             let filter_schema = bloom_index.filter_schema;

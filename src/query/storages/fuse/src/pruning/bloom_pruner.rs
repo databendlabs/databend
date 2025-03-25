@@ -39,7 +39,7 @@ use opendal::Operator;
 
 use crate::io::BlockWriter;
 use crate::io::BloomBlockFilterReader;
-use crate::io::BloomIndexBuilder;
+use crate::io::BloomIndexRebuilder;
 
 #[async_trait::async_trait]
 pub trait BloomPruner {
@@ -73,7 +73,7 @@ pub struct BloomPrunerCreator {
     data_schema: TableSchemaRef,
 
     /// bloom index builder, if set to Some(_), missing bloom index will be built during pruning
-    bloom_index_builder: Option<BloomIndexBuilder>,
+    bloom_index_builder: Option<BloomIndexRebuilder>,
 }
 
 impl BloomPrunerCreator {
@@ -83,7 +83,7 @@ impl BloomPrunerCreator {
         dal: Operator,
         filter_expr: Option<&Expr<String>>,
         bloom_index_cols: BloomIndexColumns,
-        bloom_index_builder: Option<BloomIndexBuilder>,
+        bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Option<Arc<dyn BloomPruner + Send + Sync>>> {
         let Some(expr) = filter_expr else {
             return Ok(None);
@@ -203,7 +203,7 @@ impl BloomPrunerCreator {
     async fn try_rebuild_missing_bloom_index(
         &self,
         bloom_index_location: &Location,
-        bloom_index_builder: &BloomIndexBuilder,
+        bloom_index_builder: &BloomIndexRebuilder,
         index_columns: &[String],
         block_read_info: &BlockReadInfo,
     ) -> Result<Option<BlockFilter>> {

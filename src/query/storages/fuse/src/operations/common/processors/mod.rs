@@ -14,6 +14,7 @@
 
 mod multi_table_insert_commit;
 mod sink_commit;
+// mod transform_block_writer;
 mod transform_merge_commit_meta;
 mod transform_mutation_aggregator;
 mod transform_serialize_block;
