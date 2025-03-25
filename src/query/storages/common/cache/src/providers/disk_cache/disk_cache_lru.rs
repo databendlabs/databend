@@ -177,7 +177,7 @@ impl LruDiskCacheBuilder {
     }
 }
 
-#[cfg(not(linux))]
+#[cfg(not(target_os = "linux"))]
 pub fn read_cache_content(path: PathBuf, size: usize) -> std::io::Result<Vec<u8>> {
     use std::fs::File;
     use std::io::Read;
@@ -188,11 +188,12 @@ pub fn read_cache_content(path: PathBuf, size: usize) -> std::io::Result<Vec<u8>
     Ok(v)
 }
 
-#[cfg(linux)]
+#[cfg(target_os = "linux")]
 pub fn read_cache_content(path: PathBuf, size: usize) -> std::io::Result<Vec<u8>> {
     linux_read::read_cache_content_with_syscall(path, size, linux_read::LibcRead)
 }
 
+#[cfg(target_os = "linux")]
 mod linux_read {
 
     #[cfg(test)]
@@ -223,7 +224,6 @@ mod linux_read {
         }
     }
 
-    #[cfg(linux)]
     pub(super) fn read_cache_content_with_syscall<R: CallRead>(
         path: PathBuf,
         size: usize,
