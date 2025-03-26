@@ -1033,6 +1033,10 @@ impl TableContext for CtxDelegation {
     async fn get_warehouse_nodes(&self) -> Result<Arc<Cluster>> {
         todo!()
     }
+
+    async fn get_tenant_nodes(&self) -> Result<Arc<Cluster>> {
+        todo!()
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

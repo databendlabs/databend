@@ -43,7 +43,8 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_types::NodeInfo;
-use databend_common_storage::DataOperator;
+use serde::ser::SerializeStruct;
+use serde::Serializer;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -52,8 +53,15 @@ pub static BENCHES_ACTION: &str = "/actions/benches";
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub enum TestMode {
-    Read { file_size: usize, iteration: usize },
-    Write { file_size: usize, iteration: usize },
+    Read {
+        file_size: usize,
+        iteration: usize,
+        read_write_ratio: usize,
+    },
+    Write {
+        file_size: usize,
+        iteration: usize,
+    },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -83,6 +91,7 @@ pub struct TestMetric {
     pub total_size: usize,
     pub total_duration: usize,
     pub latencies: Vec<u64>,
+    pub error_count: usize,
 }
 
 impl TestMetric {
@@ -124,7 +133,11 @@ impl TestMetric {
                 continue;
             };
 
-            let Some(latencies) = Self::get_u64_array(&block, 4, index) else {
+            let Some(error_count) = Self::get_u64(&block, 4, index) else {
+                continue;
+            };
+
+            let Some(latencies) = Self::get_u64_array(&block, 5, index) else {
                 continue;
             };
 
@@ -134,6 +147,7 @@ impl TestMetric {
                 total_size: total_size as usize,
                 total_duration: total_duration as usize,
                 latencies,
+                error_count: error_count as usize,
             })
         }
 
@@ -146,6 +160,7 @@ impl TestMetric {
             Float64Type::from_data(vec![self.max_throughput_per_object]),
             UInt64Type::from_data(vec![self.total_size as u64]),
             UInt64Type::from_data(vec![self.total_duration as u64]),
+            UInt64Type::from_data(vec![self.error_count as u64]),
             ArrayType::upcast_column(ArrayType::<UInt64Type>::column_from_iter(
                 vec![UInt64Type::column_from_iter(self.latencies.into_iter(), &[])].into_iter(),
                 &[],
@@ -175,20 +190,10 @@ impl TestMetric {
         let min_throughput_per_object = self.min_throughput_per_object / 1000_f64;
         let max_throughput_per_object = self.max_throughput_per_object / 1000_f64;
         ThroughputSummary {
-            totals: format!("{}/s", convert_byte_size(totals)),
-            min_throughput_per_object: format!(
-                "{}/s",
-                convert_byte_size(min_throughput_per_object)
-            ),
-            max_throughput_per_object: format!(
-                "{}/s",
-                convert_byte_size(max_throughput_per_object)
-            ),
+            totals,
+            min_throughput_per_object,
+            max_throughput_per_object,
         }
-    }
-
-    pub fn score(&self) -> f64 {
-        0_f64
     }
 
     pub fn latency(&self) -> LatencySummary {
@@ -213,8 +218,6 @@ impl BenchesSummaryTable {
             // list, read, write, read_and_write
             TableField::new("bench_type", TableDataType::String),
             // read, write, read_and_write: (64K，1M，4M，16M)
-            // concurrency: 128, 256, 512, 1024, 2048, 4096, 8192
-            // list: 10, 100, 1000
             TableField::new("bench_arguments", TableDataType::Variant),
             // {"min_throughput_per_object": "{:.2} MB/s", "max_throughput_per_object": "{:.2} MB/s", summary: "{:.2} MB/s"}
             TableField::new("throughput", TableDataType::Variant),
@@ -255,19 +258,19 @@ impl AsyncSystemTable for BenchesSummaryTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let tenant_nodes = ctx.get_tenant_nodes().await?;
+        let warehouse_nodes = ctx.get_warehouse_nodes().await?;
 
-        if tenant_nodes.nodes.is_empty() {
+        if warehouse_nodes.nodes.is_empty() {
             return Ok(DataBlock::empty());
         }
 
         let mut worker = BenchWorker::create(
-            tenant_nodes.clone(),
-            tenant_nodes.nodes[0].clone(),
+            warehouse_nodes.clone(),
+            warehouse_nodes.nodes[0].clone(),
             DistributionLevel::Tenant,
         );
 
-        worker.probe_concurrency(100).await?;
+        worker.probe_bench().await?;
 
         let summary_items = worker.finalize();
 
@@ -328,14 +331,14 @@ impl BenchWorker {
             TestMode::Read {
                 file_size,
                 iteration,
+                read_write_ratio: multiple_write,
             } => (
                 String::from("Read"),
                 HashMap::from([
-                    ("file_size".to_string(), convert_byte_size(file_size as f64)),
-                    (
-                        "iteration".to_string(),
-                        convert_number_size(iteration as f64),
-                    ),
+                    ("file_size", convert_byte_size(file_size as f64)),
+                    ("iteration", convert_number_size(iteration as f64)),
+                    ("multiple_write", multiple_write.to_string()),
+                    ("concurrency", concurrency.to_string()),
                 ]),
             ),
             TestMode::Write {
@@ -344,11 +347,9 @@ impl BenchWorker {
             } => (
                 String::from("Write"),
                 HashMap::from([
-                    ("file_size".to_string(), convert_byte_size(file_size as f64)),
-                    (
-                        "iteration".to_string(),
-                        convert_number_size(iteration as f64),
-                    ),
+                    ("concurrency", concurrency.to_string()),
+                    ("file_size", convert_byte_size(file_size as f64)),
+                    ("iteration", convert_number_size(iteration as f64)),
                 ]),
             ),
         };
@@ -392,25 +393,54 @@ impl BenchWorker {
             DistributionLevel::Tenant => String::from("Tenant"),
         };
 
+        let latency = metric.latency();
+        let throughput = metric.throughput();
+        let score = match latency.p99 <= 0_f64 {
+            true => f64::MAX,
+            false => throughput.totals / latency.p99,
+        };
+
         self.summary_items.push(TestSummary {
             case: display_case,
             level: display_level,
             case_arguments: display_arguments,
-            throughput: metric.throughput(),
-            latency: metric.latency(),
-            score: metric.score(),
+            throughput,
+            latency,
+            score,
         });
 
         Ok(())
     }
 
-    async fn probe_file_size(&mut self, concurrency: usize, iteration: usize) -> Result<()> {
-        for file_size in [
-            64 * 1024,
-            // 1 * 1024 * 1024,
-            // 4 * 1024 * 1024,
-            // 16 * 1024 * 1024,
-        ] {
+    async fn probe_bench(&mut self) -> Result<()> {
+        let case = vec![
+            // 64KB * 1000 * 128 = 8G data per node
+            (64 * 1024, 1000, 128, 2),  // concurrency: W-128, R-256
+            (64 * 1024, 1000, 128, 4),  // concurrency: W-128, R-512
+            (64 * 1024, 1000, 128, 8),  // concurrency: W-128, R-1024
+            // (64 * 1024, 1000, 128, 32), // concurrency: W-128, R-4096
+            // (64 * 1024, 1000, 128, 64), // concurrency: W-128, R-8192
+            // 1MB * 1000 * 8 = 8G data per node
+            (1024 * 1024, 1000, 8, 32),  // concurrency: W-8, R-256
+            (1024 * 1024, 1000, 8, 64),  // concurrency: W-8, R-512
+            (1024 * 1024, 1000, 8, 128), // concurrency: W-8, R-1024
+            // (1 * 1024 * 1024, 1000, 8, 512), // concurrency: W-8, R-4096
+            // (1 * 1024 * 1024, 1000, 8, 1024), // concurrency: W-8, R-8192
+            // 4MB * 1000 * 2 = 8G data per node
+            (4 * 1024 * 1024, 1000, 2, 128), // concurrency: W-2, R-256
+            (4 * 1024 * 1024, 1000, 2, 256), // concurrency: W-2, R-512
+            (4 * 1024 * 1024, 1000, 2, 512), // concurrency: W-2, R-1024
+            // (4 * 1024 * 1024, 1000, 2, 2048), // concurrency: W-2, R-4096
+            // (4 * 1024 * 1024, 1000, 2, 4096), // concurrency: W-2, R-8192
+            // 16MB * 256 * 2 = 8G data per node
+            (16 * 1024 * 1024, 256, 2, 128), // concurrency: W-2, R-256
+            (16 * 1024 * 1024, 256, 2, 256), // concurrency: W-2, R-512
+            (16 * 1024 * 1024, 256, 2, 512), // concurrency: W-2, R-1024
+            // (16 * 1024 * 1024, 256, 2, 2048), // concurrency: W-2, R-4096
+            // (16 * 1024 * 1024, 256, 2, 4096), // concurrency: W-2, R-8192
+        ];
+
+        for (file_size, iteration, concurrency, read_write_ratio) in case {
             let dir = GlobalUniqName::unique();
             self.run(
                 concurrency,
@@ -426,21 +456,11 @@ impl BenchWorker {
                 TestMode::Read {
                     file_size,
                     iteration,
+                    read_write_ratio,
                 },
                 dir.clone(),
             )
             .await?;
-
-            let operator = DataOperator::instance().operator();
-            operator.remove_all(&format!("benchmark/{}/", dir)).await?;
-        }
-
-        Ok(())
-    }
-
-    pub async fn probe_concurrency(&mut self, iteration: usize) -> Result<()> {
-        for concurrency in [3 /* 128, 256, 512, 1024, 2048, 4096, 8192 */] {
-            self.probe_file_size(concurrency, iteration).await?;
         }
 
         Ok(())
@@ -451,23 +471,87 @@ impl BenchWorker {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ThroughputSummary {
-    totals: String,
-    min_throughput_per_object: String,
-    max_throughput_per_object: String,
+    totals: f64,
+    min_throughput_per_object: f64,
+    max_throughput_per_object: f64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+impl serde::Serialize for ThroughputSummary {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where S: Serializer {
+        let mut throughput = serializer.serialize_struct("ThroughputSummary", 3)?;
+        throughput.serialize_field("totals", &format!("{}/s", convert_byte_size(self.totals)))?;
+        throughput.serialize_field(
+            "min_throughput_per_object",
+            &format!("{}/s", convert_byte_size(self.min_throughput_per_object)),
+        )?;
+        throughput.serialize_field(
+            "max_throughput_per_object",
+            &format!("{}/s", convert_byte_size(self.max_throughput_per_object)),
+        )?;
+        throughput.end()
+    }
+}
+
 pub struct LatencySummary {
-    min_latency: String,
-    max_latency: String,
-    avg_latency: String,
-    variance: String,
-    p50: String,
-    p90: String,
-    p95: String,
-    p99: String,
+    min_latency: f64,
+    max_latency: f64,
+    avg_latency: f64,
+    variance: f64,
+    p50: f64,
+    p90: f64,
+    p95: f64,
+    p99: f64,
+}
+
+impl serde::Serialize for LatencySummary {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where S: Serializer {
+        let mut latency_summary = serializer.serialize_struct("LatencySummary", 8)?;
+
+        latency_summary.serialize_field("min_latency", &match self.min_latency.is_nan() {
+            true => "N/A".to_string(),
+            false => format!("{:.3}", self.min_latency),
+        })?;
+
+        latency_summary.serialize_field("max_latency", &match self.max_latency.is_nan() {
+            true => "N/A".to_string(),
+            false => format!("{:.3}", self.max_latency),
+        })?;
+
+        latency_summary.serialize_field("avg_latency", &match self.avg_latency.is_nan() {
+            true => "N/A".to_string(),
+            false => format!("{:.3}", self.avg_latency),
+        })?;
+
+        latency_summary.serialize_field("variance", &match self.variance.is_nan() {
+            true => "N/A".to_string(),
+            false => format!("{:.3}", self.variance),
+        })?;
+
+        latency_summary.serialize_field("p50", &match self.p50.is_nan() {
+            true => "N/A".to_string(),
+            false => format!("{:.3}", self.p50),
+        })?;
+
+        latency_summary.serialize_field("p90", &match self.p90.is_nan() {
+            true => "N/A".to_string(),
+            false => format!("{:.3}", self.p90),
+        })?;
+
+        latency_summary.serialize_field("p95", &match self.p95.is_nan() {
+            true => "N/A".to_string(),
+            false => format!("{:.3}", self.p95),
+        })?;
+
+        latency_summary.serialize_field("p99", &match self.p99.is_nan() {
+            true => "N/A".to_string(),
+            false => format!("{:.3}", self.p99),
+        })?;
+
+        latency_summary.end()
+    }
 }
 
 impl LatencySummary {
@@ -485,27 +569,27 @@ impl LatencySummary {
             sorted_data.iter().map(|x| (x - avg).powi(2)).sum::<f64>() / sorted_data.len() as f64;
 
         Self {
-            min_latency: format!("{:.3}", min),
-            max_latency: format!("{:.3}", max),
-            avg_latency: format!("{:.3}", avg),
-            variance: format!("{:.3}", variance),
-            p50: format!("{:.3}", Self::percentile(&sorted_data, 50.0)),
-            p90: format!("{:.3}", Self::percentile(&sorted_data, 90.0)),
-            p95: format!("{:.3}", Self::percentile(&sorted_data, 95.0)),
-            p99: format!("{:.3}", Self::percentile(&sorted_data, 99.0)),
+            min_latency: min,
+            max_latency: max,
+            avg_latency: avg,
+            variance,
+            p50: Self::percentile(&sorted_data, 50.0),
+            p90: Self::percentile(&sorted_data, 90.0),
+            p95: Self::percentile(&sorted_data, 95.0),
+            p99: Self::percentile(&sorted_data, 99.0),
         }
     }
 
     fn empty_summary() -> Self {
         Self {
-            min_latency: "N/A".to_string(),
-            max_latency: "N/A".to_string(),
-            avg_latency: "N/A".to_string(),
-            variance: "N/A".to_string(),
-            p50: "N/A".to_string(),
-            p90: "N/A".to_string(),
-            p95: "N/A".to_string(),
-            p99: "N/A".to_string(),
+            min_latency: f64::NAN,
+            max_latency: f64::NAN,
+            avg_latency: f64::NAN,
+            variance: f64::NAN,
+            p50: f64::NAN,
+            p90: f64::NAN,
+            p95: f64::NAN,
+            p99: f64::NAN,
         }
     }
 
@@ -526,7 +610,7 @@ impl LatencySummary {
 pub struct TestSummary {
     level: String,
     case: String,
-    case_arguments: HashMap<String, String>,
+    case_arguments: HashMap<&'static str, String>,
 
     latency: LatencySummary,
     throughput: ThroughputSummary,

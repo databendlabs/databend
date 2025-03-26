@@ -18,14 +18,8 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::ArrayType;
-use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -106,6 +100,7 @@ impl BenchesTable {
                         "total_duration",
                         TableDataType::Number(NumberDataType::UInt64),
                     ),
+                    TableField::new("error_count", TableDataType::Number(NumberDataType::UInt64)),
                     TableField::new(
                         "latencies",
                         TableDataType::Array(Box::new(TableDataType::Number(
@@ -224,20 +219,7 @@ impl AsyncSource for BenchesWorker {
             )
             .await?;
 
-            return Ok(Some(DataBlock::new_from_columns(vec![
-                Float64Type::from_data(vec![metric.min_throughput_per_object]),
-                Float64Type::from_data(vec![metric.max_throughput_per_object]),
-                UInt64Type::from_data(vec![metric.total_size as u64]),
-                UInt64Type::from_data(vec![metric.total_duration as u64]),
-                ArrayType::upcast_column(ArrayType::<UInt64Type>::column_from_iter(
-                    vec![UInt64Type::column_from_iter(
-                        metric.latencies.into_iter(),
-                        &[],
-                    )]
-                    .into_iter(),
-                    &[],
-                )),
-            ])));
+            return Ok(Some(metric.to_block()));
         }
 
         Ok(None)
@@ -247,18 +229,19 @@ impl AsyncSource for BenchesWorker {
 async fn test(
     operator: Operator,
     mode: TestMode,
-    concurrency: usize,
+    raw_concurrency: usize,
     prefix: String,
 ) -> Result<TestMetric> {
-    let (file_size, iteration) = match mode {
+    let (file_size, iteration, concurrency) = match mode {
         TestMode::Read {
             file_size,
             iteration,
-        } => (file_size, iteration),
+            read_write_ratio,
+        } => (file_size, iteration, raw_concurrency * read_write_ratio),
         TestMode::Write {
             file_size,
             iteration,
-        } => (file_size, iteration),
+        } => (file_size, iteration, raw_concurrency),
     };
 
     let content = Bytes::from(vec![234u8; file_size]);
@@ -274,33 +257,60 @@ async fn test(
         let barrier = barrier.clone();
         let node_id = node_id.clone();
         let prefix = prefix.clone();
+        let task_id = task_id % raw_concurrency;
 
         handles.push(databend_common_base::runtime::spawn(async move {
             let mut latencies = Vec::with_capacity(iteration);
             let _permit = barrier.wait().await;
 
+            let mut error_count = 0;
             for i in 0..iteration {
                 let object_path = format!("benchmark/{prefix}/{node_id}-{task_id}-{i}");
                 let start = Instant::now();
 
                 match mode {
                     TestMode::Read { .. } => {
-                        let _ = op.read(&object_path).await?;
+                        if op.read(&object_path).await.is_err() {
+                            error_count += 1;
+                        }
+
+                        latencies.push(start.elapsed().as_millis() as u64);
                     }
                     TestMode::Write { .. } => {
-                        let _ = op.write(&object_path, content.clone()).await?;
+                        // We will read it later
+                        if op.write(&object_path, content.clone()).await.is_err() {
+                            error_count += 1;
+                        }
+
+                        latencies.push(start.elapsed().as_millis() as u64);
                     }
                 };
-
-                latencies.push(start.elapsed().as_millis() as u64);
             }
-            Ok::<_, ErrorCode>(latencies)
+            Ok::<_, ErrorCode>((error_count, latencies))
         }));
     }
 
+    let mut totals_error_code = 0;
     let mut all_latencies = Vec::with_capacity(concurrency * iteration);
     for handle in handles {
-        all_latencies.extend(handle.await.unwrap()?);
+        let (error_count, latencies) = handle.await.unwrap()?;
+        totals_error_code += error_count;
+        all_latencies.extend(latencies);
+    }
+
+    if let TestMode::Read { .. } = mode {
+        // Safe delete after read
+        for task_id in 0..raw_concurrency {
+            if let Err(err) = operator
+                .delete_iter(
+                    (0..iteration)
+                        .map(|idx| format!("benchmark/{prefix}/{node_id}-{task_id}-{idx}")),
+                )
+                .await
+            {
+                log::warn!("Cannot remove benchmark file {:?}", err);
+            }
+        }
     }
 
     let throughputs: Vec<f64> = all_latencies
@@ -317,6 +327,7 @@ async fn test(
         total_size: file_size * concurrency * iteration,
         total_duration: all_latencies.iter().cloned().sum::<u64>() as usize,
         latencies: all_latencies,
+        error_count: totals_error_code,
     })
 }
 
