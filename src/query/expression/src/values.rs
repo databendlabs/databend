@@ -1436,10 +1436,23 @@ impl Column {
                 })
                 .take(len),
             )),
-            DataType::Nullable(ty) => NullableColumn::new_column(
-                Column::random(ty, len, options),
-                Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>()),
-            ),
+            DataType::Nullable(ty) => {
+                let column = Column::random(ty, len, options);
+                let bitmap =
+                    Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>());
+
+                // If the value is NULL, insert default value in underlying column
+                let mut builder = ColumnBuilder::with_capacity(ty, len);
+                for (valid, value) in bitmap.iter().zip(column.iter()) {
+                    if valid {
+                        builder.push(value);
+                    } else {
+                        builder.push_default();
+                    }
+                }
+                let new_column = builder.build();
+                NullableColumn::new_column(new_column, bitmap)
+            }
             DataType::Array(inner_ty) => {
                 let mut inner_len = 0;
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
