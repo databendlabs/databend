@@ -569,36 +569,37 @@ impl<R: SegmentReader> ReclusterMutator<R> {
     #[async_backtrace::framed]
     async fn gather_blocks(
         &self,
-        compact_segments: Vec<Arc<R::CompactSegment>>,
+        _compact_segments: Vec<Arc<R::CompactSegment>>,
     ) -> Result<Vec<Arc<BlockMeta>>> {
-        // combine all the tasks.
-        let mut iter = compact_segments.into_iter();
-        let tasks = std::iter::from_fn(|| {
-            iter.next().map(|v| {
-                async move {
-                    v.block_metas()
-                        .map_err(|_| ErrorCode::Internal("Failed to get block metas"))
-                }
-                .in_span(Span::enter_with_local_parent(func_path!()))
-            })
-        });
+        // // combine all the tasks.
+        // let mut iter = compact_segments.into_iter();
+        // let tasks = std::iter::from_fn(|| {
+        //     iter.next().map(|v| {
+        //         async move {
+        //             v.block_metas()
+        //                 .map_err(|_| ErrorCode::Internal("Failed to get block metas"))
+        //         }
+        //         .in_span(Span::enter_with_local_parent(func_path!()))
+        //     })
+        // });
 
-        let thread_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        // let thread_nums = self.ctx.get_settings().get_max_threads()? as usize;
 
-        let joint = execute_futures_in_parallel(
-            tasks,
-            thread_nums,
-            thread_nums * 2,
-            "convert-segments-worker".to_owned(),
-        )
-        .await?;
-        let blocks = joint
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-        Ok(blocks)
+        // let joint = execute_futures_in_parallel(
+        //     tasks,
+        //     thread_nums,
+        //     thread_nums * 2,
+        //     "convert-segments-worker".to_owned(),
+        // )
+        // .await?;
+        // let blocks = joint
+        //     .into_iter()
+        //     .collect::<Result<Vec<_>>>()?
+        //     .into_iter()
+        //     .flatten()
+        //     .collect::<Vec<_>>();
+        // Ok(blocks)
+        todo!()
     }
 
     fn fetch_max_depth(
