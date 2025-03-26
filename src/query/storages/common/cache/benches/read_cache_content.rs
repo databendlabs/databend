@@ -39,9 +39,9 @@ fn bench_read_cache_content(c: &mut Criterion) {
     let large_file_path = create_test_file(&temp_dir, "large.bin", 1024 * 1024); // 1MB
 
     // Benchmark Unix specific implementation (open with O_NOATIME, read with libc::read without stat / seek)
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     {
-        let mut group = c.benchmark_group("read_cache_content_unix_specific_impl");
+        let mut group = c.benchmark_group("read_cache_content_linux_specific_impl");
 
         group.bench_function("small_file_4KB", |b| {
             b.iter(|| {

@@ -21,11 +21,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
+use super::RelExpr;
 use super::RelationalProperty;
 use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::StatInfo;
 use crate::plans::Exchange;
+use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
@@ -115,6 +117,21 @@ impl SExpr {
             .get(n)
             .map(|v| v.as_ref())
             .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
+    }
+
+    pub fn unary_child(&self) -> &SExpr {
+        assert_eq!(self.children.len(), 1);
+        &self.children[0]
+    }
+
+    pub fn left_child(&self) -> &SExpr {
+        assert_eq!(self.children.len(), 2);
+        &self.children[0]
+    }
+
+    pub fn right_child(&self) -> &SExpr {
+        assert_eq!(self.children.len(), 2);
+        &self.children[1]
     }
 
     pub fn arity(&self) -> usize {
@@ -424,6 +441,17 @@ impl SExpr {
             return true;
         }
         self.children.iter().any(|child| child.has_merge_exchange())
+    }
+
+    pub fn derive_relational_prop(&self) -> Result<Arc<RelationalProperty>> {
+        if let Some(rel_prop) = self.rel_prop.lock().unwrap().as_ref() {
+            return Ok(rel_prop.clone());
+        }
+        let rel_prop = self
+            .plan
+            .derive_relational_prop(&RelExpr::SExpr { expr: self })?;
+        *self.rel_prop.lock().unwrap() = Some(rel_prop.clone());
+        Ok(rel_prop)
     }
 }
 

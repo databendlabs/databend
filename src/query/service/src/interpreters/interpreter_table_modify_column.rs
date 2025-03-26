@@ -267,7 +267,7 @@ impl ModifyTableColumnInterpreter {
                 // 2. default expr and computed expr not changed. Otherwise, we need fill value for
                 //    new added column.
                 if ((table.storage_format_as_parquet() && is_alter_column_string_to_binary)
-                    || old_field.data_type.remove_nullable() == field.data_type.remove_nullable())
+                    || old_field.data_type == field.data_type)
                     && old_field.default_expr == field.default_expr
                     && old_field.computed_expr == field.computed_expr
                 {
@@ -301,6 +301,8 @@ impl ModifyTableColumnInterpreter {
             .map(|(index, field)| {
                 if modified_field_indices.contains(&index) {
                     let old_field = schema.field_with_name(&field.name).unwrap();
+                    let need_remove_nullable =
+                        old_field.data_type.is_nullable() && !field.data_type.is_nullable();
                     // If the column type is Tuple or Array(Tuple), the difference in the number of leaf columns may cause
                     // the auto cast to fail.
                     // We read the leaf column data, and then use build function to construct a new Tuple or Array(Tuple).
@@ -421,7 +423,11 @@ impl ModifyTableColumnInterpreter {
                             )
                         }
                         (_, _) => {
-                            format!("`{}`", field.name)
+                            if need_remove_nullable {
+                                format!("remove_nullable(`{}`)", field.name)
+                            } else {
+                                format!("`{}`", field.name)
+                            }
                         }
                     }
                 } else {
