@@ -132,12 +132,14 @@ impl BlockThresholds {
     #[inline]
     pub fn calc_rows_for_recluster(
         &self,
-        total_bytes: usize,
         total_rows: usize,
+        total_bytes: usize,
         total_compressed: usize,
     ) -> usize {
         // Check if the data is compact enough to skip further calculations.
-        if self.check_for_compact(total_rows, total_bytes) {
+        if self.check_for_compact(total_rows, total_bytes)
+            && total_compressed < 2 * self.min_compressed_per_block
+        {
             return total_rows;
         }
 
@@ -153,10 +155,10 @@ impl BlockThresholds {
         let max_bytes_per_block = (4 * self.min_bytes_per_block).min(400 * 1024 * 1024);
         let min_bytes_per_block = (self.min_bytes_per_block / 2).min(50 * 1024 * 1024);
         let block_nums = if bytes_per_block > max_bytes_per_block {
-            // Case 1: If the block size exceeds 400MB
+            // Case 1: If the block size is too bigger.
             total_bytes.div_ceil(max_bytes_per_block)
         } else if bytes_per_block < min_bytes_per_block {
-            // Case 2: If the block size is smaller than 50MB
+            // Case 2: If the block size is too smaller.
             total_bytes / min_bytes_per_block
         } else {
             // Case 3: Otherwise, use the compressed-based block count.

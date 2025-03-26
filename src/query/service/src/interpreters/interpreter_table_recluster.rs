@@ -321,7 +321,7 @@ impl ReclusterTableInterpreter {
 
         // Determine rows per block based on data size and compression ratio
         let rows_per_block =
-            block_thresholds.calc_rows_for_recluster(total_bytes, total_rows, total_compressed);
+            block_thresholds.calc_rows_for_recluster(total_rows, total_bytes, total_compressed);
 
         // Calculate initial partition count based on data volume and block size
         let mut total_partitions = std::cmp::max(total_rows / rows_per_block, 1);

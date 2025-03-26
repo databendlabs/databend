@@ -152,8 +152,8 @@ impl PipelineBuilder {
 
                 // merge sort
                 let sort_block_size = block_thresholds.calc_rows_for_recluster(
-                    task.total_bytes,
                     task.total_rows,
+                    task.total_bytes,
                     task.total_compressed,
                 );
 
