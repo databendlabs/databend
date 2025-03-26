@@ -27,7 +27,6 @@ use databend_storages_common_cache::TempDirManager;
 use log::warn;
 use rand::Rng;
 
-use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 
 pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {

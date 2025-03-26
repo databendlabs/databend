@@ -105,6 +105,8 @@ pub enum PartitionsShuffleKind {
     BroadcastCluster,
     // Bind the Partition to warehouse executor by broadcast
     BroadcastWarehouse,
+    // Bind the Partition to teant executor by broadcast
+    BroadcastTenant,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
@@ -193,7 +195,9 @@ impl Partitions {
                 parts
             }
             // the executors will be all nodes in the warehouse if a query is BroadcastWarehouse.
-            PartitionsShuffleKind::BroadcastCluster | PartitionsShuffleKind::BroadcastWarehouse => {
+            PartitionsShuffleKind::BroadcastCluster
+            | PartitionsShuffleKind::BroadcastWarehouse
+            | PartitionsShuffleKind::BroadcastTenant => {
                 return Ok(executors_sorted
                     .into_iter()
                     .map(|executor| {

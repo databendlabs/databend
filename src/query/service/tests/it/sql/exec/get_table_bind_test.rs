@@ -1030,7 +1030,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+    async fn get_warehouse_nodes(&self) -> Result<Arc<Cluster>> {
         todo!()
     }
 }

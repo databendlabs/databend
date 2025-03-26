@@ -724,6 +724,13 @@ impl PhysicalPlan {
             || matches!(self, Self::TableScan(v) if v.source.parts.kind == PartitionsShuffleKind::BroadcastWarehouse)
     }
 
+    #[recursive::recursive]
+    pub fn is_tenant_distributed_plan(&self) -> bool {
+        self.children()
+            .any(|child| child.is_warehouse_distributed_plan())
+            || matches!(self, Self::TableScan(v) if v.source.parts.kind == PartitionsShuffleKind::BroadcastTenant)
+    }
+
     pub fn get_desc(&self) -> Result<String> {
         Ok(match self {
             PhysicalPlan::TableScan(v) => format!(

@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::MemStat;
 use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::cluster_info::FlightParams;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -34,8 +35,6 @@ use petgraph::Graph;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::clusters::ClusterHelper;
-use crate::clusters::FlightParams;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;

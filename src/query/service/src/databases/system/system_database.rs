@@ -25,6 +25,7 @@ use databend_common_meta_types::seq_value::SeqV;
 use databend_common_storages_system::BackgroundJobTable;
 use databend_common_storages_system::BackgroundTaskTable;
 use databend_common_storages_system::BacktraceTable;
+use databend_common_storages_system::BenchesSummaryTable;
 use databend_common_storages_system::BuildOptionsTable;
 use databend_common_storages_system::CachesTable;
 use databend_common_storages_system::CatalogsTable;
@@ -152,6 +153,7 @@ impl SystemDatabase {
             TemporaryTablesTable::create(sys_db_meta.next_table_id()),
             ProceduresTable::create(sys_db_meta.next_table_id()),
             DictionariesTable::create(sys_db_meta.next_table_id()),
+            BenchesSummaryTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

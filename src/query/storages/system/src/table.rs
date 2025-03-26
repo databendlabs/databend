@@ -88,6 +88,12 @@ pub trait SyncSystemTable: Send + Sync {
                     Box::new(SystemTablePart),
                 )]),
             )),
+            DistributionLevel::Tenant => Ok((
+                PartStatistics::default(),
+                Partitions::create(PartitionsShuffleKind::BroadcastTenant, vec![Arc::new(
+                    Box::new(SystemTablePart),
+                )]),
+            )),
         }
     }
 
@@ -123,6 +129,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
             DistributionLevel::Local => DistributionLevel::Cluster,
             DistributionLevel::Cluster => DistributionLevel::Cluster,
             DistributionLevel::Warehouse => DistributionLevel::Warehouse,
+            DistributionLevel::Tenant => DistributionLevel::Tenant,
         }
     }
 
@@ -244,6 +251,12 @@ pub trait AsyncSystemTable: Send + Sync {
                     Box::new(SystemTablePart),
                 )]),
             )),
+            DistributionLevel::Tenant => Ok((
+                PartStatistics::default(),
+                Partitions::create(PartitionsShuffleKind::BroadcastTenant, vec![Arc::new(
+                    Box::new(SystemTablePart),
+                )]),
+            )),
         }
     }
 }
@@ -275,6 +288,7 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
             DistributionLevel::Local => DistributionLevel::Cluster,
             DistributionLevel::Cluster => DistributionLevel::Cluster,
             DistributionLevel::Warehouse => DistributionLevel::Warehouse,
+            DistributionLevel::Tenant => DistributionLevel::Tenant,
         }
     }
 

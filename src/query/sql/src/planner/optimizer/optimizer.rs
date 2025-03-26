@@ -385,7 +385,7 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
         opt_ctx.enable_distributed_optimization = false;
         info!("Disable distributed optimization due to local table scan.");
     } else if contains_warehouse_table_scan(&s_expr, &opt_ctx.metadata) {
-        let warehouse = opt_ctx.table_ctx.get_warehouse_cluster().await?;
+        let warehouse = opt_ctx.table_ctx.get_warehouse_nodes().await?;
 
         if !warehouse.is_empty() {
             opt_ctx.enable_distributed_optimization = true;
@@ -483,7 +483,7 @@ async fn get_optimized_memo(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
         opt_ctx.enable_distributed_optimization = false;
         info!("Disable distributed optimization due to local table scan.");
     } else if contains_warehouse_table_scan(&s_expr, &opt_ctx.metadata) {
-        let warehouse = opt_ctx.table_ctx.get_warehouse_cluster().await?;
+        let warehouse = opt_ctx.table_ctx.get_warehouse_nodes().await?;
 
         if !warehouse.is_empty() {
             opt_ctx.enable_distributed_optimization = true;

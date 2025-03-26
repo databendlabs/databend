@@ -32,7 +32,6 @@ use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlanReplacer;
 
-use crate::clusters::ClusterHelper;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::schedulers::PlanFragment;
 use crate::servers::flight::v1::exchange::BroadcastExchange;

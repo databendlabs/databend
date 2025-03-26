@@ -15,14 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::cluster_info::FlightParams;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::set_backtrace;
 use databend_common_exception::Result;
 use databend_common_sql::plans::SystemAction;
 use databend_common_sql::plans::SystemPlan;
 
-use crate::clusters::ClusterHelper;
-use crate::clusters::FlightParams;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::SYSTEM_ACTION;
@@ -66,7 +65,7 @@ impl Interpreter for SystemActionInterpreter {
     #[fastrace::trace]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if self.proxy_to_warehouse {
-            let warehouse = self.ctx.get_warehouse_cluster().await?;
+            let warehouse = self.ctx.get_warehouse_nodes().await?;
 
             let mut message = HashMap::with_capacity(warehouse.nodes.len());
             for node_info in &warehouse.nodes {

@@ -20,6 +20,7 @@ use criterion::black_box;
 use criterion::criterion_group;
 use criterion::criterion_main;
 use criterion::Criterion;
+#[cfg(target_os = "linux")]
 use databend_storages_common_cache::read_cache_content;
 use tempfile::TempDir;
 

@@ -47,6 +47,7 @@ use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
+use crate::table_functions::benches::BenchesTable;
 use crate::table_functions::cloud::TaskDependentsEnableTable;
 use crate::table_functions::cloud::TaskDependentsTable;
 use crate::table_functions::cloud::TaskHistoryTable;
@@ -354,6 +355,11 @@ impl TableFunctionFactory {
         creators.insert(
             "iceberg_manifest".to_string(),
             (next_id(), Arc::new(IcebergInspectTable::create)),
+        );
+
+        creators.insert(
+            "benches".to_string(),
+            (next_id(), Arc::new(BenchesTable::create)),
         );
 
         TableFunctionFactory {

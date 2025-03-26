@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
 use std::sync::Arc;
 
 use arrow_flight::flight_service_client::FlightServiceClient;
-use arrow_flight::Action;
 use arrow_flight::FlightData;
 use arrow_flight::Ticket;
 use async_channel::Receiver;
 use async_channel::Sender;
-use databend_common_base::base::tokio::time::Duration;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,10 +27,6 @@ use fastrace::future::FutureExt;
 use fastrace::Span;
 use futures::StreamExt;
 use futures_util::future::Either;
-use serde::Deserialize;
-use serde::Serialize;
-use tonic::metadata::AsciiMetadataKey;
-use tonic::metadata::AsciiMetadataValue;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Status;
@@ -54,64 +47,6 @@ impl FlightClient {
         inner = inner.max_encoding_message_size(usize::MAX);
 
         FlightClient { inner }
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    pub async fn do_action<T, Res>(
-        &mut self,
-        path: &str,
-        secret: String,
-        message: T,
-        timeout: u64,
-    ) -> Result<Res>
-    where
-        T: Serialize,
-        Res: for<'a> Deserialize<'a>,
-    {
-        let mut body = Vec::with_capacity(512);
-        let mut serializer = serde_json::Serializer::new(&mut body);
-        let serializer = serde_stacker::Serializer::new(&mut serializer);
-        message.serialize(serializer).map_err(|cause| {
-            ErrorCode::BadArguments(format!(
-                "Request payload serialize error while in {:?}, cause: {}",
-                path, cause
-            ))
-        })?;
-
-        drop(message);
-        let mut request =
-            databend_common_tracing::inject_span_to_tonic_request(Request::new(Action {
-                body: body.into(),
-                r#type: path.to_string(),
-            }));
-
-        request.set_timeout(Duration::from_secs(timeout));
-        request.metadata_mut().insert(
-            AsciiMetadataKey::from_str("secret").unwrap(),
-            AsciiMetadataValue::from_str(&secret).unwrap(),
-        );
-
-        let response = self.inner.do_action(request).await?;
-
-        match response.into_inner().message().await? {
-            Some(response) => {
-                let mut deserializer = serde_json::Deserializer::from_slice(&response.body);
-                deserializer.disable_recursion_limit();
-                let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
-
-                Res::deserialize(deserializer).map_err(|cause| {
-                    ErrorCode::BadBytes(format!(
-                        "Response payload deserialize error while in {:?}, cause: {}",
-                        path, cause
-                    ))
-                })
-            }
-            None => Err(ErrorCode::EmptyDataFromServer(format!(
-                "Can not receive data from flight server, action: {:?}",
-                path
-            ))),
-        }
     }
 
     #[async_backtrace::framed]

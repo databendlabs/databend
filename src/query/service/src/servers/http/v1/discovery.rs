@@ -19,7 +19,6 @@ use poem::web::Json;
 use poem::Request;
 
 use crate::clusters::ClusterDiscovery;
-use crate::clusters::ClusterHelper;
 use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

@@ -24,7 +24,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_types::NodeInfo;
 
-use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::packets::DataflowDiagramBuilder;
 use crate::servers::flight::v1::packets::QueryEnv;

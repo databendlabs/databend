@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod async_crash_me;
+mod benches;
 mod cloud;
 mod fuse_vacuum2;
 mod infer_schema;

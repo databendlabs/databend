@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::cluster_info::FlightParams;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_pipeline_core::PlanProfile;
@@ -29,8 +30,6 @@ use poem::web::Path;
 use poem::IntoResponse;
 
 use crate::clusters::ClusterDiscovery;
-use crate::clusters::ClusterHelper;
-use crate::clusters::FlightParams;
 use crate::servers::flight::v1::actions::GET_PROFILE;
 use crate::sessions::SessionManager;
 

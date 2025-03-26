@@ -21,10 +21,12 @@ use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
+use databend_common_storages_system::BENCHES_ACTION;
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::servers::flight::v1::actions::benches::benches;
 use crate::servers::flight::v1::actions::get_profile::get_profile;
 use crate::servers::flight::v1::actions::init_query_env::init_query_env;
 use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
@@ -135,4 +137,5 @@ pub fn flight_actions() -> FlightActions {
         .action(SET_PRIORITY, set_priority)
         .action(SYSTEM_ACTION, system_action)
         .action(GET_PROFILE, get_profile)
+        .action(BENCHES_ACTION, benches)
 }

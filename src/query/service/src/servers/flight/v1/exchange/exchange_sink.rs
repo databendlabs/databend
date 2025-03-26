@@ -29,7 +29,6 @@ use super::exchange_sorting::ExchangeSorting;
 use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use super::serde::ExchangeSerializeMeta;
-use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
