@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::usize;
 
 use arrow::datatypes::Schema;
 use bytes::Bytes;
@@ -337,6 +338,7 @@ pub fn deserialize_column_oriented_segment(
     }
     let projection_mask = ProjectionMask::roots(&schema, mask);
     let mut record_reader = ParquetRecordBatchReaderBuilder::try_new(block_metas)?
+        .with_batch_size(usize::MAX)
         .with_projection(projection_mask)
         .build()?;
     let batch = record_reader.next().unwrap()?;
