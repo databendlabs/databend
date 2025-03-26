@@ -69,14 +69,7 @@ impl<'a> RelExpr<'a> {
     #[recursive::recursive]
     pub fn derive_relational_prop(&self) -> Result<Arc<RelationalProperty>> {
         match self {
-            RelExpr::SExpr { expr } => {
-                if let Some(rel_prop) = expr.rel_prop.lock().unwrap().as_ref() {
-                    return Ok(rel_prop.clone());
-                }
-                let rel_prop = expr.plan.derive_relational_prop(self)?;
-                *expr.rel_prop.lock().unwrap() = Some(rel_prop.clone());
-                Ok(rel_prop)
-            }
+            RelExpr::SExpr { expr } => expr.derive_relational_prop(),
             RelExpr::MExpr { expr, .. } => expr.plan.derive_relational_prop(self),
             RelExpr::OptContext { expr, .. } => expr.plan.derive_relational_prop(self),
         }
