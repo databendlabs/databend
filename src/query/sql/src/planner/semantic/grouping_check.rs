@@ -38,8 +38,8 @@ impl<'a> GroupingChecker<'a> {
     }
 }
 
-const GROUP_ITEM_NAME: &'static str = "group_item";
-const GROUPING_FUNC_NAME: &'static str = "grouping";
+const GROUP_ITEM_NAME: &str = "group_item";
+const GROUPING_FUNC_NAME: &str = "grouping";
 
 impl VisitorMut<'_> for GroupingChecker<'_> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
