@@ -69,7 +69,7 @@ pub async fn test_persistent_log_write() -> Result<()> {
     }
 
     let res = fixture
-        .execute_query("select count(*) from persistent_system.text_log")
+        .execute_query("select count(*) from persistent_system.query_log")
         .await?;
 
     let data_blocks: Vec<DataBlock> = res.try_collect().await?;

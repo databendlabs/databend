@@ -2079,7 +2079,13 @@ impl TryInto<InnerLogConfig> for LogConfig {
 
         let tracing: InnerTracingConfig = self.tracing.try_into()?;
 
-        let persistentlog: InnerPersistentLogConfig = self.persistentlog.try_into()?;
+        let mut persistentlog: InnerPersistentLogConfig = self.persistentlog.try_into()?;
+
+        if persistentlog.on && persistentlog.level.is_empty() {
+            if file.on && !file.level.is_empty() {
+                persistentlog.level = file.level.clone();
+            }
+        }
 
         Ok(InnerLogConfig {
             file,

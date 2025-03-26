@@ -47,6 +47,7 @@ use parquet::basic::ZstdLevel;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use serde_json::Map;
+use serde_json::Value;
 
 use crate::Config;
 use crate::GlobalLogger;
@@ -56,6 +57,7 @@ use crate::GlobalLogger;
 pub struct RemoteLog {
     cluster_id: String,
     node_id: String,
+    warehouse_id: Option<String>,
     buffer: Arc<LogBuffer>,
 }
 
@@ -67,8 +69,9 @@ pub struct RemoteLogElement {
     pub cluster_id: String,
     pub node_id: String,
     pub query_id: Option<String>,
+    pub warehouse_id: Option<String>,
     pub log_level: String,
-    pub messages: String,
+    pub fields: String,
 }
 
 #[derive(Debug)]
@@ -106,9 +109,13 @@ impl RemoteLog {
         let node_id = labels.get("node_id").cloned().unwrap_or_default();
         let rt = Runtime::with_worker_threads(2, Some("remote-log-writer".to_string()))?;
         let (tx, rx) = bounded(1);
+        // warehouse_id need to be specified after `create warehouse`
+        // TODO: inject warehouse_id like query_id
+        let warehouse_id = None;
         let remote_log = RemoteLog {
             cluster_id: labels.get("cluster_id").cloned().unwrap_or_default(),
             node_id: node_id.clone(),
+            warehouse_id,
             buffer: Arc::new(LogBuffer::new(tx.clone(), interval as u64)),
         };
         rt.spawn(async move { RemoteLog::work(rx, &stage_name).await });
@@ -168,16 +175,27 @@ impl RemoteLog {
     }
 
     fn prepare_log_element(&self, record: &Record) -> RemoteLogElement {
-        let query_id = ThreadTracker::query_id();
+        let mut query_id = ThreadTracker::query_id().cloned();
         let mut fields = Map::new();
-        fields.insert("message".to_string(), format!("{}", record.args()).into());
-        for (k, v) in collect_kvs(record.key_values()) {
-            fields.insert(k, v.into());
+        let target = record.target().to_string();
+        match target.as_str() {
+            "databend::log::profile" | "databend::log::query" => {
+                if let Err(_) = handle_profile_and_query(&mut fields, &mut query_id, &record) {
+                    fields.insert("message".to_string(), format!("{}", record.args()).into());
+                }
+            }
+            _ => {
+                fields.insert("message".to_string(), format!("{}", record.args()).into());
+                for (k, v) in collect_kvs(record.key_values()) {
+                    fields.insert(k, v.into());
+                }
+            }
         }
-        let messages = serde_json::to_string(&fields).unwrap_or_default();
+        let fields = serde_json::to_string(&fields).unwrap_or_default();
+
         let log_level = record.level().to_string();
         let timestamp = chrono::Local::now().timestamp_micros();
-        let target = record.target().to_string();
+
         let path = format!(
             "{}: {}:{}",
             record.module_path().unwrap_or(""),
@@ -194,9 +212,10 @@ impl RemoteLog {
             target,
             cluster_id: self.cluster_id.clone(),
             node_id: self.node_id.clone(),
-            query_id: query_id.cloned(),
+            warehouse_id: self.warehouse_id.clone(),
+            query_id,
             log_level,
-            messages,
+            fields,
         }
     }
 }
@@ -259,39 +278,47 @@ pub fn convert_to_batch(records: Vec<RemoteLogElement>) -> Result<RecordBatch> {
             true,
         ),
         Field::new("path", DataType::Utf8, true),
+        Field::new("target", DataType::Utf8, true),
         Field::new("log_level", DataType::Utf8, true),
         Field::new("cluster_id", DataType::Utf8, true),
         Field::new("node_id", DataType::Utf8, true),
+        Field::new("warehouse_id", DataType::Utf8, true),
         Field::new("query_id", DataType::Utf8, true),
-        Field::new("messages", DataType::Utf8, true),
+        Field::new("fields", DataType::Utf8, true),
     ]);
 
     let mut timestamp = TimestampMicrosecondBuilder::with_capacity(records.len());
     let mut path = StringBuilder::new();
+    let mut target = StringBuilder::new();
     let mut log_level = StringBuilder::new();
     let mut cluster_id = StringBuilder::new();
     let mut node_id = StringBuilder::new();
+    let mut warehouse_id = StringBuilder::new();
     let mut query_id = StringBuilder::new();
-    let mut messages = StringBuilder::new();
+    let mut fields = StringBuilder::new();
 
     for record in records {
         timestamp.append_value(record.timestamp);
         path.append_value(&record.path);
+        target.append_value(&record.target);
         log_level.append_value(&record.log_level);
         cluster_id.append_value(&record.cluster_id);
         node_id.append_value(&record.node_id);
+        warehouse_id.append_option(record.warehouse_id);
         query_id.append_option(record.query_id);
-        messages.append_value(&record.messages);
+        fields.append_value(&record.fields);
     }
 
     RecordBatch::try_new(Arc::new(schema), vec![
         Arc::new(timestamp.finish()),
         Arc::new(path.finish()),
+        Arc::new(target.finish()),
         Arc::new(log_level.finish()),
         Arc::new(cluster_id.finish()),
         Arc::new(node_id.finish()),
+        Arc::new(warehouse_id.finish()),
         Arc::new(query_id.finish()),
-        Arc::new(messages.finish()),
+        Arc::new(fields.finish()),
     ])
     .map_err(|e| {
         databend_common_exception::ErrorCode::Internal(format!(
@@ -299,4 +326,20 @@ pub fn convert_to_batch(records: Vec<RemoteLogElement>) -> Result<RecordBatch> {
             e
         ))
     })
+}
+
+fn handle_profile_and_query(
+    fields: &mut Map<String, Value>,
+    query_id: &mut Option<String>,
+    record: &Record,
+) -> Result<()> {
+    let details: Map<String, Value> = serde_json::from_str(&record.args().to_string())?;
+    // set query_id can be help for filtering
+    if let Some(id) = details["query_id"].as_str().map(|s| s.to_string()) {
+        query_id.get_or_insert(id);
+    }
+    for (k, v) in details {
+        fields.insert(k, v);
+    }
+    Ok(())
 }

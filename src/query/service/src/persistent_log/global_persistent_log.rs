@@ -175,14 +175,16 @@ impl GlobalPersistentLog {
         let create_db = "CREATE DATABASE IF NOT EXISTS persistent_system";
         self.execute_sql(create_db).await?;
         let create_table = "
-        CREATE TABLE IF NOT EXISTS persistent_system.text_log (
+        CREATE TABLE IF NOT EXISTS persistent_system.query_log (
             timestamp TIMESTAMP,
             path VARCHAR,
+            target VARCHAR,
             log_level VARCHAR,
             cluster_id VARCHAR,
             node_id VARCHAR,
+            warehouse_id VARCHAR,
             query_id VARCHAR,
-            messages VARIANT
+            fields VARIANT
         ) CLUSTER BY (timestamp, query_id)";
         self.execute_sql(create_table).await?;
         Ok(())
@@ -191,7 +193,7 @@ impl GlobalPersistentLog {
     async fn do_copy_into(&self) -> Result<()> {
         let stage_name = GlobalPersistentLog::instance().stage_name.clone();
         let sql = format!(
-            "COPY INTO persistent_system.text_log
+            "COPY INTO persistent_system.query_log
              FROM @{} PATTERN = '.*[.]parquet' file_format = (TYPE = PARQUET)
              PURGE = TRUE",
             stage_name
@@ -201,7 +203,7 @@ impl GlobalPersistentLog {
 
     async fn clean(&self) -> Result<()> {
         let delete = format!(
-            "DELETE FROM persistent_system.text_log WHERE timestamp < subtract_hours(NOW(), {})",
+            "DELETE FROM persistent_system.query_log WHERE timestamp < subtract_hours(NOW(), {})",
             self.retention
         );
         self.execute_sql(&delete).await?;
@@ -212,7 +214,7 @@ impl GlobalPersistentLog {
             .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
             .is_ok()
         {
-            let vacuum = "VACUUM TABLE persistent_system.text_log";
+            let vacuum = "VACUUM TABLE persistent_system.query_log";
             self.execute_sql(vacuum).await?
         }
         Ok(())

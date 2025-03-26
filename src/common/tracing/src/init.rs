@@ -379,8 +379,27 @@ pub fn init_logging(
     if cfg.persistentlog.on {
         let (remote_log, flush_guard) =
             RemoteLog::new(&labels, cfg).expect("initialize remote logger");
+
+        let mut filter_builder =
+            EnvFilterBuilder::new().filter(Some("databend::log::structlog"), LevelFilter::Off);
+
+        if cfg.profile.on && !cfg.profile.dir.is_empty() {
+            filter_builder =
+                filter_builder.filter(Some("databend::log::profile"), LevelFilter::Trace);
+        } else {
+            filter_builder =
+                filter_builder.filter(Some("databend::log::profile"), LevelFilter::Off);
+        }
+        if cfg.query.on && !cfg.query.dir.is_empty() {
+            filter_builder =
+                filter_builder.filter(Some("databend::log::query"), LevelFilter::Trace);
+        } else {
+            filter_builder = filter_builder.filter(Some("databend::log::query"), LevelFilter::Off);
+        }
         let dispatch = Dispatch::new()
-            .filter(env_filter(&cfg.persistentlog.level))
+            .filter(EnvFilter::new(
+                filter_builder.parse(&cfg.persistentlog.level),
+            ))
             .append(remote_log);
 
         logger = logger.dispatch(dispatch);
