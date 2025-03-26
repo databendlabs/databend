@@ -197,12 +197,16 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                 Some(block_meta_index),
                 create_on,
             );
-            self.sender
+            if self
+                .sender
                 .as_ref()
                 .unwrap()
                 .send(Ok(part_info))
                 .await
-                .unwrap();
+                .is_err()
+            {
+                break;
+            }
         }
         Ok(false)
     }
