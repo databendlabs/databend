@@ -2996,14 +2996,14 @@ impl<'a> TypeChecker<'a> {
                         (ScalarExpr::ConstantExpr(_), _)
                             if arg1.data_type()?.remove_nullable() == DataType::Variant
                                 && !arg1.used_columns().is_empty()
-                                && arg0.data_type()? != DataType::Variant =>
+                                && arg0.data_type()? == DataType::String
                         {
                             (0, arg0)
                         }
                         (_, ScalarExpr::ConstantExpr(_))
                             if arg0.data_type()?.remove_nullable() == DataType::Variant
                                 && !arg0.used_columns().is_empty()
-                                && arg1.data_type()? != DataType::Variant =>
+                                && arg1.data_type()? == DataType::String
                         {
                             (1, arg1)
                         }
