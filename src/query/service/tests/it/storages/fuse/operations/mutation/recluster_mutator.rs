@@ -89,7 +89,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         );
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
-        let segment_location = location_generator.gen_segment_info_location(Default::default(),false);
+        let segment_location =
+            location_generator.gen_segment_info_location(Default::default(), false);
         segment
             .write_meta(&data_accessor, &segment_location)
             .await?;
@@ -147,7 +148,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     .await?;
 
     let column_ids = snapshot.schema.to_leaf_column_id_set();
-    let mutator = ReclusterMutator::new(
+    let mutator = ReclusterMutator::<RowOrientedSegmentReader>::new(
         ctx,
         schema,
         vec![DataType::Number(NumberDataType::Int64)],
@@ -278,7 +279,7 @@ async fn test_safety_for_recluster() -> Result<()> {
 
         let column_ids = snapshot.schema.to_leaf_column_id_set();
         let mut parts = ReclusterParts::new_recluster_parts();
-        let mutator = Arc::new(ReclusterMutator::new(
+        let mutator = Arc::new(ReclusterMutator::<RowOrientedSegmentReader>::new(
             ctx.clone(),
             schema.clone(),
             vec![DataType::Number(NumberDataType::Int32)],
@@ -369,30 +370,42 @@ fn test_check_point() {
     // [1,2] [2,3], check point 2
     let start = vec![1];
     let end = vec![0];
-    assert!(ReclusterMutator::check_point(&start, &end));
+    assert!(ReclusterMutator::<RowOrientedSegmentReader>::check_point(
+        &start, &end
+    ));
 
     // [1,2] [2,2], check point 2
     let start = vec![1];
     let end = vec![0, 1];
-    assert!(ReclusterMutator::check_point(&start, &end));
+    assert!(ReclusterMutator::<RowOrientedSegmentReader>::check_point(
+        &start, &end
+    ));
 
     // [1,1] [1,2], check point 1
     let start = vec![0, 1];
     let end = vec![0];
-    assert!(ReclusterMutator::check_point(&start, &end));
+    assert!(ReclusterMutator::<RowOrientedSegmentReader>::check_point(
+        &start, &end
+    ));
 
     // [1,2] [1,3], check point 1
     let start = vec![0, 1];
     let end = vec![];
-    assert!(!ReclusterMutator::check_point(&start, &end));
+    assert!(!ReclusterMutator::<RowOrientedSegmentReader>::check_point(
+        &start, &end
+    ));
 
     // [1,3] [2,3], check point 3
     let start = vec![];
     let end = vec![0, 1];
-    assert!(!ReclusterMutator::check_point(&start, &end));
+    assert!(!ReclusterMutator::<RowOrientedSegmentReader>::check_point(
+        &start, &end
+    ));
 
     // [1,3] [3,3] [3,4], check point 3
     let start = vec![1, 2];
     let end = vec![0, 1];
-    assert!(!ReclusterMutator::check_point(&start, &end));
+    assert!(!ReclusterMutator::<RowOrientedSegmentReader>::check_point(
+        &start, &end
+    ));
 }

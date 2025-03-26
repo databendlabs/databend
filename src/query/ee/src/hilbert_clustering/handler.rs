@@ -21,7 +21,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use databend_common_expression::BlockThresholds;
+use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;

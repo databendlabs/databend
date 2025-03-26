@@ -141,7 +141,7 @@ async fn test_random_location_memory_size() -> databend_common_exception::Result
 
     let mut locations: HashSet<Location, _> = HashSet::new();
     for _ in 0..num_segments {
-        let segment_path = location_gen.gen_segment_info_location(Default::default(),false);
+        let segment_path = location_gen.gen_segment_info_location(Default::default(), false);
         let segment_location = (segment_path, SegmentInfo::VERSION);
         locations.insert(segment_location);
     }
