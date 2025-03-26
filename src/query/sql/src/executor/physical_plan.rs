@@ -727,7 +727,7 @@ impl PhysicalPlan {
     #[recursive::recursive]
     pub fn is_tenant_distributed_plan(&self) -> bool {
         self.children()
-            .any(|child| child.is_warehouse_distributed_plan())
+            .any(|child| child.is_tenant_distributed_plan())
             || matches!(self, Self::TableScan(v) if v.source.parts.kind == PartitionsShuffleKind::BroadcastTenant)
     }
 
