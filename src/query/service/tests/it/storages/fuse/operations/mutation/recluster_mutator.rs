@@ -89,7 +89,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         );
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
-        let segment_location = location_generator.gen_segment_info_location(Default::default());
+        let segment_location = location_generator.gen_segment_info_location(Default::default(),false);
         segment
             .write_meta(&data_accessor, &segment_location)
             .await?;

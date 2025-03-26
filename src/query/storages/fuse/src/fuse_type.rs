@@ -65,10 +65,18 @@ impl FromStr for FuseStorageFormat {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FuseSegmentFormat {
     Row,
     Column,
+}
+
+pub fn segment_format_from_location(location: &str) -> FuseSegmentFormat {
+    if location.ends_with("col") {
+        FuseSegmentFormat::Column
+    } else {
+        FuseSegmentFormat::Row
+    }
 }
 
 impl FromStr for FuseSegmentFormat {

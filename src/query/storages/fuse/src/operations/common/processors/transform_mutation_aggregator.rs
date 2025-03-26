@@ -91,6 +91,7 @@ pub struct TableMutationAggregator<R: SegmentReader> {
     finished_tasks: usize,
     table_meta_timestamps: TableMetaTimestamps,
     _marker: std::marker::PhantomData<R>,
+    is_column_oriented: bool,
 }
 
 pub fn add_table_mutation_aggregator(
@@ -185,6 +186,7 @@ impl<R: SegmentReader> TableMutationAggregator<R> {
         kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
+        let is_column_oriented = table.is_column_oriented();
         let set_hilbert_level = table
             .cluster_type()
             .is_some_and(|v| matches!(v, ClusterType::Hilbert))
@@ -216,6 +218,7 @@ impl<R: SegmentReader> TableMutationAggregator<R> {
             table_id: table.get_id(),
             table_meta_timestamps,
             _marker: std::marker::PhantomData,
+            is_column_oriented,
         }
     }
 
@@ -483,6 +486,7 @@ impl<R: SegmentReader> TableMutationAggregator<R> {
             let op = self.dal.clone();
             let location_gen = self.location_gen.clone();
             let table_meta_timestamps = self.table_meta_timestamps;
+            let is_column_oriented = self.is_column_oriented;
 
             tasks.push(async move {
                 // let mut all_perfect = false;
@@ -558,7 +562,8 @@ impl<R: SegmentReader> TableMutationAggregator<R> {
                 //     table_meta_timestamps,
                 // )
                 // .await?;
-                let location = location_gen.gen_segment_info_location(table_meta_timestamps);
+                let location = location_gen
+                    .gen_segment_info_location(table_meta_timestamps, is_column_oriented);
                 op.write(&location, new_segment.serialize()?).await?;
                 let new_segment_info = (location, new_segment.summary().clone());
 
@@ -634,7 +639,7 @@ async fn write_segment(
     set_hilbert_level: bool,
     table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<(String, Statistics)> {
-    let location = location_gen.gen_segment_info_location(table_meta_timestamps);
+    let location = location_gen.gen_segment_info_location(table_meta_timestamps, false);
     let mut new_summary = reduce_block_metas(&blocks, thresholds, default_cluster_key);
     if all_perfect {
         // To fix issue #13217.

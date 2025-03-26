@@ -69,6 +69,7 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     thresholds: BlockThresholds,
     default_cluster_key_id: Option<u32>,
     table_meta_timestamps: TableMetaTimestamps,
+    is_column_oriented: bool,
 }
 
 impl<B: SegmentBuilder> TransformSerializeSegment<B> {
@@ -93,6 +94,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             thresholds,
             default_cluster_key_id,
             table_meta_timestamps,
+            is_column_oriented: table.is_column_oriented(),
         }
     }
 
@@ -251,9 +253,10 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
 
                 self.state = State::SerializedSegment {
                     data: segment_info.serialize()?,
-                    location: self
-                        .meta_locations
-                        .gen_segment_info_location(self.table_meta_timestamps),
+                    location: self.meta_locations.gen_segment_info_location(
+                        self.table_meta_timestamps,
+                        self.is_column_oriented,
+                    ),
                     segment: segment_info,
                 }
             }

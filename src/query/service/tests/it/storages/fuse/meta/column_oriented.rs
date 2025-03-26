@@ -342,7 +342,7 @@ async fn test_segment_cache() -> Result<()> {
         .unwrap()
         .finish();
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
-    let location = loc_generator.gen_segment_info_location(Default::default());
+    let location = loc_generator.gen_segment_info_location(Default::default(),true);
     let (column_oriented_segment, block_metas, table_schema) =
         generate_column_oriented_segment().await?;
     operator

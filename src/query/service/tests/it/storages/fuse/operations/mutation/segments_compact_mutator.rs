@@ -673,6 +673,7 @@ impl CompactSegmentTestFixture {
             data_accessor,
             location_gen,
             column_ids,
+            false,
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
@@ -784,7 +785,7 @@ impl CompactSegmentTestFixture {
                     stats_acc.add_block(block_meta).unwrap();
                 }
                 let segment_info = stats_acc.build(thresholds, cluster_key_id)?;
-                let path = location_gen.gen_segment_info_location(Default::default());
+                let path = location_gen.gen_segment_info_location(Default::default(),false);
                 segment_info.write_meta(&data_accessor, &path).await?;
                 Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))
             });
@@ -1032,6 +1033,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             &data_accessor,
             &location_gen,
             column_ids.clone(),
+            false,
         );
         let state = seg_acc
             .compact(locations, limit, |status| {

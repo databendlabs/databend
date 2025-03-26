@@ -134,15 +134,27 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    pub fn gen_segment_info_location(&self, table_meta_timestamps: TableMetaTimestamps) -> String {
+    pub fn gen_segment_info_location(
+        &self,
+        table_meta_timestamps: TableMetaTimestamps,
+        is_column_oriented: bool,
+    ) -> String {
         let segment_uuid = uuid_from_date_time(table_meta_timestamps.segment_block_timestamp);
-        format!(
-            "{}{}{}_v{}.mpk",
-            &self.segment_location_prefix(),
-            VACUUM2_OBJECT_KEY_PREFIX,
-            segment_uuid.as_simple(),
-            SegmentInfo::VERSION,
-        )
+        match is_column_oriented {
+            true => format!(
+                "{}{}{}.col",
+                &self.segment_location_prefix(),
+                VACUUM2_OBJECT_KEY_PREFIX,
+                segment_uuid.as_simple(),
+            ),
+            false => format!(
+                "{}{}{}_v{}.mpk",
+                &self.segment_location_prefix(),
+                VACUUM2_OBJECT_KEY_PREFIX,
+                segment_uuid.as_simple(),
+                SegmentInfo::VERSION,
+            ),
+        }
     }
 
     pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {

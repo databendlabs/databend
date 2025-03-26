@@ -75,6 +75,7 @@ use crate::pruning_pipeline::SendPartInfoSink;
 use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
 use crate::pruning_pipeline::TopNPruneTransform;
+use crate::segment_format_from_location;
 use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
@@ -180,6 +181,7 @@ impl FuseTable {
         let table_schema = self.schema_with_stream();
         let dal = self.operator.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
+        let mut segment_format = FuseSegmentFormat::Row;
 
         for part in &plan.parts.partitions {
             if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
@@ -188,6 +190,7 @@ impl FuseTable {
                     location: lazy_part_info.segment_location.clone(),
                     snapshot_loc: snapshot.clone(),
                 });
+                segment_format = segment_format_from_location(&lazy_part_info.segment_location.0);
             }
         }
         // If there is no lazy part, we don't need to prune
@@ -251,7 +254,7 @@ impl FuseTable {
 
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
-        match self.segment_format {
+        match segment_format {
             FuseSegmentFormat::Row => {
                 self.prune_segments_with_pipeline(
                     pruner.clone(),

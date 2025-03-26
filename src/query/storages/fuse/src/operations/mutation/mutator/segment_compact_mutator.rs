@@ -123,6 +123,7 @@ impl SegmentCompactMutator {
                     &self.data_accessor,
                     &self.location_generator,
                     column_ids,
+                    self.is_column_oriented,
                 );
 
                 self.compaction = compactor
@@ -140,6 +141,7 @@ impl SegmentCompactMutator {
                     &self.data_accessor,
                     &self.location_generator,
                     column_ids,
+                    self.is_column_oriented,
                 );
 
                 self.compaction = compactor
@@ -206,6 +208,7 @@ pub struct SegmentCompactor<'a, R: SegmentReader> {
     compacted_state: SegmentCompactionState,
     _marker: std::marker::PhantomData<R>,
     column_ids: Vec<ColumnId>,
+    is_column_oriented: bool,
 }
 
 impl<'a, R: SegmentReader> SegmentCompactor<'a, R> {
@@ -217,6 +220,7 @@ impl<'a, R: SegmentReader> SegmentCompactor<'a, R> {
         operator: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
         column_ids: Vec<ColumnId>,
+        is_column_oriented: bool,
     ) -> Self {
         Self {
             threshold,
@@ -230,6 +234,7 @@ impl<'a, R: SegmentReader> SegmentCompactor<'a, R> {
             compacted_state: Default::default(),
             _marker: std::marker::PhantomData,
             column_ids,
+            is_column_oriented,
         }
     }
 
@@ -393,7 +398,7 @@ impl<'a, R: SegmentReader> SegmentCompactor<'a, R> {
         let new_segment = R::Segment::concat(segments, new_statistics)?;
         let location = self
             .location_generator
-            .gen_segment_info_location(Default::default());
+            .gen_segment_info_location(Default::default(), self.is_column_oriented);
         // new_segment
         //     .write_meta_through_cache(self.operator, &location)
         //     .await?;
