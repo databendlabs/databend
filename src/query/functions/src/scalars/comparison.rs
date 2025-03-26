@@ -39,6 +39,7 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::ALL_NUMBER_CLASSES;
 use databend_common_expression::values::Value;
+use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::EvalContext;
@@ -610,6 +611,24 @@ fn register_like(registry: &mut FunctionRegistry) {
                 }
             }
         }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+        "glob",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<StringType, StringType, BooleanType>(
+            |a, b, builder, _ctx| {
+                // Create a glob pattern from the second argument
+                let pattern = match glob::Pattern::new(b) {
+                    Ok(pattern) => pattern,
+                    Err(_) => {
+                        builder.push(false);
+                        return;
+                    }
+                };
+                builder.push(pattern.matches(a));
+            },
+        ),
     );
 }
 

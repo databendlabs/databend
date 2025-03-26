@@ -314,6 +314,7 @@ geo = { version = "0.28.0", features = ["use-serde"] }
 geohash = "0.13.0"
 geozero = { version = "0.14.0", features = ["with-geo", "with-geojson", "with-wkb", "with-wkt"] }
 gimli = "0.31.0"
+glob = "0.3.0"
 globiter = "0.1"
 goldenfile = "1.4"
 h3o = "0.4.0"

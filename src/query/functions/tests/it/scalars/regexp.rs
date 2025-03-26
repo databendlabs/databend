@@ -30,6 +30,7 @@ fn test_string() {
     test_regexp_like(regexp_file);
     test_regexp_replace(regexp_file);
     test_regexp_substr(regexp_file);
+    test_glob(regexp_file);
 }
 
 fn test_regexp_instr(file: &mut impl Write) {
@@ -255,6 +256,13 @@ fn test_regexp_instr(file: &mut impl Write) {
         "regexp_instr(source, pat, pos, occur, ro, mt)",
         match_type_error_six_columns,
     );
+}
+
+fn test_glob(file: &mut impl Write) {
+    run_ast(file, "glob('Michael!', '*')", &[]);
+    run_ast(file, "glob('a', 'a')", &[]);
+    run_ast(file, "glob('abc', 'a*')", &[]);
+    run_ast(file, "glob('abc', '*bc')", &[]);
 }
 
 fn test_regexp_like(file: &mut impl Write) {

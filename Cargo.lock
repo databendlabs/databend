@@ -3376,6 +3376,7 @@ dependencies = [
  "geo",
  "geohash",
  "geozero",
+ "glob",
  "goldenfile",
  "h3o",
  "hex",
