@@ -803,7 +803,7 @@ TableScan
 ├── partitions total: 2
 ├── partitions scanned: 2
 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
-├── push downs: [filters: [is_true(get(t3.c (#2), 'k2') = '100')], limit: NONE]
+├── push downs: [filters: [is_true(TRY_CAST(get(t3.c (#2), 'k2') AS UInt8 NULL) = 100)], limit: NONE]
 └── estimated rows: 1.20
 
 statement ok
