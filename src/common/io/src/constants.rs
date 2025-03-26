@@ -25,15 +25,13 @@ pub const INF_BYTES_LOWER: &str = "inf";
 pub const INF_BYTES_LONG: &str = "Infinity";
 
 // The size of the I/O read/write block buffer by default.
-pub const DEFAULT_BLOCK_BUFFER_SIZE: usize = 100 * 1024 * 1024;
+pub const DEFAULT_BLOCK_BUFFER_SIZE: usize = 125 * 1024 * 1024;
 // The size of the block compressed by default.
 pub const DEFAULT_BLOCK_COMPRESSED_SIZE: usize = 16 * 1024 * 1024;
 // The size of the I/O read/write block index buffer by default.
 pub const DEFAULT_BLOCK_INDEX_BUFFER_SIZE: usize = 300 * 1024;
 // The max number of a block by default.
-pub const DEFAULT_BLOCK_MAX_ROWS: usize = 1000 * 1000;
-// The min number of a block by default.
-pub const DEFAULT_BLOCK_MIN_ROWS: usize = 800 * 1000;
+pub const DEFAULT_BLOCK_ROW_COUNT: usize = 1000 * 1000;
 // The number of blocks in a segment by default.
 pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;
 /// The number of bytes read at the end of the file on first read
