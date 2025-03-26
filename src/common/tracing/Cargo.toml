@@ -6,10 +6,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 chrono = { workspace = true }

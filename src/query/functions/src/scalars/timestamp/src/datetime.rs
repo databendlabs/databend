@@ -17,9 +17,12 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::io::Write;
 
+use chrono::Datelike;
+use chrono::NaiveDate;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
+use databend_common_expression::serialize::EPOCH_DAYS_FROM_CE;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::date::string_to_date;
@@ -300,8 +303,8 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "to_timestamp",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<TimestampType>>(
-            |timestamp, format, output, ctx| match string_to_format_timestamp(
-                timestamp, format, ctx,
+            |timestamp, format, output, ctx| match string_to_format_datetime(
+                timestamp, format, ctx, true,
             ) {
                 Ok((ts, need_null)) => {
                     if need_null {
@@ -322,8 +325,8 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "try_to_timestamp",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<TimestampType>>(
-            |timestamp, format, output, ctx| match string_to_format_timestamp(
-                timestamp, format, ctx,
+            |timestamp, format, output, ctx| match string_to_format_datetime(
+                timestamp, format, ctx, true,
             ) {
                 Ok((ts, need_null)) => {
                     if need_null {
@@ -347,36 +350,32 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match string_to_format_timestamp(date, format, ctx) {
-                        Ok((res, false)) => {
-                            output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
-                        }
-                        Ok((_, true)) => {
-                            output.push_null();
+                    match NaiveDate::parse_from_str(date, format) {
+                        Ok(res) => {
+                            output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
                         Err(e) => {
                             ctx.set_error(output.len(), e.to_string());
-                            output.push(0);
+                            output.push_null();
                         }
                     }
                 }
             },
         ),
     );
-
     registry.register_combine_nullable_2_arg::<StringType, StringType, DateType, _, _>(
         "try_to_date",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, ctx| {
+            |date, format, output, _| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match string_to_format_timestamp(date, format, ctx) {
-                        Ok((res, false)) => {
-                            output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
+                    match NaiveDate::parse_from_str(date, format) {
+                        Ok(res) => {
+                            output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
-                        _ => {
+                        Err(_) => {
                             output.push_null();
                         }
                     }
@@ -386,10 +385,11 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     );
 }
 
-fn string_to_format_timestamp(
+fn string_to_format_datetime(
     timestamp: &str,
     format: &str,
     ctx: &mut EvalContext,
+    parse_timestamp: bool,
 ) -> Result<(i64, bool), Box<ErrorCode>> {
     if format.is_empty() {
         return Ok((0, true));
@@ -424,9 +424,15 @@ fn string_to_format_timestamp(
     }
 
     let z = if tm.offset().is_none() {
-        ctx.func_ctx.tz.to_zoned(tm.to_datetime().map_err(|err| {
-            ErrorCode::BadArguments(format!("{timestamp} to datetime error {err}"))
-        })?)
+        if parse_timestamp {
+            ctx.func_ctx.tz.to_zoned(tm.to_datetime().map_err(|err| {
+                ErrorCode::BadArguments(format!("{timestamp} to datetime error {err}"))
+            })?)
+        } else {
+            TimeZone::UTC.to_zoned(tm.to_datetime().map_err(|err| {
+                ErrorCode::BadArguments(format!("{timestamp} to datetime error {err}"))
+            })?)
+        }
     } else {
         tm.to_zoned()
     }

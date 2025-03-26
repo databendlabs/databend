@@ -606,6 +606,26 @@ impl DataBlock {
         }
         self.columns[col].value.index(row)
     }
+
+    /// Calculates the memory size of a `DataBlock` for writing purposes.
+    /// This function is used to estimate the memory footprint of a `DataBlock` when writing it to storage.
+    pub fn estimate_block_size(&self) -> usize {
+        let num_rows = self.num_rows();
+        self.columns()
+            .iter()
+            .map(|entry| match &entry.value {
+                Value::Column(Column::Nullable(col)) if col.validity.true_count() == 0 => {
+                    // For `Nullable` columns with no valid values,
+                    // only the size of the validity bitmap is counted.
+                    col.validity.as_slice().0.len()
+                }
+                Value::Scalar(v) => v
+                    .as_ref()
+                    .estimated_scalar_repeat_size(num_rows, &entry.data_type),
+                _ => entry.memory_size(),
+            })
+            .sum()
+    }
 }
 
 impl BlockEntry {

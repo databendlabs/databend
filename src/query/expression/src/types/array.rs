@@ -262,7 +262,7 @@ impl<T: ValueType> ArrayColumn<T> {
     }
 
     pub fn memory_size(&self) -> usize {
-        T::column_memory_size(&self.values) + self.offsets.len() * 8
+        T::column_memory_size(&self.underlying_column()) + self.offsets.len() * 8
     }
 
     // Note: if the array column has been sliced, the number of values may not match the offsets.

@@ -29,7 +29,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortField;
 use databend_common_expression::Value;
-use jsonb::convert_to_comparable;
+use jsonb::RawJsonb;
 
 use super::RowConverter;
 use super::Rows;
@@ -84,8 +84,8 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                 Value::Scalar(s) => match s {
                     Scalar::Variant(val) => {
                         // convert variant value to comparable format.
-                        let mut buf = Vec::new();
-                        convert_to_comparable(val, &mut buf);
+                        let raw_jsonb = RawJsonb::new(val);
+                        let buf = raw_jsonb.convert_to_comparable();
                         let s = Scalar::Variant(buf);
                         ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
                     }
@@ -110,7 +110,9 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                                         continue;
                                     }
                                 }
-                                convert_to_comparable(val, &mut builder.data);
+                                let raw_jsonb = RawJsonb::new(val);
+                                let buf = raw_jsonb.convert_to_comparable();
+                                builder.put_slice(buf.as_ref());
                                 builder.commit_row();
                             }
                             if data_type.is_nullable() {

@@ -23,7 +23,7 @@ runs:
         target: ${{ inputs.target }}
         category: default
         path: distro/bin
-        artifacts: metactl,meta,query,query.debug
+        artifacts: metactl,meta,query,query.debug,bendsave
     - name: Download artifact for others
       if: inputs.category != 'dbg'
       uses: ./.github/actions/artifact_download
@@ -32,7 +32,7 @@ runs:
         target: ${{ inputs.target }}
         category: ${{ inputs.category }}
         path: distro/bin
-        artifacts: metactl,meta,query
+        artifacts: metactl,meta,query,bendsave
     - name: Get Latest BendSQL
       id: bendsql
       uses: pozetroninc/github-action-get-latest-release@master

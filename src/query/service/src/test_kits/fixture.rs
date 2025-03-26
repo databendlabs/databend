@@ -571,7 +571,7 @@ impl TestFixture {
         num_of_blocks: usize,
         start: i32,
     ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
-        Self::gen_sample_blocks_ex(num_of_blocks, 3, start)
+        Self::gen_sample_blocks_ex(num_of_blocks, 2, start)
     }
 
     pub fn gen_sample_blocks_ex(

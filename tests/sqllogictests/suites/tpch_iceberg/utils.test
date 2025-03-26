@@ -54,6 +54,7 @@ partsupp
 region
 supplier
 
+
 ## test database
 statement ok
 create database if not exists abc;

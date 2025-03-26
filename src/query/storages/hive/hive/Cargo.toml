@@ -6,10 +6,6 @@ authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 async-backtrace = { workspace = true }
 async-recursion = { workspace = true }
