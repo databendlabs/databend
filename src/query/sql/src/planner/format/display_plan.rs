@@ -17,19 +17,19 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::display::DefaultOperatorHumanizer;
-use super::display::IdHumanizer;
 use super::display::FormatOptions;
+use super::display::IdHumanizer;
 use super::display::MetadataIdHumanizer;
 use super::display::TreeHumanizer;
 use crate::optimizer::SExpr;
 use crate::plans::CreateTablePlan;
 use crate::plans::Plan;
-use crate::IndexType;
-
-pub trait Humanizer = IdHumanizer<ColumnId = IndexType, TableId = IndexType>;
 
 impl SExpr {
-    pub(crate) fn to_format_tree<I: Humanizer>(&self, id_humanizer: &I) -> Result<FormatTreeNode> {
+    pub(crate) fn to_format_tree<I: IdHumanizer>(
+        &self,
+        id_humanizer: &I,
+    ) -> Result<FormatTreeNode> {
         let operator_humanizer = DefaultOperatorHumanizer;
         let tree_humanizer = TreeHumanizer::new(id_humanizer, &operator_humanizer);
         tree_humanizer.humanize_s_expr(self)
@@ -254,10 +254,7 @@ impl Plan {
     }
 }
 
-fn format_create_table(
-    create_table: &CreateTablePlan,
-    options: FormatOptions,
-) -> Result<String> {
+fn format_create_table(create_table: &CreateTablePlan, options: FormatOptions) -> Result<String> {
     match &create_table.as_select {
         Some(plan) => match plan.as_ref() {
             Plan::Query {

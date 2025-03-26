@@ -263,7 +263,7 @@ query T
 explain(decorrelated,verbose) select a, exists(select * from numbers(1000) where number % 10 = t.b) mark from t;
 ----
 EvalScalar
-├── scalars: [t.a (#0) AS (#0), derived.mark (#3) AS (#3)]
+├── scalars: [t.a (#0) AS (#0), 3 (#3) AS (#3)]
 ├── output columns: [derived.b (#5), derived.mark (#3), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
 ├── outer columns: []
 ├── used columns: [derived.a (#4), derived.b (#5), derived.mark (#3), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
@@ -271,8 +271,8 @@ EvalScalar
 ├── precise cardinality: N/A
 ├── statistics
 └── Join(RightMark)
-    ├── build keys: [derived.b (#5)]
-    ├── probe keys: [testdb.t.b (#1)]
+    ├── build keys: [b (#5)]
+    ├── probe keys: [b (#1)]
     ├── other filters: []
     ├── output columns: [derived.b (#5), derived.mark (#3), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
     ├── outer columns: []
@@ -292,7 +292,7 @@ EvalScalar
     │   ├── precise cardinality: N/A
     │   └── statistics
     └── EvalScalar
-        ├── scalars: [numbers.number (#2) AS (#2), derived.b (#5) AS (#5)]
+        ├── scalars: [numbers.number (#2) AS (#2), outer.b (#5) AS (#5)]
         ├── output columns: [derived.b (#5), system.numbers.number (#2)]
         ├── outer columns: []
         ├── used columns: [derived.a (#4), derived.b (#5), system.numbers.number (#2)]
@@ -300,7 +300,7 @@ EvalScalar
         ├── precise cardinality: N/A
         ├── statistics
         └── Filter
-            ├── filters: [eq(modulo(numbers.number (#2), 10), derived.b (#5))]
+            ├── filters: [eq(modulo(numbers.number (#2), 10), b (#5))]
             ├── output columns: [derived.b (#5), system.numbers.number (#2)]
             ├── outer columns: []
             ├── used columns: [derived.a (#4), derived.b (#5), system.numbers.number (#2)]
@@ -318,7 +318,7 @@ EvalScalar
                 ├── precise cardinality: N/A
                 ├── statistics
                 ├── Aggregate(Initial)
-                │   ├── group items: [derived.b (#5) AS (#5)]
+                │   ├── group items: [b (#5) AS (#5)]
                 │   ├── aggregate functions: []
                 │   ├── output columns: [derived.b (#5)]
                 │   ├── outer columns: []

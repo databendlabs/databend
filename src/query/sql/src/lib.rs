@@ -22,7 +22,6 @@
 #![feature(extend_one)]
 #![feature(if_let_guard)]
 #![feature(iter_next_chunk)]
-#![feature(trait_alias)]
 
 pub mod evaluator;
 pub mod executor;

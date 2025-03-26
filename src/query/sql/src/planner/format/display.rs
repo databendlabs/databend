@@ -28,32 +28,21 @@ use crate::ScalarExpr;
 
 /// A trait for humanizing IDs.
 pub trait IdHumanizer {
-    type ColumnId;
-    type TableId;
+    fn humanize_column_id(&self, id: IndexType) -> String;
 
-    fn humanize_column_id(&self, id: Self::ColumnId) -> String;
-
-    fn humanize_table_id(&self, id: Self::TableId) -> String;
+    fn humanize_table_id(&self, id: IndexType) -> String;
 
     fn options(&self) -> &FormatOptions;
 }
 
 /// A trait for humanizing operators.
 pub trait OperatorHumanizer<I: IdHumanizer> {
-    type Output;
-
-    fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> Self::Output;
+    fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> FormatTreeNode;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FormatOptions {
     pub verbose: bool,
-}
-
-impl Default for FormatOptions {
-    fn default() -> Self {
-        Self { verbose: false }
-    }
 }
 
 /// A default implementation of `OperatorHumanizer`.
@@ -92,10 +81,7 @@ impl<'a> MetadataIdHumanizer<'a> {
 }
 
 impl IdHumanizer for MetadataIdHumanizer<'_> {
-    type ColumnId = IndexType;
-    type TableId = IndexType;
-
-    fn humanize_column_id(&self, id: Self::ColumnId) -> String {
+    fn humanize_column_id(&self, id: IndexType) -> String {
         let column_entry = self.metadata.column(id);
         match column_entry {
             ColumnEntry::BaseTableColumn(column) => {
@@ -103,27 +89,27 @@ impl IdHumanizer for MetadataIdHumanizer<'_> {
                 let db = table.database();
                 let table = table.name();
                 let column = column.column_name.as_str();
-                format!("{}.{}.{} (#{})", db, table, column, id)
+                format!("{db}.{table}.{column} (#{id})")
             }
             ColumnEntry::DerivedColumn(column) => {
                 let column = column.alias.as_str();
-                format!("derived.{} (#{})", column, id)
+                format!("derived.{column} (#{id})")
             }
             ColumnEntry::InternalColumn(column) => {
                 let column = column.internal_column.column_name.as_str();
-                format!("internal.{} (#{})", column, id)
+                format!("internal.{column} (#{id})")
             }
             ColumnEntry::VirtualColumn(column) => {
                 let table = self.metadata.table(column.table_index);
                 let db = table.database();
                 let table = table.name();
                 let column = column.column_name.as_str();
-                format!("{}.{}.{} (#{})", db, table, column, id)
+                format!("{db}.{table}.{column} (#{id})")
             }
         }
     }
 
-    fn humanize_table_id(&self, id: Self::TableId) -> String {
+    fn humanize_table_id(&self, id: IndexType) -> String {
         let table = self.metadata.table(id);
         let db = table.database();
         let table = table.name();
@@ -143,11 +129,10 @@ pub struct TreeHumanizer<'a, I, O> {
     operator_humanizer: &'a O,
 }
 
-impl<
-        'a,
-        I: IdHumanizer<ColumnId = IndexType>,
-        O: OperatorHumanizer<I, Output = FormatTreeNode>,
-    > TreeHumanizer<'a, I, O>
+impl<'a, I, O> TreeHumanizer<'a, I, O>
+where
+    I: IdHumanizer,
+    O: OperatorHumanizer<I>,
 {
     pub fn new(id_humanizer: &'a I, operator_humanizer: &'a O) -> Self {
         TreeHumanizer {

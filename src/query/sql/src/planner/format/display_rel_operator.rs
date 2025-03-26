@@ -15,8 +15,8 @@
 use databend_common_ast::ast::FormatTreeNode;
 use itertools::Itertools;
 
+use super::display::IdHumanizer;
 use super::display::OperatorHumanizer;
-use super::display_plan::Humanizer;
 use crate::planner::format::display::DefaultOperatorHumanizer;
 use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;
@@ -37,17 +37,15 @@ use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
 
-impl<I: Humanizer> OperatorHumanizer<I> for DefaultOperatorHumanizer {
-    type Output = FormatTreeNode;
-
-    fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> Self::Output {
+impl<I: IdHumanizer> OperatorHumanizer<I> for DefaultOperatorHumanizer {
+    fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> FormatTreeNode {
         to_format_tree(id_humanizer, op)
     }
 }
 
 /// Build `FormatTreeNode` for a `RelOperator`, which may returns a tree structure instead of
 /// a single node.
-fn to_format_tree<I: Humanizer>(id_humanizer: &I, op: &RelOperator) -> FormatTreeNode {
+fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &RelOperator) -> FormatTreeNode {
     match op {
         RelOperator::Join(op) => join_to_format_tree(id_humanizer, op),
         RelOperator::Scan(op) => scan_to_format_tree(id_humanizer, op),
@@ -67,7 +65,7 @@ fn to_format_tree<I: Humanizer>(id_humanizer: &I, op: &RelOperator) -> FormatTre
     }
 }
 
-fn format_scalar<I: Humanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> String {
+fn format_scalar<I: IdHumanizer>(_id_humanizer: &I, scalar: &ScalarExpr) -> String {
     match scalar {
         ScalarExpr::BoundColumnRef(column_ref) => {
             if let Some(table_name) = &column_ref.column.table_name {
@@ -76,7 +74,10 @@ fn format_scalar<I: Humanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> String 
                     table_name, column_ref.column.column_name, column_ref.column.index
                 )
             } else {
-                id_humanizer.humanize_column_id(column_ref.column.index)
+                format!(
+                    "{} (#{})",
+                    column_ref.column.column_name, column_ref.column.index
+                )
             }
         }
         ScalarExpr::ConstantExpr(constant) => constant.value.to_string(),
@@ -86,7 +87,7 @@ fn format_scalar<I: Humanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> String 
             let args = lambda
                 .args
                 .iter()
-                .map(|arg| format_scalar(id_humanizer, arg))
+                .map(|arg| format_scalar(_id_humanizer, arg))
                 .collect::<Vec<String>>()
                 .join(", ");
             format!(
@@ -100,7 +101,7 @@ fn format_scalar<I: Humanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> String 
                 &func.func_name,
                 func.arguments
                     .iter()
-                    .map(|arg| format_scalar(id_humanizer, arg))
+                    .map(|arg| format_scalar(_id_humanizer, arg))
                     .collect::<Vec<String>>()
                     .join(", ")
             )
@@ -108,7 +109,7 @@ fn format_scalar<I: Humanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> String 
         ScalarExpr::CastExpr(cast) => {
             format!(
                 "CAST({} AS {})",
-                format_scalar(id_humanizer, &cast.argument),
+                format_scalar(_id_humanizer, &cast.argument),
                 cast.target_type
             )
         }
@@ -119,7 +120,7 @@ fn format_scalar<I: Humanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> String 
                 &udf.handler,
                 udf.arguments
                     .iter()
-                    .map(|arg| format_scalar(id_humanizer, arg))
+                    .map(|arg| format_scalar(_id_humanizer, arg))
                     .collect::<Vec<String>>()
                     .join(", ")
             )
@@ -128,7 +129,7 @@ fn format_scalar<I: Humanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> String 
             format!(
                 "{}({})",
                 &udf.func_name,
-                format_scalar(id_humanizer, &udf.scalar)
+                format_scalar(_id_humanizer, &udf.scalar)
             )
         }
         ScalarExpr::UDAFCall(udaf) => udaf.display_name.clone(),
@@ -136,7 +137,7 @@ fn format_scalar<I: Humanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> String 
     }
 }
 
-fn format_scalar_item<I: Humanizer>(id_humanizer: &I, item: &ScalarItem) -> String {
+fn format_scalar_item<I: IdHumanizer>(id_humanizer: &I, item: &ScalarItem) -> String {
     format!(
         "{} AS (#{})",
         format_scalar(id_humanizer, &item.scalar),
@@ -144,7 +145,7 @@ fn format_scalar_item<I: Humanizer>(id_humanizer: &I, item: &ScalarItem) -> Stri
     )
 }
 
-fn scan_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Scan) -> FormatTreeNode {
+fn scan_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Scan) -> FormatTreeNode {
     FormatTreeNode::with_children("Scan".to_string(), vec![
         FormatTreeNode::new(format!(
             "table: {}",
@@ -180,7 +181,7 @@ fn scan_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Scan) -> FormatTreeN
     ])
 }
 
-fn join_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Join) -> FormatTreeNode {
+fn join_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Join) -> FormatTreeNode {
     let build_keys = op
         .equi_conditions
         .iter()
@@ -207,7 +208,7 @@ fn join_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Join) -> FormatTreeN
     ])
 }
 
-fn aggregate_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Aggregate) -> FormatTreeNode {
+fn aggregate_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Aggregate) -> FormatTreeNode {
     let group_items = op
         .group_items
         .iter()
@@ -226,7 +227,7 @@ fn aggregate_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Aggregate) -> F
     ])
 }
 
-fn window_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Window) -> FormatTreeNode {
+fn window_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Window) -> FormatTreeNode {
     let partition_by_items = op
         .partition_by
         .iter()
@@ -266,7 +267,7 @@ fn window_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Window) -> FormatT
     ])
 }
 
-fn udf_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Udf) -> FormatTreeNode {
+fn udf_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Udf) -> FormatTreeNode {
     let scalars = op
         .items
         .iter()
@@ -285,7 +286,10 @@ fn udf_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Udf) -> FormatTreeNod
     ))])
 }
 
-fn async_func_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &AsyncFunction) -> FormatTreeNode {
+fn async_func_to_format_tree<I: IdHumanizer>(
+    id_humanizer: &I,
+    op: &AsyncFunction,
+) -> FormatTreeNode {
     let scalars = op
         .items
         .iter()
@@ -298,7 +302,7 @@ fn async_func_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &AsyncFunction)
     )])
 }
 
-fn filter_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Filter) -> FormatTreeNode {
+fn filter_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Filter) -> FormatTreeNode {
     let scalars = op
         .predicates
         .iter()
@@ -310,7 +314,7 @@ fn filter_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Filter) -> FormatT
     ))])
 }
 
-fn eval_scalar_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &EvalScalar) -> FormatTreeNode {
+fn eval_scalar_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &EvalScalar) -> FormatTreeNode {
     let scalars = op
         .items
         .iter()
@@ -323,7 +327,7 @@ fn eval_scalar_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &EvalScalar) -
     )])
 }
 
-fn sort_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Sort) -> FormatTreeNode {
+fn sort_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Sort) -> FormatTreeNode {
     let scalars = op
         .items
         .iter()
@@ -358,7 +362,7 @@ fn sort_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Sort) -> FormatTreeN
     FormatTreeNode::with_children("Sort".to_string(), children)
 }
 
-fn constant_scan_to_format_tree<I: Humanizer>(
+fn constant_scan_to_format_tree<I: IdHumanizer>(
     id_humanizer: &I,
     plan: &ConstantTableScan,
 ) -> FormatTreeNode {
@@ -380,7 +384,7 @@ fn constant_scan_to_format_tree<I: Humanizer>(
     ])
 }
 
-fn limit_to_format_tree<I: Humanizer>(_: &I, op: &Limit) -> FormatTreeNode {
+fn limit_to_format_tree<I: IdHumanizer>(_: &I, op: &Limit) -> FormatTreeNode {
     let limit = op.limit.unwrap_or_default();
     FormatTreeNode::with_children("Limit".to_string(), vec![
         FormatTreeNode::new(format!("limit: [{}]", limit)),
@@ -388,7 +392,7 @@ fn limit_to_format_tree<I: Humanizer>(_: &I, op: &Limit) -> FormatTreeNode {
     ])
 }
 
-fn exchange_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Exchange) -> FormatTreeNode {
+fn exchange_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Exchange) -> FormatTreeNode {
     let payload = match op {
         Exchange::Hash(_) => "Exchange(Hash)",
         Exchange::Broadcast => "Exchange(Broadcast)",
@@ -409,7 +413,7 @@ fn exchange_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &Exchange) -> For
     }
 }
 
-fn union_all_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &UnionAll) -> FormatTreeNode {
+fn union_all_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &UnionAll) -> FormatTreeNode {
     let children = vec![
         FormatTreeNode::new(format!(
             "output: [{}]",
@@ -450,7 +454,7 @@ fn union_all_to_format_tree<I: Humanizer>(id_humanizer: &I, op: &UnionAll) -> Fo
     FormatTreeNode::with_children(format!("{:?}", op.rel_op()), children)
 }
 
-fn merge_into_to_format_tree<I: Humanizer>(
+fn merge_into_to_format_tree<I: IdHumanizer>(
     id_humanizer: &I,
     merge_into: &Mutation,
 ) -> FormatTreeNode {
