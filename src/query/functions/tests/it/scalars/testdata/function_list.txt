@@ -3209,6 +3209,8 @@ Functions overloads:
 1 range_partition_id(T0 NULL, Array(T0) NULL) :: UInt64
 0 regexp(String, String) :: Boolean
 1 regexp(String NULL, String NULL) :: Boolean NULL
+0 regexp_extract FACTORY
+0 regexp_extract_all FACTORY
 0 regexp_instr FACTORY
 0 regexp_like FACTORY
 0 regexp_replace FACTORY
