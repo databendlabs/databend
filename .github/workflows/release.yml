@@ -135,7 +135,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
-          artifacts: sqllogictests,sqlsmith,query,meta,metactl,metaverifier
+          artifacts: sqllogictests,sqlsmith,query,meta,metactl,metaverifier,bendsave
       - name: Basic Sqllogic Test
         shell: bash
         env:
@@ -168,7 +168,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
-          artifacts: sqllogictests,sqlsmith,metactl,meta,query
+          artifacts: sqllogictests,sqlsmith,metactl,meta,query,bendsave
           features: python-udf
           category: udf
 
@@ -266,7 +266,7 @@ jobs:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
           category: default
-          artifacts: metactl,meta,query
+          artifacts: metactl,meta,query,bendsave
           path: distro/linux/amd64
       - name: Download artifacts for aarch64
         uses: ./.github/actions/artifact_download
@@ -274,7 +274,7 @@ jobs:
           sha: ${{ github.sha }}
           target: aarch64-unknown-linux-gnu
           category: default
-          artifacts: metactl,meta,query
+          artifacts: metactl,meta,query,bendsave
           path: distro/linux/arm64
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
