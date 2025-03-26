@@ -31,6 +31,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::Plan;
+use crate::planner::format::FormatOptions;
+use crate::planner::format::MetadataIdHumanizer;
 use crate::plans::CopyIntoTablePlan;
 use crate::INSERT_NAME;
 
@@ -85,7 +87,7 @@ impl Insert {
     #[async_backtrace::framed]
     pub async fn explain(
         &self,
-        verbose: bool,
+        options: FormatOptions,
     ) -> databend_common_exception::Result<Vec<DataBlock>> {
         let mut result = vec![];
 
@@ -114,7 +116,7 @@ impl Insert {
             FormatTreeNode::new(format!("overwrite: {overwrite}")),
         ];
 
-        let formatted_plan = format_insert_source("InsertPlan", source, verbose, children)?;
+        let formatted_plan = format_insert_source("InsertPlan", source, options, children)?;
 
         let line_split_result: Vec<&str> = formatted_plan.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
@@ -133,7 +135,7 @@ impl Insert {
 pub(crate) fn format_insert_source(
     plan_name: &str,
     source: &InsertInputSource,
-    verbose: bool,
+    options: FormatOptions,
     mut children: Vec<FormatTreeNode>,
 ) -> databend_common_exception::Result<String> {
     match source {
@@ -143,7 +145,8 @@ pub(crate) fn format_insert_source(
             } = &**plan
             {
                 let metadata = &*metadata.read();
-                let sub_tree = s_expr.to_format_tree(metadata, verbose)?;
+                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                let sub_tree = s_expr.to_format_tree(&humanizer)?;
                 children.push(sub_tree);
 
                 return Ok(FormatTreeNode::with_children(

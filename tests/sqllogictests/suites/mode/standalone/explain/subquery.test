@@ -578,31 +578,31 @@ query T
 explain optimized select i, exists(select * from t where i > 10) from t;
 ----
 EvalScalar
-├── scalars: [t.i (#0) AS (#0), exists_scalar (#4) AS (#2)]
+├── scalars: [t.i (#0) AS (#0), derived._exists_scalar_subquery (#4) AS (#2)]
 └── Join(Cross)
     ├── build keys: []
     ├── probe keys: []
     ├── other filters: []
     ├── Scan
-    │   ├── table: default.t
+    │   ├── table: default.t (#0)
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
     └── EvalScalar
-        ├── scalars: [eq(count(*) (#3), 1) AS (#4)]
+        ├── scalars: [eq(derived.count(*) (#3), 1) AS (#4)]
         └── Aggregate(Final)
             ├── group items: []
-            ├── aggregate functions: [count(*) (#3)]
+            ├── aggregate functions: [count(*) AS (#3)]
             └── Aggregate(Partial)
                 ├── group items: []
-                ├── aggregate functions: [count(*) (#3)]
+                ├── aggregate functions: [count(*) AS (#3)]
                 └── Limit
                     ├── limit: [1]
                     ├── offset: [0]
                     └── Filter
                         ├── filters: [gt(t.i (#1), 10)]
                         └── Scan
-                            ├── table: default.t
+                            ├── table: default.t (#1)
                             ├── filters: [gt(t.i (#1), 10)]
                             ├── order by: []
                             └── limit: NONE
@@ -612,21 +612,21 @@ query T
 explain decorrelated select i, exists(select * from t where i > 10) from t;
 ----
 EvalScalar
-├── scalars: [t.i (#0) AS (#0), exists_scalar (#4) AS (#2)]
+├── scalars: [t.i (#0) AS (#0), derived._exists_scalar_subquery (#4) AS (#2)]
 └── Join(Cross)
     ├── build keys: []
     ├── probe keys: []
     ├── other filters: []
     ├── Scan
-    │   ├── table: default.t
+    │   ├── table: default.t (#0)
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
     └── EvalScalar
-        ├── scalars: [eq(count(*) (#3), 1) AS (#4)]
+        ├── scalars: [eq(derived.count(*) (#3), 1) AS (#4)]
         └── Aggregate(Initial)
             ├── group items: []
-            ├── aggregate functions: [count(*) (#3)]
+            ├── aggregate functions: [count(*) AS (#3)]
             └── Limit
                 ├── limit: [1]
                 ├── offset: [0]
@@ -635,7 +635,7 @@ EvalScalar
                     └── Filter
                         ├── filters: [gt(t.i (#1), 10)]
                         └── Scan
-                            ├── table: default.t
+                            ├── table: default.t (#1)
                             ├── filters: []
                             ├── order by: []
                             └── limit: NONE

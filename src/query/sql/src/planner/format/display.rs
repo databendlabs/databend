@@ -20,11 +20,11 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::SExpr;
 use crate::optimizer::StatInfo;
-use crate::planner::format::display_rel_operator::to_format_tree;
 use crate::plans::RelOperator;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
+use crate::ScalarExpr;
 
 /// A trait for humanizing IDs.
 pub trait IdHumanizer {
@@ -34,6 +34,8 @@ pub trait IdHumanizer {
     fn humanize_column_id(&self, id: Self::ColumnId) -> String;
 
     fn humanize_table_id(&self, id: Self::TableId) -> String;
+
+    fn options(&self) -> &FormatOptions;
 }
 
 /// A trait for humanizing operators.
@@ -43,20 +45,14 @@ pub trait OperatorHumanizer<I: IdHumanizer> {
     fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> Self::Output;
 }
 
-/// A default implementation of `IdHumanizer`.
-/// It just simply prints the ID with a prefix.
-pub struct DefaultIdHumanizer;
+#[derive(Debug, Clone)]
+pub struct FormatOptions {
+    pub verbose: bool,
+}
 
-impl IdHumanizer for DefaultIdHumanizer {
-    type ColumnId = IndexType;
-    type TableId = IndexType;
-
-    fn humanize_column_id(&self, id: Self::ColumnId) -> String {
-        format!("column_{}", id)
-    }
-
-    fn humanize_table_id(&self, id: Self::TableId) -> String {
-        format!("table_{}", id)
+impl Default for FormatOptions {
+    fn default() -> Self {
+        Self { verbose: false }
     }
 }
 
@@ -84,53 +80,58 @@ impl IdHumanizer for DefaultIdHumanizer {
 /// ```
 pub struct DefaultOperatorHumanizer;
 
-impl<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>> OperatorHumanizer<I>
-    for DefaultOperatorHumanizer
-{
-    type Output = FormatTreeNode;
+pub struct MetadataIdHumanizer<'a> {
+    metadata: &'a Metadata,
+    options: FormatOptions,
+}
 
-    fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> Self::Output {
-        to_format_tree(id_humanizer, op)
+impl<'a> MetadataIdHumanizer<'a> {
+    pub fn new(metadata: &'a Metadata, options: FormatOptions) -> Self {
+        Self { metadata, options }
     }
 }
 
-impl IdHumanizer for Metadata {
+impl IdHumanizer for MetadataIdHumanizer<'_> {
     type ColumnId = IndexType;
     type TableId = IndexType;
 
     fn humanize_column_id(&self, id: Self::ColumnId) -> String {
-        let column_entry = self.column(id);
+        let column_entry = self.metadata.column(id);
         match column_entry {
             ColumnEntry::BaseTableColumn(column) => {
-                let table = self.table(column.table_index);
+                let table = self.metadata.table(column.table_index);
                 let db = table.database();
                 let table = table.name();
                 let column = column.column_name.as_str();
-                format!("{}.{}.{}", db, table, column)
+                format!("{}.{}.{} (#{})", db, table, column, id)
             }
             ColumnEntry::DerivedColumn(column) => {
                 let column = column.alias.as_str();
-                format!("derived.{}", column)
+                format!("derived.{} (#{})", column, id)
             }
             ColumnEntry::InternalColumn(column) => {
                 let column = column.internal_column.column_name.as_str();
-                format!("internal.{}", column)
+                format!("internal.{} (#{})", column, id)
             }
             ColumnEntry::VirtualColumn(column) => {
-                let table = self.table(column.table_index);
+                let table = self.metadata.table(column.table_index);
                 let db = table.database();
                 let table = table.name();
                 let column = column.column_name.as_str();
-                format!("{}.{}.{}", db, table, column)
+                format!("{}.{}.{} (#{})", db, table, column, id)
             }
         }
     }
 
     fn humanize_table_id(&self, id: Self::TableId) -> String {
-        let table = self.table(id);
+        let table = self.metadata.table(id);
         let db = table.database();
         let table = table.name();
-        format!("{}.{}", db, table)
+        format!("{}.{} (#{})", db, table, id)
+    }
+
+    fn options(&self) -> &FormatOptions {
+        &self.options
     }
 }
 
@@ -140,7 +141,6 @@ impl IdHumanizer for Metadata {
 pub struct TreeHumanizer<'a, I, O> {
     id_humanizer: &'a I,
     operator_humanizer: &'a O,
-    verbose: bool,
 }
 
 impl<
@@ -149,11 +149,10 @@ impl<
         O: OperatorHumanizer<I, Output = FormatTreeNode>,
     > TreeHumanizer<'a, I, O>
 {
-    pub fn new(id_humanizer: &'a I, operator_humanizer: &'a O, verbose: bool) -> Self {
+    pub fn new(id_humanizer: &'a I, operator_humanizer: &'a O) -> Self {
         TreeHumanizer {
             id_humanizer,
             operator_humanizer,
-            verbose,
         }
     }
 
@@ -163,7 +162,7 @@ impl<
             .operator_humanizer
             .humanize_operator(self.id_humanizer, op);
 
-        if self.verbose {
+        if self.id_humanizer.options().verbose {
             let rel_expr = RelExpr::with_s_expr(s_expr);
             let prop = rel_expr.derive_relational_prop()?;
             let stat = rel_expr.derive_cardinality()?;
@@ -240,5 +239,73 @@ impl<
             FormatTreeNode::new(format!("precise cardinality: {}", precise_cardinality)),
             FormatTreeNode::with_children("statistics".to_string(), column_stats),
         ])
+    }
+}
+
+pub fn format_scalar(scalar: &ScalarExpr) -> String {
+    match scalar {
+        ScalarExpr::BoundColumnRef(column_ref) => {
+            if let Some(table_name) = &column_ref.column.table_name {
+                format!(
+                    "{}.{} (#{})",
+                    table_name, column_ref.column.column_name, column_ref.column.index
+                )
+            } else {
+                format!(
+                    "{} (#{})",
+                    column_ref.column.column_name, column_ref.column.index
+                )
+            }
+        }
+        ScalarExpr::ConstantExpr(constant) => constant.value.to_string(),
+        ScalarExpr::WindowFunction(win) => win.display_name.clone(),
+        ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
+        ScalarExpr::LambdaFunction(lambda) => {
+            let args = lambda
+                .args
+                .iter()
+                .map(format_scalar)
+                .collect::<Vec<String>>()
+                .join(", ");
+            format!(
+                "{}({}, {})",
+                &lambda.func_name, args, &lambda.lambda_display,
+            )
+        }
+        ScalarExpr::FunctionCall(func) => {
+            format!(
+                "{}({})",
+                &func.func_name,
+                func.arguments
+                    .iter()
+                    .map(format_scalar)
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+        }
+        ScalarExpr::CastExpr(cast) => {
+            format!(
+                "CAST({} AS {})",
+                format_scalar(&cast.argument),
+                cast.target_type
+            )
+        }
+        ScalarExpr::SubqueryExpr(_) => "SUBQUERY".to_string(),
+        ScalarExpr::UDFCall(udf) => {
+            format!(
+                "{}({})",
+                &udf.handler,
+                udf.arguments
+                    .iter()
+                    .map(format_scalar)
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+        }
+        ScalarExpr::UDFLambdaCall(udf) => {
+            format!("{}({})", &udf.func_name, format_scalar(&udf.scalar))
+        }
+        ScalarExpr::UDAFCall(udaf) => udaf.display_name.clone(),
+        ScalarExpr::AsyncFunctionCall(async_func) => async_func.display_name.clone(),
     }
 }

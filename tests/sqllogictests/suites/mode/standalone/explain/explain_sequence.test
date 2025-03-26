@@ -18,11 +18,11 @@ InsertPlan (subquery):
 ├── inserted columns: [tmp.a (#0),tmp.b (#1),tmp.c (#2)]
 ├── overwrite: false
 └── EvalScalar
-    ├── scalars: [10 AS (#1), nextval(seq) (#2) AS (#2), 20 AS (#3)]
+    ├── scalars: [10 AS (#1), derived.nextval(seq) (#2) AS (#2), 20 AS (#3)]
     └── AsyncFunction
         ├── scalars: [nextval(seq) AS (#2)]
         └── Scan
-            ├── table: system.numbers
+            ├── table: system.numbers (#0)
             ├── filters: []
             ├── order by: []
             └── limit: NONE

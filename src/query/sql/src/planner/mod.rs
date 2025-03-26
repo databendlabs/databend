@@ -40,7 +40,7 @@ pub use binder::SelectBuilder;
 pub use binder::Visibility;
 pub use bloom_index::BloomIndexColumns;
 pub use expression_parser::*;
-pub use format::format_scalar;
+pub use format::*;
 pub use metadata::*;
 pub use optimizer::optimize;
 pub use planner::get_query_kind;
