@@ -12,17 +12,124 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::Duration;
+
+use async_channel::bounded;
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_tracing::convert_to_batch;
+use databend_common_tracing::Config;
 use databend_common_tracing::RemoteLog;
+use databend_common_tracing::RemoteLogBuffer;
 use databend_common_tracing::RemoteLogElement;
+use databend_common_tracing::RemoteLogGuard;
+use log::Level;
+use log::Record;
 use opendal::services;
 use opendal::Operator;
+use serde_json::Value;
+
+fn setup() -> Result<(RemoteLog, Box<RemoteLogGuard>)> {
+    let mut labels = BTreeMap::new();
+    labels.insert("cluster_id".into(), "cluster_id1".into());
+    labels.insert("node_id".into(), "node_id1".into());
+    let (remote_log, guard) = RemoteLog::new(&labels, &Config::default())?;
+
+    Ok((remote_log, guard))
+}
+
+fn get_remote_log_elements() -> RemoteLogElement {
+    RemoteLogElement {
+        timestamp: chrono::Local::now().timestamp_micros(),
+        path: "databend_query::interpreters::common::query_log: query_log.rs:71".to_string(),
+        target: "databend::log::query".to_string(),
+        cluster_id: "test_cluster".to_string(),
+        node_id: "izs9przqhAN4n5hbJanJm2".to_string(),
+        query_id: Some("89ad07ad-83fe-4424-8005-4c5b318a7212".to_string()),
+        warehouse_id: None,
+        log_level: "INFO".to_string(),
+        fields: r#"{"message":"test"}"#.to_string(),
+    }
+}
 
 #[test]
-fn test_convert_to_batch() {
-    let _ = convert_to_batch(get_remote_log()).unwrap();
+fn test_basic_parse() -> Result<()> {
+    let (remote_log, _guard) = setup()?;
+    let record = Record::builder()
+        .args(format_args!("begin to list files"))
+        .level(Level::Info)
+        .target("databend_query::sessions::query_ctx")
+        .module_path(Some("databend_query::sessions::query_ctx"))
+        .file(Some("query_ctx.rs"))
+        .line(Some(656))
+        .build();
+
+    let remote_log_element = remote_log.prepare_log_element(&record);
+
+    assert_eq!(remote_log_element.cluster_id, "cluster_id1");
+    assert_eq!(remote_log_element.node_id, "node_id1");
+    assert_eq!(
+        remote_log_element.path,
+        "databend_query::sessions::query_ctx: query_ctx.rs:656"
+    );
+
+    let fields: Value = serde_json::from_str(&remote_log_element.fields)?;
+
+    assert_eq!(fields["message"], "begin to list files");
+
+    Ok(())
+}
+
+#[test]
+fn test_convert_to_batch() -> Result<()> {
+    let elements = vec![get_remote_log_elements()];
+    let _ = convert_to_batch(elements).unwrap();
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_buffer_flush_with_buffer_limit() -> Result<()> {
+    let (tx, rx) = bounded(10);
+    let interval = Duration::from_secs(100).as_micros() as u64;
+    let buffer = Arc::new(RemoteLogBuffer::new(tx.clone(), interval));
+    for _i in 0..5005 {
+        buffer.log(get_remote_log_elements())?
+    }
+    let res = rx.recv().await.unwrap();
+    assert_eq!(res.len(), 5000);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_buffer_flush_with_buffer_interval() -> Result<()> {
+    let (tx, rx) = bounded(10);
+    let interval = Duration::from_secs(1).as_micros() as u64;
+    let buffer = Arc::new(RemoteLogBuffer::new(tx.clone(), interval));
+    for _i in 0..5 {
+        buffer.log(get_remote_log_elements())?
+    }
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    buffer.log(get_remote_log_elements())?;
+    let res = rx.recv().await.unwrap();
+    assert_eq!(res.len(), 6);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_buffer_flush_with_force_collect() -> Result<()> {
+    // This simulates guard is dropped and collect is called
+    let (tx, rx) = bounded(10);
+    let interval = Duration::from_secs(100).as_micros() as u64;
+    let buffer = Arc::new(RemoteLogBuffer::new(tx.clone(), interval));
+    for _i in 0..500 {
+        buffer.log(get_remote_log_elements())?
+    }
+    buffer.collect()?;
+    let res = rx.recv().await.unwrap();
+    assert_eq!(res.len(), 500);
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -31,35 +138,12 @@ async fn test_do_flush() -> Result<()> {
     let op = Operator::new(builder)?.finish();
 
     let path = "test_logs.parquet";
-
-    let result = RemoteLog::do_flush(op.clone(), get_remote_log(), path).await;
+    let elements = vec![get_remote_log_elements()];
+    let result = RemoteLog::do_flush(op.clone(), elements, path).await;
     assert!(result.is_ok());
 
     let exists = op.exists(path).await?;
     assert!(exists);
 
     Ok(())
-}
-
-fn get_remote_log() -> Vec<RemoteLogElement> {
-    vec![
-        RemoteLogElement {
-            timestamp: 1741680446186595,
-            path: "test_path".to_string(),
-            messages: r#"{"message":"MetaGrpcClient(0.0.0.0:9191)::worker spawned"}"#.to_string(),
-            cluster_id: "cluster_id".to_string(),
-            node_id: "node_id".to_string(),
-            query_id: None,
-            log_level: "INFO".to_string(),
-        },
-        RemoteLogElement {
-            timestamp: 1741680446186596,
-            path: "test_path2".to_string(),
-            messages: r#"{"conf":"RpcClientConf { endpoints: [\"0.0.0.0:9191\"], username: \"root\", password: \"root\", tls_conf: None, timeout: Some(60s), auto_sync_interval: Some(60s), unhealthy_endpoint_evict_time: 120s }","message":"use remote meta"}"#.to_string(),
-            cluster_id: "cluster_id".to_string(),
-            node_id: "node_id".to_string(),
-            query_id: Some("query_id".to_string()),
-            log_level: "DEBUG".to_string(),
-        },
-    ]
 }

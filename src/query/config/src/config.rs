@@ -2081,10 +2081,8 @@ impl TryInto<InnerLogConfig> for LogConfig {
 
         let mut persistentlog: InnerPersistentLogConfig = self.persistentlog.try_into()?;
 
-        if persistentlog.on && persistentlog.level.is_empty() {
-            if file.on && !file.level.is_empty() {
-                persistentlog.level = file.level.clone();
-            }
+        if persistentlog.on && persistentlog.level.is_empty() && file.on && !file.level.is_empty() {
+            persistentlog.level = file.level.clone();
         }
 
         Ok(InnerLogConfig {
@@ -2518,7 +2516,7 @@ pub struct PersistentLogConfig {
     #[clap(
         long = "log-persistentlog-interval",
         value_name = "VALUE",
-        default_value = "8"
+        default_value = "2"
     )]
     #[serde(rename = "interval")]
     pub log_persistentlog_interval: usize,
@@ -2536,7 +2534,7 @@ pub struct PersistentLogConfig {
     #[clap(
         long = "log-persistentlog-retention",
         value_name = "VALUE",
-        default_value = "24"
+        default_value = "72"
     )]
     #[serde(rename = "retention")]
     pub log_persistentlog_retention: usize,
@@ -2549,16 +2547,6 @@ pub struct PersistentLogConfig {
     )]
     #[serde(rename = "level")]
     pub log_persistentlog_level: String,
-
-    /// Specifies how often the persistent log retention operation should be triggered, in terms of the number of `interval`
-    /// e.g. for default value of `interval` 8 and `retention_frequency` 40, the retention operation will be triggered every 320 seconds
-    #[clap(
-        long = "log-persistentlog-retention-frequency",
-        value_name = "VALUE",
-        default_value = "40"
-    )]
-    #[serde(rename = "retention_frequency")]
-    pub log_persistentlog_retention_frequency: usize,
 }
 
 impl Default for PersistentLogConfig {
@@ -2577,7 +2565,6 @@ impl TryInto<InnerPersistentLogConfig> for PersistentLogConfig {
             stage_name: self.log_persistentlog_stage_name,
             level: self.log_persistentlog_level,
             retention: self.log_persistentlog_retention,
-            retention_frequency: self.log_persistentlog_retention_frequency,
         })
     }
 }
@@ -2590,7 +2577,6 @@ impl From<InnerPersistentLogConfig> for PersistentLogConfig {
             log_persistentlog_stage_name: inner.stage_name,
             log_persistentlog_level: inner.level,
             log_persistentlog_retention: inner.retention,
-            log_persistentlog_retention_frequency: inner.retention_frequency,
         }
     }
 }

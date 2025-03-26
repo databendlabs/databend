@@ -17,6 +17,7 @@ arrow-schema = { workspace = true }
 async-channel = { workspace = true }
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 chrono = { workspace = true }
+concurrent-queue = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 defer = { workspace = true }
@@ -34,7 +35,6 @@ parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }
-concurrent-queue = { workspace = true }
 
 [dev-dependencies]
 

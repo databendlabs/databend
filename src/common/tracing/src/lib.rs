@@ -48,8 +48,10 @@ pub use crate::init::GlobalLogger;
 pub use crate::panic_hook::log_panic;
 pub use crate::panic_hook::set_panic_hook;
 pub use crate::remote_log::convert_to_batch;
+pub use crate::remote_log::LogBuffer as RemoteLogBuffer;
 pub use crate::remote_log::RemoteLog;
 pub use crate::remote_log::RemoteLogElement;
+pub use crate::remote_log::RemoteLogGuard;
 pub use crate::structlog::DummyReporter;
 pub use crate::structlog::StructLogReporter;
 

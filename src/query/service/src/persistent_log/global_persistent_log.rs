@@ -38,6 +38,7 @@ use databend_common_storage::DataOperator;
 use databend_common_tracing::GlobalLogger;
 use log::error;
 use log::info;
+use rand::random;
 
 use crate::interpreters::InterpreterFactory;
 use crate::persistent_log::session::create_session;
@@ -52,7 +53,6 @@ pub struct GlobalPersistentLog {
     initialized: AtomicBool,
     stopped: AtomicBool,
     retention: usize,
-    retention_frequency: usize,
 }
 
 impl GlobalPersistentLog {
@@ -72,7 +72,6 @@ impl GlobalPersistentLog {
             initialized: AtomicBool::new(false),
             stopped: AtomicBool::new(false),
             retention: cfg.log.persistentlog.retention,
-            retention_frequency: cfg.log.persistentlog.retention_frequency,
         });
         GlobalInstance::set(instance);
         GlobalIORuntime::instance().spawn(async move {
@@ -93,9 +92,20 @@ impl GlobalPersistentLog {
 
     pub async fn work(&self) -> Result<()> {
         let mut prepared = false;
+
+        // Use a counter rather than a time interval to trigger cleanup operations.
+        // because in cluster environment, a time-based interval would cause cleanup frequency
+        // to scale with the number of nodes in the cluster, whereas this count-based
+        // approach ensures consistent cleanup frequency regardless of cluster size.
+        let thirty_minutes_in_seconds = 30 * 60;
+        let copy_into_threshold = thirty_minutes_in_seconds / self.interval;
         let mut copy_into_count = 0;
+
         loop {
-            tokio::time::sleep(Duration::from_secs(self.interval as u64)).await;
+            // add a random sleep time to avoid always one node doing the work
+            let sleep_time = self.interval as u64 * 1000 + random::<u64>() % 1000;
+
+            tokio::time::sleep(Duration::from_millis(sleep_time)).await;
             if self.stopped.load(Ordering::SeqCst) {
                 return Ok(());
             }
@@ -122,11 +132,7 @@ impl GlobalPersistentLog {
                         error!("Persistent log copy into failed: {:?}", e);
                     }
                     copy_into_count += 1;
-                    // Use a counter rather than a time interval to trigger cleanup operations.
-                    // because in cluster environment, a time-based interval would cause cleanup frequency
-                    // to scale with the number of nodes in the cluster, whereas this count-based
-                    // approach ensures consistent cleanup frequency regardless of cluster size.
-                    if copy_into_count > self.retention_frequency {
+                    if copy_into_count > copy_into_threshold {
                         if let Err(e) = self.clean().await {
                             error!("Persistent log delete failed: {:?}", e);
                         }
@@ -201,6 +207,7 @@ impl GlobalPersistentLog {
         self.execute_sql(&sql).await
     }
 
+    /// Do retention and vacuum
     async fn clean(&self) -> Result<()> {
         let delete = format!(
             "DELETE FROM persistent_system.query_log WHERE timestamp < subtract_hours(NOW(), {})",

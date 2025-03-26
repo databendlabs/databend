@@ -92,7 +92,7 @@ pub struct RemoteLogGuard {
 impl Drop for RemoteLogGuard {
     fn drop(&mut self) {
         // buffer collect will send all logs and trigger the log flush
-        if let Ok(_) = self.buffer.collect() {
+        if self.buffer.collect().is_ok() {
             // wait for the log to be flushed
             std::thread::sleep(Duration::from_secs(3));
         }
@@ -104,6 +104,7 @@ impl RemoteLog {
         labels: &BTreeMap<String, String>,
         cfg: &Config,
     ) -> Result<(RemoteLog, Box<RemoteLogGuard>)> {
+        // all interval in RemoteLog is microseconds
         let interval = Duration::from_secs(cfg.persistentlog.interval as u64).as_micros();
         let stage_name = cfg.persistentlog.stage_name.clone();
         let node_id = labels.get("node_id").cloned().unwrap_or_default();
@@ -130,7 +131,6 @@ impl RemoteLog {
         while let Ok(log_element) = receiver.recv().await {
             Self::flush(log_element, stage_name).await;
         }
-        // receiver close will trigger interval_flush exit
         let _ = receiver.close();
     }
 
@@ -174,13 +174,13 @@ impl RemoteLog {
         Ok(())
     }
 
-    fn prepare_log_element(&self, record: &Record) -> RemoteLogElement {
+    pub fn prepare_log_element(&self, record: &Record) -> RemoteLogElement {
         let mut query_id = ThreadTracker::query_id().cloned();
         let mut fields = Map::new();
         let target = record.target().to_string();
         match target.as_str() {
             "databend::log::profile" | "databend::log::query" => {
-                if let Err(_) = handle_profile_and_query(&mut fields, &mut query_id, &record) {
+                if handle_profile_and_query(&mut fields, &mut query_id, record).is_err() {
                     fields.insert("message".to_string(), format!("{}", record.args()).into());
                 }
             }
@@ -237,15 +237,16 @@ impl LogBuffer {
     pub fn new(sender: Sender<Vec<RemoteLogElement>>, interval: u64) -> Self {
         Self {
             queue: ConcurrentQueue::unbounded(),
-            last_collect: AtomicU64::new(0),
+            last_collect: AtomicU64::new(chrono::Local::now().timestamp_micros() as u64),
             sender,
             interval,
         }
     }
 
+    /// log will trigger a collect either when the buffer is full or the interval is reached
     pub fn log(&self, log_element: RemoteLogElement) -> anyhow::Result<()> {
         self.queue.push(log_element)?;
-        if self.queue.len() > Self::MAX_BUFFER_SIZE {
+        if self.queue.len() >= Self::MAX_BUFFER_SIZE {
             self.last_collect.store(
                 chrono::Local::now().timestamp_micros() as u64,
                 Ordering::SeqCst,
@@ -254,10 +255,9 @@ impl LogBuffer {
         }
         let now = chrono::Local::now().timestamp_micros() as u64;
         let last = self.last_collect.load(Ordering::SeqCst);
-        if now - last > self.interval {
-            if self.last_collect.fetch_max(now, Ordering::SeqCst) == last {
-                self.collect()?;
-            }
+        if now - last > self.interval && self.last_collect.fetch_max(now, Ordering::SeqCst) == last
+        {
+            self.collect()?;
         }
         Ok(())
     }
