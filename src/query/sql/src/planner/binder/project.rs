@@ -172,7 +172,7 @@ impl Binder {
         child: SExpr,
     ) -> Result<SExpr> {
         bind_context.set_expr_context(ExprContext::SelectClause);
-
+        let mut columns = columns.to_vec();
         let mut scalars = scalars
             .iter()
             .map(|(_, item)| {
@@ -180,6 +180,11 @@ impl Binder {
                     let mut scalar = item.scalar.clone();
                     let mut grouping_checker = GroupingChecker::new(bind_context);
                     grouping_checker.visit(&mut scalar)?;
+
+                    if let Some(x) = columns.iter_mut().find(|x| x.index == item.index) {
+                        x.data_type = Box::new(scalar.data_type()?);
+                    }
+
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,
@@ -198,12 +203,9 @@ impl Binder {
 
         scalars.sort_by_key(|s| s.index);
         let eval_scalar = EvalScalar { items: scalars };
-
         let new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
-
         // Set output columns
-        bind_context.columns = columns.to_vec();
-
+        bind_context.columns = columns;
         Ok(new_expr)
     }
 
