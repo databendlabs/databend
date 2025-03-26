@@ -19,6 +19,9 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'attribute_types'                 | 'system'             | 'dictionaries'           | 'Array(String)'       | 'ARRAY(STRING)'     | ''       | ''       | 'NO'     | ''       |
 | 'auth_type'                       | 'system'             | 'users'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'auto_increment'                  | 'information_schema' | 'tables'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'bench_arguments'                 | 'system'             | 'benches_summary'        | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
+| 'bench_level'                     | 'system'             | 'benches_summary'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'bench_type'                      | 'system'             | 'benches_summary'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'byte_size'                       | 'system'             | 'clustering_history'     | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'bytes_from_local_disk'           | 'system'             | 'query_log'              | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'bytes_from_memory'               | 'system'             | 'query_log'              | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
@@ -255,6 +258,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'last_task_id'                    | 'system'             | 'background_jobs'        | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'last_task_run_at'                | 'system'             | 'background_jobs'        | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'last_updated'                    | 'system'             | 'background_jobs'        | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
+| 'latency'                         | 'system'             | 'benches_summary'        | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
 | 'level'                           | 'system'             | 'settings'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'license'                         | 'system'             | 'credits'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'location'                        | 'system'             | 'query_cache'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -470,6 +474,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'task_running_secs'               | 'system'             | 'background_tasks'       | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'task_type'                       | 'system'             | 'background_jobs'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'tenant_id'                       | 'system'             | 'query_log'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'throughput'                      | 'system'             | 'benches_summary'        | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
 | 'time'                            | 'system'             | 'processes'              | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'total_columns'                   | 'system'             | 'tables'                 | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'total_columns'                   | 'system'             | 'tables_with_history'    | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |

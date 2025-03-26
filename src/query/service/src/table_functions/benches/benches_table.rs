@@ -1,9 +1,25 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
 use bytes::Bytes;
 use chrono::DateTime;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
@@ -189,6 +205,7 @@ impl Table for BenchesTable {
                 AsyncSourcer::create(ctx.clone(), output, BenchesWorker {
                     argument: self.arguments.clone(),
                     finished: false,
+                    runtime: Runtime::with_default_worker_threads()?,
                 })
             },
             1,
@@ -201,6 +218,7 @@ pub struct BenchesWorker {
     // mode: TestMode,
     // concurrency: usize,
     finished: bool,
+    runtime: Runtime,
 }
 
 #[async_trait::async_trait]
@@ -212,6 +230,7 @@ impl AsyncSource for BenchesWorker {
             self.finished = true;
             let operator = DataOperator::instance().operator();
             let metric = test(
+                &self.runtime,
                 operator,
                 self.argument.test_mode.clone(),
                 self.argument.concurrency,
@@ -227,6 +246,7 @@ impl AsyncSource for BenchesWorker {
 }
 
 async fn test(
+    runtime: &Runtime,
     operator: Operator,
     mode: TestMode,
     raw_concurrency: usize,
@@ -259,7 +279,7 @@ async fn test(
         let prefix = prefix.clone();
         let task_id = task_id % raw_concurrency;
 
-        handles.push(databend_common_base::runtime::spawn(async move {
+        handles.push(runtime.spawn(async move {
             let mut latencies = Vec::with_capacity(iteration);
             let _permit = barrier.wait().await;
 
