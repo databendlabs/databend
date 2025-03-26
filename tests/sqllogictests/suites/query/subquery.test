@@ -2,8 +2,10 @@ statement ok
 use default
 
 
-query error 1065
+query III
 SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
+----
+1 0 0
 
 statement ok
 CREATE OR REPLACE TABLE c (c_id INT NULL, bill VARCHAR NULL)
@@ -242,14 +244,14 @@ SELECT * FROM c WHERE (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY 
 4  TX
 
 
-query ??
+query IT
 SELECT * FROM c WHERE (SELECT count(ship) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY c_id
 ----
 1 CA
 2 TX
 
 
-query ??
+query IT
 SELECT *
 FROM c
 WHERE
@@ -287,6 +289,12 @@ SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
 ----
 6  FL
 
+query IT
+SELECT * FROM ( SELECT * FROM c WHERE c_id < 6 ) c WHERE c_id in (SELECT o.c_id FROM o WHERE o.c_id = c.c_id AND c.bill!='MA');
+----
+1  CA
+2  TX
+4  TX
 
 # Subquery in SELECT clause
 
@@ -595,6 +603,25 @@ select * from numbers(5) where exists(select * from numbers(1)) order by number
 3
 4
 
+query IIT
+select *,
+(select ship from o where o.o_id = t2.o_id and o.ship != 'WA') ship 
+from (select min(o_id) o_id, count from (select count(*) count, max(o_id) o_id from o group by c_id) t group by count) t2
+order by o_id limit 2;
+----
+30 3 CA
+80 2 NULL
+
+query IIII
+select *,
+(select uniq(ship) from o where o.c_id = t.c_id)
+from (select count(*) count, max(o_id) o_id, c_id from o group by c_id) t
+order by o_id;
+----
+3 30 1 1
+3 60 2 2
+2 80 4 1
+1 90 6 1
 
 statement ok
 drop table o
@@ -663,9 +690,10 @@ create or replace table t3(a int, b int);
 statement ok
 insert into t3 values(1, 2), (3, 4), (6, 5);
 
-query T
-SELECT  *, (SELECT SUM(a) FROM t3 WHERE b IN (SELECT b FROM t1 WHERE a = t2.a )) FROM t2 WHERE  b IN (SELECT b FROM t3 WHERE a > 1);
+query III
+SELECT *, (SELECT SUM(a) FROM t3 WHERE b IN (SELECT b FROM t1 WHERE a = t2.a )) sum FROM t2 WHERE a IN (SELECT a FROM t3 WHERE b < 5);
 ----
+1 1 1
 
 query II
 SELECT * FROM t3 WHERE EXISTS (SELECT 1);
@@ -711,6 +739,25 @@ SELECT * FROM t3 WHERE a IN (SELECT * FROM unnest(split('1,2,3,4,5,6', ',')));
 1 2
 3 4
 6 5
+
+statement ok
+truncate table t3;
+
+statement ok
+insert into t3 values (1, 4), (3, 4), (6, 5), (8, 4), (8, 12), (100, 10), (101, 10), (102, 10), (20, 11);
+
+query III
+SELECT
+  (SELECT COUNT(*) FROM t3 AS x WHERE x.b < t3.b) AS count, a, b
+FROM t3 WHERE a + 2 > b ORDER BY count, a;
+----
+0 3 4
+0 8 4
+3 6 5
+4 100 10
+4 101 10
+4 102 10
+7 20 11
 
 # https://github.com/datafuselabs/databend/issues/16099
 statement ok
@@ -850,7 +897,7 @@ create or replace TABLE `merge_log` (
   `created_at` TIMESTAMP NULL
 ) ENGINE = FUSE;
 
-query
+query 
 SELECT
   (SELECT MAX(created_at)
    FROM merge_log
@@ -900,30 +947,208 @@ drop table test_group;
 
 # https://github.com/databendlabs/databend/issues/17476
 statement ok
-DROP TABLE IF EXISTS t1;
+CREATE OR REPLACE TABLE t1 AS SELECT * FROM (VALUES (5),(8)) t(i1);
 
 statement ok
-DROP TABLE IF EXISTS t2;
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM (VALUES (7),(8),(9)) t(i1);
 
 statement ok
-CREATE TABLE t1 (i1 INT);
-
-statement ok
-CREATE TABLE t2 (i1 INT);
-
-statement ok
-insert into t1 values (0);
-
-statement ok
-insert into t2 values (0);
+CREATE OR REPLACE TABLE t3 AS SELECT * FROM (VALUES (5),(5)) t(i1);
 
 query I
-SELECT 1 FROM t1
-WHERE t1.i1 = (
-  SELECT t1.i1
-    FROM t2 UNION
-  SELECT dt1.i1
-    FROM (t1 AS dt1)
+SELECT i1 FROM t1
+WHERE t1.i1 != ANY (
+  SELECT t1.i1 FROM t2 UNION
+  SELECT t3.i1 FROM t3
 );
 ----
-1
+8
+
+statement ok
+CREATE OR REPLACE TABLE employees AS
+SELECT * FROM (
+    VALUES
+        (1, 1, 50000),
+        (2, 2, 60000),
+        (3, 3, 70000)
+) AS employees(employee_id, name, salary);
+
+statement ok
+CREATE OR REPLACE TABLE departments AS
+SELECT * FROM (
+    VALUES
+        (101, 1, 1),
+        (102, 2, 2),
+        (103, 3, 3)
+) AS departments(department_id, department_name, manager_id);
+
+statement ok
+CREATE OR REPLACE TABLE salaries AS
+SELECT * FROM (
+    VALUES
+        (1, 50000),
+        (2, 60000),
+        (3, 70000),
+        (4, 80000),
+        (5, 90000)
+) AS salaries(employee_id, salary);
+
+query II
+SELECT 
+    e.employee_id, 
+    d.department_name
+FROM 
+    employees e
+INNER JOIN 
+    departments d 
+ON 
+    e.employee_id = d.manager_id
+WHERE 
+    e.salary > ANY (
+        SELECT salary
+        FROM salaries
+        WHERE employee_id != e.employee_id
+    )
+ORDER BY employee_id;
+----
+2 2
+3 3
+
+query II
+SELECT 
+    e.employee_id, 
+    d.department_name
+FROM 
+    employees e
+INNER JOIN 
+    departments d 
+ON 
+    e.employee_id = d.manager_id
+WHERE 
+    e.salary <= ALL (
+        SELECT salary
+        FROM salaries
+        WHERE employee_id != e.employee_id
+    )
+ORDER BY employee_id;
+----
+1 1
+
+statement ok
+drop table employees;
+
+statement ok
+drop table departments;
+
+statement ok
+drop table salaries;
+
+statement ok
+create or replace table tab1 as select * from (values (1), (2), (3)) tab(n);
+
+statement ok
+create or replace table tab2 as select * from (values (1, 10), (1, 20), (2, 30)) tab(n, m);
+
+statement ok
+create or replace table tab3 as select * from (values (10, 100), (20, 200), (30, 300)) tab(m, k);
+
+query II
+select t.n, t.m + t.k as result
+from (
+    select t1.n, t2.m, t3.k
+    from tab1 t1
+    join tab2 t2 on t1.n = t2.n
+    join tab3 t3 on t2.m = t3.m
+) t
+where t.k = any (select tab3.k from tab3 where tab3.k = t.n * 100 and tab3.m = t.m);
+----
+1 110
+
+query II
+select t.n, t.m + t.k as result
+from (
+    select t1.n, t2.m, t3.k
+    from (values (1), (2), (3)) t1(n)
+    join tab2 t2 on t1.n = t2.n
+    join tab3 t3 on t2.m = t3.m
+) t
+where t.k = any (select tab3.k from tab3 where tab3.k = t.n * 100 and tab3.m = t.m);
+----
+1 110
+
+query III
+select
+  t.n,
+  t.m + t.k as result,
+  (select count(tab3.k) from tab3 where tab3.k = t.n * 100 and tab3.m = t.m) count
+from (
+    select t1.n, t2.m, t3.k
+    from tab1 t1
+    join tab2 t2 on t1.n = t2.n
+    join tab3 t3 on t2.m = t3.m
+) t order by result;
+----
+1 110 1
+1 220 0
+2 330 0
+
+query III
+select
+  t.n,
+  t.m + t.k as result,
+  (select count(tab3.k) from tab3 where tab3.k = t.n * 100 and tab3.m = t.m) count
+from (
+    select t1.n, t2.m, t3.k
+    from (values (1), (2), (3)) t1(n)
+    join tab2 t2 on t1.n = t2.n
+    join tab3 t3 on t2.m = t3.m
+) t order by result;
+----
+1 110 1
+1 220 0
+2 330 0
+
+query II
+select t.n, t.m + x as result
+from 
+    (select * from (values (100)) const_table(x)),
+    (
+        select t1.n, t2.m
+        from tab1 t1
+        join tab2 t2 on t1.n = t2.n
+    ) t 
+where t.m = any (select t2.m from tab2 t2 where t2.n = t.n)
+order by result;
+----
+1 110
+1 120
+2 130
+
+statement ok
+create or replace table tab1 as select * from (values (1), (2), (3)) tab(n);
+
+statement ok
+create or replace table tab2 as select * from (values (1, 10), (1, 20), (2, 30)) tab(n, m);
+
+query II
+select t.n, t.total_m
+from (
+    select n, sum(m) as total_m
+    from tab2
+    group by n
+) t
+where t.total_m = any (
+    select sum(m)+20 from tab2 
+    where tab2.n = t.n and m <= t.total_m / 2
+);
+----
+1 30
+
+statement ok
+drop table tab1;
+
+statement ok
+drop table tab2;
+
+statement ok
+drop table tab3;
