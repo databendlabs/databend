@@ -246,8 +246,8 @@ impl BloomIndex {
                         for val in column.iter() {
                             if let ScalarRef::Variant(v) = val {
                                 let raw_jsonb = RawJsonb::new(v);
-                                if let Ok(str_val) = raw_jsonb.to_str() {
-                                    builder.push(ScalarRef::String(str_val.as_str()));
+                                if let Ok(Some(str_val)) = raw_jsonb.as_str() {
+                                    builder.push(ScalarRef::String(&str_val));
                                     continue;
                                 }
                             }
@@ -773,6 +773,24 @@ trait EqVisitor {
                     };
                     // Only JSON value of string type have bloom index.
                     if val_type.remove_nullable() == DataType::Variant {
+                        // If the scalar value is variant string, we can try extract the string
+                        // value to take advantage of bloom filtering.
+                        if scalar_type.remove_nullable() == DataType::Variant {
+                            if let Some(val) = scalar.as_variant() {
+                                let raw_jsonb = RawJsonb::new(val);
+                                if let Ok(Some(str_val)) = raw_jsonb.as_str() {
+                                    let new_scalar = Scalar::String(str_val.to_string());
+                                    let new_scalar_type = DataType::String;
+                                    return self.enter_target(
+                                        span,
+                                        id,
+                                        &new_scalar,
+                                        &new_scalar_type,
+                                        return_type,
+                                    );
+                                }
+                            }
+                        }
                         if scalar_type.remove_nullable() != DataType::String {
                             return Ok(ControlFlow::Continue(None));
                         }

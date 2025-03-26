@@ -2979,12 +2979,7 @@ impl<'a> TypeChecker<'a> {
                 let name = op.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[left, right])
             }
-            BinaryOperator::Gt
-            | BinaryOperator::Lt
-            | BinaryOperator::Gte
-            | BinaryOperator::Lte
-            | BinaryOperator::Eq
-            | BinaryOperator::NotEq => {
+            BinaryOperator::Eq | BinaryOperator::NotEq => {
                 let name = op.to_func_name();
                 let box (res, ty) =
                     self.resolve_function(span, name.as_str(), vec![], &[left, right])?;
