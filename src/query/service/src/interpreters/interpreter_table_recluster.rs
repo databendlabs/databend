@@ -472,6 +472,7 @@ impl ReclusterTableInterpreter {
             table_info: table_info.clone(),
             num_partitions: total_partitions,
             table_meta_timestamps,
+            rows_per_block,
         }));
 
         // Finally, commit the newly clustered table
