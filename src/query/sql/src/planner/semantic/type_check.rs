@@ -2983,8 +2983,8 @@ impl<'a> TypeChecker<'a> {
                 let name = op.to_func_name();
                 let box (res, ty) =
                     self.resolve_function(span, name.as_str(), vec![], &[left, right])?;
-                // When a variant type column is compared with a scalar value,
-                // we try to cast the scalar value to variant type,
+                // When a variant type column is compared with a scalar string value,
+                // we try to cast the scalar string value to variant type,
                 // because casting variant column data is a time-consuming operation.
                 if let ScalarExpr::FunctionCall(ref func) = res {
                     if func.arguments.len() != 2 {
@@ -2996,14 +2996,14 @@ impl<'a> TypeChecker<'a> {
                         (ScalarExpr::ConstantExpr(_), _)
                             if arg1.data_type()?.remove_nullable() == DataType::Variant
                                 && !arg1.used_columns().is_empty()
-                                && arg0.data_type()? == DataType::String
+                                && arg0.data_type()? == DataType::String =>
                         {
                             (0, arg0)
                         }
                         (_, ScalarExpr::ConstantExpr(_))
                             if arg0.data_type()?.remove_nullable() == DataType::Variant
                                 && !arg0.used_columns().is_empty()
-                                && arg1.data_type()? == DataType::String
+                                && arg1.data_type()? == DataType::String =>
                         {
                             (1, arg1)
                         }
