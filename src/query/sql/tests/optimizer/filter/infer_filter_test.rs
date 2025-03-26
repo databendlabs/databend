@@ -42,6 +42,7 @@ fn create_column_ref(index: IndexType, name: &str, data_type: DataType) -> Scala
         table_index: None,
         visibility: Visibility::Visible,
         virtual_expr: None,
+        source_table_index: None,
     };
     ScalarExpr::BoundColumnRef(BoundColumnRef { column, span: None })
 }

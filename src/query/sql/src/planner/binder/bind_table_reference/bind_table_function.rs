@@ -143,7 +143,7 @@ impl Binder {
             } else {
                 None
             };
-            let table_index = self.metadata.write().add_table(
+            let (table_index, _) = self.metadata.write().add_table(
                 CATALOG_DEFAULT.to_string(),
                 "system".to_string(),
                 table.clone(),
@@ -155,7 +155,7 @@ impl Binder {
             );
 
             let (s_expr, mut bind_context) =
-                self.bind_base_table(bind_context, "system", table_index, None, sample)?;
+                self.bind_base_table(bind_context, "system", table_index, None, None, sample)?;
             if let Some(alias) = alias {
                 bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
             }
@@ -205,7 +205,7 @@ impl Binder {
                 None
             };
 
-            let table_index = self.metadata.write().add_table(
+            let (table_index, source_table_index) = self.metadata.write().add_table(
                 CATALOG_DEFAULT.to_string(),
                 "system".to_string(),
                 table.clone(),
@@ -216,8 +216,14 @@ impl Binder {
                 None,
             );
 
-            let (s_expr, mut bind_context) =
-                self.bind_base_table(bind_context, "system", table_index, None, &None)?;
+            let (s_expr, mut bind_context) = self.bind_base_table(
+                bind_context,
+                "system",
+                table_index,
+                source_table_index,
+                None,
+                &None,
+            )?;
             if let Some(alias) = alias {
                 bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
             }

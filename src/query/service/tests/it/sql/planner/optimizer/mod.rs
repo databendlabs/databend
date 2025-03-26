@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod agg_index_query_rewrite;
+mod eliminate_in_subquery_test;
 pub mod test_utils;
 mod tpcds_test;
