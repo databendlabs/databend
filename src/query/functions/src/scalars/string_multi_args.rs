@@ -33,6 +33,7 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use itertools::Itertools;
+use regex::Match;
 use regex::Regex;
 use string::StringColumnBuilder;
 
@@ -327,13 +328,38 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_function_factory("regexp_extract", |_, args_type| {
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
-        let args_type = match args_type.len() {
-            2 => vec![DataType::String; 2],
-            3 => vec![
-                DataType::String,
-                DataType::String,
-                DataType::Number(NumberDataType::UInt32),
-            ],
+        let (args_type, eval) = match args_type.len() {
+            2 => (vec![DataType::String; 2], FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(regexp_extract_fn),
+            }),
+            3 => {
+                if args_type[2].remove_nullable().is_number() {
+                    (
+                        vec![
+                            DataType::String,
+                            DataType::String,
+                            DataType::Number(NumberDataType::UInt32),
+                        ],
+                        FunctionEval::Scalar {
+                            calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                            eval: Box::new(regexp_extract_fn),
+                        },
+                    )
+                } else {
+                    (
+                        vec![
+                            DataType::String,
+                            DataType::String,
+                            DataType::Array(Box::new(DataType::String)),
+                        ],
+                        FunctionEval::Scalar {
+                            calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                            eval: Box::new(regexp_extract_name_list_fn),
+                        },
+                    )
+                }
+            }
             _ => return None,
         };
 
@@ -343,10 +369,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 args_type,
                 return_type: DataType::String,
             },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(regexp_extract_fn),
-            },
+            eval,
         };
 
         if has_null {
@@ -754,6 +777,78 @@ fn inner_regexp_extract_fn(
             .as_ref()
             .unwrap_or_else(|| local_re.as_ref().unwrap());
         fn_build(re, source, group as usize, &mut builder);
+        builder.commit_row();
+    }
+    if len.is_some() {
+        Value::Column(Column::String(builder.build()))
+    } else {
+        Value::Scalar(Scalar::String(builder.build_scalar()))
+    }
+}
+
+fn regexp_extract_name_list_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        Value::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let source_arg = args[0].try_downcast::<StringType>().unwrap();
+    let pat_arg = args[1].try_downcast::<StringType>().unwrap();
+
+    let name_list_arg = if args.len() >= 3 {
+        Some(args[2].try_downcast::<ArrayType<StringType>>().unwrap())
+    } else {
+        None
+    };
+
+    let cached_reg = match &pat_arg {
+        Value::Scalar(pat) => {
+            match regexp::build_regexp_from_pattern("regexp_extract", pat, None) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+
+    let size = len.unwrap_or(1);
+    let mut builder = StringColumnBuilder::with_capacity(size);
+    for idx in 0..size {
+        let source = unsafe { source_arg.index_unchecked(idx) };
+        let pat = unsafe { pat_arg.index_unchecked(idx) };
+        let name_list = name_list_arg
+            .as_ref()
+            .map(|name_list_arg| unsafe { name_list_arg.index_unchecked(idx) })
+            .unwrap_or(StringColumn::new_empty());
+        let mut local_re = None;
+        if cached_reg.is_none() {
+            match regexp::build_regexp_from_pattern("regexp_extract", pat, None) {
+                Ok(re) => {
+                    local_re = Some(re);
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err);
+                    builder.put_str("{}");
+                    continue;
+                }
+            }
+        };
+        let re = cached_reg
+            .as_ref()
+            .unwrap_or_else(|| local_re.as_ref().unwrap());
+        let captures = re.captures_iter(source).last();
+
+        let string = name_list
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let value = captures
+                    .as_ref()
+                    .and_then(|caps| caps.get(i + 1).as_ref().map(Match::as_str))
+                    .unwrap_or("");
+                format!("\"{}\": \"{}\"", name, value)
+            })
+            .join(", ");
+        builder.put_str(format!("{{{}}}", string).as_str());
         builder.commit_row();
     }
     if len.is_some() {
