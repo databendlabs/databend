@@ -118,8 +118,12 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///              to support matching the key count by a prefix.
 ///
 /// - 2024-12-20: since 1.2.676
-///   🖥 server: add `TxnRequest::condition_tree`,
-///              to specify a complex bool expression.
+///   🖥 server: add `TxnRequest::operations`,
+///              to specify a complex bool expression and corresponding operations
+///
+/// - 2024-12-26: since 1.2.677
+///   🖥 server: add `WatchRequest::initial_flush`,
+///              to let watch stream flush all keys in a range at the beginning.
 ///
 ///
 /// Server feature set:
