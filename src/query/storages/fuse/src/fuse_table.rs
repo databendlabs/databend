@@ -58,8 +58,8 @@ use databend_common_expression::ROW_VERSION_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
-use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
+use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -1044,8 +1044,7 @@ impl Table for FuseTable {
 
     fn get_block_thresholds(&self) -> BlockThresholds {
         let max_rows_per_block =
-            self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
-        let min_rows_per_block = (max_rows_per_block * 4).div_ceil(5);
+            self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT);
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,
@@ -1055,7 +1054,6 @@ impl Table for FuseTable {
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
         BlockThresholds::new(
             max_rows_per_block,
-            min_rows_per_block,
             max_bytes_per_block,
             max_file_size,
             block_per_segment,

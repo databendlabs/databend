@@ -69,7 +69,7 @@ impl AccumulatingTransform for BlockCompactBuilder {
             // holding slices of blocks to merge later may lead to oom, so
             // 1. we expect blocks from file formats are not slice.
             // 2. if block is split here, cut evenly and emit them at once.
-            let rows_per_block = self.thresholds.calc_rows_per_block(num_bytes, num_rows, 0);
+            let rows_per_block = self.thresholds.calc_rows_for_compact(num_bytes, num_rows);
             Ok(vec![DataBlock::empty_with_meta(Box::new(
                 BlockCompactMeta::Split {
                     block: data,
