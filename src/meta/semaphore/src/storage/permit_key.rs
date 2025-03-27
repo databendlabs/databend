@@ -99,10 +99,7 @@ mod tests {
     #[test]
     fn test_display() {
         let key = PermitKey::new("test", 1);
-        assert_eq!(
-            key.to_string(),
-            "PermitKey(test/queue/00000000000000000001)"
-        );
+        assert_eq!(key.to_string(), "PermitKey(test/00000000000000000001)");
     }
 
     #[test]
