@@ -16,7 +16,6 @@ mod processor;
 mod subscriber;
 
 use std::fmt;
-use std::fmt::Display;
 
 use chrono::Local;
 use databend_common_base::display::display_option::DisplayOptionExt;
@@ -26,9 +25,11 @@ pub(crate) use subscriber::MetaEventSubscriber;
 
 use crate::SemaphoreEntry;
 
-struct DD<'a>(&'a Option<SeqV<SemaphoreEntry>>);
+/// A wrapper to implement `fmt::Display` for `Option<SeqV<SemaphoreEntry>>`.
+#[allow(dead_code)]
+struct DisplaySeqEntry<'a>(&'a Option<SeqV<SemaphoreEntry>>);
 
-impl fmt::Display for DD<'_> {
+impl fmt::Display for DisplaySeqEntry<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {
             None => {
@@ -47,6 +48,6 @@ impl fmt::Display for DD<'_> {
     }
 }
 
-pub(crate) fn now_str() -> impl Display + 'static {
+pub(crate) fn now_str() -> impl fmt::Display + 'static {
     Local::now().format("%Y-%m-%d %H:%M:%S%.3f")
 }
