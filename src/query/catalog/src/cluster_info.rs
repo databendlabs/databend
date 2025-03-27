@@ -131,7 +131,8 @@ impl Cluster {
                     let mut attempt = 0;
 
                     loop {
-                        let mut conn = create_client(&config, &flight_address).await?;
+                        let mut conn =
+                            create_client(&config, &flight_address, flight_params.timeout).await?;
                         let request = new_request(
                             path,
                             node_secret.clone(),
@@ -202,11 +203,14 @@ fn new_request<T: Serialize>(
 pub async fn create_client(
     config: &InnerConfig,
     address: &str,
+    timeout: Option<u64>,
 ) -> Result<FlightServiceClient<Channel>> {
-    let timeout = if config.query.rpc_client_timeout_secs > 0 {
-        Some(Duration::from_secs(config.query.rpc_client_timeout_secs))
-    } else {
-        None
+    let timeout = match timeout {
+        Some(timeout) => Some(Duration::from_secs(timeout)),
+        None => match config.query.rpc_client_timeout_secs > 0 {
+            true => Some(Duration::from_secs(config.query.rpc_client_timeout_secs)),
+            false => None,
+        },
     };
 
     let rpc_tls_config = if config.tls_query_cli_enabled() {

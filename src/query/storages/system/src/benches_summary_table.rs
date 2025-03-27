@@ -433,7 +433,8 @@ impl BenchWorker {
         let mut response = self
             .cluster
             .do_action::<_, Vec<TestMetric>>(BENCHES_ACTION, messages, FlightParams {
-                timeout: None,
+                // 3-day timeout
+                timeout: Some(3 * 24 * 60 * 60),
                 retry_times: 0,
                 retry_interval: 0,
             })

@@ -105,7 +105,7 @@ pub enum PartitionsShuffleKind {
     BroadcastCluster,
     // Bind the Partition to warehouse executor by broadcast
     BroadcastWarehouse,
-    // Bind the Partition to teant executor by broadcast
+    // Bind the Partition to tenant executor by broadcast
     BroadcastTenant,
 }
 
