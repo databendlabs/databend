@@ -23,51 +23,51 @@ use codeq::Encode;
 
 use crate::CURRENT_VERSION;
 
-/// The semaphore entry is used to represent the semaphore state in the meta-service.
+/// A [`PermitEntry`] represents a semaphore permit in the meta-service.
 ///
-/// It contains the user defined id and the value(how many permits the semaphore requires).
+/// It contains the user defined id and the number of permits.
 ///
-/// It is the value payload of the semaphore key in the meta-service.
+/// It is the value payload of the [`PermitKey`](crate::storage::PermitKey) in the meta-service.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SemaphoreEntry {
+pub struct PermitEntry {
     pub id: String,
-    pub value: u64,
+    pub permits: u64,
 }
 
-impl Encode for SemaphoreEntry {
+impl Encode for PermitEntry {
     fn encode<W: Write>(&self, mut w: W) -> Result<usize, io::Error> {
         let mut n = 0;
         n += CURRENT_VERSION.encode(&mut w)?;
         n += self.id.encode(&mut w)?;
-        n += self.value.encode(&mut w)?;
+        n += self.permits.encode(&mut w)?;
         Ok(n)
     }
 }
 
-impl Decode for SemaphoreEntry {
+impl Decode for PermitEntry {
     fn decode<R: Read>(mut r: R) -> Result<Self, io::Error> {
         let version = u8::decode(&mut r)?;
         if version != CURRENT_VERSION {
             return Err(Error::new(io::ErrorKind::InvalidData, "Invalid version"));
         }
         let id = Decode::decode(&mut r)?;
-        let value = Decode::decode(&mut r)?;
+        let permits = Decode::decode(&mut r)?;
 
-        Ok(SemaphoreEntry { id, value })
+        Ok(PermitEntry { id, permits })
     }
 }
 
-impl fmt::Display for SemaphoreEntry {
+impl fmt::Display for PermitEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SemEntry(id:{}, value:{})", self.id, self.value)
+        write!(f, "PermitEntry(id:{}, n:{})", self.id, self.permits)
     }
 }
 
-impl SemaphoreEntry {
+impl PermitEntry {
     pub fn new(id: impl ToString, value: u64) -> Self {
         Self {
             id: id.to_string(),
-            value,
+            permits: value,
         }
     }
 }
@@ -76,17 +76,17 @@ impl SemaphoreEntry {
 mod tests {
     use super::*;
 
-    // Test the display of SemaphoreEntry
+    // Test the display of PermitEntry
     #[test]
     fn test_display() {
-        let entry = SemaphoreEntry::new("test", 1);
-        assert_eq!(entry.to_string(), "SemaphoreEntry(id:test, value:1)");
+        let entry = PermitEntry::new("test", 1);
+        assert_eq!(entry.to_string(), "PermitEntry(id:test, value:1)");
     }
 
-    // Test the encode and decode of SemaphoreEntry
+    // Test the encode and decode of PermitEntry
     #[test]
     fn test_encode_decode() {
-        let entry = SemaphoreEntry::new("test", 1);
+        let entry = PermitEntry::new("test", 1);
         let buf = entry.encode_to_vec().unwrap();
 
         assert_eq!(buf.len(), 17);
@@ -100,7 +100,7 @@ mod tests {
             buf
         );
 
-        let decoded = SemaphoreEntry::decode(&mut &buf[..]).unwrap();
+        let decoded = PermitEntry::decode(&mut &buf[..]).unwrap();
         assert_eq!(entry, decoded);
     }
 }

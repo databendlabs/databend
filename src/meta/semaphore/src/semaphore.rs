@@ -41,18 +41,19 @@ pub struct Semaphore {
     /// The metadata client to interact with the remote meta-service.
     meta_client: Arc<ClientHandle>,
 
-    /// The background task handle.
+    /// The background subscriber task handle.
     subscriber_task_handle: Option<JoinHandle<()>>,
 
-    /// The sender to cancel the background task.
+    /// The sender to cancel the background subscriber task.
     ///
     /// When this sender is dropped, the corresponding receiver becomes ready,
     /// which signals the background task to terminate gracefully.
     subscriber_cancel_tx: oneshot::Sender<()>,
 
-    /// The receiver to receive semaphore state change event from the internal watch stream.
+    /// The receiver to receive semaphore state change event from the subscriber.
     sem_event_rx: Option<mpsc::Receiver<SemaphoreEvent>>,
 
+    /// A process-wide unique identifier for the semaphore. Used for debugging purposes.
     uniq: u64,
 }
 
@@ -90,6 +91,9 @@ impl Semaphore {
     }
 
     /// Create a new semaphore.
+    ///
+    /// The created semaphore starts to subscribe key-value change event but does not acquire any permit yet.
+    /// Use [`acquire`](Self::acquire) to acquire a permit.
     ///
     /// # Parameters
     ///
@@ -139,15 +143,18 @@ impl Semaphore {
     /// # Parameters
     ///
     /// * `id` - A unique identifier to differentiate between different acquirers.
-    /// * `ttl` - The time-to-live duration after which the semaphore will be automatically released.
+    ///   The content of the ID does not affect the semaphore behavior.
+    ///   It is only kept for other process to identify an acquirer.
+    /// * `lease` - The time-to-live duration after which the semaphore will be automatically released.
     ///   Note that this is not a timeout for the acquisition process itself.
     ///
     /// # Lease Extension
     ///
-    /// When attempting to acquire a semaphore, a background task is spawned to periodically
-    /// extend the lease to prevent it from expiring. The extension interval is calculated as
-    /// `ttl / 3`, but capped at 500ms maximum. This lease extender task will be automatically
-    /// cancelled when either:
+    /// When attempting to acquire a semaphore, after the semaphore permit entry is inserted into
+    /// the queue in meta-service, a background task is spawned to periodically extend the lease to
+    /// prevent it from expiring. The extension interval is calculated as `lease / 3`,
+    /// but capped at 2000ms maximum. This lease extender task will be automatically cancelled when
+    /// either:
     ///
     /// * The semaphore is explicitly released, the returned value from this method is dropped.
     /// * The [`Acquirer`] is dropped, i.e., before the semaphore is acquired.
@@ -159,7 +166,7 @@ impl Semaphore {
     pub async fn acquire(
         mut self,
         id: impl ToString,
-        ttl: Duration,
+        lease: Duration,
     ) -> Result<AcquiredGuard, AcquireError> {
         let id = id.to_string();
 
@@ -167,7 +174,7 @@ impl Semaphore {
         let acquirer = Acquirer {
             prefix: self.prefix.clone(),
             sem_id: id.to_string(),
-            ttl,
+            lease,
             seq_generator_key: self.seq_generator_key(),
             meta_client: self.meta_client.clone(),
             subscriber_cancel_tx: self.subscriber_cancel_tx,
@@ -184,10 +191,8 @@ impl Semaphore {
     /// them into [`SemaphoreEvent`] instances. These events are then sent through a channel
     /// to notify the semaphore instance about acquisitions and releases.
     ///
-    /// The subscriber watches a specific key range determined by the semaphore's prefix
-    /// and maintains awareness of all semaphore entries up to the specified capacity.
-    /// When entries are created or deleted, appropriate events are generated to maintain
-    /// the semaphore's state.
+    /// The subscriber watches a specific key range determined by the semaphore's prefix.
+    /// When semaphore permit are created or deleted, appropriate events are generated.
     async fn spawn_meta_event_subscriber(
         &mut self,
         tx: mpsc::Sender<SemaphoreEvent>,
@@ -214,7 +219,7 @@ impl Semaphore {
         Ok(())
     }
 
-    /// The key to store the sequence generator.
+    /// The key to store the permit sequence number generator.
     ///
     /// Update this key in the meta-service to obtain a new sequence number.
     fn seq_generator_key(&self) -> String {

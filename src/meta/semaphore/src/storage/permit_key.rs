@@ -15,35 +15,33 @@
 use std::fmt;
 use std::io;
 
-use crate::SemaphoreSeq;
+use crate::PermitSeq;
 
-/// The key of a semaphore.
-///
-/// It is used to identify a semaphore entry in the meta-service.
+/// The key of a semaphore permit in the meta-service queue.
 ///
 /// The serialized format is:
 /// ```
 /// {prefix}/queue/{seq}
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SemaphoreKey {
+pub struct PermitKey {
     /// The prefix of the semaphore. Usually the name of the semaphore.
     pub prefix: String,
 
-    /// The sequence number of the semaphore.
+    /// The sequence number of the semaphore permit.
     ///
-    /// A sequence number is assigned to each semaphore consumer and is globally unique.
-    pub seq: SemaphoreSeq,
+    /// A sequence number is assigned to each semaphore permit and is globally unique.
+    pub seq: PermitSeq,
 }
 
-impl fmt::Display for SemaphoreKey {
+impl fmt::Display for PermitKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "SemKey({}/{:020})", self.prefix, self.seq)
     }
 }
 
-impl SemaphoreKey {
-    pub fn new(prefix: impl ToString, seq: SemaphoreSeq) -> Self {
+impl PermitKey {
+    pub fn new(prefix: impl ToString, seq: PermitSeq) -> Self {
         Self {
             prefix: prefix.to_string(),
             seq,
@@ -63,7 +61,10 @@ impl SemaphoreKey {
         if parts.len() != 3 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("semaphore key should have at least 3 segments: {}", key),
+                format!(
+                    "semaphore permit key should have at least 3 segments: {}",
+                    key
+                ),
             ));
         }
 
@@ -71,7 +72,7 @@ impl SemaphoreKey {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!(
-                    "semaphore key should have 'queue' as the second segment: {}",
+                    "semaphore permit key should have 'queue' as the second segment: {}",
                     key
                 ),
             ));
@@ -97,10 +98,10 @@ mod tests {
 
     #[test]
     fn test_parse_key() {
-        let key = SemaphoreKey::new("test", 1);
+        let key = PermitKey::new("test", 1);
         assert_eq!(key.format_key(), "test/queue/00000000000000000001");
 
-        let key = SemaphoreKey::parse_key("test/queue/00000000000000000001").unwrap();
+        let key = PermitKey::parse_key("test/queue/00000000000000000001").unwrap();
         assert_eq!(key.prefix, "test");
         assert_eq!(key.seq, 1);
     }
@@ -108,15 +109,15 @@ mod tests {
     #[test]
     fn test_parse_invalid_key() {
         // Test with invalid format (not enough segments)
-        let result = SemaphoreKey::parse_key("test/queue");
+        let result = PermitKey::parse_key("test/queue");
         assert!(result.is_err());
 
         // Test with wrong second segment
-        let result = SemaphoreKey::parse_key("test/wrong/00000000000000000001");
+        let result = PermitKey::parse_key("test/wrong/00000000000000000001");
         assert!(result.is_err());
 
         // Test with invalid sequence number
-        let result = SemaphoreKey::parse_key("test/queue/not_a_number");
+        let result = PermitKey::parse_key("test/queue/not_a_number");
         assert!(result.is_err());
     }
 
@@ -124,10 +125,10 @@ mod tests {
     fn test_format_key_order_preserving() {
         for i in 0u64..500 {
             let n = i.wrapping_mul(11400714819323198485u64);
-            let nkey = SemaphoreKey::new("test", n).format_key();
+            let nkey = PermitKey::new("test", n).format_key();
             for j in 500u64..800 {
                 let m = j.wrapping_mul(11400714819323198485u64);
-                let mkey = SemaphoreKey::new("test", m).format_key();
+                let mkey = PermitKey::new("test", m).format_key();
 
                 if n < m {
                     assert!(nkey < mkey, "n={} should < m={}, {nkey} {mkey}", n, m);

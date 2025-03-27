@@ -22,8 +22,8 @@ use tokio::sync::oneshot;
 
 use crate::errors::ConnectionClosed;
 use crate::queue::SemaphoreEvent;
-use crate::storage::SemaphoreEntry;
-use crate::storage::SemaphoreKey;
+use crate::storage::PermitEntry;
+use crate::storage::PermitKey;
 
 /// An instance represents a semaphore that has been acquired.
 ///
@@ -62,8 +62,8 @@ impl AcquiredGuard {
     pub(crate) fn new(
         subscriber_cancel_tx: oneshot::Sender<()>,
         sem_event_rx: mpsc::Receiver<SemaphoreEvent>,
-        sem_key: SemaphoreKey,
-        sem_entry: SemaphoreEntry,
+        sem_key: PermitKey,
+        sem_entry: PermitEntry,
         leaser_cancel_tx: oneshot::Sender<()>,
     ) -> Self {
         let fu = Self::watch_for_remove(
@@ -91,8 +91,8 @@ impl AcquiredGuard {
     /// in such case, the semaphore may still be valid.
     pub(crate) async fn watch_for_remove(
         mut sem_event_rx: mpsc::Receiver<SemaphoreEvent>,
-        sem_key: SemaphoreKey,
-        sem_entry: SemaphoreEntry,
+        sem_key: PermitKey,
+        sem_entry: PermitEntry,
         _subscriber_cancel_tx: oneshot::Sender<()>,
         _leaser_cancel_tx: oneshot::Sender<()>,
     ) -> Result<(), ConnectionClosed> {
