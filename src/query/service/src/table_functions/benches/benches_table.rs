@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use bytes::Bytes;
 use chrono::DateTime;
+use databend_common_base::base::unescape_for_key;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -48,9 +49,11 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_storage::DataOperator;
+use databend_common_storages_stage::StageTable;
 use databend_common_storages_system::BenchesArguments;
 use databend_common_storages_system::TestMetric;
 use databend_common_storages_system::TestMode;
+use databend_common_users::UserApiProvider;
 use opendal::Operator;
 use tokio::sync::Barrier;
 
@@ -89,11 +92,15 @@ impl BenchesTable {
         let args = table_args.expect_all_positioned("benches", Some(1))?;
 
         if args.len() != 1 {
-            return Err(ErrorCode::BadArguments(""));
+            return Err(ErrorCode::BadArguments(
+                "benches function only recv one arguments",
+            ));
         }
 
         let arguments = match args[0].as_string() {
-            None => Err(ErrorCode::BadArguments("")),
+            None => Err(ErrorCode::BadArguments(
+                "benches function only recv one string arguments",
+            )),
             Some(value) => Ok(serde_json::from_str::<BenchesArguments>(value)?),
         }?;
 
@@ -203,7 +210,8 @@ impl Table for BenchesTable {
         pipeline.add_source(
             |output| {
                 AsyncSourcer::create(ctx.clone(), output, BenchesWorker {
-                    argument: self.arguments.clone(),
+                    ctx: ctx.clone(),
+                    arguments: self.arguments.clone(),
                     finished: false,
                     runtime: Runtime::with_default_worker_threads()?,
                 })
@@ -214,11 +222,10 @@ impl Table for BenchesTable {
 }
 
 pub struct BenchesWorker {
-    argument: BenchesArguments,
-    // mode: TestMode,
-    // concurrency: usize,
+    arguments: BenchesArguments,
     finished: bool,
     runtime: Runtime,
+    ctx: Arc<dyn TableContext>,
 }
 
 #[async_trait::async_trait]
@@ -228,13 +235,23 @@ impl AsyncSource for BenchesWorker {
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if !self.finished {
             self.finished = true;
-            let operator = DataOperator::instance().operator();
+            let operator = match &self.arguments.stage {
+                None => DataOperator::instance().operator(),
+                Some(stage) => {
+                    let stage = unescape_for_key(stage)?;
+                    let stage = UserApiProvider::instance()
+                        .get_stage(&self.ctx.get_tenant(), &stage)
+                        .await?;
+                    StageTable::get_op(&stage)?
+                }
+            };
+
             let metric = test(
                 &self.runtime,
                 operator,
-                self.argument.test_mode.clone(),
-                self.argument.concurrency,
-                self.argument.dir.clone(),
+                self.arguments.test_mode.clone(),
+                self.arguments.concurrency,
+                self.arguments.dir.clone(),
             )
             .await?;
 
@@ -262,6 +279,7 @@ async fn test(
             file_size,
             iteration,
         } => (file_size, iteration, raw_concurrency),
+        TestMode::Delete { iteration } => (0, iteration, raw_concurrency),
     };
 
     let content = Bytes::from(vec![234u8; file_size]);
@@ -284,19 +302,24 @@ async fn test(
             let _permit = barrier.wait().await;
 
             let mut error_count = 0;
-            for i in 0..iteration {
-                let object_path = format!("benchmark/{prefix}/{node_id}-{task_id}-{i}");
-                let start = Instant::now();
 
-                match mode {
-                    TestMode::Read { .. } => {
+            match mode {
+                TestMode::Read { .. } => {
+                    for i in 0..iteration {
+                        let object_path = format!("benchmark/{prefix}/{node_id}-{task_id}-{i}");
+                        let start = Instant::now();
                         if op.read(&object_path).await.is_err() {
                             error_count += 1;
                         }
 
                         latencies.push(start.elapsed().as_millis() as u64);
                     }
-                    TestMode::Write { .. } => {
+                }
+                TestMode::Write { .. } => {
+                    for i in 0..iteration {
+                        let object_path = format!("benchmark/{prefix}/{node_id}-{task_id}-{i}");
+                        let start = Instant::now();
+
                         // We will read it later
                         if op.write(&object_path, content.clone()).await.is_err() {
                             error_count += 1;
@@ -304,8 +327,19 @@ async fn test(
 
                         latencies.push(start.elapsed().as_millis() as u64);
                     }
-                };
-            }
+                }
+                TestMode::Delete { .. } => {
+                    if let Err(err) = op
+                        .delete_iter(
+                            (0..iteration)
+                                .map(|idx| format!("benchmark/{prefix}/{node_id}-{task_id}-{idx}")),
+                        )
+                        .await
+                    {
+                        log::warn!("Cannot remove benchmark file {:?}", err);
+                    }
+                }
+            };
             Ok::<_, ErrorCode>((error_count, latencies))
         }));
     }
@@ -318,21 +352,6 @@ async fn test(
         all_latencies.extend(latencies);
     }
 
-    if let TestMode::Read { .. } = mode {
-        // Safe delete after read
-        for task_id in 0..raw_concurrency {
-            if let Err(err) = operator
-                .delete_iter(
-                    (0..iteration)
-                        .map(|idx| format!("benchmark/{prefix}/{node_id}-{task_id}-{idx}")),
-                )
-                .await
-            {
-                log::warn!("Cannot remove benchmark file {:?}", err);
-            }
-        }
-    }
-
     let throughputs: Vec<f64> = all_latencies
         .iter()
         .map(|d| match *d <= 1000 {
@@ -341,8 +360,13 @@ async fn test(
         })
         .collect();
 
+    let min_throughput_per_object = match throughputs.iter().fold(f64::INFINITY, |a, &b| a.min(b)) {
+        f64::INFINITY => 0_f64,
+        min_throughput_per_object => min_throughput_per_object,
+    };
+
     Ok(TestMetric {
-        min_throughput_per_object: throughputs.iter().fold(f64::INFINITY, |a, &b| a.min(b)),
+        min_throughput_per_object,
         max_throughput_per_object: throughputs.iter().fold(0.0, |a, &b| a.max(b)),
         total_size: file_size * concurrency * iteration,
         total_duration: all_latencies.iter().cloned().sum::<u64>() as usize,

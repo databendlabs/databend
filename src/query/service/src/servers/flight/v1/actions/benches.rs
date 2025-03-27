@@ -25,6 +25,7 @@ use crate::servers::flight::v1::actions::create_session;
 pub async fn benches(arguments: BenchesArguments) -> Result<Vec<TestMetric>> {
     let session = create_session()?;
     let query_context = session.create_query_context().await?;
+
     let query_context = query_context.clone();
     let handle = query_context.spawn({
         let query_context = query_context.clone();

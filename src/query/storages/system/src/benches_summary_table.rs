@@ -15,9 +15,11 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
+use databend_common_base::base::escape_for_key;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::cluster_info::FlightParams;
@@ -28,7 +30,9 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::UInt64Type;
@@ -70,6 +74,9 @@ pub enum TestMode {
         file_size: usize,
         iteration: usize,
     },
+    Delete {
+        iteration: usize,
+    },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -78,6 +85,7 @@ pub struct BenchesArguments {
     pub test_mode: TestMode,
     pub concurrency: usize,
     pub dir: String,
+    pub stage: Option<String>,
 }
 
 impl BenchesArguments {
@@ -216,10 +224,30 @@ impl TestMetric {
 
 pub struct BenchesSummaryTable {
     table_info: TableInfo,
+    stage: Option<String>,
 }
 
 impl BenchesSummaryTable {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create_table_function(
+        _database_name: &str,
+        table_func_name: &str,
+        table_id: u64,
+        table_args: TableArgs,
+    ) -> Result<Arc<dyn TableFunction>> {
+        let args = table_args.expect_all_positioned(table_func_name, None)?;
+
+        let stage = match args.len() {
+            0 => Ok(None),
+            1 => Ok(args[0].as_string().map(|x| escape_for_key(x).unwrap())),
+            _ => Err(ErrorCode::BadArguments(
+                "benches_summary table function only recv one arguments",
+            )),
+        }?;
+
+        Ok(Self::create_with_stage(table_id, stage))
+    }
+
+    fn create_with_stage(table_id: u64, stage: Option<String>) -> Arc<BenchesSummaryTable> {
         let schema = TableSchemaRefExt::create(vec![
             // node, cluster, warehouse, tenant
             TableField::new("bench_level", TableDataType::String),
@@ -247,7 +275,7 @@ impl BenchesSummaryTable {
             ..Default::default()
         };
 
-        Arc::new(Self { table_info })
+        Arc::new(Self { table_info, stage })
     }
 }
 
@@ -294,7 +322,11 @@ impl Table for BenchesSummaryTable {
 
         pipeline.add_source(
             |output| {
-                AsyncSourcer::create(ctx.clone(), output, BenchAsyncSource::create(ctx.clone()))
+                AsyncSourcer::create(
+                    ctx.clone(),
+                    output,
+                    BenchAsyncSource::create(ctx.clone(), self.stage.clone()),
+                )
             },
             1,
         )?;
@@ -305,14 +337,16 @@ impl Table for BenchesSummaryTable {
 
 struct BenchAsyncSource {
     finished: bool,
+    stage: Option<String>,
     ctx: Arc<dyn TableContext>,
 }
 
 impl BenchAsyncSource {
-    pub fn create(ctx: Arc<dyn TableContext>) -> BenchAsyncSource {
+    pub fn create(ctx: Arc<dyn TableContext>, stage: Option<String>) -> BenchAsyncSource {
         BenchAsyncSource {
             finished: false,
             ctx,
+            stage,
         }
     }
 }
@@ -337,6 +371,7 @@ impl AsyncSource for BenchAsyncSource {
             warehouse_nodes.clone(),
             warehouse_nodes.nodes[0].clone(),
             DistributionLevel::Tenant,
+            self.stage.clone(),
         );
 
         worker.probe_bench().await?;
@@ -375,13 +410,20 @@ struct BenchWorker {
     level: DistributionLevel,
     running_node: Arc<NodeInfo>,
     summary_items: Vec<TestSummary>,
+    stage: Option<String>,
 }
 
 impl BenchWorker {
-    pub fn create(cluster: Arc<Cluster>, node: Arc<NodeInfo>, level: DistributionLevel) -> Self {
+    pub fn create(
+        cluster: Arc<Cluster>,
+        node: Arc<NodeInfo>,
+        level: DistributionLevel,
+        stage: Option<String>,
+    ) -> Self {
         BenchWorker {
             cluster,
             level,
+            stage,
             running_node: node,
             summary_items: vec![],
         }
@@ -400,14 +442,13 @@ impl BenchWorker {
             TestMode::Read {
                 file_size,
                 iteration,
-                read_write_ratio: multiple_write,
+                read_write_ratio,
             } => (
                 String::from("Read"),
                 HashMap::from([
                     ("file_size", convert_byte_size(file_size as f64)),
                     ("iteration", convert_number_size(iteration as f64)),
-                    ("multiple_write", multiple_write.to_string()),
-                    ("concurrency", concurrency.to_string()),
+                    ("concurrency", (concurrency * read_write_ratio).to_string()),
                 ]),
             ),
             TestMode::Write {
@@ -421,6 +462,13 @@ impl BenchWorker {
                     ("iteration", convert_number_size(iteration as f64)),
                 ]),
             ),
+            TestMode::Delete { iteration } => (
+                String::from("Delete"),
+                HashMap::from([
+                    ("concurrency", concurrency.to_string()),
+                    ("iteration", convert_number_size(iteration as f64)),
+                ]),
+            ),
         };
 
         messages.insert(self.running_node.id.clone(), BenchesArguments {
@@ -428,6 +476,7 @@ impl BenchWorker {
             concurrency,
             level: req_level,
             dir,
+            stage: self.stage.clone(),
         });
 
         let mut response = self
@@ -485,25 +534,25 @@ impl BenchWorker {
     async fn probe_bench(&mut self) -> Result<()> {
         let case = vec![
             // 64KB * 1000 * 128 = 8G data per node
-            (64 * 1024, 1000, 128, 2),  // concurrency: W-128, R-256
+            (64 * 1024, 1000, 128, vec![2, 4, 8, 32]),  // concurrency: W-128, R-256, R-512, R-1024, R-4096
             // (64 * 1024, 1000, 128, 4),  // concurrency: W-128, R-512
             // (64 * 1024, 1000, 128, 8),  // concurrency: W-128, R-1024
             // (64 * 1024, 1000, 128, 32), // concurrency: W-128, R-4096
             // (64 * 1024, 1000, 128, 64), // concurrency: W-128, R-8192
             // 1MB * 1000 * 8 = 8G data per node
-            (1024 * 1024, 1000, 8, 32),  // concurrency: W-8, R-256
+            (1024 * 1024, 1000, 8, vec![32, 64, 128, 512]),  // concurrency: W-8, R-256
             // (1024 * 1024, 1000, 8, 64),  // concurrency: W-8, R-512
             // (1024 * 1024, 1000, 8, 128), // concurrency: W-8, R-1024
             // (1 * 1024 * 1024, 1000, 8, 512), // concurrency: W-8, R-4096
             // (1 * 1024 * 1024, 1000, 8, 1024), // concurrency: W-8, R-8192
             // 4MB * 1000 * 2 = 8G data per node
-            (4 * 1024 * 1024, 1000, 2, 128), // concurrency: W-2, R-256
+            // (4 * 1024 * 1024, 1000, 2, vec![128]), // concurrency: W-2, R-256
             // (4 * 1024 * 1024, 1000, 2, 256), // concurrency: W-2, R-512
             // (4 * 1024 * 1024, 1000, 2, 512), // concurrency: W-2, R-1024
             // (4 * 1024 * 1024, 1000, 2, 2048), // concurrency: W-2, R-4096
             // (4 * 1024 * 1024, 1000, 2, 4096), // concurrency: W-2, R-8192
             // 16MB * 256 * 2 = 8G data per node
-            (16 * 1024 * 1024, 256, 2, 128), // concurrency: W-2, R-256
+            // (16 * 1024 * 1024, 256, 2, vec![128]), // concurrency: W-2, R-256
             // (16 * 1024 * 1024, 256, 2, 256), // concurrency: W-2, R-512
             // (16 * 1024 * 1024, 256, 2, 512), // concurrency: W-2, R-1024
             // (16 * 1024 * 1024, 256, 2, 2048), // concurrency: W-2, R-4096
@@ -512,6 +561,13 @@ impl BenchWorker {
 
         for (file_size, iteration, concurrency, read_write_ratio) in case {
             let dir = GlobalUniqName::unique();
+            let instant = Instant::now();
+            log::info!(
+                "begin bench write with file_size: {}, iteration: {}, concurrency: {}",
+                file_size,
+                iteration,
+                concurrency
+            );
             self.run(
                 concurrency,
                 TestMode::Write {
@@ -521,16 +577,42 @@ impl BenchWorker {
                 dir.clone(),
             )
             .await?;
-            self.run(
-                concurrency,
-                TestMode::Read {
+
+            log::info!("finished bench write. elapsed: {:?}, file_size: {}, iteration: {}, concurrency: {}", instant.elapsed(), file_size, iteration, concurrency);
+
+            for read_write_ratio in read_write_ratio {
+                let instant = Instant::now();
+                log::info!(
+                    "begin bench read with file_size: {}, iteration: {}, concurrency: {}",
                     file_size,
                     iteration,
-                    read_write_ratio,
-                },
-                dir.clone(),
-            )
-            .await?;
+                    concurrency * read_write_ratio
+                );
+                self.run(
+                    concurrency,
+                    TestMode::Read {
+                        file_size,
+                        iteration,
+                        read_write_ratio,
+                    },
+                    dir.clone(),
+                )
+                .await?;
+
+                log::info!("finished bench read. elapsed: {:?}, file_size: {}, iteration: {}, concurrency: {}", instant.elapsed(), file_size, iteration, concurrency * read_write_ratio);
+            }
+
+            let instant = Instant::now();
+            log::info!(
+                "begin bench delete with file_size: {}, iteration: {}, concurrency: {}",
+                file_size,
+                iteration,
+                concurrency
+            );
+            self.run(concurrency, TestMode::Delete { iteration }, dir.clone())
+                .await?;
+
+            log::info!("finished bench delete. elapsed: {:?}, file_size: {}, iteration: {}, concurrency: {}", instant.elapsed(), file_size, iteration, concurrency);
         }
 
         Ok(())
@@ -685,4 +767,15 @@ pub struct TestSummary {
     latency: LatencySummary,
     throughput: ThroughputSummary,
     score: f64,
+}
+
+impl TableFunction for BenchesSummaryTable {
+    fn function_name(&self) -> &str {
+        self.name()
+    }
+
+    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
+    where Self: 'a {
+        self
+    }
 }
