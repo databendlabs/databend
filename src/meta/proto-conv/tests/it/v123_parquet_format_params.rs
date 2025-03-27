@@ -30,20 +30,21 @@ use crate::common;
 // *************************************************************
 //
 #[test]
-fn test_decode_v99_parquet_file_format_params() -> anyhow::Result<()> {
-    let parquet_file_format_params_v99 = vec![
-        10, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 34, 0, 34, 1, 97, 160, 6, 99,
-        168, 6, 24,
+fn test_decode_v123_parquet_file_format_params() -> anyhow::Result<()> {
+    let parquet_file_format_params_v123 = vec![
+        10, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 16, 8, 34, 0, 34, 1, 97, 160,
+        6, 123, 168, 6, 24,
     ];
+
     let want = || ParquetFileFormatParams {
-        compression: StageFileCompression::Zstd,
+        compression: StageFileCompression::Snappy,
         missing_field_as: NullAs::FieldDefault,
         null_if: vec!["".to_string(), "a".to_string()],
     };
     common::test_load_old(
         func_name!(),
-        parquet_file_format_params_v99.as_slice(),
-        99,
+        parquet_file_format_params_v123.as_slice(),
+        123,
         want(),
     )?;
     common::test_pb_from_to(func_name!(), want())?;
