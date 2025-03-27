@@ -36,7 +36,7 @@ pub struct PermitKey {
 
 impl fmt::Display for PermitKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SemKey({}/{:020})", self.prefix, self.seq)
+        write!(f, "PermitKey({}/{:020})", self.prefix, self.seq)
     }
 }
 
@@ -95,6 +95,15 @@ impl PermitKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_display() {
+        let key = PermitKey::new("test", 1);
+        assert_eq!(
+            key.to_string(),
+            "PermitKey(test/queue/00000000000000000001)"
+        );
+    }
 
     #[test]
     fn test_parse_key() {

@@ -41,7 +41,7 @@ mod tests {
         let err = EarlyRemoved::new(PermitKey::new("test", 1), PermitEntry::new("test", 1));
         assert_eq!(
             err.to_string(),
-            "EarlyRemoved: distributed-Semaphore entry is removed before being acquired: key:SemaphoreKey(test/00000000000000000001) entry:SemaphoreEntry(id:test, value:1)"
+            "EarlyRemoved: distributed-Semaphore entry is removed before being acquired: key:PermitKey(test/00000000000000000001) entry:PermitEntry(id:test, n:1)"
         );
     }
 }
