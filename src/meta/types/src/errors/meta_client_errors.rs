@@ -55,9 +55,7 @@ impl From<MetaClientError> for io::Error {
             MetaClientError::ConfigError(e) => {
                 io::Error::new(io::ErrorKind::InvalidInput, e.to_string())
             }
-            MetaClientError::NetworkError(e) => {
-                return e.into();
-            }
+            MetaClientError::NetworkError(e) => e.into(),
             MetaClientError::HandshakeError(e) => {
                 io::Error::new(io::ErrorKind::NotConnected, e.to_string())
             }

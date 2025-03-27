@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod acquired_guard;
+#[allow(clippy::module_inception)]
 mod acquirer;
 
 pub use acquired_guard::AcquiredGuard;

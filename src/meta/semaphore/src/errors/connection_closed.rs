@@ -91,7 +91,7 @@ impl From<io::Error> for ConnectionClosed {
 
 impl From<Status> for ConnectionClosed {
     fn from(status: Status) -> Self {
-        ConnectionClosed::new_str(&status.to_string())
+        ConnectionClosed::new_str(status.to_string())
     }
 }
 

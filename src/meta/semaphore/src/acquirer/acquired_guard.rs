@@ -74,9 +74,7 @@ impl AcquiredGuard {
             leaser_cancel_tx,
         );
 
-        let acquired = AcquiredGuard { fu: Box::pin(fu) };
-
-        acquired
+        AcquiredGuard { fu: Box::pin(fu) }
     }
 
     /// Waits for the semaphore entry to be removed.
