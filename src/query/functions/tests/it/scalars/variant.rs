@@ -72,6 +72,7 @@ fn test_variant() {
     test_json_object_insert(file);
     test_json_object_delete(file);
     test_json_object_pick(file);
+    test_strip_null_value(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -2126,6 +2127,34 @@ fn test_json_object_pick(file: &mut impl Write) {
                 r#"{"m":"n"}"#,
                 "",
                 r#"{"a":"b","c":"d","y":"z"}"#,
+            ],
+            vec![true, true, false, true],
+        ),
+    )]);
+}
+
+fn test_strip_null_value(file: &mut impl Write) {
+    run_ast(file, "strip_null_value(parse_json('1234'))", &[]);
+    run_ast(file, "strip_null_value(parse_json('null'))", &[]);
+    run_ast(file, "strip_null_value(null)", &[]);
+
+    run_ast(file, "strip_null_value(parse_json(s))", &[(
+        "s",
+        StringType::from_data(vec![
+            r#"{ "a": 1, "b": null }"#,
+            "null",
+            "[\"a\",\"b\",\"c\"]",
+        ]),
+    )]);
+
+    run_ast(file, "strip_null_value(parse_json(s))", &[(
+        "s",
+        StringType::from_data_with_validity(
+            vec![
+                r#"{ "a": 1, "b": null }"#,
+                "null",
+                "",
+                "[\"a\",\"b\",\"c\"]",
             ],
             vec![true, true, false, true],
         ),

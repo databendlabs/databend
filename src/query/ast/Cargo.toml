@@ -8,9 +8,6 @@ license = { workspace = true }
 edition = { workspace = true }
 repository = "https://github.com/datafuselabs/databend/tree/main/src/query/ast"
 
-[lib]
-doctest = false
-
 [dependencies]
 derive-visitor = { workspace = true }
 educe = { workspace = true }

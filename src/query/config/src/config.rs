@@ -236,6 +236,34 @@ impl Config {
 
         Ok(conf)
     }
+
+    pub fn load_with_config_file(config_file: &str) -> Result<Self> {
+        let mut builder: serfig::Builder<Self> = serfig::Builder::default();
+
+        // Load from config file first.
+        {
+            let config_file = if !config_file.is_empty() {
+                config_file.to_string()
+            } else if let Ok(path) = env::var("CONFIG_FILE") {
+                path
+            } else {
+                "".to_string()
+            };
+
+            if !config_file.is_empty() {
+                builder = builder.collect(from_file(Toml, &config_file));
+            }
+        }
+
+        // Then, load from env.
+        builder = builder.collect(from_env());
+
+        // Check obsoleted.
+        let conf = builder.build()?;
+        conf.check_obsoleted()?;
+
+        Ok(conf)
+    }
 }
 
 /// Storage config group.
@@ -3392,5 +3420,30 @@ mod cache_config_converters {
                 inner::DiskCacheKeyReloadPolicy::Fuzzy => DiskCacheKeyReloadPolicy::Fuzzy,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::ffi::OsString;
+
+    use clap::Parser;
+    use pretty_assertions::assert_eq;
+
+    use crate::Config;
+    use crate::InnerConfig;
+
+    /// It's required to make sure setting's default value is the same with clap.
+    #[test]
+    fn test_config_default() {
+        let setting_default = InnerConfig::default();
+        let config_default: InnerConfig = Config::parse_from(Vec::<OsString>::new())
+            .try_into()
+            .expect("parse from args must succeed");
+
+        assert_eq!(
+            setting_default, config_default,
+            "default setting is different from default config, please check again"
+        )
     }
 }

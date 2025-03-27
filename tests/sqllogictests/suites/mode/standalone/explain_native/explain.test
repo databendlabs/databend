@@ -789,7 +789,7 @@ TableScan
 ├── partitions total: 2
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
-├── push downs: [filters: [is_true(TRY_CAST(get(t3.c (#2), 'k3') AS String NULL) = 'v')], limit: NONE]
+├── push downs: [filters: [is_true(get(t3.c (#2), 'k3') = '"v"')], limit: NONE]
 └── estimated rows: 1.20
 
 query T

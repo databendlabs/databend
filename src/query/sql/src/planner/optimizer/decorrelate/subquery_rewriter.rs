@@ -28,7 +28,6 @@ use databend_common_functions::aggregates::AggregateCountFunction;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
@@ -201,7 +200,6 @@ impl SubqueryRewriter {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
-            | RelOperator::Recluster(_)
             | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
         }
     }
@@ -265,8 +263,7 @@ impl SubqueryRewriter {
                 // Check if the subquery is a correlated subquery.
                 // If it is, we'll try to flatten it and rewrite to join.
                 // If it is not, we'll just rewrite it to join
-                let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                let prop = rel_expr.derive_relational_prop()?;
+                let prop = subquery.subquery.derive_relational_prop()?;
                 let mut flatten_info = FlattenInfo {
                     from_count_func: false,
                 };
@@ -277,6 +274,7 @@ impl SubqueryRewriter {
                         is_conjunctive_predicate,
                     )?
                 } else {
+                    // todo: optimize outer before decorrelate subquery
                     self.try_decorrelate_subquery(
                         s_expr,
                         &subquery,

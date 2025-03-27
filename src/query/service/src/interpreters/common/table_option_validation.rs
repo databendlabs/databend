@@ -20,7 +20,7 @@ use chrono::Duration;
 use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::TableSchemaRef;
-use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_settings::Settings;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
@@ -110,6 +110,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
     r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
+    r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
@@ -153,7 +154,7 @@ pub fn is_valid_row_per_block(
         let row_per_block = value.parse::<u64>()?;
         let error_str = "invalid row_per_block option, can't be over 1000000";
 
-        if row_per_block > DEFAULT_BLOCK_MAX_ROWS as u64 {
+        if row_per_block > DEFAULT_BLOCK_ROW_COUNT as u64 {
             error!("{}", error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
         }

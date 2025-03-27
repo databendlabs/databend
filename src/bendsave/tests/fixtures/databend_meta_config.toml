@@ -1,0 +1,22 @@
+# Usage:
+# databend-meta -c databend-meta-node-1.toml
+
+log_dir = "./.databend/logs1"
+admin_api_address = "0.0.0.0:28101"
+grpc_api_address = "0.0.0.0:9191"
+# databend-query fetch this address to update its databend-meta endpoints list,
+# in case databend-meta cluster changes.
+grpc_api_advertise_host = "127.0.0.1"
+
+[raft_config]
+id = 1
+raft_dir = "/tmp/.databend/meta1"
+raft_api_port = 28103
+
+# Assign raft_{listen|advertise}_host in test config.
+# This allows you to catch a bug in unit tests when something goes wrong in raft meta nodes communication.
+raft_listen_host = "127.0.0.1"
+raft_advertise_host = "localhost"
+
+# Start up mode: single node cluster
+single = true

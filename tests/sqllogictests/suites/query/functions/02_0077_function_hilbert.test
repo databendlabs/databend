@@ -1,53 +1,67 @@
 query T
-select to_hex(hilbert_key('abc'));
+select hilbert_range_index(1, [1,2], 2, [1,2]);
 ----
-616263
+00000003
 
 query T
-select to_hex(hilbert_key(-1));
+select hilbert_range_index(null, [1,2], 2, [1,2]);
 ----
-7f
+0000000D
 
 query T
-select to_hex(hilbert_key(1));
+select hilbert_range_index(3, [1,2], 2, [1,2]);
 ----
-01
+0000000D
 
 query T
-select to_hex(hilbert_key(-1.5));
+select hilbert_range_index(1, [], 2, [1,2]);
 ----
-4007ffffffffffff
+00000003
 
 query T
-select to_hex(hilbert_key(1.5));
+select hilbert_range_index(1, [], 2, null);
 ----
-bff8000000000000
+00000000
 
 statement error 1006
-SELECT hilbert_index([to_binary('6tkz2eT'), to_binary('3wnehCt')], 17165323156917005607);
+select hilbert_range_index(1, ['a'], 2, [1,3]);
 
-statement error 1006
-SELECT to_hex(hilbert_index([hilbert_key(1), hilbert_key(1), hilbert_key(1), hilbert_key(1),hilbert_key(1), hilbert_key(1)], 1));
+statement ok
+create table t_hilbert(a int, b int);
 
-statement error 1006
-SELECT to_hex(hilbert_index([hilbert_key(1)], 1));
-
-query T
-SELECT to_hex(hilbert_index([to_binary('6tkz2eT'), to_binary('3wnehCt')], 7));
-----
-0a1b808f82118177b9e68c34848a
+statement ok
+insert into t_hilbert values(0, 0), (1, 2), (4, 3), (5, 6), (8, 7), (9, 10), (null, 8), (3, null);
 
 query T
-SELECT to_hex(hilbert_index([hilbert_key(1), hilbert_key(-1)], 1));
+select range_bound(4)(a) as a_bound, range_bound(4)(b) as b_bound from t_hilbert;
 ----
-3ffe
+[1,4,8] [2,6,8]
 
 query T
-SELECT to_hex(hilbert_index([hilbert_key(1.5), hilbert_key(-1.5)], 8));
+with tt as (select range_bound(4)(a) as a_bound, range_bound(4)(b) as b_bound from t_hilbert)
+select a, range_partition_id(a, tt.a_bound), b, range_partition_id(b, tt.b_bound) from t_hilbert, tt order by t_hilbert.a;
 ----
-dfffffd5555555555555555555555555
+0 0 0 0
+1 0 2 0
+3 1 NULL 3
+4 1 3 1
+5 2 6 1
+8 2 7 2
+9 3 10 3
+NULL 3 8 2
 
 query T
-SELECT to_hex(hilbert_index([hilbert_key(to_uint64(1)), hilbert_key('abc')], 8));
+with tt as (select range_bound(4)(a) as a_bound, range_bound(4)(b) as b_bound from t_hilbert)
+select t.a, t.b, hilbert_range_index(t.a, tt.a_bound, t.b, tt.b_bound) as index from t_hilbert t, tt order by index;
 ----
-3c02140ebeafaaaaaaaaaaaaaaaaaaaa
+0 0 00000000
+1 2 00000000
+4 3 00000002
+3 NULL 00000006
+8 7 00000008
+9 10 0000000A
+NULL 8 0000000B
+5 6 0000000D
+
+statement ok
+drop table t_hilbert all;

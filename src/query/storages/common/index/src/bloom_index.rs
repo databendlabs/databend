@@ -55,6 +55,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
+use jsonb::RawJsonb;
 use parquet::format::FileMetaData;
 
 use crate::filters::BlockBloomFilterIndexVersion;
@@ -206,7 +207,11 @@ impl BloomIndex {
         for (index, field) in bloom_columns_map.into_iter() {
             let column = match &block.get_by_offset(index).value {
                 Value::Scalar(_) => continue,
-                Value::Column(c) => c.clone(),
+                Value::Column(c) => match c {
+                    Column::Nullable(v) if v.validity.true_count() == 0 => continue,
+                    Column::Null { .. } => continue,
+                    _ => c.clone(),
+                },
             };
 
             let field_type = &block.get_by_offset(index).data_type;
@@ -227,10 +232,10 @@ impl BloomIndex {
                     };
                     let column = map_column.underlying_column().values;
 
-                    let val_type = match inner_ty {
-                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                        _ => unreachable!(),
+                    let DataType::Tuple(kv_tys) = inner_ty else {
+                        unreachable!();
                     };
+                    let val_type = kv_tys[1].clone();
                     // Extract JSON value of string type to create bloom index,
                     // other types of JSON value will be ignored.
                     if val_type.remove_nullable() == DataType::Variant {
@@ -240,8 +245,9 @@ impl BloomIndex {
                         );
                         for val in column.iter() {
                             if let ScalarRef::Variant(v) = val {
-                                if let Ok(str_val) = jsonb::to_str(v) {
-                                    builder.push(ScalarRef::String(str_val.as_str()));
+                                let raw_jsonb = RawJsonb::new(v);
+                                if let Ok(Some(str_val)) = raw_jsonb.as_str() {
+                                    builder.push(ScalarRef::String(&str_val));
                                     continue;
                                 }
                             }
@@ -291,11 +297,13 @@ impl BloomIndex {
             let filter = filter_builder.build()?;
 
             if let Some(len) = filter.len() {
-                match field.data_type() {
-                    TableDataType::Map(_) => {}
-                    _ => {
-                        column_distinct_count.insert(index, len);
-                    }
+                if !matches!(field.data_type(), TableDataType::Map(_)) {
+                    column_distinct_count.insert(index, len);
+                }
+                // Not need to generate bloom index,
+                // it will never be used since range index is checked first.
+                if len < 2 {
+                    continue;
                 }
             }
 
@@ -765,6 +773,24 @@ trait EqVisitor {
                     };
                     // Only JSON value of string type have bloom index.
                     if val_type.remove_nullable() == DataType::Variant {
+                        // If the scalar value is variant string, we can try extract the string
+                        // value to take advantage of bloom filtering.
+                        if scalar_type.remove_nullable() == DataType::Variant {
+                            if let Some(val) = scalar.as_variant() {
+                                let raw_jsonb = RawJsonb::new(val);
+                                if let Ok(Some(str_val)) = raw_jsonb.as_str() {
+                                    let new_scalar = Scalar::String(str_val.to_string());
+                                    let new_scalar_type = DataType::String;
+                                    return self.enter_target(
+                                        span,
+                                        id,
+                                        &new_scalar,
+                                        &new_scalar_type,
+                                        return_type,
+                                    );
+                                }
+                            }
+                        }
                         if scalar_type.remove_nullable() != DataType::String {
                             return Ok(ControlFlow::Continue(None));
                         }

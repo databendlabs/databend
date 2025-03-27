@@ -50,12 +50,8 @@ impl HashJoinProbeState {
         let max_block_size = probe_state.max_block_size;
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
-        let probe_column = process_state
-            .input
-            .get_by_offset(0)
-            .to_column(process_state.input.num_rows());
         // Check if there is any null in the probe column.
-        if matches!(probe_column.validity().1, Some(x) if x.null_count() > 0) {
+        if process_state.probe_has_null {
             let mut has_null = self
                 .hash_join_state
                 .hash_join_desc
@@ -148,12 +144,8 @@ impl HashJoinProbeState {
         let max_block_size = probe_state.max_block_size;
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
-        let probe_column = process_state
-            .input
-            .get_by_offset(0)
-            .to_column(process_state.input.num_rows());
         // Check if there is any null in the probe column.
-        if matches!(probe_column.validity().1, Some(x) if x.null_count() > 0) {
+        if process_state.probe_has_null {
             let mut has_null = self
                 .hash_join_state
                 .hash_join_desc

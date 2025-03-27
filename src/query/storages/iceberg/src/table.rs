@@ -205,6 +205,15 @@ impl IcebergTable {
         Ok((table, statistics))
     }
 
+    pub fn try_from_table(tbl: &dyn Table) -> Result<&Self> {
+        tbl.as_any().downcast_ref::<Self>().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "expects table of engine iceberg, but got {}",
+                tbl.engine()
+            ))
+        })
+    }
+
     /// create a new table on the table directory
     #[async_backtrace::framed]
     pub async fn try_create_from_iceberg_catalog(
