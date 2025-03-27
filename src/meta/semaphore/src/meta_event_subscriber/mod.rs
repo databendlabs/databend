@@ -23,11 +23,11 @@ use databend_common_meta_types::SeqV;
 pub(crate) use processor::Processor;
 pub(crate) use subscriber::MetaEventSubscriber;
 
-use crate::SemaphoreEntry;
+use crate::PermitEntry;
 
 /// A wrapper to implement `fmt::Display` for `Option<SeqV<SemaphoreEntry>>`.
 #[allow(dead_code)]
-struct DisplaySeqEntry<'a>(&'a Option<SeqV<SemaphoreEntry>>);
+struct DisplaySeqEntry<'a>(&'a Option<SeqV<PermitEntry>>);
 
 impl fmt::Display for DisplaySeqEntry<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

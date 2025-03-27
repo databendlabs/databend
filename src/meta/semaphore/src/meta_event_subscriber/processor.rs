@@ -21,8 +21,8 @@ use tokio::sync::mpsc;
 use crate::errors::ConnectionClosed;
 use crate::queue::SemaphoreEvent;
 use crate::queue::SemaphoreQueue;
-use crate::SemaphoreEntry;
-use crate::SemaphoreKey;
+use crate::PermitEntry;
+use crate::PermitKey;
 
 pub(crate) struct Processor {
     pub(crate) queue: SemaphoreQueue,
@@ -62,9 +62,9 @@ impl Processor {
 
     async fn process_kv_change(
         &mut self,
-        sem_key: SemaphoreKey,
-        prev: Option<SeqV<SemaphoreEntry>>,
-        current: Option<SeqV<SemaphoreEntry>>,
+        sem_key: PermitKey,
+        prev: Option<SeqV<PermitEntry>>,
+        current: Option<SeqV<PermitEntry>>,
     ) -> Result<(), ConnectionClosed> {
         // println!(
         //     "[{}] {} process_kv_change: {}: {} -> {}",
@@ -101,10 +101,10 @@ impl Processor {
         Ok(())
     }
 
-    /// Decode the serialized key-value back to [`SemaphoreKey`] and [`SemaphoreEntry`].
+    /// Decode the serialized key-value back to [`PermitKey`] and [`PermitEntry`].
     ///
     /// Returns a tuple of `(key, value_before, value_after)` where:
-    /// - `key` is the decoded [`SemaphoreKey`]
+    /// - `key` is the decoded [`PermitKey`]
     /// - `value_before` is the previous state of the entry (if it existed)
     /// - `value_after` is the current state of the entry (if it exists)
     ///
@@ -114,9 +114,9 @@ impl Processor {
         ctx: &str,
     ) -> Result<
         Option<(
-            SemaphoreKey,
-            Option<SeqV<SemaphoreEntry>>,
-            Option<SeqV<SemaphoreEntry>>,
+            PermitKey,
+            Option<SeqV<PermitEntry>>,
+            Option<SeqV<PermitEntry>>,
         )>,
         ConnectionClosed,
     > {
@@ -125,7 +125,7 @@ impl Processor {
             return Ok(None);
         };
 
-        let sem_key = SemaphoreKey::parse_key(&sem_key).map_err(|x| {
+        let sem_key = PermitKey::parse_key(&sem_key).map_err(|x| {
             ConnectionClosed::new_io_error(x)
                 .context(format!("parse semaphore key: {}", sem_key))
                 .context(&ctx)
@@ -142,10 +142,10 @@ impl Processor {
 
     fn decode_option_seqv(
         seqv: Option<SeqV>,
-    ) -> Result<Option<SeqV<SemaphoreEntry>>, ConnectionClosed> {
+    ) -> Result<Option<SeqV<PermitEntry>>, ConnectionClosed> {
         match seqv {
             Some(seqv) => {
-                let seqv = seqv.try_map(|data| SemaphoreEntry::decode(&mut data.as_slice()))?;
+                let seqv = seqv.try_map(|data| PermitEntry::decode(&mut data.as_slice()))?;
                 Ok(Some(seqv))
             }
             None => Ok(None),
@@ -212,9 +212,9 @@ mod tests {
     fn test_decode_watch_response() -> anyhow::Result<()> {
         // Non-empty watch response.
 
-        let sem_key = SemaphoreKey::new("test_key", 1);
-        let prev = SemaphoreEntry::new("a", 1);
-        let current = SemaphoreEntry::new("b", 2);
+        let sem_key = PermitKey::new("test_key", 1);
+        let prev = PermitEntry::new("a", 1);
+        let current = PermitEntry::new("b", 2);
 
         let watch_response = WatchResponse::new3(
             sem_key.format_key(),
@@ -238,13 +238,13 @@ mod tests {
         Ok(())
     }
 
-    fn key(seq: u64) -> SemaphoreKey {
-        SemaphoreKey::new("foo".to_string(), seq)
+    fn key(seq: u64) -> PermitKey {
+        PermitKey::new("foo".to_string(), seq)
     }
 
     /// Create a semaphore entry for testing.
-    fn ent(value: u64) -> Option<SemaphoreEntry> {
-        Some(SemaphoreEntry::new(format!("id-{}", value), value))
+    fn ent(value: u64) -> Option<PermitEntry> {
+        Some(PermitEntry::new(format!("id-{}", value), value))
     }
 
     /// Create an acquired event.

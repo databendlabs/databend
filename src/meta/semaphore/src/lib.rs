@@ -55,7 +55,7 @@
 //!
 //! To acquire a semaphore, a client:
 //! 1. Updates the `seq_generator` key to obtain a new `seq`
-//! 2. Creates a [`SemaphoreEntry`] with `sem_id` and inserts it at `queue/<seq>`, where `<seq>`
+//! 2. Creates a [`PermitEntry`] with `sem_id` and inserts it at `queue/<seq>`, where `<seq>`
 //!    is serialized to string in an order-preserving way.
 //! 3. Submits a watch request on the `prefix` with `initial_flush=true` to receive all data under
 //!    `<prefix>`.
@@ -163,11 +163,11 @@ mod storage;
 /// The current version of the semaphore encoding protocol.
 const CURRENT_VERSION: u8 = 1u8;
 
-pub type SemaphoreSeq = u64;
+pub type PermitSeq = u64;
 pub type SemaphoreId = String;
 
 pub use semaphore::Semaphore;
-pub use storage::SemaphoreEntry;
-pub use storage::SemaphoreKey;
+pub use storage::PermitEntry;
+pub use storage::PermitKey;
 
 // TODO test: fake several events sequence, assume different initial_flush set, and check the final state to be consistent.

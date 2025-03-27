@@ -14,17 +14,17 @@
 
 use std::fmt;
 
-use crate::SemaphoreEntry;
-use crate::SemaphoreSeq;
+use crate::PermitEntry;
+use crate::PermitSeq;
 
 // TODO: consider adding a state `Waiting` when a semaphore enters waiting queue?
 /// The event of a semaphore, acquired or removed(removed after it is acquired or before it is acquired).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SemaphoreEvent {
     /// Removed not Released, because the semaphore may be removed before it is acquired.
-    Removed((SemaphoreSeq, SemaphoreEntry)),
+    Removed((PermitSeq, PermitEntry)),
     /// The semaphore entry enters the `acquired`.
-    Acquired((SemaphoreSeq, SemaphoreEntry)),
+    Acquired((PermitSeq, PermitEntry)),
 }
 
 impl fmt::Display for SemaphoreEvent {
@@ -41,11 +41,11 @@ impl fmt::Display for SemaphoreEvent {
 }
 
 impl SemaphoreEvent {
-    pub(crate) fn new_removed(seq: SemaphoreSeq, entry: SemaphoreEntry) -> Self {
+    pub(crate) fn new_removed(seq: PermitSeq, entry: PermitEntry) -> Self {
         SemaphoreEvent::Removed((seq, entry))
     }
 
-    pub(crate) fn new_acquired(seq: SemaphoreSeq, entry: SemaphoreEntry) -> Self {
+    pub(crate) fn new_acquired(seq: PermitSeq, entry: PermitEntry) -> Self {
         SemaphoreEvent::Acquired((seq, entry))
     }
 }
