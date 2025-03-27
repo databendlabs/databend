@@ -17,7 +17,6 @@ mod subscriber;
 
 use std::fmt;
 
-use chrono::Local;
 use databend_common_base::display::display_option::DisplayOptionExt;
 use databend_common_meta_types::SeqV;
 pub(crate) use processor::Processor;
@@ -46,8 +45,4 @@ impl fmt::Display for DisplaySeqEntry<'_> {
             }
         }
     }
-}
-
-pub(crate) fn now_str() -> impl fmt::Display + 'static {
-    Local::now().format("%Y-%m-%d %H:%M:%S%.3f")
 }
