@@ -164,7 +164,6 @@ mod storage;
 const CURRENT_VERSION: u8 = 1u8;
 
 pub type PermitSeq = u64;
-pub type SemaphoreId = String;
 
 pub use semaphore::Semaphore;
 pub use storage::PermitEntry;
