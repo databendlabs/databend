@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn test_display() {
         let entry = PermitEntry::new("test", 1);
-        assert_eq!(entry.to_string(), "PermitEntry(id:test, value:1)");
+        assert_eq!(entry.to_string(), "PermitEntry(id:test, n:1)");
     }
 
     // Test the encode and decode of PermitEntry
