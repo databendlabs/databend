@@ -55,7 +55,7 @@
 //!
 //! To acquire a semaphore, a client:
 //! 1. Updates the `seq_generator` key to obtain a new `seq`
-//! 2. Creates a [`PermitEntry`] with `sem_id` and inserts it at `queue/<seq>`, where `<seq>`
+//! 2. Creates a [`PermitEntry`] with `acquirer_id` and inserts it at `queue/<seq>`, where `<seq>`
 //!    is serialized to string in an order-preserving way.
 //! 3. Submits a watch request on the `prefix` with `initial_flush=true` to receive all data under
 //!    `<prefix>`.
@@ -152,8 +152,9 @@
 //! |       `-o------------'
 //! |           cancel
 //! ```
-//!
-//! [`Permit`]: crate::acquirer::Permit
+
+#[cfg(doc)]
+use acquirer::Permit;
 
 pub mod acquirer;
 pub mod errors;

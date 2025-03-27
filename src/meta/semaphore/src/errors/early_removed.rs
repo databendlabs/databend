@@ -15,19 +15,22 @@
 use crate::storage::PermitEntry;
 use crate::storage::PermitKey;
 
-/// The semaphore entry has been removed from the meta-service before being acquired.
+/// The [`PermitEntry`] has been removed from the meta-service before being acquired.
 ///
 /// Usually this happens when the semaphore ttl is expired.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("EarlyRemoved: distributed-Semaphore entry is removed before being acquired: key:{sem_key} entry:{sem_entry}")]
+#[error("EarlyRemoved: Semaphore PermitEntry is removed before being acquired: key:{permit_key} entry:{permit_entry}")]
 pub struct EarlyRemoved {
-    sem_key: PermitKey,
-    sem_entry: PermitEntry,
+    permit_key: PermitKey,
+    permit_entry: PermitEntry,
 }
 
 impl EarlyRemoved {
     pub fn new(sem_key: PermitKey, sem_entry: PermitEntry) -> Self {
-        Self { sem_key, sem_entry }
+        Self {
+            permit_key: sem_key,
+            permit_entry: sem_entry,
+        }
     }
 }
 
@@ -41,7 +44,7 @@ mod tests {
         let err = EarlyRemoved::new(PermitKey::new("test", 1), PermitEntry::new("test", 1));
         assert_eq!(
             err.to_string(),
-            "EarlyRemoved: distributed-Semaphore entry is removed before being acquired: key:PermitKey(test/00000000000000000001) entry:PermitEntry(id:test, n:1)"
+            "EarlyRemoved: Semaphore PermitEntry is removed before being acquired: key:PermitKey(test/00000000000000000001) entry:PermitEntry(id:test, n:1)"
         );
     }
 }
