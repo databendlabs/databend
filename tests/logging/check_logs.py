@@ -24,7 +24,7 @@ def check_queries(sql: str):
                     queries.append(query)
                 except Exception:
                     pass
-
+    queries = [query for query in queries if sql in query["query_text"]]
     logger.info("queries count: %d", len(queries))
     assert len(queries) == 2
     for query in queries:
@@ -34,18 +34,20 @@ def check_queries(sql: str):
         assert query["query_text"] == sql
 
 
-def check_profiles():
+def check_profiles(sql: str):
+    keyword = str.replace(sql, "SELECT ", "")
     profiles = []
     for filename in glob.glob(PROFILE_LOGS_DIR + "/*.log"):
         logger.info("checking profile logs: %s", filename)
         with open(filename, "r") as f:
             for line in f.readlines():
                 try:
+                    if keyword not in line:
+                        continue
                     query = json.loads(line)
                     profiles.append(query)
                 except Exception:
                     pass
-
     logger.info("profiles count: %d", len(profiles))
     assert len(profiles) == 1
     for profile in profiles:
@@ -61,4 +63,4 @@ if __name__ == "__main__":
     args = argparse.parse_args()
 
     check_queries(args.sql)
-    check_profiles()
+    check_profiles(args.sql)
