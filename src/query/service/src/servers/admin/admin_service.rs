@@ -99,14 +99,6 @@ impl AdminService {
                     get(super::v1::stream_status::stream_status_handler),
                 )
                 .at(
-                    "/v1/background/:tenant/background_tasks",
-                    get(super::v1::background_tasks::list_background_tasks),
-                )
-                .at(
-                    "/v1/tenants/:tenant/background_tasks",
-                    get(super::v1::background_tasks::list_background_tasks),
-                )
-                .at(
                     "/v1/tenants/:tenant/settings",
                     get(super::v1::settings::list_settings),
                 )

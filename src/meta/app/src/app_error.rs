@@ -17,7 +17,6 @@ use std::fmt::Display;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_types::MatchSeq;
 
-use crate::background::job_ident;
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::procedure_name_ident;
 use crate::principal::ProcedureIdentity;
@@ -1079,12 +1078,6 @@ pub enum AppError {
     UnknownDataMask(#[from] UnknownError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
-    BackgroundJobAlreadyExists(#[from] ExistError<job_ident::BackgroundJobName>),
-
-    #[error(transparent)]
-    UnknownBackgroundJob(#[from] UnknownError<job_ident::BackgroundJobName>),
-
-    #[error(transparent)]
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
 
     #[error(transparent)]
@@ -1615,10 +1608,6 @@ impl From<AppError> for ErrorCode {
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDataMask(err) => ErrorCode::UnknownDatamask(err.message()),
 
-            AppError::BackgroundJobAlreadyExists(err) => {
-                ErrorCode::BackgroundJobAlreadyExists(err.message())
-            }
-            AppError::UnknownBackgroundJob(err) => ErrorCode::UnknownBackgroundJob(err.message()),
             AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
             AppError::UnmatchMaskPolicyReturnType(err) => {
                 ErrorCode::UnmatchMaskPolicyReturnType(err.message())

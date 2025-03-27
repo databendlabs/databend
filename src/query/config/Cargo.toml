@@ -16,7 +16,6 @@ storage-hdfs = ["databend-common-storage/storage-hdfs"]
 ignored = ["strum"]
 
 [dependencies]
-chrono-tz = { workspace = true }
 clap = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
