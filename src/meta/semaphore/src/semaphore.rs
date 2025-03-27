@@ -231,7 +231,6 @@ impl Semaphore {
     /// Since `'0'` is the next char of `'/'`.
     /// `[prefix + "/queue/", prefix + "/queue0")` is the range of the semaphore ids.
     fn queue_key_range(&self) -> (String, String) {
-        // TODO: test itc
         let p = format!("{}/queue", self.prefix);
         let left = p.clone() + "/";
         let right = p.clone() + "0";
