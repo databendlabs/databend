@@ -12,8 +12,6 @@ storage-hdfs = []
 [dependencies]
 anyerror = { workspace = true }
 chrono = { workspace = true }
-chrono-tz = { workspace = true }
-cron = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
