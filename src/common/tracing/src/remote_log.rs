@@ -175,21 +175,25 @@ impl RemoteLog {
     }
 
     pub fn prepare_log_element(&self, record: &Record) -> RemoteLogElement {
-        let mut query_id = ThreadTracker::query_id().cloned();
+        let query_id = ThreadTracker::query_id().cloned();
         let mut fields = Map::new();
         let target = record.target().to_string();
-        match target.as_str() {
-            "databend::log::profile" | "databend::log::query" => {
-                if handle_profile_and_query(&mut fields, &mut query_id, record).is_err() {
-                    fields.insert("message".to_string(), format!("{}", record.args()).into());
+        // databend::log::profile record args is a json string, otherwise, it is a string
+        match serde_json::from_str::<Map<String, Value>>(&record.args().to_string()) {
+            Ok(json_value) => {
+                for (k, v) in json_value {
+                    fields.insert(k, v);
                 }
             }
-            _ => {
-                fields.insert("message".to_string(), format!("{}", record.args()).into());
-                for (k, v) in collect_kvs(record.key_values()) {
-                    fields.insert(k, v.into());
-                }
+            Err(_) => {
+                fields.insert(
+                    "message".to_string(),
+                    Value::String(record.args().to_string()),
+                );
             }
+        };
+        for (k, v) in collect_kvs(record.key_values()) {
+            fields.insert(k, v.into());
         }
         let fields = serde_json::to_string(&fields).unwrap_or_default();
 
@@ -326,20 +330,4 @@ pub fn convert_to_batch(records: Vec<RemoteLogElement>) -> Result<RecordBatch> {
             e
         ))
     })
-}
-
-fn handle_profile_and_query(
-    fields: &mut Map<String, Value>,
-    query_id: &mut Option<String>,
-    record: &Record,
-) -> Result<()> {
-    let details: Map<String, Value> = serde_json::from_str(&record.args().to_string())?;
-    // set query_id can be help for filtering
-    if let Some(id) = details["query_id"].as_str().map(|s| s.to_string()) {
-        query_id.get_or_insert(id);
-    }
-    for (k, v) in details {
-        fields.insert(k, v);
-    }
-    Ok(())
 }

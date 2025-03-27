@@ -19,6 +19,8 @@ use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
@@ -42,6 +44,7 @@ use rand::random;
 
 use crate::interpreters::InterpreterFactory;
 use crate::persistent_log::session::create_session;
+use crate::sessions::QueryContext;
 
 pub struct GlobalPersistentLog {
     meta_store: MetaStore,
@@ -167,6 +170,16 @@ impl GlobalPersistentLog {
     async fn execute_sql(&self, sql: &str) -> Result<()> {
         let session = create_session(&self.tenant_id, &self.cluster_id).await?;
         let context = session.create_query_context().await?;
+        let query_id = context.get_id();
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.query_id = Some(query_id.clone());
+        tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
+        let _guard = ThreadTracker::tracking(tracking_payload);
+        ThreadTracker::tracking_future(self.do_execute(context, sql)).await?;
+        Ok(())
+    }
+
+    async fn do_execute(&self, context: Arc<QueryContext>, sql: &str) -> Result<()> {
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
         let executor = InterpreterFactory::get(context.clone(), &plan).await?;
