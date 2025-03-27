@@ -60,13 +60,12 @@ impl Processor {
         &mut self,
         watch_response: WatchResponse,
     ) -> Result<(), ConnectionClosed> {
-        let Some((sem_key, prev, current)) =
-            Self::decode_watch_response(watch_response, &self.ctx)?
+        let Some((key, prev, current)) = Self::decode_watch_response(watch_response, &self.ctx)?
         else {
             return Ok(());
         };
 
-        self.process_kv_change(sem_key, prev, current).await
+        self.process_kv_change(key, prev, current).await
     }
 
     async fn process_kv_change(

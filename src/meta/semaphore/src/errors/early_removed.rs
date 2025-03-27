@@ -26,10 +26,10 @@ pub struct EarlyRemoved {
 }
 
 impl EarlyRemoved {
-    pub fn new(sem_key: PermitKey, sem_entry: PermitEntry) -> Self {
+    pub fn new(permit_key: PermitKey, permit_entry: PermitEntry) -> Self {
         Self {
-            permit_key: sem_key,
-            permit_entry: sem_entry,
+            permit_key,
+            permit_entry,
         }
     }
 }
