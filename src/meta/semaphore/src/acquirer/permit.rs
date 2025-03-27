@@ -34,20 +34,20 @@ use crate::storage::PermitKey;
 /// the semaphore entry from meta-service) when this instance is dropped intentionally.
 ///
 /// Internally, it contains a `BoxFuture` that holds a oneshot sender.
-/// When the future completes or the [`AcquiredGuard`] instance is dropped,
+/// When the future completes or the [`Permit`] instance is dropped,
 /// the oneshot sender signals the lease extending task to stop,
 /// allowing for proper cleanup of the semaphore entry in the meta-service.
-pub struct AcquiredGuard {
+pub struct Permit {
     pub(crate) fu: BoxFuture<'static, Result<(), ConnectionClosed>>,
 }
 
-impl std::fmt::Debug for AcquiredGuard {
+impl std::fmt::Debug for Permit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AcquiredGuard")
+        write!(f, "Permit")
     }
 }
 
-impl Future for AcquiredGuard {
+impl Future for Permit {
     type Output = Result<(), ConnectionClosed>;
 
     fn poll(
@@ -58,7 +58,7 @@ impl Future for AcquiredGuard {
     }
 }
 
-impl AcquiredGuard {
+impl Permit {
     pub(crate) fn new(
         subscriber_cancel_tx: oneshot::Sender<()>,
         sem_event_rx: mpsc::Receiver<SemaphoreEvent>,
@@ -74,7 +74,7 @@ impl AcquiredGuard {
             leaser_cancel_tx,
         );
 
-        AcquiredGuard { fu: Box::pin(fu) }
+        Permit { fu: Box::pin(fu) }
     }
 
     /// Waits for the semaphore entry to be removed.

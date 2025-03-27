@@ -33,7 +33,7 @@ use log::warn;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
-use crate::acquirer::AcquiredGuard;
+use crate::acquirer::Permit;
 use crate::errors::AcquireError;
 use crate::errors::ConnectionClosed;
 use crate::errors::EarlyRemoved;
@@ -79,7 +79,7 @@ pub(crate) struct Acquirer {
 }
 
 impl Acquirer {
-    pub async fn acquire(mut self) -> Result<AcquiredGuard, AcquireError> {
+    pub async fn acquire(mut self) -> Result<Permit, AcquireError> {
         let mut sleep_time = Duration::from_millis(10);
         let max_sleep_time = Duration::from_secs(1);
 
@@ -193,7 +193,7 @@ impl Acquirer {
             }
         }
 
-        let guard = AcquiredGuard::new(
+        let guard = Permit::new(
             self.subscriber_cancel_tx,
             self.sem_event_rx,
             sem_key,

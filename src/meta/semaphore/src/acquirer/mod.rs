@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod acquired_guard;
 #[allow(clippy::module_inception)]
 mod acquirer;
+mod permit;
 
-pub use acquired_guard::AcquiredGuard;
 pub(crate) use acquirer::Acquirer;
+pub use permit::Permit;

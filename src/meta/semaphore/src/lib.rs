@@ -111,17 +111,17 @@
 //!       These two steps are performed in a transaction. `(3)`.
 //!    3. Spawns a lease extender task to periodically refresh the TTL of the semaphore entry.  `(4)`.
 //!    4. Waits for an `Acquired` event from the KV-Change-Subscriber, indicating the semaphore
-//!       has been acquired. Returns a [`AcquiredGuard`] to the client when acquisition is
+//!       has been acquired. Returns a [`Permit`] to the client when acquisition is
 //!       successful.`(5)`.
 //!
-//! -  [`AcquiredGuard`] manages the lifecycle of the acquired semaphore:
+//! -  [`Permit`] manages the lifecycle of the acquired semaphore:
 //!    -  It contains two cancel channels: one for the lease extender task and one for the KV-Change-Subscriber
 //!    -  It automatically cancel the two tasks when dropped.
 //!    -  It implements `Future` that gets Ready with `Ok(())` if the semaphore entry is removed from
 //!       the meta-service (either intentionally or due to TTL expiration).
 //!       It gets Ready with an error [`ConnectionClosed`] if the stream from KV-Change-Subscriber is closed.
 //!
-//!    **Applications should poll the [`AcquiredGuard`] as a Future to detect when the semaphore is released**
+//!    **Applications should poll the [`Permit`] as a Future to detect when the semaphore is released**
 //! ```text
 //! | Semaphore -> spawn()-. (1)
 //! |     |                |
@@ -152,6 +152,8 @@
 //! |       `-o------------'
 //! |           cancel
 //! ```
+//!
+//! [`Permit`]: crate::acquirer::Permit
 
 pub mod acquirer;
 pub mod errors;
