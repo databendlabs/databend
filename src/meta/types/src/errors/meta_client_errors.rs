@@ -52,7 +52,9 @@ impl From<MetaClientError> for io::Error {
             MetaClientError::ClientRuntimeError(e) => {
                 io::Error::new(io::ErrorKind::Other, e.to_string())
             }
-            MetaClientError::ConfigError(e) => io::Error::new(io::ErrorKind::InvalidInput, e.to_string()),
+            MetaClientError::ConfigError(e) => {
+                io::Error::new(io::ErrorKind::InvalidInput, e.to_string())
+            }
             MetaClientError::NetworkError(e) => {
                 return e.into();
             }
