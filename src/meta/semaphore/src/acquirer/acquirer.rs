@@ -37,7 +37,6 @@ use crate::acquirer::AcquiredGuard;
 use crate::errors::AcquireError;
 use crate::errors::ConnectionClosed;
 use crate::errors::EarlyRemoved;
-use crate::meta_event_subscriber::now_str;
 use crate::queue::SemaphoreEvent;
 use crate::PermitEntry;
 use crate::PermitKey;
@@ -167,13 +166,7 @@ impl Acquirer {
                         //     self.sem_id
                         // );
 
-                        debug!(
-                            "[{}] {} acquired: {}->{}",
-                            now_str(),
-                            self.ctx,
-                            sem_key,
-                            self.sem_id
-                        );
+                        debug!("{} acquired: {}->{}", self.ctx, sem_key, self.sem_id);
                         break;
                     }
                 }
