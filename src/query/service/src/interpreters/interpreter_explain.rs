@@ -37,6 +37,7 @@ use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
+use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
@@ -91,6 +92,9 @@ impl Interpreter for ExplainInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let options = FormatOptions {
+            verbose: self.config.verbose,
+        };
         let blocks = match &self.kind {
             ExplainKind::Plan if self.config.logical => self.explain_plan(&self.plan)?,
             ExplainKind::Plan => match &self.plan {
@@ -104,8 +108,8 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_query(s_expr, metadata, bind_context, formatted_ast)
                         .await?
                 }
-                Plan::Insert(insert_plan) => insert_plan.explain(self.config.verbose).await?,
-                Plan::Replace(replace_plan) => replace_plan.explain(self.config.verbose).await?,
+                Plan::Insert(insert_plan) => insert_plan.explain(options).await?,
+                Plan::Replace(replace_plan) => replace_plan.explain(options).await?,
                 Plan::CreateTable(plan) => match &plan.as_select {
                     Some(box Plan::Query {
                         s_expr,
@@ -300,7 +304,10 @@ impl ExplainInterpreter {
     }
 
     pub fn explain_plan(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
-        let result = plan.format_indent(self.config.verbose)?;
+        let options = FormatOptions {
+            verbose: self.config.verbose,
+        };
+        let result = plan.format_indent(options)?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
