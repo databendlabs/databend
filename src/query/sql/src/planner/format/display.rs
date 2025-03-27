@@ -162,10 +162,6 @@ impl<
         let mut tree = self
             .operator_humanizer
             .humanize_operator(self.id_humanizer, op);
-        let children = s_expr
-            .children()
-            .map(|s_expr| self.humanize_s_expr(s_expr))
-            .collect::<Result<Vec<_>>>()?;
 
         if self.verbose {
             let rel_expr = RelExpr::with_s_expr(s_expr);
@@ -176,6 +172,11 @@ impl<
             tree.children.extend(properties);
             tree.children.extend(stats);
         }
+
+        let children = s_expr
+            .children()
+            .map(|s_expr| self.humanize_s_expr(s_expr))
+            .collect::<Result<Vec<_>>>()?;
 
         tree.children.extend(children);
         Ok(tree)

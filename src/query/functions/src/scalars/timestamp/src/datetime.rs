@@ -17,9 +17,12 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::io::Write;
 
+use chrono::Datelike;
+use chrono::NaiveDate;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
+use databend_common_expression::serialize::EPOCH_DAYS_FROM_CE;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::date::string_to_date;
@@ -347,36 +350,32 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match string_to_format_datetime(date, format, ctx, false) {
-                        Ok((res, false)) => {
-                            output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
-                        }
-                        Ok((_, true)) => {
-                            output.push_null();
+                    match NaiveDate::parse_from_str(date, format) {
+                        Ok(res) => {
+                            output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
                         Err(e) => {
                             ctx.set_error(output.len(), e.to_string());
-                            output.push(0);
+                            output.push_null();
                         }
                     }
                 }
             },
         ),
     );
-
     registry.register_combine_nullable_2_arg::<StringType, StringType, DateType, _, _>(
         "try_to_date",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, ctx| {
+            |date, format, output, _| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match string_to_format_datetime(date, format, ctx, false) {
-                        Ok((res, false)) => {
-                            output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
+                    match NaiveDate::parse_from_str(date, format) {
+                        Ok(res) => {
+                            output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
-                        _ => {
+                        Err(_) => {
                             output.push_null();
                         }
                     }

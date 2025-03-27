@@ -4901,6 +4901,7 @@ dependencies = [
 name = "databend-functions-scalar-datetime"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
@@ -9179,7 +9180,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.4.4"
-source = "git+https://github.com/databendlabs/jsonb?rev=37d07f0#37d07f05bb2db05c47840a5429958db981177cde"
+source = "git+https://github.com/databendlabs/jsonb?rev=1a53512#1a535124f0f57b18b57377437fe486d9bd680980"
 dependencies = [
  "byteorder",
  "fast-float2",

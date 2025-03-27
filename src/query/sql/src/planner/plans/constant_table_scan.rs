@@ -21,6 +21,7 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_common_storage::Datum;
@@ -40,6 +41,7 @@ use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::IndexType;
 
 // Constant table is a table with constant values.
 #[derive(Clone, Debug)]
@@ -100,6 +102,11 @@ impl ConstantTableScan {
         } else {
             "ConstantTableScan"
         }
+    }
+
+    pub fn value(&self, index: IndexType) -> Result<(Column, &DataField)> {
+        let pos = self.schema.index_of(&index.to_string())?;
+        Ok((self.values[pos].clone(), self.schema.field(pos)))
     }
 }
 
