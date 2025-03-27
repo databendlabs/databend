@@ -30,6 +30,7 @@ fn test_string() {
     test_regexp_like(regexp_file);
     test_regexp_replace(regexp_file);
     test_regexp_substr(regexp_file);
+    test_regexp_extract(regexp_file);
 }
 
 fn test_regexp_instr(file: &mut impl Write) {
@@ -680,5 +681,77 @@ fn test_regexp_substr(file: &mut impl Write) {
         file,
         "regexp_substr(source, pat, pos, occur, mt)",
         match_type_error_five_columns,
+    );
+}
+
+fn test_regexp_extract(file: &mut impl Write) {
+    run_ast(file, "regexp_extract('abc def ghi', '[a-z]+')", &[]);
+    run_ast(file, "regexp_extract('abc def ghi', '[a-z]+', 2)", &[]);
+    run_ast(file, "regexp_extract('abc def ghi', NULL)", &[]);
+    run_ast(file, "regexp_extract('abc def ghi', '')", &[]);
+    run_ast(file, "regexp_extract('', '[a-z]+')", &[]);
+    run_ast(file, "regexp_extract('123 456', '[a-z]+')", &[]);
+    run_ast(
+        file,
+        "regexp_extract('John Doe', '([A-Za-z]+) ([A-Za-z]+)', 1)",
+        &[],
+    );
+
+    run_ast(file, "regexp_extract(s, '([A-Za-z]+) ([A-Za-z]+)', 1)", &[
+        (
+            "s",
+            StringType::from_data(vec!["John Doe", "James Davis", "Lisa Taylor"]),
+        ),
+    ]);
+
+    run_ast(file, "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])", &[]);
+    run_ast(file, "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])", &[]);
+    run_ast(
+        file,
+        "regexp_extract('name: John, age: 30', NULL, ['name', 'age'])",
+        &[],
+    );
+    run_ast(
+        file,
+        "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', [])",
+        &[],
+    );
+    run_ast(file, "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])", &[]);
+
+    run_ast(
+        file,
+        "regexp_extract(s, 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])",
+        &[(
+            "s",
+            StringType::from_data(vec![
+                "name: John, age: 30",
+                "name: James, age: 25",
+                "name: Lisa, age: 19",
+            ]),
+        )],
+    );
+
+    run_ast(file, "regexp_extract_all('abc def ghi', '[a-z]+')", &[]);
+    run_ast(
+        file,
+        "regexp_extract_all('John Doe, Jane Smith', '([A-Za-z]+) ([A-Za-z]+)', 1)",
+        &[],
+    );
+    run_ast(file, "regexp_extract_all('abc def ghi', NULL)", &[]);
+    run_ast(file, "regexp_extract_all('', '[a-z]+')", &[]);
+    run_ast(file, "regexp_extract_all('123 456', '[a-z]+')", &[]);
+    run_ast(file, "regexp_extract_all('name: John, age: 30; name: Jane, age: 25', 'name: ([A-Za-z]+), age: ([0-9]+)')", &[]);
+
+    run_ast(
+        file,
+        "regexp_extract_all(s, '([A-Za-z]+) ([A-Za-z]+)', 1)",
+        &[(
+            "s",
+            StringType::from_data(vec![
+                "John Doe, Jane Smith",
+                "James Davis, Robert Wilson",
+                "Lisa Taylor, Sarah Williams",
+            ]),
+        )],
     );
 }
