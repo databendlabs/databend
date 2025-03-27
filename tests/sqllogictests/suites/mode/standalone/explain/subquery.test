@@ -80,8 +80,8 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 ----
 Filter
 ├── output columns: [t.number (#0)]
-├── filters: [is_true((2 (#2) OR CAST(t.number (#0) > 1 AS Boolean NULL)))]
-├── estimated rows: 1.00
+├── filters: [(is_true(2 (#2)) OR t.number (#0) > 1)]
+├── estimated rows: 0.20
 └── HashJoin
     ├── output columns: [t.number (#0), marker (#2)]
     ├── join type: RIGHT MARK
@@ -646,7 +646,7 @@ explain select t.number from numbers(10) as t where t.number = (select 1);
 Filter
 ├── output columns: [t.number (#0)]
 ├── filters: [t.number (#0) = 1]
-├── estimated rows: 0.00
+├── estimated rows: 2.00
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
