@@ -21,7 +21,7 @@ use codeq::Encode;
 use databend_common_base::runtime::spawn_named;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::protobuf;
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::UpsertKV;
@@ -112,18 +112,11 @@ impl Acquirer {
             let sem_key = PermitKey::new(self.prefix.clone(), sem_seq);
             let sem_key_str = sem_key.format_key();
 
-            let txn = databend_common_meta_types::TxnRequest::default();
+            let txn = pb::TxnRequest::default();
 
-            let cond =
-                databend_common_meta_types::TxnCondition::eq_seq(&self.seq_generator_key, sem_seq);
-            let bool_expr = protobuf::BooleanExpression::from_conditions_and([cond]);
-            let txn = txn.push_branch(Some(bool_expr), [
-                databend_common_meta_types::TxnOp::put_with_ttl(
-                    &sem_key_str,
-                    val_bytes.clone(),
-                    Some(self.lease),
-                ),
-            ]);
+            let cond = pb::TxnCondition::eq_seq(&self.seq_generator_key, sem_seq);
+            let op = pb::TxnOp::put_with_ttl(&sem_key_str, val_bytes.clone(), Some(self.lease));
+            let txn = txn.push_if_then([cond], [op]);
 
             let txn_reply = self.meta_client.transaction(txn).await.map_err(|e| {
                 conn_io_error(
