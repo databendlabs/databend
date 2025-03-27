@@ -39,8 +39,8 @@ use crate::errors::ConnectionClosed;
 use crate::errors::EarlyRemoved;
 use crate::meta_event_subscriber::now_str;
 use crate::queue::SemaphoreEvent;
-use crate::SemaphoreEntry;
-use crate::SemaphoreKey;
+use crate::PermitEntry;
+use crate::PermitKey;
 
 /// The acquirer is responsible for acquiring a semaphore.
 ///
@@ -53,13 +53,13 @@ pub(crate) struct Acquirer {
     /// The ID of this acquirer.
     ///
     /// Different ID represent different trail to acquire a semaphore.
-    /// The ID is used as part of the [`SemaphoreEntry`].
+    /// The ID is used as part of the [`PermitEntry`].
     pub(crate) sem_id: String,
 
     /// The time to live if the acquirer does not extend the lease.
     ///
     /// For example, the acquirer crashed abnormally.
-    pub(crate) ttl: Duration,
+    pub(crate) lease: Duration,
 
     /// The key of the sequence generator.
     ///
@@ -84,9 +84,9 @@ impl Acquirer {
         let mut sleep_time = Duration::from_millis(10);
         let max_sleep_time = Duration::from_secs(1);
 
-        let sem_entry = SemaphoreEntry {
+        let sem_entry = PermitEntry {
             id: self.sem_id.clone(),
-            value: 1,
+            permits: 1,
         };
         let val_bytes = sem_entry
             .encode_to_vec()
@@ -105,7 +105,7 @@ impl Acquirer {
             //         If the transaction fails, we retry with a new sequence number.
             //
             //         See the lib doc for more details.
-            let sem_key = SemaphoreKey::new(self.prefix.clone(), sem_seq);
+            let sem_key = PermitKey::new(self.prefix.clone(), sem_seq);
             let sem_key_str = sem_key.format_key();
 
             let txn = databend_common_meta_types::TxnRequest::default();
@@ -117,7 +117,7 @@ impl Acquirer {
                 databend_common_meta_types::TxnOp::put_with_ttl(
                     &sem_key_str,
                     val_bytes.clone(),
-                    Some(self.ttl),
+                    Some(self.lease),
                 ),
             ]);
 
@@ -240,7 +240,7 @@ impl Acquirer {
     /// provided cancel channel, at which point it will remove the semaphore entry.
     fn spawn_extend_lease_task(
         &self,
-        sem_key: SemaphoreKey,
+        sem_key: PermitKey,
         val_bytes: Vec<u8>,
         leaser_cancel_rx: oneshot::Receiver<()>,
     ) {
@@ -248,7 +248,7 @@ impl Acquirer {
             self.meta_client.clone(),
             sem_key.clone(),
             val_bytes,
-            self.ttl,
+            self.lease,
             leaser_cancel_rx.map(|_| ()),
         );
 
@@ -273,7 +273,7 @@ impl Acquirer {
     /// If it receives the cancel signal, it will remove the semaphore entry.
     async fn extend_lease_loop(
         meta_client: Arc<ClientHandle>,
-        sem_key: SemaphoreKey,
+        sem_key: PermitKey,
         val_bytes: Vec<u8>,
         ttl: Duration,
         cancel: impl Future<Output = ()> + Send + 'static,

@@ -14,8 +14,8 @@
 
 //! Meta-service storage related data types.
 
-mod semaphore_entry;
-mod semaphore_key;
+mod permit_entry;
+mod permit_key;
 
-pub use semaphore_entry::SemaphoreEntry;
-pub use semaphore_key::SemaphoreKey;
+pub use permit_entry::PermitEntry;
+pub use permit_key::PermitKey;

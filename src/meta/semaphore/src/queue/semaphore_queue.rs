@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 
 use crate::queue::semaphore_event::SemaphoreEvent;
-use crate::SemaphoreEntry;
-use crate::SemaphoreSeq;
+use crate::PermitEntry;
+use crate::PermitSeq;
 
 /// Manage the acquired and waiting semaphore entries.
 ///
@@ -28,8 +28,8 @@ use crate::SemaphoreSeq;
 pub struct SemaphoreQueue {
     size: u64,
     capacity: u64,
-    acquired: BTreeMap<SemaphoreSeq, SemaphoreEntry>,
-    waiting: BTreeMap<SemaphoreSeq, SemaphoreEntry>,
+    acquired: BTreeMap<PermitSeq, PermitEntry>,
+    waiting: BTreeMap<PermitSeq, PermitEntry>,
 }
 
 impl SemaphoreQueue {
@@ -51,7 +51,7 @@ impl SemaphoreQueue {
     /// - there is enough capacity;
     /// - `waiting` queue is empty.
     /// Otherwise, it will be added to the waiting queue.
-    pub fn insert(&mut self, sem_seq: SemaphoreSeq, entry: SemaphoreEntry) -> Vec<SemaphoreEvent> {
+    pub fn insert(&mut self, sem_seq: PermitSeq, entry: PermitEntry) -> Vec<SemaphoreEvent> {
         self.waiting.insert(sem_seq, entry);
 
         self.move_waiting_to_acquired()
@@ -66,11 +66,11 @@ impl SemaphoreQueue {
     ///
     /// 1. removed semaphores, containing at most one element, which is previously in the `acquired` or not in the `acquired`.
     /// 2. newly acquired semaphores, containing one or more elements, which are previously in `waiting`.
-    pub fn remove(&mut self, sem_seq: SemaphoreSeq) -> Vec<SemaphoreEvent> {
+    pub fn remove(&mut self, sem_seq: PermitSeq) -> Vec<SemaphoreEvent> {
         let removed = if self.is_acquired(&sem_seq) {
             // Safe unwrap(): it is acquired.
             let entry = self.acquired.remove(&sem_seq).unwrap();
-            self.size -= entry.value;
+            self.size -= entry.permits;
             Some(entry)
         } else {
             self.waiting.remove(&sem_seq)
@@ -89,19 +89,19 @@ impl SemaphoreQueue {
     }
 
     /// Add a semaphore entry to the acquired map if it is not already acquired.
-    fn try_acquire(&mut self, sem_seq: SemaphoreSeq, entry: SemaphoreEntry) -> bool {
+    fn try_acquire(&mut self, sem_seq: PermitSeq, entry: PermitEntry) -> bool {
         // TODO: test if the semaphore is already acquired
         if self.is_acquired(&sem_seq) {
             return false;
         }
 
-        self.size += entry.value;
+        self.size += entry.permits;
         self.acquired.insert(sem_seq, entry);
         true
     }
 
     /// Move the waiting semaphores to acquired if there is enough capacity
-    fn move_waiting_to_acquired(&mut self) -> Vec<(SemaphoreSeq, SemaphoreEntry)> {
+    fn move_waiting_to_acquired(&mut self) -> Vec<(PermitSeq, PermitEntry)> {
         let mut moved = vec![];
 
         loop {
@@ -122,23 +122,23 @@ impl SemaphoreQueue {
         moved
     }
 
-    fn is_acquired(&self, sem_seq: &SemaphoreSeq) -> bool {
+    fn is_acquired(&self, sem_seq: &PermitSeq) -> bool {
         self.acquired.contains_key(sem_seq)
     }
 
-    fn is_capacity_enough(&self, entry: &SemaphoreEntry) -> bool {
-        self.size + entry.value <= self.capacity
+    fn is_capacity_enough(&self, entry: &PermitEntry) -> bool {
+        self.size + entry.permits <= self.capacity
     }
 }
 
 /// Create an acquired event.
-fn acquired(seq: SemaphoreSeq, entry: SemaphoreEntry) -> SemaphoreEvent {
+fn acquired(seq: PermitSeq, entry: PermitEntry) -> SemaphoreEvent {
     SemaphoreEvent::new_acquired(seq, entry)
 }
 
 /// Create a removed event.
 #[allow(dead_code)]
-fn removed(seq: SemaphoreSeq, entry: SemaphoreEntry) -> SemaphoreEvent {
+fn removed(seq: PermitSeq, entry: PermitEntry) -> SemaphoreEvent {
     SemaphoreEvent::new_removed(seq, entry)
 }
 
@@ -149,7 +149,7 @@ mod tests {
     use crate::queue::semaphore_queue::acquired;
     use crate::queue::semaphore_queue::removed;
     use crate::queue::*;
-    use crate::SemaphoreEntry;
+    use crate::PermitEntry;
 
     #[test]
     fn test_insert() {
@@ -504,7 +504,7 @@ mod tests {
     }
 
     /// Create an entry with a given id and value.
-    fn ent(id: impl ToString, value: u64) -> SemaphoreEntry {
-        SemaphoreEntry::new(id.to_string(), value)
+    fn ent(id: impl ToString, value: u64) -> PermitEntry {
+        PermitEntry::new(id.to_string(), value)
     }
 }
