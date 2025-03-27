@@ -66,6 +66,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
             }
         }
         ScalarExpr::ConstantExpr(constant) => constant.value.to_string(),
+        ScalarExpr::TypedConstantExpr(constant, _) => constant.value.to_string(),
         ScalarExpr::WindowFunction(win) => win.display_name.clone(),
         ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
         ScalarExpr::LambdaFunction(lambda) => {

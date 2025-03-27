@@ -93,7 +93,11 @@ pub fn cast_scalar(
     let raw_expr = RawExpr::Cast {
         span,
         is_try: false,
-        expr: Box::new(RawExpr::Constant { span, scalar }),
+        expr: Box::new(RawExpr::Constant {
+            span,
+            scalar,
+            data_type: None,
+        }),
         dest_type,
     };
     let expr = crate::type_check::check(&raw_expr, fn_registry)?;

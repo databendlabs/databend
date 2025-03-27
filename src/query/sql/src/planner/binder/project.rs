@@ -135,7 +135,7 @@ impl Binder {
                 ..
             }) = item.scalar.clone()
             {
-                if typ == SubqueryType::Any || typ == SubqueryType::Exists {
+                if typ == SubqueryType::Any {
                     ScalarExpr::SubqueryExpr(SubqueryExpr {
                         span,
                         typ,

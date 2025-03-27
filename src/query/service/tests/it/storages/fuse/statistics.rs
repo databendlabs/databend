@@ -390,6 +390,7 @@ async fn test_ft_cluster_stats_with_stats() -> databend_common_exception::Result
             RawExpr::Constant {
                 span: None,
                 scalar: Scalar::Number(NumberScalar::UInt64(1)),
+                data_type: None,
             },
         ],
     };

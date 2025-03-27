@@ -605,7 +605,7 @@ select * from numbers(5) where exists(select * from numbers(1)) order by number
 
 query IIT
 select *,
-(select ship from o where o.o_id = t2.o_id and o.ship != 'WA') ship 
+(select ship from o where o.o_id = t2.o_id and o.ship != 'WA') ship
 from (select min(o_id) o_id, count from (select count(*) count, max(o_id) o_id from o group by c_id) t group by count) t2
 order by o_id limit 2;
 ----
@@ -794,18 +794,18 @@ drop table t4
 
 # https://github.com/datafuselabs/databend/pull/14353
 statement ok
-CREATE TABLE property_records (
+CREATE OR REPLACE TABLE property_records (
   owner_id VARCHAR NULL,
   property_id VARCHAR NULL
 ) ;
 
 statement ok
-CREATE TABLE mortgage_records (
+CREATE OR REPLACE TABLE mortgage_records (
   property_id VARCHAR NULL
 ) ;
 
 statement ok
-CREATE TABLE transaction_history (
+CREATE OR REPLACE TABLE transaction_history (
   owner_id VARCHAR NULL,
   property_id VARCHAR NULL
 ) ;
@@ -897,7 +897,7 @@ create or replace TABLE `merge_log` (
   `created_at` TIMESTAMP NULL
 ) ENGINE = FUSE;
 
-query 
+query
 SELECT
   (SELECT MAX(created_at)
    FROM merge_log
@@ -994,16 +994,16 @@ SELECT * FROM (
 ) AS salaries(employee_id, salary);
 
 query II
-SELECT 
-    e.employee_id, 
+SELECT
+    e.employee_id,
     d.department_name
-FROM 
+FROM
     employees e
-INNER JOIN 
-    departments d 
-ON 
+INNER JOIN
+    departments d
+ON
     e.employee_id = d.manager_id
-WHERE 
+WHERE
     e.salary > ANY (
         SELECT salary
         FROM salaries
@@ -1015,16 +1015,16 @@ ORDER BY employee_id;
 3 3
 
 query II
-SELECT 
-    e.employee_id, 
+SELECT
+    e.employee_id,
     d.department_name
-FROM 
+FROM
     employees e
-INNER JOIN 
-    departments d 
-ON 
+INNER JOIN
+    departments d
+ON
     e.employee_id = d.manager_id
-WHERE 
+WHERE
     e.salary <= ALL (
         SELECT salary
         FROM salaries
@@ -1110,13 +1110,13 @@ from (
 
 query II
 select t.n, t.m + x as result
-from 
+from
     (select * from (values (100)) const_table(x)),
     (
         select t1.n, t2.m
         from tab1 t1
         join tab2 t2 on t1.n = t2.n
-    ) t 
+    ) t
 where t.m = any (select t2.m from tab2 t2 where t2.n = t.n)
 order by result;
 ----
@@ -1138,7 +1138,7 @@ from (
     group by n
 ) t
 where t.total_m = any (
-    select sum(m)+20 from tab2 
+    select sum(m)+20 from tab2
     where tab2.n = t.n and m <= t.total_m / 2
 );
 ----

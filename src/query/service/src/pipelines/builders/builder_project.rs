@@ -41,7 +41,6 @@ impl PipelineBuilder {
         }
 
         let mut projections = Vec::with_capacity(result_columns.len());
-
         for column_binding in result_columns {
             let index = column_binding.index;
             projections.push(input_schema.index_of(index.to_string().as_str())?);
