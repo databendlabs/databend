@@ -33,6 +33,7 @@ use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
+use databend_storages_common_table_meta::meta::column_oriented_segment::LOCATION;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -716,6 +717,9 @@ impl FuseTable {
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
+        let mut projection = HashSet::new();
+        projection.insert(LOCATION.to_string());
+        projection.insert(BLOOM_FILTER_INDEX_LOCATION.to_string());
         for chunk in segment_locations.chunks(chunk_size) {
             let results = match self.is_column_oriented() {
                 true => {
@@ -723,7 +727,7 @@ impl FuseTable {
                         .generic_read_compact_segments::<ColumnOrientedSegmentReader>(
                             chunk,
                             put_cache,
-                            vec![],
+                            &projection,
                         )
                         .await?;
                     let mut results = Vec::new();
@@ -743,7 +747,7 @@ impl FuseTable {
                         .generic_read_compact_segments::<RowOrientedSegmentReader>(
                             chunk,
                             put_cache,
-                            vec![],
+                            &projection,
                         )
                         .await?;
                     let mut results = Vec::new();

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
@@ -120,10 +121,11 @@ impl FuseColumn {
         let schema = tbl.schema();
         let leaf_fields = schema.leaf_fields();
         let col_ids = schema.to_leaf_column_id_set();
+        let projection = HashSet::new();
 
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .generic_read_compact_segments::<R>(chunk, true, schema.to_leaf_column_ids())
+                .generic_read_compact_segments::<R>(chunk, true, &projection)
                 .await?;
             for segment in segments {
                 let segment = segment?;

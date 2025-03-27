@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -209,7 +210,6 @@ async fn set_segment_format(
         return Ok(None);
     }
     let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
-    let column_ids = fuse_table.schema().to_leaf_column_ids();
     let mut new_segment_locations = Vec::with_capacity(segment_locations.len());
     let block_per_segment = fuse_table.get_block_thresholds().block_per_segment;
     let table_meta_timestamps =
@@ -222,12 +222,13 @@ async fn set_segment_format(
             FuseSegmentFormat::Column => {
                 let mut segment_builder =
                     ColumnOrientedSegmentBuilder::new(table.schema().clone(), block_per_segment);
+                let segment_schema = segment_builder.segment_schema();
+                let mut projection = HashSet::new();
+                for field in segment_schema.fields().iter() {
+                    projection.insert(field.name.clone());
+                }
                 let segments = segments_io
-                    .generic_read_segments::<RowOrientedSegmentReader>(
-                        chunk,
-                        false,
-                        column_ids.clone(),
-                    )
+                    .generic_read_segments::<RowOrientedSegmentReader>(chunk, false, &projection)
                     .await?;
                 for segment in segments {
                     let segment = segment?;

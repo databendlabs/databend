@@ -122,15 +122,16 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
         let mut is_end = false;
         let mut parts = Vec::new();
         let chunk_size = max_threads * 4;
-        let column_ids = self
-            .compact_params
-            .base_snapshot
-            .schema
-            .to_leaf_column_ids();
+        // let column_ids = self
+        //     .compact_params
+        //     .base_snapshot
+        //     .schema
+        //     .to_leaf_column_ids();
+        let projection = HashSet::new();
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
             let mut segment_infos = segments_io
-                .generic_read_compact_segments::<R>(chunk, false, column_ids.clone())
+                .generic_read_compact_segments::<R>(chunk, false, &projection)
                 .await?
                 .into_iter()
                 .map(|sg| {

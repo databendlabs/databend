@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -207,7 +208,7 @@ pub struct SegmentCompactor<'a, R: SegmentReader> {
     // accumulated compaction state
     compacted_state: SegmentCompactionState,
     _marker: std::marker::PhantomData<R>,
-    column_ids: Vec<ColumnId>,
+    _column_ids: Vec<ColumnId>,
     is_column_oriented: bool,
 }
 
@@ -233,7 +234,7 @@ impl<'a, R: SegmentReader> SegmentCompactor<'a, R> {
             location_generator,
             compacted_state: Default::default(),
             _marker: std::marker::PhantomData,
-            column_ids,
+            _column_ids: column_ids,
             is_column_oriented,
         }
     }
@@ -255,9 +256,10 @@ impl<'a, R: SegmentReader> SegmentCompactor<'a, R> {
         let chunk_size = self.chunk_size;
         let mut checked_end_at = 0;
         let mut is_end = false;
+        let projection = HashSet::new();
         for chunk in reverse_locations.chunks(chunk_size) {
             let mut segment_infos = segments_io
-                .generic_read_segments::<R>(chunk, false, self.column_ids.clone())
+                .generic_read_segments::<R>(chunk, false, &projection)
                 .await?
                 .into_iter()
                 .zip(chunk.iter())

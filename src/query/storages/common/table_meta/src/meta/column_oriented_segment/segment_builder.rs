@@ -79,6 +79,12 @@ pub struct ColumnOrientedSegmentBuilder {
     block_per_segment: usize,
 }
 
+impl ColumnOrientedSegmentBuilder {
+    pub fn segment_schema(&self) -> TableSchemaRef {
+        self.table_schema.clone()
+    }
+}
+
 struct ColStatBuilder {
     min: ColumnBuilder,
     max: ColumnBuilder,

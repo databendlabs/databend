@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -122,7 +122,7 @@ impl SegmentsIO {
         &self,
         segment_locations: &[Location],
         put_cache: bool,
-        column_ids: Vec<ColumnId>,
+        projection: &HashSet<String>,
     ) -> Result<Vec<Result<Arc<R::CompactSegment>>>> {
         let mut iter = segment_locations.iter();
         let tasks = std::iter::from_fn(|| {
@@ -130,12 +130,12 @@ impl SegmentsIO {
                 let dal = self.operator.clone();
                 let table_schema = self.schema.clone();
                 let segment_location = location.clone();
-                let column_ids = column_ids.clone();
+                let projection = projection.clone();
                 async move {
                     let segment = R::read_compact_segment(
                         dal,
                         segment_location,
-                        column_ids,
+                        &projection,
                         table_schema,
                         put_cache,
                     )
@@ -163,7 +163,7 @@ impl SegmentsIO {
         &self,
         segment_locations: &[Location],
         put_cache: bool,
-        column_ids: Vec<ColumnId>,
+        projection: &HashSet<String>,
     ) -> Result<Vec<Result<R::Segment>>> {
         let mut iter = segment_locations.iter();
         let tasks = std::iter::from_fn(|| {
@@ -171,11 +171,16 @@ impl SegmentsIO {
                 let dal = self.operator.clone();
                 let table_schema = self.schema.clone();
                 let segment_location = location.clone();
-                let column_ids = column_ids.clone();
+                let projection = projection.clone();
                 async move {
-                    let segment =
-                        R::read_segment(dal, segment_location, column_ids, table_schema, put_cache)
-                            .await?;
+                    let segment = R::read_segment(
+                        dal,
+                        segment_location,
+                        &projection,
+                        table_schema,
+                        put_cache,
+                    )
+                    .await?;
                     Ok(segment)
                 }
                 .in_span(Span::enter_with_local_parent(func_path!()))

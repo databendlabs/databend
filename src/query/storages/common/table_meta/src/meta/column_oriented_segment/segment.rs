@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::usize;
 
 use arrow::datatypes::Schema;
 use bytes::Bytes;
@@ -43,8 +42,6 @@ use super::COMPRESSION;
 use super::FILE_SIZE;
 use super::LOCATION_PATH;
 use super::ROW_COUNT;
-use crate::meta::column_oriented_segment::schema::META_PREFIX;
-use crate::meta::column_oriented_segment::schema::STAT_PREFIX;
 use crate::meta::column_oriented_segment::LOCATION;
 use crate::meta::format::compress;
 use crate::meta::format::decode;
@@ -116,6 +113,10 @@ pub struct ColumnOrientedSegment {
 }
 
 impl ColumnOrientedSegment {
+    pub fn contains_col(&self, col_name: &str) -> bool {
+        self.segment_schema.column_with_name(col_name).is_some()
+    }
+
     pub fn stat_col(&self, col_id: u32) -> Option<Column> {
         let stat_name = stat_name(col_id);
         self.col_by_name(&[&stat_name])
@@ -301,11 +302,21 @@ impl AbstractSegment for ColumnOrientedSegment {
     }
 }
 
-// TODO(Sky):project with column_name instead of column_id
+/// Deserialize a column-oriented segment from bytes.
+///
+/// # Arguments
+///
+/// * `data`: The bytes of the segment.
+/// * `projection`: The names of the columns to be deserialized.
+/// * `need_summary`: Whether to need deserialize the summary of the segment.
+///
+/// # Returns
+///
+/// A tuple containing the deserialized data block, the schema of the segment, and the summary of the segment.
 pub fn deserialize_column_oriented_segment(
     data: Bytes,
-    column_ids: &[ColumnId],
-    only_need_cols: bool,
+    projection: &HashSet<String>,
+    need_summary: bool,
 ) -> Result<(DataBlock, TableSchema, Option<Statistics>)> {
     const FOOTER_SIZE: usize = 18;
 
@@ -322,17 +333,7 @@ pub fn deserialize_column_oriented_segment(
     let schema = metadata.file_metadata().schema_descr_ptr();
     let mut mask = Vec::new();
     for (index, field) in schema.root_schema().get_fields().iter().enumerate() {
-        if field.name().starts_with(STAT_PREFIX) {
-            let col_id = field.name()[STAT_PREFIX.len()..].parse::<u32>()?;
-            if column_ids.contains(&col_id) {
-                mask.push(index);
-            }
-        } else if field.name().starts_with(META_PREFIX) {
-            let col_id = field.name()[META_PREFIX.len()..].parse::<u32>()?;
-            if column_ids.contains(&col_id) {
-                mask.push(index);
-            }
-        } else if !only_need_cols {
+        if projection.contains(field.name()) {
             mask.push(index);
         }
     }
@@ -347,7 +348,7 @@ pub fn deserialize_column_oriented_segment(
     assert!(record_reader.next().is_none());
 
     // 3. deserialize summary
-    let summary = if only_need_cols {
+    let summary = if !need_summary {
         None
     } else {
         // TODO(Sky): Avoid extra copy.

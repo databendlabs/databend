@@ -78,7 +78,7 @@ async fn apply_snapshot_pruning(
     let fuse_pruner = Arc::new(FusePruner::create(
         &ctx,
         op,
-        schema,
+        schema.clone(),
         push_down,
         bloom_index_cols,
         None,
@@ -95,6 +95,7 @@ async fn apply_snapshot_pruning(
         segment_rx,
         res_tx,
         cache_key,
+        schema.clone(),
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {

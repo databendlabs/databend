@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
@@ -53,16 +53,16 @@ pub trait SegmentReader: Send + Sync + 'static {
     async fn read_compact_segment_through_cache(
         dal: Operator,
         location: Location,
-        column_ids: Vec<ColumnId>,
+        projection: &HashSet<String>,
         table_schema: TableSchemaRef,
     ) -> Result<Arc<Self::CompactSegment>> {
-        Self::read_compact_segment(dal, location, column_ids, table_schema, true).await
+        Self::read_compact_segment(dal, location, projection, table_schema, true).await
     }
 
     async fn read_compact_segment(
         dal: Operator,
         location: Location,
-        column_ids: Vec<ColumnId>,
+        projection: &HashSet<String>,
         table_schema: TableSchemaRef,
         put_cache: bool,
     ) -> Result<Arc<Self::CompactSegment>>;
@@ -70,7 +70,7 @@ pub trait SegmentReader: Send + Sync + 'static {
     async fn read_segment(
         dal: Operator,
         location: Location,
-        column_ids: Vec<ColumnId>,
+        projection: &HashSet<String>,
         table_schema: TableSchemaRef,
         put_cache: bool,
     ) -> Result<Self::Segment>;
@@ -89,7 +89,7 @@ impl SegmentReader for RowOrientedSegmentReader {
     async fn read_compact_segment(
         dal: Operator,
         location: Location,
-        _column_ids: Vec<ColumnId>,
+        _projection: &HashSet<String>,
         table_schema: TableSchemaRef,
         put_cache: bool,
     ) -> Result<Arc<Self::CompactSegment>> {
@@ -99,12 +99,12 @@ impl SegmentReader for RowOrientedSegmentReader {
     async fn read_segment(
         dal: Operator,
         location: Location,
-        column_ids: Vec<ColumnId>,
+        projection: &HashSet<String>,
         table_schema: TableSchemaRef,
         put_cache: bool,
     ) -> Result<Self::Segment> {
         let segment =
-            Self::read_compact_segment(dal, location, column_ids, table_schema, put_cache).await?;
+            Self::read_compact_segment(dal, location, projection, table_schema, put_cache).await?;
         Ok(segment.try_into()?)
     }
 }
@@ -122,11 +122,11 @@ impl SegmentReader for ColumnOrientedSegmentReader {
     async fn read_compact_segment(
         dal: Operator,
         location: Location,
-        column_ids: Vec<ColumnId>,
+        projection: &HashSet<String>,
         _table_schema: TableSchemaRef,
         put_cache: bool,
     ) -> Result<Arc<Self::CompactSegment>> {
-        read_column_oriented_segment(dal, &location.0, column_ids, put_cache)
+        read_column_oriented_segment(dal, &location.0, projection, put_cache)
             .await
             .map(Arc::new)
     }
@@ -134,29 +134,45 @@ impl SegmentReader for ColumnOrientedSegmentReader {
     async fn read_segment(
         dal: Operator,
         location: Location,
-        column_ids: Vec<ColumnId>,
+        projection: &HashSet<String>,
         _table_schema: TableSchemaRef,
         put_cache: bool,
     ) -> Result<Self::Segment> {
-        read_column_oriented_segment(dal, &location.0, column_ids, put_cache).await
+        read_column_oriented_segment(dal, &location.0, projection, put_cache).await
     }
 }
 
-// TODO(Sky): support projection for block level meta(like block location), for example: in compact segment, only block location is needed.
+/// Read a column-oriented segment from the storage or cache.
+///
+/// If the segment is already in cache, we'll check if all requested columns are available.
+/// If some columns are missing, we'll read only those missing columns from storage and merge them
+/// with the cached segment data to avoid reading the entire segment again.
+///
+/// # Arguments
+///
+/// * `dal`: The operator to read the segment from the storage.
+/// * `location`: The location of the segment.
+/// * `projection`: The names of the columns to be read.
+/// * `put_cache`: Whether to put the segment into the cache.
+///
+/// # Returns
+///
+/// A column-oriented segment.
 pub async fn read_column_oriented_segment(
     dal: Operator,
     location: &str,
-    column_ids: Vec<ColumnId>,
+    projection: &HashSet<String>,
     put_cache: bool,
 ) -> Result<ColumnOrientedSegment> {
     let cache = CacheManager::instance().get_column_oriented_segment_info_cache();
     let cached_segment = cache.get(location);
+    let need_summary = cached_segment.is_none();
     match cached_segment {
         Some(segment) => {
-            let mut missed_cols = Vec::new();
-            for col_id in column_ids {
-                if segment.stat_col(col_id).is_none() {
-                    missed_cols.push(col_id);
+            let mut missed_cols = HashSet::new();
+            for col_name in projection {
+                if !segment.contains_col(col_name) {
+                    missed_cols.insert(col_name.clone());
                 }
             }
             if missed_cols.is_empty() {
@@ -164,7 +180,7 @@ pub async fn read_column_oriented_segment(
             }
             let reader = bytes_reader(&dal, location, None).await?;
             let (block_metas, schema, _) =
-                deserialize_column_oriented_segment(reader.to_bytes(), &missed_cols, true)?;
+                deserialize_column_oriented_segment(reader.to_bytes(), &missed_cols, need_summary)?;
 
             let mut merged_block_metas = segment.block_metas.clone();
             merged_block_metas.merge_block(block_metas);
@@ -184,7 +200,7 @@ pub async fn read_column_oriented_segment(
         None => {
             let reader = bytes_reader(&dal, location, None).await?;
             let (block_metas, segment_schema, summary) =
-                deserialize_column_oriented_segment(reader.to_bytes(), &column_ids, false)?;
+                deserialize_column_oriented_segment(reader.to_bytes(), projection, need_summary)?;
             let segment = ColumnOrientedSegment {
                 block_metas,
                 summary: summary.unwrap(),
