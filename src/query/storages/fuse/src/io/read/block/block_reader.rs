@@ -30,7 +30,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_native::read::NativeColumnsReader;
-use databend_common_sql::field_default_value;
+use databend_common_sql::DefaultExprBinder;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use opendal::Operator;
@@ -100,9 +100,9 @@ impl BlockReader {
                 let projected_schema = TableSchemaRef::new(schema.project(indices));
                 // If projection by Columns, just calc default values by projected fields.
                 let mut default_vals = Vec::with_capacity(projected_schema.fields().len());
+                let mut default_exprs_binder = DefaultExprBinder::try_new(ctx.clone())?;
                 for field in projected_schema.fields() {
-                    let default_val = field_default_value(ctx.clone(), field)?;
-                    default_vals.push(default_val);
+                    default_vals.push(default_exprs_binder.get_scalar(field)?);
                 }
 
                 (projected_schema, default_vals)
@@ -110,10 +110,11 @@ impl BlockReader {
             Projection::InnerColumns(ref path_indices) => {
                 let projected_schema = TableSchemaRef::new(schema.inner_project(path_indices));
                 let mut field_default_vals = Vec::with_capacity(schema.fields().len());
+                let mut default_exprs_binder = DefaultExprBinder::try_new(ctx.clone())?;
 
                 // If projection by InnerColumns, first calc default value of all schema fields.
                 for field in schema.fields() {
-                    field_default_vals.push(field_default_value(ctx.clone(), field)?);
+                    field_default_vals.push(default_exprs_binder.get_scalar(field)?);
                 }
 
                 // Then calc project scalars by path_indices

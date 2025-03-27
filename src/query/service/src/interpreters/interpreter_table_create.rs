@@ -40,8 +40,8 @@ use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
+use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_users::RoleCacheManager;
@@ -374,7 +374,7 @@ impl CreateTableInterpreter {
         let fields = self.plan.schema.fields().clone();
         for field in fields.iter() {
             if field.default_expr().is_some() {
-                let _ = field_default_value(self.ctx.clone(), field)?;
+                let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
             }
             is_valid_column(field.name())?;
         }

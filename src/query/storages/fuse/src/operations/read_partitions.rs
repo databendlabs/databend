@@ -39,7 +39,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_sql::field_default_value;
+use databend_common_sql::DefaultExprBinder;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
@@ -422,7 +422,11 @@ impl FuseTable {
             .as_ref()
             .filter(|_| self.is_native()) // Only native format supports topk push down.
             .and_then(|p| p.top_k(self.schema().as_ref()))
-            .map(|topk| field_default_value(ctx.clone(), &topk.field).map(|d| (topk, d)))
+            .map(|topk| {
+                DefaultExprBinder::try_new(ctx.clone())?
+                    .get_scalar(&topk.field)
+                    .map(|d| (topk, d))
+            })
             .transpose()?;
 
         let limit = push_down
@@ -552,7 +556,11 @@ impl FuseTable {
             .as_ref()
             .filter(|_| self.is_native()) // Only native format supports topk push down.
             .and_then(|p| p.top_k(self.schema().as_ref()))
-            .map(|topk| field_default_value(ctx.clone(), &topk.field).map(|d| (topk, d)))
+            .map(|topk| {
+                DefaultExprBinder::try_new(ctx.clone())?
+                    .get_scalar(&topk.field)
+                    .map(|d| (topk, d))
+            })
             .transpose()?;
 
         let (mut statistics, parts) =

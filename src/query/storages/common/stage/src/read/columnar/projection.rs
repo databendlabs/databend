@@ -18,7 +18,7 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Expr;
-use databend_common_expression::RemoteExpr;
+use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -37,7 +37,7 @@ pub fn project_columnar(
     input_schema: &TableSchemaRef,
     output_schema: &TableSchemaRef,
     missing_as: &NullAs,
-    default_values: &Option<Vec<RemoteExpr>>,
+    default_exprs: &Option<Vec<RemoteDefaultExpr>>,
     location: &str,
     case_sensitive: bool,
     fmt: StageFileFormatType,
@@ -187,10 +187,15 @@ pub fn project_columnar(
                         }
                     }
                     NullAs::FieldDefault => {
-                        let default_values = &default_values.as_deref().expect(
+                        let default_exprs = &default_exprs.as_deref().expect(
                             "default_values should not be none when miss_field_as=FIELD_DEFAULT",
                         );
-                        default_values[i].as_expr(&BUILTIN_FUNCTIONS)
+                        match &default_exprs[i] {
+                            RemoteDefaultExpr::RemoteExpr(expr) => expr.as_expr(&BUILTIN_FUNCTIONS),
+                            RemoteDefaultExpr::Sequence(_) => {
+                                return Err(ErrorCode::BadDataValueType("not supported yet: fill missing column with sequence as default"));
+                            }
+                        }
                     }
                 }
             }
