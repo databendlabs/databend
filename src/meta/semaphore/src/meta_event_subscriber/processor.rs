@@ -109,6 +109,7 @@ impl Processor {
     /// - `value_after` is the current state of the entry (if it exists)
     ///
     /// Returns `None` if the watch response contains no events.
+    #[allow(clippy::type_complexity)]
     fn decode_watch_response(
         watch_response: WatchResponse,
         ctx: &str,
@@ -128,7 +129,7 @@ impl Processor {
         let sem_key = PermitKey::parse_key(&sem_key).map_err(|x| {
             ConnectionClosed::new_io_error(x)
                 .context(format!("parse semaphore key: {}", sem_key))
-                .context(&ctx)
+                .context(ctx)
         })?;
 
         let prev = Self::decode_option_seqv(prev)

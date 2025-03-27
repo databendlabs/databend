@@ -50,6 +50,7 @@ impl SemaphoreQueue {
     /// new entry enters acquired queue if:
     /// - there is enough capacity;
     /// - `waiting` queue is empty.
+    ///
     /// Otherwise, it will be added to the waiting queue.
     pub fn insert(&mut self, sem_seq: PermitSeq, entry: PermitEntry) -> Vec<SemaphoreEvent> {
         self.waiting.insert(sem_seq, entry);
