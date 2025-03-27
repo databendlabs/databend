@@ -51,8 +51,6 @@ pub enum Feature {
     Test,
     #[serde(alias = "virtual_column", alias = "VIRTUAL_COLUMN")]
     VirtualColumn,
-    #[serde(alias = "background_service", alias = "BACKGROUND_SERVICE")]
-    BackgroundService,
     #[serde(alias = "data_mask", alias = "DATA_MASK")]
     DataMask,
     #[serde(alias = "aggregate_index", alias = "AGGREGATE_INDEX")]
@@ -88,7 +86,6 @@ impl fmt::Display for Feature {
             Feature::Vacuum => write!(f, "vacuum"),
             Feature::Test => write!(f, "test"),
             Feature::VirtualColumn => write!(f, "virtual_column"),
-            Feature::BackgroundService => write!(f, "background_service"),
             Feature::DataMask => write!(f, "data_mask"),
             Feature::AggregateIndex => write!(f, "aggregate_index"),
             Feature::InvertedIndex => write!(f, "inverted_index"),
@@ -167,7 +164,6 @@ impl Feature {
             | (Feature::Vacuum, Feature::Vacuum)
             | (Feature::LicenseInfo, Feature::LicenseInfo)
             | (Feature::Stream, Feature::Stream)
-            | (Feature::BackgroundService, Feature::BackgroundService)
             | (Feature::DataMask, Feature::DataMask)
             | (Feature::InvertedIndex, Feature::InvertedIndex)
             | (Feature::VirtualColumn, Feature::VirtualColumn)
@@ -279,10 +275,6 @@ mod tests {
             serde_json::from_str::<Feature>("\"VIRTUAL_COLUMN\"").unwrap()
         );
         assert_eq!(
-            Feature::BackgroundService,
-            serde_json::from_str::<Feature>("\"BackgroundService\"").unwrap()
-        );
-        assert_eq!(
             Feature::DataMask,
             serde_json::from_str::<Feature>("\"DataMask\"").unwrap()
         );
@@ -363,7 +355,6 @@ mod tests {
                 Feature::Vacuum,
                 Feature::Test,
                 Feature::VirtualColumn,
-                Feature::BackgroundService,
                 Feature::DataMask,
                 Feature::AggregateIndex,
                 Feature::InvertedIndex,
