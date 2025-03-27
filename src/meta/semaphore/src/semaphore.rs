@@ -29,7 +29,7 @@ use crate::errors::AcquireError;
 use crate::errors::ConnectionClosed;
 use crate::meta_event_subscriber::MetaEventSubscriber;
 use crate::meta_event_subscriber::Processor;
-use crate::queue::SemaphoreEvent;
+use crate::queue::PermitEvent;
 
 /// Semaphore implemented on top of the distributed meta-service.
 pub struct Semaphore {
@@ -51,7 +51,7 @@ pub struct Semaphore {
     subscriber_cancel_tx: oneshot::Sender<()>,
 
     /// The receiver to receive semaphore state change event from the subscriber.
-    sem_event_rx: Option<mpsc::Receiver<SemaphoreEvent>>,
+    sem_event_rx: Option<mpsc::Receiver<PermitEvent>>,
 
     /// A process-wide unique identifier for the semaphore. Used for debugging purposes.
     uniq: u64,
@@ -178,7 +178,7 @@ impl Semaphore {
             seq_generator_key: self.seq_generator_key(),
             meta_client: self.meta_client.clone(),
             subscriber_cancel_tx: self.subscriber_cancel_tx,
-            sem_event_rx: self.sem_event_rx.take().unwrap(),
+            permit_event_rx: self.sem_event_rx.take().unwrap(),
             ctx,
         };
 
@@ -188,14 +188,14 @@ impl Semaphore {
     /// Spawns a background task to subscribe to the meta-service key value change events.
     ///
     /// This task monitors changes to semaphore entries in the meta-service and converts
-    /// them into [`SemaphoreEvent`] instances. These events are then sent through a channel
+    /// them into [`PermitEvent`] instances. These events are then sent through a channel
     /// to notify the semaphore instance about acquisitions and releases.
     ///
     /// The subscriber watches a specific key range determined by the semaphore's prefix.
     /// When semaphore permit are created or deleted, appropriate events are generated.
     async fn spawn_meta_event_subscriber(
         &mut self,
-        tx: mpsc::Sender<SemaphoreEvent>,
+        tx: mpsc::Sender<PermitEvent>,
         capacity: u64,
         cancel_rx: oneshot::Receiver<()>,
     ) -> Result<(), ConnectionClosed> {

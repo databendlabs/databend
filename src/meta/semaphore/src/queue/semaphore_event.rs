@@ -18,34 +18,35 @@ use crate::PermitEntry;
 use crate::PermitSeq;
 
 // TODO: consider adding a state `Waiting` when a semaphore enters waiting queue?
-/// The event of a semaphore, acquired or removed(removed after it is acquired or before it is acquired).
+/// The event of a semaphore permit,
+/// acquired or removed(including either removed after it is acquired or before it is acquired).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum SemaphoreEvent {
-    /// Removed not Released, because the semaphore may be removed before it is acquired.
+pub(crate) enum PermitEvent {
+    /// Removed, before or after Released, because the [`PermitEntry`] may be removed before it is acquired.
     Removed((PermitSeq, PermitEntry)),
-    /// The semaphore entry enters the `acquired`.
+    /// The [`PermitEntry`] enters the `acquired` queue.
     Acquired((PermitSeq, PermitEntry)),
 }
 
-impl fmt::Display for SemaphoreEvent {
+impl fmt::Display for PermitEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SemaphoreEvent::Removed((seq, entry)) => {
+            PermitEvent::Removed((seq, entry)) => {
                 write!(f, "Removed({}->{})", seq, entry)
             }
-            SemaphoreEvent::Acquired((seq, entry)) => {
+            PermitEvent::Acquired((seq, entry)) => {
                 write!(f, "Acquired({}->{})", seq, entry)
             }
         }
     }
 }
 
-impl SemaphoreEvent {
+impl PermitEvent {
     pub(crate) fn new_removed(seq: PermitSeq, entry: PermitEntry) -> Self {
-        SemaphoreEvent::Removed((seq, entry))
+        PermitEvent::Removed((seq, entry))
     }
 
     pub(crate) fn new_acquired(seq: PermitSeq, entry: PermitEntry) -> Self {
-        SemaphoreEvent::Acquired((seq, entry))
+        PermitEvent::Acquired((seq, entry))
     }
 }

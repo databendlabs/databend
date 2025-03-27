@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::queue::semaphore_event::SemaphoreEvent;
+use crate::queue::semaphore_event::PermitEvent;
 use crate::PermitEntry;
 use crate::PermitSeq;
 
@@ -52,7 +52,7 @@ impl SemaphoreQueue {
     /// - `waiting` queue is empty.
     ///
     /// Otherwise, it will be added to the waiting queue.
-    pub fn insert(&mut self, sem_seq: PermitSeq, entry: PermitEntry) -> Vec<SemaphoreEvent> {
+    pub fn insert(&mut self, sem_seq: PermitSeq, entry: PermitEntry) -> Vec<PermitEvent> {
         self.waiting.insert(sem_seq, entry);
 
         self.move_waiting_to_acquired()
@@ -67,7 +67,7 @@ impl SemaphoreQueue {
     ///
     /// 1. removed semaphores, containing at most one element, which is previously in the `acquired` or not in the `acquired`.
     /// 2. newly acquired semaphores, containing one or more elements, which are previously in `waiting`.
-    pub fn remove(&mut self, sem_seq: PermitSeq) -> Vec<SemaphoreEvent> {
+    pub fn remove(&mut self, sem_seq: PermitSeq) -> Vec<PermitEvent> {
         let removed = if self.is_acquired(&sem_seq) {
             // Safe unwrap(): it is acquired.
             let entry = self.acquired.remove(&sem_seq).unwrap();
@@ -81,7 +81,7 @@ impl SemaphoreQueue {
             return vec![];
         };
 
-        let removed = vec![SemaphoreEvent::new_removed(sem_seq, removed)];
+        let removed = vec![PermitEvent::new_removed(sem_seq, removed)];
         let acquired = self
             .move_waiting_to_acquired()
             .into_iter()
@@ -133,14 +133,14 @@ impl SemaphoreQueue {
 }
 
 /// Create an acquired event.
-fn acquired(seq: PermitSeq, entry: PermitEntry) -> SemaphoreEvent {
-    SemaphoreEvent::new_acquired(seq, entry)
+fn acquired(seq: PermitSeq, entry: PermitEntry) -> PermitEvent {
+    PermitEvent::new_acquired(seq, entry)
 }
 
 /// Create a removed event.
 #[allow(dead_code)]
-fn removed(seq: PermitSeq, entry: PermitEntry) -> SemaphoreEvent {
-    SemaphoreEvent::new_removed(seq, entry)
+fn removed(seq: PermitSeq, entry: PermitEntry) -> PermitEvent {
+    PermitEvent::new_removed(seq, entry)
 }
 
 #[cfg(test)]
