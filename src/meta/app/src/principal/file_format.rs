@@ -109,7 +109,7 @@ impl FileFormatParams {
             FileFormatParams::NdJson(v) => v.compression,
             FileFormatParams::Json(v) => v.compression,
             FileFormatParams::Xml(v) => v.compression,
-            FileFormatParams::Parquet(_) => StageFileCompression::None,
+            FileFormatParams::Parquet(v) => v.compression,
             FileFormatParams::Orc(_) => StageFileCompression::None,
             FileFormatParams::Avro(_) => StageFileCompression::None,
         }
@@ -153,18 +153,18 @@ impl FileFormatParams {
             StageFileFormatType::Xml => {
                 let default = XmlFileFormatParams::default();
                 let row_tag = reader.take_string(OPT_ROW_TAG, default.row_tag);
-                let compression = reader.take_compression()?;
+                let compression = reader.take_compression_default_none()?;
                 FileFormatParams::Xml(XmlFileFormatParams {
                     compression,
                     row_tag,
                 })
             }
             StageFileFormatType::Json => {
-                let compression = reader.take_compression()?;
+                let compression = reader.take_compression_default_none()?;
                 FileFormatParams::Json(JsonFileFormatParams { compression })
             }
             StageFileFormatType::NdJson => {
-                let compression = reader.take_compression()?;
+                let compression = reader.take_compression_default_none()?;
                 let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
                 let null_field_as = reader.options.remove(NULL_FIELD_AS);
                 let null_if = parse_null_if(reader.options.remove(NULL_IF))?;
@@ -176,7 +176,7 @@ impl FileFormatParams {
                 )?)
             }
             StageFileFormatType::Avro => {
-                let compression = reader.take_compression()?;
+                let compression = reader.take_compression_default_none()?;
                 let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
                 let null_if = parse_null_if(reader.options.remove(NULL_IF))?;
                 FileFormatParams::Avro(AvroFileFormatParams::try_create(
@@ -186,9 +186,11 @@ impl FileFormatParams {
                 )?)
             }
             StageFileFormatType::Parquet => {
+                let compression = reader.take_compression(StageFileCompression::Zstd)?;
                 let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
                 let null_if = parse_null_if(reader.options.remove(NULL_IF))?;
                 FileFormatParams::Parquet(ParquetFileFormatParams::try_create(
+                    compression,
                     missing_field_as.as_deref(),
                     null_if,
                 )?)
@@ -201,7 +203,7 @@ impl FileFormatParams {
             }
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
-                let compression = reader.take_compression()?;
+                let compression = reader.take_compression_default_none()?;
                 let headers = reader.take_u64(OPT_SKIP_HEADER, default.headers)?;
                 let field_delimiter =
                     reader.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
@@ -246,7 +248,7 @@ impl FileFormatParams {
             }
             StageFileFormatType::Tsv => {
                 let default = TsvFileFormatParams::default();
-                let compression = reader.take_compression()?;
+                let compression = reader.take_compression_default_none()?;
                 let headers = reader.take_u64(OPT_SKIP_HEADER, default.headers)?;
                 let field_delimiter =
                     reader.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
@@ -329,6 +331,7 @@ impl FileFormatParams {
 impl Default for FileFormatParams {
     fn default() -> Self {
         FileFormatParams::Parquet(ParquetFileFormatParams {
+            compression: StageFileCompression::Auto,
             missing_field_as: NullAs::Error,
             null_if: vec![],
         })
@@ -384,10 +387,13 @@ impl FileFormatOptionsReader {
         }
     }
 
-    fn take_compression(&mut self) -> Result<StageFileCompression> {
+    fn take_compression_default_none(&mut self) -> Result<StageFileCompression> {
+        self.take_compression(StageFileCompression::None)
+    }
+    fn take_compression(&mut self, default: StageFileCompression) -> Result<StageFileCompression> {
         match self.options.remove("compression") {
             Some(c) => StageFileCompression::from_str(&c).map_err(ErrorCode::IllegalFileFormat),
-            None => Ok(StageFileCompression::None),
+            None => Ok(default),
         }
     }
 
@@ -752,16 +758,41 @@ impl AvroFileFormatParams {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParquetFileFormatParams {
+    // used only for unload
+    pub compression: StageFileCompression,
     pub missing_field_as: NullAs,
     pub null_if: Vec<String>,
 }
 
+impl Default for ParquetFileFormatParams {
+    fn default() -> Self {
+        Self {
+            compression: StageFileCompression::Zstd,
+            missing_field_as: Default::default(),
+            null_if: Default::default(),
+        }
+    }
+}
+
 impl ParquetFileFormatParams {
-    pub fn try_create(missing_field_as: Option<&str>, null_if: Vec<String>) -> Result<Self> {
+    pub fn try_create(
+        compression: StageFileCompression,
+        missing_field_as: Option<&str>,
+        null_if: Vec<String>,
+    ) -> Result<Self> {
+        if !matches!(
+            compression,
+            StageFileCompression::Zstd | StageFileCompression::Snappy
+        ) {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "compression algorithm {compression} not supported, only support Zstd and Snappy."
+            )));
+        }
         let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
         Ok(Self {
+            compression,
             missing_field_as,
             null_if,
         })
