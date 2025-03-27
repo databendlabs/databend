@@ -171,6 +171,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("max_query_memory_usage", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "The maximum memory usage for query. If set to 0, memory usage is unlimited. This setting is the successor/replacement to the older max_memory_usage setting.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("query_out_of_memory_behavior", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("throw")),
+                    desc: "If the query memory limit is exceeded, the system will enforce predefined actions (e.g., throw or spilling).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![String::from("throw"), String::from("spilling")])),
+                }),
                 ("data_retention_time_in_days", DefaultSettingValue {
                     // unit of retention_period is day
                     value: UserSettingValue::UInt64(1),
@@ -344,13 +358,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
-                }),
-                ("join_spilling_bytes_threshold_per_proc", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of memory in bytes that one join processor can use before spilling data to storage during query execution, 0 is unlimited.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_spilling_partition_bits", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
@@ -542,26 +549,12 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("aggregate_spilling_bytes_threshold_per_proc", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of memory in bytes that an aggregator can use before spilling data to storage during query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
                 ("aggregate_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
-                }),
-                ("window_partition_spilling_bytes_threshold_per_proc", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of memory in bytes that a window partitioner can use before spilling data to storage during query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("window_partition_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
@@ -598,13 +591,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of memory in bytes that a sorter can use before spilling data to storage during query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
                 ("sort_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that a sorter can use before spilling data to storage during query execution.",
@@ -618,13 +604,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
-                }),
-                ("enable_experimental_stream_sort_spilling", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Enable experimental stream sort spilling",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
@@ -926,6 +905,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_expand_roles", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable expand roles when execute show grants statement(enable by default).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("create_query_flight_client_with_current_rt", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Turns on (1) or off (0) the use of the current runtime for query operations.",
@@ -1173,7 +1159,7 @@ impl DefaultSettings {
                     range: None,
                 }),
                 ("hilbert_num_range_ids", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1024),
+                    value: UserSettingValue::UInt64(1000),
                     desc: "Specifies the domain of range IDs in Hilbert clustering. A larger value provides finer granularity, but may incur a performance cost.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1185,6 +1171,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("hilbert_clustering_min_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(100 * 1024 * 1024 * 1024),
+                    desc: "Sets the minimum byte size of blocks for Hilbert Clustering.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=3200 * 1024 * 1024 * 1024)),
                 }),
                 ("enable_prune_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
@@ -1200,7 +1193,55 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-
+                ("force_sort_data_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "For testing only. sort data will be forcibly spilled to external storage if enabled",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("force_join_data_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "For testing only. join data will be forcibly spilled to external storage if enabled",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("force_window_data_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "For testing only. window data will be forcibly spilled to external storage if enabled",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("force_aggregate_data_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "For testing only. aggregate data will be forcibly spilled to external storage if enabled",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("error_on_nondeterministic_update", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Whether to return an error when updating a multi-joined row.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_auto_vacuum", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Whether to automatically trigger VACUUM operations on tables (using vacuum2)",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("use_vacuum2_to_purge_transient_table_data", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Experimental flag which indicates if use vacuum2 to purge transient table data",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

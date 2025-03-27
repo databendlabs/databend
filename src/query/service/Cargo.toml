@@ -7,10 +7,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [features]
 default = ["simd"]
 simd = ["databend-common-column/simd"]
@@ -47,7 +43,6 @@ backon = { workspace = true }
 base64 = { workspace = true }
 buf-list = { workspace = true }
 bumpalo = { workspace = true }
-byte-unit = { workspace = true }
 byteorder = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
@@ -73,6 +68,7 @@ databend-common-license = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
+databend-common-meta-app-types = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
@@ -107,6 +103,7 @@ databend-enterprise-aggregating-index = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
+databend-enterprise-hilbert-clustering = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
 databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
@@ -191,6 +188,8 @@ mysql_async = { workspace = true }
 p256 = { workspace = true }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true }
+serde_json.workspace = true
+serde_yaml = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 tower = { workspace = true }

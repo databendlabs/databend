@@ -12,7 +12,115 @@ CONNECTION=(
     "s3.endpoint"='http://127.0.0.1:9000'
 );
 
+statement ok
+use catalog ctl;
+
+query T
+show catalogs where name='ctl';
+----
+ctl
+
 query T
 show databases from ctl;
 ----
 tpch
+
+statement error 1003
+use aa;
+
+statement ok
+create or replace database default.tpch;
+
+statement ok
+create table default.tpch.lineitem(id int);
+
+statement ok
+insert into default.tpch.lineitem values(1);
+
+query T
+select * from default.tpch.lineitem;
+----
+1
+
+query T
+show tables from ctl.tpch;
+----
+customer
+lineitem
+nation
+orders
+part
+partsupp
+region
+supplier
+
+
+## test database
+statement ok
+create database if not exists abc;
+
+statement ok
+create database if not exists ef123;
+
+statement ok
+create or replace database ef123;
+
+statement ok
+create database if not exists ef123;
+
+query T rowsort
+show databases;
+----
+abc
+ef123
+tpch
+
+statement ok
+drop database if exists ef123;
+
+query T rowsort
+show databases from ctl;
+----
+abc
+tpch
+
+statement ok
+create table if not exists abc.t(id int);
+
+query T
+desc abc.t;
+----
+id INT YES NULL (empty)
+
+statement ok
+create or replace table abc.t1(c1 int, c2 string);
+
+statement ok
+create or replace table abc.t1(c1 date, c2 string);
+
+query T
+desc abc.t1;
+----
+c1 DATE YES NULL (empty)
+c2 VARCHAR YES NULL (empty)
+
+query T
+show tables from abc;
+----
+t
+t1
+
+statement ok
+drop table abc.t
+
+statement ok
+drop table abc.t1
+
+statement error
+drop database ef123;
+
+statement ok
+drop database abc;
+
+statement ok
+drop database default.tpch;

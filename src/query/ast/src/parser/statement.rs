@@ -40,6 +40,7 @@ use crate::parser::stream::stream_table;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
+use crate::span::merge_span;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
@@ -78,7 +79,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
-                options: options.as_ref().map_or(vec![], |(_, opts, _)| opts.clone()),
+                options: options
+                    .map(|(a, opts, b)| (merge_span(Some(a.span), Some(b.span)), opts))
+                    .unwrap_or_default(),
                 query: Box::new(statement.stmt),
             })
         },
@@ -123,49 +126,29 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ #task_warehouse_option
-            ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
-            ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
-            ~ ( WHEN ~ #expr )?
-            ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
-            ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
-            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+            ~ #create_task_option*
             ~ #set_table_option?
             ~ AS ~ #task_sql_block
         },
-        |(
-            _,
-            _,
-            opt_if_not_exists,
-            task,
-            warehouse_opts,
-            schedule_opts,
-            after_tasks,
-            when_conditions,
-            suspend_opt,
-            error_integration,
-            comment_opt,
-            session_opts,
-            _,
-            sql,
-        )| {
+        |(_, _, opt_if_not_exists, task, create_task_opts, session_opts, _, sql)| {
             let session_opts = session_opts.unwrap_or_default();
-            Statement::CreateTask(CreateTaskStmt {
+            let mut stmt = CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
-                warehouse_opts,
-                schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
-                suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
-                comments: comment_opt.map(|(_, _, comment)| comment),
-                after: match after_tasks {
-                    Some((_, tasks)) => tasks,
-                    None => Vec::new(),
-                },
-                error_integration: error_integration.map(|(_, _, name)| name.to_string()),
-                when_condition: when_conditions.map(|(_, cond)| cond),
+                warehouse: None,
+                schedule_opts: None,
+                suspend_task_after_num_failures: None,
+                comments: None,
+                after: vec![],
+                error_integration: None,
+                when_condition: None,
                 sql,
                 session_parameters: session_opts,
-            })
+            };
+            for opt in create_task_opts {
+                stmt.apply_opt(opt);
+            }
+            Statement::CreateTask(stmt)
         },
     );
 
@@ -314,7 +297,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, show_options)| Statement::ShowVariables { show_options },
     );
-    let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
+    let show_stages = map(
+        rule! {
+            SHOW ~ STAGES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowStages { show_options },
+    );
     let show_process_list = map(
         rule! {
             SHOW ~ PROCESSLIST ~ #show_options?
@@ -823,13 +811,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_create_table = map(
         rule! {
-            SHOW ~ CREATE ~ TABLE ~ #dot_separated_idents_1_to_3
+            SHOW ~ CREATE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ ( WITH ~ ^QUOTED_IDENTIFIERS )?
         },
-        |(_, _, _, (catalog, database, table))| {
+        |(_, _, _, (catalog, database, table), comment_opt)| {
             Statement::ShowCreateTable(ShowCreateTableStmt {
                 catalog,
                 database,
                 table,
+                with_quoted_ident: comment_opt.is_some(),
             })
         },
     );
@@ -1520,7 +1509,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
+    let show_users = map(
+        rule! {
+            SHOW ~ USERS ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowUsers { show_options },
+    );
+
     let describe_user = map(
         rule! {
             ( DESC | DESCRIBE ) ~ USER ~ ^#user_identity
@@ -1588,7 +1583,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             user,
         },
     );
-    let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
+    let show_roles = map(
+        rule! {
+            SHOW ~ ROLES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowRoles { show_options },
+    );
     let create_role = map(
         rule! {
             CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
@@ -3189,11 +3189,33 @@ pub fn create_def(i: Input) -> IResult<CreateDefinition> {
 }
 
 pub fn role_name(i: Input) -> IResult<String> {
-    let role_ident = map(
+    let role_ident = map_res(
         rule! {
             #ident
         },
-        |role_name| role_name.name,
+        |role_name| {
+            let name = role_name.name;
+            let mut chars = name.chars();
+            while let Some(c) = chars.next() {
+                match c {
+                    '\\' => match chars.next() {
+                        Some('f') | Some('b') => {
+                            return Err(nom::Err::Failure(ErrorKind::Other(
+                                "' or \" or \\f or \\b are not allowed in role name",
+                            )));
+                        }
+                        _ => {}
+                    },
+                    '\'' | '"' => {
+                        return Err(nom::Err::Failure(ErrorKind::Other(
+                            "' or \" or \\f or \\b are not allowed in role name",
+                        )));
+                    }
+                    _ => {}
+                }
+            }
+            Ok(name)
+        },
     );
     let role_lit = map(
         rule! {
@@ -3305,6 +3327,10 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             UserPrivilegeType::CreateDatabase,
             rule! { CREATE ~ DATABASE },
         ),
+        value(
+            UserPrivilegeType::CreateWarehouse,
+            rule! { CREATE ~ WAREHOUSE },
+        ),
         value(UserPrivilegeType::DropUser, rule! { DROP ~ USER }),
         value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
         value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE }),
@@ -3364,11 +3390,16 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         GrantObjectName::UDF(udf_name.to_string())
     });
 
+    let warehouse = map(rule! { WAREHOUSE ~ #ident}, |(_, w)| {
+        GrantObjectName::Warehouse(w.to_string())
+    });
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
         | #stage : "STAGE <stage_name>"
         | #udf : "UDF <udf_name>"
+        | #warehouse : "WAREHOUSE <warehouse_name>"
     )(i)
 }
 
@@ -3444,7 +3475,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     // "*": as current db or "table" with current db
     let db = map(
         rule! {
-            ( #ident ~ "." )? ~ "*"
+            ( #grant_ident ~ "." )? ~ "*"
         },
         |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
     );
@@ -3452,7 +3483,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
     let table = map(
         rule! {
-            ( #ident ~ "." )? ~ #parameter_to_string
+            ( #grant_ident ~ "." )? ~ #parameter_to_grant_string
         },
         |(database, table)| {
             AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
@@ -3463,25 +3494,28 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     enum Object {
         Stage,
         Udf,
+        Warehouse,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
         value(Object::Stage, rule! { STAGE }),
+        value(Object::Warehouse, rule! { WAREHOUSE }),
     ));
 
     // Object object_name
     let object = map(
-        rule! { #object ~ #ident},
+        rule! { #object ~ #grant_ident },
         |(object, object_name)| match object {
             Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
             Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
+            Object::Warehouse => AccountMgrLevel::Warehouse(object_name.to_string()),
         },
     );
 
     rule!(
         #db : "<database>.*"
         | #table : "<database>.<table>"
-        | #object : "STAGE | UDF <object_name>"
+        | #object : "STAGE | UDF | WAREHOUSE <object_name>"
     )(i)
 }
 
@@ -4041,30 +4075,22 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     let set = map(
         rule! {
              SET
-             ~ ( WAREHOUSE  ~ ^"=" ~ ^#literal_string )?
-             ~ ( SCHEDULE ~ ^"=" ~ ^#task_schedule_option )?
-             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ ^"=" ~ ^#literal_u64 )?
-             ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
-             ~ ( ERROR_INTEGRATION  ~ ^"=" ~ ^#literal_string )?
+             ~ #alter_task_set_option*
              ~ #set_table_option?
         },
-        |(
-            _,
-            warehouse_opts,
-            schedule_opts,
-            suspend_opts,
-            comment,
-            err_integration,
-            session_opts,
-        )| {
-            AlterTaskOptions::Set {
-                warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
-                schedule: schedule_opts.map(|(_, _, schedule)| schedule),
-                suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
-                comments: comment.map(|(_, _, comment)| comment),
-                error_integration: err_integration.map(|(_, _, integration)| integration),
+        |(_, task_set_options, session_opts)| {
+            let mut set = AlterTaskOptions::Set {
                 session_parameters: session_opts,
+                warehouse: None,
+                schedule: None,
+                suspend_task_after_num_failures: None,
+                comments: None,
+                error_integration: None,
+            };
+            for opt in task_set_options {
+                set.apply_opt(opt);
             }
+            set
         },
     );
     let unset = map(
@@ -4783,14 +4809,117 @@ pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
 pub fn explain_option(i: Input) -> IResult<ExplainOption> {
     map(
         rule! {
-            VERBOSE | LOGICAL | OPTIMIZED
+            VERBOSE | LOGICAL | OPTIMIZED | DECORRELATED
         },
         |opt| match &opt.kind {
             VERBOSE => ExplainOption::Verbose,
             LOGICAL => ExplainOption::Logical,
             OPTIMIZED => ExplainOption::Optimized,
+            DECORRELATED => ExplainOption::Decorrelated,
             _ => unreachable!(),
         },
+    )(i)
+}
+
+pub fn create_task_option(i: Input) -> IResult<CreateTaskOption> {
+    let warehouse_opt = map(
+        rule! {
+            (WAREHOUSE  ~ "=" ~ #literal_string)
+        },
+        |(_, _, warehouse)| CreateTaskOption::Warehouse(warehouse),
+    );
+    let schedule_opt = map(
+        rule! {
+            SCHEDULE ~ "=" ~ #task_schedule_option
+        },
+        |(_, _, schedule)| CreateTaskOption::Schedule(schedule),
+    );
+    let after_opt = map(
+        rule! {
+            AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, after)| CreateTaskOption::After(after),
+    );
+    let when_opt = map(
+        rule! {
+            WHEN ~ #expr
+        },
+        |(_, expr)| CreateTaskOption::When(expr),
+    );
+    let suspend_task_after_num_failures_opt = map(
+        rule! {
+            SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64
+        },
+        |(_, _, num)| CreateTaskOption::SuspendTaskAfterNumFailures(num),
+    );
+    let error_integration_opt = map(
+        rule! {
+            ERROR_INTEGRATION ~ "=" ~ #literal_string
+        },
+        |(_, _, integration)| CreateTaskOption::ErrorIntegration(integration),
+    );
+    let comment_opt = map(
+        rule! {
+            (COMMENT | COMMENTS) ~ "=" ~ #literal_string
+        },
+        |(_, _, comment)| CreateTaskOption::Comment(comment),
+    );
+
+    map(
+        rule! {
+            #warehouse_opt
+            | #schedule_opt
+            | #after_opt
+            | #when_opt
+            | #suspend_task_after_num_failures_opt
+            | #error_integration_opt
+            | #comment_opt
+        },
+        |opt| opt,
+    )(i)
+}
+
+fn alter_task_set_option(i: Input) -> IResult<AlterTaskSetOption> {
+    let warehouse_opt = map(
+        rule! {
+            (WAREHOUSE  ~ "=" ~ #literal_string)
+        },
+        |(_, _, warehouse)| AlterTaskSetOption::Warehouse(warehouse),
+    );
+    let schedule_opt = map(
+        rule! {
+            SCHEDULE ~ "=" ~ #task_schedule_option
+        },
+        |(_, _, schedule)| AlterTaskSetOption::Schedule(schedule),
+    );
+    let suspend_task_after_num_failures_opt = map(
+        rule! {
+            SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64
+        },
+        |(_, _, num)| AlterTaskSetOption::SuspendTaskAfterNumFailures(num),
+    );
+    let error_integration_opt = map(
+        rule! {
+            ERROR_INTEGRATION ~ "=" ~ #literal_string
+        },
+        |(_, _, integration)| AlterTaskSetOption::ErrorIntegration(integration),
+    );
+    let comment_opt = map(
+        rule! {
+            (COMMENT | COMMENTS) ~ "=" ~ #literal_string
+        },
+        |(_, _, comment)| AlterTaskSetOption::Comment(comment),
+    );
+
+    map(
+        rule! {
+            #warehouse_opt
+            | #schedule_opt
+            | #suspend_task_after_num_failures_opt
+            | #error_integration_opt
+            | #comment_opt
+        },
+        |opt| opt,
     )(i)
 }
 

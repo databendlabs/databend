@@ -79,7 +79,7 @@ impl AccumulatingTransform for BlockCompactNoSplitBuilder {
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         self.accumulated_rows += data.num_rows();
-        self.accumulated_bytes += crate::processors::memory_size(&data);
+        self.accumulated_bytes += data.estimate_block_size();
         if !self
             .thresholds
             .check_large_enough(self.accumulated_rows, self.accumulated_bytes)
@@ -98,7 +98,7 @@ impl AccumulatingTransform for BlockCompactNoSplitBuilder {
             // N <= blocks < 2N
             std::mem::swap(&mut self.staged_blocks, &mut self.pending_blocks);
         } else {
-            // blocks > 2N
+            // blocks >= 2N
             res.push(Self::create_output_data(&mut self.pending_blocks));
         }
         self.staged_blocks.push(data);

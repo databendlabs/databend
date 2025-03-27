@@ -29,9 +29,9 @@ use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropInvertedIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
-use databend_common_storages_fuse::table_functions::HilbertClusteringInfoFunc;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
+use databend_common_storages_iceberg::IcebergInspectTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
@@ -50,17 +50,18 @@ use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::cloud::TaskDependentsEnableTable;
 use crate::table_functions::cloud::TaskDependentsTable;
 use crate::table_functions::cloud::TaskHistoryTable;
+use crate::table_functions::fuse_vacuum2::FuseVacuum2Table;
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::show_grants::ShowGrants;
+use crate::table_functions::show_roles::ShowRoles;
 use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
 use crate::table_functions::TableFunction;
-
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
 
 pub trait TableFunctionCreator: Send + Sync {
@@ -159,6 +160,14 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
+            "fuse_vacuum2".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVacuum2Table>::create),
+            ),
+        );
+
+        creators.insert(
             "fuse_block".to_string(),
             (
                 next_id(),
@@ -195,14 +204,6 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<ClusteringStatisticsFunc>::create),
-            ),
-        );
-
-        creators.insert(
-            "hilbert_clustering_information".to_string(),
-            (
-                next_id(),
-                Arc::new(TableFunctionTemplate::<HilbertClusteringInfoFunc>::create),
             ),
         );
 
@@ -338,6 +339,21 @@ impl TableFunctionFactory {
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseVacuumDropInvertedIndex>::create),
             ),
+        );
+
+        creators.insert(
+            "show_roles".to_string(),
+            (next_id(), Arc::new(ShowRoles::create)),
+        );
+
+        creators.insert(
+            "iceberg_snapshot".to_string(),
+            (next_id(), Arc::new(IcebergInspectTable::create)),
+        );
+
+        creators.insert(
+            "iceberg_manifest".to_string(),
+            (next_id(), Arc::new(IcebergInspectTable::create)),
         );
 
         TableFunctionFactory {

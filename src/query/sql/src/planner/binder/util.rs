@@ -33,7 +33,9 @@ use crate::NameResolutionSuggest;
 /// Ident name can not contain ' or "
 /// Forbidden ' or " in UserName and RoleName, to prevent Meta injection problem
 pub fn illegal_ident_name(ident_name: &str) -> bool {
-    ident_name.chars().any(|c| c == '\'' || c == '\"')
+    ident_name
+        .chars()
+        .any(|c| c == '\'' || c == '\"' || c == '\u{000C}' || c == '\u{0008}')
 }
 
 impl Binder {
@@ -61,12 +63,7 @@ impl Binder {
             RelOperator::RecursiveCteScan(plan) => {
                 cte_scan_names.push(plan.table_name.clone());
                 if cte_types.is_empty() {
-                    cte_types.extend(
-                        plan.fields
-                            .iter()
-                            .map(|f| f.data_type().clone())
-                            .collect::<Vec<DataType>>(),
-                    );
+                    cte_types.extend(plan.fields.iter().map(|f| f.data_type().clone()));
                 }
             }
 
@@ -85,7 +82,6 @@ impl Binder {
             | RelOperator::Aggregate(_)
             | RelOperator::Window(_)
             | RelOperator::Mutation(_)
-            | RelOperator::Recluster(_)
             | RelOperator::MutationSource(_)
             | RelOperator::CompactBlock(_) => {
                 return Err(ErrorCode::SyntaxException(format!(

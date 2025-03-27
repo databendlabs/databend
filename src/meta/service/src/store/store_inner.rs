@@ -36,6 +36,7 @@ use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::SMV003;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::NodeId;
@@ -46,7 +47,6 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaStartupError;
-use databend_common_meta_types::Node;
 use futures::TryStreamExt;
 use log::debug;
 use log::error;
@@ -270,7 +270,7 @@ impl RaftStoreInner {
 
         Ok(Snapshot {
             meta: snapshot_meta,
-            snapshot: Box::new(db),
+            snapshot: db,
         })
     }
 

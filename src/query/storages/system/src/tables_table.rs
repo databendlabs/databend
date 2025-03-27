@@ -42,6 +42,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -53,6 +54,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_eq_filter;
 use crate::util::find_eq_or_filter;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
@@ -124,14 +126,23 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let catalogs = catalog_mgr
+        let catalogs: Vec<Arc<dyn Catalog>> = catalog_mgr
             .list_catalogs(&tenant, ctx.session_state())
             .await?
             .into_iter()
             .map(|cat| cat.disable_table_info_refresh())
             .collect::<Result<Vec<_>>>()?;
-        self.get_full_data_from_catalogs(ctx, push_downs, catalogs)
-            .await
+
+        // Optimization target:  Fast path for known iceberg catalog SHOW TABLES
+        if let Some((catalog_name, db_name)) =
+            self.is_external_show_tables_query(&push_downs, &catalogs)
+        {
+            self.show_tables_from_external_catalog(ctx, catalog_name, db_name)
+                .await
+        } else {
+            self.get_full_data_from_catalogs(ctx, push_downs, catalogs)
+                .await
+        }
     }
 }
 
@@ -241,7 +252,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
 
-        let ctls: Vec<(String, Arc<dyn Catalog>)> =
+        let mut ctls: Vec<(String, Arc<dyn Catalog>)> =
             catalogs.iter().map(|e| (e.name(), e.clone())).collect();
 
         let mut catalogs = vec![];
@@ -257,6 +268,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut invalid_tables_ids = false;
         let mut tables_ids: Vec<u64> = Vec::new();
         let mut db_name: Vec<String> = Vec::new();
+        let mut catalog_name: Vec<String> = Vec::new();
 
         let mut get_stats = true;
         let mut get_ownership = true;
@@ -296,7 +308,13 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 invalid_optimize = find_eq_or_filter(
                     &expr,
                     &mut |col_name, scalar| {
-                        if col_name == "database" {
+                        if col_name == "catalog" {
+                            if let Scalar::String(catalog) = scalar {
+                                if !catalog_name.contains(catalog) {
+                                    catalog_name.push(catalog.clone());
+                                }
+                            }
+                        } else if col_name == "database" {
                             if let Scalar::String(database) = scalar {
                                 if !db_name.contains(database) {
                                     db_name.push(database.clone());
@@ -327,6 +345,17 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 );
             }
         }
+
+        ctls = if !catalog_name.is_empty() && !invalid_optimize {
+            let mut res = vec![];
+            for name in &catalog_name {
+                let ctl = ctx.get_catalog(name).await?;
+                res.push((name.to_string(), ctl));
+            }
+            res
+        } else {
+            ctls
+        };
 
         let visibility_checker = ctx.get_visibility_checker(false).await?;
         // from system.tables where database = 'db' and name = 'name'
@@ -384,7 +413,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                     db_id,
                                     t.get_id(),
                                 ) {
-                                    catalogs.push(ctl_name.as_str());
+                                    catalogs.push(ctl_name.to_string());
                                     databases.push(db.name().to_owned());
                                     databases_ids.push(db.get_db_info().database_id.db_id);
                                     database_tables.push(t);
@@ -392,7 +421,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                 } else if let Some(role) = role {
                                     let roles = ctx.get_all_effective_roles().await?;
                                     if roles.iter().any(|r| r.name == role) {
-                                        catalogs.push(ctl_name.as_str());
+                                        catalogs.push(ctl_name.to_string());
                                         databases.push(db.name().to_owned());
                                         databases_ids.push(db.get_db_info().database_id.db_id);
                                         database_tables.push(t);
@@ -416,7 +445,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             }
         } else {
             let catalog_dbs = visibility_checker.get_visibility_database();
-
             for (ctl_name, ctl) in ctls.iter() {
                 if let Some(push_downs) = &push_downs {
                     if push_downs.filters.as_ref().map(|f| &f.filter).is_some() {
@@ -511,6 +539,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         )
                     })
                     .collect::<Vec<_>>();
+                // Now we get the final dbs, need to clear dbs vec.
+                dbs.clear();
 
                 let ownership = if get_ownership {
                     user_api.get_ownerships(&tenant).await.unwrap_or_default()
@@ -601,7 +631,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         {
                             // system.tables store view name but not store view query
                             // decrease information_schema.tables union.
-                            catalogs.push(ctl_name.as_str());
+                            catalogs.push(ctl_name.to_string());
                             databases.push(db_name.to_owned());
                             databases_ids.push(db.get_db_info().database_id.db_id);
                             database_tables.push(table);
@@ -760,31 +790,31 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .collect();
 
         if WITHOUT_VIEW {
-            Ok(DataBlock::new_from_columns(vec![
-                StringType::from_data(catalogs),
-                StringType::from_data(databases),
-                UInt64Type::from_data(databases_ids),
-                StringType::from_data(names),
-                UInt64Type::from_data(table_id),
-                UInt64Type::from_data(total_columns),
-                StringType::from_data(engines),
-                StringType::from_data(engines_full),
-                StringType::from_data(cluster_bys),
-                StringType::from_data(is_transient),
-                StringType::from_data(is_attach),
-                TimestampType::from_data(created_on),
-                TimestampType::from_opt_data(dropped_on),
-                TimestampType::from_data(updated_on),
-                UInt64Type::from_opt_data(num_rows),
-                UInt64Type::from_opt_data(data_size),
-                UInt64Type::from_opt_data(data_compressed_size),
-                UInt64Type::from_opt_data(index_size),
-                UInt64Type::from_opt_data(number_of_segments),
-                UInt64Type::from_opt_data(number_of_blocks),
-                StringType::from_opt_data(owner),
-                StringType::from_data(comment),
-                StringType::from_data(tables_type),
-            ]))
+            Self::generate_tables_block(
+                catalogs,
+                databases,
+                databases_ids,
+                names,
+                table_id,
+                total_columns,
+                engines,
+                engines_full,
+                cluster_bys,
+                is_transient,
+                is_attach,
+                created_on,
+                dropped_on,
+                updated_on,
+                num_rows,
+                data_size,
+                data_compressed_size,
+                index_size,
+                number_of_segments,
+                number_of_blocks,
+                owner,
+                comment,
+                tables_type,
+            )
         } else {
             Ok(DataBlock::new_from_columns(vec![
                 StringType::from_data(catalogs),
@@ -802,6 +832,165 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 StringType::from_data(view_query),
             ]))
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn generate_tables_block(
+        catalogs: Vec<String>,
+        databases: Vec<String>,
+        databases_ids: Vec<u64>,
+        names: Vec<String>,
+        table_id: Vec<u64>,
+        total_columns: Vec<u64>,
+        engines: Vec<String>,
+        engines_full: Vec<String>,
+        cluster_bys: Vec<String>,
+        is_transient: Vec<String>,
+        is_attach: Vec<String>,
+        created_on: Vec<i64>,
+        dropped_on: Vec<Option<i64>>,
+        updated_on: Vec<i64>,
+        num_rows: Vec<Option<u64>>,
+        data_size: Vec<Option<u64>>,
+        data_compressed_size: Vec<Option<u64>>,
+        index_size: Vec<Option<u64>>,
+        number_of_segments: Vec<Option<u64>>,
+        number_of_blocks: Vec<Option<u64>>,
+        owner: Vec<Option<String>>,
+        comment: Vec<String>,
+        tables_type: Vec<String>,
+    ) -> Result<DataBlock> {
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(catalogs),
+            StringType::from_data(databases),
+            UInt64Type::from_data(databases_ids),
+            StringType::from_data(names),
+            UInt64Type::from_data(table_id),
+            UInt64Type::from_data(total_columns),
+            StringType::from_data(engines),
+            StringType::from_data(engines_full),
+            StringType::from_data(cluster_bys),
+            StringType::from_data(is_transient),
+            StringType::from_data(is_attach),
+            TimestampType::from_data(created_on),
+            TimestampType::from_opt_data(dropped_on),
+            TimestampType::from_data(updated_on),
+            UInt64Type::from_opt_data(num_rows),
+            UInt64Type::from_opt_data(data_size),
+            UInt64Type::from_opt_data(data_compressed_size),
+            UInt64Type::from_opt_data(index_size),
+            UInt64Type::from_opt_data(number_of_segments),
+            UInt64Type::from_opt_data(number_of_blocks),
+            StringType::from_opt_data(owner),
+            StringType::from_data(comment),
+            StringType::from_data(tables_type),
+        ]))
+    }
+
+    fn is_external_show_tables_query(
+        &self,
+        push_downs: &Option<PushDownInfo>,
+        catalogs: &[Arc<dyn Catalog>],
+    ) -> Option<(String, String)> {
+        if !WITH_HISTORY && WITHOUT_VIEW {
+            let mut database_name = None;
+            // Check projection
+            if let Some(push_downs) = push_downs {
+                if let Some(Projection::Columns(projection_indices)) = &push_downs.projection {
+                    let schema = TablesTable::<WITH_HISTORY, WITHOUT_VIEW>::schema();
+                    let name_fields_indexes: HashSet<usize> = schema
+                        .fields
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(i, name)| match name.name().as_str() {
+                            "name" | "database" | "catalog" | "table_type" => Some(i),
+                            _ => None,
+                        })
+                        .collect();
+
+                    if projection_indices.len() != 4
+                        || !projection_indices
+                            .iter()
+                            .all(|field_index| name_fields_indexes.contains(field_index))
+                    {
+                        return None;
+                    }
+
+                    // Check filters (catalog name)
+                    let mut catalog_name = None;
+
+                    if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
+                        let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                        find_eq_filter(&expr, &mut |col_name, scalar| {
+                            if col_name == "catalog" {
+                                if let Scalar::String(catalog) = scalar {
+                                    catalog_name = Some(catalog.to_string());
+                                }
+                            }
+                            if col_name == "database" {
+                                if let Scalar::String(db) = scalar {
+                                    database_name = Some(db.to_string());
+                                }
+                            }
+                            Ok(())
+                        });
+                    }
+
+                    // Check iceberg catalog existence
+                    if let Some(catalog_name) = catalog_name {
+                        if let Some(database_name) = database_name {
+                            for catalog in catalogs {
+                                if catalog.name() == catalog_name {
+                                    if let CatalogType::Iceberg = catalog.info().catalog_type() {
+                                        return Some((catalog_name, database_name));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    async fn show_tables_from_external_catalog(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog_name: String,
+        db_name: String,
+    ) -> Result<DataBlock> {
+        let tenant = ctx.get_tenant();
+        let catalog = ctx.get_catalog(&catalog_name).await?;
+        let db = catalog.get_database(&tenant, &db_name).await?;
+        let all_table_names = db.list_tables_names().await?;
+        let rows = all_table_names.len();
+
+        Self::generate_tables_block(
+            vec![catalog_name; rows],
+            vec![db_name; rows],
+            vec![0; rows],
+            all_table_names,
+            vec![0; rows],
+            vec![0; rows],
+            vec!["".to_string(); rows],
+            vec!["".to_string(); rows],
+            vec!["".to_string(); rows],
+            vec!["".to_string(); rows],
+            vec!["".to_string(); rows],
+            vec![0; rows],
+            vec![Some(0); rows],
+            vec![0; rows],
+            vec![Some(0); rows],
+            vec![Some(0); rows],
+            vec![Some(0); rows],
+            vec![Some(0); rows],
+            vec![Some(0); rows],
+            vec![Some(0); rows],
+            vec![Some("".to_string()); rows],
+            vec!["".to_string(); rows],
+            vec!["BASE TABLE".to_string(); rows],
+        )
     }
 
     pub fn create(table_id: u64) -> Arc<dyn Table> {

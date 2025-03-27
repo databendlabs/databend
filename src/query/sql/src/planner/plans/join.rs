@@ -55,9 +55,11 @@ pub enum JoinType {
     LeftAnti,
     RightAnti,
     /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
-    /// Left Mark Join use subquery as probe side, it's blocked at `mark_join_blocks`
+    /// Left Mark output build fields and marker
+    /// Left Mark Join use subquery as probe(left) side, it's blocked at `mark_join_blocks`
     LeftMark,
-    /// Right Mark Join use subquery as build side, it's executed by streaming.
+    /// Right Mark output probe fields and marker
+    /// Right Mark Join use subquery as build(right) side, it's executed by streaming.
     RightMark,
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     LeftSingle,
@@ -460,6 +462,25 @@ impl Join {
                 column_stats,
             },
         }))
+    }
+
+    pub fn replace_column(&mut self, old: IndexType, new: IndexType) -> Result<()> {
+        for condition in &mut self.equi_conditions {
+            condition.left.replace_column(old, new)?;
+            condition.right.replace_column(old, new)?;
+        }
+
+        for condition in &mut self.non_equi_conditions {
+            condition.replace_column(old, new)?;
+        }
+
+        if self.marker_index == Some(old) {
+            self.marker_index = Some(new)
+        }
+
+        self.build_side_cache_info = None;
+
+        Ok(())
     }
 }
 

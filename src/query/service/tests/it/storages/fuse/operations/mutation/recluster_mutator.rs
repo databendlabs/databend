@@ -58,7 +58,7 @@ use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
 async fn test_recluster_mutator_block_select() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-    let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
 
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
 
@@ -88,7 +88,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         );
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
-        let segment_location = location_generator.gen_segment_info_location();
+        let segment_location = location_generator.gen_segment_info_location(Default::default());
         segment
             .write_meta(&data_accessor, &segment_location)
             .await?;
@@ -154,7 +154,6 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         BlockThresholds::default(),
         cluster_key_id,
         1,
-        1000,
         column_ids,
     );
     let (_, parts) = mutator
@@ -183,12 +182,7 @@ async fn test_safety_for_recluster() -> Result<()> {
         .set_recluster_block_size(recluster_block_size as u64)?;
 
     let cluster_key_id = 0;
-    let block_per_seg = 5;
-    let threshold = BlockThresholds {
-        max_rows_per_block: 5,
-        min_rows_per_block: 4,
-        max_bytes_per_block: 1024,
-    };
+    let threshold = BlockThresholds::new(5, 1024, 100, 5);
 
     let data_accessor = operator.clone();
     let schema = TestFixture::default_table_schema();
@@ -235,7 +229,6 @@ async fn test_safety_for_recluster() -> Result<()> {
             rows_per_blocks,
             threshold,
             Some(cluster_key_id),
-            block_per_seg,
             unclustered,
         )
         .await?;
@@ -247,17 +240,15 @@ async fn test_safety_for_recluster() -> Result<()> {
             merge_statistics_mut(&mut summary, &seg.summary, Some(cluster_key_id));
         }
 
-        let id = Uuid::new_v4();
-        let snapshot = Arc::new(TableSnapshot::new(
-            id,
+        let snapshot = Arc::new(TableSnapshot::try_new(
             None,
-            &None,
             None,
             schema.as_ref().clone(),
             summary,
             locations.clone(),
             None,
-        ));
+            Default::default(),
+        )?);
 
         let mut block_ids = HashSet::new();
         for seg in &segment_infos {
@@ -288,7 +279,6 @@ async fn test_safety_for_recluster() -> Result<()> {
             threshold,
             cluster_key_id,
             max_tasks,
-            block_per_seg,
             column_ids,
         ));
         let (mode, selected_segs) = mutator.select_segments(&compact_segments, 8)?;

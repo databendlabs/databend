@@ -16,13 +16,12 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::Column;
-use databend_common_expression::DataBlock;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_storage::FileStatus;
 
 use super::batch::BytesBatch;
 use super::batch::RowBatchWithPosition;
-use super::processors::BlockBuilderState;
+use crate::read::block_builder_state::BlockBuilderState;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::formats::CsvInputFormat;
 use crate::read::row_based::formats::NdJsonInputFormat;
@@ -33,11 +32,8 @@ pub trait SeparatorState: Send + Sync {
 }
 
 pub trait RowDecoder: Send + Sync {
-    fn add(
-        &self,
-        block_builder: &mut BlockBuilderState,
-        batch: RowBatchWithPosition,
-    ) -> Result<Vec<DataBlock>>;
+    fn add(&self, block_builder: &mut BlockBuilderState, batch: RowBatchWithPosition)
+        -> Result<()>;
 
     fn flush(&self, columns: Vec<Column>, _num_rows: usize) -> Vec<Column> {
         columns

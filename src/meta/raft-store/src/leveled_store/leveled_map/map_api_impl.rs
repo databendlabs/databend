@@ -12,68 +12,67 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 
 use databend_common_meta_types::seq_value::KVMeta;
-use databend_common_meta_types::snapshot_db::DB;
+use map_api::compact::compacted_get;
+use map_api::compact::compacted_range;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
+use map_api::BeforeAfter;
 
+use crate::leveled_store::db_map_api_ro_impl::MapView;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::leveled_map::LeveledMap;
-use crate::leveled_store::map_api::compacted_get;
-use crate::leveled_store::map_api::compacted_range;
 use crate::leveled_store::map_api::KVResultStream;
-use crate::leveled_store::map_api::MapApi;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::map_api::MarkedOf;
-use crate::leveled_store::map_api::Transition;
 use crate::marked::Marked;
 
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for LeveledMap
+impl<K> MapApiRO<K, KVMeta> for LeveledMap
 where
-    K: MapKey + fmt::Debug,
-    Level: MapApiRO<K>,
-    Immutable: MapApiRO<K>,
-    DB: MapApiRO<K>,
+    K: MapKey<KVMeta> + fmt::Debug,
+    K: MapKeyEncode,
+    K: MapKeyDecode,
+    Level: MapApiRO<K, KVMeta>,
+    Immutable: MapApiRO<K, KVMeta>,
+    for<'a> MapView<'a>: MapApiRO<K, KVMeta>,
 {
-    async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: MapKeyEncode,
-    {
+    async fn get(&self, key: &K) -> Result<Marked<K::V>, io::Error> {
         let levels = self.iter_levels();
-        let persisted = self.persisted.as_ref().into_iter();
+        let persisted = self.persisted.as_ref().map(MapView).into_iter();
         compacted_get(key, levels, persisted).await
     }
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
     where R: RangeBounds<K> + Clone + Send + Sync + 'static {
         let (top, levels) = self.iter_shared_levels();
-        let persisted = self.persisted.as_ref().into_iter();
+        let persisted = self.persisted.as_ref().map(MapView).into_iter();
         compacted_range(range, top, levels, persisted).await
     }
 }
 
 #[async_trait::async_trait]
-impl<K> MapApi<K> for LeveledMap
+impl<K> MapApi<K, KVMeta> for LeveledMap
 where
-    K: MapKey,
-    Level: MapApi<K>,
-    Immutable: MapApiRO<K>,
-    DB: MapApiRO<K>,
+    K: MapKey<KVMeta>,
+    K: MapKeyEncode,
+    K: MapKeyDecode,
+    Level: MapApi<K, KVMeta>,
+    Immutable: MapApiRO<K, KVMeta>,
+    for<'a> MapView<'a>: MapApiRO<K, KVMeta>,
 {
     async fn set(
         &mut self,
         key: K,
         value: Option<(K::V, Option<KVMeta>)>,
-    ) -> Result<Transition<MarkedOf<K>>, io::Error>
+    ) -> Result<BeforeAfter<MarkedOf<K>>, io::Error>
     where
         K: Ord,
     {
@@ -81,12 +80,12 @@ where
         let prev = self.get(&key).await?.clone();
 
         // No such entry at all, no need to create a tombstone for delete
-        if prev.not_found() && value.is_none() {
+        if prev.is_not_found() && value.is_none() {
             return Ok((prev, Marked::new_tombstone(0)));
         }
 
         // `writeable` is a single level map and the returned `_prev` is only from that level.
-        // Therefore it should be ignored and we use the `prev` from the multi-level map.
+        // Therefore, it should be ignored and we use the `prev` from the multi-level map.
         let (_prev, inserted) = self.writable.set(key, value).await?;
         Ok((prev, inserted))
     }

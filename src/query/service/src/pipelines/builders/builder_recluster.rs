@@ -83,7 +83,7 @@ impl PipelineBuilder {
                     description,
                     tbl_args: table.table_args(),
                     push_downs: None,
-                    query_internal_columns: false,
+                    internal_columns: None,
                     base_block_ids: None,
                     update_stream_columns: table.change_tracking_enabled(),
                     data_mask_policy: None,
@@ -151,8 +151,11 @@ impl PipelineBuilder {
                     .collect();
 
                 // merge sort
-                let sort_block_size =
-                    block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows);
+                let sort_block_size = block_thresholds.calc_rows_for_recluster(
+                    task.total_rows,
+                    task.total_bytes,
+                    task.total_compressed,
+                );
 
                 let sort_pipeline_builder =
                     SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))?
@@ -177,6 +180,7 @@ impl PipelineBuilder {
                             table,
                             cluster_stats_gen.clone(),
                             MutationKind::Recluster,
+                            recluster.table_meta_timestamps,
                         )?;
                         proc.into_processor()
                     })

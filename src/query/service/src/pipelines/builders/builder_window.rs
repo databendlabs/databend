@@ -23,20 +23,22 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_storages_common_cache::TempDirManager;
 use opendal::services::Fs;
 use opendal::Operator;
 
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::FrameBound;
+use crate::pipelines::processors::transforms::SortStrategy;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
 use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
 use crate::pipelines::processors::transforms::WindowSortDesc;
-use crate::pipelines::processors::transforms::WindowSpillSettings;
 use crate::pipelines::PipelineBuilder;
 use crate::spillers::SpillerDiskConfig;
 
@@ -210,11 +212,17 @@ impl PipelineBuilder {
                 None => None,
             };
 
-        let window_spill_settings = WindowSpillSettings::new(&settings, num_processors)?;
         let have_order_col = window_partition.after_exchange.unwrap_or(false);
+        let window_spill_settings = MemorySettings::from_window_settings(&self.ctx)?;
 
         let processor_id = AtomicUsize::new(0);
         self.main_pipeline.add_transform(|input, output| {
+            let strategy = SortStrategy::try_create(
+                &settings,
+                sort_desc.clone(),
+                plan_schema.clone(),
+                have_order_col,
+            )?;
             Ok(ProcessorPtr::create(Box::new(
                 TransformWindowPartitionCollect::new(
                     self.ctx.clone(),
@@ -226,9 +234,7 @@ impl PipelineBuilder {
                     num_partitions,
                     window_spill_settings.clone(),
                     disk_spill.clone(),
-                    sort_desc.clone(),
-                    plan_schema.clone(),
-                    have_order_col,
+                    strategy,
                 )?,
             )))
         })

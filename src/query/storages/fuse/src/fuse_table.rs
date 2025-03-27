@@ -25,7 +25,6 @@ use std::time::Instant;
 use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -58,7 +57,9 @@ use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::ROW_VERSION_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
+use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -66,6 +67,7 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
+use databend_common_sql::plans::TruncateMode;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
@@ -77,6 +79,7 @@ use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -106,24 +109,24 @@ use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 use crate::io::WriteSettings;
+use crate::operations::load_last_snapshot_hint;
 use crate::operations::ChangesDesc;
-use crate::operations::TruncateMode;
+use crate::operations::SnapshotHint;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::Trim;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::DEFAULT_ROW_PER_PAGE;
 use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
+use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
-use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -149,8 +152,6 @@ pub struct FuseTable {
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 // default schema refreshing timeout is 5 seconds.
-const DEFAULT_SCHEMA_REFRESHING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Self::do_create_table_ext(table_info, false)?)
@@ -223,13 +224,12 @@ impl FuseTable {
             .and_then(|s| s.parse::<BloomIndexColumns>().ok())
             .unwrap_or(BloomIndexColumns::All);
 
+        let meta_location_generator = TableMetaLocationGenerator::new(storage_prefix);
         if !table_info.meta.part_prefix.is_empty() {
             return Err(ErrorCode::StorageOther(
                 "Location_prefix no longer supported. The last version that supports it is: https://github.com/databendlabs/databend/releases/tag/v1.2.653-nightly",
             ));
         }
-
-        let meta_location_generator = TableMetaLocationGenerator::with_prefix(storage_prefix);
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -484,24 +484,21 @@ impl FuseTable {
     fn refresh_schema_from_hint(
         operator: &Operator,
         storage_prefix: &str,
-        table_description: &str,
-    ) -> Result<Option<(String, TableSchema)>> {
+    ) -> Result<Option<(SnapshotHint, TableSchema)>> {
         let refresh_task = async {
-            let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
             let begin_load_hint = Instant::now();
-            let maybe_hint_content = operator.read(&hint_file_path).await;
+            let maybe_hint = load_last_snapshot_hint(storage_prefix, operator).await?;
             info!(
-                "loaded last snapshot hint file [{}], time used {:?}",
-                hint_file_path,
+                "loaded last snapshot hint, time used {:?}",
                 begin_load_hint.elapsed()
             );
 
-            match maybe_hint_content {
-                Ok(buf) => {
-                    let hint_content = buf.to_vec();
-                    let snapshot_full_path = String::from_utf8(hint_content)?;
+            match maybe_hint {
+                Some(hint) => {
+                    let snapshot_full_path = &hint.snapshot_full_path;
                     let operator_info = operator.info();
 
+                    assert!(snapshot_full_path.starts_with(operator_info.root()));
                     let loc = snapshot_full_path[operator_info.root().len()..].to_string();
 
                     // refresh table schema by loading the snapshot
@@ -521,37 +518,16 @@ impl FuseTable {
                         .schema
                         .clone();
 
-                    Ok::<_, ErrorCode>(Some((
-                        snapshot_full_path[operator_info.root().len()..].to_string(),
-                        schema,
-                    )))
+                    Ok::<_, ErrorCode>(Some((hint, schema)))
                 }
-                Err(e) if e.kind() == opendal::ErrorKind::NotFound => {
+                None => {
                     // Table be attached has not last snapshot hint file, treat it as empty table
                     Ok(None)
                 }
-                Err(e) => Err(e.into()),
             }
         };
 
-        let refresh_task_with_timeout = async {
-            tokio::time::timeout(DEFAULT_SCHEMA_REFRESHING_TIMEOUT, refresh_task)
-                .await
-                .map_err(|_e| {
-                    ErrorCode::RefreshTableInfoFailure(format!(
-                        "failed to refresh table info {} in time",
-                        table_description
-                    ))
-                })
-                .map_err(|e| {
-                    ErrorCode::RefreshTableInfoFailure(format!(
-                        "failed to refresh table info {} : {}",
-                        table_description, e
-                    ))
-                })?
-        };
-
-        GlobalIORuntime::instance().block_on(refresh_task_with_timeout)
+        GlobalIORuntime::instance().block_on(refresh_task)
     }
 
     fn refresh_table_info(
@@ -570,25 +546,39 @@ impl FuseTable {
             return Ok(());
         }
 
-        let refreshed = Self::refresh_schema_from_hint(operator, storage_prefix, &table_info.desc)?;
+        info!(
+            "extracting snapshot location of table {} with id {:?} from the last snapshot hint file.",
+            table_info.desc,
+            table_info.ident
+        );
+
+        let snapshot_hint = Self::refresh_schema_from_hint(operator, storage_prefix)?;
 
         info!(
             "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
-            refreshed.as_ref().map(|(location, _)| location),
+            snapshot_hint.as_ref().map(|(hint, _)| &hint.snapshot_full_path),
             table_info.desc,
             table_info.ident
         );
 
         // Adjust snapshot location to the values extracted from the last snapshot hint
-        match refreshed {
+        match snapshot_hint {
             None => {
                 table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
             }
-            Some((location, base_table_schema)) => {
+            Some((hint, base_table_schema)) => {
+                let full_location = &hint.snapshot_full_path;
+
+                let operator_info = operator.info();
+                assert!(full_location.starts_with(operator_info.root()));
+                let location = full_location[operator.info().root().len()..].to_string();
+
+                // update table meta options
                 table_info
                     .options_mut()
-                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location.clone());
 
+                // tweak schema
                 if let Some(ids_string) = table_info
                     .schema()
                     .metadata
@@ -626,6 +616,13 @@ impl FuseTable {
                 } else {
                     table_info.meta.schema = Arc::new(base_table_schema);
                 }
+
+                // tweak table/field comments
+                let comments = hint.entity_comments;
+
+                table_info.meta.comment = comments.table_comment;
+                // TODO assert about field comments
+                table_info.meta.field_comments = comments.field_comments;
             }
         }
 
@@ -642,6 +639,20 @@ impl FuseTable {
             "does not matter".to_string(),
         );
         Ok(())
+    }
+
+    pub fn get_table_retention_period(&self) -> Option<std::time::Duration> {
+        self.table_info
+            .options()
+            .get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS)
+            .map(|val| {
+                std::time::Duration::from_secs(
+                    // Data retention period should be positive, parse it to unsigned value first
+                    3600 * val
+                        .parse::<u64>()
+                        .expect("Internal error, parsing table level data retention period failed"),
+                )
+            })
     }
 }
 
@@ -734,6 +745,14 @@ impl Table for FuseTable {
         self.do_read_data(ctx, plan, pipeline, put_cache)
     }
 
+    fn append_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<()> {
+        self.do_append_data(ctx, pipeline, table_meta_timestamps)
+    }
     fn build_prune_pipeline(
         &self,
         table_ctx: Arc<dyn TableContext>,
@@ -741,10 +760,6 @@ impl Table for FuseTable {
         source_pipeline: &mut Pipeline,
     ) -> Result<Option<Pipeline>> {
         self.do_build_prune_pipeline(table_ctx, plan, source_pipeline)
-    }
-
-    fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
-        self.do_append_data(ctx, pipeline)
     }
 
     fn commit_insertion(
@@ -756,6 +771,7 @@ impl Table for FuseTable {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         self.do_commit(
             ctx,
@@ -765,6 +781,7 @@ impl Table for FuseTable {
             overwrite,
             prev_snapshot_id,
             deduplicated_label,
+            table_meta_timestamps,
         )
     }
 
@@ -1027,13 +1044,20 @@ impl Table for FuseTable {
 
     fn get_block_thresholds(&self) -> BlockThresholds {
         let max_rows_per_block =
-            self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
-        let min_rows_per_block = (max_rows_per_block * 4).div_ceil(5);
+            self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT);
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,
         );
-        BlockThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+        let max_file_size = self.get_option(FUSE_OPT_KEY_FILE_SIZE, DEFAULT_BLOCK_COMPRESSED_SIZE);
+        let block_per_segment =
+            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+        BlockThresholds::new(
+            max_rows_per_block,
+            max_bytes_per_block,
+            max_file_size,
+            block_per_segment,
+        )
     }
 
     #[async_backtrace::framed]

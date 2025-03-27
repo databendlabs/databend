@@ -21,7 +21,7 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_sql::plans::DropTablePlan;
-use databend_common_storages_fuse::operations::TruncateMode;
+use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
@@ -124,6 +124,7 @@ impl Interpreter for DropTableInterpreter {
                 table_name: tbl_name.to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().database_id.db_id,
+                db_name: db.name().to_string(),
                 engine: tbl.engine().to_string(),
                 session_id: tbl
                     .options()

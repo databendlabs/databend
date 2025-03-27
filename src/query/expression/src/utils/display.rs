@@ -28,6 +28,7 @@ use databend_common_io::geo_to_ewkt;
 use geozero::wkb::Ewkb;
 use itertools::Itertools;
 use jiff::tz::TimeZone;
+use jsonb::RawJsonb;
 use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
@@ -262,7 +263,8 @@ impl Display for ScalarRef<'_> {
                 write!(f, ")")
             }
             ScalarRef::Variant(s) => {
-                let value = jsonb::to_string(s);
+                let raw_jsonb = RawJsonb::new(s);
+                let value = raw_jsonb.to_string();
                 write!(f, "'{value}'")
             }
             ScalarRef::Geometry(s) => {
@@ -1077,5 +1079,5 @@ fn display_f64(num: f64) -> String {
 
 /// Display a tuple field name, if it contains uppercase letters or special characters, add quotes.
 pub fn display_tuple_field_name(field_name: &str) -> String {
-    display_ident(field_name, true, Dialect::PostgreSQL)
+    display_ident(field_name, false, true, Dialect::PostgreSQL)
 }

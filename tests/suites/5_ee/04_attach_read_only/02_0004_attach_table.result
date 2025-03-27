@@ -66,6 +66,14 @@ Error: APIError: QueryFailed: [2004]Columns [c_not_exist] do not exist in the ta
 #############################
 >>>> drop table if exists attach_tbl
 >>>> alter table base RENAME COLUMN c2 to c2_new
+'ATTACH' after 'ALTER TABLE RENAME COLUMN' should see the new name of column
+>>>> drop table if exists attach_tbl2
+>>>> desc attach_tbl2
+c1	VARCHAR	YES	NULL	
+c2_new	VARCHAR	YES	NULL	
+c3	VARCHAR	YES	NULL	
+c4	VARCHAR	YES	NULL	
+<<<<
 >>>> insert into base values('c1', 'c2_new', 'c3', 'c4')
 1
 select all should work

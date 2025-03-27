@@ -20,13 +20,13 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_sql::plans::TruncateMode;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::TruncateGenerator;
-use crate::operations::common::TruncateMode;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -73,6 +73,7 @@ impl FuseTable {
         )?;
 
         let snapshot_gen = TruncateGenerator::new(mode);
+        let table_meta_timestamps = ctx.get_table_meta_timestamps(self, Some(prev_snapshot))?;
         pipeline.add_sink(|input| {
             CommitSink::try_create(
                 self,
@@ -84,6 +85,7 @@ impl FuseTable {
                 None,
                 prev_snapshot_id,
                 None,
+                table_meta_timestamps,
             )
         })
     }

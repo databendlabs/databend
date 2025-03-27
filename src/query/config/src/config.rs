@@ -240,6 +240,37 @@ impl Config {
 
         Ok(conf)
     }
+
+    pub fn load_with_config_file(config_file: &str) -> Result<Self> {
+        let mut builder: serfig::Builder<Self> = serfig::Builder::default();
+
+        // Load from config file first.
+        {
+            let config_file = if !config_file.is_empty() {
+                config_file.to_string()
+            } else if let Ok(path) = env::var("CONFIG_FILE") {
+                path
+            } else {
+                "".to_string()
+            };
+
+            if !config_file.is_empty() {
+                let toml = TomlIgnored::new(Box::new(|path| {
+                    log::warn!("unknown field in config: {}", &path);
+                }));
+                builder = builder.collect(from_file(toml, &config_file));
+            }
+        }
+
+        // Then, load from env.
+        builder = builder.collect(from_env());
+
+        // Check obsoleted.
+        let conf = builder.build()?;
+        conf.check_obsoleted()?;
+
+        Ok(conf)
+    }
 }
 
 /// Storage config group.
@@ -1700,6 +1731,15 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "gpt-3.5-turbo")]
     pub openai_api_completion_model: String,
 
+    #[clap(long, value_name = "VALUE", default_value = "true")]
+    pub enable_udf_python_script: bool,
+
+    #[clap(long, value_name = "VALUE", default_value = "true")]
+    pub enable_udf_js_script: bool,
+
+    #[clap(long, value_name = "VALUE", default_value = "true")]
+    pub enable_udf_wasm_script: bool,
+
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_server: bool,
 
@@ -1812,6 +1852,9 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             openai_api_embedding_model: self.openai_api_embedding_model,
             openai_api_version: self.openai_api_version,
             enable_udf_server: self.enable_udf_server,
+            enable_udf_python_script: self.enable_udf_python_script,
+            enable_udf_js_script: self.enable_udf_js_script,
+            enable_udf_wasm_script: self.enable_udf_wasm_script,
             udf_server_allow_list: self.udf_server_allow_list,
             udf_server_allow_insecure: self.udf_server_allow_insecure,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
@@ -1917,6 +1960,10 @@ impl From<InnerQueryConfig> for QueryConfig {
             openai_api_version: inner.openai_api_version,
             openai_api_completion_model: inner.openai_api_completion_model,
             openai_api_embedding_model: inner.openai_api_embedding_model,
+            enable_udf_python_script: inner.enable_udf_python_script,
+            enable_udf_js_script: inner.enable_udf_js_script,
+            enable_udf_wasm_script: inner.enable_udf_wasm_script,
+
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
             udf_server_allow_insecure: inner.udf_server_allow_insecure,
@@ -2131,6 +2178,15 @@ pub struct FileLogConfig {
     #[serde(rename = "limit")]
     pub file_limit: usize,
 
+    /// The max size(bytes) of the log file, default is 4GB.
+    #[clap(
+        long = "log-file-max-size",
+        value_name = "VALUE",
+        default_value = "4294967296"
+    )]
+    #[serde(rename = "max-size")]
+    pub file_max_size: usize,
+
     /// Deprecated fields, used for catching error, will be removed later.
     #[clap(skip)]
     #[serde(rename = "prefix_filter")]
@@ -2159,6 +2215,7 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
+            max_size: self.file_max_size,
         })
     }
 }
@@ -2171,6 +2228,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
+            file_max_size: inner.max_size,
 
             // Deprecated Fields
             file_prefix_filter: None,
@@ -3279,5 +3337,30 @@ mod cache_config_converters {
                 inner::DiskCacheKeyReloadPolicy::Fuzzy => DiskCacheKeyReloadPolicy::Fuzzy,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::ffi::OsString;
+
+    use clap::Parser;
+    use pretty_assertions::assert_eq;
+
+    use crate::Config;
+    use crate::InnerConfig;
+
+    /// It's required to make sure setting's default value is the same with clap.
+    #[test]
+    fn test_config_default() {
+        let setting_default = InnerConfig::default();
+        let config_default: InnerConfig = Config::parse_from(Vec::<OsString>::new())
+            .try_into()
+            .expect("parse from args must succeed");
+
+        assert_eq!(
+            setting_default, config_default,
+            "default setting is different from default config, please check again"
+        )
     }
 }

@@ -21,6 +21,7 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_common_storage::Datum;
@@ -40,6 +41,7 @@ use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::IndexType;
 
 // Constant table is a table with constant values.
 #[derive(Clone, Debug)]
@@ -101,6 +103,11 @@ impl ConstantTableScan {
             "ConstantTableScan"
         }
     }
+
+    pub fn value(&self, index: IndexType) -> Result<(Column, &DataField)> {
+        let pos = self.schema.index_of(&index.to_string())?;
+        Ok((self.values[pos].clone(), self.schema.field(pos)))
+    }
 }
 
 impl PartialEq for ConstantTableScan {
@@ -156,7 +163,7 @@ impl Operator for ConstantTableScan {
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let mut column_stats: ColumnStatSet = Default::default();
         for (index, value) in self.columns.iter().zip(self.values.iter()) {
-            let (mins, _) = eval_aggr("min", vec![], &[value.clone()], self.num_rows)?;
+            let (mins, _) = eval_aggr("min", vec![], &[value.clone()], self.num_rows, vec![])?;
             let min = if let Some(v) = mins.index(0) {
                 match Datum::from_scalar(v.to_owned()) {
                     Some(val) => val,
@@ -167,7 +174,7 @@ impl Operator for ConstantTableScan {
             } else {
                 continue;
             };
-            let (maxs, _) = eval_aggr("max", vec![], &[value.clone()], self.num_rows)?;
+            let (maxs, _) = eval_aggr("max", vec![], &[value.clone()], self.num_rows, vec![])?;
             let max = if let Some(v) = maxs.index(0) {
                 match Datum::from_scalar(v.to_owned()) {
                     Some(val) => val,
@@ -184,6 +191,7 @@ impl Operator for ConstantTableScan {
                 vec![],
                 &[value.clone()],
                 self.num_rows,
+                vec![],
             )?;
             let ndv = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap()[0];
 

@@ -56,36 +56,37 @@ impl ParquetRSTable {
             match &self.files_to_read {
                 Some(files) => files
                     .iter()
-                    .map(|f| (f.path.clone(), f.size))
+                    .filter(|f| f.size > 0)
+                    .map(|f| (f.path.clone(), f.size, f.dedup_key()))
                     .collect::<Vec<_>>(),
                 None => self
                     .files_info
                     .list(&self.operator, thread_num, None)
                     .await?
                     .into_iter()
-                    .map(|f| (f.path, f.size))
+                    .map(|f| (f.path.clone(), f.size, f.dedup_key()))
                     .collect::<Vec<_>>(),
             }
         } else {
             // Already fetched the parquet metas when creating column statistics provider.
             parquet_metas
                 .iter()
-                .map(|p| (p.location.clone(), p.size))
+                .map(|p| (p.location.clone(), p.size, None))
                 .collect()
         };
 
         // If a file size is less than `parquet_fast_read_bytes`,
-        // we treat it as a small file and it will be totally loaded into memory.
+        // we treat it as a small file, and it will be totally loaded into memory.
         let fast_read_bytes = ctx.get_settings().get_parquet_fast_read_bytes()?;
         let mut large_files = vec![];
         let mut large_file_indices = vec![];
         let mut small_file_indices = vec![];
         let mut small_files = vec![];
-        for (index, (location, size)) in file_locations.into_iter().enumerate() {
+        for (index, (location, size, dedup_key)) in file_locations.into_iter().enumerate() {
             if size > fast_read_bytes {
-                large_files.push((location, size));
+                large_files.push((location, size, dedup_key));
                 large_file_indices.push(index);
-            } else {
+            } else if size > 0 {
                 small_files.push((location, size));
                 small_file_indices.push(index);
             }
@@ -208,7 +209,7 @@ impl ParquetRSTable {
     async fn read_and_prune_metas_in_parallel(
         &self,
         ctx: Arc<dyn TableContext>,
-        file_infos: Vec<(String, u64)>,
+        file_infos: Vec<(String, u64, Option<String>)>,
         pruner: Arc<ParquetRSPruner>,
         columns_to_read: Vec<usize>,
         topk: Arc<Option<TopK>>,
@@ -220,6 +221,11 @@ impl ParquetRSTable {
         let max_memory_usage = settings.get_max_memory_usage()?;
 
         let mut tasks = Vec::with_capacity(num_threads);
+        let use_cache = if copy_status.is_some() {
+            None
+        } else {
+            Some(ctx.get_id())
+        };
 
         // Equally distribute the tasks
         for i in 0..num_threads {
@@ -237,6 +243,7 @@ impl ParquetRSTable {
             let copy_status = copy_status.clone();
             let leaf_fields = self.leaf_fields.clone();
             let topk = topk.clone();
+            let use_cache = use_cache.clone();
 
             tasks.push(async move {
                 let metas = read_parquet_metas_batch(
@@ -246,6 +253,7 @@ impl ParquetRSTable {
                     leaf_fields,
                     schema_from,
                     max_memory_usage,
+                    use_cache.clone(),
                 )
                 .await?;
                 prune_and_generate_partitions(&pruner, metas, columns_to_read, &topk, copy_status)
@@ -357,7 +365,8 @@ fn prune_and_generate_partitions(
             ..
         } = meta.as_ref();
         part_stats.partitions_total += meta.num_row_groups();
-        let (rgs, omits) = pruner.prune_row_groups(meta, row_group_level_stats.as_deref(), None)?;
+        let (rgs, omits, start_rows) =
+            pruner.prune_row_groups(meta, row_group_level_stats.as_deref(), None)?;
         let mut row_selections = if omits.iter().all(|x| *x) {
             None
         } else {
@@ -366,7 +375,7 @@ fn prune_and_generate_partitions(
 
         let mut rows_read = 0; // Rows read in current file.
 
-        for (rg, omit) in rgs.into_iter().zip(omits.into_iter()) {
+        for ((rg, omit), start_row) in rgs.into_iter().zip(omits.into_iter()).zip(start_rows) {
             let rg_meta = meta.row_group(rg);
             let num_rows = rg_meta.num_rows() as usize;
             // Split rows belonging to current row group.
@@ -417,6 +426,7 @@ fn prune_and_generate_partitions(
 
             parts.push(ParquetRSRowGroupPart {
                 location: location.clone(),
+                start_row,
                 selectors: serde_selection,
                 meta: rg_meta.clone(),
                 page_locations,

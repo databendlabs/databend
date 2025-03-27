@@ -23,6 +23,7 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
@@ -44,7 +45,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use opendal::Operator;
 use rand::thread_rng;
 use rand::Rng;
-use uuid::Uuid;
 
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 
@@ -121,24 +121,30 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
     let table_info = table.get_table_info().clone();
     if let Some((parts, snapshot)) = res {
+        let table_meta_timestamps =
+            ctx.get_table_meta_timestamps(table.as_ref(), Some(snapshot.clone()))?;
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
             plan_id: u32::MAX,
+            table_meta_timestamps,
         }));
 
         let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             table_info,
             snapshot: Some(snapshot),
-            mutation_kind: MutationKind::Compact,
+            commit_type: CommitType::Mutation {
+                kind: MutationKind::Compact,
+                merge_meta,
+            },
             update_stream_meta: vec![],
-            merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
             recluster_info: None,
+            table_meta_timestamps,
         }));
 
         let build_res =
@@ -167,11 +173,7 @@ async fn test_safety() -> Result<()> {
     settings.set_max_threads(2)?;
     settings.set_max_storage_io_requests(4)?;
 
-    let threshold = BlockThresholds {
-        max_rows_per_block: 5,
-        min_rows_per_block: 4,
-        max_bytes_per_block: 1024,
-    };
+    let threshold = BlockThresholds::new(5, 1024, 100, 10);
 
     let schema = TestFixture::default_table_schema();
     let mut rand = thread_rng();
@@ -211,7 +213,6 @@ async fn test_safety() -> Result<()> {
             rows_per_blocks,
             threshold,
             cluster_key_id,
-            5,
             false,
         )
         .await?;
@@ -223,17 +224,15 @@ async fn test_safety() -> Result<()> {
             merge_statistics_mut(&mut summary, &seg.summary, None);
         }
 
-        let id = Uuid::new_v4();
-        let snapshot = TableSnapshot::new(
-            id,
+        let snapshot = TableSnapshot::try_new(
             None,
-            &None,
             None,
             schema.as_ref().clone(),
             summary,
             locations.clone(),
             None,
-        );
+            Default::default(),
+        )?;
 
         let limit: usize = rand.gen_range(1..15);
         let compact_params = CompactOptions {

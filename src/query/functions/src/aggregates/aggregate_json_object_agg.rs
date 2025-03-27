@@ -35,9 +35,13 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use jiff::tz::TimeZone;
+use jsonb::OwnedJsonb;
+use jsonb::RawJsonb;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use super::StateAddr;
@@ -183,11 +187,13 @@ where
             cast_scalar_to_variant(v.as_ref(), &tz, &mut val);
             values.push((key, val));
         }
-        let mut data = vec![];
-        jsonb::build_object(values.iter().map(|(k, v)| (k, &v[..])), &mut data).unwrap();
-
-        let object_value = Scalar::Variant(data);
-        builder.push(object_value.as_ref());
+        let owned_jsonb =
+            OwnedJsonb::build_object(values.iter().map(|(k, v)| (k, RawJsonb::new(&v[..]))))
+                .map_err(|e| {
+                    ErrorCode::Internal(format!("failed to build object error: {:?}", e))
+                })?;
+        let object_value = ScalarRef::Variant(owned_jsonb.as_ref());
+        builder.push(object_value);
         Ok(())
     }
 }
@@ -383,6 +389,7 @@ pub fn try_create_aggregate_json_object_agg_function(
     display_name: &str,
     _params: Vec<Scalar>,
     argument_types: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_binary_arguments(display_name, argument_types.len())?;
 

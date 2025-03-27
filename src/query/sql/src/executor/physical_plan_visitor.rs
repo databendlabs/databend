@@ -17,7 +17,7 @@ use databend_common_exception::Result;
 use super::physical_plans::AddStreamColumn;
 use super::physical_plans::CacheScan;
 use super::physical_plans::ExpressionScan;
-use super::physical_plans::HilbertSerialize;
+use super::physical_plans::HilbertPartition;
 use super::physical_plans::MutationManipulate;
 use super::physical_plans::MutationOrganize;
 use super::physical_plans::MutationSplit;
@@ -108,7 +108,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
             PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
             PhysicalPlan::Recluster(plan) => self.replace_recluster(plan),
-            PhysicalPlan::HilbertSerialize(plan) => self.replace_hilbert_serialize(plan),
+            PhysicalPlan::HilbertPartition(plan) => self.replace_hilbert_serialize(plan),
             PhysicalPlan::Udf(plan) => self.replace_udf(plan),
             PhysicalPlan::AsyncFunction(plan) => self.replace_async_function(plan),
             PhysicalPlan::Duplicate(plan) => self.replace_duplicate(plan),
@@ -127,12 +127,11 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
     }
 
-    fn replace_hilbert_serialize(&mut self, plan: &HilbertSerialize) -> Result<PhysicalPlan> {
+    fn replace_hilbert_serialize(&mut self, plan: &HilbertPartition) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::HilbertSerialize(Box::new(HilbertSerialize {
-            plan_id: plan.plan_id,
+        Ok(PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
             input: Box::new(input),
-            table_info: plan.table_info.clone(),
+            ..plan.clone()
         })))
     }
 
@@ -420,13 +419,8 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::DistributedInsertSelect(Box::new(
             DistributedInsertSelect {
-                plan_id: plan.plan_id,
                 input: Box::new(input),
-                table_info: plan.table_info.clone(),
-                select_schema: plan.select_schema.clone(),
-                insert_schema: plan.insert_schema.clone(),
-                select_column_bindings: plan.select_column_bindings.clone(),
-                cast_needed: plan.cast_needed,
+                ..plan.clone()
             },
         )))
     }
@@ -650,7 +644,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ExpressionScan(_)
                 | PhysicalPlan::CacheScan(_)
                 | PhysicalPlan::Recluster(_)
-                | PhysicalPlan::HilbertSerialize(_)
+                | PhysicalPlan::HilbertPartition(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::MutationSource(_) => {}

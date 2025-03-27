@@ -18,12 +18,11 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::ModifyTableCommentPlan;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 
+use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -83,18 +82,17 @@ impl Interpreter for ModifyTableCommentInterpreter {
             }
 
             let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-            let table_id = table_info.ident.table_id;
-            let table_version = table_info.ident.seq;
             let mut new_table_meta = table_info.meta.clone();
             new_table_meta.comment = self.plan.new_comment.clone();
 
-            let req = UpdateTableMetaReq {
-                table_id,
-                seq: MatchSeq::Exact(table_version),
+            commit_table_meta(
+                &self.ctx,
+                table.as_ref(),
+                table_info,
                 new_table_meta,
-            };
-
-            catalog.update_single_table_meta(req, table_info).await?;
+                catalog,
+            )
+            .await?;
         };
 
         Ok(PipelineBuildResult::create())

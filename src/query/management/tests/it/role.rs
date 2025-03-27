@@ -18,7 +18,6 @@ use databend_common_base::base::tokio;
 use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_embedded::MemMeta;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::UpsertKV;
 use mockall::predicate::*;
 
@@ -29,6 +28,7 @@ fn make_role_key(role: &str) -> String {
 mod add {
     use databend_common_meta_app::principal::RoleInfo;
     use databend_common_meta_kvapi::kvapi::KVApi;
+    use databend_common_meta_types::MatchSeq;
     use databend_common_meta_types::Operation;
 
     use super::*;

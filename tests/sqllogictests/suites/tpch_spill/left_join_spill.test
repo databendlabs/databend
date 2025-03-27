@@ -5,10 +5,7 @@ statement ok
 use tpch_test;
 
 statement ok
-set join_spilling_memory_ratio = 10;
-
-statement ok
-set join_spilling_bytes_threshold_per_proc = 100;
+SET force_join_data_spill = 1;
 
 statement ok
 set disable_join_reorder = 1;
@@ -215,7 +212,4 @@ statement ok
 set disable_join_reorder = 0;
 
 statement ok
-set join_spilling_memory_ratio = 0;
-
-statement ok
-set join_spilling_bytes_threshold_per_proc = 0;
+unset force_join_data_spill;

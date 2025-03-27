@@ -243,6 +243,10 @@ pub struct QueryConfig {
     pub openai_api_embedding_model: String,
     pub openai_api_completion_model: String,
 
+    pub enable_udf_python_script: bool,
+    pub enable_udf_js_script: bool,
+    pub enable_udf_wasm_script: bool,
+
     pub enable_udf_server: bool,
     pub udf_server_allow_list: Vec<String>,
     pub udf_server_allow_insecure: bool,
@@ -325,6 +329,11 @@ impl Default for QueryConfig {
             openai_api_version: "".to_string(),
             openai_api_completion_model: "gpt-3.5-turbo".to_string(),
             openai_api_embedding_model: "text-embedding-ada-002".to_string(),
+
+            enable_udf_js_script: true,
+            enable_udf_python_script: true,
+            enable_udf_wasm_script: true,
+
             enable_udf_server: false,
             udf_server_allow_list: Vec::new(),
             udf_server_allow_insecure: false,

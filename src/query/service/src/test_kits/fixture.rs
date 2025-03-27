@@ -563,7 +563,7 @@ impl TestFixture {
         num_of_blocks: usize,
         start: i32,
     ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
-        Self::gen_sample_blocks_ex(num_of_blocks, 3, start)
+        Self::gen_sample_blocks_ex(num_of_blocks, 2, start)
     }
 
     pub fn gen_sample_blocks_ex(
@@ -846,7 +846,11 @@ impl TestFixture {
             data_schema,
         )?;
 
-        table.append_data(ctx.clone(), &mut build_res.main_pipeline)?;
+        table.append_data(
+            ctx.clone(),
+            &mut build_res.main_pipeline,
+            Default::default(),
+        )?;
         if commit {
             table.commit_insertion(
                 ctx.clone(),
@@ -856,6 +860,7 @@ impl TestFixture {
                 overwrite,
                 None,
                 None,
+                Default::default(),
             )?;
         } else {
             build_res

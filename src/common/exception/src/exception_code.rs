@@ -157,6 +157,9 @@ build_exceptions! {
     WrongSequenceCount(1125),
     UnknownSequence(1126),
     UnknownQuery(1127),
+    // virtual column
+    VirtualColumnTooMany(1128),
+    VirtualColumnIdOutBound(1129),
 
     // Data Related Errors
 
@@ -424,7 +427,6 @@ build_exceptions! {
     InvalidSessionState(4004),
 
     // recluster error codes
-    NoNeedToRecluster(4011),
     NoNeedToCompact(4012),
     UnsupportedClusterType(4013),
 

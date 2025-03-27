@@ -37,6 +37,7 @@ use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -91,6 +92,7 @@ use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
+use databend_common_storage::init_stage_operator;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
@@ -100,6 +102,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
@@ -113,6 +116,8 @@ use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use jiff::tz::TimeZone;
 use jiff::Zoned;
@@ -129,6 +134,7 @@ use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
+use crate::sessions::query_ctx_shared::MemoryUpdater;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
@@ -153,8 +159,6 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     written_segment_locs: Arc<RwLock<HashSet<Location>>>,
-    // Used by hilbert clustering when do recluster.
-    selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
@@ -184,7 +188,6 @@ impl QueryContext {
             written_segment_locs: Default::default(),
             block_threshold: Default::default(),
             m_cte_temp_table: Default::default(),
-            selected_segment_locs: Default::default(),
         })
     }
 
@@ -531,6 +534,22 @@ impl QueryContext {
             log::error!("create spill meta file error: {}", e);
         }
     }
+
+    pub fn get_query_memory_tracking(&self) -> Option<Arc<MemStat>> {
+        self.shared.get_query_memory_tracking()
+    }
+
+    pub fn set_query_memory_tracking(&self, mem_stat: Option<Arc<MemStat>>) {
+        self.shared.set_query_memory_tracking(mem_stat)
+    }
+
+    pub fn get_node_memory_updater(&self, node: &str) -> Arc<MemoryUpdater> {
+        self.shared.get_node_memory_updater(node)
+    }
+
+    pub fn get_node_peek_memory_usage(&self) -> HashMap<String, usize> {
+        self.shared.get_nodes_peek_memory_usage()
+    }
 }
 
 #[async_trait::async_trait]
@@ -821,7 +840,7 @@ impl TableContext for QueryContext {
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
     }
-    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         self.get_current_session().get_all_available_roles().await
     }
 
@@ -1267,16 +1286,21 @@ impl TableContext for QueryContext {
     }
 
     fn add_selected_segment_location(&self, segment_loc: Location) {
-        let mut segment_locations = self.selected_segment_locs.write();
+        let mut segment_locations = self.shared.selected_segment_locs.write();
         segment_locations.insert(segment_loc);
     }
 
     fn get_selected_segment_locations(&self) -> Vec<Location> {
-        self.selected_segment_locs.read().iter().cloned().collect()
+        self.shared
+            .selected_segment_locs
+            .read()
+            .iter()
+            .cloned()
+            .collect()
     }
 
     fn clear_selected_segment_locations(&self) {
-        let mut segment_locations = self.selected_segment_locs.write();
+        let mut segment_locations = self.shared.selected_segment_locs.write();
         segment_locations.clear();
     }
 
@@ -1458,6 +1482,56 @@ impl TableContext for QueryContext {
         self.shared.session.session_ctx.session_state()
     }
 
+    fn get_table_meta_timestamps(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        let table_id = table.get_id();
+        let cache = self.shared.get_table_meta_timestamps();
+        let cached_item = cache.lock().get(&table_id).copied();
+
+        match cached_item {
+            Some(ts) => Ok(ts),
+            None => {
+                let delta = {
+                    let fuse_table = FuseTable::try_from_table(table)?;
+                    let duration = if fuse_table.is_transient() {
+                        Duration::from_secs(0)
+                    } else {
+                        let settings = &self.query_settings;
+                        let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
+                        if max_exec_time_secs != 0 {
+                            Duration::from_secs(max_exec_time_secs)
+                        } else {
+                            // no limit, use retention period as delta
+                            // prefer table-level retention setting.
+                            match fuse_table.get_table_retention_period() {
+                                None => {
+                                    Duration::from_days(settings.get_data_retention_time_in_days()?)
+                                }
+                                Some(v) => v,
+                            }
+                        }
+                    };
+
+                    chrono::Duration::from_std(duration).map_err(|e| {
+                        ErrorCode::Internal(format!(
+                            "Unable to construct delta duration of table meta timestamp, {e}",
+                        ))
+                    })?
+                };
+                let ts = self.txn_mgr().lock().get_table_meta_timestamps(
+                    table_id,
+                    previous_snapshot,
+                    delta,
+                );
+                cache.lock().insert(table_id, ts);
+                Ok(ts)
+            }
+        }
+    }
+
     fn get_read_block_thresholds(&self) -> BlockThresholds {
         *self.block_threshold.read()
     }
@@ -1466,11 +1540,11 @@ impl TableContext for QueryContext {
         *self.block_threshold.write() = thresholds;
     }
 
-    fn get_query_queued_duration(&self) -> Duration {
+    fn get_query_queued_duration(&self) -> std::time::Duration {
         *self.shared.query_queued_duration.read()
     }
 
-    fn set_query_queued_duration(&self, queued_duration: Duration) {
+    fn set_query_queued_duration(&self, queued_duration: std::time::Duration) {
         *self.shared.query_queued_duration.write() = queued_duration;
     }
 
@@ -1514,6 +1588,14 @@ impl TableContext for QueryContext {
         max_column_position: usize,
         case_sensitive: bool,
     ) -> Result<Arc<dyn Table>> {
+        let operator = init_stage_operator(&stage_info)?;
+        let info = operator.info();
+        let stage_root = format!("{}{}", info.name(), info.root());
+        let stage_root = if stage_root.ends_with('/') {
+            stage_root
+        } else {
+            format!("{}/", stage_root)
+        };
         match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
                 let mut read_options = ParquetReadOptions::default();
@@ -1553,6 +1635,7 @@ impl TableContext for QueryContext {
                     default_values: None,
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
+                    stage_root,
                 };
                 OrcTable::try_create(info).await
             }
@@ -1571,6 +1654,7 @@ impl TableContext for QueryContext {
                     default_values: None,
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
+                    stage_root,
                 };
                 StageTable::try_create(info)
             }
@@ -1607,6 +1691,7 @@ impl TableContext for QueryContext {
                     default_values: None,
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
+                    stage_root,
                 };
                 StageTable::try_create(info)
             }
@@ -1690,6 +1775,7 @@ impl TableContext for QueryContext {
                 tb_id: table.get_table_info().ident.table_id,
                 table_name: table_name.to_string(),
                 db_id: db.get_db_info().database_id.db_id,
+                db_name: db.name().to_string(),
                 engine: table.engine().to_string(),
                 session_id: table
                     .options()

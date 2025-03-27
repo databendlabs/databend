@@ -523,6 +523,37 @@ impl UnknownTableId {
     }
 }
 
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("VirtualColumnIdOutBound: the virtual column id `{column_id}` is outside the range `{lower}` to `{upper}`")]
+pub struct VirtualColumnIdOutBound {
+    column_id: u32,
+    lower: u32,
+    upper: u32,
+}
+
+impl VirtualColumnIdOutBound {
+    pub fn new(column_id: u32, lower: u32, upper: u32) -> Self {
+        Self {
+            column_id,
+            lower,
+            upper,
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("VirtualColumnTooMany: the number of virtual columns in `{table_id}` exceeds `{limit}`")]
+pub struct VirtualColumnTooMany {
+    table_id: u64,
+    limit: usize,
+}
+
+impl VirtualColumnTooMany {
+    pub fn new(table_id: u64, limit: usize) -> VirtualColumnTooMany {
+        Self { table_id, limit }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ShareAlreadyExists: {share_name} while {context}")]
 pub struct ShareAlreadyExists {
@@ -1066,6 +1097,12 @@ pub enum AppError {
     VirtualColumnAlreadyExists(#[from] ExistError<virtual_column_ident::Resource, u64>),
 
     #[error(transparent)]
+    VirtualColumnIdOutBound(#[from] VirtualColumnIdOutBound),
+
+    #[error(transparent)]
+    VirtualColumnTooMany(#[from] VirtualColumnTooMany),
+
+    #[error(transparent)]
     StreamAlreadyExists(#[from] StreamAlreadyExists),
 
     #[error(transparent)]
@@ -1200,7 +1237,10 @@ impl AppErrorMessage for DuplicatedUpsertFiles {}
 
 impl AppErrorMessage for CommitTableMetaError {
     fn message(&self) -> String {
-        format!("Commit table '{}' fail", self.table_name)
+        format!(
+            "Create table '{}' failed, possibly because a table with the same name already exists",
+            self.table_name
+        )
     }
 }
 
@@ -1479,6 +1519,10 @@ impl AppErrorMessage for SequenceError {
     }
 }
 
+impl AppErrorMessage for VirtualColumnIdOutBound {}
+
+impl AppErrorMessage for VirtualColumnTooMany {}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1597,6 +1641,10 @@ impl From<AppError> for ErrorCode {
             AppError::ProcedureAlreadyExists(err) => {
                 ErrorCode::ProcedureAlreadyExists(err.message())
             }
+            AppError::VirtualColumnIdOutBound(err) => {
+                ErrorCode::VirtualColumnIdOutBound(err.message())
+            }
+            AppError::VirtualColumnTooMany(err) => ErrorCode::VirtualColumnTooMany(err.message()),
         }
     }
 }

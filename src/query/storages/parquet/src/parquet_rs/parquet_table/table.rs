@@ -36,8 +36,11 @@ use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::FILENAME_COLUMN_ID;
+use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -212,6 +215,10 @@ impl Table for ParquetRSTable {
         true
     }
 
+    fn supported_internal_column(&self, column_id: ColumnId) -> bool {
+        (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
+    }
+
     fn support_prewhere(&self) -> bool {
         self.read_options.do_prewhere()
     }
@@ -284,14 +291,15 @@ impl Table for ParquetRSTable {
         let file_locations = match &self.files_to_read {
             Some(files) => files
                 .iter()
-                .map(|f| (f.path.clone(), f.size))
+                .filter(|f| f.size > 0)
+                .map(|f| (f.path.clone(), f.size, f.dedup_key()))
                 .collect::<Vec<_>>(),
             None => self
                 .files_info
                 .list(&self.operator, thread_num, None)
                 .await?
                 .into_iter()
-                .map(|f| (f.path, f.size))
+                .map(|f| (f.path.clone(), f.size, f.dedup_key()))
                 .collect::<Vec<_>>(),
         };
 
@@ -306,6 +314,7 @@ impl Table for ParquetRSTable {
             self.leaf_fields.clone(),
             self.max_threads,
             self.max_memory_usage,
+            Some(ctx.get_id()),
         )
         .await?;
         let elapsed = now.elapsed();

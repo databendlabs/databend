@@ -383,6 +383,7 @@ pub struct ShowCreateTablePlan {
     pub table: String,
     /// The table schema
     pub schema: DataSchemaRef,
+    pub with_quoted_ident: bool,
 }
 
 impl ShowCreateTablePlan {
@@ -404,6 +405,16 @@ impl TruncateTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum TruncateMode {
+    // Truncate and keep the historical data.
+    Normal,
+    // Delete the data, used for delete operation.
+    Delete,
+    // Truncate and purge the historical data.
+    Purge,
 }
 
 /// Undrop.

@@ -30,10 +30,7 @@ select * from t2 left join t1 on t1.a = t2.a order by t1.a, t2.a
 ----
 
 statement ok
-set join_spilling_memory_ratio = 60;
-
-statement ok
-set join_spilling_bytes_threshold_per_proc = 1;
+set force_join_data_spill = 1;
 
 query I
 select * from t1 inner join t2 on t1.a = t2.a order by t1.a, t2.a
@@ -51,10 +48,7 @@ select * from t2 left join t1 on t1.a = t2.a order by t1.a, t2.a
 ----
 
 statement ok
-set join_spilling_memory_ratio = 0;
-
-statement ok
-set join_spilling_bytes_threshold_per_proc = 0;
+unset force_join_data_spill;
 
 statement ok
 drop table if exists t1

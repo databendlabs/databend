@@ -54,9 +54,12 @@ use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -189,10 +192,11 @@ impl ModifyTableColumnInterpreter {
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let prev_snapshot_id = fuse_table
-            .read_table_snapshot()
-            .await
-            .map_or(None, |v| v.map(|snapshot| snapshot.snapshot_id));
+        let base_snapshot = fuse_table.read_table_snapshot().await?;
+        let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(table.as_ref(), base_snapshot.clone())?;
 
         let mut bloom_index_cols = vec![];
         if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
@@ -263,7 +267,7 @@ impl ModifyTableColumnInterpreter {
                 // 2. default expr and computed expr not changed. Otherwise, we need fill value for
                 //    new added column.
                 if ((table.storage_format_as_parquet() && is_alter_column_string_to_binary)
-                    || old_field.data_type.remove_nullable() == field.data_type.remove_nullable())
+                    || old_field.data_type == field.data_type)
                     && old_field.default_expr == field.default_expr
                     && old_field.computed_expr == field.computed_expr
                 {
@@ -276,18 +280,14 @@ impl ModifyTableColumnInterpreter {
 
         // if don't need rebuild table, only update table meta.
         if modified_field_indices.is_empty() {
-            let table_id = table_info.ident.table_id;
-            let table_version = table_info.ident.seq;
-
-            let req = UpdateTableMetaReq {
-                table_id,
-                seq: MatchSeq::Exact(table_version),
-                new_table_meta: table_info.meta,
-            };
-
-            let _resp = catalog
-                .update_single_table_meta(req, table.get_table_info())
-                .await?;
+            commit_table_meta(
+                &self.ctx,
+                table.as_ref(),
+                &table_info,
+                table_info.meta.clone(),
+                catalog,
+            )
+            .await?;
 
             return Ok(PipelineBuildResult::create());
         }
@@ -301,6 +301,8 @@ impl ModifyTableColumnInterpreter {
             .map(|(index, field)| {
                 if modified_field_indices.contains(&index) {
                     let old_field = schema.field_with_name(&field.name).unwrap();
+                    let need_remove_nullable =
+                        old_field.data_type.is_nullable() && !field.data_type.is_nullable();
                     // If the column type is Tuple or Array(Tuple), the difference in the number of leaf columns may cause
                     // the auto cast to fail.
                     // We read the leaf column data, and then use build function to construct a new Tuple or Array(Tuple).
@@ -421,7 +423,11 @@ impl ModifyTableColumnInterpreter {
                             )
                         }
                         (_, _) => {
-                            format!("`{}`", field.name)
+                            if need_remove_nullable {
+                                format!("remove_nullable(`{}`)", field.name)
+                            } else {
+                                format!("`{}`", field.name)
+                            }
                         }
                     }
                 } else {
@@ -442,6 +448,7 @@ impl ModifyTableColumnInterpreter {
             table_info,
             new_schema_without_computed_fields.into(),
             prev_snapshot_id,
+            table_meta_timestamps,
         )
         .await
     }
@@ -642,6 +649,7 @@ pub(crate) async fn build_select_insert_plan(
     table_info: TableInfo,
     new_schema: TableSchemaRef,
     prev_snapshot_id: Option<SnapshotId>,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<PipelineBuildResult> {
     // 1. build plan by sql
     let mut planner = Planner::new(ctx.clone());
@@ -677,6 +685,7 @@ pub(crate) async fn build_select_insert_plan(
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),
         cast_needed: true,
+        table_meta_timestamps,
     }));
     let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &insert_plan).await?;
 
@@ -689,6 +698,7 @@ pub(crate) async fn build_select_insert_plan(
         true,
         prev_snapshot_id,
         None,
+        table_meta_timestamps,
     )?;
 
     Ok(build_res)

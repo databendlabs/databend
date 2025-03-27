@@ -240,7 +240,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) <= 1)], limit: NONE]
+├── push downs: [filters: [t1.a (#0) < 1], limit: NONE]
 └── estimated rows: 0.00
 
 # a != 1 and a <= 2
@@ -296,7 +296,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) >= 1)], limit: NONE]
+├── push downs: [filters: [t1.a (#0) > 1], limit: NONE]
 └── estimated rows: 0.00
 
 # a != 1 and a >= 0
@@ -418,6 +418,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── TableScan(Build)
@@ -448,6 +449,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t3.a (#4)]
 ├── probe keys: [t1.a (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── HashJoin(Build)
@@ -455,6 +457,7 @@ HashJoin
 │   ├── join type: INNER
 │   ├── build keys: [t3.a (#4)]
 │   ├── probe keys: [t2.a (#2)]
+│   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── estimated rows: 0.00
 │   ├── TableScan(Build)
@@ -564,6 +567,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t3.a (#4)]
 ├── probe keys: [t1.a (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── HashJoin(Build)
@@ -571,6 +575,7 @@ HashJoin
 │   ├── join type: INNER
 │   ├── build keys: [t3.a (#4)]
 │   ├── probe keys: [t2.a (#2)]
+│   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── estimated rows: 0.00
 │   ├── TableScan(Build)
@@ -637,6 +642,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [CAST(t2.id (#1) AS Int64 NULL)]
 ├── probe keys: [CAST(t1.id (#0) AS Int64 NULL)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)

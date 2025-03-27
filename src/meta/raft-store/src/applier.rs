@@ -17,6 +17,7 @@ use std::io;
 use std::time::Duration;
 
 use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
+use databend_common_meta_types::node::Node;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
 use databend_common_meta_types::protobuf::BooleanExpression;
@@ -36,7 +37,6 @@ use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::Interval;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
-use databend_common_meta_types::Node;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnDeleteByPrefixResponse;
@@ -73,7 +73,8 @@ where SM: StateMachineApi + 'static
     pub(crate) cmd_ctx: CmdContext,
 
     /// The changes have been made by the applying one log entry
-    changes: Vec<Change<Vec<u8>, String>>,
+    /// `(key, prev, result)`.
+    changes: Vec<(String, Option<SeqV>, Option<SeqV>)>,
 }
 
 impl<'a, SM> Applier<'a, SM>
@@ -586,8 +587,7 @@ where SM: StateMachineApi + 'static
             return;
         }
 
-        self.changes
-            .push(Change::new(prev, result).with_id(key.to_string()))
+        self.changes.push((key.to_string(), prev, result))
     }
 
     /// Retrieve the proposing time from a raft-log.

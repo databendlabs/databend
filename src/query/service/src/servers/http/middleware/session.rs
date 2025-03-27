@@ -23,6 +23,8 @@ use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_base::headers::HEADER_WAREHOUSE;
+use databend_common_base::runtime::defer;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_config::DATABEND_SEMVER;
@@ -39,6 +41,7 @@ use headers::authorization::Credentials;
 use http::header::AUTHORIZATION;
 use http::HeaderMap;
 use http::HeaderValue;
+use http::Method;
 use http::StatusCode;
 use log::error;
 use log::info;
@@ -91,6 +94,8 @@ pub enum EndpointKind {
     Verify,
     UploadToStage,
     SystemInfo,
+    Catalog,
+    Metadata,
 }
 
 impl EndpointKind {
@@ -105,6 +110,7 @@ impl EndpointKind {
                 | EndpointKind::PollQuery
                 | EndpointKind::Logout
                 | EndpointKind::HeartBeat
+                | EndpointKind::Catalog
         )
     }
     pub fn require_databend_token_type(&self) -> Result<Option<TokenType>> {
@@ -116,7 +122,9 @@ impl EndpointKind {
             | EndpointKind::Logout
             | EndpointKind::SystemInfo
             | EndpointKind::HeartBeat
-            | EndpointKind::UploadToStage => {
+            | EndpointKind::UploadToStage
+            | EndpointKind::Metadata
+            | EndpointKind::Catalog => {
                 if GlobalConfig::instance().query.management_mode {
                     Ok(None)
                 } else {
@@ -455,6 +463,26 @@ impl<E> HTTPSessionEndpoint<E> {
 }
 
 async fn forward_request(mut req: Request, node: Arc<NodeInfo>) -> PoemResult<Response> {
+    let body = req.take_body().into_bytes().await?;
+    let mut headers = req.headers().clone();
+    headers.remove(http::header::HOST);
+    forward_request_with_body(
+        node,
+        &req.uri().to_string(),
+        body,
+        req.method().to_owned(),
+        headers,
+    )
+    .await
+}
+
+pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
+    node: Arc<NodeInfo>,
+    uri: &str,
+    body: T,
+    method: Method,
+    headers: HeaderMap,
+) -> PoemResult<Response> {
     let addr = node.http_address.clone();
     let config = GlobalConfig::instance();
     let scheme = if config.query.http_handler_tls_server_key.is_empty()
@@ -464,13 +492,13 @@ async fn forward_request(mut req: Request, node: Arc<NodeInfo>) -> PoemResult<Re
     } else {
         "https"
     };
-    let url = format!("{scheme}://{addr}/v1{}", req.uri());
+    let url = format!("{scheme}://{addr}/v1{}", uri);
 
     let client = reqwest::Client::new();
     let reqwest_request = client
-        .request(req.method().clone(), &url)
-        .headers(req.headers().clone())
-        .body(req.take_body().into_bytes().await?)
+        .request(method, &url)
+        .headers(headers)
+        .body(body)
         .build()
         .map_err(|e| {
             HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
@@ -599,9 +627,15 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             .map(|id| id.to_str().unwrap().to_string())
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
+        let query_mem_stat = MemStat::create(format!("Query-{}", query_id));
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
+        tracking_payload.mem_stat = Some(query_mem_stat.clone());
+
         let _guard = ThreadTracker::tracking(tracking_payload);
+        let _guard2 = defer(move || {
+            query_mem_stat.set_limit(0);
+        });
 
         ThreadTracker::tracking_future(async move {
             match self.auth(&req, query_id).await {

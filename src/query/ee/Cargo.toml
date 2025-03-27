@@ -7,10 +7,6 @@ name = "databend-enterprise-query"
 publish = { workspace = true }
 version = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
@@ -68,6 +64,7 @@ jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 tempfile = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 jsonb = { workspace = true }

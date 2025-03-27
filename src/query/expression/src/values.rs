@@ -39,6 +39,7 @@ use geo::Point;
 use geozero::CoordDimensions;
 use geozero::ToWkb;
 use itertools::Itertools;
+use jsonb::RawJsonb;
 use roaring::RoaringTreemap;
 use serde::de::Visitor;
 use serde::Deserialize;
@@ -326,6 +327,16 @@ impl Value<AnyType> {
                 builder.build()
             }
             Value::Column(c) => c.clone(),
+        }
+    }
+
+    pub fn into_full_column(self, ty: &DataType, num_rows: usize) -> Column {
+        match self {
+            Value::Scalar(s) => {
+                let builder = ColumnBuilder::repeat(&s.as_ref(), num_rows, ty);
+                builder.build()
+            }
+            Value::Column(c) => c,
         }
     }
 
@@ -745,6 +756,56 @@ impl ScalarRef<'_> {
             },
         }
     }
+
+    /// Estimates the memory size of a scalar value if it were repeated `n` times,
+    /// without actually converting it into a column. This avoids unnecessary allocations
+    /// and provides a direct calculation based on the scalar type and its associated DataType.
+    ///
+    /// # Parameters:
+    /// - `scalar`: The scalar value to estimate memory size for.
+    /// - `n`: The number of times the scalar is hypothetically repeated.
+    /// - `data_type`: The data type of the scalar, used for correct size calculations.
+    ///
+    /// # Returns:
+    /// The estimated memory size (in bytes) that `n` repetitions of `scalar` would occupy.
+    pub fn estimated_scalar_repeat_size(&self, n: usize, data_type: &DataType) -> usize {
+        if let DataType::Nullable(ty) = data_type {
+            let mut memory_size = (n + 7) / 8;
+            if !self.is_null() {
+                memory_size += self.estimated_scalar_repeat_size(n, ty);
+            }
+            return memory_size;
+        }
+
+        match self {
+            ScalarRef::Null => std::mem::size_of::<usize>(),
+            ScalarRef::EmptyArray | ScalarRef::EmptyMap => std::mem::size_of::<usize>(),
+            ScalarRef::Number(_) => n * self.memory_size(),
+            ScalarRef::Decimal(_) => n * self.memory_size(),
+            ScalarRef::Boolean(_) => (n + 7) / 8,
+            ScalarRef::Binary(s) => s.len() * n + (n + 1) * 8,
+            ScalarRef::String(s) => s.len() * n + n * 12,
+            ScalarRef::Timestamp(_) => n * 8,
+            ScalarRef::Date(_) => n * 4,
+            ScalarRef::Interval(_) => n * 16,
+            ScalarRef::Array(col) => col.memory_size() * n + (n + 1) * 8,
+            ScalarRef::Map(col) => col.memory_size() * n + (n + 1) * 8,
+            ScalarRef::Bitmap(b) => b.len() * n + (n + 1) * 8,
+            ScalarRef::Tuple(fields) => {
+                let DataType::Tuple(fields_ty) = data_type else {
+                    unreachable!()
+                };
+                fields
+                    .iter()
+                    .zip(fields_ty.iter())
+                    .map(|(v, ty)| v.estimated_scalar_repeat_size(n, ty))
+                    .sum()
+            }
+            ScalarRef::Variant(s) => s.len() * n + (n + 1) * 8,
+            ScalarRef::Geometry(s) => s.len() * n + (n + 1) * 8,
+            ScalarRef::Geography(s) => s.0.len() * n + (n + 1) * 8,
+        }
+    }
 }
 
 impl PartialOrd for Scalar {
@@ -766,7 +827,9 @@ impl PartialOrd for Scalar {
             (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => b1.partial_cmp(b2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
-                jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
+                let left_jsonb = RawJsonb::new(v1);
+                let right_jsonb = RawJsonb::new(v2);
+                left_jsonb.partial_cmp(&right_jsonb)
             }
             (Scalar::Geometry(g1), Scalar::Geometry(g2)) => compare_geometry(g1, g2),
             (Scalar::Geography(g1), Scalar::Geography(g2)) => g1.partial_cmp(g2),
@@ -804,7 +867,11 @@ impl<'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'_> {
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
             (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => b1.partial_cmp(b2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
-            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => {
+                let left_jsonb = RawJsonb::new(v1);
+                let right_jsonb = RawJsonb::new(v2);
+                left_jsonb.partial_cmp(&right_jsonb)
+            }
             (ScalarRef::Geometry(g1), ScalarRef::Geometry(g2)) => compare_geometry(g1, g2),
             (ScalarRef::Geography(g1), ScalarRef::Geography(g2)) => g1.partial_cmp(g2),
             (ScalarRef::Interval(i1), ScalarRef::Interval(i2)) => i1.partial_cmp(i2),
@@ -903,9 +970,13 @@ impl PartialOrd for Column {
                 col1.iter().partial_cmp(col2.iter())
             }
             (Column::Tuple(fields1), Column::Tuple(fields2)) => fields1.partial_cmp(fields2),
-            (Column::Variant(col1), Column::Variant(col2)) => col1
-                .iter()
-                .partial_cmp_by(col2.iter(), |v1, v2| jsonb::compare(v1, v2).ok()),
+            (Column::Variant(col1), Column::Variant(col2)) => {
+                col1.iter().partial_cmp_by(col2.iter(), |v1, v2| {
+                    let left_jsonb = RawJsonb::new(v1);
+                    let right_jsonb = RawJsonb::new(v2);
+                    left_jsonb.partial_cmp(&right_jsonb)
+                })
+            }
             (Column::Geometry(col1), Column::Geometry(col2)) => {
                 col1.iter().partial_cmp_by(col2.iter(), compare_geometry)
             }
@@ -1093,9 +1164,16 @@ impl Column {
     }
 
     pub fn domain(&self) -> Domain {
-        if !matches!(self, Column::Array(_) | Column::Map(_)) {
-            assert!(self.len() > 0);
+        if self.len() == 0 {
+            if matches!(self, Column::Array(_)) {
+                return Domain::Array(None);
+            }
+            if matches!(self, Column::Map(_)) {
+                return Domain::Map(None);
+            }
+            return Domain::full(&self.data_type());
         }
+
         match self {
             Column::Null { .. } => Domain::Nullable(NullableDomain {
                 has_null: true,
@@ -1103,6 +1181,7 @@ impl Column {
             }),
             Column::EmptyArray { .. } => Domain::Array(None),
             Column::EmptyMap { .. } => Domain::Map(None),
+
             Column::Number(col) => Domain::Number(col.domain()),
             Column::Decimal(col) => Domain::Decimal(col.domain()),
             Column::Boolean(col) => Domain::Boolean(BooleanDomain {
@@ -1138,23 +1217,29 @@ impl Column {
                 })
             }
             Column::Array(col) => {
-                if col.len() == 0 || col.values.len() == 0 {
+                if col.len() == 0 {
                     Domain::Array(None)
                 } else {
-                    let inner_domain = col.values.domain();
+                    let inner_domain = col.underlying_column().domain();
                     Domain::Array(Some(Box::new(inner_domain)))
                 }
             }
             Column::Map(col) => {
-                if col.len() == 0 || col.values.len() == 0 {
+                if col.len() == 0 {
                     Domain::Map(None)
                 } else {
-                    let inner_domain = col.values.domain();
+                    let inner_domain = col.underlying_column().domain();
                     Domain::Map(Some(Box::new(inner_domain)))
                 }
             }
             Column::Nullable(col) => {
-                let inner_domain = col.column.domain();
+                let inner_domain = if col.validity.null_count() > 0 {
+                    // goes into the slower path, we will create a new column without nulls
+                    let inner = col.column.clone().filter(&col.validity);
+                    inner.domain()
+                } else {
+                    col.column.domain()
+                };
                 Domain::Nullable(NullableDomain {
                     has_null: col.validity.null_count() > 0,
                     value: Some(Box::new(inner_domain)),
@@ -1191,11 +1276,11 @@ impl Column {
             Column::Date(_) => DataType::Date,
             Column::Interval(_) => DataType::Interval,
             Column::Array(array) => {
-                let inner = array.values.data_type();
+                let inner = array.values().data_type();
                 DataType::Array(Box::new(inner))
             }
             Column::Map(col) => {
-                let inner = col.values.data_type();
+                let inner = col.values().data_type();
                 DataType::Map(Box::new(inner))
             }
             Column::Bitmap(_) => DataType::Bitmap,
@@ -1351,10 +1436,23 @@ impl Column {
                 })
                 .take(len),
             )),
-            DataType::Nullable(ty) => NullableColumn::new_column(
-                Column::random(ty, len, options),
-                Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>()),
-            ),
+            DataType::Nullable(ty) => {
+                let column = Column::random(ty, len, options);
+                let bitmap =
+                    Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>());
+
+                // If the value is NULL, insert default value in underlying column
+                let mut builder = ColumnBuilder::with_capacity(ty, len);
+                for (valid, value) in bitmap.iter().zip(column.iter()) {
+                    if valid {
+                        builder.push(value);
+                    } else {
+                        builder.push_default();
+                    }
+                }
+                let new_column = builder.build();
+                NullableColumn::new_column(new_column, bitmap)
+            }
             DataType::Array(inner_ty) => {
                 let mut inner_len = 0;
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
@@ -1363,10 +1461,8 @@ impl Column {
                     inner_len += rng.gen_range(0..=max_arr_len) as u64;
                     offsets.push(inner_len);
                 }
-                Column::Array(Box::new(ArrayColumn {
-                    values: Column::random(inner_ty, inner_len as usize, options),
-                    offsets: offsets.into(),
-                }))
+                let inner_column = Column::random(inner_ty, inner_len as usize, options);
+                Column::Array(Box::new(ArrayColumn::new(inner_column, offsets.into())))
             }
             DataType::Map(inner_ty) => {
                 let mut inner_len = 0;
@@ -1376,10 +1472,8 @@ impl Column {
                     inner_len += rng.gen_range(0..=max_arr_len) as u64;
                     offsets.push(inner_len);
                 }
-                Column::Map(Box::new(ArrayColumn {
-                    values: Column::random(inner_ty, inner_len as usize, options),
-                    offsets: offsets.into(),
-                }))
+                let inner_column = Column::random(inner_ty, inner_len as usize, options);
+                Column::Map(Box::new(ArrayColumn::new(inner_column, offsets.into())))
             }
             DataType::Bitmap => BitmapType::from_data(
                 (0..len)
@@ -1403,7 +1497,7 @@ impl Column {
             DataType::Variant => {
                 let mut data = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let val = jsonb::rand_value();
+                    let val = jsonb::Value::rand_value();
                     data.push(val.to_vec());
                 }
                 VariantType::from_data(data)
@@ -1485,8 +1579,8 @@ impl Column {
             Column::Timestamp(col) => col.len() * 8,
             Column::Date(col) => col.len() * 4,
             Column::Interval(col) => col.len() * 16,
-            Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
-            Column::Map(col) => col.values.memory_size() + col.offsets.len() * 8,
+            Column::Array(col) => col.memory_size(),
+            Column::Map(col) => col.memory_size(),
             Column::Bitmap(col) => col.memory_size(),
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
@@ -1520,7 +1614,9 @@ impl Column {
             | Column::Variant(col)
             | Column::Geometry(col) => col.memory_size(),
             Column::String(col) => col.len() * 8 + col.total_bytes_len(),
-            Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
+            Column::Array(col) | Column::Map(col) => {
+                col.underlying_column().serialize_size() + col.len() * 8
+            }
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
         }
@@ -1675,9 +1771,8 @@ impl ColumnBuilder {
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
             ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat(b, n)),
             ScalarRef::Tuple(fields) => {
-                let fields_ty = match data_type {
-                    DataType::Tuple(fields_ty) => fields_ty,
-                    _ => unreachable!(),
+                let DataType::Tuple(fields_ty) = data_type else {
+                    unreachable!()
                 };
                 ColumnBuilder::Tuple(
                     fields

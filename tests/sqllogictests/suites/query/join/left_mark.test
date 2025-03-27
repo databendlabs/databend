@@ -1,0 +1,57 @@
+statement ok
+CREATE OR REPLACE TABLE employees AS
+SELECT * FROM (
+    VALUES
+        (1, 1, 50000),
+        (2, 2, 60000),
+        (3, 3, 70000)
+) AS employees(employee_id, name, salary);
+
+statement ok
+CREATE OR REPLACE TABLE departments AS
+SELECT * FROM (
+    VALUES
+        (101, 1, 1),
+        (102, 2, 2),
+        (103, 3, 3)
+) AS departments(department_id, department_name, manager_id);
+
+statement ok
+CREATE OR REPLACE TABLE salaries AS
+SELECT * FROM (
+    VALUES
+        (1, 50000),
+        (2, 60000),
+        (3, 70000),
+        (4, 80000),
+        (5, 90000)
+) AS salaries(employee_id, salary);
+
+
+query TT
+select * from employees e where e.salary > ALL (
+          SELECT salary
+          FROM salaries
+          WHERE employee_id <> e.employee_id
+);
+----
+
+query TT
+SELECT
+    e.employee_id,
+    d.department_name
+FROM
+    employees e
+INNER JOIN
+    departments d
+ON
+    e.employee_id = d.manager_id
+WHERE
+    e.salary > ALL (
+        SELECT salary
+        FROM salaries
+        WHERE employee_id <> e.employee_id
+    )
+ORDER BY employee_id;
+----
+

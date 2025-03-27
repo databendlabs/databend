@@ -72,7 +72,7 @@ impl Plan {
             Plan::DropTableColumn(_) => Ok("DropTableColumn".to_string()),
             Plan::AlterTableClusterKey(_) => Ok("AlterTableClusterKey".to_string()),
             Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
-            Plan::ReclusterTable { .. } => Ok("ReclusterTable".to_string()),
+            Plan::ReclusterTable(_) => Ok("ReclusterTable".to_string()),
             Plan::TruncateTable(_) => Ok("TruncateTable".to_string()),
             Plan::OptimizePurge(_) => Ok("OptimizePurge".to_string()),
             Plan::OptimizeCompactSegment(_) => Ok("OptimizeCompactSegment".to_string()),
@@ -149,7 +149,6 @@ impl Plan {
             Plan::UseDatabase(_) => Ok("UseDatabase".to_string()),
             Plan::Kill(_) => Ok("Kill".to_string()),
 
-            Plan::ShowRoles(_) => Ok("ShowRoles".to_string()),
             Plan::RevertTable(_) => Ok("RevertTable".to_string()),
 
             // data mask

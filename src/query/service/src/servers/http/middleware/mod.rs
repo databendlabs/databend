@@ -18,6 +18,7 @@ mod session;
 
 pub(crate) use metrics::MetricsMiddleware;
 pub(crate) use panic_handler::PanicHandler;
+pub(crate) use session::forward_request_with_body;
 pub use session::json_response;
 pub(crate) use session::sanitize_request_headers;
 pub use session::EndpointKind;

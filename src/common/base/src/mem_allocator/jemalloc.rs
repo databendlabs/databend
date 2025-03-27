@@ -21,6 +21,10 @@
 pub struct JEAllocator;
 
 impl JEAllocator {
+    pub const fn create() -> JEAllocator {
+        JEAllocator
+    }
+
     pub fn name() -> String {
         "jemalloc".to_string()
     }
@@ -44,7 +48,6 @@ pub mod linux {
     use tikv_jemalloc_sys as ffi;
 
     use super::JEAllocator;
-    use crate::runtime::ThreadTracker;
 
     #[cfg(any(target_arch = "arm", target_arch = "mips", target_arch = "powerpc"))]
     const ALIGNOF_MAX_ALIGN_T: usize = 8;
@@ -77,8 +80,6 @@ pub mod linux {
     unsafe impl Allocator for JEAllocator {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-            ThreadTracker::alloc(layout.size() as i64)?;
-
             let data_address = if layout.size() == 0 {
                 unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
             } else {
@@ -92,8 +93,6 @@ pub mod linux {
 
         #[inline(always)]
         fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-            ThreadTracker::alloc(layout.size() as i64)?;
-
             let data_address = if layout.size() == 0 {
                 unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
             } else {
@@ -108,8 +107,6 @@ pub mod linux {
 
         #[inline(always)]
         unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-            ThreadTracker::dealloc(layout.size() as i64);
-
             if layout.size() == 0 {
                 debug_assert_eq!(ptr.as_ptr() as usize, layout.align());
             } else {
@@ -126,9 +123,6 @@ pub mod linux {
         ) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert_eq!(old_layout.align(), new_layout.align());
             debug_assert!(old_layout.size() <= new_layout.size());
-
-            ThreadTracker::dealloc(old_layout.size() as i64);
-            ThreadTracker::alloc(new_layout.size() as i64)?;
 
             let data_address = if new_layout.size() == 0 {
                 NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
@@ -155,9 +149,6 @@ pub mod linux {
         ) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert_eq!(old_layout.align(), new_layout.align());
             debug_assert!(old_layout.size() <= new_layout.size());
-
-            ThreadTracker::dealloc(old_layout.size() as i64);
-            ThreadTracker::alloc(new_layout.size() as i64)?;
 
             let data_address = if new_layout.size() == 0 {
                 NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
@@ -194,9 +185,6 @@ pub mod linux {
         ) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert_eq!(old_layout.align(), new_layout.align());
             debug_assert!(old_layout.size() >= new_layout.size());
-
-            ThreadTracker::dealloc(old_layout.size() as i64);
-            ThreadTracker::alloc(new_layout.size() as i64)?;
 
             if old_layout.size() == 0 {
                 debug_assert_eq!(ptr.as_ptr() as usize, old_layout.align());

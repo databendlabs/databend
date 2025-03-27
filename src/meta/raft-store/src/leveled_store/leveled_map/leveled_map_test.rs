@@ -14,12 +14,12 @@
 
 use databend_common_meta_types::seq_value::KVMeta;
 use futures_util::TryStreamExt;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
 
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::MapApi;
 use crate::leveled_store::map_api::MapApiExt;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::marked::Marked;
 
 #[tokio::test]
@@ -116,10 +116,10 @@ async fn test_single_level() -> anyhow::Result<()> {
     ]);
 
     // Get
-    let got = l.str_map().get("a2").await?;
+    let got = l.str_map().get(&s("a2")).await?;
     assert_eq!(got, Marked::new_with_meta(2, b("b2"), None));
 
-    let got = l.str_map().get("a3").await?;
+    let got = l.str_map().get(&s("a3")).await?;
     assert_eq!(got, Marked::new_tombstone(6));
     Ok(())
 }
@@ -182,13 +182,13 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Get
 
-    let got = l.str_map().get("a1").await?;
+    let got = l.str_map().get(&s("a1")).await?;
     assert_eq!(got, Marked::new_with_meta(7, b("b5"), None));
 
-    let got = l.str_map().get("a2").await?;
+    let got = l.str_map().get(&s("a2")).await?;
     assert_eq!(got, Marked::new_with_meta(6, b("b4"), None));
 
-    let got = l.str_map().get("w1").await?;
+    let got = l.str_map().get(&s("w1")).await?;
     assert_eq!(got, Marked::new_tombstone(0));
 
     // Check base level
@@ -241,22 +241,22 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 async fn test_three_levels_get_range() -> anyhow::Result<()> {
     let l = build_3_levels().await?;
 
-    let got = l.str_map().get("a").await?;
+    let got = l.str_map().get(&s("a")).await?;
     assert_eq!(got, Marked::new_with_meta(1, b("a0"), None));
 
-    let got = l.str_map().get("b").await?;
+    let got = l.str_map().get(&s("b")).await?;
     assert_eq!(got, Marked::new_tombstone(4));
 
-    let got = l.str_map().get("c").await?;
+    let got = l.str_map().get(&s("c")).await?;
     assert_eq!(got, Marked::new_tombstone(6));
 
-    let got = l.str_map().get("d").await?;
+    let got = l.str_map().get(&s("d")).await?;
     assert_eq!(got, Marked::new_with_meta(7, b("d2"), None));
 
-    let got = l.str_map().get("e").await?;
+    let got = l.str_map().get(&s("e")).await?;
     assert_eq!(got, Marked::new_with_meta(6, b("e1"), None));
 
-    let got = l.str_map().get("f").await?;
+    let got = l.str_map().get(&s("f")).await?;
     assert_eq!(got, Marked::new_tombstone(0));
 
     let got = l
@@ -462,7 +462,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
             Marked::new_with_meta(6, b("a1"), Some(KVMeta::new_expire(1)))
         );
 
-        let got = l.str_map().get("a").await?;
+        let got = l.str_map().get(&s("a")).await?;
         assert_eq!(
             got,
             Marked::new_with_meta(6, b("a1"), Some(KVMeta::new_expire(1)))
@@ -483,7 +483,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
             Marked::new_normal(6, b("x1")).with_meta(Some(KVMeta::new_expire(10)))
         );
 
-        let got = l.str_map().get("b").await?;
+        let got = l.str_map().get(&s("b")).await?;
         assert_eq!(
             got,
             Marked::new_normal(6, b("x1")).with_meta(Some(KVMeta::new_expire(10)))
@@ -498,7 +498,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
         assert_eq!(prev, Marked::new_tombstone(0));
         assert_eq!(result, Marked::new_with_meta(6, b("d1"), None));
 
-        let got = l.str_map().get("d").await?;
+        let got = l.str_map().get(&s("d")).await?;
         assert_eq!(got, Marked::new_with_meta(6, b("d1"), None));
     }
 
@@ -522,7 +522,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
             Marked::new_with_meta(6, b("a0"), Some(KVMeta::new_expire(2)))
         );
 
-        let got = l.str_map().get("a").await?;
+        let got = l.str_map().get(&s("a")).await?;
         assert_eq!(
             got,
             Marked::new_with_meta(6, b("a0"), Some(KVMeta::new_expire(2)))
@@ -540,7 +540,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         );
         assert_eq!(result, Marked::new_with_meta(6, b("b1"), None));
 
-        let got = l.str_map().get("b").await?;
+        let got = l.str_map().get(&s("b")).await?;
         assert_eq!(got, Marked::new_with_meta(6, b("b1"), None));
     }
 
@@ -556,7 +556,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
             Marked::new_normal(6, b("c1")).with_meta(Some(KVMeta::new_expire(20)))
         );
 
-        let got = l.str_map().get("c").await?;
+        let got = l.str_map().get(&s("c")).await?;
         assert_eq!(
             got,
             Marked::new_normal(6, b("c1")).with_meta(Some(KVMeta::new_expire(20)))
@@ -572,7 +572,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         assert_eq!(prev, Marked::new_tombstone(0));
         assert_eq!(result, Marked::new_tombstone(0));
 
-        let got = l.str_map().get("d").await?;
+        let got = l.str_map().get(&s("d")).await?;
         assert_eq!(got, Marked::new_tombstone(0));
     }
 

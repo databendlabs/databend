@@ -6,10 +6,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 anyerror = { workspace = true }
 databend-common-base = { workspace = true }
@@ -20,6 +16,7 @@ deepsize = { workspace = true }
 derive_more = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
+map-api = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
 openraft = { workspace = true }

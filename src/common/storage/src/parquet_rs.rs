@@ -273,7 +273,7 @@ mod tests {
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
-    use parquet::arrow::arrow_to_parquet_schema;
+    use parquet::arrow::ArrowSchemaConverter;
 
     use crate::parquet_rs::build_parquet_schema_tree;
     use crate::parquet_rs::ParquetSchemaTreeNode;
@@ -310,7 +310,7 @@ mod tests {
             TableField::new("h", TableDataType::String),
         ]);
         let arrow_schema = (&schema).into();
-        let schema_desc = arrow_to_parquet_schema(&arrow_schema).unwrap();
+        let schema_desc = ArrowSchemaConverter::new().convert(&arrow_schema).unwrap();
         let mut leave_id = 0;
         let tree = build_parquet_schema_tree(schema_desc.root_schema(), &mut leave_id);
         assert_eq!(leave_id, 6);

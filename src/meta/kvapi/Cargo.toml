@@ -8,14 +8,11 @@ edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-meta-app-types = { workspace = true }
 databend-common-meta-types = { workspace = true }
 fastrace = { workspace = true }
 futures-util = { workspace = true }

@@ -227,11 +227,11 @@ impl DataBlock {
         let mut arrays = Vec::with_capacity(self.columns().len());
         for (entry, arrow_field) in self
             .consume_convert_to_full()
-            .columns()
-            .iter()
+            .take_columns()
+            .into_iter()
             .zip(arrow_schema.fields())
         {
-            let column = entry.value.to_owned().into_column().unwrap();
+            let column = entry.value.into_column().unwrap();
             let column = column.maybe_gc();
             let array = column.into_arrow_rs();
 
@@ -303,10 +303,10 @@ impl From<&Column> for ArrayData {
             Column::Date(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Interval(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Array(col) => {
-                let child_data = ArrayData::from(&col.values);
+                let child_data = ArrayData::from(&col.underlying_column());
                 let builder = ArrayDataBuilder::new(arrow_type)
                     .len(value.len())
-                    .buffers(vec![col.offsets.clone().into()])
+                    .buffers(vec![col.underlying_offsets().into()])
                     .child_data(vec![child_data]);
 
                 unsafe { builder.build_unchecked() }
@@ -318,8 +318,12 @@ impl From<&Column> for ArrayData {
                 unsafe { builder.nulls(Some(nulls)).build_unchecked() }
             }
             Column::Map(col) => {
-                let child_data = ArrayData::from(&col.values);
-                let offsets: Vec<i32> = col.offsets.iter().map(|x| *x as i32).collect();
+                let child_data = ArrayData::from(&col.underlying_column());
+                let offsets: Vec<i32> = col
+                    .underlying_offsets()
+                    .into_iter()
+                    .map(|x| x as i32)
+                    .collect();
                 let builder = ArrayDataBuilder::new(arrow_type)
                     .len(value.len())
                     .buffers(vec![offsets.into()])

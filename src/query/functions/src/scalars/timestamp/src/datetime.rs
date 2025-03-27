@@ -17,9 +17,12 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::io::Write;
 
+use chrono::Datelike;
+use chrono::NaiveDate;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
+use databend_common_expression::serialize::EPOCH_DAYS_FROM_CE;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::date::string_to_date;
@@ -39,6 +42,8 @@ use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
+use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
+use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -221,7 +226,42 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, TimestampType, _, _>(
         "to_timestamp",
-        |_, _| FunctionDomain::MayThrow,
+        |ctx, d| {
+            let max = d.max.clone().unwrap_or_default();
+            let mut res = Vec::with_capacity(2);
+            for (i, v) in [&d.min, &max].iter().enumerate() {
+                let mut extend_num = 0;
+                if i == 1 && d.max.is_none() {
+                    // the max domain is unbounded
+                    res.push(TIMESTAMP_MAX);
+                    break;
+                }
+                let mut d = string_to_timestamp(v, &ctx.tz);
+                // the string max domain maybe truncated into `"2024-09-02 00:0�"`
+                const MAX_LEN: usize = "1000-01-01".len();
+                if d.is_err() && v.len() > MAX_LEN {
+                    d = string_to_timestamp(&v[0..MAX_LEN], &ctx.tz);
+                    if i == 0 {
+                        extend_num = -1;
+                    } else {
+                        extend_num = 1;
+                    }
+                }
+
+                if let Ok(ts) = d {
+                    res.push(
+                        ts.timestamp().as_microsecond()
+                            + extend_num * (24 * 60 * 60 * MICROS_PER_SEC - 1),
+                    );
+                } else {
+                    return FunctionDomain::MayThrow;
+                }
+            }
+            FunctionDomain::Domain(SimpleDomain {
+                min: res[0].clamp(TIMESTAMP_MIN, TIMESTAMP_MAX),
+                max: res[1].clamp(TIMESTAMP_MIN, TIMESTAMP_MAX),
+            })
+        },
         eval_string_to_timestamp,
     );
     registry.register_combine_nullable_1_arg::<StringType, TimestampType, _, _>(
@@ -263,8 +303,8 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "to_timestamp",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<TimestampType>>(
-            |timestamp, format, output, ctx| match string_to_format_timestamp(
-                timestamp, format, ctx,
+            |timestamp, format, output, ctx| match string_to_format_datetime(
+                timestamp, format, ctx, true,
             ) {
                 Ok((ts, need_null)) => {
                     if need_null {
@@ -285,8 +325,8 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "try_to_timestamp",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<TimestampType>>(
-            |timestamp, format, output, ctx| match string_to_format_timestamp(
-                timestamp, format, ctx,
+            |timestamp, format, output, ctx| match string_to_format_datetime(
+                timestamp, format, ctx, true,
             ) {
                 Ok((ts, need_null)) => {
                     if need_null {
@@ -310,36 +350,32 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match string_to_format_timestamp(date, format, ctx) {
-                        Ok((res, false)) => {
-                            output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
-                        }
-                        Ok((_, true)) => {
-                            output.push_null();
+                    match NaiveDate::parse_from_str(date, format) {
+                        Ok(res) => {
+                            output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
                         Err(e) => {
                             ctx.set_error(output.len(), e.to_string());
-                            output.push(0);
+                            output.push_null();
                         }
                     }
                 }
             },
         ),
     );
-
     registry.register_combine_nullable_2_arg::<StringType, StringType, DateType, _, _>(
         "try_to_date",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, ctx| {
+            |date, format, output, _| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match string_to_format_timestamp(date, format, ctx) {
-                        Ok((res, false)) => {
-                            output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
+                    match NaiveDate::parse_from_str(date, format) {
+                        Ok(res) => {
+                            output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
-                        _ => {
+                        Err(_) => {
                             output.push_null();
                         }
                     }
@@ -349,10 +385,11 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     );
 }
 
-fn string_to_format_timestamp(
+fn string_to_format_datetime(
     timestamp: &str,
     format: &str,
     ctx: &mut EvalContext,
+    parse_timestamp: bool,
 ) -> Result<(i64, bool), Box<ErrorCode>> {
     if format.is_empty() {
         return Ok((0, true));
@@ -387,9 +424,15 @@ fn string_to_format_timestamp(
     }
 
     let z = if tm.offset().is_none() {
-        ctx.func_ctx.tz.to_zoned(tm.to_datetime().map_err(|err| {
-            ErrorCode::BadArguments(format!("{timestamp} to datetime error {err}"))
-        })?)
+        if parse_timestamp {
+            ctx.func_ctx.tz.to_zoned(tm.to_datetime().map_err(|err| {
+                ErrorCode::BadArguments(format!("{timestamp} to datetime error {err}"))
+            })?)
+        } else {
+            TimeZone::UTC.to_zoned(tm.to_datetime().map_err(|err| {
+                ErrorCode::BadArguments(format!("{timestamp} to datetime error {err}"))
+            })?)
+        }
     } else {
         tm.to_zoned()
     }
@@ -502,7 +545,43 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
 fn register_string_to_date(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, DateType, _, _>(
         "to_date",
-        |_, _| FunctionDomain::MayThrow,
+        |ctx, d| {
+            let max = d.max.clone().unwrap_or_default();
+            let mut res = Vec::with_capacity(2);
+            for (i, v) in [&d.min, &max].iter().enumerate() {
+                if i == 1 && d.max.is_none() {
+                    // the max domain is unbounded
+                    res.push(DATE_MAX);
+                    break;
+                }
+
+                let mut extend_num = 0;
+                let mut d = string_to_date(v, &ctx.tz);
+                if d.is_err() && v.len() > 10 {
+                    d = string_to_date(&v[0..10], &ctx.tz);
+                    if i == 0 {
+                        extend_num = -1;
+                    } else {
+                        extend_num = 1;
+                    }
+                }
+
+                if d.is_err() {
+                    return FunctionDomain::MayThrow;
+                }
+                let days = d
+                    .unwrap()
+                    .since((Unit::Day, date(1970, 1, 1)))
+                    .unwrap()
+                    .get_days();
+                res.push(days + extend_num);
+            }
+
+            FunctionDomain::Domain(SimpleDomain {
+                min: res[0].clamp(DATE_MIN, DATE_MAX),
+                max: res[1].clamp(DATE_MIN, DATE_MAX),
+            })
+        },
         eval_string_to_date,
     );
     registry.register_combine_nullable_1_arg::<StringType, DateType, _, _>(

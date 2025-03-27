@@ -48,6 +48,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
@@ -96,9 +97,9 @@ pub fn serialize_block(
 
             let block = block.consume_convert_to_full();
             let batch: Vec<Column> = block
-                .columns()
-                .iter()
-                .map(|x| x.value.as_column().unwrap().clone())
+                .take_columns()
+                .into_iter()
+                .map(|x| x.value.into_column().unwrap())
                 .collect();
 
             writer.start()?;
@@ -343,6 +344,7 @@ pub struct BlockBuilder {
     pub cluster_stats_gen: ClusterStatsGenerator,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl BlockBuilder {
@@ -350,7 +352,9 @@ impl BlockBuilder {
     where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>
     {
         let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
-        let (block_location, block_id) = self.meta_locations.gen_block_location();
+        let (block_location, block_id) = self
+            .meta_locations
+            .gen_block_location(self.table_meta_timestamps);
 
         let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
         let bloom_index_state = BloomIndexState::from_data_block(
@@ -375,11 +379,11 @@ impl BlockBuilder {
         }
 
         let row_count = data_block.num_rows() as u64;
-        let block_size = data_block.memory_size() as u64;
         let col_stats =
             gen_columns_statistics(&data_block, column_distinct_count, &self.source_schema)?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
+        let block_size = data_block.estimate_block_size() as u64;
         let col_metas = serialize_block(
             &self.write_settings,
             &self.source_schema,

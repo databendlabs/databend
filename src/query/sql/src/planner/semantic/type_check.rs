@@ -32,6 +32,7 @@ use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
 use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::MapAccessor;
+use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -92,6 +93,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
+use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDAFScript;
@@ -130,6 +132,7 @@ use crate::planner::semantic::lowering::TypeCheck;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
+use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::AggregateMode;
 use crate::plans::AsyncFunctionArgument;
 use crate::plans::AsyncFunctionCall;
@@ -411,6 +414,7 @@ impl<'a> TypeChecker<'a> {
                             name: Identifier::from_name(*span, "array_distinct"),
                             args: vec![array_expr],
                             params: vec![],
+                            order_by: vec![],
                             window: None,
                             lambda: None,
                             distinct: false,
@@ -425,6 +429,7 @@ impl<'a> TypeChecker<'a> {
                                 name: Identifier::from_name(*span, "contains"),
                                 args: args.iter().copied().cloned().collect(),
                                 params: vec![],
+                                order_by: vec![],
                                 window: None,
                                 lambda: None,
                             },
@@ -684,6 +689,7 @@ impl<'a> TypeChecker<'a> {
                                     name: Identifier::from_name(*span, "eq"),
                                     args: vec![*operand.clone(), c.clone()],
                                     params: vec![],
+                                    order_by: vec![],
                                     window: None,
                                     lambda: None,
                                 },
@@ -733,6 +739,7 @@ impl<'a> TypeChecker<'a> {
                         name,
                         args,
                         params,
+                        order_by,
                         window,
                         lambda,
                     },
@@ -805,6 +812,15 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
 
+                // check within group legal
+                if !order_by.is_empty()
+                    && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&uni_case_func_name)
+                {
+                    return Err(ErrorCode::SemanticError(
+                        "only aggregate functions allowed in within group syntax",
+                    )
+                    .set_span(*span));
+                }
                 // check window function legal
                 if window.is_some()
                     && !AggregateFunctionFactory::instance().contains(func_name)
@@ -871,7 +887,7 @@ impl<'a> TypeChecker<'a> {
                     self.in_window_function = self.in_window_function || window.is_some();
                     let in_aggregate_function = self.in_aggregate_function;
                     let (new_agg_func, data_type) = self.resolve_aggregate_function(
-                        *span, func_name, expr, *distinct, new_params, &args,
+                        *span, func_name, expr, *distinct, new_params, &args, order_by,
                     )?;
                     self.in_window_function = in_window;
                     self.in_aggregate_function = in_aggregate_function;
@@ -947,7 +963,7 @@ impl<'a> TypeChecker<'a> {
 
             Expr::CountAll { span, window } => {
                 let (new_agg_func, data_type) =
-                    self.resolve_aggregate_function(*span, "count", expr, false, vec![], &[])?;
+                    self.resolve_aggregate_function(*span, "count", expr, false, vec![], &[], &[])?;
 
                 if let Some(window) = window {
                     // aggregate window function
@@ -1695,6 +1711,7 @@ impl<'a> TypeChecker<'a> {
         distinct: bool,
         params: Vec<Scalar>,
         args: &[&Expr],
+        order_by: &[OrderByExpr],
     ) -> Result<(AggregateFunction, DataType)> {
         if matches!(
             self.bind_context.expr_context,
@@ -1734,17 +1751,41 @@ impl<'a> TypeChecker<'a> {
         }
         self.in_aggregate_function = false;
 
+        let sort_descs = order_by
+            .iter()
+            .map(
+                |OrderByExpr {
+                     expr,
+                     asc,
+                     nulls_first,
+                 }| {
+                    let box (scalar_expr, _) = self.resolve(expr)?;
+
+                    Ok(AggregateFunctionScalarSortDesc {
+                        expr: scalar_expr,
+                        is_reuse_index: false,
+                        nulls_first: nulls_first.unwrap_or(false),
+                        asc: asc.unwrap_or(true),
+                    })
+                },
+            )
+            .collect::<Result<Vec<_>>>()?;
+
         // Convert the delimiter of string_agg to params
-        let params = if func_name.eq_ignore_ascii_case("string_agg")
+        let params = if (func_name.eq_ignore_ascii_case("string_agg")
+            || func_name.eq_ignore_ascii_case("listagg")
+            || func_name.eq_ignore_ascii_case("group_concat"))
             && arguments.len() == 2
             && params.is_empty()
         {
             let delimiter_value = ConstantExpr::try_from(arguments[1].clone());
             if arg_types[1] != DataType::String || delimiter_value.is_err() {
-                return Err(ErrorCode::SemanticError(
-                    "The delimiter of `string_agg` must be a constant string",
-                ));
+                return Err(ErrorCode::SemanticError(format!(
+                    "The delimiter of `{func_name}` must be a constant string"
+                )));
             }
+            let _ = arguments.pop();
+            let _ = arg_types.pop();
             let delimiter = delimiter_value.unwrap();
             vec![delimiter.value]
         } else {
@@ -1782,7 +1823,7 @@ impl<'a> TypeChecker<'a> {
         };
 
         let agg_func = AggregateFunctionFactory::instance()
-            .get(&func_name, params.clone(), arg_types)
+            .get(&func_name, params.clone(), arg_types, vec![])
             .map_err(|e| e.set_span(span))?;
 
         let args = if optimize_remove_count_args(&func_name, distinct, args) {
@@ -1800,6 +1841,7 @@ impl<'a> TypeChecker<'a> {
             params,
             args,
             return_type: Box::new(agg_func.return_type()?),
+            sort_descs,
         };
 
         let data_type = agg_func.return_type()?;
@@ -2937,6 +2979,59 @@ impl<'a> TypeChecker<'a> {
                 let name = op.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[left, right])
             }
+            BinaryOperator::Eq | BinaryOperator::NotEq => {
+                let name = op.to_func_name();
+                let box (res, ty) =
+                    self.resolve_function(span, name.as_str(), vec![], &[left, right])?;
+                // When a variant type column is compared with a scalar string value,
+                // we try to cast the scalar string value to variant type,
+                // because casting variant column data is a time-consuming operation.
+                if let ScalarExpr::FunctionCall(ref func) = res {
+                    if func.arguments.len() != 2 {
+                        return Ok(Box::new((res, ty)));
+                    }
+                    let arg0 = &func.arguments[0];
+                    let arg1 = &func.arguments[1];
+                    let (constant_arg_index, constant_arg) = match (arg0, arg1) {
+                        (ScalarExpr::ConstantExpr(_), _)
+                            if arg1.data_type()?.remove_nullable() == DataType::Variant
+                                && !arg1.used_columns().is_empty()
+                                && arg0.data_type()? == DataType::String =>
+                        {
+                            (0, arg0)
+                        }
+                        (_, ScalarExpr::ConstantExpr(_))
+                            if arg0.data_type()?.remove_nullable() == DataType::Variant
+                                && !arg0.used_columns().is_empty()
+                                && arg1.data_type()? == DataType::String =>
+                        {
+                            (1, arg1)
+                        }
+                        _ => {
+                            return Ok(Box::new((res, ty)));
+                        }
+                    };
+
+                    let wrap_new_arg = ScalarExpr::FunctionCall(FunctionCall {
+                        span: func.span,
+                        func_name: "to_variant".to_string(),
+                        params: vec![],
+                        arguments: vec![constant_arg.clone()],
+                    });
+                    let mut new_arguments = func.arguments.clone();
+                    new_arguments[constant_arg_index] = wrap_new_arg;
+
+                    let new_func = ScalarExpr::FunctionCall(FunctionCall {
+                        span: func.span,
+                        func_name: func.func_name.clone(),
+                        params: func.params.clone(),
+                        arguments: new_arguments,
+                    });
+
+                    return Ok(Box::new((new_func, ty)));
+                }
+                Ok(Box::new((res, ty)))
+            }
             other => {
                 let name = other.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[left, right])
@@ -3374,6 +3469,7 @@ impl<'a> TypeChecker<'a> {
                             name: Identifier::from_name(span, "is_not_null"),
                             args: vec![arg_x.clone()],
                             params: vec![],
+                            order_by: vec![],
                             window: None,
                             lambda: None,
                         },
@@ -3390,6 +3486,7 @@ impl<'a> TypeChecker<'a> {
                             name: Identifier::from_name(span, "is_not_error"),
                             args: vec![arg_x.clone()],
                             params: vec![],
+                            order_by: vec![],
                             window: None,
                             lambda: None,
                         },
@@ -3409,6 +3506,7 @@ impl<'a> TypeChecker<'a> {
                             name: Identifier::from_name(span, "is_not_error"),
                             args: vec![(*arg).clone()],
                             params: vec![],
+                            order_by: vec![],
                             window: None,
                             lambda: None,
                         },
@@ -3458,6 +3556,7 @@ impl<'a> TypeChecker<'a> {
                             name: Identifier::from_name(span, "assume_not_null"),
                             args: vec![(*arg).clone()],
                             params: vec![],
+                            order_by: vec![],
                             window: None,
                             lambda: None,
                         },
@@ -4043,7 +4142,9 @@ impl<'a> TypeChecker<'a> {
             return_type,
             runtime_version,
         } = udf_definition;
+
         let language = language.parse()?;
+        UDFValidator::is_udf_script_allowed(&language)?;
         let mut arguments = Vec::with_capacity(args.len());
         for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
             let box (arg, ty) = self.resolve(argument)?;
@@ -4107,19 +4208,22 @@ impl<'a> TypeChecker<'a> {
             code: code_blob.into(),
         });
 
-        let mut arguments = Vec::with_capacity(arg_types.len());
-        for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
-            let box (arg, ty) = self.resolve(argument)?;
-            if ty != *dest_type {
-                arguments.push(wrap_cast(&arg, dest_type));
-            } else {
-                arguments.push(arg);
-            }
-        }
+        let arguments = args
+            .iter()
+            .zip(arg_types.iter())
+            .map(|(argument, dest_type)| {
+                let box (arg, ty) = self.resolve(argument)?;
+                Ok(if ty == *dest_type {
+                    arg
+                } else {
+                    wrap_cast(&arg, dest_type)
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let display_name = format!(
             "{name}({})",
-            arg_types.iter().map(|arg| format!("{arg}")).join(", ")
+            args.iter().map(|arg| format!("{:#}", arg)).join(", ")
         );
 
         self.bind_context.have_udf_script = true;
@@ -5177,6 +5281,7 @@ impl<'a> TypeChecker<'a> {
                             name,
                             args,
                             params,
+                            order_by,
                             window,
                             lambda,
                         },
@@ -5190,6 +5295,7 @@ impl<'a> TypeChecker<'a> {
                             .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
                             .collect::<Result<Vec<Expr>>>()?,
                         params: params.clone(),
+                        order_by: order_by.clone(),
                         window: window.clone(),
                         lambda: if let Some(lambda) = lambda {
                             Some(Lambda {

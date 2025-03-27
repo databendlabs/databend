@@ -6,10 +6,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 hashbrown = { workspace = true }
 hashlink = { workspace = true }

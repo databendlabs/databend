@@ -24,8 +24,11 @@ use databend_common_hashtable::RowPtr;
 use super::desc::MARKER_KIND_FALSE;
 use crate::sql::plans::JoinType;
 
+#[derive(Debug)]
 pub struct ProcessState {
     pub input: DataBlock,
+    // used in left mark join now
+    pub probe_has_null: bool,
     pub keys_state: KeysState,
     pub next_idx: usize,
 }

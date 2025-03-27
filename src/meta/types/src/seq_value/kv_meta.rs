@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use map_api::expirable::Expirable;
 use serde::Deserialize;
 use serde::Serialize;
-
-use crate::EvalExpireTime;
 
 /// The meta data of a record in kv
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
@@ -43,11 +42,8 @@ impl KVMeta {
     }
 }
 
-impl EvalExpireTime for KVMeta {
-    fn eval_expire_at_ms(&self) -> u64 {
-        match self.expire_at {
-            None => u64::MAX,
-            Some(exp_at_sec) => exp_at_sec * 1000,
-        }
+impl Expirable for KVMeta {
+    fn expires_at_ms_opt(&self) -> Option<u64> {
+        self.expire_at.map(|t| t * 1000)
     }
 }

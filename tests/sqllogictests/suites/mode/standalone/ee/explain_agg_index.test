@@ -161,6 +161,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [scalar_subquery_5 (#5), b (#4)]
 ├── probe keys: [SUM(a) (#2), b (#1)]
+├── keys is null equal: [false, false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── AggregateFinal(Build)
@@ -174,7 +175,7 @@ HashJoin
 │       ├── estimated rows: 0.00
 │       └── Filter
 │           ├── output columns: [t.a (#3), t.b (#4)]
-│           ├── filters: [b (#4) > 3]
+│           ├── filters: [outer.b (#4) > 3]
 │           ├── estimated rows: 0.00
 │           └── TableScan
 │               ├── table: default.test_index_db.t1

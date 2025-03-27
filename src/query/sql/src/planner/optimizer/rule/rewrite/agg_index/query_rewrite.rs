@@ -25,12 +25,14 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use itertools::Itertools;
 use log::info;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
+use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -299,8 +301,8 @@ impl QueryInfo {
             }
             ScalarExpr::AggregateFunction(func) => {
                 // agg function can't push down
-                for arg in &func.args {
-                    self.check_output_cols(arg, index_output_cols, new_selection_set)?;
+                for expr in func.exprs() {
+                    self.check_output_cols(expr, index_output_cols, new_selection_set)?;
                 }
                 return Ok(None);
             }
@@ -1282,11 +1284,20 @@ fn format_scalar(scalar: &ScalarExpr, column_map: &HashMap<IndexType, ScalarExpr
                 .map(|arg| format_scalar(arg, column_map))
                 .collect::<Vec<_>>()
                 .join(", ");
-            if !params.is_empty() {
+            let mut scalar = if !params.is_empty() {
                 format!("{}<{}>({})", &agg.func_name, params, args)
             } else {
                 format!("{}({})", &agg.func_name, args)
+            };
+            if !agg.sort_descs.is_empty() {
+                let sort_descs = agg
+                    .sort_descs
+                    .iter()
+                    .map(|desc| format_sort_desc(desc, column_map))
+                    .join(", ");
+                scalar = format!("{} within group (order by {})", scalar, sort_descs);
             }
+            scalar
         }
         ScalarExpr::UDFCall(udf) => format!(
             "{}({})",
@@ -1300,6 +1311,30 @@ fn format_scalar(scalar: &ScalarExpr, column_map: &HashMap<IndexType, ScalarExpr
 
         _ => unreachable!(), // Window function and subquery will not appear in index.
     }
+}
+
+fn format_sort_desc(
+    AggregateFunctionScalarSortDesc {
+        expr,
+        nulls_first,
+        asc,
+        ..
+    }: &AggregateFunctionScalarSortDesc,
+    column_map: &HashMap<IndexType, ScalarExpr>,
+) -> String {
+    let mut expr = format_scalar(expr, column_map);
+
+    if *asc {
+        expr.push_str(" asc");
+    } else {
+        expr.push_str(" desc");
+    }
+    if *nulls_first {
+        expr.push_str(" nulls first");
+    } else {
+        expr.push_str(" nulls last");
+    }
+    expr
 }
 
 fn push_down_index_scan(s_expr: &SExpr, agg_info: AggIndexInfo) -> Result<SExpr> {

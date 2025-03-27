@@ -7,10 +7,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [features]
 default = []
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
@@ -57,11 +53,11 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
-span-map = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
+watcher = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }

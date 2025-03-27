@@ -1,0 +1,10 @@
+{
+  "namespace": "example.avro",
+  "type": "record",
+  "name": "user",
+  "fields": [
+    { "name":  "scores",
+      "type": { "name": "scores_map", "type": "map", "values": "int" }
+    }
+  ]
+}

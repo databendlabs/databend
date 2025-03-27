@@ -28,7 +28,6 @@ use databend_common_functions::aggregates::AggregateCountFunction;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
@@ -155,7 +154,7 @@ impl SubqueryRewriter {
                 }
 
                 if let WindowFuncType::Aggregate(agg) = &mut plan.function {
-                    for item in agg.args.iter_mut() {
+                    for item in agg.exprs_mut() {
                         let res = self.try_rewrite_subquery(item, &input, false)?;
                         input = res.1;
                         *item = res.0;
@@ -201,7 +200,6 @@ impl SubqueryRewriter {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
-            | RelOperator::Recluster(_)
             | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
         }
     }
@@ -265,8 +263,7 @@ impl SubqueryRewriter {
                 // Check if the subquery is a correlated subquery.
                 // If it is, we'll try to flatten it and rewrite to join.
                 // If it is not, we'll just rewrite it to join
-                let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                let prop = rel_expr.derive_relational_prop()?;
+                let prop = subquery.subquery.derive_relational_prop()?;
                 let mut flatten_info = FlattenInfo {
                     from_count_func: false,
                 };
@@ -277,6 +274,7 @@ impl SubqueryRewriter {
                         is_conjunctive_predicate,
                     )?
                 } else {
+                    // todo: optimize outer before decorrelate subquery
                     self.try_decorrelate_subquery(
                         s_expr,
                         &subquery,
@@ -376,7 +374,12 @@ impl SubqueryRewriter {
                         span: subquery.span,
                         func_name: "not".to_string(),
                         params: vec![],
-                        arguments: vec![column_ref],
+                        arguments: vec![ScalarExpr::FunctionCall(FunctionCall {
+                            span: subquery.span,
+                            func_name: "is_true".to_string(),
+                            params: vec![],
+                            arguments: vec![column_ref],
+                        })],
                     })
                 } else {
                     column_ref
@@ -489,7 +492,7 @@ impl SubqueryRewriter {
                 // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
-                let agg_func = AggregateCountFunction::try_create("", vec![], vec![])?;
+                let agg_func = AggregateCountFunction::try_create("", vec![], vec![], vec![])?;
                 let agg_func_index = self.metadata.write().add_derived_column(
                     "count(*)".to_string(),
                     agg_func.return_type()?,
@@ -507,6 +510,7 @@ impl SubqueryRewriter {
                             params: vec![],
                             args: vec![],
                             return_type: Box::new(agg_func.return_type()?),
+                            sort_descs: vec![],
                         }
                         .into(),
                         index: agg_func_index,

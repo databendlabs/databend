@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
@@ -44,6 +43,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
 use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
+use iceberg::arrow::schema_to_arrow_schema;
 use iceberg::io::FileIOBuilder;
 
 use crate::partition::IcebergPartInfo;
@@ -103,7 +103,7 @@ impl IcebergTable {
         let meta = table.metadata();
 
         // Build arrow schema from iceberg metadata.
-        let arrow_schema: ArrowSchema = meta.current_schema().as_ref().try_into().map_err(|e| {
+        let arrow_schema = schema_to_arrow_schema(meta.current_schema().as_ref()).map_err(|e| {
             ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
         })?;
         TableSchema::try_from(&arrow_schema)
@@ -203,6 +203,15 @@ impl IcebergTable {
             })?;
 
         Ok((table, statistics))
+    }
+
+    pub fn try_from_table(tbl: &dyn Table) -> Result<&Self> {
+        tbl.as_any().downcast_ref::<Self>().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "expects table of engine iceberg, but got {}",
+                tbl.engine()
+            ))
+        })
     }
 
     /// create a new table on the table directory

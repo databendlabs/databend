@@ -7,9 +7,6 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[lib]
-doctest = false
-test = true
 
 [features]
 default = []

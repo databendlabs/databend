@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
@@ -52,6 +53,7 @@ pub struct ShowCreateTableInterpreter {
 
 pub struct ShowCreateQuerySettings {
     pub sql_dialect: Dialect,
+    pub force_quoted_ident: bool,
     pub quoted_ident_case_sensitive: bool,
     pub hide_options_in_show_create_table: bool,
 }
@@ -85,6 +87,7 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let settings = ShowCreateQuerySettings {
             sql_dialect: settings.get_sql_dialect()?,
+            force_quoted_ident: self.plan.with_quoted_ident,
             quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
             hide_options_in_show_create_table: settings
                 .get_hide_options_in_show_create_table()
@@ -142,26 +145,41 @@ impl ShowCreateTableInterpreter {
         let engine = table.engine();
         let schema = table.schema();
         let field_comments = table.field_comments();
-        let n_fields = schema.fields().len();
         let sql_dialect = settings.sql_dialect;
+        let force_quoted_ident = settings.force_quoted_ident;
         let quoted_ident_case_sensitive = settings.quoted_ident_case_sensitive;
         let hide_options_in_show_create_table = settings.hide_options_in_show_create_table;
 
         let mut table_create_sql = format!(
             "CREATE TABLE {} (\n",
-            display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+            display_ident(
+                name,
+                force_quoted_ident,
+                quoted_ident_case_sensitive,
+                sql_dialect
+            )
         );
         if table.options().contains_key("TRANSIENT") {
             table_create_sql = format!(
                 "CREATE TRANSIENT TABLE {} (\n",
-                display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+                display_ident(
+                    name,
+                    force_quoted_ident,
+                    quoted_ident_case_sensitive,
+                    sql_dialect
+                )
             )
         }
 
         if table.options().contains_key(OPT_KEY_TEMP_PREFIX) {
             table_create_sql = format!(
                 "CREATE TEMP TABLE {} (\n",
-                display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+                display_ident(
+                    name,
+                    force_quoted_ident,
+                    quoted_ident_case_sensitive,
+                    sql_dialect
+                )
             )
         }
 
@@ -186,19 +204,20 @@ impl ShowCreateTableInterpreter {
                     }
                     _ => "".to_string(),
                 };
-                // compatibility: creating table in the old planner will not have `fields_comments`
-                let comment = if field_comments.len() == n_fields && !field_comments[idx].is_empty()
+                let comment = if field_comments.len() == schema.fields().len()
+                    && !field_comments[idx].is_empty()
                 {
-                    // make the display more readable.
-                    // can not use debug print, will add double quote
-                    format!(
-                        " COMMENT '{}'",
-                        &field_comments[idx].as_str().replace('\'', "\\'")
-                    )
+                    format!(" COMMENT {}", QuotedString(&field_comments[idx], '\''))
                 } else {
                     "".to_string()
                 };
-                let ident = display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect);
+
+                let ident = display_ident(
+                    field.name(),
+                    force_quoted_ident,
+                    quoted_ident_case_sensitive,
+                    sql_dialect,
+                );
                 let data_type = field.data_type().sql_name_explicit_null();
                 let column_str =
                     format!("  {ident} {data_type}{default_expr}{computed_expr}{comment}");
@@ -226,7 +245,12 @@ impl ShowCreateTableInterpreter {
                 let mut index_str = format!(
                     "  {} INVERTED INDEX {} ({})",
                     sync,
-                    display_ident(&index_field.name, quoted_ident_case_sensitive, sql_dialect),
+                    display_ident(
+                        &index_field.name,
+                        force_quoted_ident,
+                        quoted_ident_case_sensitive,
+                        sql_dialect
+                    ),
                     column_names_str
                 );
                 if !options.is_empty() {
@@ -278,7 +302,13 @@ impl ShowCreateTableInterpreter {
         }
 
         if !table_info.meta.comment.is_empty() {
-            table_create_sql.push_str(format!(" COMMENT = '{}'", table_info.meta.comment).as_str());
+            table_create_sql.push_str(
+                format!(
+                    " COMMENT = {}",
+                    QuotedString(&table_info.meta.comment, '\'')
+                )
+                .as_str(),
+            );
         }
         Ok(table_create_sql)
     }
@@ -317,7 +347,7 @@ impl ShowCreateTableInterpreter {
 
         let comment = stream_table.get_table_info().meta.comment.clone();
         if !comment.is_empty() {
-            create_sql.push_str(format!(" COMMENT = '{}'", comment).as_str());
+            create_sql.push_str(format!(" COMMENT = {}", QuotedString(comment, '\'')).as_str());
         }
         Ok(create_sql)
     }

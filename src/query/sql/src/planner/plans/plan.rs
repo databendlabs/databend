@@ -17,7 +17,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
-use databend_common_ast::ast::Query;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -122,6 +121,7 @@ use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::OptimizePurgePlan;
 use crate::plans::PresignPlan;
+use crate::plans::ReclusterPlan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
@@ -148,7 +148,6 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
-use crate::plans::ShowRolesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::SystemPlan;
@@ -248,11 +247,7 @@ pub enum Plan {
     ModifyTableColumn(Box<ModifyTableColumnPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
-    ReclusterTable {
-        s_expr: Box<SExpr>,
-        hilbert_query: Option<Box<Query>>,
-        is_final: bool,
-    },
+    ReclusterTable(Box<ReclusterPlan>),
     RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
@@ -320,7 +315,6 @@ pub enum Plan {
     DropUDF(Box<DropUDFPlan>),
 
     // Role
-    ShowRoles(Box<ShowRolesPlan>),
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
@@ -508,7 +502,6 @@ impl Plan {
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
-            Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),

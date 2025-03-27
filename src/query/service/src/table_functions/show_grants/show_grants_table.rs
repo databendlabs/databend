@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -27,9 +28,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
@@ -38,6 +37,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_management::RoleApi;
+use databend_common_management::WarehouseInfo;
 use databend_common_meta_app::principal::GrantEntry;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -55,6 +55,7 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_enterprise_resources_management::ResourcesManagement;
 use itertools::Itertools;
 
 const SHOW_GRANTS: &str = "show_grants";
@@ -128,14 +129,11 @@ impl ShowGrants {
             TableField::new("object_name", TableDataType::String),
             TableField::new(
                 "object_id",
-                TableDataType::Nullable(Box::from(TableDataType::Number(NumberDataType::UInt64))),
+                TableDataType::Nullable(Box::from(TableDataType::String)),
             ),
             TableField::new("grant_to", TableDataType::String),
             TableField::new("name", TableDataType::String),
-            TableField::new(
-                "grants",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
+            TableField::new("grants", TableDataType::String),
         ])
     }
 }
@@ -237,7 +235,7 @@ impl AsyncSource for ShowGrantsSource {
             "role" | "user" => {
                 show_account_grants(self.ctx.clone(), &self.grant_type, &self.name).await?
             }
-            "table" | "database" | "udf" | "stage" => {
+            "table" | "database" | "udf" | "stage" | "warehouse" => {
                 show_object_grant(
                     self.ctx.clone(),
                     &self.grant_type,
@@ -249,7 +247,7 @@ impl AsyncSource for ShowGrantsSource {
             }
             _ => {
                 return Err(ErrorCode::InvalidArgument(format!(
-                    "Expected 'user|role|table|database|udf|stage', but got {:?}",
+                    "Expected 'user|role|table|database|udf|stage|warehouse', but got {:?}",
                     self.grant_type
                 )));
             }
@@ -267,6 +265,7 @@ async fn show_account_grants(
     name: &str,
 ) -> Result<Option<DataBlock>> {
     let tenant = ctx.get_tenant();
+    let expand_roles = ctx.get_settings().get_enable_expand_roles()?;
     let current_user = ctx.get_current_user()?;
     let has_grant_priv = ctx
         .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
@@ -275,8 +274,15 @@ async fn show_account_grants(
 
     let user_api = UserApiProvider::instance();
 
+    let warehouse_mgr = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+    let warehouses = if warehouse_mgr.support_forward_warehouse_request() {
+        warehouse_mgr.list_warehouses().await?
+    } else {
+        vec![]
+    };
+
     // TODO: add permission check on reading user grants
-    let (grant_to, name, identity, grant_set, roles) = match grant_type {
+    let (grant_to, name, identity, grant_set, roles_list) = match grant_type {
         "user" => {
             let user = user_api
                 .get_user(&tenant, UserIdentity::new(name, "%"))
@@ -345,7 +351,7 @@ async fn show_account_grants(
         .find_related_roles(&tenant, &grant_set.roles())
         .await?;
 
-    let roles: Vec<String> = if let Some(roles) = roles {
+    let roles: Vec<String> = if let Some(roles) = roles_list {
         roles
     } else {
         related_roles
@@ -355,11 +361,15 @@ async fn show_account_grants(
             .collect()
     };
 
-    let grant_entries = related_roles
-        .into_iter()
-        .map(|role| role.grants)
-        .fold(grant_set, |a, b| a | b)
-        .entries();
+    let grant_entries = if expand_roles {
+        related_roles
+            .into_iter()
+            .map(|role| role.grants)
+            .fold(grant_set, |a, b| a | b)
+            .entries()
+    } else {
+        grant_set.entries()
+    };
 
     let mut grant_list: Vec<String> = Vec::new();
 
@@ -375,6 +385,16 @@ async fn show_account_grants(
     let mut object_id = vec![];
     let mut object_name = vec![];
     let mut privileges = vec![];
+    if !expand_roles {
+        for role in &roles {
+            if !(grant_type == "role" && role == &name || name == "account_admin") {
+                object_name.push("".to_string());
+                object_id.push(None);
+                privileges.push("".to_string());
+                grant_list.push(format!("GRANT ROLE {} to {}", role, identity));
+            }
+        }
+    }
     // must split with two hashmap, hashmap key is catalog name.
     // maybe contain: default.db1 and default.db2.t,
     // It will re-write the exists key.
@@ -431,12 +451,23 @@ async fn show_account_grants(
                     privileges.push(get_priv_str(&grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
-                GrantObject::Warehouse(w_name) => {
-                    // grant all on *.* to a
-                    object_name.push(w_name.to_string());
-                    object_id.push(None);
-                    privileges.push(get_priv_str(&grant_entry));
-                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                GrantObject::Warehouse(id) => {
+                    if let Some(sw) = warehouses
+                        .iter()
+                        .filter_map(|w| {
+                            if let WarehouseInfo::SystemManaged(sw) = w {
+                                Some(sw)
+                            } else {
+                                None
+                            }
+                        })
+                        .find(|sw| sw.role_id == *id)
+                    {
+                        object_name.push(sw.id.to_string());
+                        object_id.push(Some(id.to_string()));
+                        privileges.push(get_priv_str(&grant_entry));
+                        grant_list.push(format!("{} TO {}", grant_entry, identity));
+                    }
                 }
                 GrantObject::Global => {
                     // grant all on *.* to a
@@ -452,52 +483,85 @@ async fn show_account_grants(
     // If roles contains account_admin, it means this role has all roles.
     // No need to display ownership.
     if !roles.contains(&"account_admin".to_string()) {
-        let ownerships = user_api.role_api(&tenant).get_ownerships().await?;
-        // let mut catalog_db_ids: HashMap<String, Vec<(u64, String)>> = HashMap::new();
-        // let mut catalog_table_ids: HashMap<String, Vec<(u64, u64, String)>> = HashMap::new();
-        for ownership in ownerships {
-            if roles.contains(&ownership.data.role) {
-                match ownership.data.object {
-                    OwnershipObject::Database {
-                        catalog_name,
-                        db_id,
-                    } => {
-                        let privileges_str = "OWNERSHIP".to_string();
-                        if let Some(dbs_id_priv) = catalog_db_ids.get_mut(&catalog_name) {
-                            dbs_id_priv.push((db_id, privileges_str));
-                        } else {
-                            catalog_db_ids
-                                .insert(catalog_name.clone(), vec![(db_id, privileges_str)]);
+        let roles = if expand_roles {
+            roles
+        } else if grant_type == "role" {
+            vec![name.to_string()]
+        } else {
+            vec![]
+        };
+        // When roles is empty:
+        // 1. show grants for user
+        // 2. not expand roles
+        // So no need to get ownerships.
+        if !roles.is_empty() {
+            let ownerships = user_api.role_api(&tenant).get_ownerships().await?;
+            for ownership in ownerships {
+                if roles.contains(&ownership.data.role) {
+                    match ownership.data.object {
+                        OwnershipObject::Database {
+                            catalog_name,
+                            db_id,
+                        } => {
+                            let privileges_str = "OWNERSHIP".to_string();
+                            if let Some(dbs_id_priv) = catalog_db_ids.get_mut(&catalog_name) {
+                                dbs_id_priv.push((db_id, privileges_str));
+                            } else {
+                                catalog_db_ids
+                                    .insert(catalog_name.clone(), vec![(db_id, privileges_str)]);
+                            }
                         }
-                    }
-                    OwnershipObject::Table {
-                        catalog_name,
-                        db_id,
-                        table_id,
-                    } => {
-                        let privileges_str = "OWNERSHIP".to_string();
-                        if let Some(tables_id_priv) = catalog_table_ids.get_mut(&catalog_name) {
-                            tables_id_priv.push((db_id, table_id, privileges_str));
-                        } else {
-                            catalog_table_ids.insert(catalog_name.clone(), vec![(
-                                db_id,
-                                table_id,
-                                privileges_str,
-                            )]);
+                        OwnershipObject::Table {
+                            catalog_name,
+                            db_id,
+                            table_id,
+                        } => {
+                            let privileges_str = "OWNERSHIP".to_string();
+                            if let Some(tables_id_priv) = catalog_table_ids.get_mut(&catalog_name) {
+                                tables_id_priv.push((db_id, table_id, privileges_str));
+                            } else {
+                                catalog_table_ids.insert(catalog_name.clone(), vec![(
+                                    db_id,
+                                    table_id,
+                                    privileges_str,
+                                )]);
+                            }
                         }
-                    }
-                    OwnershipObject::Stage { name } => {
-                        object_name.push(name.to_string());
-                        object_id.push(None);
-                        privileges.push("OWNERSHIP".to_string());
-                        grant_list
-                            .push(format!("GRANT OWNERSHIP ON STAGE {} TO {}", name, identity));
-                    }
-                    OwnershipObject::UDF { name } => {
-                        object_name.push(name.to_string());
-                        object_id.push(None);
-                        privileges.push("OWNERSHIP".to_string());
-                        grant_list.push(format!("GRANT OWNERSHIP ON UDF {} TO {}", name, identity));
+                        OwnershipObject::Stage { name } => {
+                            object_name.push(name.to_string());
+                            object_id.push(None);
+                            privileges.push("OWNERSHIP".to_string());
+                            grant_list
+                                .push(format!("GRANT OWNERSHIP ON STAGE {} TO {}", name, identity));
+                        }
+                        OwnershipObject::UDF { name } => {
+                            object_name.push(name.to_string());
+                            object_id.push(None);
+                            privileges.push("OWNERSHIP".to_string());
+                            grant_list
+                                .push(format!("GRANT OWNERSHIP ON UDF {} TO {}", name, identity));
+                        }
+                        OwnershipObject::Warehouse { id } => {
+                            if let Some(sw) = warehouses
+                                .iter()
+                                .filter_map(|w| {
+                                    if let WarehouseInfo::SystemManaged(sw) = w {
+                                        Some(sw)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .find(|sw| sw.role_id == id)
+                            {
+                                object_name.push(sw.id.to_string());
+                                object_id.push(Some(id.to_string()));
+                                privileges.push("OWNERSHIP".to_string());
+                                grant_list.push(format!(
+                                    "GRANT OWNERSHIP ON WAREHOUSE {} TO {}",
+                                    id, identity
+                                ));
+                            }
+                        }
                     }
                 }
             }
@@ -526,7 +590,7 @@ async fn show_account_grants(
                     privilege_str, catalog_name, db_name, identity
                 );
                 object_name.push(db_name.to_string());
-                object_id.push(Some(db_id));
+                object_id.push(Some(db_id.to_string()));
                 privileges.push(privilege_str);
                 grant_list.push(grant_str);
             }
@@ -573,7 +637,7 @@ async fn show_account_grants(
                         &privilege_str, catalog_name, db_name, table_name, identity
                     );
                     object_name.push(format!("{}.{}.{}", catalog_name, db_name, table_name));
-                    object_id.push(Some(table_id));
+                    object_id.push(Some(table_id.to_string()));
                     privileges.push(privilege_str);
                     grant_list.push(grant_str);
                 }
@@ -586,7 +650,7 @@ async fn show_account_grants(
     Ok(Some(DataBlock::new_from_columns(vec![
         StringType::from_data(privileges),
         StringType::from_data(object_name),
-        UInt64Type::from_opt_data(object_id),
+        StringType::from_opt_data(object_id),
         StringType::from_data(grant_tos),
         StringType::from_data(names),
         StringType::from_data(grant_list),
@@ -634,7 +698,7 @@ async fn show_object_grant(
                     db_id,
                     table_id,
                 },
-                Some(table_id),
+                Some(table_id.to_string()),
                 name,
             )
         }
@@ -659,7 +723,7 @@ async fn show_object_grant(
                     catalog_name: catalog_name.to_string(),
                     db_id,
                 },
-                Some(db_id),
+                Some(db_id.to_string()),
                 name,
             )
         }
@@ -695,9 +759,37 @@ async fn show_object_grant(
                 name,
             )
         }
+        "warehouse" => {
+            let warehouse_mgr = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+            if !warehouse_mgr.support_forward_warehouse_request() {
+                return Err(ErrorCode::InvalidArgument("The 'SHOW GRANTS ON <warehouse_name>' only supported for warehouses managed by the system. Please verify that you are using a system-managed warehouse".to_string()));
+            }
+            let warehouses = warehouse_mgr.list_warehouses().await?;
+            let mut id = String::new();
+            for w in warehouses {
+                if let WarehouseInfo::SystemManaged(rw) = w {
+                    if rw.id == name {
+                        id = rw.role_id.to_string();
+                        break;
+                    }
+                }
+            }
+            if !visibility_checker.check_warehouse_visibility(&id) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: No privilege on warehouse {} for user {}.",
+                    name, current_user
+                )));
+            }
+            (
+                GrantObject::Warehouse(id.to_string()),
+                OwnershipObject::Warehouse { id: id.to_string() },
+                Some(id),
+                name,
+            )
+        }
         _ => {
             return Err(ErrorCode::InvalidArgument(format!(
-                "Expected 'table|database|udf|stage', but got {:?}",
+                "Expected 'table|database|udf|stage|warehouse', but got {:?}",
                 grant_type
             )));
         }
@@ -730,7 +822,7 @@ async fn show_object_grant(
     Ok(Some(DataBlock::new_from_columns(vec![
         StringType::from_data(privileges),
         StringType::from_data(object_names),
-        UInt64Type::from_opt_data(object_ids),
+        StringType::from_opt_data(object_ids),
         StringType::from_data(grant_tos),
         StringType::from_data(names),
         StringType::from_data(grant_list),
