@@ -1,4 +1,3 @@
-query 
 select $1 from @data/parquet/ (files => ('alltypes_plain.parquet')) a;
 ----
 4
