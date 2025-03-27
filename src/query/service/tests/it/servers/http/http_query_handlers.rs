@@ -681,6 +681,7 @@ async fn test_system_tables() -> Result<()> {
         "notification_history",
         "task_history", // same with tasks
         "tracing",      // Could be very large.
+        "benches_summary",
     ];
     for table_name in table_names {
         if skipped.contains(&table_name) {

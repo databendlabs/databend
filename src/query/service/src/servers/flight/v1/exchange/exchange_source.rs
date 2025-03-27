@@ -27,7 +27,6 @@ use databend_common_pipeline_transforms::processors::TransformDummy;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::MergeExchangeParams;
 use super::exchange_source_reader::ExchangeSourceReader;
-use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 

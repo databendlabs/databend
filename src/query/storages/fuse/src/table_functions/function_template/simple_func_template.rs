@@ -160,6 +160,12 @@ impl<T: SimpleTableFunc> Table for TableFunctionTemplate<T> {
                     Box::new(PlaceHolder),
                 )]),
             )),
+            DistributionLevel::Tenant => Ok((
+                PartStatistics::default(),
+                Partitions::create(PartitionsShuffleKind::BroadcastTenant, vec![Arc::new(
+                    Box::new(PlaceHolder),
+                )]),
+            )),
         }
     }
 

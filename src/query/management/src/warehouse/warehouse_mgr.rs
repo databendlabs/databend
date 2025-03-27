@@ -2176,6 +2176,17 @@ impl WarehouseApi for WarehouseMgr {
             .collect::<Vec<_>>())
     }
 
+    async fn discover_tenant_nodes(&self) -> Result<Vec<NodeInfo>> {
+        let values = self.metastore.prefix_list_kv(&self.node_key_prefix).await?;
+
+        let mut nodes_info = Vec::with_capacity(values.len());
+        for (_, value) in values {
+            nodes_info.push(serde_json::from_slice::<NodeInfo>(&value.data)?);
+        }
+
+        Ok(nodes_info)
+    }
+
     async fn discover_warehouse_nodes(&self, node_id: &str) -> Result<Vec<NodeInfo>> {
         let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
 

@@ -693,4 +693,5 @@ pub enum DistributionLevel {
     Local,
     Cluster,
     Warehouse,
+    Tenant,
 }

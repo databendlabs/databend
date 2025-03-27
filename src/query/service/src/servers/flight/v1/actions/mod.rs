@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod benches;
 mod flight_actions;
 mod get_profile;
 mod init_query_env;

@@ -3085,6 +3085,7 @@ dependencies = [
 name = "databend-common-catalog"
 version = "0.1.0"
 dependencies = [
+ "arrow-flight",
  "arrow-schema",
  "async-backtrace",
  "async-trait",
@@ -3095,6 +3096,7 @@ dependencies = [
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-grpc",
  "databend-common-io",
  "databend-common-meta-api",
  "databend-common-meta-app",
@@ -3103,6 +3105,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-settings",
  "databend-common-storage",
+ "databend-common-tracing",
  "databend-common-users",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
@@ -3115,8 +3118,10 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "serde_stacker",
  "sha2",
  "thrift",
+ "tonic",
  "typetag",
  "xorf",
 ]

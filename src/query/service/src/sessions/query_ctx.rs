@@ -129,7 +129,6 @@ use xorf::BinaryFuse16;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
-use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -1823,8 +1822,12 @@ impl TableContext for QueryContext {
         Ok(streams_meta)
     }
 
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
-        self.shared.get_warehouse_clusters().await
+    async fn get_warehouse_nodes(&self) -> Result<Arc<Cluster>> {
+        self.shared.get_warehouse_nodes().await
+    }
+
+    async fn get_tenant_nodes(&self) -> Result<Arc<Cluster>> {
+        self.shared.get_tenant_nodes().await
     }
 }
 

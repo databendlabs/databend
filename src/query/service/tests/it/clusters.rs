@@ -15,7 +15,6 @@
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_query::clusters::ClusterDiscovery;
-use databend_query::clusters::ClusterHelper;
 use databend_query::test_kits::*;
 use pretty_assertions::assert_eq;
 

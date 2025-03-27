@@ -104,7 +104,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<RwLock<Arc<Cluster>>>,
-    pub(in crate::sessions) warehouse_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
+    pub(in crate::sessions) warehouse_nodes_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
+    pub(in crate::sessions) tenant_nodes_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     pub(in crate::sessions) running_query_text_hash: Arc<RwLock<Option<String>>>,
@@ -228,10 +229,11 @@ impl QueryContextShared {
             cluster_spill_progress: Default::default(),
             spilled_files: Default::default(),
             unload_callbacked: AtomicBool::new(false),
-            warehouse_cache: Arc::new(RwLock::new(None)),
+            warehouse_nodes_cache: Arc::new(RwLock::new(None)),
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             selected_segment_locs: Default::default(),
+            tenant_nodes_cache: Arc::new(RwLock::new(None)),
         }))
     }
 
@@ -298,19 +300,37 @@ impl QueryContextShared {
         self.cluster_cache.read().clone()
     }
 
-    pub async fn get_warehouse_clusters(&self) -> Result<Arc<Cluster>> {
-        if let Some(warehouse) = self.warehouse_cache.read().as_ref() {
-            return Ok(warehouse.clone());
+    pub async fn get_warehouse_nodes(&self) -> Result<Arc<Cluster>> {
+        if let Some(warehouse_nodes) = self.warehouse_nodes_cache.read().as_ref() {
+            return Ok(warehouse_nodes.clone());
         }
 
         let config = GlobalConfig::instance();
         let discovery = ClusterDiscovery::instance();
         let warehouse = discovery.discover_warehouse_nodes(&config).await?;
 
-        let mut write_guard = self.warehouse_cache.write();
+        let mut write_guard = self.warehouse_nodes_cache.write();
 
         if write_guard.is_none() {
             *write_guard = Some(warehouse.clone());
+        }
+
+        Ok(write_guard.as_ref().cloned().expect("expect cluster."))
+    }
+
+    pub async fn get_tenant_nodes(&self) -> Result<Arc<Cluster>> {
+        if let Some(tenant_nodes) = self.tenant_nodes_cache.read().as_ref() {
+            return Ok(tenant_nodes.clone());
+        }
+
+        let config = GlobalConfig::instance();
+        let discovery = ClusterDiscovery::instance();
+        let tenant_nodes = discovery.discover_tenant_nodes(&config).await?;
+
+        let mut write_guard = self.tenant_nodes_cache.write();
+
+        if write_guard.is_none() {
+            *write_guard = Some(tenant_nodes.clone());
         }
 
         Ok(write_guard.as_ref().cloned().expect("expect cluster."))

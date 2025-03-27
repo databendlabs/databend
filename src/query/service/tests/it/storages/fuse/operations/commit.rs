@@ -885,7 +885,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+    async fn get_warehouse_nodes(&self) -> Result<Arc<Cluster>> {
         todo!()
     }
     fn get_table_meta_timestamps(
@@ -894,6 +894,10 @@ impl TableContext for CtxDelegation {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         self.ctx.get_table_meta_timestamps(table, previous_snapshot)
+    }
+
+    async fn get_tenant_nodes(&self) -> Result<Arc<Cluster>> {
+        todo!()
     }
 }
 

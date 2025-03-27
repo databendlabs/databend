@@ -36,7 +36,6 @@ use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use databend_common_cache::MemSized;
 pub use databend_common_catalog::cluster_info::Cluster;
-use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
@@ -56,13 +55,9 @@ use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
 use log::error;
-use log::info;
 use log::warn;
 use rand::thread_rng;
 use rand::Rng;
-use serde::Deserialize;
-use serde::Serialize;
-use tokio::time::sleep;
 
 use crate::servers::flight::FlightClient;
 
@@ -75,142 +70,6 @@ pub struct ClusterDiscovery {
     tenant_id: String,
     flight_address: String,
     lru_cache: parking_lot::Mutex<LruCache<String, CachedNode>>,
-}
-
-// avoid leak FlightClient to common-xxx
-#[async_trait::async_trait]
-pub trait ClusterHelper {
-    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster>;
-    fn empty() -> Arc<Cluster>;
-    fn is_empty(&self) -> bool;
-    fn is_local(&self, node: &NodeInfo) -> bool;
-    fn local_id(&self) -> String;
-    fn ordered_index(&self) -> usize;
-    fn index_of_nodeid(&self, node_id: &str) -> Option<usize>;
-
-    fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
-
-    async fn do_action<T: Serialize + Send + Clone, Res: for<'de> Deserialize<'de> + Send>(
-        &self,
-        path: &str,
-        message: HashMap<String, T>,
-        flight_params: FlightParams,
-    ) -> Result<HashMap<String, Res>>;
-}
-
-#[async_trait::async_trait]
-impl ClusterHelper for Cluster {
-    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster> {
-        let unassign = nodes.iter().all(|node| !node.assigned_warehouse());
-        Arc::new(Cluster {
-            unassign,
-            local_id,
-            nodes,
-        })
-    }
-
-    fn empty() -> Arc<Cluster> {
-        Arc::new(Cluster {
-            unassign: false,
-            local_id: String::from(""),
-            nodes: Vec::new(),
-        })
-    }
-
-    fn is_empty(&self) -> bool {
-        self.nodes.len() <= 1
-    }
-
-    fn is_local(&self, node: &NodeInfo) -> bool {
-        node.id == self.local_id
-    }
-
-    fn local_id(&self) -> String {
-        self.local_id.clone()
-    }
-
-    fn ordered_index(&self) -> usize {
-        let mut nodes = self.get_nodes();
-        nodes.sort_by(|a, b| a.id.cmp(&b.id));
-        nodes
-            .iter()
-            .position(|x| x.id == self.local_id)
-            .unwrap_or(0)
-    }
-
-    fn index_of_nodeid(&self, node_id: &str) -> Option<usize> {
-        let mut nodes = self.get_nodes();
-        nodes.sort_by(|a, b| a.id.cmp(&b.id));
-        nodes.iter().position(|x| x.id == node_id)
-    }
-
-    fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
-        self.nodes.to_vec()
-    }
-
-    async fn do_action<T: Serialize + Send + Clone, Res: for<'de> Deserialize<'de> + Send>(
-        &self,
-        path: &str,
-        message: HashMap<String, T>,
-        flight_params: FlightParams,
-    ) -> Result<HashMap<String, Res>> {
-        fn get_node<'a>(nodes: &'a [Arc<NodeInfo>], id: &str) -> Result<&'a Arc<NodeInfo>> {
-            for node in nodes {
-                if node.id == id {
-                    return Ok(node);
-                }
-            }
-
-            Err(ErrorCode::NotFoundClusterNode(format!(
-                "Not found node {} in cluster",
-                id
-            )))
-        }
-
-        let mut response = HashMap::with_capacity(message.len());
-        for (id, message) in message {
-            let node = get_node(&self.nodes, &id)?;
-
-            let do_action_with_retry = {
-                let config = GlobalConfig::instance();
-                let flight_address = node.flight_address.clone();
-                let node_secret = node.secret.clone();
-
-                async move {
-                    let mut attempt = 0;
-
-                    loop {
-                        let mut conn = create_client(&config, &flight_address).await?;
-                        match conn
-                            .do_action::<_, Res>(
-                                path,
-                                node_secret.clone(),
-                                message.clone(),
-                                flight_params.timeout,
-                            )
-                            .await
-                        {
-                            Ok(result) => return Ok(result),
-                            Err(e)
-                                if e.code() == ErrorCode::CANNOT_CONNECT_NODE
-                                    && attempt < flight_params.retry_times =>
-                            {
-                                // only retry when error is network problem
-                                info!("retry do_action, attempt: {}", attempt);
-                                attempt += 1;
-                                sleep(Duration::from_secs(flight_params.retry_interval)).await;
-                            }
-                            Err(e) => return Err(e),
-                        }
-                    }
-                }
-            };
-
-            response.insert(id, do_action_with_retry.await?);
-        }
-
-        Ok(response)
-    }
 }
 
 impl ClusterDiscovery {
@@ -328,6 +187,11 @@ impl ClusterDiscovery {
                 Ok(Cluster::create(res, self.local_id.clone()))
             }
         }
+    }
+
+    pub async fn discover_tenant_nodes(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
+        let nodes = self.warehouse_manager.discover_tenant_nodes().await;
+        self.create_cluster_with_try_connect(config, nodes).await
     }
 
     pub async fn discover_warehouse_nodes(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
@@ -675,13 +539,6 @@ pub async fn create_client(config: &InnerConfig, address: &str) -> Result<Flight
     Ok(FlightClient::new(FlightServiceClient::new(
         ConnectionFactory::create_rpc_channel(address.to_owned(), timeout, rpc_tls_config).await?,
     )))
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct FlightParams {
-    pub(crate) timeout: u64,
-    pub(crate) retry_times: u64,
-    pub(crate) retry_interval: u64,
 }
 
 #[derive(Clone)]

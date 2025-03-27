@@ -66,7 +66,11 @@ pub async fn build_query_pipeline_without_render_result_set(
         build_local_pipeline(ctx, plan).await
     } else {
         if plan.is_warehouse_distributed_plan() {
-            ctx.set_cluster(ctx.get_warehouse_cluster().await?);
+            ctx.set_cluster(ctx.get_warehouse_nodes().await?);
+        }
+
+        if plan.is_tenant_distributed_plan() {
+            ctx.set_cluster(ctx.get_tenant_nodes().await?);
         }
 
         build_distributed_pipeline(ctx, plan).await

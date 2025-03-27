@@ -33,6 +33,7 @@ use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_iceberg::IcebergInspectTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
+use databend_common_storages_system::BenchesSummaryTable;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
@@ -47,6 +48,7 @@ use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
+use crate::table_functions::benches::BenchesTable;
 use crate::table_functions::cloud::TaskDependentsEnableTable;
 use crate::table_functions::cloud::TaskDependentsTable;
 use crate::table_functions::cloud::TaskHistoryTable;
@@ -354,6 +356,19 @@ impl TableFunctionFactory {
         creators.insert(
             "iceberg_manifest".to_string(),
             (next_id(), Arc::new(IcebergInspectTable::create)),
+        );
+
+        creators.insert(
+            "benches".to_string(),
+            (next_id(), Arc::new(BenchesTable::create)),
+        );
+
+        creators.insert(
+            "benches_summary".to_string(),
+            (
+                next_id(),
+                Arc::new(BenchesSummaryTable::create_table_function),
+            ),
         );
 
         TableFunctionFactory {

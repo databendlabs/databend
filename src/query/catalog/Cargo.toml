@@ -7,17 +7,20 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+arrow-flight = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
+tonic = { workspace = true }
 
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
+databend-common-grpc = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
@@ -26,6 +29,7 @@ databend-common-meta-types = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
@@ -36,6 +40,7 @@ parquet = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_stacker = { workspace = true }
 sha2 = { workspace = true }
 thrift = { workspace = true }
 typetag = { workspace = true }

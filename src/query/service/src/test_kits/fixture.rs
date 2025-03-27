@@ -69,7 +69,6 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::clusters::ClusterDiscovery;
-use crate::clusters::ClusterHelper;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;

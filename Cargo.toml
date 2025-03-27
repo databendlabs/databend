@@ -585,7 +585,7 @@ debug = 1
 lto = "thin"
 overflow-checks = false
 opt-level = "s"         # defaults to be 3
-incremental = true
+incremental = false
 
 [profile.ci]
 inherits = "release"
@@ -601,7 +601,7 @@ debug-assertions = true
 split-debuginfo = "unpacked"
 overflow-checks = true
 # Report to https://github.com/rust-lang/rust/issues/100142 if incremental works well
-incremental = true
+incremental = false
 
 [profile.dev.package]
 addr2line = { opt-level = 3 }
