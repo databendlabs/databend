@@ -137,6 +137,7 @@ fn acquired(seq: SemaphoreSeq, entry: SemaphoreEntry) -> SemaphoreEvent {
 }
 
 /// Create a removed event.
+#[allow(dead_code)]
 fn removed(seq: SemaphoreSeq, entry: SemaphoreEntry) -> SemaphoreEvent {
     SemaphoreEvent::new_removed(seq, entry)
 }
