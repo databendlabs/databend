@@ -21,22 +21,22 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
 use crate::errors::ConnectionClosed;
-use crate::queue::SemaphoreEvent;
+use crate::queue::PermitEvent;
 use crate::storage::PermitEntry;
 use crate::storage::PermitKey;
 
-/// An instance represents a semaphore that has been acquired.
+/// An instance represents an acquired semaphore permit.
 ///
-/// This instance is a [`Future`] that will be ready when the semaphore is lost.
+/// This instance is a [`Future`] that will be ready when the semaphore permit is removed from meta-service.
 /// For example, the connection to meta-service is lost and failed to extend the lease.
 ///
-/// The semaphore will be released (and the lease extending task will try to delete
-/// the semaphore entry from meta-service) when this instance is dropped intentionally.
+/// The permit will be released (and the lease extending task will try to delete
+/// the [`PermitEntry`] from meta-service) when this instance is dropped intentionally.
 ///
-/// Internally, it contains a `BoxFuture` that holds a oneshot sender.
-/// When the future completes or the [`Permit`] instance is dropped,
+/// Internally, it contains a `BoxFuture` that holds an oneshot sender.
+/// When the [`Permit`] instance is dropped,
 /// the oneshot sender signals the lease extending task to stop,
-/// allowing for proper cleanup of the semaphore entry in the meta-service.
+/// allowing for proper cleanup of the [`PermitEntry`] in the meta-service.
 pub struct Permit {
     pub(crate) fu: BoxFuture<'static, Result<(), ConnectionClosed>>,
 }
@@ -59,17 +59,21 @@ impl Future for Permit {
 }
 
 impl Permit {
+    /// Create a new acquired permit instance.
+    ///
+    /// It keeps watching the permit event stream and will be notified when the [`PermitEntry`] is removed.
+    /// And it also keeps two channels to cancel the subscriber task and the lease extending task.
     pub(crate) fn new(
+        permit_event_rx: mpsc::Receiver<PermitEvent>,
+        permit_key: PermitKey,
+        permit_entry: PermitEntry,
         subscriber_cancel_tx: oneshot::Sender<()>,
-        sem_event_rx: mpsc::Receiver<SemaphoreEvent>,
-        sem_key: PermitKey,
-        sem_entry: PermitEntry,
         leaser_cancel_tx: oneshot::Sender<()>,
     ) -> Self {
         let fu = Self::watch_for_remove(
-            sem_event_rx,
-            sem_key,
-            sem_entry,
+            permit_event_rx,
+            permit_key,
+            permit_entry,
             subscriber_cancel_tx,
             leaser_cancel_tx,
         );
@@ -77,33 +81,36 @@ impl Permit {
         Permit { fu: Box::pin(fu) }
     }
 
-    /// Waits for the semaphore entry to be removed.
+    /// Waits for the [`PermitEntry`] to be removed.
     ///
-    /// This function blocks until the semaphore key is either:
+    /// This function blocks until the [`PermitEntry`] is either:
     /// - Deleted intentionally by another process
     /// - Expired due to TTL timeout on the meta-service
     ///
-    /// It can be used to detect when a lock is no longer held and take appropriate action.
+    /// It can be used to detect when a [`Permit`] is no longer held and take appropriate action.
     ///
-    /// If it returns `Err(ConnectionClosed)`, it does not mean the semaphore is lost,
-    /// in such case, the semaphore may still be valid.
+    /// Note that if it returns `Err(ConnectionClosed)`, it does not mean the permit is lost,
+    /// in such case, the permit may still be valid.
     pub(crate) async fn watch_for_remove(
-        mut sem_event_rx: mpsc::Receiver<SemaphoreEvent>,
-        sem_key: PermitKey,
-        sem_entry: PermitEntry,
+        mut permit_event_rx: mpsc::Receiver<PermitEvent>,
+        permit_key: PermitKey,
+        permit_entry: PermitEntry,
         _subscriber_cancel_tx: oneshot::Sender<()>,
         _leaser_cancel_tx: oneshot::Sender<()>,
     ) -> Result<(), ConnectionClosed> {
-        let ctx = format!("Semaphore-Acquired: {}->{}", sem_key, sem_entry);
+        let ctx = format!("Semaphore-Acquired: {}->{}", permit_key, permit_entry);
 
-        while let Some(sem_event) = sem_event_rx.recv().await {
+        while let Some(sem_event) = permit_event_rx.recv().await {
             debug!("semaphore event: {} received by: {}", sem_event, ctx);
 
             match sem_event {
-                SemaphoreEvent::Acquired((_seq, _entry)) => {}
-                SemaphoreEvent::Removed((seq, _)) => {
-                    if seq == sem_key.seq {
-                        debug!("semaphore entry is removed: {}->{}", sem_key, sem_entry.id);
+                PermitEvent::Acquired((_seq, _entry)) => {}
+                PermitEvent::Removed((seq, _)) => {
+                    if seq == permit_key.seq {
+                        debug!(
+                            "semaphore PermitEntry is removed: {}->{}",
+                            permit_key, permit_entry.id
+                        );
                         return Ok(());
                     }
                 }

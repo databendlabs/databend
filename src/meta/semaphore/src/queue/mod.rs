@@ -15,5 +15,5 @@
 mod semaphore_event;
 mod semaphore_queue;
 
-pub(crate) use semaphore_event::SemaphoreEvent;
+pub(crate) use semaphore_event::PermitEvent;
 pub use semaphore_queue::SemaphoreQueue;

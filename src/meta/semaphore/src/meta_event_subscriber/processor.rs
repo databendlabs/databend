@@ -18,29 +18,38 @@ use databend_common_meta_types::SeqV;
 use log::warn;
 use tokio::sync::mpsc;
 
+#[cfg(doc)]
+use crate::acquirer::Acquirer;
 use crate::errors::ConnectionClosed;
-use crate::queue::SemaphoreEvent;
+use crate::queue::PermitEvent;
 use crate::queue::SemaphoreQueue;
 use crate::PermitEntry;
 use crate::PermitKey;
 
+/// Process the watch response from the meta-service and emit [`PermitEvent`].
 pub(crate) struct Processor {
+    /// The local in-memory queue of [`PermitEvent`], indexed and sorted by the [`PermitKey`],
+    /// which contains prefix in string and a sequence number.
     pub(crate) queue: SemaphoreQueue,
-    pub(crate) tx: mpsc::Sender<SemaphoreEvent>,
+
+    /// The channel to send the [`PermitEvent`] to the [`Acquirer`].
+    pub(crate) tx: mpsc::Sender<PermitEvent>,
 
     /// Contains descriptive information about the context of this watcher.
     pub(crate) ctx: String,
 }
 
 impl Processor {
-    pub(crate) fn new(queue_capacity: u64, tx: mpsc::Sender<SemaphoreEvent>) -> Self {
+    /// Create a new [`Processor`] instance with given permits capacity and the channel to send the [`PermitEvent`] to the [`Acquirer`].
+    pub(crate) fn new(capacity: u64, tx: mpsc::Sender<PermitEvent>) -> Self {
         Self {
-            queue: SemaphoreQueue::new(queue_capacity),
+            queue: SemaphoreQueue::new(capacity),
             tx,
             ctx: "".to_string(),
         }
     }
 
+    /// Set the debugging context of this watcher.
     pub(crate) fn with_context(mut self, ctx: impl ToString) -> Self {
         self.ctx = ctx.to_string();
         self
@@ -66,15 +75,6 @@ impl Processor {
         prev: Option<SeqV<PermitEntry>>,
         current: Option<SeqV<PermitEntry>>,
     ) -> Result<(), ConnectionClosed> {
-        // println!(
-        //     "[{}] {} process_kv_change: {}: {} -> {}",
-        //     now_str(),
-        //     self.ctx,
-        //     sem_key,
-        //     DD(&prev),
-        //     DD(&current)
-        // );
-
         // Update local queue to update the acquired/released state.
         let state_changes = match (prev, current) {
             (None, Some(entry)) => self.queue.insert(sem_key.seq, entry.data),
@@ -91,7 +91,6 @@ impl Processor {
         };
 
         for event in state_changes {
-            // println!("[{}] {} send: {}", now_str(), self.ctx, event);
             self.tx.send(event).await.map_err(|e| {
                 ConnectionClosed::new_str(format!("Semaphore-Watcher fail to send {}", e.0))
                     .context(&self.ctx)
@@ -249,12 +248,12 @@ mod tests {
     }
 
     /// Create an acquired event.
-    fn acquired(seq: u64, entry: u64) -> SemaphoreEvent {
-        SemaphoreEvent::new_acquired(seq, ent(entry).unwrap())
+    fn acquired(seq: u64, entry: u64) -> PermitEvent {
+        PermitEvent::new_acquired(seq, ent(entry).unwrap())
     }
 
     /// Create a removed event.
-    fn removed(seq: u64, entry: u64) -> SemaphoreEvent {
-        SemaphoreEvent::new_removed(seq, ent(entry).unwrap())
+    fn removed(seq: u64, entry: u64) -> PermitEvent {
+        PermitEvent::new_removed(seq, ent(entry).unwrap())
     }
 }

@@ -15,14 +15,14 @@
 use crate::errors::ConnectionClosed;
 use crate::errors::EarlyRemoved;
 
-/// Error that occurs when acquiring a semaphore.
+/// Error that occurs when acquiring a semaphore permit.
 #[derive(thiserror::Error, Debug)]
 pub enum AcquireError {
     #[error("AcquireError: {0}")]
     ConnectionClosed(#[from] ConnectionClosed),
 
     #[error(
-        "AcquireError: the semaphore entry is removed from meta-service before being acquired: {0}"
+        "AcquireError: the semaphore permit entry is removed from meta-service before being acquired: {0}"
     )]
     EarlyRemoved(#[from] EarlyRemoved),
 }

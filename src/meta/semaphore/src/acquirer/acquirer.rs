@@ -37,7 +37,7 @@ use crate::acquirer::Permit;
 use crate::errors::AcquireError;
 use crate::errors::ConnectionClosed;
 use crate::errors::EarlyRemoved;
-use crate::queue::SemaphoreEvent;
+use crate::queue::PermitEvent;
 use crate::PermitEntry;
 use crate::PermitKey;
 
@@ -76,7 +76,7 @@ pub(crate) struct Acquirer {
 
     /// The receiver to receive semaphore state change events from the internal subscriber task.
     /// This task subscribes to the watch stream and forwards relevant state changes through this channel.
-    pub(crate) sem_event_rx: mpsc::Receiver<SemaphoreEvent>,
+    pub(crate) permit_event_rx: mpsc::Receiver<PermitEvent>,
 
     /// The context information of this acquirer instance, used for logging.
     pub(crate) ctx: String,
@@ -88,16 +88,16 @@ impl Acquirer {
         let mut sleep_time = Duration::from_millis(10);
         let max_sleep_time = Duration::from_secs(1);
 
-        let sem_entry = PermitEntry {
+        let permit_entry = PermitEntry {
             id: self.acquirer_id.clone(),
             permits: 1,
         };
-        let val_bytes = sem_entry
+        let val_bytes = permit_entry
             .encode_to_vec()
             .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.ctx))?;
 
         // The sem_key is the key of the semaphore entry.
-        let sem_key = loop {
+        let permit_key = loop {
             // Step 1: Get a new globally unique sequence number.
             let sem_seq = self.next_global_unique_seq().await?;
 
@@ -130,7 +130,7 @@ impl Acquirer {
                     e,
                     format!(
                         "insert semaphore (seq={} entry={}) in transaction",
-                        &sem_key, &sem_entry
+                        &sem_key, &permit_entry
                     ),
                 )
                 .context(&self.ctx)
@@ -152,30 +152,31 @@ impl Acquirer {
 
         // Step 3: The sem entry is inserted, keep it alive by extending the lease.
 
-        let (leaser_cancel_tx, leaser_cancel_rx) = oneshot::channel::<()>();
-
-        self.spawn_extend_lease_task(sem_key.clone(), val_bytes, leaser_cancel_rx);
+        let leaser_cancel_tx = self.spawn_extend_lease_task(permit_key.clone(), val_bytes);
 
         // Step 4: Wait for the semaphore to be acquired or removed.
 
-        while let Some(sem_event) = self.sem_event_rx.recv().await {
+        while let Some(sem_event) = self.permit_event_rx.recv().await {
             debug!("semaphore event: {:?}", sem_event);
             match sem_event {
-                SemaphoreEvent::Acquired((seq, _)) => {
-                    if seq == sem_key.seq {
-                        debug!("{} acquired: {}->{}", self.ctx, sem_key, self.acquirer_id);
+                PermitEvent::Acquired((seq, _)) => {
+                    if seq == permit_key.seq {
+                        debug!(
+                            "{} acquired: {}->{}",
+                            self.ctx, permit_key, self.acquirer_id
+                        );
                         break;
                     }
                 }
-                SemaphoreEvent::Removed((seq, _)) => {
-                    if seq == sem_key.seq {
+                PermitEvent::Removed((seq, _)) => {
+                    if seq == permit_key.seq {
                         warn!(
                             "semaphore removed before acquired: {}->{}",
-                            sem_key, self.acquirer_id
+                            permit_key, self.acquirer_id
                         );
                         return Err(AcquireError::EarlyRemoved(EarlyRemoved::new(
-                            sem_key.clone(),
-                            sem_entry.clone(),
+                            permit_key.clone(),
+                            permit_entry.clone(),
                         )));
                     }
                 }
@@ -183,10 +184,10 @@ impl Acquirer {
         }
 
         let guard = Permit::new(
+            self.permit_event_rx,
+            permit_key,
+            permit_entry,
             self.subscriber_cancel_tx,
-            self.sem_event_rx,
-            sem_key,
-            sem_entry,
             leaser_cancel_tx,
         );
 
@@ -215,23 +216,24 @@ impl Acquirer {
         Ok(seq)
     }
 
-    /// Spawns a background task that periodically extends the lease of a semaphore entry.
+    /// Spawns a background task that periodically extends the lease of a [`PermitEntry`].
     ///
-    /// This task ensures the semaphore entry remains valid in the meta-service by refreshing
-    /// its TTL before expiration. The task continues until explicitly canceled through the
-    /// provided cancel channel, at which point it will remove the semaphore entry.
+    /// This task ensures the [`PermitEntry`] remains valid in the meta-service by refreshing
+    /// its TTL before expiration. The task continues until explicitly canceled
+    /// by dropping the returned cancel sender, at which point it will remove the [`PermitEntry`].
     fn spawn_extend_lease_task(
         &self,
         sem_key: PermitKey,
         val_bytes: Vec<u8>,
-        leaser_cancel_rx: oneshot::Receiver<()>,
-    ) {
+    ) -> oneshot::Sender<()> {
+        let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+
         let fu = Self::extend_lease_loop(
             self.meta_client.clone(),
             sem_key.clone(),
             val_bytes,
             self.lease,
-            leaser_cancel_rx.map(|_| ()),
+            cancel_rx.map(|_| ()),
         );
 
         let task_name = format!("{}/(seq={})", self.ctx, sem_key.seq);
@@ -248,11 +250,13 @@ impl Acquirer {
             },
             task_name,
         );
+
+        cancel_tx
     }
 
-    /// A background task to extend the lease of the semaphore entry periodically
+    /// A background task to extend the lease of the [`PermitEntry`] periodically
     ///
-    /// If it receives the cancel signal, it will remove the semaphore entry.
+    /// If it receives the cancel signal, it will remove the [`PermitEntry`].
     async fn extend_lease_loop(
         meta_client: Arc<ClientHandle>,
         sem_key: PermitKey,
@@ -274,14 +278,14 @@ impl Acquirer {
             // Check if the cancel signal is received.
             if futures::poll!(c.as_mut()).is_ready() {
                 info!(
-                    "semaphore lease extended task canceled by user: {}, about to remove the semaphore entry",
+                    "leaser task canceled by user: {}, about to remove the semaphore permit entry",
                     sem_key
                 );
 
                 let upsert = UpsertKV::delete(&key_str);
 
                 let res = meta_client.upsert_kv(upsert).await;
-                res.map_err(|e| conn_io_error(e, "remove semaphore entry"))?;
+                res.map_err(|e| conn_io_error(e, "remove semaphore permit entry"))?;
 
                 return Ok(());
             }
@@ -295,7 +299,7 @@ impl Acquirer {
                 .with_ttl(ttl);
 
             let res = meta_client.upsert_kv(upsert).await;
-            res.map_err(|e| conn_io_error(e, "extend semaphore lease"))?;
+            res.map_err(|e| conn_io_error(e, "extend semaphore permit lease"))?;
         }
     }
 }
