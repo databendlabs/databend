@@ -31,7 +31,6 @@ use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_metrics::system::set_system_version;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
-use databend_enterprise_background_service::get_background_service_handler;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::local;
 use databend_query::servers::admin::AdminService;
@@ -414,21 +413,11 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         start_time.elapsed().as_secs_f32()
     );
 
-    if conf.background.enable {
-        println!("Start background service");
-        get_background_service_handler()
-            .start()
-            .await
-            .with_context(make_error)?;
-        // for one shot background service, we need to drop it manually.
-        drop(shutdown_handle);
-    } else {
-        let graceful_shutdown_timeout =
-            Some(Duration::from_millis(conf.query.shutdown_wait_timeout_ms));
-        shutdown_handle
-            .wait_for_termination_request(graceful_shutdown_timeout)
-            .await;
-    }
+    let graceful_shutdown_timeout =
+        Some(Duration::from_millis(conf.query.shutdown_wait_timeout_ms));
+    shutdown_handle
+        .wait_for_termination_request(graceful_shutdown_timeout)
+        .await;
     info!("Shutdown server.");
     log::logger().flush();
     Ok(())

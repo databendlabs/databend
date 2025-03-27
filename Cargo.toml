@@ -78,7 +78,6 @@ members = [
     "src/query/users",
     "src/query/ee_features/attach_table",
     "src/query/ee_features/vacuum_handler",
-    "src/query/ee_features/background_service",
     "src/query/ee_features/aggregating_index",
     "src/query/ee_features/data_mask",
     "src/query/ee_features/storage_encryption",

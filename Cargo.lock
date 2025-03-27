@@ -2944,7 +2944,6 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-storage",
  "databend-common-tracing",
- "databend-enterprise-background-service",
  "databend-enterprise-query",
  "databend-query",
  "databend-storages-common-table-meta",
@@ -4678,19 +4677,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-enterprise-background-service"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-meta-app",
- "serde",
-]
-
-[[package]]
 name = "databend-enterprise-data-mask-feature"
 version = "0.1.0"
 dependencies = [
@@ -4781,7 +4767,6 @@ dependencies = [
  "databend-common-users",
  "databend-enterprise-aggregating-index",
  "databend-enterprise-attach-table",
- "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
  "databend-enterprise-hilbert-clustering",
@@ -5137,7 +5122,6 @@ dependencies = [
  "databend-common-users",
  "databend-enterprise-aggregating-index",
  "databend-enterprise-attach-table",
- "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-hilbert-clustering",
  "databend-enterprise-inverted-index",
