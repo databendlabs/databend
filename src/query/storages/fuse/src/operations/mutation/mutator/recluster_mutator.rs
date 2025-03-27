@@ -387,10 +387,8 @@ impl ReclusterMutator {
         let mut recluster_blocks_count = 0;
 
         let mut parts = Vec::new();
-        let mut checker = SegmentCompactChecker::new(
-            self.block_thresholds.block_per_segment as u64,
-            Some(self.cluster_key_id),
-        );
+        let mut checker =
+            SegmentCompactChecker::new(self.block_thresholds, Some(self.cluster_key_id));
 
         for (loc, compact_segment) in compact_segments.into_iter() {
             recluster_blocks_count += compact_segment.summary.block_count;

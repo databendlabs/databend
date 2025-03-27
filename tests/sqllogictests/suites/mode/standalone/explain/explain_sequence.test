@@ -22,7 +22,7 @@ InsertPlan (subquery):
     └── AsyncFunction
         ├── scalars: [nextval(seq) AS (#2)]
         └── Scan
-            ├── table: system.numbers
+            ├── table: system.numbers (#0)
             ├── filters: []
             ├── order by: []
             └── limit: NONE

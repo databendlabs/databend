@@ -164,7 +164,7 @@ impl BlockBuilderState {
             self.num_rows, mem
         );
         if self.num_rows >= ctx.block_compact_thresholds.min_rows_per_block
-            || mem > ctx.block_compact_thresholds.max_bytes_per_block
+            || mem > ctx.block_compact_thresholds.min_bytes_per_block
         {
             self.flush_block(false)
         } else {

@@ -584,7 +584,7 @@ EvalScalar
     ├── probe keys: []
     ├── other filters: []
     ├── Scan
-    │   ├── table: default.t
+    │   ├── table: default.t (#0)
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
@@ -592,17 +592,17 @@ EvalScalar
         ├── scalars: [eq(count(*) (#3), 1) AS (#4)]
         └── Aggregate(Final)
             ├── group items: []
-            ├── aggregate functions: [count(*) (#3)]
+            ├── aggregate functions: [count(*) AS (#3)]
             └── Aggregate(Partial)
                 ├── group items: []
-                ├── aggregate functions: [count(*) (#3)]
+                ├── aggregate functions: [count(*) AS (#3)]
                 └── Limit
                     ├── limit: [1]
                     ├── offset: [0]
                     └── Filter
                         ├── filters: [gt(t.i (#1), 10)]
                         └── Scan
-                            ├── table: default.t
+                            ├── table: default.t (#1)
                             ├── filters: [gt(t.i (#1), 10)]
                             ├── order by: []
                             └── limit: NONE
@@ -618,7 +618,7 @@ EvalScalar
     ├── probe keys: []
     ├── other filters: []
     ├── Scan
-    │   ├── table: default.t
+    │   ├── table: default.t (#0)
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
@@ -626,7 +626,7 @@ EvalScalar
         ├── scalars: [eq(count(*) (#3), 1) AS (#4)]
         └── Aggregate(Initial)
             ├── group items: []
-            ├── aggregate functions: [count(*) (#3)]
+            ├── aggregate functions: [count(*) AS (#3)]
             └── Limit
                 ├── limit: [1]
                 ├── offset: [0]
@@ -635,7 +635,7 @@ EvalScalar
                     └── Filter
                         ├── filters: [gt(t.i (#1), 10)]
                         └── Scan
-                            ├── table: default.t
+                            ├── table: default.t (#1)
                             ├── filters: []
                             ├── order by: []
                             └── limit: NONE

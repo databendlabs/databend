@@ -108,10 +108,7 @@ impl BlockCompactMutator {
             self.operator.clone(),
             Arc::new(self.compact_params.base_snapshot.schema.clone()),
         );
-        let mut checker = SegmentCompactChecker::new(
-            self.compact_params.block_per_seg as u64,
-            self.cluster_key_id,
-        );
+        let mut checker = SegmentCompactChecker::new(self.thresholds, self.cluster_key_id);
 
         let mut segment_idx = 0;
         let mut is_end = false;
@@ -144,7 +141,7 @@ impl BlockCompactMutator {
             }
 
             // Check the segment to be compacted.
-            // Size of compacted segment should be in range R == [threshold, 2 * threshold)
+            // Size of compacted segment should be in range R == [threshold, 2 * threshold]
             for (segment_idx, compact_segment) in segment_infos.into_iter() {
                 let segments_vec = checker.add(segment_idx, compact_segment);
                 for segments in segments_vec {
@@ -294,9 +291,9 @@ impl BlockCompactMutator {
 }
 
 pub struct SegmentCompactChecker {
+    thresholds: BlockThresholds,
     segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
     total_block_count: u64,
-    block_threshold: u64,
     cluster_key_id: Option<u32>,
 
     compacted_segment_cnt: usize,
@@ -304,15 +301,40 @@ pub struct SegmentCompactChecker {
 }
 
 impl SegmentCompactChecker {
-    pub fn new(block_threshold: u64, cluster_key_id: Option<u32>) -> Self {
+    pub fn new(thresholds: BlockThresholds, cluster_key_id: Option<u32>) -> Self {
         Self {
             segments: vec![],
             total_block_count: 0,
-            block_threshold,
+            thresholds,
             cluster_key_id,
             compacted_block_cnt: 0,
             compacted_segment_cnt: 0,
         }
+    }
+
+    fn check_not_need_compact(&self, summary: &Statistics) -> bool {
+        let cluster_match = match (self.cluster_key_id, summary.cluster_stats.as_ref()) {
+            (Some(id), Some(stats)) => id == stats.cluster_key_id,
+            (None, _) => true,
+            _ => false,
+        };
+
+        if !cluster_match {
+            return false;
+        }
+
+        if summary.block_count == 1 {
+            return true;
+        }
+
+        let avg_rows = (summary.row_count / summary.block_count) as usize;
+        let avg_uncompressed = (summary.uncompressed_byte_size / summary.block_count) as usize;
+        let avg_compressed = (summary.compressed_byte_size / summary.block_count) as usize;
+
+        summary.perfect_block_count == summary.block_count
+            && self
+                .thresholds
+                .check_perfect_block(avg_rows, avg_uncompressed, avg_compressed)
     }
 
     fn check_for_compact(&mut self, segments: &[(SegmentIndex, Arc<CompactSegmentInfo>)]) -> bool {
@@ -320,21 +342,15 @@ impl SegmentCompactChecker {
             return false;
         }
 
-        if segments.len() == 1 {
-            let summary = &segments[0].1.summary;
-            if (summary.block_count == 1 || summary.perfect_block_count == summary.block_count)
-                && (self.cluster_key_id.is_none()
-                    || self.cluster_key_id
-                        == summary.cluster_stats.as_ref().map(|v| v.cluster_key_id))
-            {
-                return false;
-            }
+        if segments.len() == 1 && self.check_not_need_compact(&segments[0].1.summary) {
+            return false;
         }
 
         self.compacted_segment_cnt += segments.len();
         self.compacted_block_cnt += segments
             .iter()
-            .fold(0, |acc, x| acc + x.1.summary.block_count);
+            .map(|(_, info)| info.summary.block_count)
+            .sum::<u64>();
         true
     }
 
@@ -343,25 +359,28 @@ impl SegmentCompactChecker {
         idx: SegmentIndex,
         segment: Arc<CompactSegmentInfo>,
     ) -> Vec<Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>> {
+        let block_per_segment = self.thresholds.block_per_segment as u64;
+
         self.total_block_count += segment.summary.block_count;
-        if self.total_block_count < self.block_threshold {
-            self.segments.push((idx, segment));
+        self.segments.push((idx, segment));
+
+        if self.total_block_count < block_per_segment {
             return vec![];
         }
 
-        if self.total_block_count >= 2 * self.block_threshold {
-            self.total_block_count = 0;
-            let trivial = vec![(idx, segment)];
+        let output = if self.total_block_count >= 2 * block_per_segment {
+            let trivial = vec![self.segments.pop().unwrap()];
             if self.segments.is_empty() {
-                return vec![trivial];
+                vec![trivial]
             } else {
-                return vec![std::mem::take(&mut self.segments), trivial];
+                vec![std::mem::take(&mut self.segments), trivial]
             }
-        }
+        } else {
+            vec![std::mem::take(&mut self.segments)]
+        };
 
         self.total_block_count = 0;
-        self.segments.push((idx, segment));
-        vec![std::mem::take(&mut self.segments)]
+        output
     }
 
     pub fn generate_part(
@@ -370,15 +389,11 @@ impl SegmentCompactChecker {
         parts: &mut Vec<PartInfoPtr>,
     ) {
         if !segments.is_empty() && self.check_for_compact(&segments) {
-            let mut segment_indices = Vec::with_capacity(segments.len());
-            let mut compact_segments = Vec::with_capacity(segments.len());
-            for (idx, segment) in segments.into_iter() {
-                segment_indices.push(idx);
-                compact_segments.push(segment);
-            }
-
-            let lazy_part = CompactLazyPartInfo::create(segment_indices, compact_segments);
-            parts.push(lazy_part);
+            let (segment_indices, compact_segments) = segments.into_iter().unzip();
+            parts.push(CompactLazyPartInfo::create(
+                segment_indices,
+                compact_segments,
+            ));
         }
     }
 
@@ -389,10 +404,11 @@ impl SegmentCompactChecker {
 
     pub fn is_limit_reached(&self, num_segment_limit: usize, num_block_limit: usize) -> bool {
         let residual_segment_cnt = self.segments.len();
-        let residual_block_cnt = self
+        let residual_block_cnt: u64 = self
             .segments
             .iter()
-            .fold(0, |acc, e| acc + e.1.summary.block_count);
+            .map(|(_, info)| info.summary.block_count)
+            .sum();
         self.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
             || self.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
     }
@@ -438,16 +454,6 @@ impl CompactTaskBuilder {
     }
 
     fn add(&mut self, block: &Arc<BlockMeta>) -> (bool, bool) {
-        if let Some(default_cluster_key) = self.cluster_key_id {
-            if block
-                .cluster_stats
-                .as_ref()
-                .is_some_and(|v| v.level != 0 && v.cluster_key_id == default_cluster_key)
-            {
-                return (true, !self.blocks.is_empty());
-            }
-        }
-
         let total_rows = self.total_rows + block.row_count as usize;
         let total_size = self.total_size + block.block_size as usize;
         let total_compressed = self.total_compressed + block.file_size as usize;
@@ -464,7 +470,7 @@ impl CompactTaskBuilder {
             (false, true)
         } else {
             // blocks >= 2N
-            (true, !self.blocks.is_empty())
+            (true, !self.is_empty())
         }
     }
 
@@ -475,7 +481,7 @@ impl CompactTaskBuilder {
         total_compressed: usize,
     ) -> bool {
         self.thresholds.check_large_enough(total_rows, total_size)
-            || total_compressed >= self.thresholds.max_bytes_per_file
+            || total_compressed >= self.thresholds.min_compressed_per_block
     }
 
     fn check_for_compact(
@@ -485,7 +491,7 @@ impl CompactTaskBuilder {
         total_compressed: usize,
     ) -> bool {
         self.thresholds.check_for_compact(total_rows, total_size)
-            && total_compressed < 2 * self.thresholds.max_bytes_per_file
+            && total_compressed < 2 * self.thresholds.min_compressed_per_block
     }
 
     fn build_task(
@@ -495,14 +501,13 @@ impl CompactTaskBuilder {
         block_idx: BlockIndex,
         blocks: Vec<Arc<BlockMeta>>,
     ) -> bool {
-        let mut flag = false;
         if blocks.len() == 1 && !self.check_compact(&blocks[0]) {
             unchanged_blocks.push((block_idx, blocks[0].clone()));
-            flag = true;
+            true
         } else {
             tasks.push_back((block_idx, blocks));
+            false
         }
-        flag
     }
 
     fn check_compact(&self, block: &Arc<BlockMeta>) -> bool {
