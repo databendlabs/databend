@@ -105,7 +105,7 @@ async fn get_cluster_profile(query_id: &str) -> Result<Vec<PlanProfile>, ErrorCo
     }
 
     let flight_params = FlightParams {
-        timeout: 60,
+        timeout: Some(60),
         retry_times: 3,
         retry_interval: 3,
     };

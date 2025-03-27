@@ -417,7 +417,7 @@ impl DataExchangeManager {
     ) -> Result<PipelineBuildResult> {
         let settings = ctx.get_settings();
         let flight_params = FlightParams {
-            timeout: settings.get_flight_client_timeout()?,
+            timeout: Some(settings.get_flight_client_timeout()?),
             retry_times: settings.get_flight_max_retry_times()?,
             retry_interval: settings.get_flight_retry_interval()?,
         };

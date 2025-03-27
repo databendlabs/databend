@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -20,6 +21,10 @@ use databend_common_base::base::convert_number_size;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::cluster_info::FlightParams;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
@@ -43,11 +48,14 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_types::NodeInfo;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_sources::EmptySource;
 use serde::ser::SerializeStruct;
 use serde::Serializer;
 
-use crate::table::AsyncOneBlockSystemTable;
-use crate::table::AsyncSystemTable;
+use crate::table::SystemTablePart;
 
 pub static BENCHES_ACTION: &str = "/actions/benches";
 
@@ -239,29 +247,90 @@ impl BenchesSummaryTable {
             ..Default::default()
         };
 
-        AsyncOneBlockSystemTable::create(Self { table_info })
+        Arc::new(Self { table_info })
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncSystemTable for BenchesSummaryTable {
-    const NAME: &'static str = "system.benches_summary";
+impl Table for BenchesSummaryTable {
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Local
+    }
 
-    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Local;
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    async fn get_full_data(
+    async fn read_partitions(
+        &self,
+        _: Arc<dyn TableContext>,
+        _: Option<PushDownInfo>,
+        _dry_run: bool,
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((
+            PartStatistics::default(),
+            Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+                SystemTablePart,
+            ))]),
+        ))
+    }
+
+    fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
-    ) -> Result<DataBlock> {
-        let warehouse_nodes = ctx.get_warehouse_nodes().await?;
+        plan: &DataSourcePlan,
+        pipeline: &mut Pipeline,
+        _put_cache: bool,
+    ) -> Result<()> {
+        // avoid duplicate read in cluster mode.
+        if plan.parts.partitions.is_empty() {
+            pipeline.add_source(EmptySource::create, 1)?;
+            return Ok(());
+        }
+
+        pipeline.add_source(
+            |output| {
+                AsyncSourcer::create(ctx.clone(), output, BenchAsyncSource::create(ctx.clone()))
+            },
+            1,
+        )?;
+
+        Ok(())
+    }
+}
+
+struct BenchAsyncSource {
+    finished: bool,
+    ctx: Arc<dyn TableContext>,
+}
+
+impl BenchAsyncSource {
+    pub fn create(ctx: Arc<dyn TableContext>) -> BenchAsyncSource {
+        BenchAsyncSource {
+            finished: false,
+            ctx,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for BenchAsyncSource {
+    const NAME: &'static str = "system.benches_summary";
+
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.finished {
+            return Ok(None);
+        }
+
+        self.finished = true;
+        let warehouse_nodes = self.ctx.get_warehouse_nodes().await?;
 
         if warehouse_nodes.nodes.is_empty() {
-            return Ok(DataBlock::empty());
+            return Ok(None);
         }
 
         let mut worker = BenchWorker::create(
@@ -290,14 +359,14 @@ impl AsyncSystemTable for BenchesSummaryTable {
             display_score.push(summary_item.score);
         }
 
-        Ok(DataBlock::new_from_columns(vec![
+        Ok(Some(DataBlock::new_from_columns(vec![
             StringType::from_data(display_level),
             StringType::from_data(display_case),
             VariantType::from_data(display_argument),
             VariantType::from_data(display_throughput),
             VariantType::from_data(display_latency),
             Float64Type::from_data(display_score),
-        ]))
+        ])))
     }
 }
 
@@ -364,7 +433,7 @@ impl BenchWorker {
         let mut response = self
             .cluster
             .do_action::<_, Vec<TestMetric>>(BENCHES_ACTION, messages, FlightParams {
-                timeout: 3 * 60 * 60 * 24,
+                timeout: None,
                 retry_times: 0,
                 retry_interval: 0,
             })

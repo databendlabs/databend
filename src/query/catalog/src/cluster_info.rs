@@ -37,7 +37,7 @@ use tonic::Streaming;
 
 #[derive(Clone, Copy, Debug)]
 pub struct FlightParams {
-    pub timeout: u64,
+    pub timeout: Option<u64>,
     pub retry_times: u64,
     pub retry_interval: u64,
 }
@@ -104,11 +104,8 @@ impl Cluster {
         path: &str,
         message: HashMap<String, T>,
         flight_params: FlightParams,
-    ) -> databend_common_exception::Result<HashMap<String, Res>> {
-        fn get_node<'a>(
-            nodes: &'a [Arc<NodeInfo>],
-            id: &str,
-        ) -> databend_common_exception::Result<&'a Arc<NodeInfo>> {
+    ) -> Result<HashMap<String, Res>> {
+        fn get_node<'a>(nodes: &'a [Arc<NodeInfo>], id: &str) -> Result<&'a Arc<NodeInfo>> {
             for node in nodes {
                 if node.id == id {
                     return Ok(node);
@@ -170,7 +167,7 @@ impl Cluster {
 fn new_request<T: Serialize>(
     path: &str,
     secret: String,
-    timeout: u64,
+    timeout: Option<u64>,
     message: T,
 ) -> Result<Request<Action>> {
     let mut body = Vec::with_capacity(512);
@@ -189,7 +186,10 @@ fn new_request<T: Serialize>(
         r#type: path.to_string(),
     }));
 
-    request.set_timeout(Duration::from_secs(timeout));
+    if let Some(timeout) = timeout {
+        request.set_timeout(Duration::from_secs(timeout));
+    }
+
     request.metadata_mut().insert(
         AsciiMetadataKey::from_str("secret").unwrap(),
         AsciiMetadataValue::from_str(&secret).unwrap(),
