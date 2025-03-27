@@ -14,44 +14,20 @@ doctest = false
 test = true
 
 [dependencies]
-anyerror = { workspace = true }
-arrow-flight = { workspace = true }
-async-backtrace = { workspace = true }
-byteorder = { workspace = true }
-chrono = { workspace = true }
 codeq = { workspace = true }
 databend-common-base = { workspace = true }
-databend-common-grpc = { workspace = true }
-databend-common-meta-api = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
-databend-common-metrics = { workspace = true }
-databend-common-tracing = { workspace = true }
-derive_more = { workspace = true }
-fastrace = { workspace = true }
 futures = { workspace = true }
-itertools = { workspace = true }
 log = { workspace = true }
-logcall = { workspace = true }
-once_cell = { workspace = true }
-parking_lot = { workspace = true }
-prost = { workspace = true }
-semver = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-databend-common-exception = { workspace = true }
 pretty_assertions = { workspace = true }
-rand = { workspace = true }
-
-[build-dependencies]
-databend-common-building = { workspace = true }
 
 [lints]
 workspace = true
