@@ -1147,7 +1147,7 @@ EXPLAIN SELECT * FROM t3 WHERE c['k3'] = 'v';
 ----
 Filter
 ├── output columns: [t3.a (#0), t3.b (#1), t3.c (#2)]
-├── filters: [is_true(TRY_CAST(get(t3.c (#2), 'k3') AS String NULL) = 'v')]
+├── filters: [is_true(get(t3.c (#2), 'k3') = '"v"')]
 ├── estimated rows: 1.20
 └── TableScan
     ├── table: default.default.t3
@@ -1157,7 +1157,7 @@ Filter
     ├── partitions total: 2
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
-    ├── push downs: [filters: [is_true(TRY_CAST(get(t3.c (#2), 'k3') AS String NULL) = 'v')], limit: NONE]
+    ├── push downs: [filters: [is_true(get(t3.c (#2), 'k3') = '"v"')], limit: NONE]
     └── estimated rows: 6.00
 
 query T

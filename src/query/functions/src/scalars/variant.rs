@@ -374,10 +374,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match RawJsonb::new(val).get_by_name(name, false) {
                     Ok(Some(v)) => {
-                        if v.as_raw().is_null().unwrap_or_default() {
+                        let raw_jsonb = v.as_raw();
+                        if let Ok(Some(s)) = raw_jsonb.as_str() {
+                            output.push(&s);
+                        } else if raw_jsonb.is_null().unwrap_or_default() {
                             output.push_null();
                         } else {
-                            let json_str = cast_to_string(v.as_ref());
+                            let json_str = raw_jsonb.to_string();
                             output.push(&json_str);
                         }
                     }
@@ -405,10 +408,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 } else {
                     match RawJsonb::new(val).get_by_index(idx as usize) {
                         Ok(Some(v)) => {
-                            if v.as_raw().is_null().unwrap_or_default() {
+                            let raw_jsonb = v.as_raw();
+                            if let Ok(Some(s)) = raw_jsonb.as_str() {
+                                output.push(&s);
+                            } else if raw_jsonb.is_null().unwrap_or_default() {
                                 output.push_null();
                             } else {
-                                let json_str = cast_to_string(v.as_ref());
+                                let json_str = raw_jsonb.to_string();
                                 output.push(&json_str);
                             }
                         }
@@ -595,11 +601,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                             Ok(json_path) => {
                                 match RawJsonb::new(&buf).select_value_by_path(&json_path) {
                                     Ok(owned_jsonb_opt) => match owned_jsonb_opt {
-                                        Some(owned_jsonb) => {
-                                            if owned_jsonb.as_raw().is_null().unwrap_or_default() {
+                                        Some(v) => {
+                                            let raw_jsonb = v.as_raw();
+                                            if let Ok(Some(s)) = raw_jsonb.as_str() {
+                                                output.push(&s);
+                                            } else if raw_jsonb.is_null().unwrap_or_default() {
                                                 output.push_null();
                                             } else {
-                                                let json_str = cast_to_string(owned_jsonb.as_ref());
+                                                let json_str = raw_jsonb.to_string();
                                                 output.push(&json_str);
                                             }
                                         }
@@ -1061,10 +1070,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                if RawJsonb::new(val).is_null().unwrap_or_default() {
+                let raw_jsonb = RawJsonb::new(val);
+                if let Ok(Some(s)) = raw_jsonb.as_str() {
+                    output.push(&s);
+                } else if raw_jsonb.is_null().unwrap_or_default() {
                     output.push_null();
                 } else {
-                    let json_str = cast_to_string(val);
+                    let json_str = raw_jsonb.to_string();
                     output.push(&json_str);
                 }
             },
@@ -1082,10 +1094,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                if RawJsonb::new(val).is_null().unwrap_or_default() {
+                let raw_jsonb = RawJsonb::new(val);
+                if let Ok(Some(s)) = raw_jsonb.as_str() {
+                    output.push(&s);
+                } else if raw_jsonb.is_null().unwrap_or_default() {
                     output.push_null();
                 } else {
-                    let json_str = cast_to_string(val);
+                    let json_str = raw_jsonb.to_string();
                     output.push(&json_str);
                 }
             },
@@ -1102,12 +1117,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            if RawJsonb::new(val).is_null().unwrap_or_default() {
+            let raw_jsonb = RawJsonb::new(val);
+            if raw_jsonb.is_null().unwrap_or_default() {
                 output.push_null();
                 return;
             }
-            match cast_to_str(val)
+            match raw_jsonb
+                .as_str()
                 .map_err(|e| format!("{e}"))
+                .and_then(|r| r.ok_or(format!("invalid json type")))
                 .and_then(|s| {
                     string_to_date(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
                 })
@@ -1137,8 +1155,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match cast_to_str(val)
+            let raw_jsonb = RawJsonb::new(val);
+            match raw_jsonb
+                .as_str()
                 .map_err(|e| format!("{e}"))
+                .and_then(|r| r.ok_or(format!("invalid json type")))
                 .and_then(|s| {
                     string_to_date(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
                 })
@@ -1165,13 +1186,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                if RawJsonb::new(val).is_null().unwrap_or_default() {
+                let raw_jsonb = RawJsonb::new(val);
+                if raw_jsonb.is_null().unwrap_or_default() {
                     output.push_null();
                     return;
                 }
-                match cast_to_str(val).map_err(|e| format!("{e}")).and_then(|s| {
-                    string_to_timestamp(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
-                }) {
+                match raw_jsonb
+                    .as_str()
+                    .map_err(|e| format!("{e}"))
+                    .and_then(|r| r.ok_or(format!("invalid json type")))
+                    .and_then(|s| {
+                        string_to_timestamp(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
+                    }) {
                     Ok(ts) => output.push(ts.timestamp().as_microsecond()),
                     Err(e) => {
                         ctx.set_error(
@@ -1196,9 +1222,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match cast_to_str(val).map_err(|e| format!("{e}")).and_then(|s| {
-                    string_to_timestamp(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
-                }) {
+
+                let raw_jsonb = RawJsonb::new(val);
+                match raw_jsonb
+                    .as_str()
+                    .map_err(|e| format!("{e}"))
+                    .and_then(|r| r.ok_or(format!("invalid json type")))
+                    .and_then(|s| {
+                        string_to_timestamp(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
+                    }) {
                     Ok(ts) => output.push(ts.timestamp().as_microsecond()),
                     Err(_) => {
                         output.push_null();
@@ -2134,8 +2166,13 @@ fn get_by_keypath_fn(
                                 Ok(Some(res)) => {
                                     match &mut builder {
                                         ColumnBuilder::String(builder) => {
-                                            let json_str = cast_to_string(res.as_ref());
-                                            builder.put_str(&json_str);
+                                            let raw_jsonb = res.as_raw();
+                                            if let Ok(Some(s)) = raw_jsonb.as_str() {
+                                                builder.put_str(&s);
+                                            } else {
+                                                let json_str = raw_jsonb.to_string();
+                                                builder.put_str(&json_str);
+                                            }
                                         }
                                         ColumnBuilder::Variant(builder) => {
                                             builder.put_slice(res.as_ref());
@@ -2457,30 +2494,6 @@ fn json_object_pick_or_delete_fn(
         match len_opt {
             Some(_) => Value::Column(Column::Variant(builder.build())),
             None => Value::Scalar(Scalar::Variant(builder.build_scalar())),
-        }
-    }
-}
-
-// Extract string for string type, other types convert to JSON string.
-fn cast_to_string(v: &[u8]) -> String {
-    let raw_jsonb = RawJsonb::new(v);
-    match raw_jsonb.to_str() {
-        Ok(v) => v,
-        Err(_) => raw_jsonb.to_string(),
-    }
-}
-
-fn cast_to_str(v: &[u8]) -> Result<String, jsonb::Error> {
-    match RawJsonb::new(v).to_str() {
-        Ok(val) => Ok(val),
-        Err(err) => {
-            if err.to_string() == "InvalidJsonb" {
-                let s = unsafe { std::str::from_utf8_unchecked(v) };
-                let owned_jsonb = s.parse::<OwnedJsonb>()?;
-                let raw_jsonb = owned_jsonb.as_raw();
-                return raw_jsonb.to_str();
-            }
-            Err(err)
         }
     }
 }
