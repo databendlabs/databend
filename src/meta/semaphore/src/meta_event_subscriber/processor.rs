@@ -12,17 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::Local;
 use codeq::Decode;
-use databend_common_base::display::display_option::DisplayOptionExt;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::SeqV;
 use log::warn;
 use tokio::sync::mpsc;
 
 use crate::errors::ConnectionClosed;
-use crate::meta_event_subscriber::now_str;
-use crate::meta_event_subscriber::DD;
 use crate::queue::SemaphoreEvent;
 use crate::queue::SemaphoreQueue;
 use crate::SemaphoreEntry;
@@ -183,6 +179,9 @@ mod tests {
         ];
 
         for (sem_key, prev, current) in events {
+            // fake seqv.seq
+            let prev = prev.map(|x| SeqV::new(1, x));
+            let current = current.map(|x| SeqV::new(2, x));
             processor.process_kv_change(sem_key, prev, current).await?;
         }
 
@@ -227,8 +226,8 @@ mod tests {
         let got = got.unwrap();
 
         assert_eq!(got.0, sem_key);
-        assert_eq!(got.1, Some(prev));
-        assert_eq!(got.2, Some(current));
+        assert_eq!(got.1, Some(SeqV::new(1, prev)));
+        assert_eq!(got.2, Some(SeqV::new(2, current)));
 
         // Empty watch response.
 
