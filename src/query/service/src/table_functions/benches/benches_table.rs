@@ -57,7 +57,7 @@ use tokio::sync::Barrier;
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct BenchesTablePart;
 
-#[typetag::serde(name = "system")]
+#[typetag::serde(name = "bench")]
 impl PartInfo for BenchesTablePart {
     fn as_any(&self) -> &dyn Any {
         self
