@@ -23,8 +23,8 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-use crate::acquirer::AcquiredGuard;
 use crate::acquirer::Acquirer;
+use crate::acquirer::Permit;
 use crate::errors::AcquireError;
 use crate::errors::ConnectionClosed;
 use crate::meta_event_subscriber::MetaEventSubscriber;
@@ -64,7 +64,7 @@ impl fmt::Display for Semaphore {
 }
 
 impl Semaphore {
-    /// Acquires a new semaphore and returns an [`AcquiredGuard`] handle.
+    /// Acquires a new semaphore and returns an [`Permit`] handle.
     ///
     /// # Parameters
     ///
@@ -76,7 +76,7 @@ impl Semaphore {
     ///
     /// # Returns
     ///
-    /// Returns an [`AcquiredGuard`] handle that represents the acquired semaphore. When this handle
+    /// Returns an [`Permit`] handle that represents the acquired semaphore. When this handle
     /// is dropped, the semaphore will be released.
     /// It is also a [`Future`] that will be resolved when the semaphore is removed from meta-service.
     pub async fn new_acquired(
@@ -85,7 +85,7 @@ impl Semaphore {
         capacity: u64,
         id: impl ToString,
         lease: Duration,
-    ) -> Result<AcquiredGuard, AcquireError> {
+    ) -> Result<Permit, AcquireError> {
         let sem = Self::new(meta_client, prefix, capacity).await?;
         sem.acquire(id, lease).await
     }
@@ -161,13 +161,13 @@ impl Semaphore {
     ///
     /// # Returns
     ///
-    /// Returns an [`AcquiredGuard`] handle that represents the acquired semaphore. When this handle
+    /// Returns an [`Permit`] handle that represents the acquired semaphore. When this handle
     /// is dropped or its future is awaited, the semaphore will be released.
     pub async fn acquire(
         mut self,
         id: impl ToString,
         lease: Duration,
-    ) -> Result<AcquiredGuard, AcquireError> {
+    ) -> Result<Permit, AcquireError> {
         let id = id.to_string();
 
         let ctx = format!("{}-Acquirer(id={})", self, id);
