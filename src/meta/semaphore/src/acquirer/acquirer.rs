@@ -41,11 +41,12 @@ use crate::queue::SemaphoreEvent;
 use crate::PermitEntry;
 use crate::PermitKey;
 
-/// The acquirer is responsible for acquiring a semaphore.
+/// The acquirer is responsible for acquiring a semaphore permit.
 ///
-/// It is used to acquire a semaphore by creating a new semaphore entry in the meta-service.
+/// It is used to acquire a semaphore by creating a new [`PermitEntry`] in the meta-service.
 ///
-/// The acquirer will keep the semaphore entry alive by extending the lease, until it is acquired or removed.
+/// The acquirer will keep the semaphore entry alive by extending the lease periodically,
+/// until it is acquired or removed.
 pub(crate) struct Acquirer {
     pub(crate) prefix: String,
 
@@ -53,24 +54,27 @@ pub(crate) struct Acquirer {
     ///
     /// Different ID represent different trail to acquire a semaphore.
     /// The ID is used as part of the [`PermitEntry`].
-    pub(crate) sem_id: String,
+    pub(crate) acquirer_id: String,
 
-    /// The time to live if the acquirer does not extend the lease.
+    /// The time to live if the [`Acquirer`] does not extend the lease.
     ///
-    /// For example, the acquirer crashed abnormally.
+    /// For example, the [`Acquirer`] crashed abnormally.
     pub(crate) lease: Duration,
 
-    /// The key of the sequence generator.
+    /// The key of the permit sequence number generator.
     ///
-    /// The sequence generator is used to generate a globally unique sequence number.
+    /// It is used to generate a globally unique sequence number for each [`Permit`].
+    /// [`Permit`] will be sorted in meta-service by this sequence number
+    /// and to determine the order to be acquired.
     pub(crate) seq_generator_key: String,
 
     /// The meta client to interact with the meta-service.
     pub(crate) meta_client: Arc<ClientHandle>,
 
+    /// The sender to cancel the subscriber task.
     pub(crate) subscriber_cancel_tx: oneshot::Sender<()>,
 
-    /// The receiver to receive semaphore state change events from the internal task.
+    /// The receiver to receive semaphore state change events from the internal subscriber task.
     /// This task subscribes to the watch stream and forwards relevant state changes through this channel.
     pub(crate) sem_event_rx: mpsc::Receiver<SemaphoreEvent>,
 
@@ -79,12 +83,13 @@ pub(crate) struct Acquirer {
 }
 
 impl Acquirer {
+    /// Acquires a new semaphore permit and returns a [`Permit`] handle.
     pub async fn acquire(mut self) -> Result<Permit, AcquireError> {
         let mut sleep_time = Duration::from_millis(10);
         let max_sleep_time = Duration::from_secs(1);
 
         let sem_entry = PermitEntry {
-            id: self.sem_id.clone(),
+            id: self.acquirer_id.clone(),
             permits: 1,
         };
         let val_bytes = sem_entry
@@ -132,12 +137,12 @@ impl Acquirer {
             })?;
 
             if txn_reply.success {
-                info!("acquire semaphore: {} -> {}", self.sem_id, sem_seq);
+                info!("acquire semaphore: {} -> {}", self.acquirer_id, sem_seq);
                 break sem_key;
             } else {
                 info!(
                     "acquire semaphore failed: {} -> {}; sleep {:?} and retry",
-                    self.sem_id, sem_seq, sleep_time
+                    self.acquirer_id, sem_seq, sleep_time
                 );
 
                 tokio::time::sleep(sleep_time).await;
@@ -158,31 +163,15 @@ impl Acquirer {
             match sem_event {
                 SemaphoreEvent::Acquired((seq, _)) => {
                     if seq == sem_key.seq {
-                        // println!(
-                        //     "[{}] {} acquired: {}->{}",
-                        //     now_str(),
-                        //     self.ctx,
-                        //     sem_key,
-                        //     self.sem_id
-                        // );
-
-                        debug!("{} acquired: {}->{}", self.ctx, sem_key, self.sem_id);
+                        debug!("{} acquired: {}->{}", self.ctx, sem_key, self.acquirer_id);
                         break;
                     }
                 }
                 SemaphoreEvent::Removed((seq, _)) => {
                     if seq == sem_key.seq {
-                        // println!(
-                        //     "[{}] {} removed: {}->{}",
-                        //     now_str(),
-                        //     self.ctx,
-                        //     sem_key,
-                        //     self.sem_id
-                        // );
-
                         warn!(
                             "semaphore removed before acquired: {}->{}",
-                            sem_key, self.sem_id
+                            sem_key, self.acquirer_id
                         );
                         return Err(AcquireError::EarlyRemoved(EarlyRemoved::new(
                             sem_key.clone(),

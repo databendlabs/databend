@@ -173,7 +173,7 @@ impl Semaphore {
         let ctx = format!("{}-Acquirer(id={})", self, id);
         let acquirer = Acquirer {
             prefix: self.prefix.clone(),
-            sem_id: id.to_string(),
+            acquirer_id: id.to_string(),
             lease,
             seq_generator_key: self.seq_generator_key(),
             meta_client: self.meta_client.clone(),
