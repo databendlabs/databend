@@ -247,14 +247,13 @@ impl LogBuffer {
         }
         let now = chrono::Local::now().timestamp_micros() as u64;
         let last = self.last_collect.load(Ordering::SeqCst);
-        if now - last > self.interval {
-            if self
+        if now - last > self.interval
+            && self
                 .last_collect
                 .compare_exchange_weak(last, now, Ordering::SeqCst, Ordering::SeqCst)
                 .is_ok()
-            {
-                self.collect()?;
-            }
+        {
+            self.collect()?;
         }
         Ok(())
     }

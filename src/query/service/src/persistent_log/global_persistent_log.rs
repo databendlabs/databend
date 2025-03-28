@@ -96,13 +96,13 @@ impl GlobalPersistentLog {
     pub async fn work(&self) -> Result<()> {
         let mut prepared = false;
 
-        // Use a counter rather than a time interval to trigger cleanup operations.
-        // because in cluster environment, a time-based interval would cause cleanup frequency
-        // to scale with the number of nodes in the cluster, whereas this count-based
-        // approach ensures consistent cleanup frequency regardless of cluster size.
-        let thirty_minutes_in_seconds = 30 * 60;
-        let copy_into_threshold = thirty_minutes_in_seconds / self.interval;
-        let mut copy_into_count = 0;
+        // // Use a counter rather than a time interval to trigger cleanup operations.
+        // // because in cluster environment, a time-based interval would cause cleanup frequency
+        // // to scale with the number of nodes in the cluster, whereas this count-based
+        // // approach ensures consistent cleanup frequency regardless of cluster size.
+        // let thirty_minutes_in_seconds = 30 * 60;
+        // let copy_into_threshold = thirty_minutes_in_seconds / self.interval;
+        // let mut copy_into_count = 0;
 
         loop {
             // add a random sleep time to avoid always one node doing the work
@@ -134,13 +134,13 @@ impl GlobalPersistentLog {
                     if let Err(e) = self.do_copy_into().await {
                         error!("Persistent log copy into failed: {:?}", e);
                     }
-                    copy_into_count += 1;
-                    if copy_into_count > copy_into_threshold {
-                        if let Err(e) = self.clean().await {
-                            error!("Persistent log delete failed: {:?}", e);
-                        }
-                        copy_into_count = 0;
-                    }
+                    // copy_into_count += 1;
+                    // if copy_into_count > copy_into_threshold {
+                    //     if let Err(e) = self.clean().await {
+                    //         error!("Persistent log delete failed: {:?}", e);
+                    //     }
+                    //     copy_into_count = 0;
+                    // }
                 }
             }
         }
