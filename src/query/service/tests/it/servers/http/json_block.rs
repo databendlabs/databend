@@ -20,10 +20,9 @@ use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_io::prelude::FormatSettings;
-use databend_query::servers::http::v1::StringBlock;
+use databend_query::servers::http::v1::BlocksSerializer;
 use pretty_assertions::assert_eq;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
@@ -42,10 +41,9 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
             .collect();
     }
 
-    let block = DataBlock::new_from_columns(columns);
-
     let format = FormatSettings::default();
-    let json_block = StringBlock::new(&block, &format)?;
+    let mut serializer = BlocksSerializer::new(Some(format));
+    serializer.append(columns, 3);
     let expect = [
         vec!["1", "a", "1", "1.1", "1970-01-02"],
         vec!["2", "b", "1", "2.2", "1970-01-03"],
@@ -55,7 +53,10 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     .map(|r| r.iter().map(|v| v.to_string()).collect::<Vec<_>>())
     .collect::<Vec<_>>();
 
-    assert_eq!(json_block.as_data("").clone(), expect);
+    assert_eq!(
+        serde_json::to_string(&serializer)?,
+        serde_json::to_string(&expect)?
+    );
     Ok(())
 }
 
@@ -71,9 +72,8 @@ fn test_data_block_not_nullable() -> Result<()> {
 
 #[test]
 fn test_empty_block() -> Result<()> {
-    let block = DataBlock::empty();
     let format = FormatSettings::default();
-    let json_block = StringBlock::new(&block, &format)?;
-    assert!(json_block.is_empty());
+    let mut serializer = BlocksSerializer::new(Some(format));
+    assert!(serializer.is_empty());
     Ok(())
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::ops::Deref;
+use std::pin::pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -21,11 +22,11 @@ use std::sync::LazyLock;
 use arrow_flight::FlightData;
 use arrow_flight::SchemaAsIpc;
 use arrow_ipc::writer;
-use arrow_ipc::writer::IpcWriteOptions;
 use arrow_ipc::MessageBuilder;
 use arrow_ipc::MessageHeader;
 use arrow_ipc::MetadataVersion;
 use arrow_schema::Schema as ArrowSchema;
+use async_stream::stream;
 use bytes::Bytes;
 use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
@@ -80,16 +81,39 @@ static DATA_HEADER_PROGRESS: LazyLock<Bytes> = LazyLock::new(|| {
 impl FlightSqlServiceImpl {
     pub(crate) fn schema_to_flight_data(data_schema: DataSchema) -> FlightData {
         let arrow_schema = ArrowSchema::from(&data_schema);
-        let options = IpcWriteOptions::default();
+        let options = writer::IpcWriteOptions::default();
         SchemaAsIpc::new(&arrow_schema, &options).into()
     }
 
-    pub fn block_to_flight_data(block: DataBlock, data_schema: &DataSchema) -> Result<FlightData> {
+    pub fn block_to_flight_data_stream<'a>(
+        block: DataBlock,
+        data_schema: &'a DataSchema,
+    ) -> impl Stream<Item = Result<FlightData>> + 'a {
+        stream! {
+            let remain_size = 10 * 1024 * 1024;
+            let options = writer::IpcWriteOptions::default();
+            let data_gen = writer::IpcDataGenerator::default();
+
+            if block.memory_size() > remain_size {
+                let row = block.num_rows() / ((block.memory_size() / remain_size) + 1);
+                for block in block.split_by_rows_no_tail(row) {
+                    yield Self::block_to_flight_data(block, data_schema, &options, &data_gen);
+                }
+            } else {
+                yield Self::block_to_flight_data(block, data_schema, &options, &data_gen);
+            }
+        }
+    }
+
+    fn block_to_flight_data(
+        block: DataBlock,
+        data_schema: &DataSchema,
+        options: &writer::IpcWriteOptions,
+        data_gen: &writer::IpcDataGenerator,
+    ) -> Result<FlightData> {
         let batch = block
             .to_record_batch_with_dataschema(data_schema)
             .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
-        let options = IpcWriteOptions::default();
-        let data_gen = writer::IpcDataGenerator::default();
         let mut dictionary_tracker = writer::DictionaryTracker::new(false);
 
         let (_encoded_dictionaries, encoded_batch) = data_gen
@@ -187,13 +211,15 @@ impl FlightSqlServiceImpl {
             while let Some(block) = data_stream.next().await {
                 match block {
                     Ok(block) => {
-                        let res =
-                            match FlightSqlServiceImpl::block_to_flight_data(block, &data_schema) {
-                                Ok(flight_data) => Ok(flight_data),
-                                Err(err) => Err(status!("Could not convert batches", err)),
-                            };
-
-                        let _ = s1.send(res).await;
+                        let mut stream = pin!(FlightSqlServiceImpl::block_to_flight_data_stream(
+                            block,
+                            &data_schema,
+                        ));
+                        while let Some(res) = stream.next().await {
+                            let _ = s1
+                                .send(res.map_err(|err| status!("Could not convert batches", err)))
+                                .await;
+                        }
                     }
                     Err(err) => {
                         let _ = s1
