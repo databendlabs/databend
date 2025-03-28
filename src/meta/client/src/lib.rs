@@ -125,6 +125,8 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///   🖥 server: add `WatchRequest::initial_flush`,
 ///              to let watch stream flush all keys in a range at the beginning.
 ///
+/// - 2025-03-28: since TODO: add version when merged.
+///   👥 client: semaphore requires `WatchRequest::initial_flush`
 ///
 /// Server feature set:
 /// ```yaml
@@ -142,7 +144,7 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 // Version: v1.2.257-nightly-188426e3e6-simd(1.75.0-nightly-2023-12-17T22:09:06.675156000Z)
 // ```
 // Skip 1.2.258 use the next 1.2.259
-pub static MIN_METASRV_SEMVER: Version = Version::new(1, 2, 259);
+pub static MIN_METASRV_SEMVER: Version = Version::new(1, 2, 677);
 
 pub fn to_digit_ver(v: &Version) -> u64 {
     v.major * 1_000_000 + v.minor * 1_000 + v.patch
