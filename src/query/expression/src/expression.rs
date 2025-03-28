@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
+use databend_common_exception::ErrorCode;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -284,6 +286,133 @@ impl<Index: ColumnIndex> PartialEq for Expr<Index> {
             }
             _ => false,
         }
+    }
+}
+
+pub trait ExprVisitor<Index: ColumnIndex>: Sized {
+    type Error = ErrorCode;
+
+    fn enter_constant<'a>(
+        &mut self,
+        expr: &'a Expr<Index>,
+    ) -> Result<Cow<'a, Expr<Index>>, Self::Error> {
+        let Expr::Constant { .. } = expr else {
+            unreachable!()
+        };
+        Ok(Cow::Borrowed(expr))
+    }
+
+    fn enter_column_ref<'a>(
+        &mut self,
+        expr: &'a Expr<Index>,
+    ) -> Result<Cow<'a, Expr<Index>>, Self::Error> {
+        let Expr::ColumnRef { .. } = expr else {
+            unreachable!()
+        };
+        Ok(Cow::Borrowed(expr))
+    }
+
+    fn enter_cast<'a>(
+        &mut self,
+        expr: &'a Expr<Index>,
+    ) -> Result<Cow<'a, Expr<Index>>, Self::Error> {
+        let Expr::Cast {
+            span,
+            is_try,
+            expr: inner,
+            dest_type,
+        } = expr
+        else {
+            unreachable!()
+        };
+        match visit_expr(inner, self)? {
+            Cow::Borrowed(_) => Ok(Cow::Borrowed(expr)),
+            Cow::Owned(inner) => Ok(Cow::Owned(Expr::Cast {
+                span: *span,
+                is_try: *is_try,
+                expr: Box::new(inner),
+                dest_type: dest_type.clone(),
+            })),
+        }
+    }
+
+    fn enter_function_call<'a>(
+        &mut self,
+        expr: &'a Expr<Index>,
+    ) -> Result<Cow<'a, Expr<Index>>, Self::Error> {
+        let Expr::FunctionCall {
+            span,
+            id,
+            function,
+            generics,
+            args,
+            return_type,
+        } = expr
+        else {
+            unreachable!()
+        };
+        let args = args
+            .iter()
+            .map(|arg| visit_expr(arg, self))
+            .collect::<Result<Vec<_>, _>>()?;
+        if args.iter().all(Cow::is_borrowed) {
+            Ok(Cow::Borrowed(expr))
+        } else {
+            Ok(Cow::Owned(Expr::FunctionCall {
+                span: *span,
+                id: id.clone(),
+                function: function.clone(),
+                generics: generics.clone(),
+                args: args.into_iter().map(Cow::into_owned).collect(),
+                return_type: return_type.clone(),
+            }))
+        }
+    }
+
+    fn enter_lambda_function_call<'a>(
+        &mut self,
+        expr: &'a Expr<Index>,
+    ) -> Result<Cow<'a, Expr<Index>>, Self::Error> {
+        let Expr::LambdaFunctionCall {
+            span,
+            name,
+            args,
+            lambda_expr,
+            lambda_display,
+            return_type,
+        } = expr
+        else {
+            unreachable!()
+        };
+        let args = args
+            .iter()
+            .map(|arg| visit_expr(arg, self))
+            .collect::<Result<Vec<_>, _>>()?;
+        if args.iter().all(Cow::is_borrowed) {
+            Ok(Cow::Borrowed(expr))
+        } else {
+            Ok(Cow::Owned(Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args.into_iter().map(Cow::into_owned).collect(),
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            }))
+        }
+    }
+}
+
+pub fn visit_expr<'a, Index: ColumnIndex, V: ExprVisitor<Index>>(
+    expr: &'a Expr<Index>,
+    visitor: &mut V,
+) -> Result<Cow<'a, Expr<Index>>, V::Error> {
+    match expr {
+        Expr::Constant { .. } => visitor.enter_constant(expr),
+        Expr::ColumnRef { .. } => visitor.enter_column_ref(expr),
+        Expr::Cast { .. } => visitor.enter_cast(expr),
+        Expr::FunctionCall { .. } => visitor.enter_function_call(expr),
+        Expr::LambdaFunctionCall { .. } => visitor.enter_lambda_function_call(expr),
     }
 }
 

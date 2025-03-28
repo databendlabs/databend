@@ -201,7 +201,7 @@ result   : Uncertain
 +-----------+-------+-----------------------+
 | 0         | UInt8 | Column(UInt8([1, 2])) |
 +-----------+-------+-----------------------+
-expr     : eq<String, String>(to_string<UInt8>(x), "5")
+expr     : eq<String, String>(CAST(x AS String), "5")
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(UInt8(SimpleDomain { min: 1, max: 2 }))}
 result   : MustFalse
@@ -212,8 +212,8 @@ result   : MustFalse
 +-----------+------+-------------------------+
 | 0         | Int8 | Column(Int8([0, 1, 2])) |
 +-----------+------+-------------------------+
-expr     : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int8>(5, 0)(x), 1.2_d128(2,1))
-filter   : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int8>(5, 0)(x), 1.2_d128(2,1))
+expr     : eq<Decimal(5, 0), Decimal(2, 1)>(CAST(x AS Decimal(5, 0)), 1.2_d128(2,1))
+filter   : eq<Decimal(5, 0), Decimal(2, 1)>(CAST(x AS Decimal(5, 0)), 1.2_d128(2,1))
 domains  : {"x": Number(Int8(SimpleDomain { min: 0, max: 2 }))}
 result   : Uncertain
 
@@ -223,7 +223,7 @@ result   : Uncertain
 +-----------+------+----------------------+
 | 0         | Int8 | Column(Int8([0, 1])) |
 +-----------+------+----------------------+
-expr     : eq<Decimal(5, 0), Decimal(3, 2)>(to_decimal<Int8>(5, 0)(x), 2.00_d128(3,2))
+expr     : eq<Decimal(5, 0), Decimal(3, 2)>(CAST(x AS Decimal(5, 0)), 2.00_d128(3,2))
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(Int8(SimpleDomain { min: 0, max: 1 }))}
 result   : MustFalse
@@ -234,8 +234,8 @@ result   : MustFalse
 +-----------+-------+--------------------------+
 | 0         | Int16 | Column(Int16([0, 1, 2])) |
 +-----------+-------+--------------------------+
-expr     : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int16>(5, 0)(x), 1.2_d128(2,1))
-filter   : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int16>(5, 0)(x), 1.2_d128(2,1))
+expr     : eq<Decimal(5, 0), Decimal(2, 1)>(CAST(x AS Decimal(5, 0)), 1.2_d128(2,1))
+filter   : eq<Decimal(5, 0), Decimal(2, 1)>(CAST(x AS Decimal(5, 0)), 1.2_d128(2,1))
 domains  : {"x": Number(Int16(SimpleDomain { min: 0, max: 2 }))}
 result   : Uncertain
 
@@ -245,8 +245,8 @@ result   : Uncertain
 +-----------+-------+----------------------------+
 | 0         | Int16 | Column(Int16([1, 3, 100])) |
 +-----------+-------+----------------------------+
-expr     : eq<String, String>(to_string<Int16>(x), "+3")
-filter   : eq<String, String>(to_string<Int16>(x), "+3")
+expr     : eq<String, String>(CAST(x AS String), "+3")
+filter   : eq<String, String>(CAST(x AS String), "+3")
 domains  : {"x": Number(Int16(SimpleDomain { min: 1, max: 100 }))}
 result   : Uncertain
 
@@ -256,7 +256,7 @@ result   : Uncertain
 +-----------+-------+---------------------------+
 | 0         | Int16 | Column(Int16([100, 200])) |
 +-----------+-------+---------------------------+
-expr     : eq<String, String>(to_string<Int16>(x), "+3")
+expr     : eq<String, String>(CAST(x AS String), "+3")
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(Int16(SimpleDomain { min: 100, max: 200 }))}
 result   : MustFalse
@@ -267,8 +267,8 @@ result   : MustFalse
 +-----------+------+----------------------+
 | 0         | Int8 | Column(Int8([0, 2])) |
 +-----------+------+----------------------+
-expr     : eq<Decimal(10, 0), Decimal(2, 1)>(to_decimal<Int32>(10, 0)(to_int32<Int16>(to_int16<Int8>(x))), 1.2_d128(2,1))
-filter   : eq<Decimal(10, 0), Decimal(2, 1)>(to_decimal<Int32>(10, 0)(to_int32<Int16>(to_int16<Int8>(x))), 1.2_d128(2,1))
+expr     : eq<Decimal(10, 0), Decimal(2, 1)>(CAST(to_int32<Int16>(to_int16<Int8>(x)) AS Decimal(10, 0)), 1.2_d128(2,1))
+filter   : eq<Decimal(10, 0), Decimal(2, 1)>(CAST(to_int32<Int16>(to_int16<Int8>(x)) AS Decimal(10, 0)), 1.2_d128(2,1))
 domains  : {"x": Number(Int8(SimpleDomain { min: 0, max: 2 }))}
 result   : Uncertain
 
@@ -278,8 +278,9 @@ result   : Uncertain
 +-----------+-------+--------------------------+
 | 0         | Int32 | Column(Int32([0, 6000])) |
 +-----------+-------+--------------------------+
-expr     : eq<Int8, Int8>(to_int8<Int32>(x), 10_i8)
-filter   : eq<Int8, Int8>(to_int8<Int32>(x), 10_i8)
+expr     : eq<Int16, Int16>(CAST(CAST(x AS Int8) AS Int16), CAST(10_u8 AS Int16))
+fold_expr: eq<Int16, Int16>(CAST(CAST(x AS Int8) AS Int16), 10_i16)
+filter   : eq<Int16, Int16>(CAST(CAST(x AS Int8) AS Int16), 10_i16)
 domains  : {"x": Number(Int32(SimpleDomain { min: 0, max: 6000 }))}
 result   : Uncertain
 
@@ -289,9 +290,9 @@ result   : Uncertain
 +-----------+--------+----------------------------------------------------------------+
 | 0         | String | Column(StringColumn[2021-03-05 01:01:01, 2021-03-05 01:01:02]) |
 +-----------+--------+----------------------------------------------------------------+
-expr     : eq<Timestamp, Timestamp>(to_timestamp<String>(x), to_timestamp<String>("2021-03-05 01:01:01"))
-fold_expr: eq<Timestamp, Timestamp>(to_timestamp<String>(x), 1614906061000000)
-filter   : eq<Timestamp, Timestamp>(to_timestamp<String>(x), 1614906061000000)
+expr     : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), CAST("2021-03-05 01:01:01" AS Timestamp))
+fold_expr: eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614906061000000)
+filter   : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614906061000000)
 domains  : {"x": String(StringDomain { min: "2021-03-05 01:01:01", max: Some("2021-03-05 01:01:02") })}
 result   : Uncertain
 
@@ -301,9 +302,9 @@ result   : Uncertain
 +-----------+------+-------------------------------+
 | 0         | Date | Column([18600, 18691, 19000]) |
 +-----------+------+-------------------------------+
-expr     : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), to_timestamp<String>("2021-03-05 01:01:03"))
-fold_expr: eq<Timestamp, Timestamp>(to_timestamp<Date>(x), 1614906063000000)
-filter   : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), 1614906063000000)
+expr     : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), CAST("2021-03-05 01:01:03" AS Timestamp))
+fold_expr: eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614906063000000)
+filter   : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614906063000000)
 domains  : {"x": Date(SimpleDomain { min: 18600, max: 19000 })}
 result   : Uncertain
 
@@ -313,9 +314,9 @@ result   : Uncertain
 +-----------+------+-------------------------------+
 | 0         | Date | Column([18600, 18691, 19000]) |
 +-----------+------+-------------------------------+
-expr     : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), to_timestamp<String>("2021-03-05 00:00:00"))
-fold_expr: eq<Timestamp, Timestamp>(to_timestamp<Date>(x), 1614902400000000)
-filter   : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), 1614902400000000)
+expr     : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), CAST("2021-03-05 00:00:00" AS Timestamp))
+fold_expr: eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614902400000000)
+filter   : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614902400000000)
 domains  : {"x": Date(SimpleDomain { min: 18600, max: 19000 })}
 result   : Uncertain
 
@@ -325,8 +326,8 @@ result   : Uncertain
 +-----------+------+-------------------------------+
 | 0         | Date | Column([18600, 18691, 19000]) |
 +-----------+------+-------------------------------+
-expr     : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), to_timestamp<String>("2030-03-05 00:00:00"))
-fold_expr: eq<Timestamp, Timestamp>(to_timestamp<Date>(x), 1898899200000000)
+expr     : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), CAST("2030-03-05 00:00:00" AS Timestamp))
+fold_expr: eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1898899200000000)
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Date(SimpleDomain { min: 18600, max: 19000 })}
 result   : MustFalse
@@ -337,8 +338,8 @@ result   : MustFalse
 +-----------+-------+-------------------------+
 | 0         | Int16 | Column(Int16([0, 300])) |
 +-----------+-------+-------------------------+
-expr     : eq<Decimal(3, 0), Decimal(2, 1)>(to_decimal<Int8>(3, 0)(to_int8<Int16>(x)), 1.2_d128(2,1))
-filter   : eq<Decimal(3, 0), Decimal(2, 1)>(to_decimal<Int8>(3, 0)(to_int8<Int16>(x)), 1.2_d128(2,1))
+expr     : eq<Decimal(3, 0), Decimal(2, 1)>(CAST(to_int8<Int16>(x) AS Decimal(3, 0)), 1.2_d128(2,1))
+filter   : eq<Decimal(3, 0), Decimal(2, 1)>(CAST(to_int8<Int16>(x) AS Decimal(3, 0)), 1.2_d128(2,1))
 domains  : {"x": Number(Int16(SimpleDomain { min: 0, max: 300 }))}
 result   : Uncertain
 
@@ -348,7 +349,7 @@ result   : Uncertain
 +-----------+------------+----------------------------------------------------------------------------+
 | 0         | Int16 NULL | Column(NullableColumn { column: Int16([0, 100]), validity: [0b______11] }) |
 +-----------+------------+----------------------------------------------------------------------------+
-expr     : eq<Int16, Int16>(x, to_int16<Int8>(to_int8<UInt8>(1_u8)))
+expr     : eq<Int16, Int16>(x, CAST(CAST(1_u8 AS Int8) AS Int16))
 fold_expr: eq<Int16, Int16>(x, 1_i16)
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(Int16(SimpleDomain { min: 0, max: 100 }))}
@@ -360,7 +361,7 @@ result   : MustFalse
 +-----------+------------+----------------------------------------------------------------------------+
 | 0         | Int16 NULL | Column(NullableColumn { column: Int16([0, 100]), validity: [0b______11] }) |
 +-----------+------------+----------------------------------------------------------------------------+
-expr     : eq<Int8 NULL, Int8 NULL>(CAST(x AS Int8 NULL), CAST(to_int8<UInt8>(1_u8) AS Int8 NULL))
+expr     : eq<Int8 NULL, Int8 NULL>(CAST(x AS Int8 NULL), CAST(CAST(1_u8 AS Int8) AS Int8 NULL))
 fold_expr: eq<Int8 NULL, Int8 NULL>(CAST(x AS Int8 NULL), 1_i8)
 filter   : eq<Int8 NULL, Int8 NULL>(CAST(x AS Int8 NULL), 1_i8)
 domains  : {"x": Number(Int16(SimpleDomain { min: 0, max: 100 }))}
