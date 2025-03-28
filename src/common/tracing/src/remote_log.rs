@@ -246,14 +246,25 @@ impl LogBuffer {
             self.collect()?;
         }
         let now = chrono::Local::now().timestamp_micros() as u64;
-        let last = self.last_collect.load(Ordering::SeqCst);
-        if now - last > self.interval
-            && self
-                .last_collect
-                .compare_exchange_weak(last, now, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-        {
-            self.collect()?;
+        let mut current_last_collect = 0;
+        loop {
+            match self.last_collect.compare_exchange_weak(
+                current_last_collect,
+                now,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => {
+                    self.collect()?;
+                    break;
+                }
+                Err(last_collect) => {
+                    if now - self.interval < last_collect {
+                        break;
+                    }
+                    current_last_collect = last_collect;
+                }
+            }
         }
         Ok(())
     }

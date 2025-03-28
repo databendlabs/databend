@@ -29,7 +29,6 @@ use log::Level;
 use log::Record;
 use opendal::services;
 use opendal::Operator;
-use serde_json::Value;
 
 fn setup() -> Result<(RemoteLog, Box<RemoteLogGuard>)> {
     let mut labels = BTreeMap::new();
@@ -50,7 +49,8 @@ fn get_remote_log_elements() -> RemoteLogElement {
         query_id: Some("89ad07ad-83fe-4424-8005-4c5b318a7212".to_string()),
         warehouse_id: None,
         log_level: "INFO".to_string(),
-        fields: r#"{"message":"test"}"#.to_string(),
+        message: "test".to_string(),
+        fields: r#"{"key":"test"}"#.to_string(),
     }
 }
 
@@ -75,9 +75,7 @@ fn test_basic_parse() -> Result<()> {
         "databend_query::sessions::query_ctx: query_ctx.rs:656"
     );
 
-    let fields: Value = serde_json::from_str(&remote_log_element.fields)?;
-
-    assert_eq!(fields["message"], "begin to list files");
+    assert_eq!(&remote_log_element.message, "begin to list files");
 
     Ok(())
 }

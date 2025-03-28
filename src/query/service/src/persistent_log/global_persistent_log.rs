@@ -55,6 +55,7 @@ pub struct GlobalPersistentLog {
     stage_name: String,
     initialized: AtomicBool,
     stopped: AtomicBool,
+    #[allow(dead_code)]
     retention: usize,
 }
 
@@ -222,6 +223,7 @@ impl GlobalPersistentLog {
     }
 
     /// Do retention and vacuum
+    #[allow(dead_code)]
     async fn clean(&self) -> Result<()> {
         let delete = format!(
             "DELETE FROM persistent_system.query_log WHERE timestamp < subtract_hours(NOW(), {})",

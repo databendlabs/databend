@@ -108,7 +108,9 @@ fn get_remote_log() -> Vec<RemoteLogElement> {
             node_id: "izs9przqhAN4n5hbJanJm2".to_string(),
             query_id: Some("89ad07ad-83fe-4424-8005-4c5b318a7212".to_string()),
             warehouse_id: None,
+            message: "test".to_string(),
             log_level: "INFO".to_string(),
+
             fields: r#"{"message":"test"}"#.to_string(),
         },
         RemoteLogElement {
@@ -120,6 +122,7 @@ fn get_remote_log() -> Vec<RemoteLogElement> {
             query_id: Some("89ad07ad-83fe-4424-8005-4c5b318a7212".to_string()),
             warehouse_id: None,
             log_level: "INFO".to_string(),
+            message: "test2".to_string(),
             fields: r#"{"message":"test"}"#.to_string(),
         },
     ]
