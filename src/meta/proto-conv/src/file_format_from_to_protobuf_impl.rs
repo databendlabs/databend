@@ -21,6 +21,7 @@ use databend_common_io::GeometryDataType;
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::EmptyFieldAs;
+use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
@@ -335,14 +336,29 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
     fn from_pb(p: pb::ParquetFileFormatParams) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        mt::principal::ParquetFileFormatParams::try_create(p.missing_field_as.as_deref(), p.null_if)
-            .map_err(|e| Incompatible::new(format!("{e}")))
+        let mut compression = mt::principal::StageFileCompression::from_pb_enum(
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| {
+                Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
+            })?,
+        )?;
+        if compression == StageFileCompression::Auto {
+            compression = StageFileCompression::Zstd;
+        };
+        mt::principal::ParquetFileFormatParams::try_create(
+            compression,
+            p.missing_field_as.as_deref(),
+            p.null_if,
+        )
+        .map_err(|e| Incompatible::new(format!("{e}")))
     }
 
     fn to_pb(&self) -> Result<pb::ParquetFileFormatParams, Incompatible> {
+        let compression =
+            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
         Ok(pb::ParquetFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
+            compression,
             missing_field_as: Some(self.missing_field_as.to_string()),
             null_if: self.null_if.clone(),
         })
