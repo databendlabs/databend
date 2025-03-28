@@ -26,6 +26,7 @@ use redis::Commands;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
+use testcontainers::core::client::docker_client_instance;
 use testcontainers::core::error::WaitContainerError;
 use testcontainers::core::IntoContainerPort;
 use testcontainers::core::WaitFor;
@@ -242,12 +243,12 @@ fn run_script(name: &str, args: &[&str]) -> Result<()> {
 }
 
 pub async fn run_ttc_container(
-    docker: &Docker,
     image: &str,
     port: u16,
     http_server_port: u16,
     cs: &mut Vec<ContainerAsync<GenericImage>>,
 ) -> Result<()> {
+    let docker = &docker_client_instance().await?;
     let mut images = image.split(":");
     let image = images.next().unwrap();
     let tag = images.next().unwrap_or("latest");
@@ -324,7 +325,7 @@ pub async fn lazy_run_dictionary_containers(
         return Ok(None);
     }
     println!("Start run dictionary source server container");
-    let docker = Docker::connect_with_local_defaults().unwrap();
+    let docker = docker_client_instance().await?;
     let redis = run_redis_server(&docker).await?;
     let mysql = run_mysql_server(&docker).await?;
     let dict_container = DictionaryContainer { redis, mysql };
