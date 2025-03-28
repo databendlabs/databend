@@ -151,9 +151,9 @@ impl PipelineBuilder {
                     .collect();
 
                 // merge sort
-                let sort_block_size = block_thresholds.calc_rows_per_block(
-                    task.total_bytes,
+                let sort_block_size = block_thresholds.calc_rows_for_recluster(
                     task.total_rows,
+                    task.total_bytes,
                     task.total_compressed,
                 );
 

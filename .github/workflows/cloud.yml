@@ -120,8 +120,7 @@ jobs:
             ## Docker Image for PR
             * **tag**: `${{ steps.prepare.outputs.tag }}`
 
-            > note: this image tag is only available for internal use,
-            > please check the [internal doc](https://datafuselabs.feishu.cn/wiki/Hk7iwYsnWi3wsXkpbW5c9apTn0b) for more details.
+            > note: this image tag is only available for internal use.
 
   benchmark:
     if: needs.info.outputs.target

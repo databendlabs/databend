@@ -2944,7 +2944,6 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-storage",
  "databend-common-tracing",
- "databend-enterprise-background-service",
  "databend-enterprise-query",
  "databend-query",
  "databend-storages-common-table-meta",
@@ -3186,7 +3185,6 @@ dependencies = [
 name = "databend-common-config"
 version = "0.1.0"
 dependencies = [
- "chrono-tz 0.8.6",
  "clap",
  "databend-common-base",
  "databend-common-building",
@@ -3565,8 +3563,6 @@ dependencies = [
  "anyerror",
  "anyhow",
  "chrono",
- "chrono-tz 0.8.6",
- "cron",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-exception",
@@ -3948,7 +3944,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "chrono-tz 0.8.6",
  "convert_case 0.6.0",
  "databend-common-expression",
  "databend-common-io",
@@ -4547,7 +4542,6 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-management",
- "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-types",
  "databend-common-metrics",
@@ -4679,19 +4673,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-enterprise-background-service"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-meta-app",
- "serde",
-]
-
-[[package]]
 name = "databend-enterprise-data-mask-feature"
 version = "0.1.0"
 dependencies = [
@@ -4752,7 +4733,6 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "chrono",
- "chrono-tz 0.8.6",
  "dashmap 6.1.0",
  "databend-common-ast",
  "databend-common-base",
@@ -4779,10 +4759,8 @@ dependencies = [
  "databend-common-storages-fuse",
  "databend-common-storages-stream",
  "databend-common-tracing",
- "databend-common-users",
  "databend-enterprise-aggregating-index",
  "databend-enterprise-attach-table",
- "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
  "databend-enterprise-hilbert-clustering",
@@ -5138,7 +5116,6 @@ dependencies = [
  "databend-common-users",
  "databend-enterprise-aggregating-index",
  "databend-enterprise-attach-table",
- "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-hilbert-clustering",
  "databend-enterprise-inverted-index",
@@ -9176,7 +9153,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.4.4"
-source = "git+https://github.com/databendlabs/jsonb?rev=37d07f0#37d07f05bb2db05c47840a5429958db981177cde"
+source = "git+https://github.com/databendlabs/jsonb?rev=1a53512#1a535124f0f57b18b57377437fe486d9bd680980"
 dependencies = [
  "byteorder",
  "fast-float2",

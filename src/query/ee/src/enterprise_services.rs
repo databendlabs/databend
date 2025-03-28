@@ -18,7 +18,6 @@ use databend_common_license::license_manager::LicenseManager;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::attach_table::RealAttachTableHandler;
-use crate::background_service::RealBackgroundService;
 use crate::data_mask::RealDatamaskHandler;
 use crate::fail_safe::RealFailSafeHandler;
 use crate::hilbert_clustering::RealHilbertClusteringHandler;
@@ -40,7 +39,6 @@ impl EnterpriseServices {
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
         RealDatamaskHandler::init()?;
-        RealBackgroundService::init(&cfg).await?;
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
         RealAttachTableHandler::init()?;
