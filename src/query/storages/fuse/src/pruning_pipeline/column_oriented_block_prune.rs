@@ -85,12 +85,16 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             .segments;
 
         let range_pruner = &self.block_pruner.pruning_ctx.range_pruner;
+        let bloom_pruner = &self.block_pruner.pruning_ctx.bloom_pruner;
 
         let block_num = segment.block_metas.num_rows();
         let location_path_col = segment.location_path_col();
-        let rows_count_col = segment.row_count_col();
         let compression_col = segment.compression_col();
         let create_on_col = segment.col_by_name(&[CREATE_ON]).unwrap();
+        let bloom_index_location_col = segment.col_by_name(&[BLOOM_FILTER_INDEX_LOCATION]).unwrap();
+        let bloom_index_size_col = segment.bloom_filter_index_size_col();
+        let block_size_col = segment.block_size_col();
+        let row_count_col = segment.row_count_col();
 
         for block_idx in 0..block_num {
             // 1. prune internal column
@@ -141,11 +145,53 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                 continue;
             }
 
-            // TODO(Sky): add bloom filter pruning, inverted index pruning
-
-            let row_count = rows_count_col[block_idx];
+            let row_count = row_count_col[block_idx];
             let compression = compression_col[block_idx];
             let compression = Compression::from_u8(compression);
+            let block_size = block_size_col[block_idx];
+
+            // TODO(Sky): execute bloom filter pruning parallel
+            if let Some(bloom_pruner) = bloom_pruner {
+                let location_scalar = bloom_index_location_col.index(block_idx).unwrap();
+                let index_location = match location_scalar {
+                    ScalarRef::Null => None,
+                    ScalarRef::Tuple(tuple) => {
+                        if tuple.len() != 2 {
+                            unreachable!()
+                        }
+                        Some((
+                            tuple[0].as_string().unwrap().to_string(),
+                            *tuple[1].as_number().unwrap().as_u_int64().unwrap(),
+                        ))
+                    }
+                    _ => unreachable!(),
+                };
+                let index_size = bloom_index_size_col[block_idx];
+
+                // used to rebuild bloom index
+                let block_read_info = BlockReadInfo {
+                    location: location_path.to_string(),
+                    row_count,
+                    col_metas: columns_meta.clone(),
+                    compression,
+                    block_size,
+                };
+                if !bloom_pruner
+                    .should_keep(
+                        &index_location,
+                        index_size,
+                        &columns_stat,
+                        self.column_ids.clone(),
+                        &block_read_info,
+                    )
+                    .await
+                {
+                    continue;
+                }
+            }
+
+            // TODO(Sky): add inverted index pruning
+
             let create_on = create_on_col.index(block_idx).unwrap();
             let create_on = match create_on {
                 ScalarRef::Null => None,

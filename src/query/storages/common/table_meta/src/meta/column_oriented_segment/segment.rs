@@ -38,6 +38,7 @@ use super::block_meta::ColumnOrientedBlockMeta;
 use super::meta_name;
 use super::stat_name;
 use super::BLOCK_SIZE;
+use super::BLOOM_FILTER_INDEX_SIZE;
 use super::COMPRESSION;
 use super::FILE_SIZE;
 use super::LOCATION_PATH;
@@ -185,6 +186,16 @@ impl ColumnOrientedSegment {
             }
         }
         col_metas
+    }
+
+    pub fn bloom_filter_index_size_col(&self) -> Buffer<u64> {
+        self.col_by_name(&[BLOOM_FILTER_INDEX_SIZE])
+            .unwrap()
+            .as_number()
+            .unwrap()
+            .as_u_int64()
+            .unwrap()
+            .clone()
     }
 
     pub fn col_by_name(&self, name: &[&str]) -> Option<Column> {
