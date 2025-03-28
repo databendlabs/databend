@@ -28,11 +28,6 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
-use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
-use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
-use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::schema::TableIdent;
@@ -382,13 +377,7 @@ pub trait Table: Sync + Send {
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {
-        BlockThresholds {
-            max_rows_per_block: DEFAULT_BLOCK_MAX_ROWS,
-            min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
-            max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE,
-            max_bytes_per_file: DEFAULT_BLOCK_COMPRESSED_SIZE,
-            block_per_segment: DEFAULT_BLOCK_PER_SEGMENT,
-        }
+        BlockThresholds::default()
     }
 
     #[async_backtrace::framed]

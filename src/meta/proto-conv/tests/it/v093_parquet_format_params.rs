@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_app::principal::ParquetFileFormatParams;
+use databend_common_meta_app::principal::StageFileCompression;
 use fastrace::func_name;
 
 use crate::common;
@@ -31,6 +32,7 @@ use crate::common;
 fn test_decode_v93_parquet_file_format_params() -> anyhow::Result<()> {
     let parquet_file_format_params_v93 = vec![34, 0, 34, 1, 97, 160, 6, 93, 168, 6, 24];
     let want = || ParquetFileFormatParams {
+        compression: StageFileCompression::Zstd,
         missing_field_as: Default::default(),
         null_if: vec!["".to_string(), "a".to_string()],
     };

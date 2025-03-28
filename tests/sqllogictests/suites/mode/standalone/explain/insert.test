@@ -28,7 +28,7 @@ InsertPlan (subquery):
 └── Filter
     ├── filters: [eq(t1.a (#0), 1)]
     └── Scan
-        ├── table: default.t1
+        ├── table: default.t1 (#0)
         ├── filters: [eq(t1.a (#0), 1)]
         ├── order by: []
         └── limit: NONE

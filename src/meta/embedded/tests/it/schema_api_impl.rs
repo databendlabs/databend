@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use databend_common_meta_api::BackgroundApiTestSuite;
 use databend_common_meta_api::SchemaApiTestSuite;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_raft_store::mem_meta::MemMeta;
@@ -39,12 +38,5 @@ impl kvapi::ApiBuilder<MemMeta> for MemMetaBuilder {
 #[fastrace::trace]
 async fn test_mem_meta_schema_api() -> anyhow::Result<()> {
     SchemaApiTestSuite::test_single_node(MemMetaBuilder {}).await?;
-    Ok(())
-}
-
-#[test(harness = mem_meta_test_harness)]
-#[fastrace::trace]
-async fn test_mem_meta_background_api() -> anyhow::Result<()> {
-    BackgroundApiTestSuite::test_single_node(MemMetaBuilder {}).await?;
     Ok(())
 }

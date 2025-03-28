@@ -69,7 +69,6 @@ use super::inner::InnerConfig;
 use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
-use crate::background_config::BackgroundConfig;
 use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
@@ -137,10 +136,6 @@ pub struct Config {
     // spill Config
     #[clap(flatten)]
     pub spill: SpillConfig,
-
-    // background configs
-    #[clap(flatten)]
-    pub background: BackgroundConfig,
 
     /// external catalog config.
     ///
@@ -3110,7 +3105,6 @@ mod cache_config_converters {
                     .collect(),
                 cache: inner.cache.into(),
                 spill: inner.spill.into(),
-                background: inner.background.into(),
             }
         }
     }
@@ -3129,7 +3123,6 @@ mod cache_config_converters {
                 catalog,
                 cache,
                 spill,
-                background,
                 catalogs: input_catalogs,
                 ..
             } = self;
@@ -3160,7 +3153,6 @@ mod cache_config_converters {
                 catalogs,
                 cache: cache.try_into()?,
                 spill,
-                background: background.try_into()?,
             })
         }
     }

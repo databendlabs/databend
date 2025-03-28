@@ -15,11 +15,11 @@
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
+use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ConstantTableScan {
@@ -50,20 +50,35 @@ impl PhysicalPlanBuilder {
         scan: &crate::plans::ConstantTableScan,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        // 1. Prune unused Columns.
-        let used: ColumnSet = required.intersection(&scan.columns).cloned().collect();
-        let (values, fields) = if used == scan.columns {
-            (scan.values.clone(), scan.schema.fields().clone())
-        } else {
-            let new_scan = scan.prune_columns(used);
-            (new_scan.values.clone(), new_scan.schema.fields().clone())
-        };
-        // 2. Build physical plan.
+        debug_assert!(scan
+            .schema
+            .fields
+            .iter()
+            .map(|field| field.name().parse::<IndexType>().unwrap())
+            .collect::<ColumnSet>()
+            .is_superset(&scan.columns));
+
+        let used: ColumnSet = required.intersection(&scan.columns).copied().collect();
+        if used.len() < scan.columns.len() {
+            let crate::plans::ConstantTableScan {
+                values,
+                num_rows,
+                schema,
+                ..
+            } = scan.prune_columns(used);
+            return Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
+                plan_id: 0,
+                values,
+                num_rows,
+                output_schema: schema,
+            }));
+        }
+
         Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
             plan_id: 0,
-            values,
+            values: scan.values.clone(),
             num_rows: scan.num_rows,
-            output_schema: DataSchemaRefExt::create(fields),
+            output_schema: scan.schema.clone(),
         }))
     }
 }

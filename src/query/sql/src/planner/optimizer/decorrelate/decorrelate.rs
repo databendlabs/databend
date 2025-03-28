@@ -261,17 +261,18 @@ impl SubqueryRewriter {
 
     pub fn try_decorrelate_subquery(
         &mut self,
-        left: &SExpr,
+        outer: &SExpr,
         subquery: &SubqueryExpr,
         flatten_info: &mut FlattenInfo,
         is_conjunctive_predicate: bool,
     ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
             SubqueryType::Scalar => {
-                let correlated_columns = subquery.outer_columns.clone();
+                let correlated_columns = &subquery.outer_columns;
                 let flatten_plan = self.flatten_plan(
+                    outer,
                     &subquery.subquery,
-                    &correlated_columns,
+                    correlated_columns,
                     flatten_info,
                     false,
                 )?;
@@ -280,23 +281,23 @@ impl SubqueryRewriter {
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
                 self.add_equi_conditions(
                     subquery.span,
-                    &correlated_columns,
+                    correlated_columns,
                     &mut right_conditions,
                     &mut left_conditions,
                 )?;
 
-                let mut join_type = JoinType::LeftSingle;
-                if matches!(subquery.contain_agg, Some(true)) {
+                let join_type = if matches!(subquery.contain_agg, Some(true)) && {
                     let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                    let card = rel_expr
+                    rel_expr
                         .derive_cardinality()?
                         .statistics
-                        .precise_cardinality;
-
-                    if card.is_some() {
-                        join_type = JoinType::Left;
-                    }
-                }
+                        .precise_cardinality
+                        .is_some()
+                } {
+                    JoinType::Left
+                } else {
+                    JoinType::LeftSingle
+                };
 
                 let join_plan = Join {
                     equi_conditions: JoinEquiCondition::new_conditions(
@@ -315,21 +316,22 @@ impl SubqueryRewriter {
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
-                    Arc::new(left.clone()),
+                    Arc::new(outer.clone()),
                     Arc::new(flatten_plan),
                 );
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
                 if is_conjunctive_predicate {
-                    if let Some(result) = self.try_decorrelate_simple_subquery(left, subquery)? {
+                    if let Some(result) = self.try_decorrelate_simple_subquery(outer, subquery)? {
                         return Ok((result, UnnestResult::SimpleJoin { output_index: None }));
                     }
                 }
-                let correlated_columns = subquery.outer_columns.clone();
+                let correlated_columns = &subquery.outer_columns;
                 let flatten_plan = self.flatten_plan(
+                    outer,
                     &subquery.subquery,
-                    &correlated_columns,
+                    correlated_columns,
                     flatten_info,
                     false,
                 )?;
@@ -338,7 +340,7 @@ impl SubqueryRewriter {
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
                 self.add_equi_conditions(
                     subquery.span,
-                    &correlated_columns,
+                    correlated_columns,
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
@@ -379,16 +381,17 @@ impl SubqueryRewriter {
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
-                    Arc::new(left.clone()),
+                    Arc::new(outer.clone()),
                     Arc::new(flatten_plan),
                 );
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             SubqueryType::Any => {
-                let correlated_columns = subquery.outer_columns.clone();
+                let correlated_columns = &subquery.outer_columns;
                 let flatten_plan = self.flatten_plan(
+                    outer,
                     &subquery.subquery,
-                    &correlated_columns,
+                    correlated_columns,
                     flatten_info,
                     false,
                 )?;
@@ -396,7 +399,7 @@ impl SubqueryRewriter {
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
                 self.add_equi_conditions(
                     subquery.span,
-                    &correlated_columns,
+                    correlated_columns,
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
@@ -450,7 +453,7 @@ impl SubqueryRewriter {
                 Ok((
                     SExpr::create_binary(
                         Arc::new(mark_join),
-                        Arc::new(left.clone()),
+                        Arc::new(outer.clone()),
                         Arc::new(flatten_plan),
                     ),
                     UnnestResult::MarkJoin { marker_index },
@@ -467,23 +470,23 @@ impl SubqueryRewriter {
         left_conditions: &mut Vec<ScalarExpr>,
         right_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
-        let mut correlated_columns = correlated_columns.clone().into_iter().collect::<Vec<_>>();
+        let mut correlated_columns = correlated_columns.iter().copied().collect::<Vec<_>>();
         correlated_columns.sort();
-        for correlated_column in correlated_columns.iter() {
+        for correlated_column in correlated_columns {
             let metadata = self.metadata.read();
-            let column_entry = metadata.column(*correlated_column);
+            let column_entry = metadata.column(correlated_column);
             let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
                 column: ColumnBindingBuilder::new(
                     column_entry.name(),
-                    *correlated_column,
+                    correlated_column,
                     Box::from(column_entry.data_type()),
                     Visibility::Visible,
                 )
                 .table_index(column_entry.table_index())
                 .build(),
             });
-            let Some(derive_column) = self.derived_columns.get(correlated_column) else {
+            let Some(derive_column) = self.derived_columns.get(&correlated_column) else {
                 continue;
             };
             let column_entry = metadata.column(*derive_column);

@@ -43,10 +43,10 @@ runs:
       run: |
         case ${{ inputs.target }} in
           x86_64-unknown-linux-gnu)
-            flags="-C target-feature=+sse4.2,+avx2"
+            flags="-C target-feature=+sse4.2"
             ;;
           x86_64-unknown-linux-musl)
-            flags="-C target-feature=+sse4.2,+avx2"
+            flags="-C target-feature=+sse4.2"
             ;;
           aarch64-unknown-linux-gnu)
             flags=""

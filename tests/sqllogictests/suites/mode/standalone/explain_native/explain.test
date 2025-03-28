@@ -104,12 +104,12 @@ EvalScalar
         ├── probe keys: []
         ├── other filters: []
         ├── Scan
-        │   ├── table: default.t1
+        │   ├── table: default.t1 (#0)
         │   ├── filters: []
         │   ├── order by: []
         │   └── limit: NONE
         └── Scan
-            ├── table: default.t2
+            ├── table: default.t2 (#1)
             ├── filters: []
             ├── order by: []
             └── limit: NONE
@@ -126,12 +126,12 @@ EvalScalar
     ├── Filter
     │   ├── filters: [gt(t1.a (#0), 2)]
     │   └── Scan
-    │       ├── table: default.t1
+    │       ├── table: default.t1 (#0)
     │       ├── filters: []
     │       ├── order by: []
     │       └── limit: NONE
     └── Scan
-        ├── table: default.t2
+        ├── table: default.t2 (#1)
         ├── filters: []
         ├── order by: []
         └── limit: NONE
@@ -789,7 +789,7 @@ TableScan
 ├── partitions total: 2
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
-├── push downs: [filters: [is_true(TRY_CAST(get(t3.c (#2), 'k3') AS String NULL) = 'v')], limit: NONE]
+├── push downs: [filters: [is_true(get(t3.c (#2), 'k3') = '"v"')], limit: NONE]
 └── estimated rows: 1.20
 
 query T
