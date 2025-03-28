@@ -749,7 +749,7 @@ impl<'a> InferFilterOptimizer<'a> {
                 match expr {
                     ScalarExpr::FunctionCall(expr) => self.visit_function_call(expr),
                     ScalarExpr::CastExpr(expr) => self.visit_cast_expr(expr),
-                    ScalarExpr::ConstantExpr(_) => Ok(()),
+                    ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => Ok(()),
                     ScalarExpr::BoundColumnRef(_)
                     | ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)

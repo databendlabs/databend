@@ -3323,8 +3323,7 @@ impl<'a> TypeChecker<'a> {
             outer_columns: rel_prop.outer_columns.clone(),
             contain_agg,
         };
-
-        let data_type = subquery_expr.data_type();
+        let data_type = subquery_expr.output_data_type();
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
@@ -4912,7 +4911,7 @@ impl<'a> TypeChecker<'a> {
             outer_columns: rel_prop.outer_columns.clone(),
             contain_agg: None,
         };
-        let data_type = subquery_expr.data_type();
+        let data_type = subquery_expr.output_data_type();
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 

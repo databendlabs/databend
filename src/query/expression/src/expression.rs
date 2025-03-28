@@ -42,6 +42,7 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
     Constant {
         span: Span,
         scalar: Scalar,
+        data_type: Option<DataType>,
     },
     ColumnRef {
         span: Span,
@@ -361,9 +362,14 @@ impl<Index: ColumnIndex> RawExpr<Index> {
         f: impl Fn(&Index) -> ToIndex + Copy,
     ) -> RawExpr<ToIndex> {
         match self {
-            RawExpr::Constant { span, scalar } => RawExpr::Constant {
+            RawExpr::Constant {
+                span,
+                scalar,
+                data_type,
+            } => RawExpr::Constant {
                 span: *span,
                 scalar: scalar.clone(),
+                data_type: data_type.clone(),
             },
             RawExpr::ColumnRef {
                 span,

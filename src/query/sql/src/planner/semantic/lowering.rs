@@ -193,6 +193,12 @@ impl ScalarExpr {
             ScalarExpr::ConstantExpr(constant) => RawExpr::Constant {
                 span: constant.span,
                 scalar: constant.value.clone(),
+                data_type: None,
+            },
+            ScalarExpr::TypedConstantExpr(constant, data_type) => RawExpr::Constant {
+                span: constant.span,
+                scalar: constant.value.clone(),
+                data_type: Some(data_type.clone()),
             },
             ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
                 span: None,
@@ -238,10 +244,10 @@ impl ScalarExpr {
                 span: subquery.span,
                 id: ColumnBinding::new_dummy_column(
                     "DUMMY_SUBQUERY".to_string(),
-                    Box::new(subquery.data_type()),
+                    Box::new(subquery.output_data_type()),
                     DummyColumnType::Subquery,
                 ),
-                data_type: subquery.data_type(),
+                data_type: subquery.output_data_type(),
                 display_name: "DUMMY_SUBQUERY".to_string(),
             },
             ScalarExpr::UDFCall(udf) => RawExpr::ColumnRef {

@@ -4,6 +4,15 @@ select (number % 2) as a from numbers(5) group by grouping sets (a) order by a;
 0
 1
 
+query IIIITTT rowsort
+select number a, number % 3 as b, number % 5 as c, a + 8, b::string,  c::string, (b+c)::string from numbers(1) group by rollup(a, b, c)
+----
+0 0 0 8 0 0 0
+0 0 NULL 8 0 NULL NULL
+0 NULL NULL 8 NULL NULL NULL
+NULL NULL NULL NULL NULL NULL NULL
+
+
 statement ok
 select sum(number), number % 3 a, grouping(number % 3)+grouping(number % 4) AS lochierarchy from numbers(10)
 group by rollup(number % 3, number % 4)  order by  grouping(number % 3)+grouping(number % 4) ;
@@ -44,11 +53,9 @@ create database if not exists grouping_sets;
 statement ok
 use grouping_sets;
 
-statement ok
-drop table if exists t;
 
 statement ok
-create table t (a string, b string, c int);
+create or replace table t (a string, b string, c int);
 
 statement ok
 insert into t values ('a','A',1),('a','A',2),('a','B',1),('a','B',3),('b','A',1),('b','A',4),('b','B',1),('b','B',5);
@@ -197,10 +204,7 @@ a B 1 5 NULL B
 a A 1 5 NULL NULL
 
 statement ok
-drop table if exists tt;
-
-statement ok
-create table tt (a string not null, b string not null, c int not null);
+create or replace table tt (a string not null, b string not null, c int not null);
 
 statement ok
 insert into tt select *  from t;

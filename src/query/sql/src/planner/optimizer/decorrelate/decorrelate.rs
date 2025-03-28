@@ -613,6 +613,8 @@ impl SubqueryRewriter {
                 let Ok(const_scalar) = ConstantExpr::try_from(eval.items[0].scalar.clone()) else {
                     return Ok(None);
                 };
+                let scalar_data_type = eval.items[0].scalar.data_type()?.wrap_nullable();
+                let scalar = ScalarExpr::TypedConstantExpr(const_scalar, scalar_data_type);
                 match (&subquery.child_expr, subquery.compare_op) {
                     (Some(child_expr), Some(compare_op)) => {
                         let func_name = compare_op.to_func_name().to_string();
@@ -620,13 +622,13 @@ impl SubqueryRewriter {
                             span: subquery.span,
                             func_name,
                             params: vec![],
-                            arguments: vec![*child_expr.clone(), const_scalar.into()],
+                            arguments: vec![*child_expr.clone(), scalar],
                         });
                         return Ok(Some(func));
                     }
                     (None, None) => match subquery.typ {
                         SubqueryType::Scalar => {
-                            return Ok(Some(const_scalar.into()));
+                            return Ok(Some(scalar));
                         }
                         SubqueryType::Exists => {
                             return Ok(Some(ScalarExpr::ConstantExpr(ConstantExpr {

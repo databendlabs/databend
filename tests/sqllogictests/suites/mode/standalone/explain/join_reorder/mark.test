@@ -96,7 +96,7 @@ EvalScalar
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)
     │   ├── output columns: [c (#8), if(EXISTS (SELECT 1 FROM t1 WHERE t1.a = t2.c), '1', '0') (#5)]
-    │   ├── expressions: [if(7 (#7), '1', '0')]
+    │   ├── expressions: [if(CAST(is_true(7 (#7)) AS Boolean NULL), '1', '0')]
     │   ├── estimated rows: 4.00
     │   └── HashJoin
     │       ├── output columns: [c (#8), marker (#7)]

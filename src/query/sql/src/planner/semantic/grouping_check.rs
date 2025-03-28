@@ -38,6 +38,9 @@ impl<'a> GroupingChecker<'a> {
     }
 }
 
+const GROUP_ITEM_NAME: &str = "group_item";
+const GROUPING_FUNC_NAME: &str = "grouping";
+
 impl VisitorMut<'_> for GroupingChecker<'_> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
         if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(expr) {
@@ -47,7 +50,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 column_ref.column.clone()
             } else {
                 ColumnBindingBuilder::new(
-                    "group_item".to_string(),
+                    GROUP_ITEM_NAME.to_string(),
                     column.index,
                     Box::new(column.scalar.data_type()?),
                     Visibility::Visible,
@@ -175,15 +178,26 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                     return Ok(());
                 }
             }
-            ScalarExpr::SubqueryExpr(q) => {
-                if let Some(c) = q.child_expr.as_mut() {
-                    self.visit(c.as_mut())?;
-                }
+            // don't check and rewrite grouping function
+            ScalarExpr::FunctionCall(func)
+                if func.func_name.eq_ignore_ascii_case(GROUPING_FUNC_NAME) =>
+            {
+                return Ok(());
             }
             _ => {}
         }
-
         walk_expr_mut(self, expr)
+    }
+
+    fn visit_cast_expr(&mut self, cast: &'_ mut crate::plans::CastExpr) -> Result<()> {
+        let source_type = cast.argument.data_type()?;
+        self.visit(&mut cast.argument)?;
+        let after_type = cast.argument.data_type()?;
+
+        if !source_type.is_nullable() && after_type.is_nullable() {
+            cast.target_type = Box::new(cast.target_type.wrap_nullable());
+        }
+        Ok(())
     }
 
     fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
