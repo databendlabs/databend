@@ -263,10 +263,10 @@ query T
 explain(decorrelated,verbose) select a, exists(select * from numbers(1000) where number % 10 = t.b) mark from t;
 ----
 EvalScalar
-├── scalars: [t.a (#0) AS (#0), 3 (#3) AS (#3)]
-├── output columns: [derived.b (#5), derived.mark (#3), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
+├── scalars: [t.a (#0) AS (#0), is_true(6 (#6)) AS (#3)]
+├── output columns: [derived.b (#5), derived.mark (#3), derived.marker (#6), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
 ├── outer columns: []
-├── used columns: [derived.a (#4), derived.b (#5), derived.mark (#3), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
+├── used columns: [derived.a (#4), derived.b (#5), derived.mark (#3), derived.marker (#6), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
 ├── cardinality: 0.000
 ├── precise cardinality: N/A
 ├── statistics
@@ -274,7 +274,7 @@ EvalScalar
     ├── build keys: [b (#5)]
     ├── probe keys: [b (#1)]
     ├── other filters: []
-    ├── output columns: [derived.b (#5), derived.mark (#3), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
+    ├── output columns: [derived.b (#5), derived.marker (#6), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
     ├── outer columns: []
     ├── used columns: [derived.a (#4), derived.b (#5), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
     ├── cardinality: 0.000
