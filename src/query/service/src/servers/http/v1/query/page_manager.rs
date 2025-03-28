@@ -148,7 +148,7 @@ impl PageManager {
             .map(|entry| entry.to_column(block.num_rows()))
             .collect_vec();
 
-        let take_rows = min(
+        let mut take_rows = min(
             *remain_rows,
             if block.memory_size() > *remain_size {
                 (*remain_size * block.num_rows()) / block.memory_size()
@@ -158,9 +158,7 @@ impl PageManager {
         );
         // this means that the data in remaining_size cannot satisfy even one row.
         if take_rows == 0 {
-            *remain_size = 0;
-            self.row_buffer = Some(columns);
-            return Ok(());
+            take_rows = 1;
         }
 
         // theoretically, it should always be smaller than the memory_size of the block.
