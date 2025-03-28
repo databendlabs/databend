@@ -598,6 +598,7 @@ impl<'a> TypeChecker<'a> {
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
+                let checked_expr = type_check::rewrite_function_to_cast(checked_expr)?;
 
                 if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
                     return Ok(constant);
@@ -646,6 +647,7 @@ impl<'a> TypeChecker<'a> {
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
+                let checked_expr = type_check::rewrite_function_to_cast(checked_expr)?;
 
                 if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
                     return Ok(constant);
@@ -2153,6 +2155,7 @@ impl<'a> TypeChecker<'a> {
                     .project_column_ref(|index| {
                         lambda_schema.index_of(&index.to_string()).unwrap()
                     });
+                let expr = type_check::rewrite_function_to_cast(expr)?;
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote_lambda_expr = expr.as_remote_expr();
                 let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
@@ -2873,6 +2876,7 @@ impl<'a> TypeChecker<'a> {
         };
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        let expr = type_check::rewrite_function_to_cast(expr)?;
 
         // Run constant folding for arguments of the scalar function.
         // This will be helpful to simplify some constant expressions, especially
