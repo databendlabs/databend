@@ -38,6 +38,7 @@ pub struct TransformFinalAggregate {
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
     hash_table: AggregateHashTable,
+    has_output: bool,
 }
 
 impl AccumulatingTransform for TransformFinalAggregate {
@@ -97,10 +98,6 @@ impl AccumulatingTransform for TransformFinalAggregate {
                     }
                 }
 
-                if blocks.is_empty() {
-                    blocks.push(self.params.empty_result_block());
-                }
-
                 let config = HashTableConfig::default().with_initial_radix_bits(0);
                 self.hash_table = AggregateHashTable::new(
                     self.params.group_data_types.clone(),
@@ -108,8 +105,18 @@ impl AccumulatingTransform for TransformFinalAggregate {
                     config,
                     Arc::new(Bump::new()),
                 );
+
+                self.has_output |= !blocks.is_empty();
                 return Ok(blocks);
             }
+        }
+
+        Ok(vec![])
+    }
+
+    fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
+        if output && !self.has_output {
+            return Ok(vec![self.params.empty_result_block()]);
         }
 
         Ok(vec![])
@@ -138,6 +145,7 @@ impl TransformFinalAggregate {
                 params,
                 hash_table,
                 flush_state: PayloadFlushState::default(),
+                has_output: false,
             },
         ))
     }

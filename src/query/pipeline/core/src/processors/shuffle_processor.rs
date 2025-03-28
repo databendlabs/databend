@@ -242,7 +242,9 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
 
             if output.can_push() {
                 if let Some(block) = self.partitioned_data[index].take() {
-                    output.push_data(Ok(block));
+                    if !block.is_empty() || block.get_meta().is_some() {
+                        output.push_data(Ok(block));
+                    }
 
                     continue;
                 }
