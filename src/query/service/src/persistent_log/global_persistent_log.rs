@@ -203,6 +203,7 @@ impl GlobalPersistentLog {
             node_id VARCHAR,
             warehouse_id VARCHAR,
             query_id VARCHAR,
+            message VARCHAR,
             fields VARIANT
         ) CLUSTER BY (timestamp, query_id)";
         self.execute_sql(create_table).await?;

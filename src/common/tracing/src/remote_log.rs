@@ -47,7 +47,6 @@ use parquet::basic::ZstdLevel;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use serde_json::Map;
-use serde_json::Value;
 
 use crate::Config;
 use crate::GlobalLogger;
@@ -71,6 +70,7 @@ pub struct RemoteLogElement {
     pub query_id: Option<String>,
     pub warehouse_id: Option<String>,
     pub log_level: String,
+    pub message: String,
     pub fields: String,
 }
 
@@ -178,20 +178,7 @@ impl RemoteLog {
         let query_id = ThreadTracker::query_id().cloned();
         let mut fields = Map::new();
         let target = record.target().to_string();
-        // databend::log::profile record args is a json string, otherwise, it is a string
-        match serde_json::from_str::<Map<String, Value>>(&record.args().to_string()) {
-            Ok(json_value) => {
-                for (k, v) in json_value {
-                    fields.insert(k, v);
-                }
-            }
-            Err(_) => {
-                fields.insert(
-                    "message".to_string(),
-                    Value::String(record.args().to_string()),
-                );
-            }
-        };
+        let message = record.args().to_string();
         for (k, v) in collect_kvs(record.key_values()) {
             fields.insert(k, v.into());
         }
@@ -219,6 +206,7 @@ impl RemoteLog {
             warehouse_id: self.warehouse_id.clone(),
             query_id,
             log_level,
+            message,
             fields,
         }
     }
@@ -259,9 +247,14 @@ impl LogBuffer {
         }
         let now = chrono::Local::now().timestamp_micros() as u64;
         let last = self.last_collect.load(Ordering::SeqCst);
-        if now - last > self.interval && self.last_collect.fetch_max(now, Ordering::SeqCst) == last
-        {
-            self.collect()?;
+        if now - last > self.interval {
+            if self
+                .last_collect
+                .compare_exchange_weak(last, now, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                self.collect()?;
+            }
         }
         Ok(())
     }
@@ -288,6 +281,7 @@ pub fn convert_to_batch(records: Vec<RemoteLogElement>) -> Result<RecordBatch> {
         Field::new("node_id", DataType::Utf8, true),
         Field::new("warehouse_id", DataType::Utf8, true),
         Field::new("query_id", DataType::Utf8, true),
+        Field::new("message", DataType::Utf8, true),
         Field::new("fields", DataType::Utf8, true),
     ]);
 
@@ -299,6 +293,7 @@ pub fn convert_to_batch(records: Vec<RemoteLogElement>) -> Result<RecordBatch> {
     let mut node_id = StringBuilder::new();
     let mut warehouse_id = StringBuilder::new();
     let mut query_id = StringBuilder::new();
+    let mut message = StringBuilder::new();
     let mut fields = StringBuilder::new();
 
     for record in records {
@@ -310,6 +305,7 @@ pub fn convert_to_batch(records: Vec<RemoteLogElement>) -> Result<RecordBatch> {
         node_id.append_value(&record.node_id);
         warehouse_id.append_option(record.warehouse_id);
         query_id.append_option(record.query_id);
+        message.append_value(&record.message);
         fields.append_value(&record.fields);
     }
 
@@ -322,6 +318,7 @@ pub fn convert_to_batch(records: Vec<RemoteLogElement>) -> Result<RecordBatch> {
         Arc::new(node_id.finish()),
         Arc::new(warehouse_id.finish()),
         Arc::new(query_id.finish()),
+        Arc::new(message.finish()),
         Arc::new(fields.finish()),
     ])
     .map_err(|e| {
