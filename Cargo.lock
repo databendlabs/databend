@@ -5156,6 +5156,7 @@ dependencies = [
  "flatbuffers",
  "futures",
  "futures-util",
+ "geozero",
  "goldenfile",
  "headers",
  "hex",

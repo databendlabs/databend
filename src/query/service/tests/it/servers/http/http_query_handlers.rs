@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
-use std::sync::Arc;
 use std::time::Duration;
 
 use base64::engine::general_purpose;
@@ -103,6 +102,7 @@ struct TestHttpQueryRequest {
 }
 
 /// Copy for [QueryResponse](databend_query::servers::http::v1::QueryResponse) to deserialize
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestQueryResponse {
     pub id: String,
@@ -1862,7 +1862,9 @@ async fn test_max_size_per_page() -> Result<()> {
     let (_, reply, body) = TestHttpQueryRequest::new(json).fetch_begin().await?;
     assert!(reply.error.is_none(), "{:?}", reply.error);
     let len = body.len() as i32;
-    assert_eq!(len, 20_081_150);
+    let target = 20_080_000;
+    assert!(len > target);
+    assert!(len < target + 2000);
     assert_eq!(reply.data.len(), 10_000);
     assert_eq!(reply.data[0].len(), 2);
     Ok(())

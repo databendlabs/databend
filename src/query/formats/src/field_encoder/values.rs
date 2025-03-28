@@ -55,8 +55,6 @@ use crate::field_encoder::helpers::PrimitiveWithFormat;
 use crate::FileFormatOptionsExt;
 use crate::OutputCommonSettings;
 
-pub const BITMAP_RESULT: &str = "<bitmap binary>";
-
 pub struct FieldEncoderValues {
     pub common_settings: OutputCommonSettings,
     pub quote_char: u8,
@@ -247,12 +245,13 @@ impl FieldEncoderValues {
     }
 
     fn write_decimal(&self, column: &DecimalColumn, row_index: usize, out_buf: &mut Vec<u8>) {
-        let data = Self::decimal_as_string(column, row_index);
+        let data = column.index(row_index).unwrap().to_string();
         out_buf.extend_from_slice(data.as_bytes());
     }
 
     fn write_binary(&self, column: &BinaryColumn, row_index: usize, out_buf: &mut Vec<u8>) {
-        out_buf.extend_from_slice(Self::binary_as_string(column, row_index).as_bytes());
+        let v = unsafe { column.index_unchecked(row_index) };
+        out_buf.extend_from_slice(hex::encode_upper(v).as_bytes());
     }
 
     fn write_string(
@@ -263,14 +262,10 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         self.write_string_inner(
-            Self::get_string(column, row_index).as_bytes(),
+            unsafe { column.index_unchecked(row_index).as_bytes() },
             out_buf,
             in_nested,
         );
-    }
-
-    fn get_string(column: &StringColumn, row_index: usize) -> &str {
-        unsafe { column.index_unchecked(row_index) }
     }
 
     fn write_date(
@@ -280,8 +275,9 @@ impl FieldEncoderValues {
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) {
-        let string = Self::date_as_string(column, row_index, &self.common_settings().jiff_timezone);
-        self.write_string_inner(string.as_bytes(), out_buf, in_nested);
+        let v = unsafe { column.get_unchecked(row_index) };
+        let s = date_to_string(*v as i64, &self.common_settings().jiff_timezone).to_string();
+        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
     fn write_interval(
@@ -291,7 +287,8 @@ impl FieldEncoderValues {
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) {
-        let s = Self::interval_as_string(column, row_index);
+        let v = unsafe { column.get_unchecked(row_index) };
+        let s = interval_to_string(v).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
@@ -314,7 +311,7 @@ impl FieldEncoderValues {
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) {
-        let bitmap_result = BITMAP_RESULT.as_bytes();
+        let bitmap_result = "<bitmap binary>".as_bytes();
         self.write_string_inner(bitmap_result, out_buf, in_nested);
     }
 
@@ -325,53 +322,9 @@ impl FieldEncoderValues {
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) {
-        let s = Self::variant_as_string(column, row_index);
+        let v = unsafe { column.index_unchecked(row_index) };
+        let s = RawJsonb::new(v).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
-    }
-
-    // when column is a Variant, value will have a meaningless conversion overhead:
-    // `RawJsonb::to_string()` -> `as_bytes` -> `String::from_utf8_lossy`.
-    // therefore, in this case where only strings are needed, Variant is specially processed to avoid the overhead of intermediate conversion.
-    pub fn try_direct_as_string(
-        &self,
-        column: &Column,
-        row_index: usize,
-        in_nested: bool,
-    ) -> Option<String> {
-        if in_nested {
-            return None;
-        }
-        match column {
-            Column::Variant(c) => Some(Self::variant_as_string(c, row_index)),
-            Column::Decimal(c) => Some(Self::decimal_as_string(c, row_index)),
-            Column::Binary(c) => Some(Self::binary_as_string(c, row_index)),
-            Column::String(c) => Some(Self::get_string(c, row_index).to_string()),
-            Column::Date(b) => Some(Self::date_as_string(
-                b,
-                row_index,
-                &self.common_settings.jiff_timezone,
-            )),
-            Column::Timestamp(b) => Some(Self::timestamp_as_string(
-                b,
-                row_index,
-                &self.common_settings.jiff_timezone,
-            )),
-            Column::Interval(c) => Some(Self::interval_as_string(c, row_index)),
-            Column::Bitmap(_) => Some(BITMAP_RESULT.to_string()),
-            Column::Geometry(c) => {
-                Self::try_geometry_as_string(c, row_index, &self.common_settings().geometry_format)
-            }
-            Column::Geography(c) => {
-                Self::try_geography_as_string(c, row_index, &self.common_settings().geometry_format)
-            }
-            Column::Nullable(c) => {
-                if !c.validity.get_bit(row_index) {
-                    return None;
-                }
-                self.try_direct_as_string(&c.column, row_index, in_nested)
-            }
-            _ => None,
-        }
     }
 
     fn write_geometry(
@@ -381,15 +334,20 @@ impl FieldEncoderValues {
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) {
-        if let Some(s) =
-            Self::try_geometry_as_string(column, row_index, &self.common_settings().geometry_format)
-        {
-            self.write_string_inner(s.as_bytes(), out_buf, in_nested);
-        } else {
-            let v = unsafe { column.index_unchecked(row_index) };
+        let v = unsafe { column.index_unchecked(row_index) };
+        let s = ewkb_to_geo(&mut Ewkb(v))
+            .and_then(|(geo, srid)| match self.common_settings().geometry_format {
+                GeometryDataType::WKB => geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes()),
+                GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::EWKB => {
+                    geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
+                }
+                GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
+            })
+            .unwrap_or_else(|_| v.to_vec());
 
-            self.write_string_inner(v, out_buf, in_nested);
-        }
+        self.write_string_inner(&s, out_buf, in_nested);
     }
 
     fn write_geography(
@@ -399,17 +357,20 @@ impl FieldEncoderValues {
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) {
-        if let Some(s) = Self::try_geography_as_string(
-            column,
-            row_index,
-            &self.common_settings().geometry_format,
-        ) {
-            self.write_string_inner(s.as_bytes(), out_buf, in_nested);
-        } else {
-            let v = unsafe { column.index_unchecked(row_index) };
+        let v = unsafe { column.index_unchecked(row_index) };
+        let s = ewkb_to_geo(&mut Ewkb(v.0))
+            .and_then(|(geo, srid)| match self.common_settings().geometry_format {
+                GeometryDataType::WKB => geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes()),
+                GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::EWKB => {
+                    geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
+                }
+                GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
+            })
+            .unwrap_or_else(|_| v.0.to_vec());
 
-            self.write_string_inner(v.0, out_buf, in_nested);
-        }
+        self.write_string_inner(&s, out_buf, in_nested);
     }
 
     fn write_array<T: ValueType>(
@@ -466,72 +427,5 @@ impl FieldEncoderValues {
             self.write_field(inner, row_index, out_buf, true);
         }
         out_buf.push(b')');
-    }
-
-    fn variant_as_string(column: &BinaryColumn, row_index: usize) -> String {
-        let v = unsafe { column.index_unchecked(row_index) };
-        RawJsonb::new(v).to_string()
-    }
-
-    fn decimal_as_string(column: &DecimalColumn, row_index: usize) -> String {
-        column.index(row_index).unwrap().to_string()
-    }
-
-    fn binary_as_string(column: &BinaryColumn, row_index: usize) -> String {
-        let v = unsafe { column.index_unchecked(row_index) };
-        hex::encode_upper(v)
-    }
-
-    fn date_as_string(buffer: &Buffer<i32>, row_index: usize, time_zone: &TimeZone) -> String {
-        let v = unsafe { buffer.get_unchecked(row_index) };
-        date_to_string(*v as i64, time_zone).to_string()
-    }
-
-    fn interval_as_string(buffer: &Buffer<months_days_micros>, row_index: usize) -> String {
-        let v = unsafe { buffer.get_unchecked(row_index) };
-        interval_to_string(v).to_string()
-    }
-
-    fn timestamp_as_string(buffer: &Buffer<i64>, row_index: usize, time_zone: &TimeZone) -> String {
-        let v = unsafe { buffer.get_unchecked(row_index) };
-        timestamp_to_string(*v, time_zone).to_string()
-    }
-
-    fn try_geometry_as_string(
-        column: &BinaryColumn,
-        row_index: usize,
-        ty: &GeometryDataType,
-    ) -> Option<String> {
-        let v = unsafe { column.index_unchecked(row_index) };
-
-        match (ty, ewkb_to_geo(&mut Ewkb(v))) {
-            (GeometryDataType::WKB, Ok((geo, _))) => geo_to_wkb(geo).map(hex::encode_upper).ok(),
-            (GeometryDataType::WKT, Ok((geo, _))) => geo_to_wkt(geo).ok(),
-            (GeometryDataType::EWKB, Ok((geo, srid))) => {
-                geo_to_ewkb(geo, srid).map(hex::encode_upper).ok()
-            }
-            (GeometryDataType::EWKT, Ok((geo, srid))) => geo_to_ewkt(geo, srid).ok(),
-            (GeometryDataType::GEOJSON, Ok((geo, _))) => geo_to_json(geo).ok(),
-            (_, Err(_)) => None,
-        }
-    }
-
-    fn try_geography_as_string(
-        column: &GeographyColumn,
-        row_index: usize,
-        ty: &GeometryDataType,
-    ) -> Option<String> {
-        let v = unsafe { column.index_unchecked(row_index) };
-
-        match (ty, ewkb_to_geo(&mut Ewkb(v.0))) {
-            (GeometryDataType::WKB, Ok((geo, _))) => geo_to_wkb(geo).map(hex::encode_upper).ok(),
-            (GeometryDataType::WKT, Ok((geo, _))) => geo_to_wkt(geo).ok(),
-            (GeometryDataType::EWKB, Ok((geo, srid))) => {
-                geo_to_ewkb(geo, srid).map(hex::encode_upper).ok()
-            }
-            (GeometryDataType::EWKT, Ok((geo, srid))) => geo_to_ewkt(geo, srid).ok(),
-            (GeometryDataType::GEOJSON, Ok((geo, _))) => geo_to_json(geo).ok(),
-            (_, Err(_)) => None,
-        }
     }
 }

@@ -85,10 +85,10 @@ impl FlightSqlServiceImpl {
         SchemaAsIpc::new(&arrow_schema, &options).into()
     }
 
-    pub fn block_to_flight_data_stream<'a>(
+    pub fn block_to_flight_data_stream(
         block: DataBlock,
-        data_schema: &'a DataSchema,
-    ) -> impl Stream<Item = Result<FlightData>> + 'a {
+        data_schema: &DataSchema,
+    ) -> impl Stream<Item = Result<FlightData>> + '_ {
         stream! {
             let remain_size = 10 * 1024 * 1024;
             let options = writer::IpcWriteOptions::default();
@@ -117,7 +117,7 @@ impl FlightSqlServiceImpl {
         let mut dictionary_tracker = writer::DictionaryTracker::new(false);
 
         let (_encoded_dictionaries, encoded_batch) = data_gen
-            .encoded_batch(&batch, &mut dictionary_tracker, &options)
+            .encoded_batch(&batch, &mut dictionary_tracker, options)
             .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
 
         Ok(encoded_batch.into())

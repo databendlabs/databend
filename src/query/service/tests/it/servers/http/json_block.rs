@@ -73,7 +73,7 @@ fn test_data_block_not_nullable() -> Result<()> {
 #[test]
 fn test_empty_block() -> Result<()> {
     let format = FormatSettings::default();
-    let mut serializer = BlocksSerializer::new(Some(format));
+    let serializer = BlocksSerializer::new(Some(format));
     assert!(serializer.is_empty());
     Ok(())
 }
