@@ -17,7 +17,6 @@ use std::future::Future;
 use std::path::Path;
 use std::time::Instant;
 
-use bollard::Docker;
 use clap::Parser;
 use client::TTCClient;
 use futures_util::stream;
@@ -161,12 +160,11 @@ async fn run_hybrid_client(
 ) -> Result<()> {
     println!("Hybird client starts to run with: {:?}", args);
 
-    let docker = Docker::connect_with_local_defaults().unwrap();
     for (c, _) in HYBRID_CONFIGS.iter() {
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
             ClientType::Ttc(image, port) => {
-                run_ttc_container(&docker, image, *port, args.port, cs).await?;
+                run_ttc_container(image, *port, args.port, cs).await?;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
         }
