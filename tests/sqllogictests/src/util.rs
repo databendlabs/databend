@@ -264,8 +264,6 @@ pub async fn run_ttc_container(
     let start = Instant::now();
     println!("Start container {container_name}");
 
-    stop_container(docker, &container_name).await;
-
     let mut i = 1;
     loop {
         let container_res = GenericImage::new(image, tag)
@@ -287,28 +285,24 @@ pub async fn run_ttc_container(
         match container_res {
             Ok(container) => {
                 println!(
-                    "Start container {} using {} secs success",
+                    "Start container {container_name} {} using {duration} secs success",
                     container.id(),
-                    duration
                 );
                 cs.push(container);
                 return Ok(());
             }
             Err(err) => {
-                println!(
-                    "Start container {} using {} secs failed: {}",
-                    container_name, duration, err
-                );
+                println!("Start container {container_name} using {duration} secs failed: {err}");
                 if err.to_string().to_ascii_lowercase().contains("timeout")
                     || err.to_string().to_ascii_lowercase().contains("conflict")
                 {
-                    println!("start to stop container {container_name}");
+                    println!("Start to stop container {container_name}");
                     stop_container(docker, &container_name).await;
                 }
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
                     break;
                 } else {
-                    println!("retry start container {container_name} after {duration}");
+                    println!("retry start container {container_name} after {duration} secs");
                     i += 1;
                 }
             }
@@ -469,11 +463,15 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
 
 // Stop the running container to avoid conflict
 async fn stop_container(docker: &Docker, container_name: &str) {
-    let _ = docker.stop_container(container_name, None).await;
+    if let Err(err) = docker.stop_container(container_name, None).await {
+        println!("stop container {container_name} err: {err}");
+    }
     let options = Some(RemoveContainerOptions {
         force: true,
         ..Default::default()
     });
-    let _ = docker.remove_container(container_name, options).await;
-    println!("Stop container {container_name}");
+    if let Err(err) = docker.remove_container(container_name, options).await {
+        println!("remove container {container_name} err: {err}");
+    }
+    println!("Stopped container {container_name}");
 }
