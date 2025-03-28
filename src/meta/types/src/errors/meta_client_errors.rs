@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
+
 use anyerror::AnyError;
 
 use crate::MetaHandshakeError;
@@ -40,6 +42,23 @@ impl MetaClientError {
             MetaClientError::ConfigError(_) => "ConfigError",
             MetaClientError::NetworkError(err) => err.name(),
             MetaClientError::HandshakeError(_) => "MetaHandshakeError",
+        }
+    }
+}
+
+impl From<MetaClientError> for io::Error {
+    fn from(e: MetaClientError) -> Self {
+        match e {
+            MetaClientError::ClientRuntimeError(e) => {
+                io::Error::new(io::ErrorKind::Other, e.to_string())
+            }
+            MetaClientError::ConfigError(e) => {
+                io::Error::new(io::ErrorKind::InvalidInput, e.to_string())
+            }
+            MetaClientError::NetworkError(e) => e.into(),
+            MetaClientError::HandshakeError(e) => {
+                io::Error::new(io::ErrorKind::NotConnected, e.to_string())
+            }
         }
     }
 }

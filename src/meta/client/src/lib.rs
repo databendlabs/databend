@@ -113,14 +113,21 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2024-11-23: since 1.2.663
 ///   👥 client: remove use of `Operation::AsIs`
 ///
-/// - 2024-12-1*: since 1.2.*
+/// - 2024-12-16: since 1.2.674
 ///   🖥 server: add `txn_condition::Target::KeysWithPrefix`,
 ///              to support matching the key count by a prefix.
 ///
-/// - 2024-12-1*: since 1.2.*
-///   🖥 server: add `TxnRequest::condition_tree`,
-///              to specify a complex bool expression.
+/// - 2024-12-20: since 1.2.676
+///   🖥 server: add `TxnRequest::operations`,
+///              to specify a complex bool expression and corresponding operations
 ///
+/// - 2024-12-26: since 1.2.677
+///   🖥 server: add `WatchRequest::initial_flush`,
+///              to let watch stream flush all keys in a range at the beginning.
+///
+/// - 2025-03-28: since TODO: add version when merged.
+///   👥 client: semaphore(watch) requires `WatchRequest::initial_flush`(`1,2.677`),
+///              other RPC does not require `1.2.677`, requires only `1.2.259`.
 ///
 /// Server feature set:
 /// ```yaml

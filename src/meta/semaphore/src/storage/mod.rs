@@ -12,18 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod metasrv_connection_error;
-pub mod metasrv_grpc_api;
-mod metasrv_grpc_export;
-pub mod metasrv_grpc_get_client_info;
-pub mod metasrv_grpc_handshake;
-pub mod metasrv_grpc_kv_api;
-pub mod metasrv_grpc_kv_api_restart_cluster;
-pub mod metasrv_grpc_kv_read_v1;
-pub mod metasrv_grpc_schema_api;
-pub mod metasrv_grpc_schema_api_follower_follower;
-pub mod metasrv_grpc_schema_api_leader_follower;
-pub mod metasrv_grpc_tls;
-pub mod metasrv_grpc_transaction;
-pub mod metasrv_grpc_watch;
-pub mod t51_metasrv_grpc_semaphore;
+//! Meta-service storage related data types.
+
+mod permit_entry;
+mod permit_key;
+
+pub use permit_entry::PermitEntry;
+pub use permit_key::PermitKey;

@@ -14,6 +14,7 @@
 
 use std::fmt;
 use std::fmt::Display;
+use std::io;
 
 use anyerror::AnyError;
 use serde::Deserialize;
@@ -198,5 +199,21 @@ impl From<tonic::transport::Error> for MetaNetworkError {
 impl From<errors::IncompleteStream> for MetaNetworkError {
     fn from(e: errors::IncompleteStream) -> Self {
         MetaNetworkError::InvalidReply(InvalidReply::from(e))
+    }
+}
+
+impl From<MetaNetworkError> for io::Error {
+    fn from(e: MetaNetworkError) -> Self {
+        let kind = match &e {
+            MetaNetworkError::ConnectionError(_) => io::ErrorKind::NotConnected,
+            MetaNetworkError::GetNodeAddrError(_) => io::ErrorKind::NotFound,
+            MetaNetworkError::DnsParseError(_) => io::ErrorKind::NotConnected,
+            MetaNetworkError::TLSConfigError(_) => io::ErrorKind::NotConnected,
+            MetaNetworkError::BadAddressFormat(_) => io::ErrorKind::InvalidInput,
+            MetaNetworkError::InvalidArgument(_) => io::ErrorKind::InvalidInput,
+            MetaNetworkError::InvalidReply(_) => io::ErrorKind::InvalidData,
+        };
+
+        io::Error::new(kind, e.to_string())
     }
 }
