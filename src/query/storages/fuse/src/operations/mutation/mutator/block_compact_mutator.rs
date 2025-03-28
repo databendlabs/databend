@@ -113,7 +113,7 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
             self.operator.clone(),
             Arc::new(self.compact_params.base_snapshot.schema.clone()),
         );
-        let mut checker = SegmentCompactChecker::new(self.thresholds, self.cluster_key_id);
+        let mut checker = SegmentCompactChecker::<R>::new(self.thresholds, self.cluster_key_id);
 
         let mut segment_idx = 0;
         let mut is_end = false;
@@ -299,9 +299,9 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
     }
 }
 
-pub struct SegmentCompactChecker<R:SegmentReader> {
+pub struct SegmentCompactChecker<R: SegmentReader> {
     thresholds: BlockThresholds,
-    segments: Vec<(SegmentIndex, Arc<R::CompactSegmentInfo>)>,
+    segments: Vec<(SegmentIndex, Arc<R::CompactSegment>)>,
     total_block_count: u64,
     cluster_key_id: Option<u32>,
 
@@ -346,19 +346,19 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
                 .check_perfect_block(avg_rows, avg_uncompressed, avg_compressed)
     }
 
-    fn check_for_compact(&mut self, segments: &[(SegmentIndex, Arc<CompactSegmentInfo>)]) -> bool {
+    fn check_for_compact(&mut self, segments: &[(SegmentIndex, Arc<R::CompactSegment>)]) -> bool {
         if segments.is_empty() {
             return false;
         }
 
-        if segments.len() == 1 && self.check_not_need_compact(&segments[0].1.summary) {
+        if segments.len() == 1 && self.check_not_need_compact(segments[0].1.summary()) {
             return false;
         }
 
         self.compacted_segment_cnt += segments.len();
         self.compacted_block_cnt += segments
             .iter()
-            .map(|(_, info)| info.summary.block_count)
+            .map(|(_, info)| info.summary().block_count)
             .sum::<u64>();
         true
     }
@@ -366,11 +366,11 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
     pub fn add(
         &mut self,
         idx: SegmentIndex,
-        segment: Arc<CompactSegmentInfo>,
-    ) -> Vec<Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>> {
+        segment: Arc<R::CompactSegment>,
+    ) -> Vec<Vec<(SegmentIndex, Arc<R::CompactSegment>)>> {
         let block_per_segment = self.thresholds.block_per_segment as u64;
 
-        self.total_block_count += segment.summary.block_count;
+        self.total_block_count += segment.summary().block_count;
         self.segments.push((idx, segment));
 
         if self.total_block_count < block_per_segment {
@@ -399,7 +399,7 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
     ) {
         if !segments.is_empty() && self.check_for_compact(&segments) {
             let (segment_indices, compact_segments) = segments.into_iter().unzip();
-            parts.push(CompactLazyPartInfo::create(
+            parts.push(R::SegmentsWithIndices::create(
                 segment_indices,
                 compact_segments,
             ));
@@ -416,7 +416,7 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
         let residual_block_cnt: u64 = self
             .segments
             .iter()
-            .map(|(_, info)| info.summary.block_count)
+            .map(|(_, info)| info.summary().block_count)
             .sum();
         self.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
             || self.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
