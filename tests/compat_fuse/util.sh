@@ -125,6 +125,7 @@ run_test() {
     local query_old="./bins/$query_old_ver/bin/databend-query"
     local query_new="./bins/current/databend-query"
     local metasrv_old="./bins/$meta_ver/bin/databend-meta"
+    local metasrv_current="./bins/current/bin/databend-meta"
     local sqllogictests="./bins/current/databend-sqllogictests"
 
 
@@ -174,19 +175,23 @@ run_test() {
     # run_logictest new_logictest/$query_new_ver fuse_compat_write
     $sqllogictests --handlers mysql --suites "$logictest_path" --run_file fuse_compat_write
 
+    # Always kill databend-meta and bring up the current version of databend-meta.
+    # Because the current version query may not be compatible with the old version databend-meta.
+
     kill_proc databend-query
+    kill_proc databend-meta
 
     if [ "$forward" == 'forward' ]
     then
         echo " === Start old databend-meta and databend-query..."
         log="query-old.log"
-        start "" "$query_old" "$old_config_path" $log
+        start "$metasrv_current" "$query_old" "$old_config_path" $log
         echo " === Run test: fuse_compat_read with old query"
     else
         echo ' === Start new databend-meta and databend-query...'
         config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
         log="query-current.log"
-        start "" $query_new $config_path $log
+        start "$metasrv_current" $query_new $config_path $log
         echo " === Run test: fuse_compat_read with current query"
     fi
 
