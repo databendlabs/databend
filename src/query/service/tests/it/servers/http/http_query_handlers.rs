@@ -40,7 +40,8 @@ use databend_query::servers::http::v1::users::CreateUserRequest;
 use databend_query::servers::http::v1::users::ListUsersResponse;
 use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSessionConf;
-use databend_query::servers::http::v1::QueryResponse;
+use databend_query::servers::http::v1::QueryResponseField;
+use databend_query::servers::http::v1::QueryStats;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
@@ -66,6 +67,7 @@ use poem::Request;
 use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use serde::Deserialize;
 use serde_json::json;
 use tokio::time::sleep;
 use wiremock::matchers::method;
@@ -99,6 +101,37 @@ struct TestHttpQueryRequest {
     next_uri: Option<String>,
 }
 
+/// Copy for [QueryResponse](databend_query::servers::http::v1::QueryResponse) to deserialize
+#[allow(dead_code)]
+#[derive(Deserialize, Debug, Clone)]
+pub struct TestQueryResponse {
+    pub id: String,
+    pub session_id: Option<String>,
+    pub node_id: String,
+
+    pub state: ExecuteStateKind,
+    pub session: Option<HttpSessionConf>,
+    // only sql query error
+    pub error: Option<QueryError>,
+    pub warnings: Vec<String>,
+
+    // about results
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_result_set: Option<bool>,
+    pub schema: Vec<QueryResponseField>,
+    pub data: Vec<Vec<Option<String>>>,
+    pub affect: Option<QueryAffect>,
+    pub result_timeout_secs: Option<u64>,
+
+    pub stats: QueryStats,
+
+    pub stats_uri: Option<String>,
+    // just call it after client not use it anymore, not care about the server-side behavior
+    pub final_uri: Option<String>,
+    pub next_uri: Option<String>,
+    pub kill_uri: Option<String>,
+}
+
 impl TestHttpQueryRequest {
     fn new(json: serde_json::Value) -> Self {
         let ep = create_endpoint().unwrap();
@@ -130,7 +163,7 @@ impl TestHttpQueryRequest {
     //    self
     // }
 
-    async fn fetch_begin(&mut self) -> Result<(StatusCode, QueryResponse, String)> {
+    async fn fetch_begin(&mut self) -> Result<(StatusCode, TestQueryResponse, String)> {
         let (status, resp, body) = self
             .do_request(Method::POST, "/v1/query")
             .await
@@ -139,7 +172,7 @@ impl TestHttpQueryRequest {
         Ok((status, resp.unwrap(), body))
     }
 
-    async fn fetch_next(&mut self) -> Result<(StatusCode, Option<QueryResponse>, String)> {
+    async fn fetch_next(&mut self) -> Result<(StatusCode, Option<TestQueryResponse>, String)> {
         let (status, resp, body) = self
             .do_request(Method::GET, self.next_uri.as_ref().unwrap())
             .await?;
@@ -171,7 +204,7 @@ impl TestHttpQueryRequest {
         &self,
         method: Method,
         uri: &str,
-    ) -> Result<(StatusCode, Option<QueryResponse>, String)> {
+    ) -> Result<(StatusCode, Option<TestQueryResponse>, String)> {
         let content_type = "application/json";
         let body = serde_json::to_vec(&self.json).unwrap();
 
@@ -196,7 +229,7 @@ impl TestHttpQueryRequest {
 
         let status_code = resp.status();
         let body = resp.into_body().into_string().await.unwrap();
-        let query_resp = serde_json::from_str::<QueryResponse>(&body)
+        let query_resp = serde_json::from_str::<TestQueryResponse>(&body)
             .map(Some)
             .unwrap_or_default();
 
@@ -206,11 +239,11 @@ impl TestHttpQueryRequest {
 
 #[derive(Debug, Clone)]
 struct TestHttpQueryFetchReply {
-    pub resps: Vec<(StatusCode, QueryResponse)>,
+    pub resps: Vec<(StatusCode, TestQueryResponse)>,
 }
 
 impl TestHttpQueryFetchReply {
-    fn last(&self) -> (StatusCode, QueryResponse) {
+    fn last(&self) -> (StatusCode, TestQueryResponse) {
         self.resps.last().unwrap().clone()
     }
 
@@ -239,7 +272,7 @@ impl TestHttpQueryFetchReply {
 // TODO(youngsofun): add test for
 // 1. query fail after started
 
-async fn expect_end(ep: &EndpointType, result: QueryResponse) -> Result<()> {
+async fn expect_end(ep: &EndpointType, result: TestQueryResponse) -> Result<()> {
     assert!(result.next_uri.is_some(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
@@ -930,10 +963,10 @@ async fn test_role_apis() -> Result<()> {
     Ok(())
 }
 
-async fn check_response(response: Response) -> Result<(StatusCode, QueryResponse)> {
+async fn check_response(response: Response) -> Result<(StatusCode, TestQueryResponse)> {
     let status = response.status();
     let body = response.into_body().into_string().await.unwrap();
-    let result = serde_json::from_str::<QueryResponse>(&body);
+    let result = serde_json::from_str::<TestQueryResponse>(&body);
     assert!(
         result.is_ok(),
         "body ='{}', result='{:?}'",
@@ -981,12 +1014,12 @@ async fn post_uri(
     Ok(response)
 }
 
-async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, QueryResponse)> {
+async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, TestQueryResponse)> {
     let response = get_uri(ep, uri).await;
     check_response(response).await
 }
 
-async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryResponse)> {
+async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, TestQueryResponse)> {
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
     post_json(&json).await
 }
@@ -995,7 +1028,7 @@ pub fn create_endpoint() -> Result<EndpointType> {
     Ok(Route::new().nest("/v1", query_route().around(json_response)))
 }
 
-async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
+async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, TestQueryResponse)> {
     let ep = create_endpoint()?;
     post_json_to_endpoint(&ep, json, HeaderMap::default()).await
 }
@@ -1004,7 +1037,7 @@ async fn post_sql_to_endpoint(
     ep: &EndpointType,
     sql: &str,
     wait_time_secs: u64,
-) -> Result<(StatusCode, QueryResponse)> {
+) -> Result<(StatusCode, TestQueryResponse)> {
     post_sql_to_endpoint_new_session(ep, sql, wait_time_secs, HeaderMap::default()).await
 }
 
@@ -1013,7 +1046,7 @@ async fn post_sql_to_endpoint_new_session(
     sql: &str,
     wait_time_secs: u64,
     headers: HeaderMap,
-) -> Result<(StatusCode, QueryResponse)> {
+) -> Result<(StatusCode, TestQueryResponse)> {
     let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {}}});
     post_json_to_endpoint(ep, &json, headers).await
 }
@@ -1022,7 +1055,7 @@ async fn post_json_to_endpoint(
     ep: &EndpointType,
     json: &serde_json::Value,
     headers: HeaderMap,
-) -> Result<(StatusCode, QueryResponse)> {
+) -> Result<(StatusCode, TestQueryResponse)> {
     let uri = "/v1/query";
     let response = post_uri(ep, uri, json, headers).await?;
     check_response(response).await
@@ -1310,7 +1343,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
     assert!(resp.is_ok(), "{:?}", resp.err());
     let resp = resp.unwrap();
     assert!(resp.status().is_success());
-    let res = resp.json::<QueryResponse>().await;
+    let res = resp.json::<TestQueryResponse>().await;
     assert!(res.is_ok(), "{:?}", res);
     let res = res.unwrap();
     assert!(!res.data.is_empty(), "{:?}", res);
@@ -1386,7 +1419,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
     assert!(resp.is_ok(), "{:?}", resp.err());
     let resp = resp.unwrap();
     assert!(resp.status().is_success(), "{:?}", resp);
-    let res = resp.json::<QueryResponse>().await;
+    let res = resp.json::<TestQueryResponse>().await;
     assert!(res.is_ok(), "{:?}", res);
     let res = res.unwrap();
     assert!(!res.data.is_empty(), "{:?}", res);
@@ -1829,9 +1862,11 @@ async fn test_max_size_per_page() -> Result<()> {
     let (_, reply, body) = TestHttpQueryRequest::new(json).fetch_begin().await?;
     assert!(reply.error.is_none(), "{:?}", reply.error);
     let len = body.len() as i32;
-    let target = 10485760; // 10M
-    assert!(len < target);
-    assert!(len > target - 2000);
+    let target = 20_080_000;
+    assert!(len > target);
+    assert!(len < target + 2000);
+    assert_eq!(reply.data.len(), 10_000);
+    assert_eq!(reply.data[0].len(), 2);
     Ok(())
 }
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use databend_common_base::base::mask_connection_info;
 use databend_common_base::headers::HEADER_QUERY_ID;
@@ -70,7 +71,7 @@ use crate::servers::http::v1::catalog::search_tables_handler;
 use crate::servers::http::v1::discovery_nodes;
 use crate::servers::http::v1::login_handler;
 use crate::servers::http::v1::logout_handler;
-use crate::servers::http::v1::query::string_block::StringBlock;
+use crate::servers::http::v1::query::blocks_serializer::BlocksSerializer;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::refresh_handler;
 use crate::servers::http::v1::roles::list_roles_handler;
@@ -126,7 +127,7 @@ impl QueryResponseField {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone)]
 pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
@@ -142,7 +143,7 @@ pub struct QueryResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub has_result_set: Option<bool>,
     pub schema: Vec<QueryResponseField>,
-    pub data: Vec<Vec<Option<String>>>,
+    pub data: Arc<BlocksSerializer>,
     pub affect: Option<QueryAffect>,
     pub result_timeout_secs: Option<u64>,
 
@@ -163,11 +164,14 @@ impl QueryResponse {
     ) -> impl IntoResponse {
         let state = r.state.clone();
         let (data, next_uri) = if is_final {
-            (StringBlock::empty(), None)
+            (Arc::new(BlocksSerializer::empty()), None)
         } else {
             match state.state {
                 ExecuteStateKind::Running | ExecuteStateKind::Starting => match r.data {
-                    None => (StringBlock::empty(), Some(make_state_uri(&id))),
+                    None => (
+                        Arc::new(BlocksSerializer::empty()),
+                        Some(make_state_uri(&id)),
+                    ),
                     Some(d) => {
                         let uri = match d.next_page_no {
                             Some(n) => Some(make_page_uri(&id, n)),
@@ -176,9 +180,15 @@ impl QueryResponse {
                         (d.page.data, uri)
                     }
                 },
-                ExecuteStateKind::Failed => (StringBlock::empty(), Some(make_final_uri(&id))),
+                ExecuteStateKind::Failed => (
+                    Arc::new(BlocksSerializer::empty()),
+                    Some(make_final_uri(&id)),
+                ),
                 ExecuteStateKind::Succeeded => match r.data {
-                    None => (StringBlock::empty(), Some(make_final_uri(&id))),
+                    None => (
+                        Arc::new(BlocksSerializer::empty()),
+                        Some(make_final_uri(&id)),
+                    ),
                     Some(d) => {
                         let uri = match d.next_page_no {
                             Some(n) => Some(make_page_uri(&id, n)),
@@ -199,10 +209,10 @@ impl QueryResponse {
             progresses: state.progresses.clone(),
             running_time_ms: state.running_time_ms,
         };
-        let rows = data.data.len();
+        let rows = data.num_rows();
 
         Json(QueryResponse {
-            data: data.into(),
+            data,
             state: state.state,
             schema: state.schema.clone(),
             session_id: Some(session_id),
