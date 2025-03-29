@@ -827,6 +827,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_prune_pipeline")? == 1)
     }
 
+    pub fn set_enable_prune_pipeline(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_prune_pipeline", val)
+    }
+
     pub fn get_enable_prune_cache(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_prune_cache")? == 1)
     }

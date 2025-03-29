@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -652,6 +653,78 @@ impl PhysicalPlan {
         }
     }
 
+    pub fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
+        match self {
+            PhysicalPlan::TableScan(_)
+            | PhysicalPlan::ConstantTableScan(_)
+            | PhysicalPlan::CacheScan(_)
+            | PhysicalPlan::ExchangeSource(_)
+            | PhysicalPlan::CompactSource(_)
+            | PhysicalPlan::ReplaceAsyncSourcer(_)
+            | PhysicalPlan::Recluster(_)
+            | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::HilbertSerialize(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::AggregatePartial(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::AggregateFinal(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Window(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::WindowPartition(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Sort(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Limit(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::RowFetch(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::HashJoin(plan) => Box::new(
+                std::iter::once(plan.probe.as_mut()).chain(std::iter::once(plan.build.as_mut())),
+            ),
+            PhysicalPlan::ExpressionScan(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Exchange(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::ExchangeSink(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::UnionAll(plan) => Box::new(
+                std::iter::once(plan.left.as_mut()).chain(std::iter::once(plan.right.as_mut())),
+            ),
+            PhysicalPlan::DistributedInsertSelect(plan) => {
+                Box::new(std::iter::once(plan.input.as_mut()))
+            }
+            PhysicalPlan::CommitSink(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::RangeJoin(plan) => Box::new(
+                std::iter::once(plan.left.as_mut()).chain(std::iter::once(plan.right.as_mut())),
+            ),
+            PhysicalPlan::ReplaceDeduplicate(plan) => {
+                Box::new(std::iter::once(plan.input.as_mut()))
+            }
+            PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::MutationSource(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::ColumnMutation(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Mutation(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::MutationSplit(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::MutationManipulate(plan) => {
+                Box::new(std::iter::once(plan.input.as_mut()))
+            }
+            PhysicalPlan::MutationOrganize(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::AddStreamColumn(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::AsyncFunction(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::CopyIntoLocation(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Duplicate(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Shuffle(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::ChunkFilter(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::ChunkEvalScalar(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::ChunkCastSchema(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::ChunkFillAndReorder(plan) => {
+                Box::new(std::iter::once(plan.input.as_mut()))
+            }
+            PhysicalPlan::ChunkAppendData(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::ChunkMerge(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::ChunkCommitInsert(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::CopyIntoTable(v) => match &mut v.source {
+                CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v.as_mut())),
+                CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v.as_mut())),
+            },
+        }
+    }
+
     /// Used to find data source info in a non-aggregation and single-table query plan.
     pub fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         match self {
@@ -1003,6 +1076,34 @@ impl PhysicalPlan {
                     }
                 }
                 None
+            }
+        }
+    }
+
+    pub fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
+        match self {
+            PhysicalPlan::TableScan(table_scan) => {
+                sources.push((table_scan.plan_id, table_scan.source.clone()));
+            }
+            _ => {
+                for child in self.children() {
+                    child.get_all_data_source(sources);
+                }
+            }
+        }
+    }
+
+    pub fn set_pruning_stats(&mut self, plan_id: u32, stat: PartStatistics) {
+        match self {
+            PhysicalPlan::TableScan(table_scan) => {
+                if table_scan.plan_id == plan_id {
+                    table_scan.source.statistics = stat;
+                }
+            }
+            _ => {
+                for child in self.children_mut() {
+                    child.set_pruning_stats(plan_id, stat.clone())
+                }
             }
         }
     }
