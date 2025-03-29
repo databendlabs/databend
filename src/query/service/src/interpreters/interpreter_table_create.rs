@@ -374,7 +374,7 @@ impl CreateTableInterpreter {
         let fields = self.plan.schema.fields().clone();
         for field in fields.iter() {
             if field.default_expr().is_some() {
-                let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
+                let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(field)?;
             }
             is_valid_column(field.name())?;
         }
