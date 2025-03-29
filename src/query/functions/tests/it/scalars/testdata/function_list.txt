@@ -1809,6 +1809,8 @@ Functions overloads:
 1 get_string(Variant NULL, String NULL) :: String NULL
 2 get_string(Variant, Int64) :: String NULL
 3 get_string(Variant NULL, Int64 NULL) :: String NULL
+0 glob(String, String) :: Boolean
+1 glob(String NULL, String NULL) :: Boolean NULL
 0 great_circle_angle(Float64, Float64, Float64, Float64) :: Float32
 1 great_circle_angle(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 great_circle_distance(Float64, Float64, Float64, Float64) :: Float32

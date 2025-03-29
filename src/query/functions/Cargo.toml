@@ -34,6 +34,7 @@ ethnum = { workspace = true }
 geo = { workspace = true }
 geohash = { workspace = true }
 geozero = { workspace = true }
+glob = { workspace = true }
 h3o = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }

@@ -502,8 +502,6 @@ pub(crate) mod jaro_winkler {
     //! # Examples
     //!
     //! ```
-    //! use jaro_winkler::jaro_winkler;
-    //!
     //! assert_eq!(jaro_winkler("martha", "marhta"), 0.9611111111111111);
     //! assert_eq!(jaro_winkler("", "words"), 0.0);
     //! assert_eq!(jaro_winkler("same", "same"), 1.0);
