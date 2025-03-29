@@ -739,8 +739,8 @@ fn is_simple_cast_function(name: &str) -> bool {
 
 pub fn rewrite_function_to_cast<Index: ColumnIndex>(expr: Expr<Index>) -> Result<Expr<Index>> {
     match visit_expr(&expr, &mut RewriteCast).unwrap() {
-        Cow::Borrowed(_) => Ok(expr),
-        Cow::Owned(expr) => Ok(expr),
+        None => Ok(expr),
+        Some(expr) => Ok(expr),
     }
 }
 
@@ -749,10 +749,14 @@ struct RewriteCast;
 impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast {
     type Error = ();
 
-    fn enter_function_call<'a>(
+    fn enter_function_call(
         &mut self,
-        expr: &'a Expr<Index>,
-    ) -> std::result::Result<std::borrow::Cow<'a, Expr<Index>>, Self::Error> {
+        expr: &Expr<Index>,
+    ) -> std::result::Result<Option<Expr<Index>>, Self::Error> {
+        let expr = match Self::visit_function_call(expr, self)? {
+            Some(expr) => Cow::Owned(expr),
+            None => Cow::Borrowed(expr),
+        };
         let Expr::FunctionCall {
             span,
             function,
@@ -760,15 +764,18 @@ impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast {
             args,
             return_type,
             ..
-        } = &expr
+        } = expr.as_ref()
         else {
             unreachable!();
         };
         if !generics.is_empty() || args.len() != 1 {
-            return Ok(Cow::Borrowed(expr));
+            return match expr {
+                Cow::Borrowed(_) => Ok(None),
+                Cow::Owned(expr) => Ok(Some(expr)),
+            };
         }
         if function.signature.name == "parse_json" {
-            return Ok(Cow::Owned(Expr::Cast {
+            return Ok(Some(Expr::Cast {
                 span: *span,
                 is_try: false,
                 expr: Box::new(args.first().unwrap().clone()),
@@ -777,7 +784,7 @@ impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast {
         }
         let func_name = format!("to_{}", return_type.remove_nullable());
         if function.signature.name == func_name {
-            return Ok(Cow::Owned(Expr::Cast {
+            return Ok(Some(Expr::Cast {
                 span: *span,
                 is_try: false,
                 expr: Box::new(args.first().unwrap().clone()),
@@ -785,13 +792,16 @@ impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast {
             }));
         };
         if function.signature.name == format!("try_{func_name}") {
-            return Ok(Cow::Owned(Expr::Cast {
+            return Ok(Some(Expr::Cast {
                 span: *span,
                 is_try: true,
                 expr: Box::new(args.first().unwrap().clone()),
                 dest_type: return_type.clone(),
             }));
         }
-        Ok(Cow::Borrowed(expr))
+        match expr {
+            Cow::Borrowed(_) => Ok(None),
+            Cow::Owned(expr) => Ok(Some(expr)),
+        }
     }
 }

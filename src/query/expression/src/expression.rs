@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -289,33 +288,32 @@ impl<Index: ColumnIndex> PartialEq for Expr<Index> {
     }
 }
 
-pub trait ExprVisitor<Index: ColumnIndex>: Sized {
+pub trait ExprVisitor<I: ColumnIndex>: Sized {
     type Error = ErrorCode;
 
-    fn enter_constant<'a>(
-        &mut self,
-        expr: &'a Expr<Index>,
-    ) -> Result<Cow<'a, Expr<Index>>, Self::Error> {
+    fn enter_constant(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
         let Expr::Constant { .. } = expr else {
             unreachable!()
         };
-        Ok(Cow::Borrowed(expr))
+        Ok(None)
     }
 
-    fn enter_column_ref<'a>(
-        &mut self,
-        expr: &'a Expr<Index>,
-    ) -> Result<Cow<'a, Expr<Index>>, Self::Error> {
+    fn enter_column_ref(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
         let Expr::ColumnRef { .. } = expr else {
             unreachable!()
         };
-        Ok(Cow::Borrowed(expr))
+        Ok(None)
     }
 
-    fn enter_cast<'a>(
-        &mut self,
-        expr: &'a Expr<Index>,
-    ) -> Result<Cow<'a, Expr<Index>>, Self::Error> {
+    fn enter_cast(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        Self::visit_cast(expr, self)
+    }
+
+    fn visit_cast<V>(expr: &Expr<I>, visitor: &mut V) -> Result<Option<Expr<I>>, Self::Error>
+    where
+        I: ColumnIndex,
+        V: ExprVisitor<I, Error = Self::Error>,
+    {
         let Expr::Cast {
             span,
             is_try,
@@ -325,21 +323,29 @@ pub trait ExprVisitor<Index: ColumnIndex>: Sized {
         else {
             unreachable!()
         };
-        match visit_expr(inner, self)? {
-            Cow::Borrowed(_) => Ok(Cow::Borrowed(expr)),
-            Cow::Owned(inner) => Ok(Cow::Owned(Expr::Cast {
+        if let Some(inner) = visit_expr(inner, visitor)? {
+            Ok(Some(Expr::Cast {
                 span: *span,
                 is_try: *is_try,
-                expr: Box::new(inner),
+                expr: Box::new(inner.clone()),
                 dest_type: dest_type.clone(),
-            })),
+            }))
+        } else {
+            Ok(None)
         }
     }
 
-    fn enter_function_call<'a>(
-        &mut self,
-        expr: &'a Expr<Index>,
-    ) -> Result<Cow<'a, Expr<Index>>, Self::Error> {
+    fn enter_function_call(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        Self::visit_function_call(expr, self)
+    }
+
+    fn visit_function_call<V>(
+        expr: &Expr<I>,
+        visitor: &mut V,
+    ) -> Result<Option<Expr<I>>, Self::Error>
+    where
+        V: ExprVisitor<I, Error = Self::Error>,
+    {
         let Expr::FunctionCall {
             span,
             id,
@@ -351,28 +357,41 @@ pub trait ExprVisitor<Index: ColumnIndex>: Sized {
         else {
             unreachable!()
         };
-        let args = args
+        let new_args = args
             .iter()
-            .map(|arg| visit_expr(arg, self))
+            .map(|arg| Ok((visit_expr(arg, visitor)?, arg)))
             .collect::<Result<Vec<_>, _>>()?;
-        if args.iter().all(Cow::is_borrowed) {
-            Ok(Cow::Borrowed(expr))
+        if new_args.iter().all(|(v, _)| v.is_none()) {
+            Ok(None)
         } else {
-            Ok(Cow::Owned(Expr::FunctionCall {
+            Ok(Some(Expr::FunctionCall {
                 span: *span,
                 id: id.clone(),
                 function: function.clone(),
                 generics: generics.clone(),
-                args: args.into_iter().map(Cow::into_owned).collect(),
+                args: new_args
+                    .into_iter()
+                    .map(|(new, old)| new.unwrap_or_else(|| old.clone()))
+                    .collect(),
                 return_type: return_type.clone(),
             }))
         }
     }
 
-    fn enter_lambda_function_call<'a>(
+    fn enter_lambda_function_call(
         &mut self,
-        expr: &'a Expr<Index>,
-    ) -> Result<Cow<'a, Expr<Index>>, Self::Error> {
+        expr: &Expr<I>,
+    ) -> Result<Option<Expr<I>>, Self::Error> {
+        Self::visit_lambda_function_call(expr, self)
+    }
+
+    fn visit_lambda_function_call<V>(
+        expr: &Expr<I>,
+        visitor: &mut V,
+    ) -> Result<Option<Expr<I>>, Self::Error>
+    where
+        V: ExprVisitor<I, Error = Self::Error>,
+    {
         let Expr::LambdaFunctionCall {
             span,
             name,
@@ -384,17 +403,20 @@ pub trait ExprVisitor<Index: ColumnIndex>: Sized {
         else {
             unreachable!()
         };
-        let args = args
+        let new_args = args
             .iter()
-            .map(|arg| visit_expr(arg, self))
+            .map(|arg| Ok((visit_expr(arg, visitor)?, arg)))
             .collect::<Result<Vec<_>, _>>()?;
-        if args.iter().all(Cow::is_borrowed) {
-            Ok(Cow::Borrowed(expr))
+        if new_args.iter().all(|(v, _)| v.is_none()) {
+            Ok(None)
         } else {
-            Ok(Cow::Owned(Expr::LambdaFunctionCall {
+            Ok(Some(Expr::LambdaFunctionCall {
                 span: *span,
                 name: name.clone(),
-                args: args.into_iter().map(Cow::into_owned).collect(),
+                args: new_args
+                    .into_iter()
+                    .map(|(new, old)| new.unwrap_or_else(|| old.clone()))
+                    .collect(),
                 lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
@@ -403,10 +425,10 @@ pub trait ExprVisitor<Index: ColumnIndex>: Sized {
     }
 }
 
-pub fn visit_expr<'a, Index: ColumnIndex, V: ExprVisitor<Index>>(
-    expr: &'a Expr<Index>,
+pub fn visit_expr<Index: ColumnIndex, V: ExprVisitor<Index>>(
+    expr: &Expr<Index>,
     visitor: &mut V,
-) -> Result<Cow<'a, Expr<Index>>, V::Error> {
+) -> Result<Option<Expr<Index>>, V::Error> {
     match expr {
         Expr::Constant { .. } => visitor.enter_constant(expr),
         Expr::ColumnRef { .. } => visitor.enter_column_ref(expr),

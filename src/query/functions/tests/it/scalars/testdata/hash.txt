@@ -355,7 +355,7 @@ output         : NULL
 
 ast            : siphash64(parse_json('{"a":1}'))
 raw expr       : siphash64(parse_json('{"a":1}'))
-checked expr   : siphash64<Variant>(parse_json<String>("{\"a\":1}"))
+checked expr   : siphash64<Variant>(CAST<String>("{\"a\":1}" AS Variant))
 optimized expr : 10266916306474055689_u64
 output type    : UInt64
 output domain  : {10266916306474055689..=10266916306474055689}
@@ -448,7 +448,7 @@ output         : NULL
 
 ast            : xxhash64(parse_json('{"a":1}'))
 raw expr       : xxhash64(parse_json('{"a":1}'))
-checked expr   : xxhash64<Variant>(parse_json<String>("{\"a\":1}"))
+checked expr   : xxhash64<Variant>(CAST<String>("{\"a\":1}" AS Variant))
 optimized expr : 13558435650847720346_u64
 output type    : UInt64
 output domain  : {13558435650847720346..=13558435650847720346}
@@ -541,7 +541,7 @@ output         : NULL
 
 ast            : xxhash32(parse_json('{"a":1}'))
 raw expr       : xxhash32(parse_json('{"a":1}'))
-checked expr   : xxhash32<Variant>(parse_json<String>("{\"a\":1}"))
+checked expr   : xxhash32<Variant>(CAST<String>("{\"a\":1}" AS Variant))
 optimized expr : 3886246173_u32
 output type    : UInt32
 output domain  : {3886246173..=3886246173}

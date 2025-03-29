@@ -205,7 +205,7 @@ evaluation (internal):
 
 ast            : to_binary(parse_json('{"k1":"val","k2":100}'))
 raw expr       : to_binary(parse_json('{"k1":"val","k2":100}'))
-checked expr   : to_binary<Variant>(parse_json<String>("{\"k1\":\"val\",\"k2\":100}"))
+checked expr   : to_binary<Variant>(CAST<String>("{\"k1\":\"val\",\"k2\":100}" AS Variant))
 optimized expr : 40000002100000021000000210000003200000026B316B3276616C5064
 output type    : Binary
 output domain  : Undefined
@@ -214,7 +214,7 @@ output         : 40000002100000021000000210000003200000026B316B3276616C5064
 
 ast            : to_binary(parse_json('10'))
 raw expr       : to_binary(parse_json('10'))
-checked expr   : to_binary<Variant>(parse_json<String>("10"))
+checked expr   : to_binary<Variant>(CAST<String>("10" AS Variant))
 optimized expr : 2000000020000002500A
 output type    : Binary
 output domain  : Undefined
@@ -223,7 +223,7 @@ output         : 2000000020000002500A
 
 ast            : to_binary(parse_json('123456'))
 raw expr       : to_binary(parse_json('123456'))
-checked expr   : to_binary<Variant>(parse_json<String>("123456"))
+checked expr   : to_binary<Variant>(CAST<String>("123456" AS Variant))
 optimized expr : 2000000020000005500001E240
 output type    : Binary
 output domain  : Undefined
@@ -232,7 +232,7 @@ output         : 2000000020000005500001E240
 
 ast            : to_binary(parse_json('"abcd"'))
 raw expr       : to_binary(parse_json('"abcd"'))
-checked expr   : to_binary<Variant>(parse_json<String>("\"abcd\""))
+checked expr   : to_binary<Variant>(CAST<String>("\"abcd\"" AS Variant))
 optimized expr : 200000001000000461626364
 output type    : Binary
 output domain  : Undefined
@@ -374,7 +374,7 @@ evaluation (internal):
 
 ast            : TRY_to_binary(parse_json('{"k1":"val","k2":100}'))
 raw expr       : TRY_to_binary(parse_json('{"k1":"val","k2":100}'))
-checked expr   : try_to_binary<Variant>(parse_json<String>("{\"k1\":\"val\",\"k2\":100}"))
+checked expr   : try_to_binary<Variant>(CAST<String>("{\"k1\":\"val\",\"k2\":100}" AS Variant))
 optimized expr : 40000002100000021000000210000003200000026B316B3276616C5064
 output type    : Binary NULL
 output domain  : Undefined
@@ -383,7 +383,7 @@ output         : 40000002100000021000000210000003200000026B316B3276616C5064
 
 ast            : TRY_to_binary(parse_json('10'))
 raw expr       : TRY_to_binary(parse_json('10'))
-checked expr   : try_to_binary<Variant>(parse_json<String>("10"))
+checked expr   : try_to_binary<Variant>(CAST<String>("10" AS Variant))
 optimized expr : 2000000020000002500A
 output type    : Binary NULL
 output domain  : Undefined
@@ -392,7 +392,7 @@ output         : 2000000020000002500A
 
 ast            : TRY_to_binary(parse_json('123456'))
 raw expr       : TRY_to_binary(parse_json('123456'))
-checked expr   : try_to_binary<Variant>(parse_json<String>("123456"))
+checked expr   : try_to_binary<Variant>(CAST<String>("123456" AS Variant))
 optimized expr : 2000000020000005500001E240
 output type    : Binary NULL
 output domain  : Undefined
@@ -401,7 +401,7 @@ output         : 2000000020000005500001E240
 
 ast            : TRY_to_binary(parse_json('"abcd"'))
 raw expr       : TRY_to_binary(parse_json('"abcd"'))
-checked expr   : try_to_binary<Variant>(parse_json<String>("\"abcd\""))
+checked expr   : try_to_binary<Variant>(CAST<String>("\"abcd\"" AS Variant))
 optimized expr : 200000001000000461626364
 output type    : Binary NULL
 output domain  : Undefined

@@ -345,7 +345,7 @@ evaluation (internal):
 
 ast            : length(parse_json('1234'))
 raw expr       : length(parse_json('1234'))
-checked expr   : length<Variant NULL>(CAST<Variant>(parse_json<String>("1234") AS Variant NULL))
+checked expr   : length<Variant NULL>(CAST<Variant>(CAST<String>("1234" AS Variant) AS Variant NULL))
 optimized expr : NULL
 output type    : UInt32 NULL
 output domain  : {NULL}
@@ -354,7 +354,7 @@ output         : NULL
 
 ast            : length(parse_json('[1,2,3,4]'))
 raw expr       : length(parse_json('[1,2,3,4]'))
-checked expr   : length<Variant NULL>(CAST<Variant>(parse_json<String>("[1,2,3,4]") AS Variant NULL))
+checked expr   : length<Variant NULL>(CAST<Variant>(CAST<String>("[1,2,3,4]" AS Variant) AS Variant NULL))
 optimized expr : 4_u32
 output type    : UInt32 NULL
 output domain  : {4..=4}
@@ -363,7 +363,7 @@ output         : 4
 
 ast            : length(parse_json('{"k":"v"}'))
 raw expr       : length(parse_json('{"k":"v"}'))
-checked expr   : length<Variant NULL>(CAST<Variant>(parse_json<String>("{\"k\":\"v\"}") AS Variant NULL))
+checked expr   : length<Variant NULL>(CAST<Variant>(CAST<String>("{\"k\":\"v\"}" AS Variant) AS Variant NULL))
 optimized expr : NULL
 output type    : UInt32 NULL
 output domain  : {NULL}
@@ -372,7 +372,7 @@ output         : NULL
 
 ast            : length(parse_json(s))
 raw expr       : length(parse_json(s::String))
-checked expr   : length<Variant NULL>(CAST<Variant>(parse_json<String>(s) AS Variant NULL))
+checked expr   : length<Variant NULL>(CAST<Variant>(CAST<String>(s AS Variant) AS Variant NULL))
 evaluation:
 +--------+----------------------------------+-------------+
 |        | s                                | Output      |
@@ -394,7 +394,7 @@ evaluation (internal):
 
 ast            : length(parse_json(s))
 raw expr       : length(parse_json(s::String NULL))
-checked expr   : length<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : length<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+-------------------------------------------+-------------+
 |        | s                                         | Output      |
@@ -417,7 +417,7 @@ evaluation (internal):
 
 ast            : json_object_keys(parse_json('[1,2,3,4]'))
 raw expr       : json_object_keys(parse_json('[1,2,3,4]'))
-checked expr   : json_object_keys<Variant NULL>(CAST<Variant>(parse_json<String>("[1,2,3,4]") AS Variant NULL))
+checked expr   : json_object_keys<Variant NULL>(CAST<Variant>(CAST<String>("[1,2,3,4]" AS Variant) AS Variant NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -426,7 +426,7 @@ output         : NULL
 
 ast            : json_object_keys(parse_json('{"k1":"v1","k2":"v2"}'))
 raw expr       : json_object_keys(parse_json('{"k1":"v1","k2":"v2"}'))
-checked expr   : json_object_keys<Variant NULL>(CAST<Variant>(parse_json<String>("{\"k1\":\"v1\",\"k2\":\"v2\"}") AS Variant NULL))
+checked expr   : json_object_keys<Variant NULL>(CAST<Variant>(CAST<String>("{\"k1\":\"v1\",\"k2\":\"v2\"}" AS Variant) AS Variant NULL))
 optimized expr : 0x8000000210000002100000026b316b32
 output type    : Variant NULL
 output domain  : Undefined
@@ -435,7 +435,7 @@ output         : '["k1","k2"]'
 
 ast            : json_object_keys(parse_json(s))
 raw expr       : json_object_keys(parse_json(s::String))
-checked expr   : json_object_keys<Variant NULL>(CAST<Variant>(parse_json<String>(s) AS Variant NULL))
+checked expr   : json_object_keys<Variant NULL>(CAST<Variant>(CAST<String>(s AS Variant) AS Variant NULL))
 evaluation:
 +--------+-------------------------------------------------+---------------+
 |        | s                                               | Output        |
@@ -457,7 +457,7 @@ evaluation (internal):
 
 ast            : json_object_keys(parse_json(s))
 raw expr       : json_object_keys(parse_json(s::String NULL))
-checked expr   : json_object_keys<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : json_object_keys<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+----------------------------------------------------------+---------------+
 |        | s                                                        | Output        |
@@ -480,7 +480,7 @@ evaluation (internal):
 
 ast            : parse_json('null')[1]
 raw expr       : get(parse_json('null'), 1)
-checked expr   : get<Variant, Int64>(parse_json<String>("null"), CAST<UInt8>(1_u8 AS Int64))
+checked expr   : get<Variant, Int64>(CAST<String>("null" AS Variant), CAST<UInt8>(1_u8 AS Int64))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -489,7 +489,7 @@ output         : NULL
 
 ast            : parse_json('null')['k']
 raw expr       : get(parse_json('null'), 'k')
-checked expr   : get<Variant, String>(parse_json<String>("null"), "k")
+checked expr   : get<Variant, String>(CAST<String>("null" AS Variant), "k")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -498,7 +498,7 @@ output         : NULL
 
 ast            : parse_json('[1,2,3,4]')[1]
 raw expr       : get(parse_json('[1,2,3,4]'), 1)
-checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), CAST<UInt8>(1_u8 AS Int64))
+checked expr   : get<Variant, Int64>(CAST<String>("[1,2,3,4]" AS Variant), CAST<UInt8>(1_u8 AS Int64))
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Undefined
@@ -507,7 +507,7 @@ output         : '2'
 
 ast            : parse_json('[1,2,3,4]')[2+3]
 raw expr       : get(parse_json('[1,2,3,4]'), plus(2, 3))
-checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), CAST<UInt16>(plus<UInt8, UInt8>(2_u8, 3_u8) AS Int64))
+checked expr   : get<Variant, Int64>(CAST<String>("[1,2,3,4]" AS Variant), CAST<UInt16>(plus<UInt8, UInt8>(2_u8, 3_u8) AS Int64))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -516,7 +516,7 @@ output         : NULL
 
 ast            : parse_json('{"k":"v"}')['k']
 raw expr       : get(parse_json('{"k":"v"}'), 'k')
-checked expr   : get<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "k")
+checked expr   : get<Variant, String>(CAST<String>("{\"k\":\"v\"}" AS Variant), "k")
 optimized expr : 0x200000001000000176
 output type    : Variant NULL
 output domain  : Undefined
@@ -525,7 +525,7 @@ output         : '"v"'
 
 ast            : parse_json('{"k":"v"}')['x']
 raw expr       : get(parse_json('{"k":"v"}'), 'x')
-checked expr   : get<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "x")
+checked expr   : get<Variant, String>(CAST<String>("{\"k\":\"v\"}" AS Variant), "x")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -543,7 +543,7 @@ output         : '"b"'
 
 ast            : parse_json(s)[i]
 raw expr       : get(parse_json(s::String), i::UInt64)
-checked expr   : get<Variant, Int64>(parse_json<String>(s), CAST<UInt64>(i AS Int64))
+checked expr   : get<Variant, Int64>(CAST<String>(s AS Variant), CAST<UInt64>(i AS Int64))
 evaluation:
 +--------+----------------------------------+---------+--------------+
 |        | s                                | i       | Output       |
@@ -566,7 +566,7 @@ evaluation (internal):
 
 ast            : parse_json(s)[i]
 raw expr       : get(parse_json(s::String NULL), i::UInt64 NULL)
-checked expr   : get<Variant NULL, Int64 NULL>(parse_json<String NULL>(s), CAST<UInt64 NULL>(i AS Int64 NULL))
+checked expr   : get<Variant NULL, Int64 NULL>(CAST<String NULL>(s AS Variant NULL), CAST<UInt64 NULL>(i AS Int64 NULL))
 evaluation:
 +--------+-------------------------------------------+------------------+--------------+
 |        | s                                         | i                | Output       |
@@ -590,7 +590,7 @@ evaluation (internal):
 
 ast            : parse_json(s)[k]
 raw expr       : get(parse_json(s::String), k::String)
-checked expr   : get<Variant, String>(parse_json<String>(s), k)
+checked expr   : get<Variant, String>(CAST<String>(s AS Variant), k)
 evaluation:
 +--------+------------------------+-------------+--------------+
 |        | s                      | k           | Output       |
@@ -613,7 +613,7 @@ evaluation (internal):
 
 ast            : parse_json(s)[k]
 raw expr       : get(parse_json(s::String NULL), k::String)
-checked expr   : get<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST<String>(k AS String NULL))
+checked expr   : get<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), CAST<String>(k AS String NULL))
 evaluation:
 +--------+---------------------------------+------------+--------------+
 |        | s                               | k          | Output       |
@@ -637,7 +637,7 @@ evaluation (internal):
 
 ast            : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'AA')
 raw expr       : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'AA')
-checked expr   : get_ignore_case<Variant, String>(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "AA")
+checked expr   : get_ignore_case<Variant, String>(CAST<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}" AS Variant), "AA")
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
@@ -646,7 +646,7 @@ output         : '1'
 
 ast            : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'aa')
 raw expr       : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'aa')
-checked expr   : get_ignore_case<Variant, String>(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "aa")
+checked expr   : get_ignore_case<Variant, String>(CAST<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}" AS Variant), "aa")
 optimized expr : 0x20000000200000025003
 output type    : Variant NULL
 output domain  : Undefined
@@ -655,7 +655,7 @@ output         : '3'
 
 ast            : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'bb')
 raw expr       : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'bb')
-checked expr   : get_ignore_case<Variant, String>(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "bb")
+checked expr   : get_ignore_case<Variant, String>(CAST<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}" AS Variant), "bb")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -664,7 +664,7 @@ output         : NULL
 
 ast            : get_ignore_case(parse_json(s), k)
 raw expr       : get_ignore_case(parse_json(s::String), k::String)
-checked expr   : get_ignore_case<Variant, String>(parse_json<String>(s), k)
+checked expr   : get_ignore_case<Variant, String>(CAST<String>(s AS Variant), k)
 evaluation:
 +--------+------------------------+-------------+--------------+
 |        | s                      | k           | Output       |
@@ -687,7 +687,7 @@ evaluation (internal):
 
 ast            : get_ignore_case(parse_json(s), k)
 raw expr       : get_ignore_case(parse_json(s::String NULL), k::String)
-checked expr   : get_ignore_case<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST<String>(k AS String NULL))
+checked expr   : get_ignore_case<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), CAST<String>(k AS String NULL))
 evaluation:
 +--------+---------------------------------+------------+--------------+
 |        | s                               | k          | Output       |
@@ -711,7 +711,7 @@ evaluation (internal):
 
 ast            : get_path(parse_json('[[1,2],3]'), '[0]')
 raw expr       : get_path(parse_json('[[1,2],3]'), '[0]')
-checked expr   : get_path<Variant, String>(parse_json<String>("[[1,2],3]"), "[0]")
+checked expr   : get_path<Variant, String>(CAST<String>("[[1,2],3]" AS Variant), "[0]")
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant NULL
 output domain  : Undefined
@@ -720,7 +720,7 @@ output         : '[1,2]'
 
 ast            : get_path(parse_json('[[1,2],3]'), '[0][1]')
 raw expr       : get_path(parse_json('[[1,2],3]'), '[0][1]')
-checked expr   : get_path<Variant, String>(parse_json<String>("[[1,2],3]"), "[0][1]")
+checked expr   : get_path<Variant, String>(CAST<String>("[[1,2],3]" AS Variant), "[0][1]")
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Undefined
@@ -729,7 +729,7 @@ output         : '2'
 
 ast            : get_path(parse_json('[1,2,3]'), '[0]')
 raw expr       : get_path(parse_json('[1,2,3]'), '[0]')
-checked expr   : get_path<Variant, String>(parse_json<String>("[1,2,3]"), "[0]")
+checked expr   : get_path<Variant, String>(CAST<String>("[1,2,3]" AS Variant), "[0]")
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
@@ -738,7 +738,7 @@ output         : '1'
 
 ast            : get_path(parse_json('[1,2,3]'), 'k2:k3')
 raw expr       : get_path(parse_json('[1,2,3]'), 'k2:k3')
-checked expr   : get_path<Variant, String>(parse_json<String>("[1,2,3]"), "k2:k3")
+checked expr   : get_path<Variant, String>(CAST<String>("[1,2,3]" AS Variant), "k2:k3")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -747,7 +747,7 @@ output         : NULL
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), '["a"]["b"]')
 raw expr       : get_path(parse_json('{"a":{"b":2}}'), '["a"]["b"]')
-checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}"), "[\"a\"][\"b\"]")
+checked expr   : get_path<Variant, String>(CAST<String>("{\"a\":{\"b\":2}}" AS Variant), "[\"a\"][\"b\"]")
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Undefined
@@ -756,7 +756,7 @@ output         : '2'
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), 'a:b')
 raw expr       : get_path(parse_json('{"a":{"b":2}}'), 'a:b')
-checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}"), "a:b")
+checked expr   : get_path<Variant, String>(CAST<String>("{\"a\":{\"b\":2}}" AS Variant), "a:b")
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Undefined
@@ -765,7 +765,7 @@ output         : '2'
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), '["a"]')
 raw expr       : get_path(parse_json('{"a":{"b":2}}'), '["a"]')
-checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}"), "[\"a\"]")
+checked expr   : get_path<Variant, String>(CAST<String>("{\"a\":{\"b\":2}}" AS Variant), "[\"a\"]")
 optimized expr : 0x400000011000000120000002625002
 output type    : Variant NULL
 output domain  : Undefined
@@ -774,7 +774,7 @@ output         : '{"b":2}'
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), 'a')
 raw expr       : get_path(parse_json('{"a":{"b":2}}'), 'a')
-checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}"), "a")
+checked expr   : get_path<Variant, String>(CAST<String>("{\"a\":{\"b\":2}}" AS Variant), "a")
 optimized expr : 0x400000011000000120000002625002
 output type    : Variant NULL
 output domain  : Undefined
@@ -783,7 +783,7 @@ output         : '{"b":2}'
 
 ast            : get_path(parse_json(s), k)
 raw expr       : get_path(parse_json(s::String), k::String)
-checked expr   : get_path<Variant, String>(parse_json<String>(s), k)
+checked expr   : get_path<Variant, String>(CAST<String>(s AS Variant), k)
 evaluation:
 +--------+---------------------------------+-------------------+--------------+
 |        | s                               | k                 | Output       |
@@ -806,7 +806,7 @@ evaluation (internal):
 
 ast            : get_path(parse_json(s), k)
 raw expr       : get_path(parse_json(s::String NULL), k::String)
-checked expr   : get_path<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST<String>(k AS String NULL))
+checked expr   : get_path<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), CAST<String>(k AS String NULL))
 evaluation:
 +--------+------------------------------------------+--------------+--------------+
 |        | s                                        | k            | Output       |
@@ -958,7 +958,7 @@ evaluation (internal):
 
 ast            : as_boolean(parse_json('true'))
 raw expr       : as_boolean(parse_json('true'))
-checked expr   : as_boolean<Variant>(parse_json<String>("true"))
+checked expr   : as_boolean<Variant>(CAST<String>("true" AS Variant))
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -967,7 +967,7 @@ output         : true
 
 ast            : as_boolean(parse_json('123'))
 raw expr       : as_boolean(parse_json('123'))
-checked expr   : as_boolean<Variant>(parse_json<String>("123"))
+checked expr   : as_boolean<Variant>(CAST<String>("123" AS Variant))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -976,7 +976,7 @@ output         : NULL
 
 ast            : as_integer(parse_json('true'))
 raw expr       : as_integer(parse_json('true'))
-checked expr   : as_integer<Variant>(parse_json<String>("true"))
+checked expr   : as_integer<Variant>(CAST<String>("true" AS Variant))
 optimized expr : NULL
 output type    : Int64 NULL
 output domain  : {NULL}
@@ -985,7 +985,7 @@ output         : NULL
 
 ast            : as_integer(parse_json('123'))
 raw expr       : as_integer(parse_json('123'))
-checked expr   : as_integer<Variant>(parse_json<String>("123"))
+checked expr   : as_integer<Variant>(CAST<String>("123" AS Variant))
 optimized expr : 123_i64
 output type    : Int64 NULL
 output domain  : {123..=123}
@@ -994,7 +994,7 @@ output         : 123
 
 ast            : as_float(parse_json('"ab"'))
 raw expr       : as_float(parse_json('"ab"'))
-checked expr   : as_float<Variant>(parse_json<String>("\"ab\""))
+checked expr   : as_float<Variant>(CAST<String>("\"ab\"" AS Variant))
 optimized expr : NULL
 output type    : Float64 NULL
 output domain  : {NULL}
@@ -1003,7 +1003,7 @@ output         : NULL
 
 ast            : as_float(parse_json('12.34'))
 raw expr       : as_float(parse_json('12.34'))
-checked expr   : as_float<Variant>(parse_json<String>("12.34"))
+checked expr   : as_float<Variant>(CAST<String>("12.34" AS Variant))
 optimized expr : 12.34_f64
 output type    : Float64 NULL
 output domain  : {12.34..=12.34}
@@ -1012,7 +1012,7 @@ output         : 12.34
 
 ast            : as_string(parse_json('"ab"'))
 raw expr       : as_string(parse_json('"ab"'))
-checked expr   : as_string<Variant>(parse_json<String>("\"ab\""))
+checked expr   : as_string<Variant>(CAST<String>("\"ab\"" AS Variant))
 optimized expr : "ab"
 output type    : String NULL
 output domain  : {"ab"..="ab"}
@@ -1021,7 +1021,7 @@ output         : 'ab'
 
 ast            : as_string(parse_json('12.34'))
 raw expr       : as_string(parse_json('12.34'))
-checked expr   : as_string<Variant>(parse_json<String>("12.34"))
+checked expr   : as_string<Variant>(CAST<String>("12.34" AS Variant))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1030,7 +1030,7 @@ output         : NULL
 
 ast            : as_array(parse_json('[1,2,3]'))
 raw expr       : as_array(parse_json('[1,2,3]'))
-checked expr   : as_array<Variant>(parse_json<String>("[1,2,3]"))
+checked expr   : as_array<Variant>(CAST<String>("[1,2,3]" AS Variant))
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant NULL
 output domain  : Undefined
@@ -1039,7 +1039,7 @@ output         : '[1,2,3]'
 
 ast            : as_array(parse_json('{"a":"b"}'))
 raw expr       : as_array(parse_json('{"a":"b"}'))
-checked expr   : as_array<Variant>(parse_json<String>("{\"a\":\"b\"}"))
+checked expr   : as_array<Variant>(CAST<String>("{\"a\":\"b\"}" AS Variant))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -1048,7 +1048,7 @@ output         : NULL
 
 ast            : as_object(parse_json('[1,2,3]'))
 raw expr       : as_object(parse_json('[1,2,3]'))
-checked expr   : as_object<Variant>(parse_json<String>("[1,2,3]"))
+checked expr   : as_object<Variant>(CAST<String>("[1,2,3]" AS Variant))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -1057,7 +1057,7 @@ output         : NULL
 
 ast            : as_object(parse_json('{"a":"b"}'))
 raw expr       : as_object(parse_json('{"a":"b"}'))
-checked expr   : as_object<Variant>(parse_json<String>("{\"a\":\"b\"}"))
+checked expr   : as_object<Variant>(CAST<String>("{\"a\":\"b\"}" AS Variant))
 optimized expr : 0x4000000110000001100000016162
 output type    : Variant NULL
 output domain  : Undefined
@@ -1066,7 +1066,7 @@ output         : '{"a":"b"}'
 
 ast            : as_boolean(parse_json(s))
 raw expr       : as_boolean(parse_json(s::String))
-checked expr   : as_boolean<Variant>(parse_json<String>(s))
+checked expr   : as_boolean<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1092,7 +1092,7 @@ evaluation (internal):
 
 ast            : as_integer(parse_json(s))
 raw expr       : as_integer(parse_json(s::String))
-checked expr   : as_integer<Variant>(parse_json<String>(s))
+checked expr   : as_integer<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+------------+
 |        | s                            | Output     |
@@ -1118,7 +1118,7 @@ evaluation (internal):
 
 ast            : as_float(parse_json(s))
 raw expr       : as_float(parse_json(s::String))
-checked expr   : as_float<Variant>(parse_json<String>(s))
+checked expr   : as_float<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1144,7 +1144,7 @@ evaluation (internal):
 
 ast            : as_string(parse_json(s))
 raw expr       : as_string(parse_json(s::String))
-checked expr   : as_string<Variant>(parse_json<String>(s))
+checked expr   : as_string<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+-------------+
 |        | s                            | Output      |
@@ -1170,7 +1170,7 @@ evaluation (internal):
 
 ast            : as_array(parse_json(s))
 raw expr       : as_array(parse_json(s::String))
-checked expr   : as_array<Variant>(parse_json<String>(s))
+checked expr   : as_array<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1196,7 +1196,7 @@ evaluation (internal):
 
 ast            : as_object(parse_json(s))
 raw expr       : as_object(parse_json(s::String))
-checked expr   : as_object<Variant>(parse_json<String>(s))
+checked expr   : as_object<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1222,7 +1222,7 @@ evaluation (internal):
 
 ast            : is_null_value(parse_json('null'))
 raw expr       : is_null_value(parse_json('null'))
-checked expr   : is_null_value<Variant>(parse_json<String>("null"))
+checked expr   : is_null_value<Variant>(CAST<String>("null" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1231,7 +1231,7 @@ output         : true
 
 ast            : is_null_value(parse_json('[1,2]'))
 raw expr       : is_null_value(parse_json('[1,2]'))
-checked expr   : is_null_value<Variant>(parse_json<String>("[1,2]"))
+checked expr   : is_null_value<Variant>(CAST<String>("[1,2]" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1240,7 +1240,7 @@ output         : false
 
 ast            : is_boolean(parse_json('true'))
 raw expr       : is_boolean(parse_json('true'))
-checked expr   : is_boolean<Variant>(parse_json<String>("true"))
+checked expr   : is_boolean<Variant>(CAST<String>("true" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1249,7 +1249,7 @@ output         : true
 
 ast            : is_boolean(parse_json('123'))
 raw expr       : is_boolean(parse_json('123'))
-checked expr   : is_boolean<Variant>(parse_json<String>("123"))
+checked expr   : is_boolean<Variant>(CAST<String>("123" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1258,7 +1258,7 @@ output         : false
 
 ast            : is_integer(parse_json('true'))
 raw expr       : is_integer(parse_json('true'))
-checked expr   : is_integer<Variant>(parse_json<String>("true"))
+checked expr   : is_integer<Variant>(CAST<String>("true" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1267,7 +1267,7 @@ output         : false
 
 ast            : is_integer(parse_json('123'))
 raw expr       : is_integer(parse_json('123'))
-checked expr   : is_integer<Variant>(parse_json<String>("123"))
+checked expr   : is_integer<Variant>(CAST<String>("123" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1276,7 +1276,7 @@ output         : true
 
 ast            : is_float(parse_json('"ab"'))
 raw expr       : is_float(parse_json('"ab"'))
-checked expr   : is_float<Variant>(parse_json<String>("\"ab\""))
+checked expr   : is_float<Variant>(CAST<String>("\"ab\"" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1285,7 +1285,7 @@ output         : false
 
 ast            : is_float(parse_json('12.34'))
 raw expr       : is_float(parse_json('12.34'))
-checked expr   : is_float<Variant>(parse_json<String>("12.34"))
+checked expr   : is_float<Variant>(CAST<String>("12.34" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1294,7 +1294,7 @@ output         : true
 
 ast            : is_string(parse_json('"ab"'))
 raw expr       : is_string(parse_json('"ab"'))
-checked expr   : is_string<Variant>(parse_json<String>("\"ab\""))
+checked expr   : is_string<Variant>(CAST<String>("\"ab\"" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1303,7 +1303,7 @@ output         : true
 
 ast            : is_string(parse_json('12.34'))
 raw expr       : is_string(parse_json('12.34'))
-checked expr   : is_string<Variant>(parse_json<String>("12.34"))
+checked expr   : is_string<Variant>(CAST<String>("12.34" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1312,7 +1312,7 @@ output         : false
 
 ast            : is_array(parse_json('[1,2,3]'))
 raw expr       : is_array(parse_json('[1,2,3]'))
-checked expr   : is_array<Variant>(parse_json<String>("[1,2,3]"))
+checked expr   : is_array<Variant>(CAST<String>("[1,2,3]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1321,7 +1321,7 @@ output         : true
 
 ast            : is_array(parse_json('{"a":"b"}'))
 raw expr       : is_array(parse_json('{"a":"b"}'))
-checked expr   : is_array<Variant>(parse_json<String>("{\"a\":\"b\"}"))
+checked expr   : is_array<Variant>(CAST<String>("{\"a\":\"b\"}" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1330,7 +1330,7 @@ output         : false
 
 ast            : is_object(parse_json('[1,2,3]'))
 raw expr       : is_object(parse_json('[1,2,3]'))
-checked expr   : is_object<Variant>(parse_json<String>("[1,2,3]"))
+checked expr   : is_object<Variant>(CAST<String>("[1,2,3]" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1339,7 +1339,7 @@ output         : false
 
 ast            : is_object(parse_json('{"a":"b"}'))
 raw expr       : is_object(parse_json('{"a":"b"}'))
-checked expr   : is_object<Variant>(parse_json<String>("{\"a\":\"b\"}"))
+checked expr   : is_object<Variant>(CAST<String>("{\"a\":\"b\"}" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1348,7 +1348,7 @@ output         : true
 
 ast            : is_null_value(parse_json(s))
 raw expr       : is_null_value(parse_json(s::String))
-checked expr   : is_null_value<Variant>(parse_json<String>(s))
+checked expr   : is_null_value<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+---------+
 |        | s                            | Output  |
@@ -1374,7 +1374,7 @@ evaluation (internal):
 
 ast            : is_boolean(parse_json(s))
 raw expr       : is_boolean(parse_json(s::String))
-checked expr   : is_boolean<Variant>(parse_json<String>(s))
+checked expr   : is_boolean<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+---------+
 |        | s                            | Output  |
@@ -1400,7 +1400,7 @@ evaluation (internal):
 
 ast            : is_integer(parse_json(s))
 raw expr       : is_integer(parse_json(s::String))
-checked expr   : is_integer<Variant>(parse_json<String>(s))
+checked expr   : is_integer<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+---------+
 |        | s                            | Output  |
@@ -1426,7 +1426,7 @@ evaluation (internal):
 
 ast            : is_float(parse_json(s))
 raw expr       : is_float(parse_json(s::String))
-checked expr   : is_float<Variant>(parse_json<String>(s))
+checked expr   : is_float<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+---------+
 |        | s                            | Output  |
@@ -1452,7 +1452,7 @@ evaluation (internal):
 
 ast            : is_string(parse_json(s))
 raw expr       : is_string(parse_json(s::String))
-checked expr   : is_string<Variant>(parse_json<String>(s))
+checked expr   : is_string<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+---------+
 |        | s                            | Output  |
@@ -1478,7 +1478,7 @@ evaluation (internal):
 
 ast            : is_array(parse_json(s))
 raw expr       : is_array(parse_json(s::String))
-checked expr   : is_array<Variant>(parse_json<String>(s))
+checked expr   : is_array<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+---------+
 |        | s                            | Output  |
@@ -1504,7 +1504,7 @@ evaluation (internal):
 
 ast            : is_object(parse_json(s))
 raw expr       : is_object(parse_json(s::String))
-checked expr   : is_object<Variant>(parse_json<String>(s))
+checked expr   : is_object<Variant>(CAST<String>(s AS Variant))
 evaluation:
 +--------+------------------------------+---------+
 |        | s                            | Output  |
@@ -1530,7 +1530,7 @@ evaluation (internal):
 
 ast            : to_boolean(parse_json('null'))
 raw expr       : to_boolean(parse_json('null'))
-checked expr   : to_boolean<Variant>(parse_json<String>("null"))
+checked expr   : to_boolean<Variant>(CAST<String>("null" AS Variant))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -1539,7 +1539,7 @@ output         : NULL
 
 ast            : to_boolean(parse_json('true'))
 raw expr       : to_boolean(parse_json('true'))
-checked expr   : to_boolean<Variant>(parse_json<String>("true"))
+checked expr   : to_boolean<Variant>(CAST<String>("true" AS Variant))
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -1550,7 +1550,7 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')` in expr `to_boolean(parse_json('123'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')` in expr `to_boolean(CAST('123' AS Variant))`
 
 
 
@@ -1558,13 +1558,13 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')` in expr `to_boolean(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')` in expr `to_boolean(CAST('"abc"' AS Variant))`
 
 
 
 ast            : to_uint64(parse_json('null'))
 raw expr       : to_uint64(parse_json('null'))
-checked expr   : to_uint64<Variant>(parse_json<String>("null"))
+checked expr   : to_uint64<Variant>(CAST<String>("null" AS Variant))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -1573,7 +1573,7 @@ output         : NULL
 
 ast            : to_uint64(parse_json('123'))
 raw expr       : to_uint64(parse_json('123'))
-checked expr   : to_uint64<Variant>(parse_json<String>("123"))
+checked expr   : to_uint64<Variant>(CAST<String>("123" AS Variant))
 optimized expr : 123_u64
 output type    : UInt64 NULL
 output domain  : {123..=123}
@@ -1584,7 +1584,7 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('-123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')` in expr `to_uint64(parse_json('-123'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')` in expr `to_uint64(CAST('-123' AS Variant))`
 
 
 
@@ -1592,13 +1592,13 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')` in expr `to_uint64(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')` in expr `to_uint64(CAST('"abc"' AS Variant))`
 
 
 
 ast            : to_int64(parse_json('123'))
 raw expr       : to_int64(parse_json('123'))
-checked expr   : to_int64<Variant>(parse_json<String>("123"))
+checked expr   : to_int64<Variant>(CAST<String>("123" AS Variant))
 optimized expr : 123_i64
 output type    : Int64 NULL
 output domain  : {123..=123}
@@ -1607,7 +1607,7 @@ output         : 123
 
 ast            : to_int64(parse_json('-123'))
 raw expr       : to_int64(parse_json('-123'))
-checked expr   : to_int64<Variant>(parse_json<String>("-123"))
+checked expr   : to_int64<Variant>(CAST<String>("-123" AS Variant))
 optimized expr : -123_i64
 output type    : Int64 NULL
 output domain  : {-123..=-123}
@@ -1618,13 +1618,13 @@ error:
   --> SQL:1:1
   |
 1 | to_int64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')` in expr `to_int64(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')` in expr `to_int64(CAST('"abc"' AS Variant))`
 
 
 
 ast            : to_float64(parse_json('12.34'))
 raw expr       : to_float64(parse_json('12.34'))
-checked expr   : to_float64<Variant>(parse_json<String>("12.34"))
+checked expr   : to_float64<Variant>(CAST<String>("12.34" AS Variant))
 optimized expr : 12.34_f64
 output type    : Float64 NULL
 output domain  : {12.34..=12.34}
@@ -1635,13 +1635,13 @@ error:
   --> SQL:1:1
   |
 1 | to_float64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')` in expr `to_float64(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')` in expr `to_float64(CAST('"abc"' AS Variant))`
 
 
 
 ast            : to_date(parse_json('null'))
 raw expr       : to_date(parse_json('null'))
-checked expr   : to_date<Variant>(parse_json<String>("null"))
+checked expr   : to_date<Variant>(CAST<String>("null" AS Variant))
 optimized expr : NULL
 output type    : Date NULL
 output domain  : {NULL}
@@ -1650,7 +1650,7 @@ output         : NULL
 
 ast            : to_date(parse_json('"2023-01-01"'))
 raw expr       : to_date(parse_json('"2023-01-01"'))
-checked expr   : to_date<Variant>(parse_json<String>("\"2023-01-01\""))
+checked expr   : to_date<Variant>(CAST<String>("\"2023-01-01\"" AS Variant))
 optimized expr : 19358
 output type    : Date NULL
 output domain  : {19358..=19358}
@@ -1661,13 +1661,13 @@ error:
   --> SQL:1:1
   |
 1 | to_date(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(CAST('"abc"' AS Variant))`
 
 
 
 ast            : to_timestamp(parse_json('null'))
 raw expr       : to_timestamp(parse_json('null'))
-checked expr   : to_timestamp<Variant>(parse_json<String>("null"))
+checked expr   : to_timestamp<Variant>(CAST<String>("null" AS Variant))
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}
@@ -1676,7 +1676,7 @@ output         : NULL
 
 ast            : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 raw expr       : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
-checked expr   : to_timestamp<Variant>(parse_json<String>("\"2023-01-01 00:00:00\""))
+checked expr   : to_timestamp<Variant>(CAST<String>("\"2023-01-01 00:00:00\"" AS Variant))
 optimized expr : 1672531200000000
 output type    : Timestamp NULL
 output domain  : {1672531200000000..=1672531200000000}
@@ -1687,13 +1687,13 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(CAST('"abc"' AS Variant))`
 
 
 
 ast            : to_string(parse_json('null'))
 raw expr       : to_string(parse_json('null'))
-checked expr   : to_string<Variant>(parse_json<String>("null"))
+checked expr   : to_string<Variant>(CAST<String>("null" AS Variant))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1702,7 +1702,7 @@ output         : NULL
 
 ast            : to_string(parse_json('12.34'))
 raw expr       : to_string(parse_json('12.34'))
-checked expr   : to_string<Variant>(parse_json<String>("12.34"))
+checked expr   : to_string<Variant>(CAST<String>("12.34" AS Variant))
 optimized expr : "12.34"
 output type    : String NULL
 output domain  : {"12.34"..="12.34"}
@@ -1711,7 +1711,7 @@ output         : '12.34'
 
 ast            : to_string(parse_json('"abc"'))
 raw expr       : to_string(parse_json('"abc"'))
-checked expr   : to_string<Variant>(parse_json<String>("\"abc\""))
+checked expr   : to_string<Variant>(CAST<String>("\"abc\"" AS Variant))
 optimized expr : "abc"
 output type    : String NULL
 output domain  : {"abc"..="abc"}
@@ -1720,7 +1720,7 @@ output         : 'abc'
 
 ast            : to_boolean(parse_json(s))
 raw expr       : to_boolean(parse_json(s::String NULL))
-checked expr   : to_boolean<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : to_boolean<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+----------------------------+--------------+
 |        | s                          | Output       |
@@ -1742,7 +1742,7 @@ evaluation (internal):
 
 ast            : to_int64(parse_json(s))
 raw expr       : to_int64(parse_json(s::String NULL))
-checked expr   : to_int64<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : to_int64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+------------------------+------------+
 |        | s                      | Output     |
@@ -1764,7 +1764,7 @@ evaluation (internal):
 
 ast            : to_uint64(parse_json(s))
 raw expr       : to_uint64(parse_json(s::String NULL))
-checked expr   : to_uint64<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : to_uint64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+-----------------------+-------------+
 |        | s                     | Output      |
@@ -1786,7 +1786,7 @@ evaluation (internal):
 
 ast            : to_float64(parse_json(s))
 raw expr       : to_float64(parse_json(s::String NULL))
-checked expr   : to_float64<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : to_float64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+----------------------------+--------------+
 |        | s                          | Output       |
@@ -1808,7 +1808,7 @@ evaluation (internal):
 
 ast            : to_date(parse_json(s))
 raw expr       : to_date(parse_json(s::String NULL))
-checked expr   : to_date<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : to_date<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+------------------------------------------------+--------------+
 |        | s                                              | Output       |
@@ -1830,7 +1830,7 @@ evaluation (internal):
 
 ast            : to_timestamp(parse_json(s))
 raw expr       : to_timestamp(parse_json(s::String NULL))
-checked expr   : to_timestamp<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : to_timestamp<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+------------------------------------------------------------------+------------------------------+
 |        | s                                                                | Output                       |
@@ -1852,7 +1852,7 @@ evaluation (internal):
 
 ast            : to_string(parse_json(s))
 raw expr       : to_string(parse_json(s::String NULL))
-checked expr   : to_string<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : to_string<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+------------------------------+-------------+
 |        | s                            | Output      |
@@ -1874,7 +1874,7 @@ evaluation (internal):
 
 ast            : try_to_boolean(parse_json('null'))
 raw expr       : try_to_boolean(parse_json('null'))
-checked expr   : try_to_boolean<Variant>(parse_json<String>("null"))
+checked expr   : try_to_boolean<Variant>(CAST<String>("null" AS Variant))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -1883,7 +1883,7 @@ output         : NULL
 
 ast            : try_to_boolean(parse_json('true'))
 raw expr       : try_to_boolean(parse_json('true'))
-checked expr   : try_to_boolean<Variant>(parse_json<String>("true"))
+checked expr   : try_to_boolean<Variant>(CAST<String>("true" AS Variant))
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -1892,7 +1892,7 @@ output         : true
 
 ast            : try_to_boolean(parse_json('123'))
 raw expr       : try_to_boolean(parse_json('123'))
-checked expr   : try_to_boolean<Variant>(parse_json<String>("123"))
+checked expr   : try_to_boolean<Variant>(CAST<String>("123" AS Variant))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -1901,7 +1901,7 @@ output         : NULL
 
 ast            : try_to_boolean(parse_json('"abc"'))
 raw expr       : try_to_boolean(parse_json('"abc"'))
-checked expr   : try_to_boolean<Variant>(parse_json<String>("\"abc\""))
+checked expr   : try_to_boolean<Variant>(CAST<String>("\"abc\"" AS Variant))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -1910,7 +1910,7 @@ output         : NULL
 
 ast            : try_to_uint64(parse_json('null'))
 raw expr       : try_to_uint64(parse_json('null'))
-checked expr   : try_to_uint64<Variant>(parse_json<String>("null"))
+checked expr   : try_to_uint64<Variant>(CAST<String>("null" AS Variant))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -1919,7 +1919,7 @@ output         : NULL
 
 ast            : try_to_uint64(parse_json('123'))
 raw expr       : try_to_uint64(parse_json('123'))
-checked expr   : try_to_uint64<Variant>(parse_json<String>("123"))
+checked expr   : try_to_uint64<Variant>(CAST<String>("123" AS Variant))
 optimized expr : 123_u64
 output type    : UInt64 NULL
 output domain  : {123..=123}
@@ -1928,7 +1928,7 @@ output         : 123
 
 ast            : try_to_uint64(parse_json('-123'))
 raw expr       : try_to_uint64(parse_json('-123'))
-checked expr   : try_to_uint64<Variant>(parse_json<String>("-123"))
+checked expr   : try_to_uint64<Variant>(CAST<String>("-123" AS Variant))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -1937,7 +1937,7 @@ output         : NULL
 
 ast            : try_to_uint64(parse_json('"abc"'))
 raw expr       : try_to_uint64(parse_json('"abc"'))
-checked expr   : try_to_uint64<Variant>(parse_json<String>("\"abc\""))
+checked expr   : try_to_uint64<Variant>(CAST<String>("\"abc\"" AS Variant))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -1946,7 +1946,7 @@ output         : NULL
 
 ast            : try_to_int64(parse_json('123'))
 raw expr       : try_to_int64(parse_json('123'))
-checked expr   : try_to_int64<Variant>(parse_json<String>("123"))
+checked expr   : try_to_int64<Variant>(CAST<String>("123" AS Variant))
 optimized expr : 123_i64
 output type    : Int64 NULL
 output domain  : {123..=123}
@@ -1955,7 +1955,7 @@ output         : 123
 
 ast            : try_to_int64(parse_json('-123'))
 raw expr       : try_to_int64(parse_json('-123'))
-checked expr   : try_to_int64<Variant>(parse_json<String>("-123"))
+checked expr   : try_to_int64<Variant>(CAST<String>("-123" AS Variant))
 optimized expr : -123_i64
 output type    : Int64 NULL
 output domain  : {-123..=-123}
@@ -1964,7 +1964,7 @@ output         : -123
 
 ast            : try_to_int64(parse_json('"abc"'))
 raw expr       : try_to_int64(parse_json('"abc"'))
-checked expr   : try_to_int64<Variant>(parse_json<String>("\"abc\""))
+checked expr   : try_to_int64<Variant>(CAST<String>("\"abc\"" AS Variant))
 optimized expr : NULL
 output type    : Int64 NULL
 output domain  : {NULL}
@@ -1973,7 +1973,7 @@ output         : NULL
 
 ast            : try_to_float64(parse_json('12.34'))
 raw expr       : try_to_float64(parse_json('12.34'))
-checked expr   : try_to_float64<Variant>(parse_json<String>("12.34"))
+checked expr   : try_to_float64<Variant>(CAST<String>("12.34" AS Variant))
 optimized expr : 12.34_f64
 output type    : Float64 NULL
 output domain  : {12.34..=12.34}
@@ -1982,7 +1982,7 @@ output         : 12.34
 
 ast            : try_to_float64(parse_json('"abc"'))
 raw expr       : try_to_float64(parse_json('"abc"'))
-checked expr   : try_to_float64<Variant>(parse_json<String>("\"abc\""))
+checked expr   : try_to_float64<Variant>(CAST<String>("\"abc\"" AS Variant))
 optimized expr : NULL
 output type    : Float64 NULL
 output domain  : {NULL}
@@ -1991,7 +1991,7 @@ output         : NULL
 
 ast            : try_to_date(parse_json('null'))
 raw expr       : try_to_date(parse_json('null'))
-checked expr   : try_to_date<Variant>(parse_json<String>("null"))
+checked expr   : try_to_date<Variant>(CAST<String>("null" AS Variant))
 optimized expr : NULL
 output type    : Date NULL
 output domain  : {NULL}
@@ -2000,7 +2000,7 @@ output         : NULL
 
 ast            : try_to_date(parse_json('"2023-01-01"'))
 raw expr       : try_to_date(parse_json('"2023-01-01"'))
-checked expr   : try_to_date<Variant>(parse_json<String>("\"2023-01-01\""))
+checked expr   : try_to_date<Variant>(CAST<String>("\"2023-01-01\"" AS Variant))
 optimized expr : 19358
 output type    : Date NULL
 output domain  : {19358..=19358}
@@ -2009,7 +2009,7 @@ output         : '2023-01-01'
 
 ast            : try_to_date(parse_json('"abc"'))
 raw expr       : try_to_date(parse_json('"abc"'))
-checked expr   : try_to_date<Variant>(parse_json<String>("\"abc\""))
+checked expr   : try_to_date<Variant>(CAST<String>("\"abc\"" AS Variant))
 optimized expr : NULL
 output type    : Date NULL
 output domain  : {NULL}
@@ -2018,7 +2018,7 @@ output         : NULL
 
 ast            : try_to_timestamp(parse_json('null'))
 raw expr       : try_to_timestamp(parse_json('null'))
-checked expr   : try_to_timestamp<Variant>(parse_json<String>("null"))
+checked expr   : try_to_timestamp<Variant>(CAST<String>("null" AS Variant))
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}
@@ -2027,7 +2027,7 @@ output         : NULL
 
 ast            : try_to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 raw expr       : try_to_timestamp(parse_json('"2023-01-01 00:00:00"'))
-checked expr   : try_to_timestamp<Variant>(parse_json<String>("\"2023-01-01 00:00:00\""))
+checked expr   : try_to_timestamp<Variant>(CAST<String>("\"2023-01-01 00:00:00\"" AS Variant))
 optimized expr : 1672531200000000
 output type    : Timestamp NULL
 output domain  : {1672531200000000..=1672531200000000}
@@ -2036,7 +2036,7 @@ output         : '2023-01-01 00:00:00.000000'
 
 ast            : try_to_timestamp(parse_json('"abc"'))
 raw expr       : try_to_timestamp(parse_json('"abc"'))
-checked expr   : try_to_timestamp<Variant>(parse_json<String>("\"abc\""))
+checked expr   : try_to_timestamp<Variant>(CAST<String>("\"abc\"" AS Variant))
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}
@@ -2045,7 +2045,7 @@ output         : NULL
 
 ast            : try_to_string(parse_json('null'))
 raw expr       : try_to_string(parse_json('null'))
-checked expr   : try_to_string<Variant>(parse_json<String>("null"))
+checked expr   : try_to_string<Variant>(CAST<String>("null" AS Variant))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -2054,7 +2054,7 @@ output         : NULL
 
 ast            : try_to_string(parse_json('12.34'))
 raw expr       : try_to_string(parse_json('12.34'))
-checked expr   : try_to_string<Variant>(parse_json<String>("12.34"))
+checked expr   : try_to_string<Variant>(CAST<String>("12.34" AS Variant))
 optimized expr : "12.34"
 output type    : String NULL
 output domain  : {"12.34"..="12.34"}
@@ -2063,7 +2063,7 @@ output         : '12.34'
 
 ast            : try_to_string(parse_json('"abc"'))
 raw expr       : try_to_string(parse_json('"abc"'))
-checked expr   : try_to_string<Variant>(parse_json<String>("\"abc\""))
+checked expr   : try_to_string<Variant>(CAST<String>("\"abc\"" AS Variant))
 optimized expr : "abc"
 output type    : String NULL
 output domain  : {"abc"..="abc"}
@@ -2072,7 +2072,7 @@ output         : 'abc'
 
 ast            : try_to_boolean(parse_json(s))
 raw expr       : try_to_boolean(parse_json(s::String NULL))
-checked expr   : try_to_boolean<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : try_to_boolean<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+--------------------------------------+--------------+
 |        | s                                    | Output       |
@@ -2099,7 +2099,7 @@ evaluation (internal):
 
 ast            : try_to_int64(parse_json(s))
 raw expr       : try_to_int64(parse_json(s::String NULL))
-checked expr   : try_to_int64<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : try_to_int64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+--------------------------------------+------------+
 |        | s                                    | Output     |
@@ -2126,7 +2126,7 @@ evaluation (internal):
 
 ast            : try_to_uint64(parse_json(s))
 raw expr       : try_to_uint64(parse_json(s::String NULL))
-checked expr   : try_to_uint64<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : try_to_uint64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+--------------------------------------+-------------+
 |        | s                                    | Output      |
@@ -2153,7 +2153,7 @@ evaluation (internal):
 
 ast            : try_to_float64(parse_json(s))
 raw expr       : try_to_float64(parse_json(s::String NULL))
-checked expr   : try_to_float64<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : try_to_float64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+--------------------------------------+--------------+
 |        | s                                    | Output       |
@@ -2180,7 +2180,7 @@ evaluation (internal):
 
 ast            : try_to_date(parse_json(s))
 raw expr       : try_to_date(parse_json(s::String NULL))
-checked expr   : try_to_date<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : try_to_date<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+--------------------------------------+--------------+
 |        | s                                    | Output       |
@@ -2207,7 +2207,7 @@ evaluation (internal):
 
 ast            : try_to_timestamp(parse_json(s))
 raw expr       : try_to_timestamp(parse_json(s::String NULL))
-checked expr   : try_to_timestamp<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : try_to_timestamp<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+--------------------------------------+------------------------------+
 |        | s                                    | Output                       |
@@ -2234,7 +2234,7 @@ evaluation (internal):
 
 ast            : try_to_string(parse_json(s))
 raw expr       : try_to_string(parse_json(s::String NULL))
-checked expr   : try_to_string<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : try_to_string<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+--------------------------------------+-----------------------+
 |        | s                                    | Output                |
@@ -2575,7 +2575,7 @@ evaluation (internal):
 
 ast            : json_path_query_array(parse_json('[1, 2, 3, 4, 5, 6]'), '$[0, 2 to last, 4]')
 raw expr       : json_path_query_array(parse_json('[1, 2, 3, 4, 5, 6]'), '$[0, 2 to last, 4]')
-checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[1, 2, 3, 4, 5, 6]"), "$[0, 2 to last, 4]")
+checked expr   : json_path_query_array<Variant, String>(CAST<String>("[1, 2, 3, 4, 5, 6]" AS Variant), "$[0, 2 to last, 4]")
 optimized expr : 0x80000006200000022000000220000002200000022000000220000002500150035004500550065005
 output type    : Variant NULL
 output domain  : Undefined
@@ -2584,7 +2584,7 @@ output         : '[1,3,4,5,6,5]'
 
 ast            : json_path_query_array(parse_json('[1, 2, 3, 4, 5, 6]'), '$[100]')
 raw expr       : json_path_query_array(parse_json('[1, 2, 3, 4, 5, 6]'), '$[100]')
-checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[1, 2, 3, 4, 5, 6]"), "$[100]")
+checked expr   : json_path_query_array<Variant, String>(CAST<String>("[1, 2, 3, 4, 5, 6]" AS Variant), "$[100]")
 optimized expr : 0x80000000
 output type    : Variant NULL
 output domain  : Undefined
@@ -2593,7 +2593,7 @@ output         : '[]'
 
 ast            : json_path_query_array(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a')
 raw expr       : json_path_query_array(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a')
-checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[{\"a\": 1}, {\"a\": 2}]"), "$[*].a")
+checked expr   : json_path_query_array<Variant, String>(CAST<String>("[{\"a\": 1}, {\"a\": 2}]" AS Variant), "$[*].a")
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant NULL
 output domain  : Undefined
@@ -2602,7 +2602,7 @@ output         : '[1,2]'
 
 ast            : json_path_query_array(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ == 1)')
 raw expr       : json_path_query_array(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ == 1)')
-checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[{\"a\": 1}, {\"a\": 2}]"), "$[*].a ? (@ == 1)")
+checked expr   : json_path_query_array<Variant, String>(CAST<String>("[{\"a\": 1}, {\"a\": 2}]" AS Variant), "$[*].a ? (@ == 1)")
 optimized expr : 0x80000001200000025001
 output type    : Variant NULL
 output domain  : Undefined
@@ -2611,7 +2611,7 @@ output         : '[1]'
 
 ast            : json_path_query_array(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ > 10)')
 raw expr       : json_path_query_array(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ > 10)')
-checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[{\"a\": 1}, {\"a\": 2}]"), "$[*].a ? (@ > 10)")
+checked expr   : json_path_query_array<Variant, String>(CAST<String>("[{\"a\": 1}, {\"a\": 2}]" AS Variant), "$[*].a ? (@ > 10)")
 optimized expr : 0x80000000
 output type    : Variant NULL
 output domain  : Undefined
@@ -2620,7 +2620,7 @@ output         : '[]'
 
 ast            : json_path_query_array(parse_json('[{"a": {"b":10}}, {"a": 2}]'), '$[*].a.b')
 raw expr       : json_path_query_array(parse_json('[{"a": {"b":10}}, {"a": 2}]'), '$[*].a.b')
-checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[{\"a\": {\"b\":10}}, {\"a\": 2}]"), "$[*].a.b")
+checked expr   : json_path_query_array<Variant, String>(CAST<String>("[{\"a\": {\"b\":10}}, {\"a\": 2}]" AS Variant), "$[*].a.b")
 optimized expr : 0x8000000120000002500a
 output type    : Variant NULL
 output domain  : Undefined
@@ -2629,7 +2629,7 @@ output         : '[10]'
 
 ast            : json_path_query_array(parse_json(s), p)
 raw expr       : json_path_query_array(parse_json(s::String NULL), p::String)
-checked expr   : json_path_query_array<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST<String>(p AS String NULL))
+checked expr   : json_path_query_array<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), CAST<String>(p AS String NULL))
 evaluation:
 +--------+---------------------------------+------------------+--------------+
 |        | s                               | p                | Output       |
@@ -2653,7 +2653,7 @@ evaluation (internal):
 
 ast            : json_path_query_first(parse_json('[1, 2, 3, 4, 5, 6]'), '$[0, 2 to last, 4]')
 raw expr       : json_path_query_first(parse_json('[1, 2, 3, 4, 5, 6]'), '$[0, 2 to last, 4]')
-checked expr   : json_path_query_first<Variant, String>(parse_json<String>("[1, 2, 3, 4, 5, 6]"), "$[0, 2 to last, 4]")
+checked expr   : json_path_query_first<Variant, String>(CAST<String>("[1, 2, 3, 4, 5, 6]" AS Variant), "$[0, 2 to last, 4]")
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
@@ -2662,7 +2662,7 @@ output         : '1'
 
 ast            : json_path_query_first(parse_json('[1, 2, 3, 4, 5, 6]'), '$[100]')
 raw expr       : json_path_query_first(parse_json('[1, 2, 3, 4, 5, 6]'), '$[100]')
-checked expr   : json_path_query_first<Variant, String>(parse_json<String>("[1, 2, 3, 4, 5, 6]"), "$[100]")
+checked expr   : json_path_query_first<Variant, String>(CAST<String>("[1, 2, 3, 4, 5, 6]" AS Variant), "$[100]")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -2671,7 +2671,7 @@ output         : NULL
 
 ast            : json_path_query_first(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a')
 raw expr       : json_path_query_first(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a')
-checked expr   : json_path_query_first<Variant, String>(parse_json<String>("[{\"a\": 1}, {\"a\": 2}]"), "$[*].a")
+checked expr   : json_path_query_first<Variant, String>(CAST<String>("[{\"a\": 1}, {\"a\": 2}]" AS Variant), "$[*].a")
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
@@ -2680,7 +2680,7 @@ output         : '1'
 
 ast            : json_path_query_first(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ == 1)')
 raw expr       : json_path_query_first(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ == 1)')
-checked expr   : json_path_query_first<Variant, String>(parse_json<String>("[{\"a\": 1}, {\"a\": 2}]"), "$[*].a ? (@ == 1)")
+checked expr   : json_path_query_first<Variant, String>(CAST<String>("[{\"a\": 1}, {\"a\": 2}]" AS Variant), "$[*].a ? (@ == 1)")
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
@@ -2689,7 +2689,7 @@ output         : '1'
 
 ast            : json_path_query_first(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ > 10)')
 raw expr       : json_path_query_first(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ > 10)')
-checked expr   : json_path_query_first<Variant, String>(parse_json<String>("[{\"a\": 1}, {\"a\": 2}]"), "$[*].a ? (@ > 10)")
+checked expr   : json_path_query_first<Variant, String>(CAST<String>("[{\"a\": 1}, {\"a\": 2}]" AS Variant), "$[*].a ? (@ > 10)")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -2698,7 +2698,7 @@ output         : NULL
 
 ast            : json_path_query_first(parse_json('[{"a": {"b":10}}, {"a": 2}]'), '$[*].a.b')
 raw expr       : json_path_query_first(parse_json('[{"a": {"b":10}}, {"a": 2}]'), '$[*].a.b')
-checked expr   : json_path_query_first<Variant, String>(parse_json<String>("[{\"a\": {\"b\":10}}, {\"a\": 2}]"), "$[*].a.b")
+checked expr   : json_path_query_first<Variant, String>(CAST<String>("[{\"a\": {\"b\":10}}, {\"a\": 2}]" AS Variant), "$[*].a.b")
 optimized expr : 0x2000000020000002500a
 output type    : Variant NULL
 output domain  : Undefined
@@ -2707,7 +2707,7 @@ output         : '10'
 
 ast            : json_path_query_first(parse_json(s), p)
 raw expr       : json_path_query_first(parse_json(s::String NULL), p::String)
-checked expr   : json_path_query_first<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST<String>(p AS String NULL))
+checked expr   : json_path_query_first<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), CAST<String>(p AS String NULL))
 evaluation:
 +--------+---------------------------------+------------------+--------------+
 |        | s                               | p                | Output       |
@@ -2731,7 +2731,7 @@ evaluation (internal):
 
 ast            : json_to_string(parse_json('true'))
 raw expr       : json_to_string(parse_json('true'))
-checked expr   : to_string<Variant>(parse_json<String>("true"))
+checked expr   : to_string<Variant>(CAST<String>("true" AS Variant))
 optimized expr : "true"
 output type    : String NULL
 output domain  : {"true"..="true"}
@@ -2740,7 +2740,7 @@ output         : 'true'
 
 ast            : json_to_string(parse_json('123456'))
 raw expr       : json_to_string(parse_json('123456'))
-checked expr   : to_string<Variant>(parse_json<String>("123456"))
+checked expr   : to_string<Variant>(CAST<String>("123456" AS Variant))
 optimized expr : "123456"
 output type    : String NULL
 output domain  : {"123456"..="123456"}
@@ -2749,7 +2749,7 @@ output         : '123456'
 
 ast            : json_to_string(parse_json('"abcd"'))
 raw expr       : json_to_string(parse_json('"abcd"'))
-checked expr   : to_string<Variant>(parse_json<String>("\"abcd\""))
+checked expr   : to_string<Variant>(CAST<String>("\"abcd\"" AS Variant))
 optimized expr : "abcd"
 output type    : String NULL
 output domain  : {"abcd"..="abcd"}
@@ -2758,7 +2758,7 @@ output         : 'abcd'
 
 ast            : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
 raw expr       : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
-checked expr   : to_string<Variant>(parse_json<String>("[1, 2, 3, 4, 5, 6]"))
+checked expr   : to_string<Variant>(CAST<String>("[1, 2, 3, 4, 5, 6]" AS Variant))
 optimized expr : "[1,2,3,4,5,6]"
 output type    : String NULL
 output domain  : {"[1,2,3,4,5,6]"..="[1,2,3,4,5,6]"}
@@ -2767,7 +2767,7 @@ output         : '[1,2,3,4,5,6]'
 
 ast            : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
 raw expr       : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
-checked expr   : to_string<Variant>(parse_json<String>("{\"k1\":123, \"k2\":\"abc\"}"))
+checked expr   : to_string<Variant>(CAST<String>("{\"k1\":123, \"k2\":\"abc\"}" AS Variant))
 optimized expr : "{\"k1\":123,\"k2\":\"abc\"}"
 output type    : String NULL
 output domain  : {"{\"k1\":123,\"k2\":\"abc\"}"..="{\"k1\":123,\"k2\":\"abc\"}"}
@@ -2776,7 +2776,7 @@ output         : '{"k1":123,"k2":"abc"}'
 
 ast            : json_pretty(parse_json('true'))
 raw expr       : json_pretty(parse_json('true'))
-checked expr   : json_pretty<Variant>(parse_json<String>("true"))
+checked expr   : json_pretty<Variant>(CAST<String>("true" AS Variant))
 optimized expr : "true"
 output type    : String
 output domain  : {"true"..="true"}
@@ -2785,7 +2785,7 @@ output         : 'true'
 
 ast            : json_pretty(parse_json('123456'))
 raw expr       : json_pretty(parse_json('123456'))
-checked expr   : json_pretty<Variant>(parse_json<String>("123456"))
+checked expr   : json_pretty<Variant>(CAST<String>("123456" AS Variant))
 optimized expr : "123456"
 output type    : String
 output domain  : {"123456"..="123456"}
@@ -2794,7 +2794,7 @@ output         : '123456'
 
 ast            : json_pretty(parse_json('"abcd"'))
 raw expr       : json_pretty(parse_json('"abcd"'))
-checked expr   : json_pretty<Variant>(parse_json<String>("\"abcd\""))
+checked expr   : json_pretty<Variant>(CAST<String>("\"abcd\"" AS Variant))
 optimized expr : "\"abcd\""
 output type    : String
 output domain  : {"\"abcd\""..="\"abcd\""}
@@ -2803,7 +2803,7 @@ output         : '"abcd"'
 
 ast            : json_pretty(parse_json('[1, 2, 3, 4, 5, 6]'))
 raw expr       : json_pretty(parse_json('[1, 2, 3, 4, 5, 6]'))
-checked expr   : json_pretty<Variant>(parse_json<String>("[1, 2, 3, 4, 5, 6]"))
+checked expr   : json_pretty<Variant>(CAST<String>("[1, 2, 3, 4, 5, 6]" AS Variant))
 optimized expr : "[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]"
 output type    : String
 output domain  : {"[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]"..="[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]"}
@@ -2819,7 +2819,7 @@ output         : '[
 
 ast            : json_pretty(parse_json('{"k1":123, "k2":"abc"}'))
 raw expr       : json_pretty(parse_json('{"k1":123, "k2":"abc"}'))
-checked expr   : json_pretty<Variant>(parse_json<String>("{\"k1\":123, \"k2\":\"abc\"}"))
+checked expr   : json_pretty<Variant>(CAST<String>("{\"k1\":123, \"k2\":\"abc\"}" AS Variant))
 optimized expr : "{\n  \"k1\": 123,\n  \"k2\": \"abc\"\n}"
 output type    : String
 output domain  : {"{\n  \"k1\": 123,\n  \"k2\": \"abc\"\n}"..="{\n  \"k1\": 123,\n  \"k2\": \"abc\"\n}"}
@@ -2831,7 +2831,7 @@ output         : '{
 
 ast            : json_pretty(parse_json('{"a":1,"b":true,"c":["1","2","3"],"d":{"a":1,"b":[1,2,3],"c":{"a":1,"b":2}}}'))
 raw expr       : json_pretty(parse_json('{"a":1,"b":true,"c":["1","2","3"],"d":{"a":1,"b":[1,2,3],"c":{"a":1,"b":2}}}'))
-checked expr   : json_pretty<Variant>(parse_json<String>("{\"a\":1,\"b\":true,\"c\":[\"1\",\"2\",\"3\"],\"d\":{\"a\":1,\"b\":[1,2,3],\"c\":{\"a\":1,\"b\":2}}}"))
+checked expr   : json_pretty<Variant>(CAST<String>("{\"a\":1,\"b\":true,\"c\":[\"1\",\"2\",\"3\"],\"d\":{\"a\":1,\"b\":[1,2,3],\"c\":{\"a\":1,\"b\":2}}}" AS Variant))
 optimized expr : "{\n  \"a\": 1,\n  \"b\": true,\n  \"c\": [\n    \"1\",\n    \"2\",\n    \"3\"\n  ],\n  \"d\": {\n    \"a\": 1,\n    \"b\": [\n      1,\n      2,\n      3\n    ],\n    \"c\": {\n      \"a\": 1,\n      \"b\": 2\n    }\n  }\n}"
 output type    : String
 output domain  : {"{\n  \"a\": 1,\n  \"b\": true,\n  \"c\": [\n    \"1\",\n    \"2\",\n    \"3\"\n  ],\n  \"d\": {\n    \"a\": 1,\n    \"b\": [\n      1,\n      2,\n      3\n    ],\n    \"c\": {\n      \"a\": 1,\n      \"b\": 2\n    }\n  }\n}"..="{\n  \"a\": 1,\n  \"b\": true,\n  \"c\": [\n    \"1\",\n    \"2\",\n    \"3\"\n  ],\n  \"d\": {\n    \"a\": 1,\n    \"b\": [\n      1,\n      2,\n      3\n    ],\n    \"c\": {\n      \"a\": 1,\n      \"b\": 2\n    }\n  }\n}"}
@@ -2860,7 +2860,7 @@ output         : '{
 
 ast            : json_strip_nulls(parse_json('true'))
 raw expr       : json_strip_nulls(parse_json('true'))
-checked expr   : json_strip_nulls<Variant>(parse_json<String>("true"))
+checked expr   : json_strip_nulls<Variant>(CAST<String>("true" AS Variant))
 optimized expr : 0x2000000040000000
 output type    : Variant
 output domain  : Undefined
@@ -2869,7 +2869,7 @@ output         : 'true'
 
 ast            : json_strip_nulls(parse_json('null'))
 raw expr       : json_strip_nulls(parse_json('null'))
-checked expr   : json_strip_nulls<Variant>(parse_json<String>("null"))
+checked expr   : json_strip_nulls<Variant>(CAST<String>("null" AS Variant))
 optimized expr : 0x2000000000000000
 output type    : Variant
 output domain  : Undefined
@@ -2878,7 +2878,7 @@ output         : 'null'
 
 ast            : json_strip_nulls(parse_json('[1, 2, 3, null]'))
 raw expr       : json_strip_nulls(parse_json('[1, 2, 3, null]'))
-checked expr   : json_strip_nulls<Variant>(parse_json<String>("[1, 2, 3, null]"))
+checked expr   : json_strip_nulls<Variant>(CAST<String>("[1, 2, 3, null]" AS Variant))
 optimized expr : 0x8000000420000002200000022000000200000000500150025003
 output type    : Variant
 output domain  : Undefined
@@ -2887,7 +2887,7 @@ output         : '[1,2,3,null]'
 
 ast            : json_strip_nulls(parse_json('{"a":null, "b": {"c": 1, "d": null}, "c": [{"a": 1, "b": null}]}'))
 raw expr       : json_strip_nulls(parse_json('{"a":null, "b": {"c": 1, "d": null}, "c": [{"a": 1, "b": null}]}'))
-checked expr   : json_strip_nulls<Variant>(parse_json<String>("{\"a\":null, \"b\": {\"c\": 1, \"d\": null}, \"c\": [{\"a\": 1, \"b\": null}]}"))
+checked expr   : json_strip_nulls<Variant>(CAST<String>("{\"a\":null, \"b\": {\"c\": 1, \"d\": null}, \"c\": [{\"a\": 1, \"b\": null}]}" AS Variant))
 optimized expr : 0x4000000210000001100000015000000f500000176263400000011000000120000002635001800000015000000f400000011000000120000002615001
 output type    : Variant
 output domain  : Undefined
@@ -2905,7 +2905,7 @@ output         : NULL
 
 ast            : json_typeof(parse_json('null'))
 raw expr       : json_typeof(parse_json('null'))
-checked expr   : json_typeof<Variant>(parse_json<String>("null"))
+checked expr   : json_typeof<Variant>(CAST<String>("null" AS Variant))
 optimized expr : "null"
 output type    : String
 output domain  : {"null"..="null"}
@@ -2914,7 +2914,7 @@ output         : 'null'
 
 ast            : json_typeof(parse_json('true'))
 raw expr       : json_typeof(parse_json('true'))
-checked expr   : json_typeof<Variant>(parse_json<String>("true"))
+checked expr   : json_typeof<Variant>(CAST<String>("true" AS Variant))
 optimized expr : "boolean"
 output type    : String
 output domain  : {"boolean"..="boolean"}
@@ -2923,7 +2923,7 @@ output         : 'boolean'
 
 ast            : json_typeof(parse_json('"test"'))
 raw expr       : json_typeof(parse_json('"test"'))
-checked expr   : json_typeof<Variant>(parse_json<String>("\"test\""))
+checked expr   : json_typeof<Variant>(CAST<String>("\"test\"" AS Variant))
 optimized expr : "string"
 output type    : String
 output domain  : {"string"..="string"}
@@ -2932,7 +2932,7 @@ output         : 'string'
 
 ast            : json_typeof(parse_json('-1.12'))
 raw expr       : json_typeof(parse_json('-1.12'))
-checked expr   : json_typeof<Variant>(parse_json<String>("-1.12"))
+checked expr   : json_typeof<Variant>(CAST<String>("-1.12" AS Variant))
 optimized expr : "number"
 output type    : String
 output domain  : {"number"..="number"}
@@ -2941,7 +2941,7 @@ output         : 'number'
 
 ast            : json_typeof(parse_json('[1,2,3]'))
 raw expr       : json_typeof(parse_json('[1,2,3]'))
-checked expr   : json_typeof<Variant>(parse_json<String>("[1,2,3]"))
+checked expr   : json_typeof<Variant>(CAST<String>("[1,2,3]" AS Variant))
 optimized expr : "array"
 output type    : String
 output domain  : {"array"..="array"}
@@ -2950,7 +2950,7 @@ output         : 'array'
 
 ast            : json_typeof(parse_json('{"a":1,"b":2}'))
 raw expr       : json_typeof(parse_json('{"a":1,"b":2}'))
-checked expr   : json_typeof<Variant>(parse_json<String>("{\"a\":1,\"b\":2}"))
+checked expr   : json_typeof<Variant>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant))
 optimized expr : "object"
 output type    : String
 output domain  : {"object"..="object"}
@@ -3011,7 +3011,7 @@ output         : NULL
 
 ast            : json_path_exists(parse_json('{"a": 1, "b": 2}'), NULL)
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), NULL)
-checked expr   : json_path_exists<Variant, NULL>(parse_json<String>("{\"a\": 1, \"b\": 2}"), NULL)
+checked expr   : json_path_exists<Variant, NULL>(CAST<String>("{\"a\": 1, \"b\": 2}" AS Variant), NULL)
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -3020,7 +3020,7 @@ output         : NULL
 
 ast            : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a')
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.a")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": 2}" AS Variant), "$.a")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -3029,7 +3029,7 @@ output         : true
 
 ast            : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.c')
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.c')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.c")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": 2}" AS Variant), "$.c")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -3038,7 +3038,7 @@ output         : false
 
 ast            : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ == 1)')
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ == 1)')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.a ? (@ == 1)")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": 2}" AS Variant), "$.a ? (@ == 1)")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -3047,7 +3047,7 @@ output         : true
 
 ast            : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ > 1)')
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ > 1)')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.a ? (@ > 1)")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": 2}" AS Variant), "$.a ? (@ > 1)")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -3056,7 +3056,7 @@ output         : false
 
 ast            : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[0]')
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[0]')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": [1,2,3]}"), "$.b[0]")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": [1,2,3]}" AS Variant), "$.b[0]")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -3065,7 +3065,7 @@ output         : true
 
 ast            : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[3]')
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[3]')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": [1,2,3]}"), "$.b[3]")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": [1,2,3]}" AS Variant), "$.b[3]")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -3074,7 +3074,7 @@ output         : false
 
 ast            : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? (@ >=2 && @ <=3)')
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? (@ >=2 && @ <=3)')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": [1,2,3]}"), "$.b[1 to last] ? (@ >=2 && @ <=3)")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": [1,2,3]}" AS Variant), "$.b[1 to last] ? (@ >=2 && @ <=3)")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -3083,7 +3083,7 @@ output         : true
 
 ast            : parse_json('null')->1
 raw expr       : get(parse_json('null'), 1)
-checked expr   : get<Variant, Int64>(parse_json<String>("null"), CAST<UInt8>(1_u8 AS Int64))
+checked expr   : get<Variant, Int64>(CAST<String>("null" AS Variant), CAST<UInt8>(1_u8 AS Int64))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -3092,7 +3092,7 @@ output         : NULL
 
 ast            : parse_json('null')->'k'
 raw expr       : get(parse_json('null'), 'k')
-checked expr   : get<Variant, String>(parse_json<String>("null"), "k")
+checked expr   : get<Variant, String>(CAST<String>("null" AS Variant), "k")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -3101,7 +3101,7 @@ output         : NULL
 
 ast            : parse_json('[1,2,3,4]')->1
 raw expr       : get(parse_json('[1,2,3,4]'), 1)
-checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), CAST<UInt8>(1_u8 AS Int64))
+checked expr   : get<Variant, Int64>(CAST<String>("[1,2,3,4]" AS Variant), CAST<UInt8>(1_u8 AS Int64))
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Undefined
@@ -3110,7 +3110,7 @@ output         : '2'
 
 ast            : parse_json('[1,2,3,4]')->(2+3)
 raw expr       : get(parse_json('[1,2,3,4]'), plus(2, 3))
-checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), CAST<UInt16>(plus<UInt8, UInt8>(2_u8, 3_u8) AS Int64))
+checked expr   : get<Variant, Int64>(CAST<String>("[1,2,3,4]" AS Variant), CAST<UInt16>(plus<UInt8, UInt8>(2_u8, 3_u8) AS Int64))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -3119,7 +3119,7 @@ output         : NULL
 
 ast            : parse_json('{"k":"v"}')->'k'
 raw expr       : get(parse_json('{"k":"v"}'), 'k')
-checked expr   : get<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "k")
+checked expr   : get<Variant, String>(CAST<String>("{\"k\":\"v\"}" AS Variant), "k")
 optimized expr : 0x200000001000000176
 output type    : Variant NULL
 output domain  : Undefined
@@ -3128,7 +3128,7 @@ output         : '"v"'
 
 ast            : parse_json('{"k":"v"}')->'x'
 raw expr       : get(parse_json('{"k":"v"}'), 'x')
-checked expr   : get<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "x")
+checked expr   : get<Variant, String>(CAST<String>("{\"k\":\"v\"}" AS Variant), "x")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -3146,7 +3146,7 @@ output         : '"b"'
 
 ast            : parse_json(s)->i
 raw expr       : get(parse_json(s::String), i::UInt64)
-checked expr   : get<Variant, Int64>(parse_json<String>(s), CAST<UInt64>(i AS Int64))
+checked expr   : get<Variant, Int64>(CAST<String>(s AS Variant), CAST<UInt64>(i AS Int64))
 evaluation:
 +--------+----------------------------------+---------+--------------+
 |        | s                                | i       | Output       |
@@ -3169,7 +3169,7 @@ evaluation (internal):
 
 ast            : parse_json(s)->i
 raw expr       : get(parse_json(s::String NULL), i::UInt64 NULL)
-checked expr   : get<Variant NULL, Int64 NULL>(parse_json<String NULL>(s), CAST<UInt64 NULL>(i AS Int64 NULL))
+checked expr   : get<Variant NULL, Int64 NULL>(CAST<String NULL>(s AS Variant NULL), CAST<UInt64 NULL>(i AS Int64 NULL))
 evaluation:
 +--------+-------------------------------------------+------------------+--------------+
 |        | s                                         | i                | Output       |
@@ -3193,7 +3193,7 @@ evaluation (internal):
 
 ast            : parse_json(s)->k
 raw expr       : get(parse_json(s::String), k::String)
-checked expr   : get<Variant, String>(parse_json<String>(s), k)
+checked expr   : get<Variant, String>(CAST<String>(s AS Variant), k)
 evaluation:
 +--------+------------------------+-------------+--------------+
 |        | s                      | k           | Output       |
@@ -3216,7 +3216,7 @@ evaluation (internal):
 
 ast            : parse_json(s)->k
 raw expr       : get(parse_json(s::String NULL), k::String)
-checked expr   : get<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST<String>(k AS String NULL))
+checked expr   : get<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), CAST<String>(k AS String NULL))
 evaluation:
 +--------+---------------------------------+------------+--------------+
 |        | s                               | k          | Output       |
@@ -3240,7 +3240,7 @@ evaluation (internal):
 
 ast            : parse_json('null')->>1
 raw expr       : get_string(parse_json('null'), 1)
-checked expr   : get_string<Variant, Int64>(parse_json<String>("null"), CAST<UInt8>(1_u8 AS Int64))
+checked expr   : get_string<Variant, Int64>(CAST<String>("null" AS Variant), CAST<UInt8>(1_u8 AS Int64))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3249,7 +3249,7 @@ output         : NULL
 
 ast            : parse_json('null')->>'k'
 raw expr       : get_string(parse_json('null'), 'k')
-checked expr   : get_string<Variant, String>(parse_json<String>("null"), "k")
+checked expr   : get_string<Variant, String>(CAST<String>("null" AS Variant), "k")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3258,7 +3258,7 @@ output         : NULL
 
 ast            : parse_json('[1,2,3,4]')->>1
 raw expr       : get_string(parse_json('[1,2,3,4]'), 1)
-checked expr   : get_string<Variant, Int64>(parse_json<String>("[1,2,3,4]"), CAST<UInt8>(1_u8 AS Int64))
+checked expr   : get_string<Variant, Int64>(CAST<String>("[1,2,3,4]" AS Variant), CAST<UInt8>(1_u8 AS Int64))
 optimized expr : "2"
 output type    : String NULL
 output domain  : {"2"..="2"}
@@ -3267,7 +3267,7 @@ output         : '2'
 
 ast            : parse_json('[1,2,3,4]')->>(2+3)
 raw expr       : get_string(parse_json('[1,2,3,4]'), plus(2, 3))
-checked expr   : get_string<Variant, Int64>(parse_json<String>("[1,2,3,4]"), CAST<UInt16>(plus<UInt8, UInt8>(2_u8, 3_u8) AS Int64))
+checked expr   : get_string<Variant, Int64>(CAST<String>("[1,2,3,4]" AS Variant), CAST<UInt16>(plus<UInt8, UInt8>(2_u8, 3_u8) AS Int64))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3276,7 +3276,7 @@ output         : NULL
 
 ast            : parse_json('{"k":"v"}')->>'k'
 raw expr       : get_string(parse_json('{"k":"v"}'), 'k')
-checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "k")
+checked expr   : get_string<Variant, String>(CAST<String>("{\"k\":\"v\"}" AS Variant), "k")
 optimized expr : "v"
 output type    : String NULL
 output domain  : {"v"..="v"}
@@ -3285,7 +3285,7 @@ output         : 'v'
 
 ast            : parse_json('{"k":"v"}')->>'x'
 raw expr       : get_string(parse_json('{"k":"v"}'), 'x')
-checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "x")
+checked expr   : get_string<Variant, String>(CAST<String>("{\"k\":\"v\"}" AS Variant), "x")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3294,7 +3294,7 @@ output         : NULL
 
 ast            : parse_json('{"k":null}')->>'k'
 raw expr       : get_string(parse_json('{"k":null}'), 'k')
-checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":null}"), "k")
+checked expr   : get_string<Variant, String>(CAST<String>("{\"k\":null}" AS Variant), "k")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3312,7 +3312,7 @@ output         : 'b'
 
 ast            : parse_json(s)->>i
 raw expr       : get_string(parse_json(s::String), i::UInt64)
-checked expr   : get_string<Variant, Int64>(parse_json<String>(s), CAST<UInt64>(i AS Int64))
+checked expr   : get_string<Variant, Int64>(CAST<String>(s AS Variant), CAST<UInt64>(i AS Int64))
 evaluation:
 +--------+----------------------------------+---------+-------------+
 |        | s                                | i       | Output      |
@@ -3335,7 +3335,7 @@ evaluation (internal):
 
 ast            : parse_json(s)->>i
 raw expr       : get_string(parse_json(s::String NULL), i::UInt64 NULL)
-checked expr   : get_string<Variant NULL, Int64 NULL>(parse_json<String NULL>(s), CAST<UInt64 NULL>(i AS Int64 NULL))
+checked expr   : get_string<Variant NULL, Int64 NULL>(CAST<String NULL>(s AS Variant NULL), CAST<UInt64 NULL>(i AS Int64 NULL))
 evaluation:
 +--------+-------------------------------------------+------------------+-------------+
 |        | s                                         | i                | Output      |
@@ -3359,7 +3359,7 @@ evaluation (internal):
 
 ast            : parse_json(s)->>k
 raw expr       : get_string(parse_json(s::String), k::String)
-checked expr   : get_string<Variant, String>(parse_json<String>(s), k)
+checked expr   : get_string<Variant, String>(CAST<String>(s AS Variant), k)
 evaluation:
 +--------+------------------------+-------------+-------------+
 |        | s                      | k           | Output      |
@@ -3382,7 +3382,7 @@ evaluation (internal):
 
 ast            : parse_json(s)->>k
 raw expr       : get_string(parse_json(s::String NULL), k::String)
-checked expr   : get_string<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST<String>(k AS String NULL))
+checked expr   : get_string<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), CAST<String>(k AS String NULL))
 evaluation:
 +--------+---------------------------------+------------+-------------+
 |        | s                               | k          | Output      |
@@ -3408,7 +3408,7 @@ error:
   --> SQL:1:28
   |
 1 | parse_json('[10, 20, 30]') #> '1'
-  |                            ^^ InvalidKeyPath while evaluating function `get_by_keypath('[10,20,30]', '1')` in expr `get_by_keypath(parse_json('[10, 20, 30]'), '1')`
+  |                            ^^ InvalidKeyPath while evaluating function `get_by_keypath('[10,20,30]', '1')` in expr `get_by_keypath(CAST('[10, 20, 30]' AS Variant), '1')`
 
 
 
@@ -3432,7 +3432,7 @@ output         : NULL
 
 ast            : parse_json('"string"') #> '{0}'
 raw expr       : get_by_keypath(parse_json('"string"'), '{0}')
-checked expr   : get_by_keypath<Variant, String>(parse_json<String>("\"string\""), "{0}")
+checked expr   : get_by_keypath<Variant, String>(CAST<String>("\"string\"" AS Variant), "{0}")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -3441,7 +3441,7 @@ output         : NULL
 
 ast            : parse_json('1') #> '{0}'
 raw expr       : get_by_keypath(parse_json('1'), '{0}')
-checked expr   : get_by_keypath<Variant, String>(parse_json<String>("1"), "{0}")
+checked expr   : get_by_keypath<Variant, String>(CAST<String>("1" AS Variant), "{0}")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -3450,7 +3450,7 @@ output         : NULL
 
 ast            : parse_json('[10, 20, 30]') #> '{1}'
 raw expr       : get_by_keypath(parse_json('[10, 20, 30]'), '{1}')
-checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, 20, 30]"), "{1}")
+checked expr   : get_by_keypath<Variant, String>(CAST<String>("[10, 20, 30]" AS Variant), "{1}")
 optimized expr : 0x20000000200000025014
 output type    : Variant NULL
 output domain  : Undefined
@@ -3459,7 +3459,7 @@ output         : '20'
 
 ast            : parse_json('[10, 20, 30]') #> '{3}'
 raw expr       : get_by_keypath(parse_json('[10, 20, 30]'), '{3}')
-checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, 20, 30]"), "{3}")
+checked expr   : get_by_keypath<Variant, String>(CAST<String>("[10, 20, 30]" AS Variant), "{3}")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -3468,7 +3468,7 @@ output         : NULL
 
 ast            : parse_json('[10, 20, 30]') #> '{a}'
 raw expr       : get_by_keypath(parse_json('[10, 20, 30]'), '{a}')
-checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, 20, 30]"), "{a}")
+checked expr   : get_by_keypath<Variant, String>(CAST<String>("[10, 20, 30]" AS Variant), "{a}")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -3477,7 +3477,7 @@ output         : NULL
 
 ast            : parse_json('{"k": null}') #> '{k}'
 raw expr       : get_by_keypath(parse_json('{"k": null}'), '{k}')
-checked expr   : get_by_keypath<Variant, String>(parse_json<String>("{\"k\": null}"), "{k}")
+checked expr   : get_by_keypath<Variant, String>(CAST<String>("{\"k\": null}" AS Variant), "{k}")
 optimized expr : 0x2000000000000000
 output type    : Variant NULL
 output domain  : Undefined
@@ -3486,7 +3486,7 @@ output         : 'null'
 
 ast            : parse_json('[10, 20, null]') #> '{2}'
 raw expr       : get_by_keypath(parse_json('[10, 20, null]'), '{2}')
-checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, 20, null]"), "{2}")
+checked expr   : get_by_keypath<Variant, String>(CAST<String>("[10, 20, null]" AS Variant), "{2}")
 optimized expr : 0x2000000000000000
 output type    : Variant NULL
 output domain  : Undefined
@@ -3495,7 +3495,7 @@ output         : 'null'
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1}'
 raw expr       : get_by_keypath(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1}')
-checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1}")
+checked expr   : get_by_keypath<Variant, String>(CAST<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]" AS Variant), "{1, a, k1}")
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant NULL
 output domain  : Undefined
@@ -3504,7 +3504,7 @@ output         : '[1,2,3]'
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1, 0}'
 raw expr       : get_by_keypath(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1, 0}')
-checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1, 0}")
+checked expr   : get_by_keypath<Variant, String>(CAST<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]" AS Variant), "{1, a, k1, 0}")
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
@@ -3513,7 +3513,7 @@ output         : '1'
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1, 0, 10}'
 raw expr       : get_by_keypath(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1, 0, 10}')
-checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1, 0, 10}")
+checked expr   : get_by_keypath<Variant, String>(CAST<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]" AS Variant), "{1, a, k1, 0, 10}")
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -3522,7 +3522,7 @@ output         : NULL
 
 ast            : parse_json(s) #> '{0}'
 raw expr       : get_by_keypath(parse_json(s::String NULL), '{0}')
-checked expr   : get_by_keypath<Variant NULL, String>(parse_json<String NULL>(s), "{0}")
+checked expr   : get_by_keypath<Variant NULL, String>(CAST<String NULL>(s AS Variant NULL), "{0}")
 evaluation:
 +--------+------------------------------------+--------------+
 |        | s                                  | Output       |
@@ -3545,7 +3545,7 @@ evaluation (internal):
 
 ast            : parse_json(s) #> k
 raw expr       : get_by_keypath(parse_json(s::String NULL), k::String NULL)
-checked expr   : get_by_keypath<Variant NULL, String NULL>(parse_json<String NULL>(s), k)
+checked expr   : get_by_keypath<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), k)
 evaluation:
 +--------+---------------------------------+--------------------------+--------------+
 |        | s                               | k                        | Output       |
@@ -3578,7 +3578,7 @@ output         : NULL
 
 ast            : parse_json('"string"') #>> '{0}'
 raw expr       : get_by_keypath_string(parse_json('"string"'), '{0}')
-checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("\"string\""), "{0}")
+checked expr   : get_by_keypath_string<Variant, String>(CAST<String>("\"string\"" AS Variant), "{0}")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3587,7 +3587,7 @@ output         : NULL
 
 ast            : parse_json('1') #>> '{0}'
 raw expr       : get_by_keypath_string(parse_json('1'), '{0}')
-checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("1"), "{0}")
+checked expr   : get_by_keypath_string<Variant, String>(CAST<String>("1" AS Variant), "{0}")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3596,7 +3596,7 @@ output         : NULL
 
 ast            : parse_json('[10, 20, 30]') #>> '{1}'
 raw expr       : get_by_keypath_string(parse_json('[10, 20, 30]'), '{1}')
-checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, 20, 30]"), "{1}")
+checked expr   : get_by_keypath_string<Variant, String>(CAST<String>("[10, 20, 30]" AS Variant), "{1}")
 optimized expr : "20"
 output type    : String NULL
 output domain  : {"20"..="20"}
@@ -3605,7 +3605,7 @@ output         : '20'
 
 ast            : parse_json('[10, 20, 30]') #>> '{3}'
 raw expr       : get_by_keypath_string(parse_json('[10, 20, 30]'), '{3}')
-checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, 20, 30]"), "{3}")
+checked expr   : get_by_keypath_string<Variant, String>(CAST<String>("[10, 20, 30]" AS Variant), "{3}")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3614,7 +3614,7 @@ output         : NULL
 
 ast            : parse_json('[10, 20, 30]') #>> '{a}'
 raw expr       : get_by_keypath_string(parse_json('[10, 20, 30]'), '{a}')
-checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, 20, 30]"), "{a}")
+checked expr   : get_by_keypath_string<Variant, String>(CAST<String>("[10, 20, 30]" AS Variant), "{a}")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3623,7 +3623,7 @@ output         : NULL
 
 ast            : parse_json('{"k": null}') #>> '{k}'
 raw expr       : get_by_keypath_string(parse_json('{"k": null}'), '{k}')
-checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("{\"k\": null}"), "{k}")
+checked expr   : get_by_keypath_string<Variant, String>(CAST<String>("{\"k\": null}" AS Variant), "{k}")
 optimized expr : "null"
 output type    : String NULL
 output domain  : {"null"..="null"}
@@ -3632,7 +3632,7 @@ output         : 'null'
 
 ast            : parse_json('[10, 20, null]') #>> '{2}'
 raw expr       : get_by_keypath_string(parse_json('[10, 20, null]'), '{2}')
-checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, 20, null]"), "{2}")
+checked expr   : get_by_keypath_string<Variant, String>(CAST<String>("[10, 20, null]" AS Variant), "{2}")
 optimized expr : "null"
 output type    : String NULL
 output domain  : {"null"..="null"}
@@ -3641,7 +3641,7 @@ output         : 'null'
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1}'
 raw expr       : get_by_keypath_string(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1}')
-checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1}")
+checked expr   : get_by_keypath_string<Variant, String>(CAST<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]" AS Variant), "{1, a, k1}")
 optimized expr : "[1,2,3]"
 output type    : String NULL
 output domain  : {"[1,2,3]"..="[1,2,3]"}
@@ -3650,7 +3650,7 @@ output         : '[1,2,3]'
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1, 0}'
 raw expr       : get_by_keypath_string(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1, 0}')
-checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1, 0}")
+checked expr   : get_by_keypath_string<Variant, String>(CAST<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]" AS Variant), "{1, a, k1, 0}")
 optimized expr : "1"
 output type    : String NULL
 output domain  : {"1"..="1"}
@@ -3659,7 +3659,7 @@ output         : '1'
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1, 0, 10}'
 raw expr       : get_by_keypath_string(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1, 0, 10}')
-checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1, 0, 10}")
+checked expr   : get_by_keypath_string<Variant, String>(CAST<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]" AS Variant), "{1, a, k1, 0, 10}")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3668,7 +3668,7 @@ output         : NULL
 
 ast            : parse_json(s) #>> '{0}'
 raw expr       : get_by_keypath_string(parse_json(s::String NULL), '{0}')
-checked expr   : get_by_keypath_string<Variant NULL, String>(parse_json<String NULL>(s), "{0}")
+checked expr   : get_by_keypath_string<Variant NULL, String>(CAST<String NULL>(s AS Variant NULL), "{0}")
 evaluation:
 +--------+------------------------------------+-------------+
 |        | s                                  | Output      |
@@ -3691,7 +3691,7 @@ evaluation (internal):
 
 ast            : parse_json(s) #>> k
 raw expr       : get_by_keypath_string(parse_json(s::String NULL), k::String NULL)
-checked expr   : get_by_keypath_string<Variant NULL, String NULL>(parse_json<String NULL>(s), k)
+checked expr   : get_by_keypath_string<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), k)
 evaluation:
 +--------+---------------------------------+--------------------------+-------------+
 |        | s                               | k                        | Output      |
@@ -3715,7 +3715,7 @@ evaluation (internal):
 
 ast            : parse_json('["1","2","3"]') ? NULL
 raw expr       : json_exists_key(parse_json('["1","2","3"]'), NULL)
-checked expr   : json_exists_key<Variant NULL, String NULL>(CAST<Variant>(parse_json<String>("[\"1\",\"2\",\"3\"]") AS Variant NULL), CAST<NULL>(NULL AS String NULL))
+checked expr   : json_exists_key<Variant NULL, String NULL>(CAST<Variant>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant) AS Variant NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -3724,7 +3724,7 @@ output         : NULL
 
 ast            : parse_json('true') ? '1'
 raw expr       : json_exists_key(parse_json('true'), '1')
-checked expr   : json_exists_key<Variant, String>(parse_json<String>("true"), "1")
+checked expr   : json_exists_key<Variant, String>(CAST<String>("true" AS Variant), "1")
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -3733,7 +3733,7 @@ output         : false
 
 ast            : parse_json('["1","2","3"]') ? '1'
 raw expr       : json_exists_key(parse_json('["1","2","3"]'), '1')
-checked expr   : json_exists_key<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "1")
+checked expr   : json_exists_key<Variant, String>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant), "1")
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -3742,7 +3742,7 @@ output         : true
 
 ast            : parse_json('["1","2","3"]') ? '4'
 raw expr       : json_exists_key(parse_json('["1","2","3"]'), '4')
-checked expr   : json_exists_key<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "4")
+checked expr   : json_exists_key<Variant, String>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant), "4")
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -3751,7 +3751,7 @@ output         : false
 
 ast            : parse_json('{"a":1,"b":2,"c":3}') ? 'a'
 raw expr       : json_exists_key(parse_json('{"a":1,"b":2,"c":3}'), 'a')
-checked expr   : json_exists_key<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), "a")
+checked expr   : json_exists_key<Variant, String>(CAST<String>("{\"a\":1,\"b\":2,\"c\":3}" AS Variant), "a")
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -3760,7 +3760,7 @@ output         : true
 
 ast            : parse_json('{"a":1,"b":2,"c":3}') ? 'd'
 raw expr       : json_exists_key(parse_json('{"a":1,"b":2,"c":3}'), 'd')
-checked expr   : json_exists_key<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), "d")
+checked expr   : json_exists_key<Variant, String>(CAST<String>("{\"a\":1,\"b\":2,\"c\":3}" AS Variant), "d")
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -3769,8 +3769,8 @@ output         : false
 
 ast            : parse_json(s) ? 'a'
 raw expr       : json_exists_key(parse_json(s::String NULL), 'a')
-checked expr   : json_exists_key<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST<String>("a" AS String NULL))
-optimized expr : json_exists_key<Variant NULL, String NULL>(parse_json<String NULL>(s), "a")
+checked expr   : json_exists_key<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), CAST<String>("a" AS String NULL))
+optimized expr : json_exists_key<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), "a")
 evaluation:
 +--------+------------------------------------+--------------+
 |        | s                                  | Output       |
@@ -3793,7 +3793,7 @@ evaluation (internal):
 
 ast            : parse_json('["1","2","3"]') ?| NULL
 raw expr       : json_exists_any_keys(parse_json('["1","2","3"]'), NULL)
-checked expr   : json_exists_any_keys<Variant NULL, Array(String) NULL>(CAST<Variant>(parse_json<String>("[\"1\",\"2\",\"3\"]") AS Variant NULL), CAST<NULL>(NULL AS Array(String) NULL))
+checked expr   : json_exists_any_keys<Variant NULL, Array(String) NULL>(CAST<Variant>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant) AS Variant NULL), CAST<NULL>(NULL AS Array(String) NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -3802,7 +3802,7 @@ output         : NULL
 
 ast            : parse_json('true') ?| ['1','2']
 raw expr       : json_exists_any_keys(parse_json('true'), array('1', '2'))
-checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("true"), array<T0=String><T0, T0>("1", "2"))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(CAST<String>("true" AS Variant), array<T0=String><T0, T0>("1", "2"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -3811,7 +3811,7 @@ output         : false
 
 ast            : parse_json('["1","2","3"]') ?| ['1','2']
 raw expr       : json_exists_any_keys(parse_json('["1","2","3"]'), array('1', '2'))
-checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("1", "2"))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant), array<T0=String><T0, T0>("1", "2"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -3820,7 +3820,7 @@ output         : true
 
 ast            : parse_json('["1","2","3"]') ?| ['4','5']
 raw expr       : json_exists_any_keys(parse_json('["1","2","3"]'), array('4', '5'))
-checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("4", "5"))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant), array<T0=String><T0, T0>("4", "5"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -3829,7 +3829,7 @@ output         : false
 
 ast            : parse_json('{"a":1,"b":2,"c":3}') ?| ['a','b']
 raw expr       : json_exists_any_keys(parse_json('{"a":1,"b":2,"c":3}'), array('a', 'b'))
-checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("a", "b"))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(CAST<String>("{\"a\":1,\"b\":2,\"c\":3}" AS Variant), array<T0=String><T0, T0>("a", "b"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -3838,7 +3838,7 @@ output         : true
 
 ast            : parse_json('{"a":1,"b":2,"c":3}') ?| ['d','e']
 raw expr       : json_exists_any_keys(parse_json('{"a":1,"b":2,"c":3}'), array('d', 'e'))
-checked expr   : json_exists_any_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("d", "e"))
+checked expr   : json_exists_any_keys<Variant, Array(String)>(CAST<String>("{\"a\":1,\"b\":2,\"c\":3}" AS Variant), array<T0=String><T0, T0>("d", "e"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -3847,8 +3847,8 @@ output         : false
 
 ast            : parse_json(s) ?| ['a','b']
 raw expr       : json_exists_any_keys(parse_json(s::String NULL), array('a', 'b'))
-checked expr   : json_exists_any_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), CAST<Array(String)>(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL))
-optimized expr : json_exists_any_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), ['a', 'b'])
+checked expr   : json_exists_any_keys<Variant NULL, Array(String) NULL>(CAST<String NULL>(s AS Variant NULL), CAST<Array(String)>(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL))
+optimized expr : json_exists_any_keys<Variant NULL, Array(String) NULL>(CAST<String NULL>(s AS Variant NULL), ['a', 'b'])
 evaluation:
 +--------+------------------------------------------------+--------------+
 |        | s                                              | Output       |
@@ -3871,7 +3871,7 @@ evaluation (internal):
 
 ast            : parse_json('["1","2","3"]') ?& NULL
 raw expr       : json_exists_all_keys(parse_json('["1","2","3"]'), NULL)
-checked expr   : json_exists_all_keys<Variant NULL, Array(String) NULL>(CAST<Variant>(parse_json<String>("[\"1\",\"2\",\"3\"]") AS Variant NULL), CAST<NULL>(NULL AS Array(String) NULL))
+checked expr   : json_exists_all_keys<Variant NULL, Array(String) NULL>(CAST<Variant>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant) AS Variant NULL), CAST<NULL>(NULL AS Array(String) NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -3880,7 +3880,7 @@ output         : NULL
 
 ast            : parse_json('true') ?& ['1','2']
 raw expr       : json_exists_all_keys(parse_json('true'), array('1', '2'))
-checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("true"), array<T0=String><T0, T0>("1", "2"))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(CAST<String>("true" AS Variant), array<T0=String><T0, T0>("1", "2"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -3889,7 +3889,7 @@ output         : false
 
 ast            : parse_json('["1","2","3"]') ?& ['1','2']
 raw expr       : json_exists_all_keys(parse_json('["1","2","3"]'), array('1', '2'))
-checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("1", "2"))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant), array<T0=String><T0, T0>("1", "2"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -3898,7 +3898,7 @@ output         : true
 
 ast            : parse_json('["1","2","3"]') ?& ['3','5']
 raw expr       : json_exists_all_keys(parse_json('["1","2","3"]'), array('3', '5'))
-checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("[\"1\",\"2\",\"3\"]"), array<T0=String><T0, T0>("3", "5"))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant), array<T0=String><T0, T0>("3", "5"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -3907,7 +3907,7 @@ output         : false
 
 ast            : parse_json('{"a":1,"b":2,"c":3}') ?& ['a','b']
 raw expr       : json_exists_all_keys(parse_json('{"a":1,"b":2,"c":3}'), array('a', 'b'))
-checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("a", "b"))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(CAST<String>("{\"a\":1,\"b\":2,\"c\":3}" AS Variant), array<T0=String><T0, T0>("a", "b"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -3916,7 +3916,7 @@ output         : true
 
 ast            : parse_json('{"a":1,"b":2,"c":3}') ?& ['c','e']
 raw expr       : json_exists_all_keys(parse_json('{"a":1,"b":2,"c":3}'), array('c', 'e'))
-checked expr   : json_exists_all_keys<Variant, Array(String)>(parse_json<String>("{\"a\":1,\"b\":2,\"c\":3}"), array<T0=String><T0, T0>("c", "e"))
+checked expr   : json_exists_all_keys<Variant, Array(String)>(CAST<String>("{\"a\":1,\"b\":2,\"c\":3}" AS Variant), array<T0=String><T0, T0>("c", "e"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -3925,8 +3925,8 @@ output         : false
 
 ast            : parse_json(s) ?& ['a','b']
 raw expr       : json_exists_all_keys(parse_json(s::String NULL), array('a', 'b'))
-checked expr   : json_exists_all_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), CAST<Array(String)>(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL))
-optimized expr : json_exists_all_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), ['a', 'b'])
+checked expr   : json_exists_all_keys<Variant NULL, Array(String) NULL>(CAST<String NULL>(s AS Variant NULL), CAST<Array(String)>(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL))
+optimized expr : json_exists_all_keys<Variant NULL, Array(String) NULL>(CAST<String NULL>(s AS Variant NULL), ['a', 'b'])
 evaluation:
 +--------+--------------------------------------------------------+--------------+
 |        | s                                                      | Output       |
@@ -3958,7 +3958,7 @@ output         : NULL
 
 ast            : parse_json('[1,2,3]') @> NULL
 raw expr       : json_contains_in_left(parse_json('[1,2,3]'), NULL)
-checked expr   : json_contains_in_left<Variant NULL, Variant NULL>(CAST<Variant>(parse_json<String>("[1,2,3]") AS Variant NULL), CAST<NULL>(NULL AS Variant NULL))
+checked expr   : json_contains_in_left<Variant NULL, Variant NULL>(CAST<Variant>(CAST<String>("[1,2,3]" AS Variant) AS Variant NULL), CAST<NULL>(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -3967,7 +3967,7 @@ output         : NULL
 
 ast            : NULL @> parse_json('1')
 raw expr       : json_contains_in_left(NULL, parse_json('1'))
-checked expr   : json_contains_in_left<Variant NULL, Variant NULL>(CAST<NULL>(NULL AS Variant NULL), CAST<Variant>(parse_json<String>("1") AS Variant NULL))
+checked expr   : json_contains_in_left<Variant NULL, Variant NULL>(CAST<NULL>(NULL AS Variant NULL), CAST<Variant>(CAST<String>("1" AS Variant) AS Variant NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -3976,7 +3976,7 @@ output         : NULL
 
 ast            : parse_json('true') @> parse_json('true')
 raw expr       : json_contains_in_left(parse_json('true'), parse_json('true'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("true"), parse_json<String>("true"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("true" AS Variant), CAST<String>("true" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -3985,7 +3985,7 @@ output         : true
 
 ast            : parse_json('true') @> parse_json('false')
 raw expr       : json_contains_in_left(parse_json('true'), parse_json('false'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("true"), parse_json<String>("false"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("true" AS Variant), CAST<String>("false" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -3994,7 +3994,7 @@ output         : false
 
 ast            : parse_json('"asd"') @> parse_json('"asd"')
 raw expr       : json_contains_in_left(parse_json('"asd"'), parse_json('"asd"'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asd\""))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("\"asd\"" AS Variant), CAST<String>("\"asd\"" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4003,7 +4003,7 @@ output         : true
 
 ast            : parse_json('"asd"') @> parse_json('"asdd"')
 raw expr       : json_contains_in_left(parse_json('"asd"'), parse_json('"asdd"'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asdd\""))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("\"asd\"" AS Variant), CAST<String>("\"asdd\"" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4012,7 +4012,7 @@ output         : false
 
 ast            : parse_json('[1,2,3]') @> parse_json('1')
 raw expr       : json_contains_in_left(parse_json('[1,2,3]'), parse_json('1'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_json<String>("1"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("[1,2,3]" AS Variant), CAST<String>("1" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4021,7 +4021,7 @@ output         : true
 
 ast            : parse_json('[1,2,3]') @> parse_json('4')
 raw expr       : json_contains_in_left(parse_json('[1,2,3]'), parse_json('4'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_json<String>("4"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("[1,2,3]" AS Variant), CAST<String>("4" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4030,7 +4030,7 @@ output         : false
 
 ast            : parse_json('[1,2,3,4]') @> parse_json('[2,1,3]')
 raw expr       : json_contains_in_left(parse_json('[1,2,3,4]'), parse_json('[2,1,3]'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3,4]"), parse_json<String>("[2,1,3]"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("[1,2,3,4]" AS Variant), CAST<String>("[2,1,3]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4039,7 +4039,7 @@ output         : true
 
 ast            : parse_json('[1,2,3,4]') @> parse_json('[2,1,1]')
 raw expr       : json_contains_in_left(parse_json('[1,2,3,4]'), parse_json('[2,1,1]'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,3,4]"), parse_json<String>("[2,1,1]"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("[1,2,3,4]" AS Variant), CAST<String>("[2,1,1]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4048,7 +4048,7 @@ output         : true
 
 ast            : parse_json('[1,2,[1,3]]') @> parse_json('[1,3]')
 raw expr       : json_contains_in_left(parse_json('[1,2,[1,3]]'), parse_json('[1,3]'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,[1,3]]"), parse_json<String>("[1,3]"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("[1,2,[1,3]]" AS Variant), CAST<String>("[1,3]" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4057,7 +4057,7 @@ output         : false
 
 ast            : parse_json('[1,2,[1,3]]') @> parse_json('[[1,3]]')
 raw expr       : json_contains_in_left(parse_json('[1,2,[1,3]]'), parse_json('[[1,3]]'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,[1,3]]"), parse_json<String>("[[1,3]]"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("[1,2,[1,3]]" AS Variant), CAST<String>("[[1,3]]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4066,7 +4066,7 @@ output         : true
 
 ast            : parse_json('[1,2,[1,3]]') @> parse_json('[[[1,3]]]')
 raw expr       : json_contains_in_left(parse_json('[1,2,[1,3]]'), parse_json('[[[1,3]]]'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[1,2,[1,3]]"), parse_json<String>("[[[1,3]]]"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("[1,2,[1,3]]" AS Variant), CAST<String>("[[[1,3]]]" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4075,7 +4075,7 @@ output         : false
 
 ast            : parse_json('[{"a":1}]') @> parse_json('{"a":1}')
 raw expr       : json_contains_in_left(parse_json('[{"a":1}]'), parse_json('{"a":1}'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[{\"a\":1}]"), parse_json<String>("{\"a\":1}"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("[{\"a\":1}]" AS Variant), CAST<String>("{\"a\":1}" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4084,7 +4084,7 @@ output         : false
 
 ast            : parse_json('[{"a":1},{"b":2}]') @> parse_json('[{"a":1}]')
 raw expr       : json_contains_in_left(parse_json('[{"a":1},{"b":2}]'), parse_json('[{"a":1}]'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("[{\"a\":1},{\"b\":2}]"), parse_json<String>("[{\"a\":1}]"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("[{\"a\":1},{\"b\":2}]" AS Variant), CAST<String>("[{\"a\":1}]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4093,7 +4093,7 @@ output         : true
 
 ast            : parse_json('{"a":1,"b":2}') @> parse_json('{"a":1}')
 raw expr       : json_contains_in_left(parse_json('{"a":1,"b":2}'), parse_json('{"a":1}'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("{\"a\":1}"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), CAST<String>("{\"a\":1}" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4102,7 +4102,7 @@ output         : true
 
 ast            : parse_json('{"a":1,"b":2}') @> parse_json('{"a":2}')
 raw expr       : json_contains_in_left(parse_json('{"a":1,"b":2}'), parse_json('{"a":2}'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("{\"a\":2}"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), CAST<String>("{\"a\":2}" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4111,7 +4111,7 @@ output         : false
 
 ast            : parse_json('{"z":2,"b":{"a":1}}') @> parse_json('{"a":1}')
 raw expr       : json_contains_in_left(parse_json('{"z":2,"b":{"a":1}}'), parse_json('{"a":1}'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"z\":2,\"b\":{\"a\":1}}"), parse_json<String>("{\"a\":1}"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("{\"z\":2,\"b\":{\"a\":1}}" AS Variant), CAST<String>("{\"a\":1}" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4120,7 +4120,7 @@ output         : false
 
 ast            : parse_json('{"a":{"c":100,"d":200},"b":2}') @> parse_json('{"a":{}}')
 raw expr       : json_contains_in_left(parse_json('{"a":{"c":100,"d":200},"b":2}'), parse_json('{"a":{}}'))
-checked expr   : json_contains_in_left<Variant, Variant>(parse_json<String>("{\"a\":{\"c\":100,\"d\":200},\"b\":2}"), parse_json<String>("{\"a\":{}}"))
+checked expr   : json_contains_in_left<Variant, Variant>(CAST<String>("{\"a\":{\"c\":100,\"d\":200},\"b\":2}" AS Variant), CAST<String>("{\"a\":{}}" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4138,7 +4138,7 @@ output         : NULL
 
 ast            : parse_json('[1,2,3]') <@ NULL
 raw expr       : json_contains_in_right(parse_json('[1,2,3]'), NULL)
-checked expr   : json_contains_in_right<Variant NULL, Variant NULL>(CAST<Variant>(parse_json<String>("[1,2,3]") AS Variant NULL), CAST<NULL>(NULL AS Variant NULL))
+checked expr   : json_contains_in_right<Variant NULL, Variant NULL>(CAST<Variant>(CAST<String>("[1,2,3]" AS Variant) AS Variant NULL), CAST<NULL>(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -4147,7 +4147,7 @@ output         : NULL
 
 ast            : NULL <@ parse_json('1')
 raw expr       : json_contains_in_right(NULL, parse_json('1'))
-checked expr   : json_contains_in_right<Variant NULL, Variant NULL>(CAST<NULL>(NULL AS Variant NULL), CAST<Variant>(parse_json<String>("1") AS Variant NULL))
+checked expr   : json_contains_in_right<Variant NULL, Variant NULL>(CAST<NULL>(NULL AS Variant NULL), CAST<Variant>(CAST<String>("1" AS Variant) AS Variant NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -4156,7 +4156,7 @@ output         : NULL
 
 ast            : parse_json('true') <@ parse_json('true')
 raw expr       : json_contains_in_right(parse_json('true'), parse_json('true'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("true"), parse_json<String>("true"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("true" AS Variant), CAST<String>("true" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4165,7 +4165,7 @@ output         : true
 
 ast            : parse_json('true') <@ parse_json('false')
 raw expr       : json_contains_in_right(parse_json('true'), parse_json('false'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("true"), parse_json<String>("false"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("true" AS Variant), CAST<String>("false" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4174,7 +4174,7 @@ output         : false
 
 ast            : parse_json('"asd"') <@ parse_json('"asd"')
 raw expr       : json_contains_in_right(parse_json('"asd"'), parse_json('"asd"'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asd\""))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("\"asd\"" AS Variant), CAST<String>("\"asd\"" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4183,7 +4183,7 @@ output         : true
 
 ast            : parse_json('"asd"') <@ parse_json('"asdd"')
 raw expr       : json_contains_in_right(parse_json('"asd"'), parse_json('"asdd"'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("\"asdd\""))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("\"asd\"" AS Variant), CAST<String>("\"asdd\"" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4192,7 +4192,7 @@ output         : false
 
 ast            : parse_json('1') <@ parse_json('[1,2,3]')
 raw expr       : json_contains_in_right(parse_json('1'), parse_json('[1,2,3]'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("1"), parse_json<String>("[1,2,3]"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("1" AS Variant), CAST<String>("[1,2,3]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4201,7 +4201,7 @@ output         : true
 
 ast            : parse_json('4') <@ parse_json('[1,2,3]')
 raw expr       : json_contains_in_right(parse_json('4'), parse_json('[1,2,3]'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("4"), parse_json<String>("[1,2,3]"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("4" AS Variant), CAST<String>("[1,2,3]" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4210,7 +4210,7 @@ output         : false
 
 ast            : parse_json('[2,1,3]') <@ parse_json('[1,2,3,4]')
 raw expr       : json_contains_in_right(parse_json('[2,1,3]'), parse_json('[1,2,3,4]'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[2,1,3]"), parse_json<String>("[1,2,3,4]"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("[2,1,3]" AS Variant), CAST<String>("[1,2,3,4]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4219,7 +4219,7 @@ output         : true
 
 ast            : parse_json('[2,1,1]') <@ parse_json('[1,2,3,4]')
 raw expr       : json_contains_in_right(parse_json('[2,1,1]'), parse_json('[1,2,3,4]'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[2,1,1]"), parse_json<String>("[1,2,3,4]"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("[2,1,1]" AS Variant), CAST<String>("[1,2,3,4]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4228,7 +4228,7 @@ output         : true
 
 ast            : parse_json('[1,3]') <@ parse_json('[1,2,[1,3]]')
 raw expr       : json_contains_in_right(parse_json('[1,3]'), parse_json('[1,2,[1,3]]'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[1,3]"), parse_json<String>("[1,2,[1,3]]"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("[1,3]" AS Variant), CAST<String>("[1,2,[1,3]]" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4237,7 +4237,7 @@ output         : false
 
 ast            : parse_json('[[1,3]]') <@ parse_json('[1,2,[1,3]]')
 raw expr       : json_contains_in_right(parse_json('[[1,3]]'), parse_json('[1,2,[1,3]]'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[[1,3]]"), parse_json<String>("[1,2,[1,3]]"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("[[1,3]]" AS Variant), CAST<String>("[1,2,[1,3]]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4246,7 +4246,7 @@ output         : true
 
 ast            : parse_json('[[[1,3]]]') <@ parse_json('[1,2,[1,3]]')
 raw expr       : json_contains_in_right(parse_json('[[[1,3]]]'), parse_json('[1,2,[1,3]]'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[[[1,3]]]"), parse_json<String>("[1,2,[1,3]]"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("[[[1,3]]]" AS Variant), CAST<String>("[1,2,[1,3]]" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4255,7 +4255,7 @@ output         : false
 
 ast            : parse_json('{"a":1}') <@ parse_json('[{"a":1}]')
 raw expr       : json_contains_in_right(parse_json('{"a":1}'), parse_json('[{"a":1}]'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":1}"), parse_json<String>("[{\"a\":1}]"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("{\"a\":1}" AS Variant), CAST<String>("[{\"a\":1}]" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4264,7 +4264,7 @@ output         : false
 
 ast            : parse_json('[{"a":1}]') <@ parse_json('[{"a":1},{"b":2}]')
 raw expr       : json_contains_in_right(parse_json('[{"a":1}]'), parse_json('[{"a":1},{"b":2}]'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("[{\"a\":1}]"), parse_json<String>("[{\"a\":1},{\"b\":2}]"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("[{\"a\":1}]" AS Variant), CAST<String>("[{\"a\":1},{\"b\":2}]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4273,7 +4273,7 @@ output         : true
 
 ast            : parse_json('{"a":1}') <@ parse_json('{"a":1,"b":2}')
 raw expr       : json_contains_in_right(parse_json('{"a":1}'), parse_json('{"a":1,"b":2}'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":1}"), parse_json<String>("{\"a\":1,\"b\":2}"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("{\"a\":1}" AS Variant), CAST<String>("{\"a\":1,\"b\":2}" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4282,7 +4282,7 @@ output         : true
 
 ast            : parse_json('{"a":2}') <@ parse_json('{"a":1,"b":2}')
 raw expr       : json_contains_in_right(parse_json('{"a":2}'), parse_json('{"a":1,"b":2}'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":2}"), parse_json<String>("{\"a\":1,\"b\":2}"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("{\"a\":2}" AS Variant), CAST<String>("{\"a\":1,\"b\":2}" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4291,7 +4291,7 @@ output         : false
 
 ast            : parse_json('{"a":1}') <@ parse_json('{"z":2,"b":{"a":1}}')
 raw expr       : json_contains_in_right(parse_json('{"a":1}'), parse_json('{"z":2,"b":{"a":1}}'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":1}"), parse_json<String>("{\"z\":2,\"b\":{\"a\":1}}"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("{\"a\":1}" AS Variant), CAST<String>("{\"z\":2,\"b\":{\"a\":1}}" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -4300,7 +4300,7 @@ output         : false
 
 ast            : parse_json('{"a":{}}') <@ parse_json('{"a":{"c":100,"d":200},"b":2}')
 raw expr       : json_contains_in_right(parse_json('{"a":{}}'), parse_json('{"a":{"c":100,"d":200},"b":2}'))
-checked expr   : json_contains_in_right<Variant, Variant>(parse_json<String>("{\"a\":{}}"), parse_json<String>("{\"a\":{\"c\":100,\"d\":200},\"b\":2}"))
+checked expr   : json_contains_in_right<Variant, Variant>(CAST<String>("{\"a\":{}}" AS Variant), CAST<String>("{\"a\":{\"c\":100,\"d\":200},\"b\":2}" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -4309,7 +4309,7 @@ output         : true
 
 ast            : json_path_match(parse_json('{"a":1,"b":2}'), '$.a == 1')
 raw expr       : json_path_match(parse_json('{"a":1,"b":2}'), '$.a == 1')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "$.a == 1")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), "$.a == 1")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4318,7 +4318,7 @@ output         : true
 
 ast            : json_path_match(parse_json('{"a":1,"b":2}'), '$.a > 1')
 raw expr       : json_path_match(parse_json('{"a":1,"b":2}'), '$.a > 1')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "$.a > 1")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), "$.a > 1")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4327,7 +4327,7 @@ output         : false
 
 ast            : json_path_match(parse_json('{"a":1,"b":2}'), '$.c > 0')
 raw expr       : json_path_match(parse_json('{"a":1,"b":2}'), '$.c > 0')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "$.c > 0")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), "$.c > 0")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4336,7 +4336,7 @@ output         : false
 
 ast            : json_path_match(parse_json('{"a":1,"b":2}'), '$.b < 2')
 raw expr       : json_path_match(parse_json('{"a":1,"b":2}'), '$.b < 2')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "$.b < 2")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), "$.b < 2")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4345,7 +4345,7 @@ output         : false
 
 ast            : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] == 1')
 raw expr       : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] == 1')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "$.b[0] == 1")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "$.b[0] == 1")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4354,7 +4354,7 @@ output         : true
 
 ast            : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] > 1')
 raw expr       : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] > 1')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "$.b[0] > 1")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "$.b[0] > 1")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4363,7 +4363,7 @@ output         : false
 
 ast            : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[3] == 0')
 raw expr       : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[3] == 0')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "$.b[3] == 0")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "$.b[3] == 0")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4372,7 +4372,7 @@ output         : false
 
 ast            : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] >= 2')
 raw expr       : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] >= 2')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "$.b[1 to last] >= 2")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "$.b[1 to last] >= 2")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4381,7 +4381,7 @@ output         : true
 
 ast            : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] == 2 || $.b[1 to last] == 3')
 raw expr       : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] == 2 || $.b[1 to last] == 3')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "$.b[1 to last] == 2 || $.b[1 to last] == 3")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "$.b[1 to last] == 2 || $.b[1 to last] == 3")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4390,7 +4390,7 @@ output         : true
 
 ast            : json_path_match(parse_json(s), p)
 raw expr       : json_path_match(parse_json(s::String NULL), p::String)
-checked expr   : json_path_match<Variant NULL, String>(parse_json<String NULL>(s), p)
+checked expr   : json_path_match<Variant NULL, String>(CAST<String NULL>(s AS Variant NULL), p)
 evaluation:
 +--------+---------------------------------+-----------------------------+--------------+
 |        | s                               | p                           | Output       |
@@ -4414,7 +4414,7 @@ evaluation (internal):
 
 ast            : parse_json('{"a":1,"b":2}') @@ '$.a == 1'
 raw expr       : json_path_match(parse_json('{"a":1,"b":2}'), '$.a == 1')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "$.a == 1")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), "$.a == 1")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4423,7 +4423,7 @@ output         : true
 
 ast            : parse_json('{"a":1,"b":2}') @@ '$.a > 1'
 raw expr       : json_path_match(parse_json('{"a":1,"b":2}'), '$.a > 1')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "$.a > 1")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), "$.a > 1")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4432,7 +4432,7 @@ output         : false
 
 ast            : parse_json('{"a":1,"b":2}') @@ '$.c > 0'
 raw expr       : json_path_match(parse_json('{"a":1,"b":2}'), '$.c > 0')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "$.c > 0")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), "$.c > 0")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4441,7 +4441,7 @@ output         : false
 
 ast            : parse_json('{"a":1,"b":2}') @@ '$.b < 2'
 raw expr       : json_path_match(parse_json('{"a":1,"b":2}'), '$.b < 2')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "$.b < 2")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), "$.b < 2")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4450,7 +4450,7 @@ output         : false
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] == 1'
 raw expr       : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] == 1')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "$.b[0] == 1")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "$.b[0] == 1")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4459,7 +4459,7 @@ output         : true
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] > 1'
 raw expr       : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] > 1')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "$.b[0] > 1")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "$.b[0] > 1")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4468,7 +4468,7 @@ output         : false
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[3] == 0'
 raw expr       : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[3] == 0')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "$.b[3] == 0")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "$.b[3] == 0")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4477,7 +4477,7 @@ output         : false
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] >= 2'
 raw expr       : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] >= 2')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "$.b[1 to last] >= 2")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "$.b[1 to last] >= 2")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4486,7 +4486,7 @@ output         : true
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] == 2 || $.b[1 to last] == 3'
 raw expr       : json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] == 2 || $.b[1 to last] == 3')
-checked expr   : json_path_match<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "$.b[1 to last] == 2 || $.b[1 to last] == 3")
+checked expr   : json_path_match<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "$.b[1 to last] == 2 || $.b[1 to last] == 3")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4495,7 +4495,7 @@ output         : true
 
 ast            : parse_json(s) @@ p
 raw expr       : json_path_match(parse_json(s::String NULL), p::String)
-checked expr   : json_path_match<Variant NULL, String>(parse_json<String NULL>(s), p)
+checked expr   : json_path_match<Variant NULL, String>(CAST<String NULL>(s AS Variant NULL), p)
 evaluation:
 +--------+---------------------------------+-----------------------------+--------------+
 |        | s                               | p                           | Output       |
@@ -4528,7 +4528,7 @@ output         : NULL
 
 ast            : parse_json('{"a": 1, "b": 2}') @? NULL
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), NULL)
-checked expr   : json_path_exists<Variant, NULL>(parse_json<String>("{\"a\": 1, \"b\": 2}"), NULL)
+checked expr   : json_path_exists<Variant, NULL>(CAST<String>("{\"a\": 1, \"b\": 2}" AS Variant), NULL)
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -4537,7 +4537,7 @@ output         : NULL
 
 ast            : parse_json('{"a": 1, "b": 2}') @? '$.a'
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.a")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": 2}" AS Variant), "$.a")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4546,7 +4546,7 @@ output         : true
 
 ast            : parse_json('{"a": 1, "b": 2}') @? '$.c'
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.c')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.c")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": 2}" AS Variant), "$.c")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4555,7 +4555,7 @@ output         : false
 
 ast            : parse_json('{"a": 1, "b": 2}') @? '$.a ? (@ == 1)'
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ == 1)')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.a ? (@ == 1)")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": 2}" AS Variant), "$.a ? (@ == 1)")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4564,7 +4564,7 @@ output         : true
 
 ast            : parse_json('{"a": 1, "b": 2}') @? '$.a ? (@ > 1)'
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ > 1)')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.a ? (@ > 1)")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": 2}" AS Variant), "$.a ? (@ > 1)")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4573,7 +4573,7 @@ output         : false
 
 ast            : parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[0]'
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[0]')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": [1,2,3]}"), "$.b[0]")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": [1,2,3]}" AS Variant), "$.b[0]")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4582,7 +4582,7 @@ output         : true
 
 ast            : parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[3]'
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[3]')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": [1,2,3]}"), "$.b[3]")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": [1,2,3]}" AS Variant), "$.b[3]")
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -4591,7 +4591,7 @@ output         : false
 
 ast            : parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[1 to last] ? (@ >=2 && @ <=3)'
 raw expr       : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? (@ >=2 && @ <=3)')
-checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": [1,2,3]}"), "$.b[1 to last] ? (@ >=2 && @ <=3)")
+checked expr   : json_path_exists<Variant, String>(CAST<String>("{\"a\": 1, \"b\": [1,2,3]}" AS Variant), "$.b[1 to last] ? (@ >=2 && @ <=3)")
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -4600,7 +4600,7 @@ output         : true
 
 ast            : parse_json('[1,2,3]') || NULL
 raw expr       : concat(parse_json('[1,2,3]'), NULL)
-checked expr   : concat<Variant NULL, Variant NULL>(CAST<Variant>(parse_json<String>("[1,2,3]") AS Variant NULL), CAST<NULL>(NULL AS Variant NULL))
+checked expr   : concat<Variant NULL, Variant NULL>(CAST<Variant>(CAST<String>("[1,2,3]" AS Variant) AS Variant NULL), CAST<NULL>(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -4609,7 +4609,7 @@ output         : NULL
 
 ast            : parse_json('[1,2,3]') || parse_json('10')
 raw expr       : concat(parse_json('[1,2,3]'), parse_json('10'))
-checked expr   : concat<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_json<String>("10"))
+checked expr   : concat<Variant, Variant>(CAST<String>("[1,2,3]" AS Variant), CAST<String>("10" AS Variant))
 optimized expr : 0x8000000420000002200000022000000220000002500150025003500a
 output type    : Variant
 output domain  : Undefined
@@ -4618,7 +4618,7 @@ output         : '[1,2,3,10]'
 
 ast            : parse_json('"asd"') || parse_json('[1,2,3]')
 raw expr       : concat(parse_json('"asd"'), parse_json('[1,2,3]'))
-checked expr   : concat<Variant, Variant>(parse_json<String>("\"asd\""), parse_json<String>("[1,2,3]"))
+checked expr   : concat<Variant, Variant>(CAST<String>("\"asd\"" AS Variant), CAST<String>("[1,2,3]" AS Variant))
 optimized expr : 0x8000000410000003200000022000000220000002617364500150025003
 output type    : Variant
 output domain  : Undefined
@@ -4627,7 +4627,7 @@ output         : '["asd",1,2,3]'
 
 ast            : parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('"asd"')
 raw expr       : concat(parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]'), parse_json('"asd"'))
-checked expr   : concat<Variant, Variant>(parse_json<String>("[1,{\"a\":1,\"b\":2,\"c\":[1,2,3]},3]"), parse_json<String>("\"asd\""))
+checked expr   : concat<Variant, Variant>(CAST<String>("[1,{\"a\":1,\"b\":2,\"c\":[1,2,3]},3]" AS Variant), CAST<String>("\"asd\"" AS Variant))
 optimized expr : 0x800000042000000250000039200000021000000350014000000310000001100000011000000120000002200000025000001661626350015002800000032000000220000002200000025001500250035003617364
 output type    : Variant
 output domain  : Undefined
@@ -4636,7 +4636,7 @@ output         : '[1,{"a":1,"b":2,"c":[1,2,3]},3,"asd"]'
 
 ast            : parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('[10,20,30]')
 raw expr       : concat(parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]'), parse_json('[10,20,30]'))
-checked expr   : concat<Variant, Variant>(parse_json<String>("[1,{\"a\":1,\"b\":2,\"c\":[1,2,3]},3]"), parse_json<String>("[10,20,30]"))
+checked expr   : concat<Variant, Variant>(CAST<String>("[1,{\"a\":1,\"b\":2,\"c\":[1,2,3]},3]" AS Variant), CAST<String>("[10,20,30]" AS Variant))
 optimized expr : 0x8000000620000002500000392000000220000002200000022000000250014000000310000001100000011000000120000002200000025000001661626350015002800000032000000220000002200000025001500250035003500a5014501e
 output type    : Variant
 output domain  : Undefined
@@ -4645,7 +4645,7 @@ output         : '[1,{"a":1,"b":2,"c":[1,2,3]},3,10,20,30]'
 
 ast            : parse_json('[1,[1,2,3],3]') || parse_json('[[10,20,30]]')
 raw expr       : concat(parse_json('[1,[1,2,3],3]'), parse_json('[[10,20,30]]'))
-checked expr   : concat<Variant, Variant>(parse_json<String>("[1,[1,2,3],3]"), parse_json<String>("[[10,20,30]]"))
+checked expr   : concat<Variant, Variant>(CAST<String>("[1,[1,2,3],3]" AS Variant), CAST<String>("[[10,20,30]]" AS Variant))
 optimized expr : 0x8000000420000002500000162000000250000016500180000003200000022000000220000002500150025003500380000003200000022000000220000002500a5014501e
 output type    : Variant
 output domain  : Undefined
@@ -4654,7 +4654,7 @@ output         : '[1,[1,2,3],3,[10,20,30]]'
 
 ast            : parse_json('{"a":1,"b":2}') || parse_json('true')
 raw expr       : concat(parse_json('{"a":1,"b":2}'), parse_json('true'))
-checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("true"))
+checked expr   : concat<Variant, Variant>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), CAST<String>("true" AS Variant))
 optimized expr : 0x800000025000001a400000004000000210000001100000012000000220000002616250015002
 output type    : Variant
 output domain  : Undefined
@@ -4663,7 +4663,7 @@ output         : '[{"a":1,"b":2},true]'
 
 ast            : parse_json('[1,2,3]') || parse_json('{"a":1,"b":2}')
 raw expr       : concat(parse_json('[1,2,3]'), parse_json('{"a":1,"b":2}'))
-checked expr   : concat<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_json<String>("{\"a\":1,\"b\":2}"))
+checked expr   : concat<Variant, Variant>(CAST<String>("[1,2,3]" AS Variant), CAST<String>("{\"a\":1,\"b\":2}" AS Variant))
 optimized expr : 0x800000042000000220000002200000025000001a5001500250034000000210000001100000012000000220000002616250015002
 output type    : Variant
 output domain  : Undefined
@@ -4672,7 +4672,7 @@ output         : '[1,2,3,{"a":1,"b":2}]'
 
 ast            : parse_json('{"a":1,"b":2}') || parse_json('[1,2,3]')
 raw expr       : concat(parse_json('{"a":1,"b":2}'), parse_json('[1,2,3]'))
-checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("[1,2,3]"))
+checked expr   : concat<Variant, Variant>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), CAST<String>("[1,2,3]" AS Variant))
 optimized expr : 0x800000045000001a2000000220000002200000024000000210000001100000012000000220000002616250015002500150025003
 output type    : Variant
 output domain  : Undefined
@@ -4681,7 +4681,7 @@ output         : '[{"a":1,"b":2},1,2,3]'
 
 ast            : parse_json('{"a":1,"b":2}') || parse_json('{"c":3,"d":4}')
 raw expr       : concat(parse_json('{"a":1,"b":2}'), parse_json('{"c":3,"d":4}'))
-checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"), parse_json<String>("{\"c\":3,\"d\":4}"))
+checked expr   : concat<Variant, Variant>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), CAST<String>("{\"c\":3,\"d\":4}" AS Variant))
 optimized expr : 0x400000041000000110000001100000011000000120000002200000022000000220000002616263645001500250035004
 output type    : Variant
 output domain  : Undefined
@@ -4690,7 +4690,7 @@ output         : '{"a":1,"b":2,"c":3,"d":4}'
 
 ast            : parse_json('{"a":1,"b":2,"d":10}') || parse_json('{"a":3,"b":4}')
 raw expr       : concat(parse_json('{"a":1,"b":2,"d":10}'), parse_json('{"a":3,"b":4}'))
-checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2,\"d\":10}"), parse_json<String>("{\"a\":3,\"b\":4}"))
+checked expr   : concat<Variant, Variant>(CAST<String>("{\"a\":1,\"b\":2,\"d\":10}" AS Variant), CAST<String>("{\"a\":3,\"b\":4}" AS Variant))
 optimized expr : 0x4000000310000001100000011000000120000002200000022000000261626450035004500a
 output type    : Variant
 output domain  : Undefined
@@ -4701,13 +4701,13 @@ error:
   --> SQL:1:20
   |
 1 | parse_json('true') - '1'
-  |                    ^ InvalidJsonType while evaluating function `minus('true', '1')` in expr `parse_json('true') - '1'`
+  |                    ^ InvalidJsonType while evaluating function `minus('true', '1')` in expr `CAST('true' AS Variant) - '1'`
 
 
 
 ast            : parse_json('[1,2,3]') - '1'
 raw expr       : minus(parse_json('[1,2,3]'), '1')
-checked expr   : minus<Variant, String>(parse_json<String>("[1,2,3]"), "1")
+checked expr   : minus<Variant, String>(CAST<String>("[1,2,3]" AS Variant), "1")
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant
 output domain  : Undefined
@@ -4716,7 +4716,7 @@ output         : '[1,2,3]'
 
 ast            : parse_json('["1","2","3"]') - '0'
 raw expr       : minus(parse_json('["1","2","3"]'), '0')
-checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "0")
+checked expr   : minus<Variant, String>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant), "0")
 optimized expr : 0x80000003100000011000000110000001313233
 output type    : Variant
 output domain  : Undefined
@@ -4725,7 +4725,7 @@ output         : '["1","2","3"]'
 
 ast            : parse_json('["1","2","3"]') - '1'
 raw expr       : minus(parse_json('["1","2","3"]'), '1')
-checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"), "1")
+checked expr   : minus<Variant, String>(CAST<String>("[\"1\",\"2\",\"3\"]" AS Variant), "1")
 optimized expr : 0x8000000210000001100000013233
 output type    : Variant
 output domain  : Undefined
@@ -4734,7 +4734,7 @@ output         : '["2","3"]'
 
 ast            : parse_json('["1","2","3",{"a":1,"b":2}]') - '1'
 raw expr       : minus(parse_json('["1","2","3",{"a":1,"b":2}]'), '1')
-checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\",{\"a\":1,\"b\":2}]"), "1")
+checked expr   : minus<Variant, String>(CAST<String>("[\"1\",\"2\",\"3\",{\"a\":1,\"b\":2}]" AS Variant), "1")
 optimized expr : 0x8000000310000001100000015000001a32334000000210000001100000012000000220000002616250015002
 output type    : Variant
 output domain  : Undefined
@@ -4743,7 +4743,7 @@ output         : '["2","3",{"a":1,"b":2}]'
 
 ast            : parse_json('{"a":1,"b":2}') - 'c'
 raw expr       : minus(parse_json('{"a":1,"b":2}'), 'c')
-checked expr   : minus<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "c")
+checked expr   : minus<Variant, String>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), "c")
 optimized expr : 0x4000000210000001100000012000000220000002616250015002
 output type    : Variant
 output domain  : Undefined
@@ -4752,7 +4752,7 @@ output         : '{"a":1,"b":2}'
 
 ast            : parse_json('{"a":1,"b":2}') - 'a'
 raw expr       : minus(parse_json('{"a":1,"b":2}'), 'a')
-checked expr   : minus<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"), "a")
+checked expr   : minus<Variant, String>(CAST<String>("{\"a\":1,\"b\":2}" AS Variant), "a")
 optimized expr : 0x400000011000000120000002625002
 output type    : Variant
 output domain  : Undefined
@@ -4761,7 +4761,7 @@ output         : '{"b":2}'
 
 ast            : parse_json('{"b":2}') - 'b'
 raw expr       : minus(parse_json('{"b":2}'), 'b')
-checked expr   : minus<Variant, String>(parse_json<String>("{\"b\":2}"), "b")
+checked expr   : minus<Variant, String>(CAST<String>("{\"b\":2}" AS Variant), "b")
 optimized expr : 0x40000000
 output type    : Variant
 output domain  : Undefined
@@ -4772,13 +4772,13 @@ error:
   --> SQL:1:20
   |
 1 | parse_json('true') - 1
-  |                    ^ InvalidJsonType while evaluating function `minus('true', 1)` in expr `parse_json('true') - CAST(1 AS Int32)`
+  |                    ^ InvalidJsonType while evaluating function `minus('true', 1)` in expr `CAST('true' AS Variant) - CAST(1 AS Int32)`
 
 
 
 ast            : parse_json('[1,2,3]') - 0
 raw expr       : minus(parse_json('[1,2,3]'), 0)
-checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), CAST<UInt8>(0_u8 AS Int32))
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<UInt8>(0_u8 AS Int32))
 optimized expr : 0x80000002200000022000000250025003
 output type    : Variant
 output domain  : Undefined
@@ -4787,7 +4787,7 @@ output         : '[2,3]'
 
 ast            : parse_json('[1,2,3]') - 1
 raw expr       : minus(parse_json('[1,2,3]'), 1)
-checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), CAST<UInt8>(1_u8 AS Int32))
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<UInt8>(1_u8 AS Int32))
 optimized expr : 0x80000002200000022000000250015003
 output type    : Variant
 output domain  : Undefined
@@ -4796,7 +4796,7 @@ output         : '[1,3]'
 
 ast            : parse_json('[1,2,3]') - 2
 raw expr       : minus(parse_json('[1,2,3]'), 2)
-checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), CAST<UInt8>(2_u8 AS Int32))
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<UInt8>(2_u8 AS Int32))
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant
 output domain  : Undefined
@@ -4805,7 +4805,7 @@ output         : '[1,2]'
 
 ast            : parse_json('[1,2,3]') - -1
 raw expr       : minus(parse_json('[1,2,3]'), minus(1))
-checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), CAST<Int16>(minus<UInt8>(1_u8) AS Int32))
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int16>(minus<UInt8>(1_u8) AS Int32))
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant
 output domain  : Undefined
@@ -4814,7 +4814,7 @@ output         : '[1,2]'
 
 ast            : parse_json('[1,2,3]') - -2
 raw expr       : minus(parse_json('[1,2,3]'), minus(2))
-checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), CAST<Int16>(minus<UInt8>(2_u8) AS Int32))
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int16>(minus<UInt8>(2_u8) AS Int32))
 optimized expr : 0x80000002200000022000000250015003
 output type    : Variant
 output domain  : Undefined
@@ -4823,7 +4823,7 @@ output         : '[1,3]'
 
 ast            : parse_json('[1,2,3]') - -3
 raw expr       : minus(parse_json('[1,2,3]'), minus(3))
-checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), CAST<Int16>(minus<UInt8>(3_u8) AS Int32))
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int16>(minus<UInt8>(3_u8) AS Int32))
 optimized expr : 0x80000002200000022000000250025003
 output type    : Variant
 output domain  : Undefined
@@ -4832,7 +4832,7 @@ output         : '[2,3]'
 
 ast            : parse_json('[1,2,3]') - -4
 raw expr       : minus(parse_json('[1,2,3]'), minus(4))
-checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), CAST<Int16>(minus<UInt8>(4_u8) AS Int32))
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int16>(minus<UInt8>(4_u8) AS Int32))
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant
 output domain  : Undefined
@@ -4841,7 +4841,7 @@ output         : '[1,2,3]'
 
 ast            : parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]') - 2
 raw expr       : minus(parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]'), 2)
-checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,{\"a\":[1,2,3],\"b\":[40,50,60]}]"), CAST<UInt8>(2_u8 AS Int32))
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,{\"a\":[1,2,3],\"b\":[40,50,60]}]" AS Variant), CAST<UInt8>(2_u8 AS Int32))
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant
 output domain  : Undefined
@@ -4850,7 +4850,7 @@ output         : '[1,2]'
 
 ast            : parse_json('[1,2,3]') #- NULL
 raw expr       : delete_by_keypath(parse_json('[1,2,3]'), NULL)
-checked expr   : delete_by_keypath<Variant, NULL>(parse_json<String>("[1,2,3]"), NULL)
+checked expr   : delete_by_keypath<Variant, NULL>(CAST<String>("[1,2,3]" AS Variant), NULL)
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -4859,7 +4859,7 @@ output         : NULL
 
 ast            : parse_json('[1,2,3]') #- '{}'
 raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("[1,2,3]" AS Variant), "{}")
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant NULL
 output domain  : Undefined
@@ -4868,7 +4868,7 @@ output         : '[1,2,3]'
 
 ast            : parse_json('[1,2,3]') #- '{0}'
 raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{0}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{0}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("[1,2,3]" AS Variant), "{0}")
 optimized expr : 0x80000002200000022000000250025003
 output type    : Variant NULL
 output domain  : Undefined
@@ -4877,7 +4877,7 @@ output         : '[2,3]'
 
 ast            : parse_json('[1,2,3]') #- '{-1}'
 raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{-1}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{-1}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("[1,2,3]" AS Variant), "{-1}")
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant NULL
 output domain  : Undefined
@@ -4886,7 +4886,7 @@ output         : '[1,2]'
 
 ast            : parse_json('[1,2,3]') #- '{3}'
 raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{3}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{3}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("[1,2,3]" AS Variant), "{3}")
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant NULL
 output domain  : Undefined
@@ -4895,7 +4895,7 @@ output         : '[1,2,3]'
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b}'
 raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "{b}")
 optimized expr : 0x400000011000000120000002615001
 output type    : Variant NULL
 output domain  : Undefined
@@ -4904,7 +4904,7 @@ output         : '{"a":1}'
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{c}'
 raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{c}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{c}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "{c}")
 optimized expr : 0x40000002100000011000000120000002500000166162500180000003200000022000000220000002500150025003
 output type    : Variant NULL
 output domain  : Undefined
@@ -4913,7 +4913,7 @@ output         : '{"a":1,"b":[1,2,3]}'
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,2}'
 raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,2}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,2}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "{b,2}")
 optimized expr : 0x40000002100000011000000120000002500000106162500180000002200000022000000250015002
 output type    : Variant NULL
 output domain  : Undefined
@@ -4922,7 +4922,7 @@ output         : '{"a":1,"b":[1,2]}'
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,-2}'
 raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,-2}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,-2}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "{b,-2}")
 optimized expr : 0x40000002100000011000000120000002500000106162500180000002200000022000000250015003
 output type    : Variant NULL
 output domain  : Undefined
@@ -4931,7 +4931,7 @@ output         : '{"a":1,"b":[1,3]}'
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20}'
 raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,20}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,20}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "{b,20}")
 optimized expr : 0x40000002100000011000000120000002500000166162500180000003200000022000000220000002500150025003
 output type    : Variant NULL
 output domain  : Undefined
@@ -4940,7 +4940,7 @@ output         : '{"a":1,"b":[1,2,3]}'
 
 ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20,c,e}'
 raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,20,c,e}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,20,c,e}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("{\"a\":1,\"b\":[1,2,3]}" AS Variant), "{b,20,c,e}")
 optimized expr : 0x40000002100000011000000120000002500000166162500180000003200000022000000220000002500150025003
 output type    : Variant NULL
 output domain  : Undefined
@@ -4949,7 +4949,7 @@ output         : '{"a":1,"b":[1,2,3]}'
 
 ast            : parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}') #- '{b,0,d}'
 raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}'), '{b,0,d}')
-checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[{\"c\":1,\"d\":10},2,3]}"), "{b,0,d}")
+checked expr   : delete_by_keypath<Variant, String>(CAST<String>("{\"a\":1,\"b\":[{\"c\":1,\"d\":10},2,3]}" AS Variant), "{b,0,d}")
 optimized expr : 0x400000021000000110000001200000025000002361625001800000035000000f200000022000000240000001100000012000000263500150025003
 output type    : Variant NULL
 output domain  : Undefined
@@ -4958,7 +4958,7 @@ output         : '{"a":1,"b":[{"c":1},2,3]}'
 
 ast            : parse_json(s) #- '{0,a}'
 raw expr       : delete_by_keypath(parse_json(s::String NULL), '{0,a}')
-checked expr   : delete_by_keypath<Variant NULL, String>(parse_json<String NULL>(s), "{0,a}")
+checked expr   : delete_by_keypath<Variant NULL, String>(CAST<String NULL>(s AS Variant NULL), "{0,a}")
 evaluation:
 +--------+----------------------------------------+--------------+
 |        | s                                      | Output       |
@@ -4981,7 +4981,7 @@ evaluation (internal):
 
 ast            : parse_json(s) #- k
 raw expr       : delete_by_keypath(parse_json(s::String NULL), k::String NULL)
-checked expr   : delete_by_keypath<Variant NULL, String NULL>(parse_json<String NULL>(s), k)
+checked expr   : delete_by_keypath<Variant NULL, String NULL>(CAST<String NULL>(s AS Variant NULL), k)
 evaluation:
 +--------+--------------------------------------------------+-------------------------------+---------------+
 |        | s                                                | k                             | Output        |
@@ -5059,8 +5059,8 @@ output         : '[{"k":"v"},true]'
 
 ast            : json_array_insert(parse_json(v), 2, parse_json(n))
 raw expr       : json_array_insert(parse_json(v::String NULL), 2, parse_json(n::String NULL))
-checked expr   : json_array_insert<Variant NULL, Int32 NULL, Variant NULL>(parse_json<String NULL>(v), CAST<UInt8>(2_u8 AS Int32 NULL), parse_json<String NULL>(n))
-optimized expr : json_array_insert<Variant NULL, Int32 NULL, Variant NULL>(parse_json<String NULL>(v), 2_i32, parse_json<String NULL>(n))
+checked expr   : json_array_insert<Variant NULL, Int32 NULL, Variant NULL>(CAST<String NULL>(v AS Variant NULL), CAST<UInt8>(2_u8 AS Int32 NULL), CAST<String NULL>(n AS Variant NULL))
+optimized expr : json_array_insert<Variant NULL, Int32 NULL, Variant NULL>(CAST<String NULL>(v AS Variant NULL), 2_i32, CAST<String NULL>(n AS Variant NULL))
 evaluation:
 +--------+----------------------------------------------+------------------------------+-----------------------+
 |        | v                                            | n                            | Output                |
@@ -5147,7 +5147,7 @@ output         : '[{"k":"v"}]'
 
 ast            : json_array_distinct(parse_json(v))
 raw expr       : json_array_distinct(parse_json(v::String NULL))
-checked expr   : json_array_distinct<Variant NULL>(parse_json<String NULL>(v))
+checked expr   : json_array_distinct<Variant NULL>(CAST<String NULL>(v AS Variant NULL))
 evaluation:
 +--------+----------------------------------------------------------------+-----------------+
 |        | v                                                              | Output          |
@@ -5260,7 +5260,7 @@ output         : '[{"k":"v"}]'
 
 ast            : json_array_intersection(parse_json(v1), parse_json(v2))
 raw expr       : json_array_intersection(parse_json(v1::String NULL), parse_json(v2::String NULL))
-checked expr   : json_array_intersection<Variant NULL, Variant NULL>(parse_json<String NULL>(v1), parse_json<String NULL>(v2))
+checked expr   : json_array_intersection<Variant NULL, Variant NULL>(CAST<String NULL>(v1 AS Variant NULL), CAST<String NULL>(v2 AS Variant NULL))
 evaluation:
 +--------+----------------------------------------------------------------+----------------------------------------------------+----------------+
 |        | v1                                                             | v2                                                 | Output         |
@@ -5374,7 +5374,7 @@ output         : '[]'
 
 ast            : json_array_except(parse_json(v1), parse_json(v2))
 raw expr       : json_array_except(parse_json(v1::String NULL), parse_json(v2::String NULL))
-checked expr   : json_array_except<Variant NULL, Variant NULL>(parse_json<String NULL>(v1), parse_json<String NULL>(v2))
+checked expr   : json_array_except<Variant NULL, Variant NULL>(CAST<String NULL>(v1 AS Variant NULL), CAST<String NULL>(v2 AS Variant NULL))
 evaluation:
 +--------+----------------------------------------------------------------+----------------------------------------------------+-------------------------+
 |        | v1                                                             | v2                                                 | Output                  |
@@ -5488,7 +5488,7 @@ output         : true
 
 ast            : json_array_overlap(parse_json(v1), parse_json(v2))
 raw expr       : json_array_overlap(parse_json(v1::String NULL), parse_json(v2::String NULL))
-checked expr   : json_array_overlap<Variant NULL, Variant NULL>(parse_json<String NULL>(v1), parse_json<String NULL>(v2))
+checked expr   : json_array_overlap<Variant NULL, Variant NULL>(CAST<String NULL>(v1 AS Variant NULL), CAST<String NULL>(v2 AS Variant NULL))
 evaluation:
 +--------+----------------------------------------------------------------+----------------------------------------------------+--------------+
 |        | v1                                                             | v2                                                 | Output       |
@@ -5635,7 +5635,7 @@ error:
 
 ast            : json_object_insert(parse_json(v), 'x', parse_json(n))
 raw expr       : json_object_insert(parse_json(v::String NULL), 'x', parse_json(n::String NULL))
-checked expr   : json_object_insert<Variant NULL, String, Variant NULL>(parse_json<String NULL>(v), "x", parse_json<String NULL>(n))
+checked expr   : json_object_insert<Variant NULL, String, Variant NULL>(CAST<String NULL>(v AS Variant NULL), "x", CAST<String NULL>(n AS Variant NULL))
 evaluation:
 +--------+----------------------------------------------------------------------+------------------------------+-----------------------------------------+
 |        | v                                                                    | n                            | Output                                  |
@@ -5659,7 +5659,7 @@ evaluation (internal):
 
 ast            : json_object_insert(parse_json(v), 'c', parse_json(n), true)
 raw expr       : json_object_insert(parse_json(v::String NULL), 'c', parse_json(n::String NULL), true)
-checked expr   : json_object_insert<Variant NULL, String, Variant NULL, Boolean>(parse_json<String NULL>(v), "c", parse_json<String NULL>(n), true)
+checked expr   : json_object_insert<Variant NULL, String, Variant NULL, Boolean>(CAST<String NULL>(v AS Variant NULL), "c", CAST<String NULL>(n AS Variant NULL), true)
 evaluation:
 +--------+----------------------------------------------------------------------+------------------------------+---------------------------------+
 |        | v                                                                    | n                            | Output                          |
@@ -5727,7 +5727,7 @@ error:
 
 ast            : json_object_delete(parse_json(v), 'a', 'm')
 raw expr       : json_object_delete(parse_json(v::String NULL), 'a', 'm')
-checked expr   : json_object_delete<Variant NULL, String, String>(parse_json<String NULL>(v), "a", "m")
+checked expr   : json_object_delete<Variant NULL, String, String>(CAST<String NULL>(v AS Variant NULL), "a", "m")
 evaluation:
 +--------+----------------------------------------------------------------------+---------------------+
 |        | v                                                                    | Output              |
@@ -5794,7 +5794,7 @@ error:
 
 ast            : json_object_pick(parse_json(v), 'a', 'm')
 raw expr       : json_object_pick(parse_json(v::String NULL), 'a', 'm')
-checked expr   : json_object_pick<Variant NULL, String, String>(parse_json<String NULL>(v), "a", "m")
+checked expr   : json_object_pick<Variant NULL, String, String>(CAST<String NULL>(v AS Variant NULL), "a", "m")
 evaluation:
 +--------+----------------------------------------------------------------------+--------------+
 |        | v                                                                    | Output       |
@@ -5817,7 +5817,7 @@ evaluation (internal):
 
 ast            : strip_null_value(parse_json('1234'))
 raw expr       : strip_null_value(parse_json('1234'))
-checked expr   : strip_null_value<Variant NULL>(CAST<Variant>(parse_json<String>("1234") AS Variant NULL))
+checked expr   : strip_null_value<Variant NULL>(CAST<Variant>(CAST<String>("1234" AS Variant) AS Variant NULL))
 optimized expr : 0x20000000200000035004d2
 output type    : Variant NULL
 output domain  : Undefined
@@ -5826,7 +5826,7 @@ output         : '1234'
 
 ast            : strip_null_value(parse_json('null'))
 raw expr       : strip_null_value(parse_json('null'))
-checked expr   : strip_null_value<Variant NULL>(CAST<Variant>(parse_json<String>("null") AS Variant NULL))
+checked expr   : strip_null_value<Variant NULL>(CAST<Variant>(CAST<String>("null" AS Variant) AS Variant NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -5844,7 +5844,7 @@ output         : NULL
 
 ast            : strip_null_value(parse_json(s))
 raw expr       : strip_null_value(parse_json(s::String))
-checked expr   : strip_null_value<Variant NULL>(CAST<Variant>(parse_json<String>(s) AS Variant NULL))
+checked expr   : strip_null_value<Variant NULL>(CAST<Variant>(CAST<String>(s AS Variant) AS Variant NULL))
 evaluation:
 +--------+-------------------------------------------------------+--------------------+
 |        | s                                                     | Output             |
@@ -5866,7 +5866,7 @@ evaluation (internal):
 
 ast            : strip_null_value(parse_json(s))
 raw expr       : strip_null_value(parse_json(s::String NULL))
-checked expr   : strip_null_value<Variant NULL>(parse_json<String NULL>(s))
+checked expr   : strip_null_value<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
 evaluation:
 +--------+----------------------------------------------------------------+--------------------+
 |        | s                                                              | Output             |

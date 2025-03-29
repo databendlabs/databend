@@ -207,7 +207,7 @@ output         : true
 
 ast            : parse_json('[1,2,3,["a","b","c"]]') = parse_json('[1,2,3,["a","b","c"]]')
 raw expr       : eq(parse_json('[1,2,3,["a","b","c"]]'), parse_json('[1,2,3,["a","b","c"]]'))
-checked expr   : eq<Variant, Variant>(parse_json<String>("[1,2,3,[\"a\",\"b\",\"c\"]]"), parse_json<String>("[1,2,3,[\"a\",\"b\",\"c\"]]"))
+checked expr   : eq<Variant, Variant>(CAST<String>("[1,2,3,[\"a\",\"b\",\"c\"]]" AS Variant), CAST<String>("[1,2,3,[\"a\",\"b\",\"c\"]]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -216,7 +216,7 @@ output         : true
 
 ast            : parse_json(lhs) = parse_json(rhs)
 raw expr       : eq(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : eq<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : eq<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+------------------------------------------+------------------------------------------+---------+
 |        | lhs                                      | rhs                                      | Output  |
@@ -401,7 +401,7 @@ output         : true
 
 ast            : parse_json('"databend"') != parse_json('"databend"')
 raw expr       : noteq(parse_json('"databend"'), parse_json('"databend"'))
-checked expr   : noteq<Variant, Variant>(parse_json<String>("\"databend\""), parse_json<String>("\"databend\""))
+checked expr   : noteq<Variant, Variant>(CAST<String>("\"databend\"" AS Variant), CAST<String>("\"databend\"" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -410,7 +410,7 @@ output         : false
 
 ast            : parse_json(lhs) != parse_json(rhs)
 raw expr       : noteq(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : noteq<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : noteq<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+----------------------------------+----------------------------------+---------+
 |        | lhs                              | rhs                              | Output  |
@@ -575,7 +575,7 @@ output         : true
 
 ast            : parse_json('"true"') < parse_json('"false"')
 raw expr       : lt(parse_json('"true"'), parse_json('"false"'))
-checked expr   : lt<Variant, Variant>(parse_json<String>("\"true\""), parse_json<String>("\"false\""))
+checked expr   : lt<Variant, Variant>(CAST<String>("\"true\"" AS Variant), CAST<String>("\"false\"" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -584,7 +584,7 @@ output         : false
 
 ast            : parse_json(lhs) >= parse_json(rhs)
 raw expr       : gte(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : gte<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : gte<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+-------------------------+-------------------------+---------+
 |        | lhs                     | rhs                     | Output  |
@@ -737,7 +737,7 @@ output         : true
 
 ast            : parse_json('null') <= parse_json('null')
 raw expr       : lte(parse_json('null'), parse_json('null'))
-checked expr   : lte<Variant, Variant>(parse_json<String>("null"), parse_json<String>("null"))
+checked expr   : lte<Variant, Variant>(CAST<String>("null" AS Variant), CAST<String>("null" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -773,7 +773,7 @@ output         : true
 
 ast            : parse_json(lhs) <= parse_json(rhs)
 raw expr       : lte(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : lte<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : lte<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+------------------------------------------------+------------------------------------------------+---------+
 |        | lhs                                            | rhs                                            | Output  |
@@ -945,7 +945,7 @@ output         : false
 
 ast            : parse_json('{"k":"v","a":"b"}') > parse_json('{"k":"v","a":"d"}')
 raw expr       : gt(parse_json('{"k":"v","a":"b"}'), parse_json('{"k":"v","a":"d"}'))
-checked expr   : gt<Variant, Variant>(parse_json<String>("{\"k\":\"v\",\"a\":\"b\"}"), parse_json<String>("{\"k\":\"v\",\"a\":\"d\"}"))
+checked expr   : gt<Variant, Variant>(CAST<String>("{\"k\":\"v\",\"a\":\"b\"}" AS Variant), CAST<String>("{\"k\":\"v\",\"a\":\"d\"}" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -954,7 +954,7 @@ output         : false
 
 ast            : parse_json(lhs) > parse_json(rhs)
 raw expr       : gt(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : gt<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : gt<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+-----------------------+-----------------------+---------+
 |        | lhs                   | rhs                   | Output  |
@@ -1152,7 +1152,7 @@ output         : true
 
 ast            : parse_json('1.912e2') >= parse_json('1.912e2')
 raw expr       : gte(parse_json('1.912e2'), parse_json('1.912e2'))
-checked expr   : gte<Variant, Variant>(parse_json<String>("1.912e2"), parse_json<String>("1.912e2"))
+checked expr   : gte<Variant, Variant>(CAST<String>("1.912e2" AS Variant), CAST<String>("1.912e2" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1161,7 +1161,7 @@ output         : true
 
 ast            : parse_json(lhs) >= parse_json(rhs)
 raw expr       : gte(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : gte<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : gte<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------+
 |        | lhs                                                       | rhs                                                       | Output  |
@@ -1382,7 +1382,7 @@ evaluation (internal):
 
 ast            : parse_json('"hello"') like 'h%'
 raw expr       : like(parse_json('"hello"'), 'h%')
-checked expr   : like<Variant, String>(parse_json<String>("\"hello\""), "h%")
+checked expr   : like<Variant, String>(CAST<String>("\"hello\"" AS Variant), "h%")
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1391,7 +1391,7 @@ output         : true
 
 ast            : parse_json('{"abc":1,"def":22}') like '%e%'
 raw expr       : like(parse_json('{"abc":1,"def":22}'), '%e%')
-checked expr   : like<Variant, String>(parse_json<String>("{\"abc\":1,\"def\":22}"), "%e%")
+checked expr   : like<Variant, String>(CAST<String>("{\"abc\":1,\"def\":22}" AS Variant), "%e%")
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1400,7 +1400,7 @@ output         : true
 
 ast            : parse_json('{"k1":"abc","k2":"def"}') like '%e%'
 raw expr       : like(parse_json('{"k1":"abc","k2":"def"}'), '%e%')
-checked expr   : like<Variant, String>(parse_json<String>("{\"k1\":\"abc\",\"k2\":\"def\"}"), "%e%")
+checked expr   : like<Variant, String>(CAST<String>("{\"k1\":\"abc\",\"k2\":\"def\"}" AS Variant), "%e%")
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1409,7 +1409,7 @@ output         : true
 
 ast            : parse_json(lhs) like 'a%'
 raw expr       : like(parse_json(lhs::String), 'a%')
-checked expr   : like<Variant, String>(parse_json<String>(lhs), "a%")
+checked expr   : like<Variant, String>(CAST<String>(lhs AS Variant), "a%")
 evaluation:
 +--------+------------------------------+---------+
 |        | lhs                          | Output  |
@@ -1431,7 +1431,7 @@ evaluation (internal):
 
 ast            : parse_json(lhs) like '%ab%'
 raw expr       : like(parse_json(lhs::String), '%ab%')
-checked expr   : like<Variant, String>(parse_json<String>(lhs), "%ab%")
+checked expr   : like<Variant, String>(CAST<String>(lhs AS Variant), "%ab%")
 evaluation:
 +--------+------------------------------+---------+
 |        | lhs                          | Output  |

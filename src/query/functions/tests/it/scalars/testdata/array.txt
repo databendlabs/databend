@@ -57,7 +57,7 @@ candidate functions:
 
 ast            : [parse_json('[]'), parse_json('{"foo":"bar"}')]
 raw expr       : array(parse_json('[]'), parse_json('{"foo":"bar"}'))
-checked expr   : array<T0=Variant><T0, T0>(parse_json<String>("[]"), parse_json<String>("{\"foo\":\"bar\"}"))
+checked expr   : array<T0=Variant><T0, T0>(CAST<String>("[]" AS Variant), CAST<String>("{\"foo\":\"bar\"}" AS Variant))
 optimized expr : ['[]', '{"foo":"bar"}']
 output type    : Array(Variant)
 output domain  : [Undefined]
