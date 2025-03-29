@@ -4603,8 +4603,13 @@ dependencies = [
 name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "arrow-array",
+ "arrow-schema",
+ "async-channel 1.9.0",
  "backtrace",
  "chrono",
+ "concurrent-queue",
  "databend-common-base",
  "databend-common-exception",
  "defer",
@@ -4614,9 +4619,11 @@ dependencies = [
  "libc",
  "log",
  "logforth",
+ "opendal",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "parquet",
  "serde",
  "serde_json",
  "tonic",
