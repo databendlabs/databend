@@ -93,7 +93,7 @@ impl Dataframe {
                 query_ctx.clone().get_abort_checker(),
             )?;
 
-            let table_index = metadata.write().add_table(
+            let (table_index, source_table_index) = metadata.write().add_table(
                 CATALOG_DEFAULT.to_owned(),
                 database.to_string(),
                 table_meta,
@@ -104,7 +104,14 @@ impl Dataframe {
                 None,
             );
 
-            binder.bind_base_table(&bind_context, database, table_index, None, &None)
+            binder.bind_base_table(
+                &bind_context,
+                database,
+                table_index,
+                source_table_index,
+                None,
+                &None,
+            )
         } else {
             binder.bind_table_reference(&mut bind_context, &table)
         }?;

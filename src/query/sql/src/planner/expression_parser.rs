@@ -60,7 +60,7 @@ use crate::Visibility;
 pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
-    let table_index = metadata.write().add_table(
+    let (table_index, _) = metadata.write().add_table(
         CATALOG_DEFAULT.to_owned(),
         "default".to_string(),
         table_meta,
