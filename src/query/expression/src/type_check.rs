@@ -733,7 +733,7 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "parse_json",
 ];
 
-pub fn is_simple_cast_function(name: &str) -> bool {
+fn is_simple_cast_function(name: &str) -> bool {
     ALL_SIMPLE_CAST_FUNCTIONS.contains(&name)
 }
 

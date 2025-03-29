@@ -9,7 +9,7 @@ output         : 5
 
 ast            : length(to_binary(NULL))
 raw expr       : length(to_binary(NULL))
-checked expr   : length<Binary NULL>(to_binary<Variant NULL>(CAST(NULL AS Variant NULL)))
+checked expr   : length<Binary NULL>(to_binary<Variant NULL>(CAST<NULL>(NULL AS Variant NULL)))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -40,7 +40,7 @@ evaluation (internal):
 
 ast            : to_base64('Abc')
 raw expr       : to_base64('Abc')
-checked expr   : to_base64<Binary>(to_binary<String>("Abc"))
+checked expr   : to_base64<Binary>(CAST<String>("Abc" AS Binary))
 optimized expr : "QWJj"
 output type    : String
 output domain  : {"QWJj"..="QWJj"}
@@ -49,7 +49,7 @@ output         : 'QWJj'
 
 ast            : to_base64('123')
 raw expr       : to_base64('123')
-checked expr   : to_base64<Binary>(to_binary<String>("123"))
+checked expr   : to_base64<Binary>(CAST<String>("123" AS Binary))
 optimized expr : "MTIz"
 output type    : String
 output domain  : {"MTIz"..="MTIz"}
@@ -58,7 +58,7 @@ output         : 'MTIz'
 
 ast            : to_base64(Null)
 raw expr       : to_base64(NULL)
-checked expr   : to_base64<Binary NULL>(CAST(NULL AS Binary NULL))
+checked expr   : to_base64<Binary NULL>(CAST<NULL>(NULL AS Binary NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -67,7 +67,7 @@ output         : NULL
 
 ast            : to_base64(a)
 raw expr       : to_base64(a::String)
-checked expr   : to_base64<Binary>(to_binary<String>(a))
+checked expr   : to_base64<Binary>(CAST<String>(a AS Binary))
 evaluation:
 +--------+-----------------+--------+
 |        | a               | Output |
@@ -119,7 +119,7 @@ evaluation (internal):
 
 ast            : from_base64('QWJj')::String
 raw expr       : CAST(from_base64('QWJj') AS String)
-checked expr   : to_string<Binary>(from_base64<String>("QWJj"))
+checked expr   : CAST<Binary>(from_base64<String>("QWJj") AS String)
 optimized expr : "Abc"
 output type    : String
 output domain  : {"Abc"..="Abc"}
@@ -128,7 +128,7 @@ output         : 'Abc'
 
 ast            : from_base64('MTIz')::String
 raw expr       : CAST(from_base64('MTIz') AS String)
-checked expr   : to_string<Binary>(from_base64<String>("MTIz"))
+checked expr   : CAST<Binary>(from_base64<String>("MTIz") AS String)
 optimized expr : "123"
 output type    : String
 output domain  : {"123"..="123"}
@@ -137,7 +137,7 @@ output         : '123'
 
 ast            : from_base64(a)::String
 raw expr       : CAST(from_base64(a::String) AS String)
-checked expr   : to_string<Binary>(from_base64<String>(a))
+checked expr   : CAST<Binary>(from_base64<String>(a) AS String)
 evaluation:
 +--------+-------------------+---------+
 |        | a                 | Output  |
@@ -166,7 +166,7 @@ error:
 
 ast            : from_hex('6461746162656e64')::String
 raw expr       : CAST(from_hex('6461746162656e64') AS String)
-checked expr   : to_string<Binary>(from_hex<String>("6461746162656e64"))
+checked expr   : CAST<Binary>(from_hex<String>("6461746162656e64") AS String)
 optimized expr : "databend"
 output type    : String
 output domain  : {"databend"..="databend"}
@@ -183,7 +183,7 @@ error:
 
 ast            : from_hex(s)::String
 raw expr       : CAST(from_hex(s::String) AS String)
-checked expr   : to_string<Binary>(from_hex<String>(s))
+checked expr   : CAST<Binary>(from_hex<String>(s) AS String)
 evaluation:
 +--------+-----------------------+------------+
 |        | s                     | Output     |
@@ -286,7 +286,7 @@ output         : 0101000020E61000006666666666965EC06666666666C64240
 
 ast            : TRY_from_base64('QWJj')::String
 raw expr       : CAST(TRY_from_base64('QWJj') AS String)
-checked expr   : CAST(try_from_base64<String>("QWJj") AS String)
+checked expr   : CAST<Binary NULL>(try_from_base64<String>("QWJj") AS String)
 optimized expr : "Abc"
 output type    : String
 output domain  : {"Abc"..="Abc"}
@@ -295,7 +295,7 @@ output         : 'Abc'
 
 ast            : TRY_from_base64('MTIz')::String
 raw expr       : CAST(TRY_from_base64('MTIz') AS String)
-checked expr   : CAST(try_from_base64<String>("MTIz") AS String)
+checked expr   : CAST<Binary NULL>(try_from_base64<String>("MTIz") AS String)
 optimized expr : "123"
 output type    : String
 output domain  : {"123"..="123"}
@@ -304,7 +304,7 @@ output         : '123'
 
 ast            : TRY_from_base64(a)::String
 raw expr       : CAST(TRY_from_base64(a::String) AS String)
-checked expr   : CAST(try_from_base64<String>(a) AS String)
+checked expr   : CAST<Binary NULL>(try_from_base64<String>(a) AS String)
 evaluation:
 +--------+-------------------+---------+
 |        | a                 | Output  |
@@ -334,7 +334,7 @@ output         : NULL
 
 ast            : TRY_from_hex('6461746162656e64')::String
 raw expr       : CAST(TRY_from_hex('6461746162656e64') AS String)
-checked expr   : CAST(try_from_hex<String>("6461746162656e64") AS String)
+checked expr   : CAST<Binary NULL>(try_from_hex<String>("6461746162656e64") AS String)
 optimized expr : "databend"
 output type    : String
 output domain  : {"databend"..="databend"}
@@ -352,7 +352,7 @@ output         : NULL
 
 ast            : TRY_from_hex(s)::String
 raw expr       : CAST(TRY_from_hex(s::String) AS String)
-checked expr   : CAST(try_from_hex<String>(s) AS String)
+checked expr   : CAST<Binary NULL>(try_from_hex<String>(s) AS String)
 evaluation:
 +--------+-----------------------+------------+
 |        | s                     | Output     |

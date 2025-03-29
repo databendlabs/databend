@@ -1,6 +1,6 @@
 ast            : regexp_instr('dog cat dog', 'dog', 1)
 raw expr       : regexp_instr('dog cat dog', 'dog', 1)
-checked expr   : regexp_instr<String, String, Int64>("dog cat dog", "dog", to_int64<UInt8>(1_u8))
+checked expr   : regexp_instr<String, String, Int64>("dog cat dog", "dog", CAST<UInt8>(1_u8 AS Int64))
 optimized expr : 1_u64
 output type    : UInt64
 output domain  : {1..=1}
@@ -9,7 +9,7 @@ output         : 1
 
 ast            : regexp_instr('aa aaa aaaa aa aaa aaaa', 'a{2}', 1)
 raw expr       : regexp_instr('aa aaa aaaa aa aaa aaaa', 'a{2}', 1)
-checked expr   : regexp_instr<String, String, Int64>("aa aaa aaaa aa aaa aaaa", "a{2}", to_int64<UInt8>(1_u8))
+checked expr   : regexp_instr<String, String, Int64>("aa aaa aaaa aa aaa aaaa", "a{2}", CAST<UInt8>(1_u8 AS Int64))
 optimized expr : 1_u64
 output type    : UInt64
 output domain  : {1..=1}
@@ -18,7 +18,7 @@ output         : 1
 
 ast            : regexp_instr('aa aaa aaaa aa aaa aaaa', NULL, 2)
 raw expr       : regexp_instr('aa aaa aaaa aa aaa aaaa', NULL, 2)
-checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL>(CAST("aa aaa aaaa aa aaa aaaa" AS String NULL), CAST(NULL AS String NULL), CAST(2_u8 AS Int64 NULL))
+checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL>(CAST<String>("aa aaa aaaa aa aaa aaaa" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<UInt8>(2_u8 AS Int64 NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -27,7 +27,7 @@ output         : NULL
 
 ast            : regexp_instr('', '', 1)
 raw expr       : regexp_instr('', '', 1)
-checked expr   : regexp_instr<String, String, Int64>("", "", to_int64<UInt8>(1_u8))
+checked expr   : regexp_instr<String, String, Int64>("", "", CAST<UInt8>(1_u8 AS Int64))
 optimized expr : 0_u64
 output type    : UInt64
 output domain  : {0..=0}
@@ -38,7 +38,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr('', '', 0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr('', '', 0)` in expr `regexp_instr('', '', to_int64(0))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr('', '', 0)` in expr `regexp_instr('', '', CAST(0 AS Int64))`
 
 
 
@@ -171,7 +171,7 @@ evaluation (internal):
 
 ast            : regexp_instr(source, pat, pos, occur, ro)
 raw expr       : regexp_instr(source::String NULL, pat::String NULL, pos::Int64, occur::Int64, ro::Int64)
-checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL>(source, pat, CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL), CAST(ro AS Int64 NULL))
+checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL>(source, pat, CAST<Int64>(pos AS Int64 NULL), CAST<Int64>(occur AS Int64 NULL), CAST<Int64>(ro AS Int64 NULL))
 evaluation:
 +--------+------------------------------------------------------+---------------------------+---------+---------+---------+-------------+
 |        | source                                               | pat                       | pos     | occur   | ro      | Output      |
@@ -198,7 +198,7 @@ evaluation (internal):
 
 ast            : regexp_instr(source, pat, pos, occur, ro, mt)
 raw expr       : regexp_instr(source::String NULL, pat::String NULL, pos::Int64, occur::Int64, ro::Int64, mt::String)
-checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL), CAST(ro AS Int64 NULL), CAST(mt AS String NULL))
+checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, CAST<Int64>(pos AS Int64 NULL), CAST<Int64>(occur AS Int64 NULL), CAST<Int64>(ro AS Int64 NULL), CAST<String>(mt AS String NULL))
 evaluation:
 +--------+------------------------------------------------------+---------------------------+---------+---------+---------+-------------+-------------+
 |        | source                                               | pat                       | pos     | occur   | ro      | mt          | Output      |
@@ -314,7 +314,7 @@ output         : false
 
 ast            : regexp_like('abc', 'ABC', NULL)
 raw expr       : regexp_like('abc', 'ABC', NULL)
-checked expr   : regexp_like<String NULL, String NULL, String NULL>(CAST("abc" AS String NULL), CAST("ABC" AS String NULL), CAST(NULL AS String NULL))
+checked expr   : regexp_like<String NULL, String NULL, String NULL>(CAST<String>("abc" AS String NULL), CAST<String>("ABC" AS String NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -488,7 +488,7 @@ output         : ''
 
 ast            : regexp_replace('a b c', 'b', NULL)
 raw expr       : regexp_replace('a b c', 'b', NULL)
-checked expr   : regexp_replace<String NULL, String NULL, String NULL>(CAST("a b c" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL))
+checked expr   : regexp_replace<String NULL, String NULL, String NULL>(CAST<String>("a b c" AS String NULL), CAST<String>("b" AS String NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -497,7 +497,7 @@ output         : NULL
 
 ast            : regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3)
 raw expr       : regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3)
-checked expr   : regexp_replace<String, String, String, Int64, Int64>("abc def ghi", "[a-z]+", "X", to_int64<UInt8>(1_u8), to_int64<UInt8>(3_u8))
+checked expr   : regexp_replace<String, String, String, Int64, Int64>("abc def ghi", "[a-z]+", "X", CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(3_u8 AS Int64))
 optimized expr : "abc def X"
 output type    : String
 output domain  : {"abc def X"..="abc def X"}
@@ -615,8 +615,8 @@ evaluation (internal):
 
 ast            : regexp_replace(source, pat, repl, pos, occur)
 raw expr       : regexp_replace(source::String NULL, pat::String NULL, repl::String, pos::Int64, occur::Int64)
-checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(source, pat, CAST(repl AS String NULL), CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL))
-optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(source, pat, "X", CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL))
+checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(source, pat, CAST<String>(repl AS String NULL), CAST<Int64>(pos AS Int64 NULL), CAST<Int64>(occur AS Int64 NULL))
+optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(source, pat, "X", CAST<Int64>(pos AS Int64 NULL), CAST<Int64>(occur AS Int64 NULL))
 evaluation:
 +--------+------------------------------------------+--------------------------------+-------------+---------+---------+-------------+
 |        | source                                   | pat                            | repl        | pos     | occur   | Output      |
@@ -643,8 +643,8 @@ evaluation (internal):
 
 ast            : regexp_replace(source, pat, repl, pos, occur, mt)
 raw expr       : regexp_replace(source::String NULL, pat::String NULL, repl::String, pos::Int64, occur::Int64, mt::String)
-checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, CAST(repl AS String NULL), CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL), CAST(mt AS String NULL))
-optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, "X", CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL), CAST(mt AS String NULL))
+checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, CAST<String>(repl AS String NULL), CAST<Int64>(pos AS Int64 NULL), CAST<Int64>(occur AS Int64 NULL), CAST<String>(mt AS String NULL))
+optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, "X", CAST<Int64>(pos AS Int64 NULL), CAST<Int64>(occur AS Int64 NULL), CAST<String>(mt AS String NULL))
 evaluation:
 +--------+------------------------------------------+--------------------------------+-------------+---------+---------+------------+-------------+
 |        | source                                   | pat                            | repl        | pos     | occur   | mt         | Output      |
@@ -733,7 +733,7 @@ output         : 'abc'
 
 ast            : regexp_substr('abc def ghi', '[a-z]+', 1, 3)
 raw expr       : regexp_substr('abc def ghi', '[a-z]+', 1, 3)
-checked expr   : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", to_int64<UInt8>(1_u8), to_int64<UInt8>(3_u8))
+checked expr   : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(3_u8 AS Int64))
 optimized expr : "ghi"
 output type    : String NULL
 output domain  : {"ghi"..="ghi"}
@@ -742,7 +742,7 @@ output         : 'ghi'
 
 ast            : regexp_substr('abc def ghi', '[a-z]+', NULL)
 raw expr       : regexp_substr('abc def ghi', '[a-z]+', NULL)
-checked expr   : regexp_substr<String NULL, String NULL, Int64 NULL>(CAST("abc def ghi" AS String NULL), CAST("[a-z]+" AS String NULL), CAST(NULL AS Int64 NULL))
+checked expr   : regexp_substr<String NULL, String NULL, Int64 NULL>(CAST<String>("abc def ghi" AS String NULL), CAST<String>("[a-z]+" AS String NULL), CAST<NULL>(NULL AS Int64 NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -760,7 +760,7 @@ output         : NULL
 
 ast            : regexp_substr('', NULL)
 raw expr       : regexp_substr('', NULL)
-checked expr   : regexp_substr<String NULL, String NULL>(CAST("" AS String NULL), CAST(NULL AS String NULL))
+checked expr   : regexp_substr<String NULL, String NULL>(CAST<String>("" AS String NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -769,7 +769,7 @@ output         : NULL
 
 ast            : regexp_substr('', '', 1, 3)
 raw expr       : regexp_substr('', '', 1, 3)
-checked expr   : regexp_substr<String, String, Int64, Int64>("", "", to_int64<UInt8>(1_u8), to_int64<UInt8>(3_u8))
+checked expr   : regexp_substr<String, String, Int64, Int64>("", "", CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(3_u8 AS Int64))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -879,7 +879,7 @@ evaluation (internal):
 
 ast            : regexp_substr(source, pat, pos, occur, mt)
 raw expr       : regexp_substr(source::String NULL, pat::String NULL, pos::Int64, occur::Int64, mt::String)
-checked expr   : regexp_substr<String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL), CAST(mt AS String NULL))
+checked expr   : regexp_substr<String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, CAST<Int64>(pos AS Int64 NULL), CAST<Int64>(occur AS Int64 NULL), CAST<String>(mt AS String NULL))
 evaluation:
 +--------+------------------------------------------+--------------------------------+---------+---------+------------+-------------+
 |        | source                                   | pat                            | pos     | occur   | mt         | Output      |

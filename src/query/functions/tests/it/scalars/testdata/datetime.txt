@@ -27,7 +27,7 @@ output         : '1960-01-04 00:00:00.000000'
 
 ast            : to_timestamp(-100)
 raw expr       : to_timestamp(minus(100))
-checked expr   : to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8)))
+checked expr   : to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64))
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
@@ -36,7 +36,7 @@ output         : '1969-12-31 23:58:20.000000'
 
 ast            : to_timestamp(-0)
 raw expr       : to_timestamp(minus(0))
-checked expr   : to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(0_u8)))
+checked expr   : to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64))
 optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
@@ -45,7 +45,7 @@ output         : '1970-01-01 00:00:00.000000'
 
 ast            : to_timestamp(0)
 raw expr       : to_timestamp(0)
-checked expr   : to_timestamp<Int64>(to_int64<UInt8>(0_u8))
+checked expr   : to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64))
 optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
@@ -54,7 +54,7 @@ output         : '1970-01-01 00:00:00.000000'
 
 ast            : to_timestamp(100)
 raw expr       : to_timestamp(100)
-checked expr   : to_timestamp<Int64>(to_int64<UInt8>(100_u8))
+checked expr   : to_timestamp<Int64>(CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 100000000
 output type    : Timestamp
 output domain  : {100000000..=100000000}
@@ -63,7 +63,7 @@ output         : '1970-01-01 00:01:40.000000'
 
 ast            : to_timestamp(315360000000)
 raw expr       : to_timestamp(315360000000)
-checked expr   : to_timestamp<Int64>(to_int64<UInt64>(315360000000_u64))
+checked expr   : to_timestamp<Int64>(CAST<UInt64>(315360000000_u64 AS Int64))
 optimized expr : 315360000000000
 output type    : Timestamp
 output domain  : {315360000000000..=315360000000000}
@@ -81,7 +81,7 @@ output         : '2023-01-11 00:00:00.000000'
 
 ast            : to_timestamp('2023-01-11')::int64::timestamp
 raw expr       : CAST(CAST(to_timestamp('2023-01-11') AS Int64) AS Timestamp)
-checked expr   : to_timestamp<Int64>(to_int64<Timestamp>(to_timestamp<String>("2023-01-11")))
+checked expr   : CAST<Int64>(CAST<Timestamp>(to_timestamp<String>("2023-01-11") AS Int64) AS Timestamp)
 optimized expr : 1673395200000000
 output type    : Timestamp
 output domain  : {1673395200000000..=1673395200000000}
@@ -90,7 +90,7 @@ output         : '2023-01-11 00:00:00.000000'
 
 ast            : to_timestamp(315360000000000)
 raw expr       : to_timestamp(315360000000000)
-checked expr   : to_timestamp<Int64>(to_int64<UInt64>(315360000000000_u64))
+checked expr   : to_timestamp<Int64>(CAST<UInt64>(315360000000000_u64 AS Int64))
 optimized expr : 315360000000000
 output type    : Timestamp
 output domain  : {315360000000000..=315360000000000}
@@ -99,7 +99,7 @@ output         : '1979-12-30 00:00:00.000000'
 
 ast            : to_timestamp(253402300800000000)
 raw expr       : to_timestamp(253402300800000000)
-checked expr   : to_timestamp<Int64>(to_int64<UInt64>(253402300800000000_u64))
+checked expr   : to_timestamp<Int64>(CAST<UInt64>(253402300800000000_u64 AS Int64))
 optimized expr : -62135596800000000
 output type    : Timestamp
 output domain  : {-62135596800000000..=-62135596800000000}
@@ -175,7 +175,7 @@ output         : '1000-01-01'
 
 ast            : to_date(-100)
 raw expr       : to_date(minus(100))
-checked expr   : to_date<Int64>(to_int64<Int16>(minus<UInt8>(100_u8)))
+checked expr   : to_date<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64))
 optimized expr : -100
 output type    : Date
 output domain  : {-100..=-100}
@@ -184,7 +184,7 @@ output         : '1969-09-23'
 
 ast            : to_date(-0)
 raw expr       : to_date(minus(0))
-checked expr   : to_date<Int64>(to_int64<Int16>(minus<UInt8>(0_u8)))
+checked expr   : to_date<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64))
 optimized expr : 0
 output type    : Date
 output domain  : {0..=0}
@@ -193,7 +193,7 @@ output         : '1970-01-01'
 
 ast            : to_date(0)
 raw expr       : to_date(0)
-checked expr   : to_date<Int64>(to_int64<UInt8>(0_u8))
+checked expr   : to_date<Int64>(CAST<UInt8>(0_u8 AS Int64))
 optimized expr : 0
 output type    : Date
 output domain  : {0..=0}
@@ -211,7 +211,7 @@ output         : '2023-01-11'
 
 ast            : to_int32(to_date('2023-01-11'))::date
 raw expr       : CAST(to_int32(to_date('2023-01-11')) AS Date)
-checked expr   : to_date<Int64>(to_int64<Int32>(to_int32<Int64>(to_int64<Date>(to_date<String>("2023-01-11")))))
+checked expr   : CAST<Int32>(to_int32<Int64>(CAST<Date>(to_date<String>("2023-01-11") AS Int64)) AS Date)
 optimized expr : 19368
 output type    : Date
 output domain  : {19368..=19368}
@@ -220,7 +220,7 @@ output         : '2023-01-11'
 
 ast            : to_date(100)
 raw expr       : to_date(100)
-checked expr   : to_date<Int64>(to_int64<UInt8>(100_u8))
+checked expr   : to_date<Int64>(CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 100
 output type    : Date
 output domain  : {100..=100}
@@ -229,7 +229,7 @@ output         : '1970-04-11'
 
 ast            : to_date(2932896)
 raw expr       : to_date(2932896)
-checked expr   : to_date<Int64>(to_int64<UInt32>(2932896_u32))
+checked expr   : to_date<Int64>(CAST<UInt32>(2932896_u32 AS Int64))
 optimized expr : 2932896
 output type    : Date
 output domain  : {2932896..=2932896}
@@ -238,7 +238,7 @@ output         : '9999-12-31'
 
 ast            : to_date(2932897)
 raw expr       : to_date(2932897)
-checked expr   : to_date<Int64>(to_int64<UInt32>(2932897_u32))
+checked expr   : to_date<Int64>(CAST<UInt32>(2932897_u32 AS Int64))
 optimized expr : -719162
 output type    : Date
 output domain  : {-719162..=-719162}
@@ -247,7 +247,7 @@ output         : '0001-01-01'
 
 ast            : to_date(a)
 raw expr       : to_date(a::Int32)
-checked expr   : to_date<Int64>(to_int64<Int32>(a))
+checked expr   : to_date<Int64>(CAST<Int32>(a AS Int64))
 evaluation:
 +--------+---------------------+---------------------+
 |        | a                   | Output              |
@@ -296,13 +296,13 @@ error:
   --> SQL:1:1
   |
 1 | add_years(to_date(0), 10000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(CAST(0 AS Int64)), CAST(10000 AS Int64))`
 
 
 
 ast            : add_years(to_date(0), 100)
 raw expr       : add_years(to_date(0), 100)
-checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_years<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 36525
 output type    : Date
 output domain  : {36525..=36525}
@@ -311,7 +311,7 @@ output         : '2070-01-01'
 
 ast            : add_months(to_date(0), 100)
 raw expr       : add_months(to_date(0), 100)
-checked expr   : add_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_months<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 3042
 output type    : Date
 output domain  : {3042..=3042}
@@ -320,7 +320,7 @@ output         : '1978-05-01'
 
 ast            : add_days(to_date(0), 100)
 raw expr       : add_days(to_date(0), 100)
-checked expr   : add_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_days<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 100
 output type    : Date
 output domain  : {100..=100}
@@ -329,7 +329,7 @@ output         : '1970-04-11'
 
 ast            : add(to_date(0), 100)
 raw expr       : add(to_date(0), 100)
-checked expr   : plus<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : plus<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 100
 output type    : Date
 output domain  : {100..=100}
@@ -338,7 +338,7 @@ output         : '1970-04-11'
 
 ast            : add(to_date(0), 10000000)
 raw expr       : add(to_date(0), 10000000)
-checked expr   : plus<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt32>(10000000_u32))
+checked expr   : plus<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt32>(10000000_u32 AS Int64))
 optimized expr : -719162
 output type    : Date
 output domain  : {-719162..=-719162}
@@ -347,7 +347,7 @@ output         : '0001-01-01'
 
 ast            : subtract_years(to_date(0), 100)
 raw expr       : subtract_years(to_date(0), 100)
-checked expr   : subtract_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_years<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -36524
 output type    : Date
 output domain  : {-36524..=-36524}
@@ -356,7 +356,7 @@ output         : '1870-01-01'
 
 ast            : subtract_quarters(to_date(0), 100)
 raw expr       : subtract_quarters(to_date(0), 100)
-checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -9131
 output type    : Date
 output domain  : {-9131..=-9131}
@@ -365,7 +365,7 @@ output         : '1945-01-01'
 
 ast            : subtract_months(to_date(0), 100)
 raw expr       : subtract_months(to_date(0), 100)
-checked expr   : subtract_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_months<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -3044
 output type    : Date
 output domain  : {-3044..=-3044}
@@ -374,7 +374,7 @@ output         : '1961-09-01'
 
 ast            : subtract_days(to_date(0), 100)
 raw expr       : subtract_days(to_date(0), 100)
-checked expr   : subtract_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_days<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -100
 output type    : Date
 output domain  : {-100..=-100}
@@ -383,7 +383,7 @@ output         : '1969-09-23'
 
 ast            : subtract(to_date(0), 100)
 raw expr       : subtract(to_date(0), 100)
-checked expr   : minus<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : minus<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -100
 output type    : Date
 output domain  : {-100..=-100}
@@ -392,7 +392,7 @@ output         : '1969-09-23'
 
 ast            : subtract(to_date(0), 10000000)
 raw expr       : subtract(to_date(0), 10000000)
-checked expr   : minus<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt32>(10000000_u32))
+checked expr   : minus<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt32>(10000000_u32 AS Int64))
 optimized expr : -719162
 output type    : Date
 output domain  : {-719162..=-719162}
@@ -401,7 +401,7 @@ output         : '0001-01-01'
 
 ast            : add_years(a, b)
 raw expr       : add_years(a::Date, b::Int32)
-checked expr   : add_years<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_years<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -424,7 +424,7 @@ evaluation (internal):
 
 ast            : add_quarters(a, b)
 raw expr       : add_quarters(a::Date, b::Int32)
-checked expr   : add_quarters<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_quarters<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -447,7 +447,7 @@ evaluation (internal):
 
 ast            : add_months(a, b)
 raw expr       : add_months(a::Date, b::Int32)
-checked expr   : add_months<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_months<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -470,7 +470,7 @@ evaluation (internal):
 
 ast            : add_days(a, b)
 raw expr       : add_days(a::Date, b::Int32)
-checked expr   : add_days<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_days<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -493,7 +493,7 @@ evaluation (internal):
 
 ast            : subtract_years(a, b)
 raw expr       : subtract_years(a::Date, b::Int32)
-checked expr   : subtract_years<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_years<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -516,7 +516,7 @@ evaluation (internal):
 
 ast            : subtract_quarters(a, b)
 raw expr       : subtract_quarters(a::Date, b::Int32)
-checked expr   : subtract_quarters<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_quarters<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -539,7 +539,7 @@ evaluation (internal):
 
 ast            : subtract_months(a, b)
 raw expr       : subtract_months(a::Date, b::Int32)
-checked expr   : subtract_months<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_months<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -562,7 +562,7 @@ evaluation (internal):
 
 ast            : subtract_days(a, b)
 raw expr       : subtract_days(a::Date, b::Int32)
-checked expr   : subtract_days<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_days<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -587,13 +587,13 @@ error:
   --> SQL:1:1
   |
 1 | add_years(to_timestamp(0), 10000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(CAST(0 AS Int64)), CAST(10000 AS Int64))`
 
 
 
 ast            : add_years(to_timestamp(0), 100)
 raw expr       : add_years(to_timestamp(0), 100)
-checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 3155760000000000
 output type    : Timestamp
 output domain  : {3155760000000000..=3155760000000000}
@@ -602,7 +602,7 @@ output         : '2070-01-01 00:00:00.000000'
 
 ast            : add_quarters(to_timestamp(0), 100)
 raw expr       : add_quarters(to_timestamp(0), 100)
-checked expr   : add_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 788918400000000
 output type    : Timestamp
 output domain  : {788918400000000..=788918400000000}
@@ -611,7 +611,7 @@ output         : '1995-01-01 00:00:00.000000'
 
 ast            : add_months(to_timestamp(0), 100)
 raw expr       : add_months(to_timestamp(0), 100)
-checked expr   : add_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_months<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 262828800000000
 output type    : Timestamp
 output domain  : {262828800000000..=262828800000000}
@@ -620,7 +620,7 @@ output         : '1978-05-01 00:00:00.000000'
 
 ast            : add_days(to_timestamp(0), 100)
 raw expr       : add_days(to_timestamp(0), 100)
-checked expr   : add_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_days<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 8640000000000
 output type    : Timestamp
 output domain  : {8640000000000..=8640000000000}
@@ -629,7 +629,7 @@ output         : '1970-04-11 00:00:00.000000'
 
 ast            : add_hours(to_timestamp(0), 100)
 raw expr       : add_hours(to_timestamp(0), 100)
-checked expr   : add_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 360000000000
 output type    : Timestamp
 output domain  : {360000000000..=360000000000}
@@ -638,7 +638,7 @@ output         : '1970-01-05 04:00:00.000000'
 
 ast            : add_minutes(to_timestamp(0), 100)
 raw expr       : add_minutes(to_timestamp(0), 100)
-checked expr   : add_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 6000000000
 output type    : Timestamp
 output domain  : {6000000000..=6000000000}
@@ -647,7 +647,7 @@ output         : '1970-01-01 01:40:00.000000'
 
 ast            : add_seconds(to_timestamp(0), 100)
 raw expr       : add_seconds(to_timestamp(0), 100)
-checked expr   : add_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 100000000
 output type    : Timestamp
 output domain  : {100000000..=100000000}
@@ -656,7 +656,7 @@ output         : '1970-01-01 00:01:40.000000'
 
 ast            : add(to_timestamp(0), 100000000000000)
 raw expr       : add(to_timestamp(0), 100000000000000)
-checked expr   : plus<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt64>(100000000000000_u64))
+checked expr   : plus<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt64>(100000000000000_u64 AS Int64))
 optimized expr : 100000000000000
 output type    : Timestamp
 output domain  : {100000000000000..=100000000000000}
@@ -665,7 +665,7 @@ output         : '1973-03-03 09:46:40.000000'
 
 ast            : add(to_timestamp(0), 1000000000000000000)
 raw expr       : add(to_timestamp(0), 1000000000000000000)
-checked expr   : plus<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt64>(1000000000000000000_u64))
+checked expr   : plus<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt64>(1000000000000000000_u64 AS Int64))
 optimized expr : -62135596800000000
 output type    : Timestamp
 output domain  : {-62135596800000000..=-62135596800000000}
@@ -674,7 +674,7 @@ output         : '0001-01-01 00:00:00.000000'
 
 ast            : subtract_years(to_timestamp(0), 100)
 raw expr       : subtract_years(to_timestamp(0), 100)
-checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -3155673600000000
 output type    : Timestamp
 output domain  : {-3155673600000000..=-3155673600000000}
@@ -683,7 +683,7 @@ output         : '1870-01-01 00:00:00.000000'
 
 ast            : subtract_quarters(to_timestamp(0), 100)
 raw expr       : subtract_quarters(to_timestamp(0), 100)
-checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -788918400000000
 output type    : Timestamp
 output domain  : {-788918400000000..=-788918400000000}
@@ -692,7 +692,7 @@ output         : '1945-01-01 00:00:00.000000'
 
 ast            : subtract_months(to_timestamp(0), 100)
 raw expr       : subtract_months(to_timestamp(0), 100)
-checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -263001600000000
 output type    : Timestamp
 output domain  : {-263001600000000..=-263001600000000}
@@ -701,7 +701,7 @@ output         : '1961-09-01 00:00:00.000000'
 
 ast            : subtract_days(to_timestamp(0), 100)
 raw expr       : subtract_days(to_timestamp(0), 100)
-checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -8640000000000
 output type    : Timestamp
 output domain  : {-8640000000000..=-8640000000000}
@@ -710,7 +710,7 @@ output         : '1969-09-23 00:00:00.000000'
 
 ast            : subtract_hours(to_timestamp(0), 100)
 raw expr       : subtract_hours(to_timestamp(0), 100)
-checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -360000000000
 output type    : Timestamp
 output domain  : {-360000000000..=-360000000000}
@@ -719,7 +719,7 @@ output         : '1969-12-27 20:00:00.000000'
 
 ast            : subtract_minutes(to_timestamp(0), 100)
 raw expr       : subtract_minutes(to_timestamp(0), 100)
-checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -6000000000
 output type    : Timestamp
 output domain  : {-6000000000..=-6000000000}
@@ -728,7 +728,7 @@ output         : '1969-12-31 22:20:00.000000'
 
 ast            : subtract_seconds(to_timestamp(0), 100)
 raw expr       : subtract_seconds(to_timestamp(0), 100)
-checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
@@ -737,7 +737,7 @@ output         : '1969-12-31 23:58:20.000000'
 
 ast            : subtract(to_timestamp(0), 100000000000000)
 raw expr       : subtract(to_timestamp(0), 100000000000000)
-checked expr   : minus<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt64>(100000000000000_u64))
+checked expr   : minus<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt64>(100000000000000_u64 AS Int64))
 optimized expr : -100000000000000
 output type    : Timestamp
 output domain  : {-100000000000000..=-100000000000000}
@@ -746,7 +746,7 @@ output         : '1966-10-31 14:13:20.000000'
 
 ast            : subtract(to_timestamp(0), 1000000000000000000)
 raw expr       : subtract(to_timestamp(0), 1000000000000000000)
-checked expr   : minus<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt64>(1000000000000000000_u64))
+checked expr   : minus<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt64>(1000000000000000000_u64 AS Int64))
 optimized expr : -62135596800000000
 output type    : Timestamp
 output domain  : {-62135596800000000..=-62135596800000000}
@@ -755,7 +755,7 @@ output         : '0001-01-01 00:00:00.000000'
 
 ast            : add_years(a, b)
 raw expr       : add_years(a::Timestamp, b::Int32)
-checked expr   : add_years<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_years<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -778,7 +778,7 @@ evaluation (internal):
 
 ast            : add_quarters(a, b)
 raw expr       : add_quarters(a::Timestamp, b::Int32)
-checked expr   : add_quarters<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_quarters<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -801,7 +801,7 @@ evaluation (internal):
 
 ast            : add_months(a, b)
 raw expr       : add_months(a::Timestamp, b::Int32)
-checked expr   : add_months<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_months<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -824,7 +824,7 @@ evaluation (internal):
 
 ast            : add_days(a, b)
 raw expr       : add_days(a::Timestamp, b::Int32)
-checked expr   : add_days<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_days<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -847,7 +847,7 @@ evaluation (internal):
 
 ast            : add_hours(a, b)
 raw expr       : add_hours(a::Timestamp, b::Int32)
-checked expr   : add_hours<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_hours<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -870,7 +870,7 @@ evaluation (internal):
 
 ast            : add_minutes(a, b)
 raw expr       : add_minutes(a::Timestamp, b::Int32)
-checked expr   : add_minutes<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_minutes<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -893,7 +893,7 @@ evaluation (internal):
 
 ast            : add_seconds(a, b)
 raw expr       : add_seconds(a::Timestamp, b::Int32)
-checked expr   : add_seconds<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_seconds<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -916,7 +916,7 @@ evaluation (internal):
 
 ast            : subtract_years(a, b)
 raw expr       : subtract_years(a::Timestamp, b::Int32)
-checked expr   : subtract_years<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_years<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -939,7 +939,7 @@ evaluation (internal):
 
 ast            : subtract_quarters(a, b)
 raw expr       : subtract_quarters(a::Timestamp, b::Int32)
-checked expr   : subtract_quarters<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_quarters<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -962,7 +962,7 @@ evaluation (internal):
 
 ast            : subtract_months(a, b)
 raw expr       : subtract_months(a::Timestamp, b::Int32)
-checked expr   : subtract_months<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_months<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -985,7 +985,7 @@ evaluation (internal):
 
 ast            : subtract_days(a, b)
 raw expr       : subtract_days(a::Timestamp, b::Int32)
-checked expr   : subtract_days<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_days<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1008,7 +1008,7 @@ evaluation (internal):
 
 ast            : subtract_hours(a, b)
 raw expr       : subtract_hours(a::Timestamp, b::Int32)
-checked expr   : subtract_hours<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_hours<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1031,7 +1031,7 @@ evaluation (internal):
 
 ast            : subtract_minutes(a, b)
 raw expr       : subtract_minutes(a::Timestamp, b::Int32)
-checked expr   : subtract_minutes<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_minutes<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1054,7 +1054,7 @@ evaluation (internal):
 
 ast            : subtract_seconds(a, b)
 raw expr       : subtract_seconds(a::Timestamp, b::Int32)
-checked expr   : subtract_seconds<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_seconds<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1079,13 +1079,13 @@ error:
   --> SQL:1:1
   |
 1 | date_add(year, 10000, to_date(0))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(CAST(0 AS Int64)), CAST(10000 AS Int64))`
 
 
 
 ast            : date_add(year, 100, to_date(0))
 raw expr       : add_years(to_date(0), 100)
-checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_years<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 36525
 output type    : Date
 output domain  : {36525..=36525}
@@ -1094,7 +1094,7 @@ output         : '2070-01-01'
 
 ast            : date_add(quarter, 100, to_date(0))
 raw expr       : add_quarters(to_date(0), 100)
-checked expr   : add_quarters<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_quarters<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 9131
 output type    : Date
 output domain  : {9131..=9131}
@@ -1103,7 +1103,7 @@ output         : '1995-01-01'
 
 ast            : date_add(month, 100, to_date(0))
 raw expr       : add_months(to_date(0), 100)
-checked expr   : add_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_months<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 3042
 output type    : Date
 output domain  : {3042..=3042}
@@ -1112,7 +1112,7 @@ output         : '1978-05-01'
 
 ast            : date_add(day, 100, to_date(0))
 raw expr       : add_days(to_date(0), 100)
-checked expr   : add_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_days<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 100
 output type    : Date
 output domain  : {100..=100}
@@ -1121,7 +1121,7 @@ output         : '1970-04-11'
 
 ast            : date_sub(year, 100, to_date(0))
 raw expr       : subtract_years(to_date(0), 100)
-checked expr   : subtract_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_years<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -36524
 output type    : Date
 output domain  : {-36524..=-36524}
@@ -1130,7 +1130,7 @@ output         : '1870-01-01'
 
 ast            : date_sub(quarter, 100, to_date(0))
 raw expr       : subtract_quarters(to_date(0), 100)
-checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -9131
 output type    : Date
 output domain  : {-9131..=-9131}
@@ -1139,7 +1139,7 @@ output         : '1945-01-01'
 
 ast            : date_sub(month, 100, to_date(0))
 raw expr       : subtract_months(to_date(0), 100)
-checked expr   : subtract_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_months<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -3044
 output type    : Date
 output domain  : {-3044..=-3044}
@@ -1148,7 +1148,7 @@ output         : '1961-09-01'
 
 ast            : date_sub(day, 100, to_date(0))
 raw expr       : subtract_days(to_date(0), 100)
-checked expr   : subtract_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_days<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -100
 output type    : Date
 output domain  : {-100..=-100}
@@ -1157,7 +1157,7 @@ output         : '1969-09-23'
 
 ast            : date_add(year, b, a)
 raw expr       : add_years(a::Date, b::Int32)
-checked expr   : add_years<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_years<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1180,7 +1180,7 @@ evaluation (internal):
 
 ast            : date_add(quarter, b, a)
 raw expr       : add_quarters(a::Date, b::Int32)
-checked expr   : add_quarters<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_quarters<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1203,7 +1203,7 @@ evaluation (internal):
 
 ast            : date_add(month, b, a)
 raw expr       : add_months(a::Date, b::Int32)
-checked expr   : add_months<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_months<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1226,7 +1226,7 @@ evaluation (internal):
 
 ast            : date_add(day, b, a)
 raw expr       : add_days(a::Date, b::Int32)
-checked expr   : add_days<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_days<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1249,7 +1249,7 @@ evaluation (internal):
 
 ast            : date_sub(year, b, a)
 raw expr       : subtract_years(a::Date, b::Int32)
-checked expr   : subtract_years<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_years<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1272,7 +1272,7 @@ evaluation (internal):
 
 ast            : date_sub(quarter, b, a)
 raw expr       : subtract_quarters(a::Date, b::Int32)
-checked expr   : subtract_quarters<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_quarters<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1295,7 +1295,7 @@ evaluation (internal):
 
 ast            : date_sub(month, b, a)
 raw expr       : subtract_months(a::Date, b::Int32)
-checked expr   : subtract_months<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_months<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1318,7 +1318,7 @@ evaluation (internal):
 
 ast            : date_sub(day, b, a)
 raw expr       : subtract_days(a::Date, b::Int32)
-checked expr   : subtract_days<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_days<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1343,13 +1343,13 @@ error:
   --> SQL:1:1
   |
 1 | date_add(year, 10000, to_timestamp(0))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(CAST(0 AS Int64)), CAST(10000 AS Int64))`
 
 
 
 ast            : date_add(year, 100, to_timestamp(0))
 raw expr       : add_years(to_timestamp(0), 100)
-checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 3155760000000000
 output type    : Timestamp
 output domain  : {3155760000000000..=3155760000000000}
@@ -1358,7 +1358,7 @@ output         : '2070-01-01 00:00:00.000000'
 
 ast            : date_add(quarter, 100, to_timestamp(0))
 raw expr       : add_quarters(to_timestamp(0), 100)
-checked expr   : add_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 788918400000000
 output type    : Timestamp
 output domain  : {788918400000000..=788918400000000}
@@ -1367,7 +1367,7 @@ output         : '1995-01-01 00:00:00.000000'
 
 ast            : date_add(month, 100, to_timestamp(0))
 raw expr       : add_months(to_timestamp(0), 100)
-checked expr   : add_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_months<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 262828800000000
 output type    : Timestamp
 output domain  : {262828800000000..=262828800000000}
@@ -1376,7 +1376,7 @@ output         : '1978-05-01 00:00:00.000000'
 
 ast            : date_add(day, 100, to_timestamp(0))
 raw expr       : add_days(to_timestamp(0), 100)
-checked expr   : add_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_days<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 8640000000000
 output type    : Timestamp
 output domain  : {8640000000000..=8640000000000}
@@ -1385,7 +1385,7 @@ output         : '1970-04-11 00:00:00.000000'
 
 ast            : date_add(hour, 100, to_timestamp(0))
 raw expr       : add_hours(to_timestamp(0), 100)
-checked expr   : add_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 360000000000
 output type    : Timestamp
 output domain  : {360000000000..=360000000000}
@@ -1394,7 +1394,7 @@ output         : '1970-01-05 04:00:00.000000'
 
 ast            : date_add(minute, 100, to_timestamp(0))
 raw expr       : add_minutes(to_timestamp(0), 100)
-checked expr   : add_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 6000000000
 output type    : Timestamp
 output domain  : {6000000000..=6000000000}
@@ -1403,7 +1403,7 @@ output         : '1970-01-01 01:40:00.000000'
 
 ast            : date_add(second, 100, to_timestamp(0))
 raw expr       : add_seconds(to_timestamp(0), 100)
-checked expr   : add_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 100000000
 output type    : Timestamp
 output domain  : {100000000..=100000000}
@@ -1412,7 +1412,7 @@ output         : '1970-01-01 00:01:40.000000'
 
 ast            : date_sub(year, 100, to_timestamp(0))
 raw expr       : subtract_years(to_timestamp(0), 100)
-checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -3155673600000000
 output type    : Timestamp
 output domain  : {-3155673600000000..=-3155673600000000}
@@ -1421,7 +1421,7 @@ output         : '1870-01-01 00:00:00.000000'
 
 ast            : date_sub(quarter, 100, to_timestamp(0))
 raw expr       : subtract_quarters(to_timestamp(0), 100)
-checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -788918400000000
 output type    : Timestamp
 output domain  : {-788918400000000..=-788918400000000}
@@ -1430,7 +1430,7 @@ output         : '1945-01-01 00:00:00.000000'
 
 ast            : date_sub(month, 100, to_timestamp(0))
 raw expr       : subtract_months(to_timestamp(0), 100)
-checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -263001600000000
 output type    : Timestamp
 output domain  : {-263001600000000..=-263001600000000}
@@ -1439,7 +1439,7 @@ output         : '1961-09-01 00:00:00.000000'
 
 ast            : date_sub(day, 100, to_timestamp(0))
 raw expr       : subtract_days(to_timestamp(0), 100)
-checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -8640000000000
 output type    : Timestamp
 output domain  : {-8640000000000..=-8640000000000}
@@ -1448,7 +1448,7 @@ output         : '1969-09-23 00:00:00.000000'
 
 ast            : date_sub(hour, 100, to_timestamp(0))
 raw expr       : subtract_hours(to_timestamp(0), 100)
-checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -360000000000
 output type    : Timestamp
 output domain  : {-360000000000..=-360000000000}
@@ -1457,7 +1457,7 @@ output         : '1969-12-27 20:00:00.000000'
 
 ast            : date_sub(minute, 100, to_timestamp(0))
 raw expr       : subtract_minutes(to_timestamp(0), 100)
-checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -6000000000
 output type    : Timestamp
 output domain  : {-6000000000..=-6000000000}
@@ -1466,7 +1466,7 @@ output         : '1969-12-31 22:20:00.000000'
 
 ast            : date_sub(second, 100, to_timestamp(0))
 raw expr       : subtract_seconds(to_timestamp(0), 100)
-checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
@@ -1475,7 +1475,7 @@ output         : '1969-12-31 23:58:20.000000'
 
 ast            : date_add(year, b, a)
 raw expr       : add_years(a::Timestamp, b::Int32)
-checked expr   : add_years<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_years<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1498,7 +1498,7 @@ evaluation (internal):
 
 ast            : date_add(quarter, b, a)
 raw expr       : add_quarters(a::Timestamp, b::Int32)
-checked expr   : add_quarters<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_quarters<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1521,7 +1521,7 @@ evaluation (internal):
 
 ast            : date_add(month, b, a)
 raw expr       : add_months(a::Timestamp, b::Int32)
-checked expr   : add_months<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_months<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1544,7 +1544,7 @@ evaluation (internal):
 
 ast            : date_add(day, b, a)
 raw expr       : add_days(a::Timestamp, b::Int32)
-checked expr   : add_days<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_days<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1567,7 +1567,7 @@ evaluation (internal):
 
 ast            : date_add(hour, b, a)
 raw expr       : add_hours(a::Timestamp, b::Int32)
-checked expr   : add_hours<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_hours<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1590,7 +1590,7 @@ evaluation (internal):
 
 ast            : date_add(minute, b, a)
 raw expr       : add_minutes(a::Timestamp, b::Int32)
-checked expr   : add_minutes<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_minutes<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1613,7 +1613,7 @@ evaluation (internal):
 
 ast            : date_add(second, b, a)
 raw expr       : add_seconds(a::Timestamp, b::Int32)
-checked expr   : add_seconds<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_seconds<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1636,7 +1636,7 @@ evaluation (internal):
 
 ast            : date_sub(year, b, a)
 raw expr       : subtract_years(a::Timestamp, b::Int32)
-checked expr   : subtract_years<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_years<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1659,7 +1659,7 @@ evaluation (internal):
 
 ast            : date_sub(quarter, b, a)
 raw expr       : subtract_quarters(a::Timestamp, b::Int32)
-checked expr   : subtract_quarters<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_quarters<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1682,7 +1682,7 @@ evaluation (internal):
 
 ast            : date_sub(month, b, a)
 raw expr       : subtract_months(a::Timestamp, b::Int32)
-checked expr   : subtract_months<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_months<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1705,7 +1705,7 @@ evaluation (internal):
 
 ast            : date_sub(day, b, a)
 raw expr       : subtract_days(a::Timestamp, b::Int32)
-checked expr   : subtract_days<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_days<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1728,7 +1728,7 @@ evaluation (internal):
 
 ast            : date_sub(hour, b, a)
 raw expr       : subtract_hours(a::Timestamp, b::Int32)
-checked expr   : subtract_hours<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_hours<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1751,7 +1751,7 @@ evaluation (internal):
 
 ast            : date_sub(minute, b, a)
 raw expr       : subtract_minutes(a::Timestamp, b::Int32)
-checked expr   : subtract_minutes<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_minutes<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1774,7 +1774,7 @@ evaluation (internal):
 
 ast            : date_sub(second, b, a)
 raw expr       : subtract_seconds(a::Timestamp, b::Int32)
-checked expr   : subtract_seconds<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_seconds<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -1799,13 +1799,13 @@ error:
   --> SQL:1:12
   |
 1 | to_date(0) + interval 10000 year
-  |            ^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
+  |            ^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(CAST(0 AS Int64)), CAST(10000 AS Int64))`
 
 
 
 ast            : to_date(0) + interval 100 year
 raw expr       : add_years(to_date(0), 100)
-checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_years<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 36525
 output type    : Date
 output domain  : {36525..=36525}
@@ -1814,7 +1814,7 @@ output         : '2070-01-01'
 
 ast            : to_date(0) + interval 100 quarter
 raw expr       : add_quarters(to_date(0), 100)
-checked expr   : add_quarters<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_quarters<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 9131
 output type    : Date
 output domain  : {9131..=9131}
@@ -1823,7 +1823,7 @@ output         : '1995-01-01'
 
 ast            : to_date(0) + interval 100 month
 raw expr       : add_months(to_date(0), 100)
-checked expr   : add_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_months<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 3042
 output type    : Date
 output domain  : {3042..=3042}
@@ -1832,7 +1832,7 @@ output         : '1978-05-01'
 
 ast            : to_date(0) + interval 100 day
 raw expr       : add_days(to_date(0), 100)
-checked expr   : add_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_days<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 100
 output type    : Date
 output domain  : {100..=100}
@@ -1841,7 +1841,7 @@ output         : '1970-04-11'
 
 ast            : to_date(0) - interval 100 year
 raw expr       : subtract_years(to_date(0), 100)
-checked expr   : subtract_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_years<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -36524
 output type    : Date
 output domain  : {-36524..=-36524}
@@ -1850,7 +1850,7 @@ output         : '1870-01-01'
 
 ast            : to_date(0) - interval 100 quarter
 raw expr       : subtract_quarters(to_date(0), 100)
-checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_quarters<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -9131
 output type    : Date
 output domain  : {-9131..=-9131}
@@ -1859,7 +1859,7 @@ output         : '1945-01-01'
 
 ast            : to_date(0) - interval 100 month
 raw expr       : subtract_months(to_date(0), 100)
-checked expr   : subtract_months<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_months<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -3044
 output type    : Date
 output domain  : {-3044..=-3044}
@@ -1868,7 +1868,7 @@ output         : '1961-09-01'
 
 ast            : to_date(0) - interval 100 day
 raw expr       : subtract_days(to_date(0), 100)
-checked expr   : subtract_days<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_days<Date, Int64>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -100
 output type    : Date
 output domain  : {-100..=-100}
@@ -1877,7 +1877,7 @@ output         : '1969-09-23'
 
 ast            : a + interval b year
 raw expr       : add_years(a::Date, b::Int32)
-checked expr   : add_years<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_years<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1900,7 +1900,7 @@ evaluation (internal):
 
 ast            : a + interval b quarter
 raw expr       : add_quarters(a::Date, b::Int32)
-checked expr   : add_quarters<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_quarters<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1923,7 +1923,7 @@ evaluation (internal):
 
 ast            : a + interval b month
 raw expr       : add_months(a::Date, b::Int32)
-checked expr   : add_months<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_months<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1946,7 +1946,7 @@ evaluation (internal):
 
 ast            : a + interval b day
 raw expr       : add_days(a::Date, b::Int32)
-checked expr   : add_days<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_days<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1969,7 +1969,7 @@ evaluation (internal):
 
 ast            : a - interval b year
 raw expr       : subtract_years(a::Date, b::Int32)
-checked expr   : subtract_years<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_years<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -1992,7 +1992,7 @@ evaluation (internal):
 
 ast            : a - interval b quarter
 raw expr       : subtract_quarters(a::Date, b::Int32)
-checked expr   : subtract_quarters<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_quarters<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -2015,7 +2015,7 @@ evaluation (internal):
 
 ast            : a - interval b month
 raw expr       : subtract_months(a::Date, b::Int32)
-checked expr   : subtract_months<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_months<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -2038,7 +2038,7 @@ evaluation (internal):
 
 ast            : a - interval b day
 raw expr       : subtract_days(a::Date, b::Int32)
-checked expr   : subtract_days<Date, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_days<Date, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+--------------+---------+--------------+
 |        | a            | b       | Output       |
@@ -2063,13 +2063,13 @@ error:
   --> SQL:1:17
   |
 1 | to_timestamp(0) + interval 10000 year
-  |                 ^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
+  |                 ^ Invalid date: parameter 'year' with value 11970 is not in the required range of -9999..=9999 while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(CAST(0 AS Int64)), CAST(10000 AS Int64))`
 
 
 
 ast            : to_timestamp(0) + interval 100 year
 raw expr       : add_years(to_timestamp(0), 100)
-checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 3155760000000000
 output type    : Timestamp
 output domain  : {3155760000000000..=3155760000000000}
@@ -2078,7 +2078,7 @@ output         : '2070-01-01 00:00:00.000000'
 
 ast            : to_timestamp(0) + interval 100 quarter
 raw expr       : add_quarters(to_timestamp(0), 100)
-checked expr   : add_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 788918400000000
 output type    : Timestamp
 output domain  : {788918400000000..=788918400000000}
@@ -2087,7 +2087,7 @@ output         : '1995-01-01 00:00:00.000000'
 
 ast            : to_timestamp(0) + interval 100 month
 raw expr       : add_months(to_timestamp(0), 100)
-checked expr   : add_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_months<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 262828800000000
 output type    : Timestamp
 output domain  : {262828800000000..=262828800000000}
@@ -2096,7 +2096,7 @@ output         : '1978-05-01 00:00:00.000000'
 
 ast            : to_timestamp(0) + interval 100 day
 raw expr       : add_days(to_timestamp(0), 100)
-checked expr   : add_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_days<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 8640000000000
 output type    : Timestamp
 output domain  : {8640000000000..=8640000000000}
@@ -2105,7 +2105,7 @@ output         : '1970-04-11 00:00:00.000000'
 
 ast            : to_timestamp(0) + interval 100 hour
 raw expr       : add_hours(to_timestamp(0), 100)
-checked expr   : add_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 360000000000
 output type    : Timestamp
 output domain  : {360000000000..=360000000000}
@@ -2114,7 +2114,7 @@ output         : '1970-01-05 04:00:00.000000'
 
 ast            : to_timestamp(0) + interval 100 minute
 raw expr       : add_minutes(to_timestamp(0), 100)
-checked expr   : add_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 6000000000
 output type    : Timestamp
 output domain  : {6000000000..=6000000000}
@@ -2123,7 +2123,7 @@ output         : '1970-01-01 01:40:00.000000'
 
 ast            : to_timestamp(0) + interval 100 second
 raw expr       : add_seconds(to_timestamp(0), 100)
-checked expr   : add_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : add_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : 100000000
 output type    : Timestamp
 output domain  : {100000000..=100000000}
@@ -2132,7 +2132,7 @@ output         : '1970-01-01 00:01:40.000000'
 
 ast            : to_timestamp(0) - interval 100 year
 raw expr       : subtract_years(to_timestamp(0), 100)
-checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -3155673600000000
 output type    : Timestamp
 output domain  : {-3155673600000000..=-3155673600000000}
@@ -2141,7 +2141,7 @@ output         : '1870-01-01 00:00:00.000000'
 
 ast            : to_timestamp(0) - interval 100 quarter
 raw expr       : subtract_quarters(to_timestamp(0), 100)
-checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_quarters<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -788918400000000
 output type    : Timestamp
 output domain  : {-788918400000000..=-788918400000000}
@@ -2150,7 +2150,7 @@ output         : '1945-01-01 00:00:00.000000'
 
 ast            : to_timestamp(0) - interval 100 month
 raw expr       : subtract_months(to_timestamp(0), 100)
-checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_months<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -263001600000000
 output type    : Timestamp
 output domain  : {-263001600000000..=-263001600000000}
@@ -2159,7 +2159,7 @@ output         : '1961-09-01 00:00:00.000000'
 
 ast            : to_timestamp(0) - interval 100 day
 raw expr       : subtract_days(to_timestamp(0), 100)
-checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_days<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -8640000000000
 output type    : Timestamp
 output domain  : {-8640000000000..=-8640000000000}
@@ -2168,7 +2168,7 @@ output         : '1969-09-23 00:00:00.000000'
 
 ast            : to_timestamp(0) - interval 100 hour
 raw expr       : subtract_hours(to_timestamp(0), 100)
-checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_hours<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -360000000000
 output type    : Timestamp
 output domain  : {-360000000000..=-360000000000}
@@ -2177,7 +2177,7 @@ output         : '1969-12-27 20:00:00.000000'
 
 ast            : to_timestamp(0) - interval 100 minute
 raw expr       : subtract_minutes(to_timestamp(0), 100)
-checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_minutes<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -6000000000
 output type    : Timestamp
 output domain  : {-6000000000..=-6000000000}
@@ -2186,7 +2186,7 @@ output         : '1969-12-31 22:20:00.000000'
 
 ast            : to_timestamp(0) - interval 100 second
 raw expr       : subtract_seconds(to_timestamp(0), 100)
-checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+checked expr   : subtract_seconds<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)), CAST<UInt8>(100_u8 AS Int64))
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
@@ -2195,7 +2195,7 @@ output         : '1969-12-31 23:58:20.000000'
 
 ast            : a + interval b year
 raw expr       : add_years(a::Timestamp, b::Int32)
-checked expr   : add_years<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_years<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2218,7 +2218,7 @@ evaluation (internal):
 
 ast            : a + interval b quarter
 raw expr       : add_quarters(a::Timestamp, b::Int32)
-checked expr   : add_quarters<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_quarters<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2241,7 +2241,7 @@ evaluation (internal):
 
 ast            : a + interval b month
 raw expr       : add_months(a::Timestamp, b::Int32)
-checked expr   : add_months<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_months<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2264,7 +2264,7 @@ evaluation (internal):
 
 ast            : a + interval b day
 raw expr       : add_days(a::Timestamp, b::Int32)
-checked expr   : add_days<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_days<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2287,7 +2287,7 @@ evaluation (internal):
 
 ast            : a + interval b hour
 raw expr       : add_hours(a::Timestamp, b::Int32)
-checked expr   : add_hours<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_hours<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2310,7 +2310,7 @@ evaluation (internal):
 
 ast            : a + interval b minute
 raw expr       : add_minutes(a::Timestamp, b::Int32)
-checked expr   : add_minutes<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_minutes<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2333,7 +2333,7 @@ evaluation (internal):
 
 ast            : a + interval b second
 raw expr       : add_seconds(a::Timestamp, b::Int32)
-checked expr   : add_seconds<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : add_seconds<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2356,7 +2356,7 @@ evaluation (internal):
 
 ast            : a - interval b year
 raw expr       : subtract_years(a::Timestamp, b::Int32)
-checked expr   : subtract_years<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_years<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2379,7 +2379,7 @@ evaluation (internal):
 
 ast            : a - interval b quarter
 raw expr       : subtract_quarters(a::Timestamp, b::Int32)
-checked expr   : subtract_quarters<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_quarters<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2402,7 +2402,7 @@ evaluation (internal):
 
 ast            : a - interval b month
 raw expr       : subtract_months(a::Timestamp, b::Int32)
-checked expr   : subtract_months<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_months<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2425,7 +2425,7 @@ evaluation (internal):
 
 ast            : a - interval b day
 raw expr       : subtract_days(a::Timestamp, b::Int32)
-checked expr   : subtract_days<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_days<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2448,7 +2448,7 @@ evaluation (internal):
 
 ast            : a - interval b hour
 raw expr       : subtract_hours(a::Timestamp, b::Int32)
-checked expr   : subtract_hours<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_hours<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2471,7 +2471,7 @@ evaluation (internal):
 
 ast            : a - interval b minute
 raw expr       : subtract_minutes(a::Timestamp, b::Int32)
-checked expr   : subtract_minutes<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_minutes<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2494,7 +2494,7 @@ evaluation (internal):
 
 ast            : a - interval b second
 raw expr       : subtract_seconds(a::Timestamp, b::Int32)
-checked expr   : subtract_seconds<Timestamp, Int64>(a, to_int64<Int32>(b))
+checked expr   : subtract_seconds<Timestamp, Int64>(a, CAST<Int32>(b AS Int64))
 evaluation:
 +--------+------------------------------+---------+------------------------------+
 |        | a                            | b       | Output                       |
@@ -2517,7 +2517,7 @@ evaluation (internal):
 
 ast            : to_yyyymm(to_date(18875))
 raw expr       : to_yyyymm(to_date(18875))
-checked expr   : to_yyyymm<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+checked expr   : to_yyyymm<Date>(to_date<Int64>(CAST<UInt16>(18875_u16 AS Int64)))
 optimized expr : 202109_u32
 output type    : UInt32
 output domain  : {202109..=202109}
@@ -2526,7 +2526,7 @@ output         : 202109
 
 ast            : to_yyyymmdd(to_date(18875))
 raw expr       : to_yyyymmdd(to_date(18875))
-checked expr   : to_yyyymmdd<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+checked expr   : to_yyyymmdd<Date>(to_date<Int64>(CAST<UInt16>(18875_u16 AS Int64)))
 optimized expr : 20210905_u32
 output type    : UInt32
 output domain  : {20210905..=20210905}
@@ -2535,7 +2535,7 @@ output         : 20210905
 
 ast            : to_yyyymmddhhmmss(to_date(18875))
 raw expr       : to_yyyymmddhhmmss(to_date(18875))
-checked expr   : to_yyyymmddhhmmss<Timestamp>(to_timestamp<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16))))
+checked expr   : to_yyyymmddhhmmss<Timestamp>(CAST<Date>(to_date<Int64>(CAST<UInt16>(18875_u16 AS Int64)) AS Timestamp))
 optimized expr : 20210905000000_u64
 output type    : UInt64
 output domain  : {20210905000000..=20210905000000}
@@ -2544,7 +2544,7 @@ output         : 20210905000000
 
 ast            : to_year(to_date(18875))
 raw expr       : to_year(to_date(18875))
-checked expr   : to_year<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+checked expr   : to_year<Date>(to_date<Int64>(CAST<UInt16>(18875_u16 AS Int64)))
 optimized expr : 2021_u16
 output type    : UInt16
 output domain  : {2021..=2021}
@@ -2553,7 +2553,7 @@ output         : 2021
 
 ast            : to_quarter(to_date(18875))
 raw expr       : to_quarter(to_date(18875))
-checked expr   : to_quarter<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+checked expr   : to_quarter<Date>(to_date<Int64>(CAST<UInt16>(18875_u16 AS Int64)))
 optimized expr : 3_u8
 output type    : UInt8
 output domain  : {3..=3}
@@ -2562,7 +2562,7 @@ output         : 3
 
 ast            : to_month(to_date(18875))
 raw expr       : to_month(to_date(18875))
-checked expr   : to_month<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+checked expr   : to_month<Date>(to_date<Int64>(CAST<UInt16>(18875_u16 AS Int64)))
 optimized expr : 9_u8
 output type    : UInt8
 output domain  : {9..=9}
@@ -2571,7 +2571,7 @@ output         : 9
 
 ast            : to_day_of_year(to_date(18875))
 raw expr       : to_day_of_year(to_date(18875))
-checked expr   : to_day_of_year<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+checked expr   : to_day_of_year<Date>(to_date<Int64>(CAST<UInt16>(18875_u16 AS Int64)))
 optimized expr : 248_u16
 output type    : UInt16
 output domain  : {248..=248}
@@ -2580,7 +2580,7 @@ output         : 248
 
 ast            : to_day_of_month(to_date(18875))
 raw expr       : to_day_of_month(to_date(18875))
-checked expr   : to_day_of_month<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+checked expr   : to_day_of_month<Date>(to_date<Int64>(CAST<UInt16>(18875_u16 AS Int64)))
 optimized expr : 5_u8
 output type    : UInt8
 output domain  : {5..=5}
@@ -2589,7 +2589,7 @@ output         : 5
 
 ast            : to_day_of_week(to_date(18875))
 raw expr       : to_day_of_week(to_date(18875))
-checked expr   : to_day_of_week<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+checked expr   : to_day_of_week<Date>(to_date<Int64>(CAST<UInt16>(18875_u16 AS Int64)))
 optimized expr : 7_u8
 output type    : UInt8
 output domain  : {7..=7}
@@ -2598,7 +2598,7 @@ output         : 7
 
 ast            : to_week_of_year(to_date(18875))
 raw expr       : to_week_of_year(to_date(18875))
-checked expr   : to_week_of_year<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+checked expr   : to_week_of_year<Date>(to_date<Int64>(CAST<UInt16>(18875_u16 AS Int64)))
 optimized expr : 35_u32
 output type    : UInt32
 output domain  : {35..=35}
@@ -2651,7 +2651,7 @@ evaluation (internal):
 
 ast            : to_yyyymmddhhmmss(a)
 raw expr       : to_yyyymmddhhmmss(a::Date)
-checked expr   : to_yyyymmddhhmmss<Timestamp>(to_timestamp<Date>(a))
+checked expr   : to_yyyymmddhhmmss<Timestamp>(CAST<Date>(a AS Timestamp))
 evaluation:
 +--------+--------------+----------------------------+
 |        | a            | Output                     |
@@ -2827,7 +2827,7 @@ evaluation (internal):
 
 ast            : to_yyyymm(to_timestamp(1630812366))
 raw expr       : to_yyyymm(to_timestamp(1630812366))
-checked expr   : to_yyyymm<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_yyyymm<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 202109_u32
 output type    : UInt32
 output domain  : {202109..=202109}
@@ -2836,7 +2836,7 @@ output         : 202109
 
 ast            : to_yyyymmdd(to_timestamp(1630812366))
 raw expr       : to_yyyymmdd(to_timestamp(1630812366))
-checked expr   : to_yyyymmdd<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_yyyymmdd<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 20210905_u32
 output type    : UInt32
 output domain  : {20210905..=20210905}
@@ -2845,7 +2845,7 @@ output         : 20210905
 
 ast            : to_yyyymmddhhmmss(to_timestamp(1630812366))
 raw expr       : to_yyyymmddhhmmss(to_timestamp(1630812366))
-checked expr   : to_yyyymmddhhmmss<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_yyyymmddhhmmss<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 20210905032606_u64
 output type    : UInt64
 output domain  : {20210905032606..=20210905032606}
@@ -2854,7 +2854,7 @@ output         : 20210905032606
 
 ast            : to_year(to_timestamp(1630812366))
 raw expr       : to_year(to_timestamp(1630812366))
-checked expr   : to_year<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_year<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 2021_u16
 output type    : UInt16
 output domain  : {2021..=2021}
@@ -2863,7 +2863,7 @@ output         : 2021
 
 ast            : to_quarter(to_timestamp(1630812366))
 raw expr       : to_quarter(to_timestamp(1630812366))
-checked expr   : to_quarter<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_quarter<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 3_u8
 output type    : UInt8
 output domain  : {3..=3}
@@ -2872,7 +2872,7 @@ output         : 3
 
 ast            : to_month(to_timestamp(1630812366))
 raw expr       : to_month(to_timestamp(1630812366))
-checked expr   : to_month<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_month<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 9_u8
 output type    : UInt8
 output domain  : {9..=9}
@@ -2881,7 +2881,7 @@ output         : 9
 
 ast            : to_day_of_year(to_timestamp(1630812366))
 raw expr       : to_day_of_year(to_timestamp(1630812366))
-checked expr   : to_day_of_year<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_day_of_year<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 248_u16
 output type    : UInt16
 output domain  : {248..=248}
@@ -2890,7 +2890,7 @@ output         : 248
 
 ast            : to_day_of_month(to_timestamp(1630812366))
 raw expr       : to_day_of_month(to_timestamp(1630812366))
-checked expr   : to_day_of_month<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_day_of_month<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 5_u8
 output type    : UInt8
 output domain  : {5..=5}
@@ -2899,7 +2899,7 @@ output         : 5
 
 ast            : to_day_of_week(to_timestamp(1630812366))
 raw expr       : to_day_of_week(to_timestamp(1630812366))
-checked expr   : to_day_of_week<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_day_of_week<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 7_u8
 output type    : UInt8
 output domain  : {7..=7}
@@ -2908,7 +2908,7 @@ output         : 7
 
 ast            : to_week_of_year(to_timestamp(1630812366))
 raw expr       : to_week_of_year(to_timestamp(1630812366))
-checked expr   : to_week_of_year<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_week_of_year<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 35_u32
 output type    : UInt32
 output domain  : {35..=35}
@@ -2917,7 +2917,7 @@ output         : 35
 
 ast            : to_hour(to_timestamp(1630812366))
 raw expr       : to_hour(to_timestamp(1630812366))
-checked expr   : to_hour<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_hour<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 3_u8
 output type    : UInt8
 output domain  : {3..=3}
@@ -2926,7 +2926,7 @@ output         : 3
 
 ast            : to_minute(to_timestamp(1630812366))
 raw expr       : to_minute(to_timestamp(1630812366))
-checked expr   : to_minute<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_minute<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 26_u8
 output type    : UInt8
 output domain  : {26..=26}
@@ -2935,7 +2935,7 @@ output         : 26
 
 ast            : to_second(to_timestamp(1630812366))
 raw expr       : to_second(to_timestamp(1630812366))
-checked expr   : to_second<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_second<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 6_u8
 output type    : UInt8
 output domain  : {6..=6}
@@ -3230,7 +3230,7 @@ evaluation (internal):
 
 ast            : to_start_of_second(to_timestamp(1630812366))
 raw expr       : to_start_of_second(to_timestamp(1630812366))
-checked expr   : to_start_of_second<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_second<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630812366000000
 output type    : Timestamp
 output domain  : {1630812366000000..=1630812366000000}
@@ -3239,7 +3239,7 @@ output         : '2021-09-05 03:26:06.000000'
 
 ast            : to_start_of_minute(to_timestamp(1630812366))
 raw expr       : to_start_of_minute(to_timestamp(1630812366))
-checked expr   : to_start_of_minute<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_minute<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630812360000000
 output type    : Timestamp
 output domain  : {1630812360000000..=1630812360000000}
@@ -3248,7 +3248,7 @@ output         : '2021-09-05 03:26:00.000000'
 
 ast            : to_start_of_five_minutes(to_timestamp(1630812366))
 raw expr       : to_start_of_five_minutes(to_timestamp(1630812366))
-checked expr   : to_start_of_five_minutes<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_five_minutes<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630812300000000
 output type    : Timestamp
 output domain  : {1630812300000000..=1630812300000000}
@@ -3257,7 +3257,7 @@ output         : '2021-09-05 03:25:00.000000'
 
 ast            : to_start_of_ten_minutes(to_timestamp(1630812366))
 raw expr       : to_start_of_ten_minutes(to_timestamp(1630812366))
-checked expr   : to_start_of_ten_minutes<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_ten_minutes<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630812000000000
 output type    : Timestamp
 output domain  : {1630812000000000..=1630812000000000}
@@ -3266,7 +3266,7 @@ output         : '2021-09-05 03:20:00.000000'
 
 ast            : to_start_of_fifteen_minutes(to_timestamp(1630812366))
 raw expr       : to_start_of_fifteen_minutes(to_timestamp(1630812366))
-checked expr   : to_start_of_fifteen_minutes<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_fifteen_minutes<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630811700000000
 output type    : Timestamp
 output domain  : {1630811700000000..=1630811700000000}
@@ -3275,7 +3275,7 @@ output         : '2021-09-05 03:15:00.000000'
 
 ast            : to_start_of_hour(to_timestamp(1630812366))
 raw expr       : to_start_of_hour(to_timestamp(1630812366))
-checked expr   : to_start_of_hour<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_hour<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630810800000000
 output type    : Timestamp
 output domain  : {1630810800000000..=1630810800000000}
@@ -3284,7 +3284,7 @@ output         : '2021-09-05 03:00:00.000000'
 
 ast            : to_start_of_day(to_timestamp(1630812366))
 raw expr       : to_start_of_day(to_timestamp(1630812366))
-checked expr   : to_start_of_day<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_day<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630800000000000
 output type    : Timestamp
 output domain  : {1630800000000000..=1630800000000000}
@@ -3293,7 +3293,7 @@ output         : '2021-09-05 00:00:00.000000'
 
 ast            : time_slot(to_timestamp(1630812366))
 raw expr       : time_slot(to_timestamp(1630812366))
-checked expr   : time_slot<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : time_slot<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630810800000000
 output type    : Timestamp
 output domain  : {1630810800000000..=1630810800000000}
@@ -3302,7 +3302,7 @@ output         : '2021-09-05 03:00:00.000000'
 
 ast            : to_monday(to_timestamp(1630812366))
 raw expr       : to_monday(to_timestamp(1630812366))
-checked expr   : to_monday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_monday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18869
 output type    : Date
 output domain  : {18869..=18869}
@@ -3311,7 +3311,7 @@ output         : '2021-08-30'
 
 ast            : to_start_of_week(to_timestamp(1630812366))
 raw expr       : to_start_of_week(to_timestamp(1630812366))
-checked expr   : to_start_of_week<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_week<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18875
 output type    : Date
 output domain  : {18875..=18875}
@@ -3320,7 +3320,7 @@ output         : '2021-09-05'
 
 ast            : to_start_of_week(to_timestamp(1630812366))
 raw expr       : to_start_of_week(to_timestamp(1630812366))
-checked expr   : to_start_of_week<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_week<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18875
 output type    : Date
 output domain  : {18875..=18875}
@@ -3329,7 +3329,7 @@ output         : '2021-09-05'
 
 ast            : to_start_of_week(to_timestamp(1630812366), 1)
 raw expr       : to_start_of_week(to_timestamp(1630812366), 1)
-checked expr   : to_start_of_week<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)), to_int64<UInt8>(1_u8))
+checked expr   : to_start_of_week<Timestamp, Int64>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)), CAST<UInt8>(1_u8 AS Int64))
 optimized expr : 18869
 output type    : Date
 output domain  : {18869..=18869}
@@ -3338,7 +3338,7 @@ output         : '2021-08-30'
 
 ast            : to_start_of_month(to_timestamp(1630812366))
 raw expr       : to_start_of_month(to_timestamp(1630812366))
-checked expr   : to_start_of_month<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_month<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18871
 output type    : Date
 output domain  : {18871..=18871}
@@ -3347,7 +3347,7 @@ output         : '2021-09-01'
 
 ast            : to_start_of_quarter(to_timestamp(1630812366))
 raw expr       : to_start_of_quarter(to_timestamp(1630812366))
-checked expr   : to_start_of_quarter<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_quarter<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18809
 output type    : Date
 output domain  : {18809..=18809}
@@ -3356,7 +3356,7 @@ output         : '2021-07-01'
 
 ast            : to_start_of_year(to_timestamp(1630812366))
 raw expr       : to_start_of_year(to_timestamp(1630812366))
-checked expr   : to_start_of_year<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_year<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18628
 output type    : Date
 output domain  : {18628..=18628}
@@ -3365,7 +3365,7 @@ output         : '2021-01-01'
 
 ast            : to_start_of_iso_year(to_timestamp(1630812366))
 raw expr       : to_start_of_iso_year(to_timestamp(1630812366))
-checked expr   : to_start_of_iso_year<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_iso_year<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18631
 output type    : Date
 output domain  : {18631..=18631}
@@ -3374,7 +3374,7 @@ output         : '2021-01-04'
 
 ast            : date_trunc(year, to_timestamp(1630812366))
 raw expr       : to_start_of_year(to_timestamp(1630812366))
-checked expr   : to_start_of_year<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_year<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18628
 output type    : Date
 output domain  : {18628..=18628}
@@ -3383,7 +3383,7 @@ output         : '2021-01-01'
 
 ast            : date_trunc(quarter, to_timestamp(1630812366))
 raw expr       : to_start_of_quarter(to_timestamp(1630812366))
-checked expr   : to_start_of_quarter<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_quarter<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18809
 output type    : Date
 output domain  : {18809..=18809}
@@ -3392,7 +3392,7 @@ output         : '2021-07-01'
 
 ast            : date_trunc(month, to_timestamp(1630812366))
 raw expr       : to_start_of_month(to_timestamp(1630812366))
-checked expr   : to_start_of_month<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_month<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18871
 output type    : Date
 output domain  : {18871..=18871}
@@ -3401,7 +3401,7 @@ output         : '2021-09-01'
 
 ast            : date_trunc(day, to_timestamp(1630812366))
 raw expr       : to_start_of_day(to_timestamp(1630812366))
-checked expr   : to_start_of_day<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_day<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630800000000000
 output type    : Timestamp
 output domain  : {1630800000000000..=1630800000000000}
@@ -3410,7 +3410,7 @@ output         : '2021-09-05 00:00:00.000000'
 
 ast            : date_trunc(hour, to_timestamp(1630812366))
 raw expr       : to_start_of_hour(to_timestamp(1630812366))
-checked expr   : to_start_of_hour<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_hour<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630810800000000
 output type    : Timestamp
 output domain  : {1630810800000000..=1630810800000000}
@@ -3419,7 +3419,7 @@ output         : '2021-09-05 03:00:00.000000'
 
 ast            : date_trunc(minute, to_timestamp(1630812366))
 raw expr       : to_start_of_minute(to_timestamp(1630812366))
-checked expr   : to_start_of_minute<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_minute<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630812360000000
 output type    : Timestamp
 output domain  : {1630812360000000..=1630812360000000}
@@ -3428,7 +3428,7 @@ output         : '2021-09-05 03:26:00.000000'
 
 ast            : date_trunc(second, to_timestamp(1630812366))
 raw expr       : to_start_of_second(to_timestamp(1630812366))
-checked expr   : to_start_of_second<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_start_of_second<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 1630812366000000
 output type    : Timestamp
 output domain  : {1630812366000000..=1630812366000000}
@@ -3437,7 +3437,7 @@ output         : '2021-09-05 03:26:06.000000'
 
 ast            : last_day(to_timestamp(1630812366), year)
 raw expr       : to_last_of_year(to_timestamp(1630812366))
-checked expr   : to_last_of_year<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_last_of_year<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18992
 output type    : Date
 output domain  : {18992..=18992}
@@ -3446,7 +3446,7 @@ output         : '2021-12-31'
 
 ast            : last_day(to_timestamp(1630812366), quarter)
 raw expr       : to_last_of_quarter(to_timestamp(1630812366))
-checked expr   : to_last_of_quarter<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_last_of_quarter<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18900
 output type    : Date
 output domain  : {18900..=18900}
@@ -3455,7 +3455,7 @@ output         : '2021-09-30'
 
 ast            : last_day(to_timestamp(1630812366), month)
 raw expr       : to_last_of_month(to_timestamp(1630812366))
-checked expr   : to_last_of_month<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_last_of_month<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18900
 output type    : Date
 output domain  : {18900..=18900}
@@ -3464,7 +3464,7 @@ output         : '2021-09-30'
 
 ast            : last_day(to_timestamp(1630812366), week)
 raw expr       : to_last_of_week(to_timestamp(1630812366))
-checked expr   : to_last_of_week<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_last_of_week<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18875
 output type    : Date
 output domain  : {18875..=18875}
@@ -3473,7 +3473,7 @@ output         : '2021-09-05'
 
 ast            : previous_day(to_timestamp(1630812366), monday)
 raw expr       : to_previous_monday(to_timestamp(1630812366))
-checked expr   : to_previous_monday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_previous_monday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18869
 output type    : Date
 output domain  : {18869..=18869}
@@ -3482,7 +3482,7 @@ output         : '2021-08-30'
 
 ast            : previous_day(to_timestamp(1630812366), tuesday)
 raw expr       : to_previous_tuesday(to_timestamp(1630812366))
-checked expr   : to_previous_tuesday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_previous_tuesday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18870
 output type    : Date
 output domain  : {18870..=18870}
@@ -3491,7 +3491,7 @@ output         : '2021-08-31'
 
 ast            : previous_day(to_timestamp(1630812366), wednesday)
 raw expr       : to_previous_wednesday(to_timestamp(1630812366))
-checked expr   : to_previous_wednesday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_previous_wednesday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18871
 output type    : Date
 output domain  : {18871..=18871}
@@ -3500,7 +3500,7 @@ output         : '2021-09-01'
 
 ast            : previous_day(to_timestamp(1630812366), thursday)
 raw expr       : to_previous_thursday(to_timestamp(1630812366))
-checked expr   : to_previous_thursday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_previous_thursday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18872
 output type    : Date
 output domain  : {18872..=18872}
@@ -3509,7 +3509,7 @@ output         : '2021-09-02'
 
 ast            : previous_day(to_timestamp(1630812366), friday)
 raw expr       : to_previous_friday(to_timestamp(1630812366))
-checked expr   : to_previous_friday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_previous_friday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18873
 output type    : Date
 output domain  : {18873..=18873}
@@ -3518,7 +3518,7 @@ output         : '2021-09-03'
 
 ast            : previous_day(to_timestamp(1630812366), saturday)
 raw expr       : to_previous_saturday(to_timestamp(1630812366))
-checked expr   : to_previous_saturday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_previous_saturday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18874
 output type    : Date
 output domain  : {18874..=18874}
@@ -3527,7 +3527,7 @@ output         : '2021-09-04'
 
 ast            : previous_day(to_timestamp(1630812366), sunday)
 raw expr       : to_previous_sunday(to_timestamp(1630812366))
-checked expr   : to_previous_sunday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_previous_sunday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18868
 output type    : Date
 output domain  : {18868..=18868}
@@ -3536,7 +3536,7 @@ output         : '2021-08-29'
 
 ast            : next_day(to_timestamp(1630812366), monday)
 raw expr       : to_next_monday(to_timestamp(1630812366))
-checked expr   : to_next_monday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_next_monday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18876
 output type    : Date
 output domain  : {18876..=18876}
@@ -3545,7 +3545,7 @@ output         : '2021-09-06'
 
 ast            : next_day(to_timestamp(1630812366), tuesday)
 raw expr       : to_next_tuesday(to_timestamp(1630812366))
-checked expr   : to_next_tuesday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_next_tuesday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18877
 output type    : Date
 output domain  : {18877..=18877}
@@ -3554,7 +3554,7 @@ output         : '2021-09-07'
 
 ast            : next_day(to_timestamp(1630812366), wednesday)
 raw expr       : to_next_wednesday(to_timestamp(1630812366))
-checked expr   : to_next_wednesday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_next_wednesday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18878
 output type    : Date
 output domain  : {18878..=18878}
@@ -3563,7 +3563,7 @@ output         : '2021-09-08'
 
 ast            : next_day(to_timestamp(1630812366), thursday)
 raw expr       : to_next_thursday(to_timestamp(1630812366))
-checked expr   : to_next_thursday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_next_thursday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18879
 output type    : Date
 output domain  : {18879..=18879}
@@ -3572,7 +3572,7 @@ output         : '2021-09-09'
 
 ast            : next_day(to_timestamp(1630812366), friday)
 raw expr       : to_next_friday(to_timestamp(1630812366))
-checked expr   : to_next_friday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_next_friday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18880
 output type    : Date
 output domain  : {18880..=18880}
@@ -3581,7 +3581,7 @@ output         : '2021-09-10'
 
 ast            : next_day(to_timestamp(1630812366), saturday)
 raw expr       : to_next_saturday(to_timestamp(1630812366))
-checked expr   : to_next_saturday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_next_saturday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18881
 output type    : Date
 output domain  : {18881..=18881}
@@ -3590,7 +3590,7 @@ output         : '2021-09-11'
 
 ast            : next_day(to_timestamp(1630812366), sunday)
 raw expr       : to_next_sunday(to_timestamp(1630812366))
-checked expr   : to_next_sunday<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+checked expr   : to_next_sunday<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1630812366_u32 AS Int64)))
 optimized expr : 18882
 output type    : Date
 output domain  : {18882..=18882}
@@ -3599,7 +3599,7 @@ output         : '2021-09-12'
 
 ast            : date_diff(year, to_date(0), to_date(10000))
 raw expr       : diff_years(to_date(10000), to_date(0))
-checked expr   : diff_years<Date, Date>(to_date<Int64>(to_int64<UInt16>(10000_u16)), to_date<Int64>(to_int64<UInt8>(0_u8)))
+checked expr   : diff_years<Date, Date>(to_date<Int64>(CAST<UInt16>(10000_u16 AS Int64)), to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)))
 optimized expr : 27_i64
 output type    : Int64
 output domain  : {27..=27}
@@ -3608,7 +3608,7 @@ output         : 27
 
 ast            : date_diff(year, to_date(10000), to_date(0))
 raw expr       : diff_years(to_date(0), to_date(10000))
-checked expr   : diff_years<Date, Date>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_date<Int64>(to_int64<UInt16>(10000_u16)))
+checked expr   : diff_years<Date, Date>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), to_date<Int64>(CAST<UInt16>(10000_u16 AS Int64)))
 optimized expr : -27_i64
 output type    : Int64
 output domain  : {-27..=-27}
@@ -3662,7 +3662,7 @@ output         : -1
 
 ast            : date_diff(month, to_date(0), to_date(10000))
 raw expr       : diff_months(to_date(10000), to_date(0))
-checked expr   : diff_months<Date, Date>(to_date<Int64>(to_int64<UInt16>(10000_u16)), to_date<Int64>(to_int64<UInt8>(0_u8)))
+checked expr   : diff_months<Date, Date>(to_date<Int64>(CAST<UInt16>(10000_u16 AS Int64)), to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)))
 optimized expr : 328_i64
 output type    : Int64
 output domain  : {328..=328}
@@ -3671,7 +3671,7 @@ output         : 328
 
 ast            : date_diff(month, to_date(10000), to_date(0))
 raw expr       : diff_months(to_date(0), to_date(10000))
-checked expr   : diff_months<Date, Date>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_date<Int64>(to_int64<UInt16>(10000_u16)))
+checked expr   : diff_months<Date, Date>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), to_date<Int64>(CAST<UInt16>(10000_u16 AS Int64)))
 optimized expr : -328_i64
 output type    : Int64
 output domain  : {-328..=-328}
@@ -3707,7 +3707,7 @@ output         : -12
 
 ast            : date_diff(day, to_date(0), to_date(10000))
 raw expr       : diff_days(to_date(10000), to_date(0))
-checked expr   : diff_days<Date, Date>(to_date<Int64>(to_int64<UInt16>(10000_u16)), to_date<Int64>(to_int64<UInt8>(0_u8)))
+checked expr   : diff_days<Date, Date>(to_date<Int64>(CAST<UInt16>(10000_u16 AS Int64)), to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)))
 optimized expr : 10000_i64
 output type    : Int64
 output domain  : {10000..=10000}
@@ -3716,7 +3716,7 @@ output         : 10000
 
 ast            : date_diff(day, to_date(10000), to_date(0))
 raw expr       : diff_days(to_date(0), to_date(10000))
-checked expr   : diff_days<Date, Date>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_date<Int64>(to_int64<UInt16>(10000_u16)))
+checked expr   : diff_days<Date, Date>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)), to_date<Int64>(CAST<UInt16>(10000_u16 AS Int64)))
 optimized expr : -10000_i64
 output type    : Int64
 output domain  : {-10000..=-10000}

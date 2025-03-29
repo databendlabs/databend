@@ -23,7 +23,7 @@ evaluation (internal):
 
 ast            : a2 + 10
 raw expr       : plus(a2::UInt8 NULL, 10)
-checked expr   : plus<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
+checked expr   : plus<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(10_u8 AS UInt8 NULL))
 optimized expr : plus<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
 +--------+------------------+--------------------+
@@ -46,7 +46,7 @@ evaluation (internal):
 
 ast            : a2 + c
 raw expr       : plus(a2::UInt8 NULL, c::UInt32)
-checked expr   : plus<UInt8 NULL, UInt32 NULL>(a2, CAST(c AS UInt32 NULL))
+checked expr   : plus<UInt8 NULL, UInt32 NULL>(a2, CAST<UInt32>(c AS UInt32 NULL))
 evaluation:
 +--------+------------------+-----------+--------------------+
 |        | a2               | c         | Output             |
@@ -160,7 +160,7 @@ evaluation (internal):
 
 ast            : d + e
 raw expr       : plus(d::Float64, e::Decimal(10, 1))
-checked expr   : plus<Float64, Float64>(d, to_float64<Decimal(10, 1)>(e))
+checked expr   : plus<Float64, Float64>(d, CAST<Decimal(10, 1)>(e AS Float64))
 evaluation:
 +--------+------------+----------------+-----------------+
 |        | d          | e              | Output          |
@@ -183,7 +183,7 @@ evaluation (internal):
 
 ast            : d2 + e
 raw expr       : plus(d2::UInt8 NULL, e::Decimal(10, 1))
-checked expr   : plus<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST(e AS Decimal(10, 1) NULL))
+checked expr   : plus<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST<Decimal(10, 1)>(e AS Decimal(10, 1) NULL))
 evaluation:
 +--------+------------------+----------------+------------------------+
 |        | d2               | e              | Output                 |
@@ -206,7 +206,7 @@ evaluation (internal):
 
 ast            : d2 + f
 raw expr       : plus(d2::UInt8 NULL, f::Decimal(76, 2))
-checked expr   : plus<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST(f AS Decimal(76, 2) NULL))
+checked expr   : plus<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST<Decimal(76, 2)>(f AS Decimal(76, 2) NULL))
 evaluation:
 +--------+------------------+----------------+-------------------------+
 |        | d2               | f              | Output                  |
@@ -275,7 +275,7 @@ evaluation (internal):
 
 ast            : a2 - 10
 raw expr       : minus(a2::UInt8 NULL, 10)
-checked expr   : minus<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
+checked expr   : minus<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(10_u8 AS UInt8 NULL))
 optimized expr : minus<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
 +--------+------------------+--------------------+
@@ -298,7 +298,7 @@ evaluation (internal):
 
 ast            : a2 - c
 raw expr       : minus(a2::UInt8 NULL, c::UInt32)
-checked expr   : minus<UInt8 NULL, UInt32 NULL>(a2, CAST(c AS UInt32 NULL))
+checked expr   : minus<UInt8 NULL, UInt32 NULL>(a2, CAST<UInt32>(c AS UInt32 NULL))
 evaluation:
 +--------+------------------+-----------+---------------------+
 |        | a2               | c         | Output              |
@@ -412,7 +412,7 @@ evaluation (internal):
 
 ast            : d - e
 raw expr       : minus(d::Float64, e::Decimal(10, 1))
-checked expr   : minus<Float64, Float64>(d, to_float64<Decimal(10, 1)>(e))
+checked expr   : minus<Float64, Float64>(d, CAST<Decimal(10, 1)>(e AS Float64))
 evaluation:
 +--------+------------+----------------+-----------------+
 |        | d          | e              | Output          |
@@ -435,7 +435,7 @@ evaluation (internal):
 
 ast            : d2 - e
 raw expr       : minus(d2::UInt8 NULL, e::Decimal(10, 1))
-checked expr   : minus<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST(e AS Decimal(10, 1) NULL))
+checked expr   : minus<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST<Decimal(10, 1)>(e AS Decimal(10, 1) NULL))
 evaluation:
 +--------+------------------+----------------+--------------------------+
 |        | d2               | e              | Output                   |
@@ -458,7 +458,7 @@ evaluation (internal):
 
 ast            : d2 - f
 raw expr       : minus(d2::UInt8 NULL, f::Decimal(76, 2))
-checked expr   : minus<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST(f AS Decimal(76, 2) NULL))
+checked expr   : minus<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST<Decimal(76, 2)>(f AS Decimal(76, 2) NULL))
 evaluation:
 +--------+------------------+----------------+--------------------------+
 |        | d2               | f              | Output                   |
@@ -711,7 +711,7 @@ evaluation (internal):
 
 ast            : a2 * 10
 raw expr       : multiply(a2::UInt8 NULL, 10)
-checked expr   : multiply<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
+checked expr   : multiply<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(10_u8 AS UInt8 NULL))
 optimized expr : multiply<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
 +--------+------------------+--------------------+
@@ -734,7 +734,7 @@ evaluation (internal):
 
 ast            : a2 * c
 raw expr       : multiply(a2::UInt8 NULL, c::UInt32)
-checked expr   : multiply<UInt8 NULL, UInt32 NULL>(a2, CAST(c AS UInt32 NULL))
+checked expr   : multiply<UInt8 NULL, UInt32 NULL>(a2, CAST<UInt32>(c AS UInt32 NULL))
 evaluation:
 +--------+------------------+-----------+--------------------+
 |        | a2               | c         | Output             |
@@ -848,7 +848,7 @@ evaluation (internal):
 
 ast            : d * e
 raw expr       : multiply(d::Float64, e::Decimal(10, 1))
-checked expr   : multiply<Float64, Float64>(d, to_float64<Decimal(10, 1)>(e))
+checked expr   : multiply<Float64, Float64>(d, CAST<Decimal(10, 1)>(e AS Float64))
 evaluation:
 +--------+------------+----------------+----------------+
 |        | d          | e              | Output         |
@@ -871,7 +871,7 @@ evaluation (internal):
 
 ast            : d2 * e
 raw expr       : multiply(d2::UInt8 NULL, e::Decimal(10, 1))
-checked expr   : multiply<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST(e AS Decimal(10, 1) NULL))
+checked expr   : multiply<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST<Decimal(10, 1)>(e AS Decimal(10, 1) NULL))
 evaluation:
 +--------+------------------+----------------+------------------------+
 |        | d2               | e              | Output                 |
@@ -894,7 +894,7 @@ evaluation (internal):
 
 ast            : d2 * f
 raw expr       : multiply(d2::UInt8 NULL, f::Decimal(76, 2))
-checked expr   : multiply<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST(f AS Decimal(76, 2) NULL))
+checked expr   : multiply<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST<Decimal(76, 2)>(f AS Decimal(76, 2) NULL))
 evaluation:
 +--------+------------------+----------------+-------------------------+
 |        | d2               | f              | Output                  |
@@ -1029,7 +1029,7 @@ evaluation (internal):
 
 ast            : a2 / 10
 raw expr       : divide(a2::UInt8 NULL, 10)
-checked expr   : divide<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
+checked expr   : divide<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(10_u8 AS UInt8 NULL))
 optimized expr : divide<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
 +--------+------------------+--------------+
@@ -1052,7 +1052,7 @@ evaluation (internal):
 
 ast            : a2 / c
 raw expr       : divide(a2::UInt8 NULL, c::UInt32)
-checked expr   : divide<UInt8 NULL, UInt32 NULL>(a2, CAST(c AS UInt32 NULL))
+checked expr   : divide<UInt8 NULL, UInt32 NULL>(a2, CAST<UInt32>(c AS UInt32 NULL))
 evaluation:
 +--------+------------------+-----------+--------------+
 |        | a2               | c         | Output       |
@@ -1143,7 +1143,7 @@ evaluation (internal):
 
 ast            : b / d2
 raw expr       : divide(b::Int16, d2::UInt8 NULL)
-checked expr   : divide<Int16 NULL, UInt8 NULL>(CAST(b AS Int16 NULL), d2)
+checked expr   : divide<Int16 NULL, UInt8 NULL>(CAST<Int16>(b AS Int16 NULL), d2)
 evaluation:
 +--------+---------+------------------+--------------+
 |        | b       | d2               | Output       |
@@ -1197,7 +1197,7 @@ evaluation (internal):
 
 ast            : d / e
 raw expr       : divide(d::Float64, e::Decimal(10, 1))
-checked expr   : divide<Float64, Float64>(d, to_float64<Decimal(10, 1)>(e))
+checked expr   : divide<Float64, Float64>(d, CAST<Decimal(10, 1)>(e AS Float64))
 evaluation:
 +--------+------------+----------------+---------------+
 |        | d          | e              | Output        |
@@ -1220,7 +1220,7 @@ evaluation (internal):
 
 ast            : d2 / e
 raw expr       : divide(d2::UInt8 NULL, e::Decimal(10, 1))
-checked expr   : divide<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST(e AS Decimal(10, 1) NULL))
+checked expr   : divide<UInt8 NULL, Decimal(10, 1) NULL>(d2, CAST<Decimal(10, 1)>(e AS Decimal(10, 1) NULL))
 evaluation:
 +--------+------------------+----------------+---------------------+
 |        | d2               | e              | Output              |
@@ -1243,7 +1243,7 @@ evaluation (internal):
 
 ast            : d2 / f
 raw expr       : divide(d2::UInt8 NULL, f::Decimal(76, 2))
-checked expr   : divide<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST(f AS Decimal(76, 2) NULL))
+checked expr   : divide<UInt8 NULL, Decimal(76, 2) NULL>(d2, CAST<Decimal(76, 2)>(f AS Decimal(76, 2) NULL))
 evaluation:
 +--------+------------------+----------------+---------------------+
 |        | d2               | f              | Output              |
@@ -1312,7 +1312,7 @@ evaluation (internal):
 
 ast            : a2 div 10
 raw expr       : div(a2::UInt8 NULL, 10)
-checked expr   : div<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
+checked expr   : div<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(10_u8 AS UInt8 NULL))
 optimized expr : div<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
 +--------+------------------+------------+
@@ -1335,7 +1335,7 @@ evaluation (internal):
 
 ast            : a2 div c
 raw expr       : div(a2::UInt8 NULL, c::UInt32)
-checked expr   : div<UInt8 NULL, UInt32 NULL>(a2, CAST(c AS UInt32 NULL))
+checked expr   : div<UInt8 NULL, UInt32 NULL>(a2, CAST<UInt32>(c AS UInt32 NULL))
 evaluation:
 +--------+------------------+-----------+-------------+
 |        | a2               | c         | Output      |
@@ -1358,7 +1358,7 @@ evaluation (internal):
 
 ast            : c div 0.5
 raw expr       : div(c::UInt32, 0.5)
-checked expr   : div<UInt32, Float64>(c, to_float64<Decimal(1, 1)>(0.5_d128(1,1)))
+checked expr   : div<UInt32, Float64>(c, CAST<Decimal(1, 1)>(0.5_d128(1,1) AS Float64))
 optimized expr : div<UInt32, Float64>(c, 0.5_f64)
 evaluation:
 +--------+-----------+---------+
@@ -1427,7 +1427,7 @@ evaluation (internal):
 
 ast            : c div d2
 raw expr       : div(c::UInt32, d2::UInt8 NULL)
-checked expr   : div<UInt32 NULL, UInt8 NULL>(CAST(c AS UInt32 NULL), d2)
+checked expr   : div<UInt32 NULL, UInt8 NULL>(CAST<UInt32>(c AS UInt32 NULL), d2)
 evaluation:
 +--------+-----------+------------------+-------------+
 |        | c         | d2               | Output      |
@@ -1481,7 +1481,7 @@ evaluation (internal):
 
 ast            : a2 % 4
 raw expr       : modulo(a2::UInt8 NULL, 4)
-checked expr   : modulo<UInt8 NULL, UInt8 NULL>(a2, CAST(4_u8 AS UInt8 NULL))
+checked expr   : modulo<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(4_u8 AS UInt8 NULL))
 optimized expr : modulo<UInt8 NULL, UInt8 NULL>(a2, 4_u8)
 evaluation:
 +--------+------------------+------------+
@@ -1504,8 +1504,8 @@ evaluation (internal):
 
 ast            : (a2 + 4) % c
 raw expr       : modulo(plus(a2::UInt8 NULL, 4), c::UInt32)
-checked expr   : modulo<UInt16 NULL, UInt32 NULL>(plus<UInt8 NULL, UInt8 NULL>(a2, CAST(4_u8 AS UInt8 NULL)), CAST(c AS UInt32 NULL))
-optimized expr : modulo<UInt16 NULL, UInt32 NULL>(plus<UInt8 NULL, UInt8 NULL>(a2, 4_u8), CAST(c AS UInt32 NULL))
+checked expr   : modulo<UInt16 NULL, UInt32 NULL>(plus<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(4_u8 AS UInt8 NULL)), CAST<UInt32>(c AS UInt32 NULL))
+optimized expr : modulo<UInt16 NULL, UInt32 NULL>(plus<UInt8 NULL, UInt8 NULL>(a2, 4_u8), CAST<UInt32>(c AS UInt32 NULL))
 evaluation:
 +--------+------------------+-----------+-------------+
 |        | a2               | c         | Output      |
@@ -1582,7 +1582,7 @@ error:
 
 ast            : c % d2
 raw expr       : modulo(c::UInt32, d2::UInt8 NULL)
-checked expr   : modulo<UInt32 NULL, UInt8 NULL>(CAST(c AS UInt32 NULL), d2)
+checked expr   : modulo<UInt32 NULL, UInt8 NULL>(CAST<UInt32>(c AS UInt32 NULL), d2)
 evaluation:
 +--------+-----------+------------------+------------+
 |        | c         | d2               | Output     |
@@ -1781,8 +1781,8 @@ evaluation (internal):
 
 ast            : a ^ 2
 raw expr       : pow(a::Int8, 2)
-checked expr   : pow<Float64, Float64>(to_float64<Int8>(a), to_float64<UInt8>(2_u8))
-optimized expr : pow<Float64, Float64>(to_float64<Int8>(a), 2_f64)
+checked expr   : pow<Float64, Float64>(CAST<Int8>(a AS Float64), CAST<UInt8>(2_u8 AS Float64))
+optimized expr : pow<Float64, Float64>(CAST<Int8>(a AS Float64), 2_f64)
 evaluation:
 +--------+---------+--------------+
 |        | a       | Output       |
@@ -1804,7 +1804,7 @@ evaluation (internal):
 
 ast            : a ^ a
 raw expr       : pow(a::Int8, a::Int8)
-checked expr   : pow<Float64, Float64>(to_float64<Int8>(a), to_float64<Int8>(a))
+checked expr   : pow<Float64, Float64>(CAST<Int8>(a AS Float64), CAST<Int8>(a AS Float64))
 evaluation:
 +--------+---------+--------------+
 |        | a       | Output       |
@@ -1826,7 +1826,7 @@ evaluation (internal):
 
 ast            : a ^ a2
 raw expr       : pow(a::Int8, a2::UInt8 NULL)
-checked expr   : pow<Float64 NULL, Float64 NULL>(CAST(a AS Float64 NULL), CAST(a2 AS Float64 NULL))
+checked expr   : pow<Float64 NULL, Float64 NULL>(CAST<Int8>(a AS Float64 NULL), CAST<UInt8 NULL>(a2 AS Float64 NULL))
 evaluation:
 +--------+---------+------------------+-----------------------+
 |        | a       | a2               | Output                |
@@ -1849,8 +1849,8 @@ evaluation (internal):
 
 ast            : c ^ 0
 raw expr       : pow(c::UInt32, 0)
-checked expr   : pow<Float64, Float64>(to_float64<UInt32>(c), to_float64<UInt8>(0_u8))
-optimized expr : pow<Float64, Float64>(to_float64<UInt32>(c), 0_f64)
+checked expr   : pow<Float64, Float64>(CAST<UInt32>(c AS Float64), CAST<UInt8>(0_u8 AS Float64))
+optimized expr : pow<Float64, Float64>(CAST<UInt32>(c AS Float64), 0_f64)
 evaluation:
 +--------+-----------+--------------+
 |        | c         | Output       |
@@ -1872,7 +1872,7 @@ evaluation (internal):
 
 ast            : c ^ d
 raw expr       : pow(c::UInt32, d::Float64)
-checked expr   : pow<Float64, Float64>(to_float64<UInt32>(c), d)
+checked expr   : pow<Float64, Float64>(CAST<UInt32>(c AS Float64), d)
 evaluation:
 +--------+-----------+------------+-----------------------------------------------+
 |        | c         | d          | Output                                        |
@@ -2159,7 +2159,7 @@ evaluation (internal):
 
 ast            : @ a
 raw expr       : abs(a::Int8)
-checked expr   : abs<Int64>(to_int64<Int8>(a))
+checked expr   : abs<Int64>(CAST<Int8>(a AS Int64))
 evaluation:
 +--------+---------+---------+
 |        | a       | Output  |
@@ -2181,7 +2181,7 @@ evaluation (internal):
 
 ast            : @ a2
 raw expr       : abs(a2::UInt8 NULL)
-checked expr   : abs<UInt64 NULL>(CAST(a2 AS UInt64 NULL))
+checked expr   : abs<UInt64 NULL>(CAST<UInt8 NULL>(a2 AS UInt64 NULL))
 evaluation:
 +--------+------------------+------------------+
 |        | a2               | Output           |
@@ -2203,7 +2203,7 @@ evaluation (internal):
 
 ast            : @ b
 raw expr       : abs(b::Int16)
-checked expr   : abs<Int64>(to_int64<Int16>(b))
+checked expr   : abs<Int64>(CAST<Int16>(b AS Int64))
 evaluation:
 +--------+---------+---------+
 |        | b       | Output  |
@@ -2225,7 +2225,7 @@ evaluation (internal):
 
 ast            : @ c
 raw expr       : abs(c::UInt32)
-checked expr   : abs<UInt64>(to_uint64<UInt32>(c))
+checked expr   : abs<UInt64>(CAST<UInt32>(c AS UInt64))
 evaluation:
 +--------+-----------+-----------+
 |        | c         | Output    |
@@ -2269,7 +2269,7 @@ evaluation (internal):
 
 ast            : @ d2
 raw expr       : abs(d2::UInt8 NULL)
-checked expr   : abs<UInt64 NULL>(CAST(d2 AS UInt64 NULL))
+checked expr   : abs<UInt64 NULL>(CAST<UInt8 NULL>(d2 AS UInt64 NULL))
 evaluation:
 +--------+------------------+------------------+
 |        | d2               | Output           |
@@ -2375,7 +2375,7 @@ evaluation (internal):
 
 ast            : a2 # 10
 raw expr       : bit_xor(a2::UInt8 NULL, 10)
-checked expr   : bit_xor<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
+checked expr   : bit_xor<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(10_u8 AS UInt8 NULL))
 optimized expr : bit_xor<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
 +--------+------------------+-------------------------------------------------------+
@@ -2398,7 +2398,7 @@ evaluation (internal):
 
 ast            : a2 # c
 raw expr       : bit_xor(a2::UInt8 NULL, c::UInt32)
-checked expr   : bit_xor<UInt8 NULL, UInt32 NULL>(a2, CAST(c AS UInt32 NULL))
+checked expr   : bit_xor<UInt8 NULL, UInt32 NULL>(a2, CAST<UInt32>(c AS UInt32 NULL))
 evaluation:
 +--------+------------------+-----------+-------------------------------------------------------+
 |        | a2               | c         | Output                                                |
@@ -2467,7 +2467,7 @@ evaluation (internal):
 
 ast            : a2 & 10
 raw expr       : bit_and(a2::UInt8 NULL, 10)
-checked expr   : bit_and<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
+checked expr   : bit_and<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(10_u8 AS UInt8 NULL))
 optimized expr : bit_and<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
 +--------+------------------+-------------------------------------------------------+
@@ -2490,7 +2490,7 @@ evaluation (internal):
 
 ast            : a2 & c
 raw expr       : bit_and(a2::UInt8 NULL, c::UInt32)
-checked expr   : bit_and<UInt8 NULL, UInt32 NULL>(a2, CAST(c AS UInt32 NULL))
+checked expr   : bit_and<UInt8 NULL, UInt32 NULL>(a2, CAST<UInt32>(c AS UInt32 NULL))
 evaluation:
 +--------+------------------+-----------+-------------------------------------------------------+
 |        | a2               | c         | Output                                                |
@@ -2559,7 +2559,7 @@ evaluation (internal):
 
 ast            : a2 | 10
 raw expr       : bit_or(a2::UInt8 NULL, 10)
-checked expr   : bit_or<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
+checked expr   : bit_or<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(10_u8 AS UInt8 NULL))
 optimized expr : bit_or<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
 +--------+------------------+-------------------------------------------------------+
@@ -2582,7 +2582,7 @@ evaluation (internal):
 
 ast            : a2 | c
 raw expr       : bit_or(a2::UInt8 NULL, c::UInt32)
-checked expr   : bit_or<UInt8 NULL, UInt32 NULL>(a2, CAST(c AS UInt32 NULL))
+checked expr   : bit_or<UInt8 NULL, UInt32 NULL>(a2, CAST<UInt32>(c AS UInt32 NULL))
 evaluation:
 +--------+------------------+-----------+-------------------------------------------------------+
 |        | a2               | c         | Output                                                |
@@ -2738,7 +2738,7 @@ evaluation (internal):
 
 ast            : a2 << 2
 raw expr       : bit_shift_left(a2::UInt8 NULL, 2)
-checked expr   : bit_shift_left<UInt8 NULL, UInt8 NULL>(a2, CAST(2_u8 AS UInt8 NULL))
+checked expr   : bit_shift_left<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(2_u8 AS UInt8 NULL))
 optimized expr : bit_shift_left<UInt8 NULL, UInt8 NULL>(a2, 2_u8)
 evaluation:
 +--------+------------------+-------------------------------------------------------+
@@ -2761,7 +2761,7 @@ evaluation (internal):
 
 ast            : a2 << 4
 raw expr       : bit_shift_left(a2::UInt8 NULL, 4)
-checked expr   : bit_shift_left<UInt8 NULL, UInt8 NULL>(a2, CAST(4_u8 AS UInt8 NULL))
+checked expr   : bit_shift_left<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(4_u8 AS UInt8 NULL))
 optimized expr : bit_shift_left<UInt8 NULL, UInt8 NULL>(a2, 4_u8)
 evaluation:
 +--------+------------------+-------------------------------------------------------+
@@ -2828,7 +2828,7 @@ evaluation (internal):
 
 ast            : a2 >> 1
 raw expr       : bit_shift_right(a2::UInt8 NULL, 1)
-checked expr   : bit_shift_right<UInt8 NULL, UInt8 NULL>(a2, CAST(1_u8 AS UInt8 NULL))
+checked expr   : bit_shift_right<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(1_u8 AS UInt8 NULL))
 optimized expr : bit_shift_right<UInt8 NULL, UInt8 NULL>(a2, 1_u8)
 evaluation:
 +--------+------------------+-------------------------------------------------------+
@@ -2851,7 +2851,7 @@ evaluation (internal):
 
 ast            : a2 >> 2
 raw expr       : bit_shift_right(a2::UInt8 NULL, 2)
-checked expr   : bit_shift_right<UInt8 NULL, UInt8 NULL>(a2, CAST(2_u8 AS UInt8 NULL))
+checked expr   : bit_shift_right<UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(2_u8 AS UInt8 NULL))
 optimized expr : bit_shift_right<UInt8 NULL, UInt8 NULL>(a2, 2_u8)
 evaluation:
 +--------+------------------+-------------------------------------------------------+

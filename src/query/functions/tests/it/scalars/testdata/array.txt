@@ -11,7 +11,7 @@ error:
   --> SQL:1:2
   |
 1 | ['a', 1]
-  |  ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`, during run expr: `array(to_uint64('a'), to_uint64(1))`
+  |  ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64()`, during run expr: `array(CAST('a' AS UInt64), CAST(1 AS UInt64))`
 
 
 
@@ -28,7 +28,7 @@ candidate functions:
 
 ast            : [NULL, 8, -10]
 raw expr       : array(NULL, 8, minus(10))
-checked expr   : array<T0=Int16 NULL><T0, T0, T0>(CAST(NULL AS Int16 NULL), CAST(8_u8 AS Int16 NULL), CAST(minus<UInt8>(10_u8) AS Int16 NULL))
+checked expr   : array<T0=Int16 NULL><T0, T0, T0>(CAST<NULL>(NULL AS Int16 NULL), CAST<UInt8>(8_u8 AS Int16 NULL), CAST<Int16>(minus<UInt8>(10_u8) AS Int16 NULL))
 optimized expr : [NULL, 8, -10]
 output type    : Array(Int16 NULL)
 output domain  : [{-10..=8} ∪ {NULL}]
@@ -37,7 +37,7 @@ output         : [NULL, 8, -10]
 
 ast            : [['a', 'b'], []]
 raw expr       : array(array('a', 'b'), array())
-checked expr   : array<T0=Array(String)><T0, T0>(array<T0=String><T0, T0>("a", "b"), CAST(array<>() AS Array(String)))
+checked expr   : array<T0=Array(String)><T0, T0>(array<T0=String><T0, T0>("a", "b"), CAST<Array(Nothing)>(array<>() AS Array(String)))
 optimized expr : [['a', 'b'], []]
 output type    : Array(Array(String))
 output domain  : [[{"a"..="b"}]]
@@ -120,7 +120,7 @@ output         : 4
 
 ast            : range(10, 20)
 raw expr       : range(10, 20)
-checked expr   : range<UInt64, UInt64>(to_uint64<UInt8>(10_u8), to_uint64<UInt8>(20_u8))
+checked expr   : range<UInt64, UInt64>(CAST<UInt8>(10_u8 AS UInt64), CAST<UInt8>(20_u8 AS UInt64))
 optimized expr : [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 output type    : Array(UInt64)
 output domain  : [{10..=19}]
@@ -131,7 +131,7 @@ error:
   --> SQL:1:1
   |
 1 | range(10, 500000011)
-  | ^^^^^^^^^^^^^^^^^^^^ the allowed maximum values of range function is 500000000, but got 500000001 while evaluating function `range(10, 500000011)` in expr `range(to_uint64(10), to_uint64(500000011))`
+  | ^^^^^^^^^^^^^^^^^^^^ the allowed maximum values of range function is 500000000, but got 500000001 while evaluating function `range(10, 500000011)` in expr `range(CAST(10 AS UInt64), CAST(500000011 AS UInt64))`
 
 
 
@@ -139,13 +139,13 @@ error:
   --> SQL:1:8
   |
 1 | [1, 2]['a']
-  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`, during run expr: `get(CAST(array(1, 2) AS Array(UInt8 NULL)), to_uint64('a'))`
+  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64()`, during run expr: `get(CAST(array(1, 2) AS Array(UInt8 NULL)), CAST('a' AS UInt64))`
 
 
 
 ast            : [][1]
 raw expr       : get(array(), 1)
-checked expr   : get<Array(Nothing) NULL, UInt64 NULL>(CAST(array<>() AS Array(Nothing) NULL), CAST(1_u8 AS UInt64 NULL))
+checked expr   : get<Array(Nothing) NULL, UInt64 NULL>(CAST<Array(Nothing)>(array<>() AS Array(Nothing) NULL), CAST<UInt8>(1_u8 AS UInt64 NULL))
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
@@ -154,7 +154,7 @@ output         : NULL
 
 ast            : [][NULL]
 raw expr       : get(array(), NULL)
-checked expr   : get<Array(Nothing) NULL, UInt64 NULL>(CAST(array<>() AS Array(Nothing) NULL), CAST(NULL AS UInt64 NULL))
+checked expr   : get<Array(Nothing) NULL, UInt64 NULL>(CAST<Array(Nothing)>(array<>() AS Array(Nothing) NULL), CAST<NULL>(NULL AS UInt64 NULL))
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
@@ -163,7 +163,7 @@ output         : NULL
 
 ast            : [NULL][0]
 raw expr       : get(array(NULL), 0)
-checked expr   : get<Array(NULL) NULL, UInt64 NULL>(CAST(array<T0=NULL><T0>(NULL) AS Array(NULL) NULL), CAST(0_u8 AS UInt64 NULL))
+checked expr   : get<Array(NULL) NULL, UInt64 NULL>(CAST<Array(NULL)>(array<T0=NULL><T0>(NULL) AS Array(NULL) NULL), CAST<UInt8>(0_u8 AS UInt64 NULL))
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
@@ -172,7 +172,7 @@ output         : NULL
 
 ast            : [true, false][1]
 raw expr       : get(array(true, false), 1)
-checked expr   : get<T0=Boolean><Array(T0 NULL), UInt64>(CAST(array<T0=Boolean><T0, T0>(true, false) AS Array(Boolean NULL)), to_uint64<UInt8>(1_u8))
+checked expr   : get<T0=Boolean><Array(T0 NULL), UInt64>(CAST<Array(Boolean)>(array<T0=Boolean><T0, T0>(true, false) AS Array(Boolean NULL)), CAST<UInt8>(1_u8 AS UInt64))
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -181,7 +181,7 @@ output         : true
 
 ast            : ['a', 'b', 'c'][2]
 raw expr       : get(array('a', 'b', 'c'), 2)
-checked expr   : get<T0=String><Array(T0 NULL), UInt64>(CAST(array<T0=String><T0, T0, T0>("a", "b", "c") AS Array(String NULL)), to_uint64<UInt8>(2_u8))
+checked expr   : get<T0=String><Array(T0 NULL), UInt64>(CAST<Array(String)>(array<T0=String><T0, T0, T0>("a", "b", "c") AS Array(String NULL)), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : "b"
 output type    : String NULL
 output domain  : {"b"..="b"}
@@ -190,7 +190,7 @@ output         : 'b'
 
 ast            : [1, 2, 3][1]
 raw expr       : get(array(1, 2, 3), 1)
-checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), to_uint64<UInt8>(1_u8))
+checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), CAST<UInt8>(1_u8 AS UInt64))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
@@ -199,7 +199,7 @@ output         : 1
 
 ast            : [1, 2, 3][3]
 raw expr       : get(array(1, 2, 3), 3)
-checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), to_uint64<UInt8>(3_u8))
+checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), CAST<UInt8>(3_u8 AS UInt64))
 optimized expr : 3_u8
 output type    : UInt8 NULL
 output domain  : {3..=3}
@@ -208,7 +208,7 @@ output         : 3
 
 ast            : [1, null, 3][1]
 raw expr       : get(array(1, NULL, 3), 1)
-checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), to_uint64<UInt8>(1_u8))
+checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL)), CAST<UInt8>(1_u8 AS UInt64))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
@@ -217,7 +217,7 @@ output         : 1
 
 ast            : [1, null, 3][2]
 raw expr       : get(array(1, NULL, 3), 2)
-checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), to_uint64<UInt8>(2_u8))
+checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL)), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : NULL
 output type    : UInt8 NULL
 output domain  : {NULL}
@@ -226,7 +226,7 @@ output         : NULL
 
 ast            : [1, 2, 3][4]
 raw expr       : get(array(1, 2, 3), 4)
-checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), to_uint64<UInt8>(4_u8))
+checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), CAST<UInt8>(4_u8 AS UInt64))
 optimized expr : NULL
 output type    : UInt8 NULL
 output domain  : {NULL}
@@ -235,7 +235,7 @@ output         : NULL
 
 ast            : [a, b][idx]
 raw expr       : get(array(a::Int16, b::Int16), idx::UInt16)
-checked expr   : get<T0=Int16><Array(T0 NULL), UInt64>(CAST(array<T0=Int16><T0, T0>(a, b) AS Array(Int16 NULL)), to_uint64<UInt16>(idx))
+checked expr   : get<T0=Int16><Array(T0 NULL), UInt64>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(a, b) AS Array(Int16 NULL)), CAST<UInt16>(idx AS UInt64))
 evaluation:
 +--------+---------+---------+---------+------------------+
 |        | a       | b       | idx     | Output           |
@@ -259,7 +259,7 @@ evaluation (internal):
 
 ast            : slice([], 1)
 raw expr       : slice(array(), 1)
-checked expr   : slice<Array(Nothing), UInt64>(array<>(), to_uint64<UInt8>(1_u8))
+checked expr   : slice<Array(Nothing), UInt64>(array<>(), CAST<UInt8>(1_u8 AS UInt64))
 optimized expr : [] :: Array(Nothing)
 output type    : Array(Nothing)
 output domain  : []
@@ -268,7 +268,7 @@ output         : []
 
 ast            : slice([0, 1, 2, 3], 2)
 raw expr       : slice(array(0, 1, 2, 3), 2)
-checked expr   : slice<T0=UInt8><Array(T0), UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), to_uint64<UInt8>(2_u8))
+checked expr   : slice<T0=UInt8><Array(T0), UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : [1, 2, 3]
 output type    : Array(UInt8)
 output domain  : [{1..=3}]
@@ -277,7 +277,7 @@ output         : [1, 2, 3]
 
 ast            : slice(['a', 'b', 'c', 'd'], 3)
 raw expr       : slice(array('a', 'b', 'c', 'd'), 3)
-checked expr   : slice<T0=String><Array(T0), UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(3_u8))
+checked expr   : slice<T0=String><Array(T0), UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), CAST<UInt8>(3_u8 AS UInt64))
 optimized expr : ['c', 'd']
 output type    : Array(String)
 output domain  : [{"c"..="d"}]
@@ -286,7 +286,7 @@ output         : ['c', 'd']
 
 ast            : slice([a, b, c], 2)
 raw expr       : slice(array(a::Int16, b::Int16, c::Int16), 2)
-checked expr   : slice<T0=Int16><Array(T0), UInt64>(array<T0=Int16><T0, T0, T0>(a, b, c), to_uint64<UInt8>(2_u8))
+checked expr   : slice<T0=Int16><Array(T0), UInt64>(array<T0=Int16><T0, T0, T0>(a, b, c), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : slice<T0=Int16><Array(T0), UInt64>(array<T0=Int16><T0, T0, T0>(a, b, c), 2_u64)
 evaluation:
 +--------+---------+---------+---------+--------------+
@@ -311,7 +311,7 @@ evaluation (internal):
 
 ast            : slice([], 1, 2)
 raw expr       : slice(array(), 1, 2)
-checked expr   : slice<Array(Nothing), UInt64, UInt64>(array<>(), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
+checked expr   : slice<Array(Nothing), UInt64, UInt64>(array<>(), CAST<UInt8>(1_u8 AS UInt64), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : [] :: Array(Nothing)
 output type    : Array(Nothing)
 output domain  : []
@@ -320,7 +320,7 @@ output         : []
 
 ast            : slice([1], 1, 2)
 raw expr       : slice(array(1), 1, 2)
-checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0>(1_u8), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
+checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0>(1_u8), CAST<UInt8>(1_u8 AS UInt64), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : [1]
 output type    : Array(UInt8)
 output domain  : [{1..=1}]
@@ -329,7 +329,7 @@ output         : [1]
 
 ast            : slice([NULL, 1, 2, 3], 0, 2)
 raw expr       : slice(array(NULL, 1, 2, 3), 0, 2)
-checked expr   : slice<T0=UInt8 NULL><Array(T0), UInt64, UInt64>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), to_uint64<UInt8>(0_u8), to_uint64<UInt8>(2_u8))
+checked expr   : slice<T0=UInt8 NULL><Array(T0), UInt64, UInt64>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL)), CAST<UInt8>(0_u8 AS UInt64), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : [NULL, 1]
 output type    : Array(UInt8 NULL)
 output domain  : [{1..=1} ∪ {NULL}]
@@ -338,7 +338,7 @@ output         : [NULL, 1]
 
 ast            : slice([0, 1, 2, 3], 1, 2)
 raw expr       : slice(array(0, 1, 2, 3), 1, 2)
-checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
+checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), CAST<UInt8>(1_u8 AS UInt64), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : [0, 1]
 output type    : Array(UInt8)
 output domain  : [{0..=1}]
@@ -347,7 +347,7 @@ output         : [0, 1]
 
 ast            : slice([0, 1, 2, 3], 1, 5)
 raw expr       : slice(array(0, 1, 2, 3), 1, 5)
-checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(5_u8))
+checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), CAST<UInt8>(1_u8 AS UInt64), CAST<UInt8>(5_u8 AS UInt64))
 optimized expr : [0, 1, 2, 3]
 output type    : Array(UInt8)
 output domain  : [{0..=3}]
@@ -356,7 +356,7 @@ output         : [0, 1, 2, 3]
 
 ast            : slice(['a', 'b', 'c', 'd'], 0, 2)
 raw expr       : slice(array('a', 'b', 'c', 'd'), 0, 2)
-checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(0_u8), to_uint64<UInt8>(2_u8))
+checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), CAST<UInt8>(0_u8 AS UInt64), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : ['a', 'b']
 output type    : Array(String)
 output domain  : [{"a"..="b"}]
@@ -365,7 +365,7 @@ output         : ['a', 'b']
 
 ast            : slice(['a', 'b', 'c', 'd'], 1, 4)
 raw expr       : slice(array('a', 'b', 'c', 'd'), 1, 4)
-checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(4_u8))
+checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), CAST<UInt8>(1_u8 AS UInt64), CAST<UInt8>(4_u8 AS UInt64))
 optimized expr : ['a', 'b', 'c', 'd']
 output type    : Array(String)
 output domain  : [{"a"..="d"}]
@@ -374,7 +374,7 @@ output         : ['a', 'b', 'c', 'd']
 
 ast            : slice(['a', 'b', 'c', 'd'], 2, 6)
 raw expr       : slice(array('a', 'b', 'c', 'd'), 2, 6)
-checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(2_u8), to_uint64<UInt8>(6_u8))
+checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), CAST<UInt8>(2_u8 AS UInt64), CAST<UInt8>(6_u8 AS UInt64))
 optimized expr : ['b', 'c', 'd']
 output type    : Array(String)
 output domain  : [{"b"..="d"}]
@@ -383,7 +383,7 @@ output         : ['b', 'c', 'd']
 
 ast            : slice([a, b, c], 1, 2)
 raw expr       : slice(array(a::Int16, b::Int16, c::Int16), 1, 2)
-checked expr   : slice<T0=Int16><Array(T0), UInt64, UInt64>(array<T0=Int16><T0, T0, T0>(a, b, c), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
+checked expr   : slice<T0=Int16><Array(T0), UInt64, UInt64>(array<T0=Int16><T0, T0, T0>(a, b, c), CAST<UInt8>(1_u8 AS UInt64), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : slice<T0=Int16><Array(T0), UInt64, UInt64>(array<T0=Int16><T0, T0, T0>(a, b, c), 1_u64, 2_u64)
 evaluation:
 +--------+---------+---------+---------+--------------+
@@ -435,8 +435,8 @@ output         : true
 
 ast            : int8_col not in (1, 2, 3, 4, 5, null)
 raw expr       : not(contains(array(1, 2, 3, 4, 5), int8_col::Int8))
-checked expr   : not<Boolean>(contains<Array(Int16), Int16>(CAST(array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8) AS Array(Int16)), to_int16<Int8>(int8_col)))
-optimized expr : not<Boolean>(contains<Array(Int16), Int16>([1, 2, 3, 4, 5], to_int16<Int8>(int8_col)))
+checked expr   : not<Boolean>(contains<Array(Int16), Int16>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8) AS Array(Int16)), CAST<Int8>(int8_col AS Int16)))
+optimized expr : not<Boolean>(contains<Array(Int16), Int16>([1, 2, 3, 4, 5], CAST<Int8>(int8_col AS Int16)))
 evaluation:
 +--------+----------+---------------+
 |        | int8_col | Output        |
@@ -531,7 +531,7 @@ evaluation (internal):
 
 ast            : contains([1,2,null], nullable_col)
 raw expr       : contains(array(1, 2, NULL), nullable_col::Int64 NULL)
-checked expr   : contains<T0=Int64 NULL><Array(T0) NULL, T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL) NULL), nullable_col)
+checked expr   : contains<T0=Int64 NULL><Array(T0) NULL, T0>(CAST<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)) AS Array(Int64 NULL) NULL), nullable_col)
 optimized expr : contains<T0=Int64 NULL><Array(T0) NULL, T0>([1, 2, NULL], nullable_col)
 evaluation:
 +--------+-------------------+---------------+
@@ -555,7 +555,7 @@ evaluation (internal):
 
 ast            : contains([(1,'2', 3, false), (1,'2', 4, true), null], (1,'2', 3, false))
 raw expr       : contains(array(tuple(1, '2', 3, false), tuple(1, '2', 4, true), NULL), tuple(1, '2', 3, false))
-checked expr   : contains<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><Array(T0) NULL, T0>(CAST(array<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><T0, T0, T0>(CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 4_u8, true) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST(NULL AS Tuple(UInt8, String, UInt8, Boolean) NULL)) AS Array(Tuple(UInt8, String, UInt8, Boolean) NULL) NULL), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL))
+checked expr   : contains<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><Array(T0) NULL, T0>(CAST<Array(Tuple(UInt8, String, UInt8, Boolean) NULL)>(array<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><T0, T0, T0>(CAST<Tuple(UInt8, String, UInt8, Boolean)>(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST<Tuple(UInt8, String, UInt8, Boolean)>(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 4_u8, true) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST<NULL>(NULL AS Tuple(UInt8, String, UInt8, Boolean) NULL)) AS Array(Tuple(UInt8, String, UInt8, Boolean) NULL) NULL), CAST<Tuple(UInt8, String, UInt8, Boolean)>(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -564,7 +564,7 @@ output         : true
 
 ast            : nullable_col in (null, 9, 10, 12)
 raw expr       : or(or(eq(nullable_col::Int64 NULL, 9), eq(nullable_col::Int64 NULL, 10)), eq(nullable_col::Int64 NULL, 12))
-checked expr   : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(nullable_col, CAST(9_i64 AS Int64 NULL)), eq<Int64 NULL, Int64 NULL>(nullable_col, CAST(10_i64 AS Int64 NULL))), eq<Int64 NULL, Int64 NULL>(nullable_col, CAST(12_i64 AS Int64 NULL)))
+checked expr   : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(nullable_col, CAST<UInt8>(9_u8 AS Int64 NULL)), eq<Int64 NULL, Int64 NULL>(nullable_col, CAST<UInt8>(10_u8 AS Int64 NULL))), eq<Int64 NULL, Int64 NULL>(nullable_col, CAST<UInt8>(12_u8 AS Int64 NULL)))
 optimized expr : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(nullable_col, 9_i64), eq<Int64 NULL, Int64 NULL>(nullable_col, 10_i64)), eq<Int64 NULL, Int64 NULL>(nullable_col, 12_i64))
 evaluation:
 +--------+-------------------+------------------------+
@@ -617,7 +617,7 @@ output         : []
 
 ast            : array_remove_first([0, 1, 2, NULL])
 raw expr       : array_remove_first(array(0, 1, 2, NULL))
-checked expr   : array_remove_first<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(0_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
+checked expr   : array_remove_first<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<UInt8>(0_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)))
 optimized expr : [1, 2, NULL]
 output type    : Array(UInt8 NULL)
 output domain  : [{1..=2} ∪ {NULL}]
@@ -685,7 +685,7 @@ output         : []
 
 ast            : array_remove_last([0, 1, 2, NULL])
 raw expr       : array_remove_last(array(0, 1, 2, NULL))
-checked expr   : array_remove_last<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(0_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
+checked expr   : array_remove_last<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<UInt8>(0_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)))
 optimized expr : [0, 1, 2]
 output type    : Array(UInt8 NULL)
 output domain  : [{0..=2}]
@@ -744,7 +744,7 @@ output         : []
 
 ast            : array_concat([], [1,2])
 raw expr       : array_concat(array(), array(1, 2))
-checked expr   : array_concat<T0=UInt8><Array(T0), Array(T0)>(CAST(array<>() AS Array(UInt8)), array<T0=UInt8><T0, T0>(1_u8, 2_u8))
+checked expr   : array_concat<T0=UInt8><Array(T0), Array(T0)>(CAST<Array(Nothing)>(array<>() AS Array(UInt8)), array<T0=UInt8><T0, T0>(1_u8, 2_u8))
 optimized expr : [1, 2]
 output type    : Array(UInt8)
 output domain  : [{1..=2}]
@@ -753,7 +753,7 @@ output         : [1, 2]
 
 ast            : array_concat([false, true], [])
 raw expr       : array_concat(array(false, true), array())
-checked expr   : array_concat<T0=Boolean><Array(T0), Array(T0)>(array<T0=Boolean><T0, T0>(false, true), CAST(array<>() AS Array(Boolean)))
+checked expr   : array_concat<T0=Boolean><Array(T0), Array(T0)>(array<T0=Boolean><T0, T0>(false, true), CAST<Array(Nothing)>(array<>() AS Array(Boolean)))
 optimized expr : [false, true]
 output type    : Array(Boolean)
 output domain  : [{FALSE, TRUE}]
@@ -793,7 +793,7 @@ error:
 
 ast            : array_concat([1, 2, 3, 4, 5, null], [nullable_col])
 raw expr       : array_concat(array(1, 2, 3, 4, 5, NULL), array(nullable_col::Int64 NULL))
-checked expr   : array_concat<T0=Int64 NULL><Array(T0), Array(T0)>(CAST(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), array<T0=Int64 NULL><T0>(nullable_col))
+checked expr   : array_concat<T0=Int64 NULL><Array(T0), Array(T0)>(CAST<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(4_u8 AS UInt8 NULL), CAST<UInt8>(5_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), array<T0=Int64 NULL><T0>(nullable_col))
 optimized expr : array_concat<T0=Int64 NULL><Array(T0), Array(T0)>([1, 2, 3, 4, 5, NULL], array<T0=Int64 NULL><T0>(nullable_col))
 evaluation:
 +--------+-------------------+-----------------------------+
@@ -817,8 +817,8 @@ evaluation (internal):
 
 ast            : array_concat([1,2,null], [int8_col])
 raw expr       : array_concat(array(1, 2, NULL), array(int8_col::Int8))
-checked expr   : array_concat<T0=Int16 NULL><Array(T0), Array(T0)>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int16 NULL)), CAST(array<T0=Int8><T0>(int8_col) AS Array(Int16 NULL)))
-optimized expr : array_concat<T0=Int16 NULL><Array(T0), Array(T0)>([1, 2, NULL], CAST(array<T0=Int8><T0>(int8_col) AS Array(Int16 NULL)))
+checked expr   : array_concat<T0=Int16 NULL><Array(T0), Array(T0)>(CAST<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)) AS Array(Int16 NULL)), CAST<Array(Int8)>(array<T0=Int8><T0>(int8_col) AS Array(Int16 NULL)))
+optimized expr : array_concat<T0=Int16 NULL><Array(T0), Array(T0)>([1, 2, NULL], CAST<Array(Int8)>(array<T0=Int8><T0>(int8_col) AS Array(Int16 NULL)))
 evaluation:
 +--------+----------+--------------------+
 |        | int8_col | Output             |
@@ -841,7 +841,7 @@ evaluation (internal):
 
 ast            : array_prepend(1, [])
 raw expr       : array_prepend(1, array())
-checked expr   : array_prepend<T0=UInt8><T0, Array(T0) NULL>(1_u8, CAST(array<>() AS Array(UInt8) NULL))
+checked expr   : array_prepend<T0=UInt8><T0, Array(T0) NULL>(1_u8, CAST<Array(Nothing)>(array<>() AS Array(UInt8) NULL))
 optimized expr : [1]
 output type    : Array(UInt8)
 output domain  : [{1..=1}]
@@ -850,7 +850,7 @@ output         : [1]
 
 ast            : array_prepend(1, [2, 3, NULL, 4])
 raw expr       : array_prepend(1, array(2, 3, NULL, 4))
-checked expr   : array_prepend<T0=UInt8 NULL><T0, Array(T0) NULL>(CAST(1_u8 AS UInt8 NULL), CAST(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL)) AS Array(UInt8 NULL) NULL))
+checked expr   : array_prepend<T0=UInt8 NULL><T0, Array(T0) NULL>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(4_u8 AS UInt8 NULL)) AS Array(UInt8 NULL) NULL))
 optimized expr : [1, 2, 3, NULL, 4]
 output type    : Array(UInt8 NULL)
 output domain  : [{1..=4} ∪ {NULL}]
@@ -859,7 +859,7 @@ output         : [1, 2, 3, NULL, 4]
 
 ast            : array_prepend('a', ['b', NULL, NULL, 'c', 'd'])
 raw expr       : array_prepend('a', array('b', NULL, NULL, 'c', 'd'))
-checked expr   : array_prepend<T0=String NULL><T0, Array(T0) NULL>(CAST("a" AS String NULL), CAST(array<T0=String NULL><T0, T0, T0, T0, T0>(CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)) AS Array(String NULL) NULL))
+checked expr   : array_prepend<T0=String NULL><T0, Array(T0) NULL>(CAST<String>("a" AS String NULL), CAST<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0>(CAST<String>("b" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("c" AS String NULL), CAST<String>("d" AS String NULL)) AS Array(String NULL) NULL))
 optimized expr : ['a', 'b', NULL, NULL, 'c', 'd']
 output type    : Array(String NULL)
 output domain  : [{"a"..="d"} ∪ {NULL}]
@@ -868,7 +868,7 @@ output         : ['a', 'b', NULL, NULL, 'c', 'd']
 
 ast            : array_prepend(NULL, CAST([2, 3] AS Array(INT8 NULL) NULL))
 raw expr       : array_prepend(NULL, CAST(array(2, 3) AS Array(Int8 NULL) NULL))
-checked expr   : array_prepend<T0=Int8 NULL><T0, Array(T0) NULL>(CAST(NULL AS Int8 NULL), CAST(array<T0=UInt8><T0, T0>(2_u8, 3_u8) AS Array(Int8 NULL) NULL))
+checked expr   : array_prepend<T0=Int8 NULL><T0, Array(T0) NULL>(CAST<NULL>(NULL AS Int8 NULL), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(2_u8, 3_u8) AS Array(Int8 NULL) NULL))
 optimized expr : [NULL, 2, 3]
 output type    : Array(Int8 NULL)
 output domain  : [{2..=3} ∪ {NULL}]
@@ -877,7 +877,7 @@ output         : [NULL, 2, 3]
 
 ast            : array_prepend(1, CAST([2, 3] AS Array(INT8 NULL) NULL))
 raw expr       : array_prepend(1, CAST(array(2, 3) AS Array(Int8 NULL) NULL))
-checked expr   : array_prepend<T0=Int16 NULL><T0, Array(T0) NULL>(CAST(1_u8 AS Int16 NULL), CAST(CAST(array<T0=UInt8><T0, T0>(2_u8, 3_u8) AS Array(Int8 NULL) NULL) AS Array(Int16 NULL) NULL))
+checked expr   : array_prepend<T0=Int16 NULL><T0, Array(T0) NULL>(CAST<UInt8>(1_u8 AS Int16 NULL), CAST<Array(Int8 NULL) NULL>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(2_u8, 3_u8) AS Array(Int8 NULL) NULL) AS Array(Int16 NULL) NULL))
 optimized expr : [1, 2, 3]
 output type    : Array(Int16 NULL)
 output domain  : [{1..=3}]
@@ -886,7 +886,7 @@ output         : [1, 2, 3]
 
 ast            : array_prepend(a, [b, c])
 raw expr       : array_prepend(a::Int16, array(b::Int16, c::Int16))
-checked expr   : array_prepend<T0=Int16><T0, Array(T0) NULL>(a, CAST(array<T0=Int16><T0, T0>(b, c) AS Array(Int16) NULL))
+checked expr   : array_prepend<T0=Int16><T0, Array(T0) NULL>(a, CAST<Array(Int16)>(array<T0=Int16><T0, T0>(b, c) AS Array(Int16) NULL))
 evaluation:
 +--------+---------+---------+---------+--------------+
 |        | a       | b       | c       | Output       |
@@ -910,7 +910,7 @@ evaluation (internal):
 
 ast            : array_append([], 1)
 raw expr       : array_append(array(), 1)
-checked expr   : array_append<T0=UInt8><Array(T0) NULL, T0>(CAST(array<>() AS Array(UInt8) NULL), 1_u8)
+checked expr   : array_append<T0=UInt8><Array(T0) NULL, T0>(CAST<Array(Nothing)>(array<>() AS Array(UInt8) NULL), 1_u8)
 optimized expr : [1]
 output type    : Array(UInt8)
 output domain  : [{1..=1}]
@@ -919,7 +919,7 @@ output         : [1]
 
 ast            : array_append([2, 3, NULL, 4], 5)
 raw expr       : array_append(array(2, 3, NULL, 4), 5)
-checked expr   : array_append<T0=UInt8 NULL><Array(T0) NULL, T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL)) AS Array(UInt8 NULL) NULL), CAST(5_u8 AS UInt8 NULL))
+checked expr   : array_append<T0=UInt8 NULL><Array(T0) NULL, T0>(CAST<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(4_u8 AS UInt8 NULL)) AS Array(UInt8 NULL) NULL), CAST<UInt8>(5_u8 AS UInt8 NULL))
 optimized expr : [2, 3, NULL, 4, 5]
 output type    : Array(UInt8 NULL)
 output domain  : [{2..=5} ∪ {NULL}]
@@ -928,7 +928,7 @@ output         : [2, 3, NULL, 4, 5]
 
 ast            : array_append(['b', NULL, NULL, 'c', 'd'], 'e')
 raw expr       : array_append(array('b', NULL, NULL, 'c', 'd'), 'e')
-checked expr   : array_append<T0=String NULL><Array(T0) NULL, T0>(CAST(array<T0=String NULL><T0, T0, T0, T0, T0>(CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)) AS Array(String NULL) NULL), CAST("e" AS String NULL))
+checked expr   : array_append<T0=String NULL><Array(T0) NULL, T0>(CAST<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0>(CAST<String>("b" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("c" AS String NULL), CAST<String>("d" AS String NULL)) AS Array(String NULL) NULL), CAST<String>("e" AS String NULL))
 optimized expr : ['b', NULL, NULL, 'c', 'd', 'e']
 output type    : Array(String NULL)
 output domain  : [{"b"..="e"} ∪ {NULL}]
@@ -937,7 +937,7 @@ output         : ['b', NULL, NULL, 'c', 'd', 'e']
 
 ast            : array_append(CAST([1, 2] AS Array(INT8 NULL) NULL), NULL)
 raw expr       : array_append(CAST(array(1, 2) AS Array(Int8 NULL) NULL), NULL)
-checked expr   : array_append<T0=Int8 NULL><Array(T0) NULL, T0>(CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Int8 NULL) NULL), CAST(NULL AS Int8 NULL))
+checked expr   : array_append<T0=Int8 NULL><Array(T0) NULL, T0>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Int8 NULL) NULL), CAST<NULL>(NULL AS Int8 NULL))
 optimized expr : [1, 2, NULL]
 output type    : Array(Int8 NULL)
 output domain  : [{1..=2} ∪ {NULL}]
@@ -946,7 +946,7 @@ output         : [1, 2, NULL]
 
 ast            : array_append(CAST([1, 2] AS Array(INT8 NULL) NULL), 3)
 raw expr       : array_append(CAST(array(1, 2) AS Array(Int8 NULL) NULL), 3)
-checked expr   : array_append<T0=Int16 NULL><Array(T0) NULL, T0>(CAST(CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Int8 NULL) NULL) AS Array(Int16 NULL) NULL), CAST(3_u8 AS Int16 NULL))
+checked expr   : array_append<T0=Int16 NULL><Array(T0) NULL, T0>(CAST<Array(Int8 NULL) NULL>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Int8 NULL) NULL) AS Array(Int16 NULL) NULL), CAST<UInt8>(3_u8 AS Int16 NULL))
 optimized expr : [1, 2, 3]
 output type    : Array(Int16 NULL)
 output domain  : [{1..=3}]
@@ -955,7 +955,7 @@ output         : [1, 2, 3]
 
 ast            : array_append([b, c], a)
 raw expr       : array_append(array(b::Int16, c::Int16), a::Int16)
-checked expr   : array_append<T0=Int16><Array(T0) NULL, T0>(CAST(array<T0=Int16><T0, T0>(b, c) AS Array(Int16) NULL), a)
+checked expr   : array_append<T0=Int16><Array(T0) NULL, T0>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(b, c) AS Array(Int16) NULL), a)
 evaluation:
 +--------+---------+---------+---------+--------------+
 |        | a       | b       | c       | Output       |
@@ -979,7 +979,7 @@ evaluation (internal):
 
 ast            : array_indexof([], NULL)
 raw expr       : array_indexof(array(), NULL)
-checked expr   : array_indexof<T0=NULL><Array(T0), T0>(CAST(array<>() AS Array(NULL)), NULL)
+checked expr   : array_indexof<T0=NULL><Array(T0), T0>(CAST<Array(Nothing)>(array<>() AS Array(NULL)), NULL)
 optimized expr : 0_u64
 output type    : UInt64
 output domain  : {0..=0}
@@ -1006,7 +1006,7 @@ output         : 1
 
 ast            : array_indexof([], false)
 raw expr       : array_indexof(array(), false)
-checked expr   : array_indexof<T0=Boolean><Array(T0), T0>(CAST(array<>() AS Array(Boolean)), false)
+checked expr   : array_indexof<T0=Boolean><Array(T0), T0>(CAST<Array(Nothing)>(array<>() AS Array(Boolean)), false)
 optimized expr : 0_u64
 output type    : UInt64
 output domain  : {0..=0}
@@ -1015,7 +1015,7 @@ output         : 0
 
 ast            : array_indexof([false, true], null)
 raw expr       : array_indexof(array(false, true), NULL)
-checked expr   : array_indexof<T0=Boolean NULL><Array(T0), T0>(CAST(array<T0=Boolean><T0, T0>(false, true) AS Array(Boolean NULL)), CAST(NULL AS Boolean NULL))
+checked expr   : array_indexof<T0=Boolean NULL><Array(T0), T0>(CAST<Array(Boolean)>(array<T0=Boolean><T0, T0>(false, true) AS Array(Boolean NULL)), CAST<NULL>(NULL AS Boolean NULL))
 optimized expr : 0_u64
 output type    : UInt64
 output domain  : {0..=0}
@@ -1039,13 +1039,13 @@ error:
   --> SQL:1:22
   |
 1 | array_indexof([1,2,3,'s'], 's')
-  |                      ^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `to_int64('s')`, during run expr: `array_indexof(array(to_int64(1), to_int64(2), to_int64(3), to_int64('s')), to_int64('s'))`
+  |                      ^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `to_int64()`, during run expr: `array_indexof(array(CAST(1 AS Int64), CAST(2 AS Int64), CAST(3 AS Int64), CAST('s' AS Int64)), CAST('s' AS Int64))`
 
 
 
 ast            : array_indexof([1::VARIANT,2::VARIANT,3::VARIANT,4::VARIANT], 2::VARIANT)
 raw expr       : array_indexof(array(CAST(1 AS Variant), CAST(2 AS Variant), CAST(3 AS Variant), CAST(4 AS Variant)), CAST(2 AS Variant))
-checked expr   : array_indexof<T0=Variant><Array(T0), T0>(array<T0=Variant><T0, T0, T0, T0>(to_variant<T0=UInt8><T0>(1_u8), to_variant<T0=UInt8><T0>(2_u8), to_variant<T0=UInt8><T0>(3_u8), to_variant<T0=UInt8><T0>(4_u8)), to_variant<T0=UInt8><T0>(2_u8))
+checked expr   : array_indexof<T0=Variant><Array(T0), T0>(array<T0=Variant><T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS Variant), CAST<UInt8>(2_u8 AS Variant), CAST<UInt8>(3_u8 AS Variant), CAST<UInt8>(4_u8 AS Variant)), CAST<UInt8>(2_u8 AS Variant))
 optimized expr : 2_u64
 output type    : UInt64
 output domain  : {2..=2}
@@ -1054,7 +1054,7 @@ output         : 2
 
 ast            : array_indexof([1, 2, 3, 4, 5, null], nullable_col)
 raw expr       : array_indexof(array(1, 2, 3, 4, 5, NULL), nullable_col::Int64 NULL)
-checked expr   : array_indexof<T0=Int64 NULL><Array(T0), T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), nullable_col)
+checked expr   : array_indexof<T0=Int64 NULL><Array(T0), T0>(CAST<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(4_u8 AS UInt8 NULL), CAST<UInt8>(5_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), nullable_col)
 optimized expr : array_indexof<T0=Int64 NULL><Array(T0), T0>([1, 2, 3, 4, 5, NULL], nullable_col)
 evaluation:
 +--------+-------------------+----------------------------+
@@ -1078,8 +1078,8 @@ evaluation (internal):
 
 ast            : array_indexof([9,10,null], int8_col)
 raw expr       : array_indexof(array(9, 10, NULL), int8_col::Int8)
-checked expr   : array_indexof<T0=Int16 NULL><Array(T0), T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(9_u8 AS UInt8 NULL), CAST(10_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int16 NULL)), CAST(int8_col AS Int16 NULL))
-optimized expr : array_indexof<T0=Int16 NULL><Array(T0), T0>([9, 10, NULL], CAST(int8_col AS Int16 NULL))
+checked expr   : array_indexof<T0=Int16 NULL><Array(T0), T0>(CAST<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0>(CAST<UInt8>(9_u8 AS UInt8 NULL), CAST<UInt8>(10_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)) AS Array(Int16 NULL)), CAST<Int8>(int8_col AS Int16 NULL))
+optimized expr : array_indexof<T0=Int16 NULL><Array(T0), T0>([9, 10, NULL], CAST<Int8>(int8_col AS Int16 NULL))
 evaluation:
 +--------+----------+----------------------------+
 |        | int8_col | Output                     |
@@ -1111,7 +1111,7 @@ output         : 0
 
 ast            : array_unique([1, 1, 2, 2, 3, NULL])
 raw expr       : array_unique(array(1, 1, 2, 2, 3, NULL))
-checked expr   : array_unique<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
+checked expr   : array_unique<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)))
 optimized expr : 3_u64
 output type    : UInt64
 output domain  : {3..=3}
@@ -1120,7 +1120,7 @@ output         : 3
 
 ast            : array_unique(['a', NULL, 'a', 'b', NULL, 'c', 'd'])
 raw expr       : array_unique(array('a', NULL, 'a', 'b', NULL, 'c', 'd'))
-checked expr   : array_unique<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST(NULL AS String NULL), CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)))
+checked expr   : array_unique<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0, T0>(CAST<String>("a" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("a" AS String NULL), CAST<String>("b" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("c" AS String NULL), CAST<String>("d" AS String NULL)))
 optimized expr : 4_u64
 output type    : UInt64
 output domain  : {4..=4}
@@ -1164,7 +1164,7 @@ output         : []
 
 ast            : array_distinct([1, 1, 2, 2, 3, NULL])
 raw expr       : array_distinct(array(1, 1, 2, 2, 3, NULL))
-checked expr   : array_distinct<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
+checked expr   : array_distinct<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)))
 optimized expr : [1, 2, 3]
 output type    : Array(UInt8 NULL)
 output domain  : [{1..=3}]
@@ -1173,7 +1173,7 @@ output         : [1, 2, 3]
 
 ast            : array_distinct(['a', NULL, 'a', 'b', NULL, 'c', 'd'])
 raw expr       : array_distinct(array('a', NULL, 'a', 'b', NULL, 'c', 'd'))
-checked expr   : array_distinct<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST(NULL AS String NULL), CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)))
+checked expr   : array_distinct<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0, T0>(CAST<String>("a" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("a" AS String NULL), CAST<String>("b" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("c" AS String NULL), CAST<String>("d" AS String NULL)))
 optimized expr : ['a', 'b', 'c', 'd']
 output type    : Array(String NULL)
 output domain  : [{"a"..="d"}]
@@ -1226,7 +1226,7 @@ output         : 28
 
 ast            : array_sum([1, 2, 3, 4, 5, NULL, 6])
 raw expr       : array_sum(array(1, 2, 3, 4, 5, NULL, 6))
-checked expr   : array_sum<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(6_u8 AS UInt8 NULL)))
+checked expr   : array_sum<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(4_u8 AS UInt8 NULL), CAST<UInt8>(5_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(6_u8 AS UInt8 NULL)))
 optimized expr : 21_u64
 output type    : UInt64 NULL
 output domain  : {21..=21}
@@ -1244,7 +1244,7 @@ output         : 18.0
 
 ast            : array_sum([1.2, NULL, 3.4, 5.6, NULL])
 raw expr       : array_sum(array(1.2, NULL, 3.4, 5.6, NULL))
-checked expr   : array_sum<Array(Decimal(2, 1) NULL)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+checked expr   : array_sum<Array(Decimal(2, 1) NULL)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0>(CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL)))
 optimized expr : 10.2_d128(38,1)
 output type    : Decimal(38, 1) NULL
 output domain  : {10.2..=10.2}
@@ -1323,7 +1323,7 @@ output         : 4
 
 ast            : array_avg([1, 2, 3, 4, 5, NULL, 6])
 raw expr       : array_avg(array(1, 2, 3, 4, 5, NULL, 6))
-checked expr   : array_avg<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(6_u8 AS UInt8 NULL)))
+checked expr   : array_avg<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(4_u8 AS UInt8 NULL), CAST<UInt8>(5_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(6_u8 AS UInt8 NULL)))
 optimized expr : 3.5_f64
 output type    : Float64 NULL
 output domain  : {3.5..=3.5}
@@ -1341,7 +1341,7 @@ output         : 4.5000
 
 ast            : array_avg([1.2, NULL, 3.4, 5.6, NULL])
 raw expr       : array_avg(array(1.2, NULL, 3.4, 5.6, NULL))
-checked expr   : array_avg<Array(Decimal(2, 1) NULL)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+checked expr   : array_avg<Array(Decimal(2, 1) NULL)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0>(CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL)))
 optimized expr : 3.4000_d128(38,4)
 output type    : Decimal(38, 4) NULL
 output domain  : {3.4000..=3.4000}
@@ -1420,7 +1420,7 @@ output         : 7
 
 ast            : array_count([1, 2, 3, 4, 5, NULL, 6])
 raw expr       : array_count(array(1, 2, 3, 4, 5, NULL, 6))
-checked expr   : array_count<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(6_u8 AS UInt8 NULL)))
+checked expr   : array_count<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(4_u8 AS UInt8 NULL), CAST<UInt8>(5_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(6_u8 AS UInt8 NULL)))
 optimized expr : 6_u64
 output type    : UInt64
 output domain  : {6..=6}
@@ -1438,7 +1438,7 @@ output         : 4
 
 ast            : array_count([1.2, NULL, 3.4, 5.6, NULL])
 raw expr       : array_count(array(1.2, NULL, 3.4, 5.6, NULL))
-checked expr   : array_count<Array(Decimal(2, 1) NULL)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+checked expr   : array_count<Array(Decimal(2, 1) NULL)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0>(CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL)))
 optimized expr : 3_u64
 output type    : UInt64
 output domain  : {3..=3}
@@ -1456,7 +1456,7 @@ output         : 5
 
 ast            : array_count(['a', 'b', NULL, 'c', 'd', NULL])
 raw expr       : array_count(array('a', 'b', NULL, 'c', 'd', NULL))
-checked expr   : array_count<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
+checked expr   : array_count<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST<String>("a" AS String NULL), CAST<String>("b" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("c" AS String NULL), CAST<String>("d" AS String NULL), CAST<NULL>(NULL AS String NULL)))
 optimized expr : 4_u64
 output type    : UInt64
 output domain  : {4..=4}
@@ -1535,7 +1535,7 @@ output         : 7
 
 ast            : array_max([1, 2, 3, 4, 5, NULL, 6])
 raw expr       : array_max(array(1, 2, 3, 4, 5, NULL, 6))
-checked expr   : array_max<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(6_u8 AS UInt8 NULL)))
+checked expr   : array_max<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(4_u8 AS UInt8 NULL), CAST<UInt8>(5_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(6_u8 AS UInt8 NULL)))
 optimized expr : 6_u8
 output type    : UInt8 NULL
 output domain  : {6..=6}
@@ -1553,7 +1553,7 @@ output         : 7.8
 
 ast            : array_max([1.2, NULL, 3.4, 5.6, NULL])
 raw expr       : array_max(array(1.2, NULL, 3.4, 5.6, NULL))
-checked expr   : array_max<Array(Decimal(2, 1) NULL)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+checked expr   : array_max<Array(Decimal(2, 1) NULL)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0>(CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL)))
 optimized expr : 5.6_d128(2,1)
 output type    : Decimal(2, 1) NULL
 output domain  : {5.6..=5.6}
@@ -1571,7 +1571,7 @@ output         : 'e'
 
 ast            : array_max(['a', 'b', NULL, 'c', 'd', NULL])
 raw expr       : array_max(array('a', 'b', NULL, 'c', 'd', NULL))
-checked expr   : array_max<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
+checked expr   : array_max<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST<String>("a" AS String NULL), CAST<String>("b" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("c" AS String NULL), CAST<String>("d" AS String NULL), CAST<NULL>(NULL AS String NULL)))
 optimized expr : "d"
 output type    : String NULL
 output domain  : {"d"..="d"}
@@ -1650,7 +1650,7 @@ output         : 1
 
 ast            : array_min([1, 2, 3, 4, 5, NULL, 6])
 raw expr       : array_min(array(1, 2, 3, 4, 5, NULL, 6))
-checked expr   : array_min<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(6_u8 AS UInt8 NULL)))
+checked expr   : array_min<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(4_u8 AS UInt8 NULL), CAST<UInt8>(5_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(6_u8 AS UInt8 NULL)))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
@@ -1668,7 +1668,7 @@ output         : 1.2
 
 ast            : array_min([1.2, NULL, 3.4, 5.6, NULL])
 raw expr       : array_min(array(1.2, NULL, 3.4, 5.6, NULL))
-checked expr   : array_min<Array(Decimal(2, 1) NULL)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+checked expr   : array_min<Array(Decimal(2, 1) NULL)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0>(CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL)))
 optimized expr : 1.2_d128(2,1)
 output type    : Decimal(2, 1) NULL
 output domain  : {1.2..=1.2}
@@ -1686,7 +1686,7 @@ output         : 'a'
 
 ast            : array_min(['a', 'b', NULL, 'c', 'd', NULL])
 raw expr       : array_min(array('a', 'b', NULL, 'c', 'd', NULL))
-checked expr   : array_min<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
+checked expr   : array_min<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST<String>("a" AS String NULL), CAST<String>("b" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("c" AS String NULL), CAST<String>("d" AS String NULL), CAST<NULL>(NULL AS String NULL)))
 optimized expr : "a"
 output type    : String NULL
 output domain  : {"a"..="a"}
@@ -1765,7 +1765,7 @@ output         : 1
 
 ast            : array_any([NULL, 3, 2, 1])
 raw expr       : array_any(array(NULL, 3, 2, 1))
-checked expr   : array_any<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+checked expr   : array_any<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL)))
 optimized expr : 3_u8
 output type    : UInt8 NULL
 output domain  : {3..=3}
@@ -1783,7 +1783,7 @@ output         : 'a'
 
 ast            : array_any([NULL, 'x', 'y', 'z'])
 raw expr       : array_any(array(NULL, 'x', 'y', 'z'))
-checked expr   : array_any<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0>(CAST(NULL AS String NULL), CAST("x" AS String NULL), CAST("y" AS String NULL), CAST("z" AS String NULL)))
+checked expr   : array_any<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0>(CAST<NULL>(NULL AS String NULL), CAST<String>("x" AS String NULL), CAST<String>("y" AS String NULL), CAST<String>("z" AS String NULL)))
 optimized expr : "x"
 output type    : String NULL
 output domain  : {"x"..="x"}
@@ -1862,7 +1862,7 @@ output         : 1
 
 ast            : array_stddev_samp([NULL, 3, 2, 1])
 raw expr       : array_stddev_samp(array(NULL, 3, 2, 1))
-checked expr   : array_stddev_samp<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+checked expr   : array_stddev_samp<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL)))
 optimized expr : 1_f64
 output type    : Float64 NULL
 output domain  : {1..=1}
@@ -1915,7 +1915,7 @@ output         : 0.8164965809
 
 ast            : array_stddev_pop([NULL, 3, 2, 1])
 raw expr       : array_stddev_pop(array(NULL, 3, 2, 1))
-checked expr   : array_stddev_pop<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+checked expr   : array_stddev_pop<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL)))
 optimized expr : 0.8164965809_f64
 output type    : Float64 NULL
 output domain  : {0.8164965809..=0.8164965809}
@@ -1968,7 +1968,7 @@ output         : 2
 
 ast            : array_median([NULL, 3, 2, 1])
 raw expr       : array_median(array(NULL, 3, 2, 1))
-checked expr   : array_median<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+checked expr   : array_median<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL)))
 optimized expr : 2_f64
 output type    : Float64 NULL
 output domain  : {2..=2}
@@ -2021,7 +2021,7 @@ output         : 3
 
 ast            : array_approx_count_distinct([NULL, 3, 2, 1])
 raw expr       : array_approx_count_distinct(array(NULL, 3, 2, 1))
-checked expr   : array_approx_count_distinct<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+checked expr   : array_approx_count_distinct<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL)))
 optimized expr : 3_u64
 output type    : UInt64
 output domain  : {3..=3}
@@ -2039,7 +2039,7 @@ output         : 3
 
 ast            : array_approx_count_distinct([NULL, 'x', 'y', 'z'])
 raw expr       : array_approx_count_distinct(array(NULL, 'x', 'y', 'z'))
-checked expr   : array_approx_count_distinct<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0>(CAST(NULL AS String NULL), CAST("x" AS String NULL), CAST("y" AS String NULL), CAST("z" AS String NULL)))
+checked expr   : array_approx_count_distinct<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0>(CAST<NULL>(NULL AS String NULL), CAST<String>("x" AS String NULL), CAST<String>("y" AS String NULL), CAST<String>("z" AS String NULL)))
 optimized expr : 3_u64
 output type    : UInt64
 output domain  : {3..=3}
@@ -2118,7 +2118,7 @@ output         : 0
 
 ast            : array_kurtosis([NULL, 3, 2, 1])
 raw expr       : array_kurtosis(array(NULL, 3, 2, 1))
-checked expr   : array_kurtosis<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+checked expr   : array_kurtosis<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL)))
 optimized expr : 0_f64
 output type    : Float64 NULL
 output domain  : {0..=0}
@@ -2197,7 +2197,7 @@ output         : 0
 
 ast            : array_skewness([NULL, 3, 2, 1])
 raw expr       : array_skewness(array(NULL, 3, 2, 1))
-checked expr   : array_skewness<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+checked expr   : array_skewness<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(1_u8 AS UInt8 NULL)))
 optimized expr : 0_f64
 output type    : Float64 NULL
 output domain  : {0..=0}
@@ -2276,7 +2276,7 @@ output         : []
 
 ast            : array_sort_asc_null_first(NULL)
 raw expr       : array_sort_asc_null_first(NULL)
-checked expr   : array_sort_asc_null_first<Array(Nothing) NULL>(CAST(NULL AS Array(Nothing) NULL))
+checked expr   : array_sort_asc_null_first<Array(Nothing) NULL>(CAST<NULL>(NULL AS Array(Nothing) NULL))
 optimized expr : NULL
 output type    : Array(Nothing) NULL
 output domain  : {NULL}
@@ -2348,7 +2348,7 @@ output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 ast            : array_sort_asc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_asc_null_first(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
-checked expr   : array_sort_asc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+checked expr   : array_sort_asc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST<String>("2.2" AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
 output type    : Array(Decimal(2, 1) NULL)
 output domain  : [{1.2..=5.6} ∪ {NULL}]
@@ -2357,7 +2357,7 @@ output         : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
 
 ast            : array_sort_asc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_asc_null_last(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
-checked expr   : array_sort_asc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+checked expr   : array_sort_asc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST<String>("2.2" AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [1.2, 2.2, 3.4, 5.6, NULL, NULL]
 output type    : Array(Decimal(2, 1) NULL)
 output domain  : [{1.2..=5.6} ∪ {NULL}]
@@ -2366,7 +2366,7 @@ output         : [1.2, 2.2, 3.4, 5.6, NULL, NULL]
 
 ast            : array_sort_desc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_desc_null_first(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
-checked expr   : array_sort_desc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+checked expr   : array_sort_desc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST<String>("2.2" AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
 output type    : Array(Decimal(2, 1) NULL)
 output domain  : [{1.2..=5.6} ∪ {NULL}]
@@ -2375,7 +2375,7 @@ output         : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
 
 ast            : array_sort_desc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_desc_null_last(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
-checked expr   : array_sort_desc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+checked expr   : array_sort_desc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST<Decimal(2, 1)>(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST<String>("2.2" AS Decimal(2, 1) NULL), CAST<NULL>(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
 output type    : Array(Decimal(2, 1) NULL)
 output domain  : [{1.2..=5.6} ∪ {NULL}]

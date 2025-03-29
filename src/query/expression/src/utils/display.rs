@@ -637,10 +637,9 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
                 ..
             } => {
                 if *is_try {
-                    write!(f, "TRY_CAST({expr} AS {dest_type})")
-                } else {
-                    write!(f, "CAST({expr} AS {dest_type})")
+                    write!(f, "TRY_")?;
                 }
+                write!(f, "CAST<{}>({expr} AS {dest_type})", expr.data_type())
             }
             Expr::FunctionCall {
                 function,

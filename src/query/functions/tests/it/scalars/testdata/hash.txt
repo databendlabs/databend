@@ -9,7 +9,7 @@ output         : '35593b7ce5020eae3ca68fd5b6f3e031'
 
 ast            : md5(NULL)
 raw expr       : md5(NULL)
-checked expr   : md5<String NULL>(CAST(NULL AS String NULL))
+checked expr   : md5<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -49,7 +49,7 @@ output         : '915858afa2278f25527f192038108346164b47f2'
 
 ast            : sha(NULL)
 raw expr       : sha(NULL)
-checked expr   : sha<String NULL>(CAST(NULL AS String NULL))
+checked expr   : sha<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -89,7 +89,7 @@ output         : '1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b821
 
 ast            : blake3(NULL)
 raw expr       : blake3(NULL)
-checked expr   : blake3<String NULL>(CAST(NULL AS String NULL))
+checked expr   : blake3<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -120,7 +120,7 @@ evaluation (internal):
 
 ast            : sha2('Abc',0)
 raw expr       : sha2('Abc', 0)
-checked expr   : sha2<String, UInt64>("Abc", to_uint64<UInt8>(0_u8))
+checked expr   : sha2<String, UInt64>("Abc", CAST<UInt8>(0_u8 AS UInt64))
 optimized expr : "06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"
 output type    : String
 output domain  : {"06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"..="06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"}
@@ -129,7 +129,7 @@ output         : '06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee879
 
 ast            : sha2('Abc',256)
 raw expr       : sha2('Abc', 256)
-checked expr   : sha2<String, UInt64>("Abc", to_uint64<UInt16>(256_u16))
+checked expr   : sha2<String, UInt64>("Abc", CAST<UInt16>(256_u16 AS UInt64))
 optimized expr : "06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"
 output type    : String
 output domain  : {"06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"..="06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"}
@@ -138,7 +138,7 @@ output         : '06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee879
 
 ast            : sha2(NULL,0)
 raw expr       : sha2(NULL, 0)
-checked expr   : sha2<String NULL, UInt64 NULL>(CAST(NULL AS String NULL), CAST(0_u8 AS UInt64 NULL))
+checked expr   : sha2<String NULL, UInt64 NULL>(CAST<NULL>(NULL AS String NULL), CAST<UInt8>(0_u8 AS UInt64 NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -147,7 +147,7 @@ output         : NULL
 
 ast            : sha2(a,b)
 raw expr       : sha2(a::String, b::UInt16)
-checked expr   : sha2<String, UInt64>(a, to_uint64<UInt16>(b))
+checked expr   : sha2<String, UInt64>(a, CAST<UInt16>(b AS UInt64))
 evaluation:
 +--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
 |        | a                 | b           | Output                                                                                                                             |
@@ -188,7 +188,7 @@ output         : 10246934130793054423
 
 ast            : city64withseed('Abc',256.3)
 raw expr       : city64withseed('Abc', 256.3)
-checked expr   : city64withseed<String, Float64>("Abc", to_float64<Decimal(4, 1)>(256.3_d128(4,1)))
+checked expr   : city64withseed<String, Float64>("Abc", CAST<Decimal(4, 1)>(256.3_d128(4,1) AS Float64))
 optimized expr : 10246934130793054423_u64
 output type    : UInt64
 output domain  : {10246934130793054423..=10246934130793054423}
@@ -197,7 +197,7 @@ output         : 10246934130793054423
 
 ast            : city64withseed(to_datetime(100000), 1234)
 raw expr       : city64withseed(to_datetime(100000), 1234)
-checked expr   : city64withseed<Timestamp, UInt16>(to_timestamp<Int64>(to_int64<UInt32>(100000_u32)), 1234_u16)
+checked expr   : city64withseed<Timestamp, UInt16>(to_timestamp<Int64>(CAST<UInt32>(100000_u32 AS Int64)), 1234_u16)
 optimized expr : 4538088127563444061_u64
 output type    : UInt64
 output domain  : {4538088127563444061..=4538088127563444061}
@@ -215,7 +215,7 @@ output         : 2939704650099116301
 
 ast            : city64withseed(1.1, 12)
 raw expr       : city64withseed(1.1, 12)
-checked expr   : city64withseed<Float64, UInt8>(to_float64<Decimal(2, 1)>(1.1_d128(2,1)), 12_u8)
+checked expr   : city64withseed<Float64, UInt8>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Float64), 12_u8)
 optimized expr : 10046394896202388363_u64
 output type    : UInt64
 output domain  : {10046394896202388363..=10046394896202388363}
@@ -224,7 +224,7 @@ output         : 10046394896202388363
 
 ast            : city64withseed('1234567890', 12.12)
 raw expr       : city64withseed('1234567890', 12.12)
-checked expr   : city64withseed<String, Float64>("1234567890", to_float64<Decimal(4, 2)>(12.12_d128(4,2)))
+checked expr   : city64withseed<String, Float64>("1234567890", CAST<Decimal(4, 2)>(12.12_d128(4,2) AS Float64))
 optimized expr : 10660895976650300430_u64
 output type    : UInt64
 output domain  : {10660895976650300430..=10660895976650300430}
@@ -233,7 +233,7 @@ output         : 10660895976650300430
 
 ast            : city64withseed(1234567890, 12.12)
 raw expr       : city64withseed(1234567890, 12.12)
-checked expr   : city64withseed<UInt32, Float64>(1234567890_u32, to_float64<Decimal(4, 2)>(12.12_d128(4,2)))
+checked expr   : city64withseed<UInt32, Float64>(1234567890_u32, CAST<Decimal(4, 2)>(12.12_d128(4,2) AS Float64))
 optimized expr : 2939704650099116301_u64
 output type    : UInt64
 output domain  : {2939704650099116301..=2939704650099116301}
@@ -242,7 +242,7 @@ output         : 2939704650099116301
 
 ast            : city64withseed(to_date(100000), 1234)
 raw expr       : city64withseed(to_date(100000), 1234)
-checked expr   : city64withseed<Date, UInt16>(to_date<Int64>(to_int64<UInt32>(100000_u32)), 1234_u16)
+checked expr   : city64withseed<Date, UInt16>(to_date<Int64>(CAST<UInt32>(100000_u32 AS Int64)), 1234_u16)
 optimized expr : 8535774936754559738_u64
 output type    : UInt64
 output domain  : {8535774936754559738..=8535774936754559738}
@@ -251,7 +251,7 @@ output         : 8535774936754559738
 
 ast            : city64withseed(NULL,0)
 raw expr       : city64withseed(NULL, 0)
-checked expr   : city64withseed<Variant NULL, UInt8 NULL>(CAST(NULL AS Variant NULL), CAST(0_u8 AS UInt8 NULL))
+checked expr   : city64withseed<Variant NULL, UInt8 NULL>(CAST<NULL>(NULL AS Variant NULL), CAST<UInt8>(0_u8 AS UInt8 NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -292,7 +292,7 @@ output         : 17684958587550623602
 
 ast            : siphash64(to_datetime(100000))
 raw expr       : siphash64(to_datetime(100000))
-checked expr   : siphash64<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(100000_u32)))
+checked expr   : siphash64<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
 optimized expr : 6710305768027137259_u64
 output type    : UInt64
 output domain  : {6710305768027137259..=6710305768027137259}
@@ -310,7 +310,7 @@ output         : 12447382539015599056
 
 ast            : siphash64([1, 2, 3, null])
 raw expr       : siphash64(array(1, 2, 3, NULL))
-checked expr   : siphash64<T0=Array(UInt8 NULL)><T0>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
+checked expr   : siphash64<T0=Array(UInt8 NULL)><T0>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<UInt8>(3_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)))
 optimized expr : 15130871412783076140_u64
 output type    : UInt64
 output domain  : {15130871412783076140..=15130871412783076140}
@@ -319,7 +319,7 @@ output         : 15130871412783076140
 
 ast            : siphash64(['ab', 'cd', null, 'ef'])
 raw expr       : siphash64(array('ab', 'cd', NULL, 'ef'))
-checked expr   : siphash64<T0=Array(String NULL)><T0>(array<T0=String NULL><T0, T0, T0, T0>(CAST("ab" AS String NULL), CAST("cd" AS String NULL), CAST(NULL AS String NULL), CAST("ef" AS String NULL)))
+checked expr   : siphash64<T0=Array(String NULL)><T0>(array<T0=String NULL><T0, T0, T0, T0>(CAST<String>("ab" AS String NULL), CAST<String>("cd" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("ef" AS String NULL)))
 optimized expr : 15130871412783076140_u64
 output type    : UInt64
 output domain  : {15130871412783076140..=15130871412783076140}
@@ -328,7 +328,7 @@ output         : 15130871412783076140
 
 ast            : siphash64(1.1)
 raw expr       : siphash64(1.1)
-checked expr   : siphash64<Float64>(to_float64<Decimal(2, 1)>(1.1_d128(2,1)))
+checked expr   : siphash64<Float64>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Float64))
 optimized expr : 14856193058643670405_u64
 output type    : UInt64
 output domain  : {14856193058643670405..=14856193058643670405}
@@ -337,7 +337,7 @@ output         : 14856193058643670405
 
 ast            : siphash64(to_date(100000))
 raw expr       : siphash64(to_date(100000))
-checked expr   : siphash64<Date>(to_date<Int64>(to_int64<UInt32>(100000_u32)))
+checked expr   : siphash64<Date>(to_date<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
 optimized expr : 17230848539826186862_u64
 output type    : UInt64
 output domain  : {17230848539826186862..=17230848539826186862}
@@ -346,7 +346,7 @@ output         : 17230848539826186862
 
 ast            : siphash64(NULL)
 raw expr       : siphash64(NULL)
-checked expr   : siphash64<Variant NULL>(CAST(NULL AS Variant NULL))
+checked expr   : siphash64<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -403,7 +403,7 @@ output         : 11989503812394966078
 
 ast            : xxhash64(to_datetime(100000))
 raw expr       : xxhash64(to_datetime(100000))
-checked expr   : xxhash64<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(100000_u32)))
+checked expr   : xxhash64<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
 optimized expr : 14455582462593060490_u64
 output type    : UInt64
 output domain  : {14455582462593060490..=14455582462593060490}
@@ -421,7 +421,7 @@ output         : 14922725725041217620
 
 ast            : xxhash64(1.1)
 raw expr       : xxhash64(1.1)
-checked expr   : xxhash64<Float64>(to_float64<Decimal(2, 1)>(1.1_d128(2,1)))
+checked expr   : xxhash64<Float64>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Float64))
 optimized expr : 18307966283998289030_u64
 output type    : UInt64
 output domain  : {18307966283998289030..=18307966283998289030}
@@ -430,7 +430,7 @@ output         : 18307966283998289030
 
 ast            : xxhash64(to_date(100000))
 raw expr       : xxhash64(to_date(100000))
-checked expr   : xxhash64<Date>(to_date<Int64>(to_int64<UInt32>(100000_u32)))
+checked expr   : xxhash64<Date>(to_date<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
 optimized expr : 8691527656253933431_u64
 output type    : UInt64
 output domain  : {8691527656253933431..=8691527656253933431}
@@ -439,7 +439,7 @@ output         : 8691527656253933431
 
 ast            : xxhash64(NULL)
 raw expr       : xxhash64(NULL)
-checked expr   : xxhash64<Variant NULL>(CAST(NULL AS Variant NULL))
+checked expr   : xxhash64<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -496,7 +496,7 @@ output         : 3980406955
 
 ast            : xxhash32(to_datetime(100000))
 raw expr       : xxhash32(to_datetime(100000))
-checked expr   : xxhash32<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(100000_u32)))
+checked expr   : xxhash32<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
 optimized expr : 680734338_u32
 output type    : UInt32
 output domain  : {680734338..=680734338}
@@ -514,7 +514,7 @@ output         : 2833116583
 
 ast            : xxhash32(1.1)
 raw expr       : xxhash32(1.1)
-checked expr   : xxhash32<Float64>(to_float64<Decimal(2, 1)>(1.1_d128(2,1)))
+checked expr   : xxhash32<Float64>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Float64))
 optimized expr : 3252916525_u32
 output type    : UInt32
 output domain  : {3252916525..=3252916525}
@@ -523,7 +523,7 @@ output         : 3252916525
 
 ast            : xxhash32(to_date(100000))
 raw expr       : xxhash32(to_date(100000))
-checked expr   : xxhash32<Date>(to_date<Int64>(to_int64<UInt32>(100000_u32)))
+checked expr   : xxhash32<Date>(to_date<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
 optimized expr : 2518126785_u32
 output type    : UInt32
 output domain  : {2518126785..=2518126785}
@@ -532,7 +532,7 @@ output         : 2518126785
 
 ast            : xxhash32(NULL)
 raw expr       : xxhash32(NULL)
-checked expr   : xxhash32<Variant NULL>(CAST(NULL AS Variant NULL))
+checked expr   : xxhash32<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : UInt32 NULL
 output domain  : {NULL}
