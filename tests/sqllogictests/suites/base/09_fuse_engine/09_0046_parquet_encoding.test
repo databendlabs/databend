@@ -1,0 +1,29 @@
+statement ok
+create or replace database test_tbl_opt_parquet_encoding;
+
+statement ok
+use test_tbl_opt_parquet_encoding;
+
+# Test create table with parquet encoding option
+
+statement ok
+create or replace table t_encoded (c int, s string) enable_parquet_encoding = 'true' compression = 'lz4';
+
+statement ok
+create or replace table t(c int, s string) compression = 'lz4';
+
+statement ok
+insert into t_encoded(c, s) select number as c, to_string(number) as s from numbers(500000);
+
+statement ok
+insert into t(c, s) select number as c, to_string(number) as s from numbers(500000);
+
+query T
+select humanize_size(file_size) from fuse_block('test_tbl_opt_parquet_encoding', 't_encoded');
+----
+2.30 MiB
+
+query T
+select humanize_size(file_size) from fuse_block('test_tbl_opt_parquet_encoding', 't');
+----
+3.91 MiB
