@@ -182,8 +182,9 @@ impl From<CompactSegmentInfo> for CacheValue<CompactSegmentInfo> {
 impl From<ColumnOrientedSegment> for CacheValue<ColumnOrientedSegment> {
     fn from(value: ColumnOrientedSegment) -> Self {
         CacheValue {
+            mem_bytes: value.block_metas.memory_size()
+                + std::mem::size_of::<ColumnOrientedSegment>(),
             inner: Arc::new(value),
-            mem_bytes: 0,
         }
     }
 }
