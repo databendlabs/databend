@@ -313,6 +313,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
             };
 
             if ht.len() == 0 {
+                self.hash_table = HashTable::AggregateHashTable(ht);
                 return Ok(false);
             }
 
@@ -321,11 +322,6 @@ impl AccumulatingTransform for TransformPartialAggregate {
         }
 
         if let Some(spilling_state) = self.spilling_state.as_mut() {
-            // spill is finished.
-            if spilling_state.finished {
-                return Ok(false);
-            }
-
             spilling_state.last_prepare_payload = spilling_state.serialize_partition_payload()?;
             return Ok(true);
         }
