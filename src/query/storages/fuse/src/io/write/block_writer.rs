@@ -85,6 +85,7 @@ pub fn serialize_block(
                 vec![block],
                 buf,
                 write_settings.table_compression,
+                write_settings.enable_parquet_encoding,
                 None,
             )?;
             let meta = column_parquet_metas(&result, &schema)?;

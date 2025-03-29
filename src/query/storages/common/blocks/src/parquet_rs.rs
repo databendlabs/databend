@@ -23,6 +23,7 @@ use parquet::basic::Encoding;
 use parquet::file::metadata::KeyValue;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
+use parquet::file::properties::WriterVersion;
 use parquet::format::FileMetaData;
 
 /// Serialize data blocks to parquet format.
@@ -31,19 +32,29 @@ pub fn blocks_to_parquet(
     blocks: Vec<DataBlock>,
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
+    enable_encoding: bool,
     metadata: Option<Vec<KeyValue>>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
-    let props = WriterProperties::builder()
+    let builder = WriterProperties::builder()
         .set_compression(compression.into())
         // use `usize::MAX` to effectively limit the number of row groups to 1
         .set_max_row_group_size(usize::MAX)
         .set_encoding(Encoding::PLAIN)
-        .set_dictionary_enabled(false)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
-        .set_key_value_metadata(metadata)
-        .build();
+        .set_key_value_metadata(metadata);
+
+    let builder = if enable_encoding {
+        builder
+            .set_writer_version(WriterVersion::PARQUET_2_0)
+            .set_dictionary_enabled(true)
+    } else {
+        builder
+            .set_dictionary_enabled(false)
+    };
+
+    let props = builder.build();
     let batches = blocks
         .into_iter()
         .map(|block| block.to_record_batch(table_schema))

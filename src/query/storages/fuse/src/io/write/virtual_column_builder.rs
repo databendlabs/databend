@@ -511,6 +511,7 @@ impl VirtualColumnBuilder {
             vec![virtual_block],
             &mut data,
             write_settings.table_compression,
+            false,
             None,
         )?;
 

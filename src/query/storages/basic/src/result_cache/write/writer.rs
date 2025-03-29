@@ -72,11 +72,13 @@ impl ResultCacheWriter {
     #[async_backtrace::framed]
     pub async fn write_to_storage(&self) -> Result<String> {
         let mut buf = Vec::with_capacity(self.current_bytes);
+        // TODO doc why encoding is not enabled
         let _ = blocks_to_parquet(
             &self.schema,
             self.blocks.clone(),
             &mut buf,
             TableCompression::None,
+            false,
             None,
         )?;
 
