@@ -164,22 +164,6 @@ impl Payload {
         Ok(Some(DataBlock::new_from_columns(cols)))
     }
 
-    pub fn group_by_flush_all(&self) -> Result<DataBlock> {
-        let mut state = PayloadFlushState::default();
-        let mut blocks = vec![];
-
-        while self.flush(&mut state) {
-            let cols = state.take_group_columns();
-            blocks.push(DataBlock::new_from_columns(cols));
-        }
-
-        if blocks.is_empty() {
-            return Ok(self.empty_block(None));
-        }
-
-        DataBlock::concat(&blocks)
-    }
-
     pub fn flush(&self, state: &mut PayloadFlushState) -> bool {
         if state.flush_page >= self.pages.len() {
             return false;

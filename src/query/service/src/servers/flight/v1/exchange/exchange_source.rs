@@ -28,14 +28,13 @@ use super::exchange_params::ExchangeParams;
 use super::exchange_params::MergeExchangeParams;
 use super::exchange_source_reader::ExchangeSourceReader;
 use crate::clusters::ClusterHelper;
-use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::sessions::QueryContext;
 
 /// Add Exchange Source to the pipeline.
 pub fn via_exchange_source(
     ctx: Arc<QueryContext>,
     params: &MergeExchangeParams,
-    injector: Arc<dyn ExchangeInjector>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
     // UpstreamTransform --->  DummyTransform   --->    DummyTransform      --->  DownstreamTransform
@@ -93,5 +92,7 @@ pub fn via_exchange_source(
         pipeline.try_resize(last_output_len)?;
     }
 
-    injector.apply_merge_deserializer(params, pipeline)
+    pipeline.add_transform(|input, output| {
+        TransformAggregateDeserializer::try_create(input, output, &params.schema)
+    })
 }

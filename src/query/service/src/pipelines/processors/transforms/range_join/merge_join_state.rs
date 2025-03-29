@@ -79,11 +79,11 @@ impl RangeJoinState {
         let right_table = self.right_table.read();
 
         while i < left_len {
-            if j == right_len {
+            if j >= right_len {
                 i += 1;
                 j = 0;
             }
-            if i == left_len {
+            if i >= left_len {
                 break;
             }
             let left_scalar = unsafe { left_join_key_col.index_unchecked(i) };
@@ -137,6 +137,7 @@ impl RangeJoinState {
                 j += 1;
             }
         }
+
         Ok(result_blocks)
     }
 

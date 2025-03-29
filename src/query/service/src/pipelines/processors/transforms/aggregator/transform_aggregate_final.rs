@@ -15,16 +15,21 @@
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::InputColumns;
+use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
+use databend_common_expression::ProbeState;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_transforms::processors::BlockMetaTransform;
-use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::AccumulatingTransform;
+use databend_common_pipeline_transforms::AccumulatingTransformer;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
@@ -32,108 +37,154 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 pub struct TransformFinalAggregate {
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
+    hash_table: AggregateHashTable,
+    has_output: bool,
+}
+
+impl AccumulatingTransform for TransformFinalAggregate {
+    const NAME: &'static str = "TransformFinalAggregate";
+
+    fn transform(&mut self, mut data: DataBlock) -> Result<Vec<DataBlock>> {
+        let Some(meta) = data.take_meta() else {
+            return Err(ErrorCode::Internal(""));
+        };
+
+        let Some(aggregate_meta) = AggregateMeta::downcast_from(meta) else {
+            return Err(ErrorCode::Internal(""));
+        };
+
+        match aggregate_meta {
+            AggregateMeta::SpilledPayload(_) => unreachable!(),
+            AggregateMeta::Serialized(payload) => {
+                let payload = payload.convert_to_partitioned_payload(
+                    self.params.group_data_types.clone(),
+                    self.params.aggregate_functions.clone(),
+                    self.params.num_states(),
+                    0,
+                    Arc::new(Bump::new()),
+                )?;
+
+                self.hash_table
+                    .combine_payloads(&payload, &mut self.flush_state)?;
+            }
+            AggregateMeta::InFlightPayload(_payload) => {
+                if !data.is_empty() {
+                    let payload = self.deserialize_flight(data)?;
+                    self.hash_table
+                        .combine_payload(&payload, &mut self.flush_state)?;
+                }
+            }
+            AggregateMeta::AggregatePayload(payload) => {
+                if payload.payload.len() != 0 {
+                    self.hash_table
+                        .combine_payload(&payload.payload, &mut self.flush_state)?;
+                }
+            }
+            AggregateMeta::FinalPartition => {
+                if self.hash_table.len() == 0 {
+                    return Ok(vec![self.params.empty_result_block()]);
+                }
+
+                let mut blocks = vec![];
+                self.flush_state.clear();
+
+                loop {
+                    if self.hash_table.merge_result(&mut self.flush_state)? {
+                        let mut cols = self.flush_state.take_aggregate_results();
+                        cols.extend_from_slice(&self.flush_state.take_group_columns());
+                        blocks.push(DataBlock::new_from_columns(cols));
+                    } else {
+                        break;
+                    }
+                }
+
+                let config = HashTableConfig::default().with_initial_radix_bits(0);
+                self.hash_table = AggregateHashTable::new(
+                    self.params.group_data_types.clone(),
+                    self.params.aggregate_functions.clone(),
+                    config,
+                    Arc::new(Bump::new()),
+                );
+
+                self.has_output |= !blocks.is_empty();
+                return Ok(blocks);
+            }
+        }
+
+        Ok(vec![])
+    }
+
+    fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
+        if output && !self.has_output {
+            return Ok(vec![self.params.empty_result_block()]);
+        }
+
+        Ok(vec![])
+    }
 }
 
 impl TransformFinalAggregate {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        Ok(BlockMetaTransformer::create(
+        let config = HashTableConfig::default().with_initial_radix_bits(0);
+
+        let hash_table = AggregateHashTable::new(
+            params.group_data_types.clone(),
+            params.aggregate_functions.clone(),
+            config,
+            Arc::new(Bump::new()),
+        );
+
+        Ok(AccumulatingTransformer::create(
             input,
             output,
             TransformFinalAggregate {
                 params,
+                hash_table,
                 flush_state: PayloadFlushState::default(),
+                has_output: false,
             },
         ))
     }
 
-    fn transform_agg_hashtable(&mut self, meta: AggregateMeta) -> Result<DataBlock> {
-        let mut agg_hashtable: Option<AggregateHashTable> = None;
-        if let AggregateMeta::Partitioned { bucket, data } = meta {
-            for bucket_data in data {
-                match bucket_data {
-                    AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
-                        Some(ht) => {
-                            debug_assert!(bucket == payload.bucket);
+    fn deserialize_flight(&mut self, data: DataBlock) -> Result<Payload> {
+        let rows_num = data.num_rows();
+        let group_len = self.params.group_data_types.len();
 
-                            let payload = payload.convert_to_partitioned_payload(
-                                self.params.group_data_types.clone(),
-                                self.params.aggregate_functions.clone(),
-                                self.params.num_states(),
-                                0,
-                                Arc::new(Bump::new()),
-                            )?;
-                            ht.combine_payloads(&payload, &mut self.flush_state)?;
-                        }
-                        None => {
-                            debug_assert!(bucket == payload.bucket);
-                            agg_hashtable = Some(payload.convert_to_aggregate_table(
-                                self.params.group_data_types.clone(),
-                                self.params.aggregate_functions.clone(),
-                                self.params.num_states(),
-                                0,
-                                Arc::new(Bump::new()),
-                                true,
-                            )?);
-                        }
-                    },
-                    AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
-                        Some(ht) => {
-                            debug_assert!(bucket == payload.bucket);
-                            ht.combine_payload(&payload.payload, &mut self.flush_state)?;
-                        }
-                        None => {
-                            debug_assert!(bucket == payload.bucket);
-                            let capacity =
-                                AggregateHashTable::get_capacity_for_count(payload.payload.len());
-                            let mut hashtable = AggregateHashTable::new_with_capacity(
-                                self.params.group_data_types.clone(),
-                                self.params.aggregate_functions.clone(),
-                                HashTableConfig::default().with_initial_radix_bits(0),
-                                capacity,
-                                Arc::new(Bump::new()),
-                            );
-                            hashtable.combine_payload(&payload.payload, &mut self.flush_state)?;
-                            agg_hashtable = Some(hashtable);
-                        }
-                    },
-                    _ => unreachable!(),
-                }
-            }
-        }
+        let mut state = ProbeState::default();
 
-        if let Some(mut ht) = agg_hashtable {
-            let mut blocks = vec![];
-            self.flush_state.clear();
+        // create single partition hash table for deserialize
+        let capacity = AggregateHashTable::get_capacity_for_count(rows_num);
+        let config = HashTableConfig::default().with_initial_radix_bits(0);
+        let mut hashtable = AggregateHashTable::new_directly(
+            self.params.group_data_types.clone(),
+            self.params.aggregate_functions.clone(),
+            config,
+            capacity,
+            Arc::new(Bump::new()),
+            false,
+        );
 
-            loop {
-                if ht.merge_result(&mut self.flush_state)? {
-                    let mut cols = self.flush_state.take_aggregate_results();
-                    cols.extend_from_slice(&self.flush_state.take_group_columns());
-                    blocks.push(DataBlock::new_from_columns(cols));
-                } else {
-                    break;
-                }
-            }
+        let num_states = self.params.num_states();
+        let states_index: Vec<usize> = (0..num_states).collect();
+        let agg_states = InputColumns::new_block_proxy(&states_index, &data);
 
-            if blocks.is_empty() {
-                return Ok(self.params.empty_result_block());
-            }
-            return DataBlock::concat(&blocks);
-        }
+        let group_index: Vec<usize> = (num_states..(num_states + group_len)).collect();
+        let group_columns = InputColumns::new_block_proxy(&group_index, &data);
 
-        Ok(self.params.empty_result_block())
-    }
-}
+        let _ = hashtable.add_groups(
+            &mut state,
+            group_columns,
+            &[(&[]).into()],
+            agg_states,
+            rows_num,
+        )?;
 
-impl BlockMetaTransform<AggregateMeta> for TransformFinalAggregate {
-    const NAME: &'static str = "TransformFinalAggregate";
-
-    fn transform(&mut self, meta: AggregateMeta) -> Result<Vec<DataBlock>> {
-        Ok(vec![self.transform_agg_hashtable(meta)?])
+        hashtable.payload.mark_min_cardinality();
+        assert_eq!(hashtable.payload.payloads.len(), 1);
+        Ok(hashtable.payload.payloads.pop().unwrap())
     }
 }

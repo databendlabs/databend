@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use itertools::Itertools;
+use serde::Deserializer;
+use serde::Serializer;
 
 use super::payload::Payload;
 use super::probe_state::ProbeState;
@@ -49,6 +51,18 @@ pub struct PartitionedPayload {
 
 unsafe impl Send for PartitionedPayload {}
 unsafe impl Sync for PartitionedPayload {}
+
+impl serde::Serialize for PartitionedPayload {
+    fn serialize<S: Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+        unreachable!("PartitionedPayload must not be exchanged between multiple nodes.")
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PartitionedPayload {
+    fn deserialize<D: Deserializer<'de>>(_: D) -> Result<Self, D::Error> {
+        unreachable!("PartitionedPayload must not be exchanged between multiple nodes.")
+    }
+}
 
 impl PartitionedPayload {
     pub fn new(

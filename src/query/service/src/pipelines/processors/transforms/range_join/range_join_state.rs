@@ -133,9 +133,11 @@ impl RangeJoinState {
 
     pub fn task_id(&self) -> Option<usize> {
         let task_id = self.finished_tasks.fetch_add(1, atomic::Ordering::SeqCst);
+
         if task_id >= self.tasks.read().len() as u64 {
             return None;
         }
+
         Some(task_id as usize)
     }
 
