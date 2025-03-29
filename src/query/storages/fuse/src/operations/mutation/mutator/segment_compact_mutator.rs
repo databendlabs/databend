@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -25,7 +28,10 @@ use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
 
-use crate::io::CachedMetaWriter;
+use crate::io::read::ColumnOrientedSegmentReader;
+use crate::io::read::RowOrientedSegmentReader;
+use crate::io::read::SegmentReader;
+// use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::CompactOptions;
@@ -51,6 +57,7 @@ pub struct SegmentCompactMutator {
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
     default_cluster_key_id: Option<u32>,
+    is_column_oriented: bool,
 }
 
 impl SegmentCompactMutator {
@@ -60,6 +67,7 @@ impl SegmentCompactMutator {
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
         default_cluster_key_id: Option<u32>,
+        is_column_oriented: bool,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
@@ -68,6 +76,7 @@ impl SegmentCompactMutator {
             location_generator,
             compaction: Default::default(),
             default_cluster_key_id,
+            is_column_oriented,
         })
     }
 
@@ -100,23 +109,49 @@ impl SegmentCompactMutator {
 
         // prepare compactor
         let schema = Arc::new(self.compact_params.base_snapshot.schema.clone());
+        let column_ids = schema.to_leaf_column_ids();
         let fuse_segment_io =
             SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone(), schema);
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
-        let compactor = SegmentCompactor::new(
-            self.compact_params.block_per_seg as u64,
-            self.default_cluster_key_id,
-            chunk_size,
-            &fuse_segment_io,
-            &self.data_accessor,
-            &self.location_generator,
-        );
 
-        self.compaction = compactor
-            .compact(base_segment_locations, limit, |status| {
-                self.ctx.set_status_info(&status);
-            })
-            .await?;
+        match self.is_column_oriented {
+            true => {
+                let compactor = SegmentCompactor::<ColumnOrientedSegmentReader>::new(
+                    self.compact_params.block_per_seg as u64,
+                    self.default_cluster_key_id,
+                    chunk_size,
+                    &fuse_segment_io,
+                    &self.data_accessor,
+                    &self.location_generator,
+                    column_ids,
+                    self.is_column_oriented,
+                );
+
+                self.compaction = compactor
+                    .compact(base_segment_locations, limit, |status| {
+                        self.ctx.set_status_info(&status);
+                    })
+                    .await?;
+            }
+            false => {
+                let compactor = SegmentCompactor::<RowOrientedSegmentReader>::new(
+                    self.compact_params.block_per_seg as u64,
+                    self.default_cluster_key_id,
+                    chunk_size,
+                    &fuse_segment_io,
+                    &self.data_accessor,
+                    &self.location_generator,
+                    column_ids,
+                    self.is_column_oriented,
+                );
+
+                self.compaction = compactor
+                    .compact(base_segment_locations, limit, |status| {
+                        self.ctx.set_status_info(&status);
+                    })
+                    .await?;
+            }
+        }
 
         metrics_set_compact_segments_select_duration_second(select_begin.elapsed());
 
@@ -156,13 +191,13 @@ impl SegmentCompactMutator {
 // To avoid this "ripple effects", consecutive segments are allowed to be compacted into
 // a new segment, if the size of compacted segment is lesser than 2 * threshold (exclusive).
 
-pub struct SegmentCompactor<'a> {
+pub struct SegmentCompactor<'a, R: SegmentReader> {
     // Size of compacted segment should be in range R == [threshold, 2 * threshold)
     // within R, smaller one is preferred
     threshold: u64,
     default_cluster_key_id: Option<u32>,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
-    fragmented_segments: Vec<(SegmentInfo, Location)>,
+    fragmented_segments: Vec<(R::Segment, Location)>,
     // state which keep the number of blocks of all the fragmented segment collected so far,
     // it will be reset to 0 if compaction occurs
     accumulated_num_blocks: u64,
@@ -172,9 +207,12 @@ pub struct SegmentCompactor<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     // accumulated compaction state
     compacted_state: SegmentCompactionState,
+    _marker: std::marker::PhantomData<R>,
+    _column_ids: Vec<ColumnId>,
+    is_column_oriented: bool,
 }
 
-impl<'a> SegmentCompactor<'a> {
+impl<'a, R: SegmentReader> SegmentCompactor<'a, R> {
     pub fn new(
         threshold: u64,
         default_cluster_key_id: Option<u32>,
@@ -182,6 +220,8 @@ impl<'a> SegmentCompactor<'a> {
         segment_reader: &'a SegmentsIO,
         operator: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
+        column_ids: Vec<ColumnId>,
+        is_column_oriented: bool,
     ) -> Self {
         Self {
             threshold,
@@ -193,6 +233,9 @@ impl<'a> SegmentCompactor<'a> {
             operator,
             location_generator,
             compacted_state: Default::default(),
+            _marker: std::marker::PhantomData,
+            _column_ids: column_ids,
+            is_column_oriented,
         }
     }
 
@@ -213,9 +256,10 @@ impl<'a> SegmentCompactor<'a> {
         let chunk_size = self.chunk_size;
         let mut checked_end_at = 0;
         let mut is_end = false;
+        let projection = HashSet::new();
         for chunk in reverse_locations.chunks(chunk_size) {
             let mut segment_infos = segments_io
-                .read_segments::<SegmentInfo>(chunk, false)
+                .generic_read_segments::<R>(chunk, false, &projection)
                 .await?
                 .into_iter()
                 .zip(chunk.iter())
@@ -226,8 +270,8 @@ impl<'a> SegmentCompactor<'a> {
                 // sort ascending.
                 segment_infos.sort_by(|a, b| {
                     sort_by_cluster_stats(
-                        &a.0.summary.cluster_stats,
-                        &b.0.summary.cluster_stats,
+                        &a.0.summary().cluster_stats,
+                        &b.0.summary().cluster_stats,
                         default_cluster_key,
                     )
                 });
@@ -289,8 +333,8 @@ impl<'a> SegmentCompactor<'a> {
 
     // accumulate one segment
     #[async_backtrace::framed]
-    pub async fn add(&mut self, segment_info: SegmentInfo, location: Location) -> Result<()> {
-        let num_blocks_current_segment = segment_info.blocks.len() as u64;
+    pub async fn add(&mut self, segment_info: R::Segment, location: Location) -> Result<()> {
+        let num_blocks_current_segment = segment_info.summary().block_count;
 
         if num_blocks_current_segment == 0 {
             return Ok(());
@@ -340,26 +384,28 @@ impl<'a> SegmentCompactor<'a> {
 
         // 2. build (and write down the compacted segment
         // 2.1 merge fragmented segments into new segment, and update the statistics
-        let mut blocks = Vec::with_capacity(self.threshold as usize);
         let mut new_statistics = Statistics::default();
-
         self.compacted_state.num_fragments_compacted += fragments.len();
+        let mut segments = Vec::with_capacity(fragments.len());
         for (segment, _location) in fragments {
             merge_statistics_mut(
                 &mut new_statistics,
-                &segment.summary,
+                segment.summary(),
                 self.default_cluster_key_id,
             );
-            blocks.append(&mut segment.blocks.clone());
+            segments.push(segment);
         }
 
         // 2.2 write down new segment
-        let new_segment = SegmentInfo::new(blocks, new_statistics);
+        let new_segment = R::Segment::concat(segments, new_statistics)?;
         let location = self
             .location_generator
-            .gen_segment_info_location(Default::default());
-        new_segment
-            .write_meta_through_cache(self.operator, &location)
+            .gen_segment_info_location(Default::default(), self.is_column_oriented);
+        // new_segment
+        //     .write_meta_through_cache(self.operator, &location)
+        //     .await?;
+        self.operator
+            .write(&location, new_segment.serialize()?)
             .await?;
         self.compacted_state
             .new_segment_paths

@@ -492,6 +492,10 @@ pub trait Table: Sync + Send {
     ) -> Result<u64> {
         Ok(0)
     }
+
+    fn is_column_oriented(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]

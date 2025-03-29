@@ -173,7 +173,7 @@ impl BlockPruner {
                                         index_size,
                                         &block_meta.col_stats,
                                         column_ids,
-                                        &block_meta,
+                                        &block_meta.as_ref().into(),
                                     )
                                     .await;
 

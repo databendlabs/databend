@@ -32,6 +32,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::Value;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::io::CompactSegmentInfoReader;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -46,13 +47,14 @@ use databend_common_storages_fuse::operations::SegmentCompactor;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
-use databend_common_storages_fuse::statistics::StatisticsAccumulator;
+use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
@@ -266,6 +268,7 @@ async fn build_mutator(
         tbl.meta_location_generator().clone(),
         tbl.get_operator(),
         tbl.cluster_key_id(),
+        tbl.is_column_oriented(),
     )?;
 
     if segment_mutator.target_select().await? {
@@ -658,16 +661,19 @@ impl CompactSegmentTestFixture {
         let location_gen = &self.location_gen;
 
         let schema = TestFixture::default_table_schema();
+        let column_ids = schema.to_leaf_column_ids();
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
 
-        let seg_acc = SegmentCompactor::new(
+        let seg_acc = SegmentCompactor::<RowOrientedSegmentReader>::new(
             self.threshold.block_per_segment as u64,
             cluster_key_id,
             max_threads,
             &fuse_segment_io,
             data_accessor,
             location_gen,
+            column_ids,
+            false,
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
@@ -717,7 +723,7 @@ impl CompactSegmentTestFixture {
             tasks.push(async move {
                 let (schema, blocks) =
                     TestFixture::gen_sample_blocks_ex(num_blocks, rows_per_block, 1);
-                let mut stats_acc = StatisticsAccumulator::default();
+                let mut stats_acc = RowOrientedSegmentBuilder::default();
 
                 let mut collected_blocks = vec![];
                 for block in blocks {
@@ -776,11 +782,10 @@ impl CompactSegmentTestFixture {
                     );
 
                     collected_blocks.push(block_meta.clone());
-                    stats_acc.add_with_block_meta(block_meta);
+                    stats_acc.add_block(block_meta).unwrap();
                 }
-                let summary = stats_acc.summary(thresholds, cluster_key_id);
-                let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
-                let path = location_gen.gen_segment_info_location(Default::default());
+                let segment_info = stats_acc.build(thresholds, cluster_key_id)?;
+                let path = location_gen.gen_segment_info_location(Default::default(), false);
                 segment_info.write_meta(&data_accessor, &path).await?;
                 Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))
             });
@@ -968,6 +973,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
     let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
     let schema = TestFixture::default_table_schema();
+    let column_ids = schema.to_leaf_column_ids();
 
     let settings = ctx.get_settings();
     settings.set_max_threads(2)?;
@@ -1019,13 +1025,15 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
         }
 
         eprintln!("running compact, limit {}", limit);
-        let seg_acc = SegmentCompactor::new(
+        let seg_acc = SegmentCompactor::<RowOrientedSegmentReader>::new(
             threshold.block_per_segment as u64,
             Some(cluster_key_id),
             chunk_size,
             &fuse_segment_io,
             &data_accessor,
             &location_gen,
+            column_ids.clone(),
+            false,
         );
         let state = seg_acc
             .compact(locations, limit, |status| {

@@ -90,6 +90,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -104,6 +105,8 @@ use parking_lot::Mutex;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
+use crate::io::read::ColumnOrientedSegmentReader;
+use crate::io::read::RowOrientedSegmentReader;
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -114,6 +117,7 @@ use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::Trim;
+use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
 use crate::Table;
@@ -135,6 +139,7 @@ pub struct FuseTable {
 
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) storage_format: FuseStorageFormat,
+    pub(crate) segment_format: FuseSegmentFormat,
     pub(crate) table_compression: TableCompression,
     pub(crate) bloom_index_cols: BloomIndexColumns,
 
@@ -212,6 +217,12 @@ impl FuseTable {
             .cloned()
             .unwrap_or_default();
 
+        let segment_format = table_info
+            .options()
+            .get(OPT_KEY_SEGMENT_FORMAT)
+            .cloned()
+            .unwrap_or_default();
+
         let table_compression = table_info
             .options()
             .get(OPT_KEY_TABLE_COMPRESSION)
@@ -239,6 +250,7 @@ impl FuseTable {
             operator,
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
+            segment_format: FuseSegmentFormat::from_str(segment_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
@@ -869,6 +881,10 @@ impl Table for FuseTable {
         Ok(Some(stats))
     }
 
+    fn is_column_oriented(&self) -> bool {
+        matches!(self.segment_format, FuseSegmentFormat::Column)
+    }
+
     #[async_backtrace::framed]
     async fn column_statistics_provider(
         &self,
@@ -1085,7 +1101,16 @@ impl Table for FuseTable {
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
-        self.do_recluster(ctx, push_downs, limit).await
+        match self.is_column_oriented() {
+            true => {
+                self.do_recluster::<ColumnOrientedSegmentReader>(ctx, push_downs, limit)
+                    .await
+            }
+            false => {
+                self.do_recluster::<RowOrientedSegmentReader>(ctx, push_downs, limit)
+                    .await
+            }
+        }
     }
 
     #[async_backtrace::framed]

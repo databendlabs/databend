@@ -30,7 +30,7 @@ use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
-use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::info;
@@ -50,7 +50,7 @@ pub trait BloomPruner {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
-        block_meta: &BlockMeta,
+        block_meta: &BlockReadInfo,
     ) -> bool;
 }
 
@@ -126,7 +126,7 @@ impl BloomPrunerCreator {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids_of_indexed_block: Vec<ColumnId>,
-        block_meta: &BlockMeta,
+        block_meta: &BlockReadInfo,
     ) -> Result<bool> {
         let version = index_location.1;
 
@@ -146,13 +146,6 @@ impl BloomPrunerCreator {
             .read_block_filter(self.dal.clone(), &index_columns, index_length)
             .await;
 
-        // Perform a defensive check to ensure that the bloom index location being processed
-        // matches the location specified in the block metadata.
-        assert_eq!(
-            Some(index_location),
-            block_meta.bloom_filter_index_location.as_ref()
-        );
-
         let maybe_filter = match (&maybe_filter, &self.bloom_index_builder) {
             (Err(_e), Some(bloom_index_builder)) => {
                 // Got error while loading bloom filters, and there is Some(bloom_index_builder),
@@ -164,9 +157,10 @@ impl BloomPrunerCreator {
 
                 match self
                     .try_rebuild_missing_bloom_index(
-                        block_meta,
+                        index_location,
                         bloom_index_builder,
                         &index_columns,
+                        block_meta,
                     )
                     .await
                 {
@@ -209,22 +203,18 @@ impl BloomPrunerCreator {
 
     async fn try_rebuild_missing_bloom_index(
         &self,
-        block_meta: &BlockMeta,
+        bloom_index_location: &Location,
         bloom_index_builder: &BloomIndexBuilder,
         index_columns: &[String],
+        block_read_info: &BlockReadInfo,
     ) -> Result<Option<BlockFilter>> {
-        let Some(bloom_index_location) = &block_meta.bloom_filter_index_location else {
-            info!("no bloom index found in block meta, ignore");
-            return Ok(None);
-        };
-
         if self.dal.exists(bloom_index_location.0.as_str()).await? {
             info!("bloom index exists, ignore");
             return Ok(None);
         }
 
         let bloom_index_state = bloom_index_builder
-            .bloom_index_state_from_block_meta(block_meta)
+            .bloom_index_state_from_block_meta(bloom_index_location, block_read_info)
             .await?;
 
         if let Some((bloom_state, bloom_index)) = bloom_index_state {
@@ -271,7 +261,7 @@ impl BloomPruner for BloomPrunerCreator {
         index_length: u64,
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
-        block_meta: &BlockMeta,
+        block_meta: &BlockReadInfo,
     ) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression

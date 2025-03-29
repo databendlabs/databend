@@ -312,8 +312,11 @@ impl FusePruner {
         delete_pruning: bool,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Segment pruner.
-        let segment_pruner =
-            SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
+        let segment_pruner = SegmentPruner::create(
+            self.pruning_ctx.clone(),
+            self.table_schema.clone(),
+            Default::default(),
+        )?;
         let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
 
         let mut remain = segment_locs.len() % self.max_concurrency;
