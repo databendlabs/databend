@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::Expr;
-use databend_common_expression::RemoteExpr;
+use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -27,7 +27,7 @@ use crate::hashable_schema::HashableSchema;
 #[derive(Clone)]
 pub struct ProjectionFactory {
     pub output_schema: TableSchemaRef,
-    default_values: Option<Vec<RemoteExpr>>,
+    default_exprs: Option<Vec<RemoteDefaultExpr>>,
     null_as: NullAs,
 
     projections: Arc<dashmap::DashMap<HashableSchema, Vec<Expr>>>,
@@ -36,12 +36,12 @@ pub struct ProjectionFactory {
 impl ProjectionFactory {
     pub fn try_create(
         output_schema: TableSchemaRef,
-        default_values: Option<Vec<RemoteExpr>>,
+        default_exprs: Option<Vec<RemoteDefaultExpr>>,
         null_as: NullAs,
     ) -> Result<Self> {
         Ok(Self {
             output_schema,
-            default_values,
+            default_exprs,
             null_as,
             projections: Default::default(),
         })
@@ -54,7 +54,7 @@ impl ProjectionFactory {
                 &schema.table_schema,
                 &self.output_schema,
                 &self.null_as,
-                &self.default_values,
+                &self.default_exprs,
                 location,
                 false,
                 StageFileFormatType::Orc,

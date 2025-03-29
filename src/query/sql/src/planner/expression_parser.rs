@@ -24,26 +24,19 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
-use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::ConstantFolder;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::TableInfo;
 use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
-use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::planner::binder::BindContext;
@@ -128,6 +121,7 @@ fn parse_ast_exprs(
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
@@ -240,48 +234,6 @@ pub fn parse_computed_expr(
     let (scalar, _) = *type_checker.resolve(&ast)?;
     let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
     Ok(expr)
-}
-
-pub fn parse_default_expr_to_string(
-    ctx: Arc<dyn TableContext>,
-    field: &TableField,
-    ast: &AExpr,
-) -> Result<(String, bool)> {
-    let mut bind_context = BindContext::new();
-    let metadata = Metadata::default();
-
-    let settings = ctx.get_settings();
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx.clone(),
-        &name_resolution_ctx,
-        Arc::new(RwLock::new(metadata)),
-        &[],
-        false,
-    )?;
-
-    let (mut scalar, data_type) = *type_checker.resolve(ast)?;
-    if !scalar.evaluable() {
-        return Err(ErrorCode::SemanticError(format!(
-            "default value expression `{:#}` is invalid",
-            ast
-        )));
-    }
-    let schema_data_type = DataType::from(field.data_type());
-    if data_type != schema_data_type {
-        scalar = wrap_cast(&scalar, &schema_data_type);
-    }
-    let expr = scalar.as_expr()?;
-    let (expr, is_deterministic) = if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-        let (fold_to_constant, _) =
-            ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-        (fold_to_constant, true)
-    } else {
-        (expr, false)
-    };
-
-    Ok((expr.sql_display(), is_deterministic))
 }
 
 pub fn parse_computed_expr_to_string(
@@ -543,64 +495,4 @@ pub fn analyze_cluster_keys(
 
     let cluster_by_str = format!("({})", cluster_keys.join(", "));
     Ok((cluster_by_str, exprs))
-}
-
-#[derive(Default)]
-struct DummyTable {
-    info: TableInfo,
-}
-impl Table for DummyTable {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn get_table_info(&self) -> &databend_common_meta_app::schema::TableInfo {
-        &self.info
-    }
-}
-
-pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Result<Scalar> {
-    let data_type = field.data_type();
-    let data_type = DataType::from(data_type);
-
-    match field.default_expr() {
-        Some(default_expr) => {
-            let table: Arc<dyn Table> = Arc::new(DummyTable::default());
-            let mut exprs = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
-            if exprs.len() != 1 {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "Invalid default value for column: {}, expected single expr, but got: {}",
-                    field.name(),
-                    default_expr
-                )));
-            }
-            let expr = exprs.remove(0);
-            let expr = check_cast(
-                None,
-                false,
-                expr,
-                &field.data_type().into(),
-                &BUILTIN_FUNCTIONS,
-            )?;
-
-            let dummy_block = DataBlock::new(vec![], 1);
-            let func_ctx = FunctionContext::default();
-            let evaluator = Evaluator::new(&dummy_block, &func_ctx, &BUILTIN_FUNCTIONS);
-            let result = evaluator.run(&expr)?;
-
-            match result {
-                databend_common_expression::Value::Scalar(s) => Ok(s),
-                databend_common_expression::Value::Column(c) if c.len() == 1 => {
-                    let value = unsafe { c.index_unchecked(0) };
-                    Ok(value.to_owned())
-                }
-                _ => Err(ErrorCode::BadDataValueType(format!(
-                    "Invalid default value for column: {}, must be constant, but got: {}",
-                    field.name(),
-                    result
-                ))),
-            }
-        }
-        None => Ok(Scalar::default_value(&data_type)),
-    }
 }

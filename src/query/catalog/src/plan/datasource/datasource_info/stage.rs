@@ -20,7 +20,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::CopyIntoLocationOptions;
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_exception::Result;
-use databend_common_expression::RemoteExpr;
+use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::StageInfo;
@@ -31,7 +31,7 @@ use databend_common_storage::StageFilesInfo;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
     pub schema: TableSchemaRef,
-    pub default_values: Option<Vec<RemoteExpr>>,
+    pub default_exprs: Option<Vec<RemoteDefaultExpr>>,
     pub files_info: StageFilesInfo,
     pub stage_info: StageInfo,
     pub files_to_copy: Option<Vec<StageFileInfo>>,

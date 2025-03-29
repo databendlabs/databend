@@ -41,11 +41,11 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
-use databend_common_sql::field_default_value;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -150,6 +150,7 @@ impl ModifyTableColumnInterpreter {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
+        let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
@@ -167,7 +168,7 @@ impl ModifyTableColumnInterpreter {
                 if let Some(default_expr) = &field.default_expr {
                     let default_expr = default_expr.to_string();
                     new_schema.fields[i].default_expr = Some(default_expr);
-                    let _ = field_default_value(self.ctx.clone(), &new_schema.fields[i])?;
+                    let _ = default_expr_binder.get_scalar(&new_schema.fields[i])?;
                 } else {
                     new_schema.fields[i].default_expr = None;
                 }

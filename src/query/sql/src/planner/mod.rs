@@ -35,6 +35,7 @@ pub use binder::BindContext;
 pub use binder::Binder;
 pub use binder::ColumnBinding;
 pub use binder::ColumnBindingBuilder;
+pub use binder::DefaultExprBinder;
 pub use binder::ScalarBinder;
 pub use binder::SelectBuilder;
 pub use binder::Visibility;

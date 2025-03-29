@@ -26,8 +26,8 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::field_default_value;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::DefaultExprBinder;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::SegmentBlockMetasCache;
@@ -117,6 +117,8 @@ impl PruningContext {
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
         let limit_pruner = LimiterPrunerCreator::create(limit);
 
+        let mut default_exprs_binder = DefaultExprBinder::try_new(ctx.clone())?;
+
         let default_stats: StatisticsOfColumns = filter_expr
             .as_ref()
             .map(|f| f.column_refs())
@@ -124,7 +126,7 @@ impl PruningContext {
             .flatten()
             .filter_map(|(name, _)| {
                 let field = table_schema.field_with_name(&name).ok()?;
-                let default_scalar = field_default_value(ctx.clone(), field).ok()?;
+                let default_scalar = default_exprs_binder.get_scalar(field).ok()?;
 
                 let stats =
                     ColumnStatistics::new(default_scalar.clone(), default_scalar, 0, 0, Some(1));

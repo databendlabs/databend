@@ -106,7 +106,6 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::parse_computed_expr_to_string;
-use crate::parse_default_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
@@ -144,6 +143,7 @@ use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
+use crate::DefaultExprBinder;
 use crate::Planner;
 use crate::SelectBuilder;
 
@@ -1374,8 +1374,9 @@ impl Binder {
         if let Some(expr) = &column.expr {
             match expr {
                 ColumnExpr::Default(default_expr) => {
+                    let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
                     let (expr, expr_is_deterministic) =
-                        parse_default_expr_to_string(self.ctx.clone(), &field, default_expr)?;
+                        default_expr_binder.parse_default_expr_to_string(&field, default_expr)?;
                     field = field.with_default_expr(Some(expr));
                     is_deterministic = expr_is_deterministic;
                 }
@@ -1413,6 +1414,7 @@ impl Binder {
         let mut fields = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
         let not_null = self.is_column_not_null();
+        let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
             let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
@@ -1421,8 +1423,8 @@ impl Binder {
             if let Some(expr) = &column.expr {
                 match expr {
                     ColumnExpr::Default(default_expr) => {
-                        let (expr, _) =
-                            parse_default_expr_to_string(self.ctx.clone(), &field, default_expr)?;
+                        let (expr, _) = default_expr_binder
+                            .parse_default_expr_to_string(&field, default_expr)?;
                         field = field.with_default_expr(Some(expr));
                     }
                     _ => has_computed = true,

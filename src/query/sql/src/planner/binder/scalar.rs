@@ -15,18 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
-use databend_common_ast::parser::parse_expr;
-use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
 
-use crate::binder::wrap_cast;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
@@ -37,7 +30,6 @@ use crate::MetadataRef;
 pub struct ScalarBinder<'a> {
     bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
-    dialect: Dialect,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     aliases: &'a [(String, ScalarExpr)],
@@ -52,12 +44,9 @@ impl<'a> ScalarBinder<'a> {
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
     ) -> Self {
-        let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
-
         ScalarBinder {
             bind_context,
             ctx,
-            dialect,
             name_resolution_ctx,
             metadata,
             aliases,
@@ -83,42 +72,5 @@ impl<'a> ScalarBinder<'a> {
 
     pub fn get_func_ctx(&self) -> Result<FunctionContext> {
         self.ctx.get_function_context()
-    }
-
-    pub async fn get_default_value(
-        &mut self,
-        field: &DataField,
-        schema: &DataSchema,
-    ) -> Result<databend_common_expression::Expr> {
-        if let Some(default_expr) = field.default_expr() {
-            let tokens = tokenize_sql(default_expr)?;
-            let ast = parse_expr(&tokens, self.dialect)?;
-            let (mut scalar, _) = self.bind(&ast)?;
-            scalar = wrap_cast(&scalar, field.data_type());
-
-            let expr = scalar
-                .as_expr()?
-                .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
-            Ok(expr)
-        } else {
-            // If field data type is nullable, then we'll fill it with null.
-            if field.data_type().is_nullable() {
-                let expr = databend_common_expression::Expr::Constant {
-                    span: None,
-                    scalar: Scalar::Null,
-                    data_type: field.data_type().clone(),
-                };
-                Ok(expr)
-            } else {
-                let data_type = field.data_type().clone();
-                let default_value = Scalar::default_value(&data_type);
-                let expr = databend_common_expression::Expr::Constant {
-                    span: None,
-                    scalar: default_value,
-                    data_type,
-                };
-                Ok(expr)
-            }
-        }
     }
 }

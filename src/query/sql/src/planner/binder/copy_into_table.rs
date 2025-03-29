@@ -49,7 +49,6 @@ use databend_common_expression::shrink_scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
@@ -73,9 +72,9 @@ use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
 use crate::plans::ValidationMode;
 use crate::BindContext;
+use crate::DefaultExprBinder;
 use crate::Metadata;
 use crate::NameResolutionContext;
-use crate::ScalarBinder;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -87,7 +86,7 @@ impl Binder {
         match &stmt.src {
             CopyIntoTableSource::Location(location) => {
                 let mut plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location, false)
+                    .bind_copy_into_table_common(stmt, location, false)
                     .await?;
 
                 // for copy from location, collect files explicitly
@@ -105,7 +104,7 @@ impl Binder {
                     .set_max_column_position(max_column_position.max_pos);
                 let (select_list, location, alias) = check_transform_query(query)?;
                 let plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location, true)
+                    .bind_copy_into_table_common(stmt, location, true)
                     .await?;
 
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
@@ -136,7 +135,6 @@ impl Binder {
 
     async fn bind_copy_into_table_common(
         &mut self,
-        bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
         location: &FileLocation,
         is_transform: bool,
@@ -198,8 +196,8 @@ impl Binder {
 
         let default_values = if stage_info.file_format_params.need_field_default() {
             Some(
-                self.prepare_default_values(bind_context, &required_values_schema)
-                    .await?,
+                DefaultExprBinder::try_new(self.ctx.clone())?
+                    .prepare_default_values(&required_values_schema)?,
             )
         } else {
             None
@@ -222,7 +220,7 @@ impl Binder {
                 files_to_copy: None,
                 duplicated_files_detected: vec![],
                 is_select: false,
-                default_values,
+                default_exprs: default_values,
                 copy_into_location_options: Default::default(),
                 copy_into_table_options: stmt.options.clone(),
                 stage_root: "".to_string(),
@@ -381,9 +379,8 @@ impl Binder {
 
         let stage_schema = infer_table_schema(&data_schema)?;
 
-        let default_values = self
-            .prepare_default_values(bind_context, &data_schema)
-            .await?;
+        let default_values = DefaultExprBinder::try_new(self.ctx.clone())?
+            .prepare_default_values(&required_values_schema)?;
 
         let plan = CopyIntoTablePlan {
             catalog_info,
@@ -403,7 +400,7 @@ impl Binder {
                 files_to_copy: Some(files_to_copy),
                 duplicated_files_detected,
                 is_select: false,
-                default_values: Some(default_values),
+                default_exprs: Some(default_values),
                 copy_into_location_options: Default::default(),
                 copy_into_table_options: options,
                 stage_root: "".to_string(),
@@ -572,26 +569,6 @@ impl Binder {
             )
             .await?;
         Ok((Arc::new(DataSchema::new(attachment_fields)), const_values))
-    }
-
-    async fn prepare_default_values(
-        &mut self,
-        bind_context: &mut BindContext,
-        data_schema: &DataSchemaRef,
-    ) -> Result<Vec<RemoteExpr>> {
-        let mut scalar_binder = ScalarBinder::new(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-        );
-        let mut values = Vec::with_capacity(data_schema.fields.len());
-        for field in &data_schema.fields {
-            let expr = scalar_binder.get_default_value(field, data_schema).await?;
-            values.push(expr.as_remote_expr());
-        }
-        Ok(values)
     }
 }
 

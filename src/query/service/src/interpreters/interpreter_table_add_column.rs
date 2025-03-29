@@ -28,11 +28,11 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_sql::field_default_value;
 use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -105,7 +105,7 @@ impl Interpreter for AddTableColumnInterpreter {
         }
 
         if field.default_expr().is_some() {
-            let _ = field_default_value(self.ctx.clone(), &field)?;
+            let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
         }
         is_valid_column(field.name())?;
         let index = match &self.plan.option {
