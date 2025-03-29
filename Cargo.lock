@@ -3185,6 +3185,7 @@ dependencies = [
 name = "databend-common-config"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "databend-common-base",
  "databend-common-building",
@@ -3196,8 +3197,11 @@ dependencies = [
  "log",
  "pretty_assertions",
  "serde",
+ "serde_ignored",
  "serde_with",
  "serfig",
+ "tempfile",
+ "toml 0.8.19",
 ]
 
 [[package]]
@@ -13210,6 +13214,15 @@ name = "serde_fmt"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1d4ddca14104cd60529e8c7f7ba71a2c8acd8f7f5cfcdc2faf97eeb7c3010a4"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "serde_ignored"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8e319a36d1b52126a0d608f24e93b2d81297091818cd70625fcf50a15d84ddf"
 dependencies = [
  "serde",
 ]
