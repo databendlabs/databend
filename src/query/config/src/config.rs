@@ -181,7 +181,7 @@ impl Config {
     /// We should set this to false during tests because we don't want
     /// our test binary to parse cargo's args.
     #[no_sanitize(address)]
-    pub fn load(config_file: Option<String>, with_args: bool) -> Result<Self> {
+    pub fn load(with_args: bool) -> Result<Self> {
         let mut arg_conf = Self::default();
 
         if with_args {
@@ -200,9 +200,7 @@ impl Config {
 
         // Load from config file first.
         {
-            let final_config_file = if let Some(config_file) = config_file {
-                config_file
-            } else if !arg_conf.config_file.is_empty() {
+            let final_config_file = if !arg_conf.config_file.is_empty() {
                 // TODO: remove this `allow(clippy::redundant_clone)`
                 // as soon as this issue is fixed:
                 // https://github.com/rust-lang/rust-clippy/issues/10940
