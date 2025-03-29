@@ -93,3 +93,14 @@ impl From<MetaError> for ErrorCode {
         ErrorCode::MetaServiceError(e.to_string())
     }
 }
+
+impl From<MetaError> for io::Error {
+    fn from(e: MetaError) -> Self {
+        match e {
+            MetaError::NetworkError(net_err) => net_err.into(),
+            MetaError::StorageError(e) => e.into(),
+            MetaError::ClientError(e) => e.into(),
+            MetaError::APIError(e) => e.into(),
+        }
+    }
+}

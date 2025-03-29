@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 
@@ -153,6 +155,7 @@ impl SubqueryRewriter {
         if !eval_scalar.used_columns()?.is_disjoint(correlated_columns) {
             need_cross_join = true;
         }
+
         let flatten_plan = self.flatten_plan(
             outer,
             subquery.unary_child(),
@@ -163,7 +166,7 @@ impl SubqueryRewriter {
 
         let metadata = self.metadata.clone();
         let metadata = metadata.read();
-        let items = eval_scalar
+        let items: Vec<ScalarItem> = eval_scalar
             .items
             .iter()
             .filter(|item| !correlated_columns.contains(&item.index))
@@ -181,6 +184,41 @@ impl SubqueryRewriter {
                 )),
             })
             .collect::<Result<_>>()?;
+
+        // Eg1. SELECT c_id, (SELECT count() FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
+        // Eg2. SELECT
+        //   (
+        //     SELECT
+        //       IF(COUNT(0) = 0, '0', '1')
+        //     FROM
+        //       property_records pr
+        //     WHERE
+        //       th.property_id = pr.property_id
+        //       AND th.owner_id = pr.owner_id
+        //   ) AS ownership_status,
+        //   (
+        //     SELECT
+        //       IF(COUNT(0) = 0, '0', '1')
+        //     FROM
+        //       mortgage_records mr
+        //     WHERE
+        //       th.property_id = mr.property_id
+        //   ) AS mortgage_status
+        // FROM
+        //   transaction_history th;
+
+        if flatten_info.from_count_func {
+            flatten_info.from_count_func = items.iter().any(|x| {
+                if let ScalarExpr::BoundColumnRef(cf) = &x.scalar {
+                    matches!(
+                        cf.column.data_type.as_ref(),
+                        &DataType::Number(NumberDataType::UInt64),
+                    )
+                } else {
+                    false
+                }
+            });
+        }
 
         Ok(SExpr::create_unary(
             Arc::new(EvalScalar { items }.into()),
@@ -471,7 +509,8 @@ impl SubqueryRewriter {
                 // Single join is similar to left outer join, if there isn't matched row in the right side, we'll add NULL value for the right side.
                 // But for count aggregation function, NULL values should be 0.
                 if aggregate.aggregate_functions.len() == 1
-                    && (func_name.eq_ignore_ascii_case("count") || func_name.eq("count_distinct"))
+                    && (func_name.eq_ignore_ascii_case("count")
+                        || func_name.eq_ignore_ascii_case("count_distinct"))
                 {
                     flatten_info.from_count_func = true;
                 }

@@ -78,7 +78,6 @@ members = [
     "src/query/users",
     "src/query/ee_features/attach_table",
     "src/query/ee_features/vacuum_handler",
-    "src/query/ee_features/background_service",
     "src/query/ee_features/aggregating_index",
     "src/query/ee_features/data_mask",
     "src/query/ee_features/storage_encryption",
@@ -106,6 +105,7 @@ members = [
     "src/meta/ee",
     "src/meta/proto-conv",
     "src/meta/protos",
+    "src/meta/semaphore",
     "src/meta/service",
     "tests/sqllogictests",
     "src/tests/sqlsmith",
@@ -147,6 +147,7 @@ databend-common-meta-embedded = { path = "src/meta/embedded" }
 databend-common-meta-kvapi = { path = "src/meta/kvapi" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/raft-store" }
+databend-common-meta-semaphore = { path = "src/meta/semaphore" }
 databend-common-meta-sled-store = { path = "src/meta/sled-store" }
 databend-common-meta-stoerr = { path = "src/meta/stoerr" }
 databend-common-meta-store = { path = "src/meta/store" }
@@ -186,7 +187,6 @@ databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
 databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregating_index" }
 databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
-databend-enterprise-background-service = { path = "src/query/ee_features/background_service" }
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
 databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
 databend-enterprise-hilbert-clustering = { path = "src/query/ee_features/hilbert_clustering" }
@@ -276,7 +276,9 @@ chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
 cidr = { version = "0.2.2" }
 clap = { version = "4.4.2", features = ["derive"] }
+codeq = { version = "0.5.2" }
 comfy-table = "7"
+concurrent-queue = "2.5.0"
 convert_case = "0.6.0"
 cookie = "0.18.1"
 crc32fast = "1.3.2"

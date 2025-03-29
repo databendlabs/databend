@@ -20,7 +20,6 @@ use criterion::black_box;
 use criterion::criterion_group;
 use criterion::criterion_main;
 use criterion::Criterion;
-use databend_storages_common_cache::read_cache_content;
 use tempfile::TempDir;
 
 fn create_test_file(dir: &TempDir, name: &str, size: usize) -> PathBuf {

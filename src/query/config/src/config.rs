@@ -48,6 +48,7 @@ use databend_common_tracing::FileConfig as InnerFileLogConfig;
 use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
 use databend_common_tracing::OTLPEndpointConfig as InnerOTLPEndpointConfig;
 use databend_common_tracing::OTLPProtocol;
+use databend_common_tracing::PersistentLogConfig as InnerPersistentLogConfig;
 use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
 use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
@@ -68,7 +69,6 @@ use super::inner::InnerConfig;
 use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
-use crate::background_config::BackgroundConfig;
 use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
@@ -137,10 +137,6 @@ pub struct Config {
     // spill Config
     #[clap(flatten)]
     pub spill: SpillConfig,
-
-    // background configs
-    #[clap(flatten)]
-    pub background: BackgroundConfig,
 
     /// external catalog config.
     ///
@@ -2028,6 +2024,9 @@ pub struct LogConfig {
 
     #[clap(flatten)]
     pub tracing: TracingConfig,
+
+    #[clap(flatten)]
+    pub persistentlog: PersistentLogConfig,
 }
 
 impl Default for LogConfig {
@@ -2111,6 +2110,12 @@ impl TryInto<InnerLogConfig> for LogConfig {
 
         let tracing: InnerTracingConfig = self.tracing.try_into()?;
 
+        let mut persistentlog: InnerPersistentLogConfig = self.persistentlog.try_into()?;
+
+        if persistentlog.on && persistentlog.level.is_empty() && file.on && !file.level.is_empty() {
+            persistentlog.level = file.level.clone();
+        }
+
         Ok(InnerLogConfig {
             file,
             stderr: self.stderr.try_into()?,
@@ -2119,6 +2124,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
             profile,
             structlog,
             tracing,
+            persistentlog,
         })
     }
 }
@@ -2135,6 +2141,7 @@ impl From<InnerLogConfig> for LogConfig {
             profile: inner.profile.into(),
             structlog: inner.structlog.into(),
             tracing: inner.tracing.into(),
+            persistentlog: inner.persistentlog.into(),
 
             // Deprecated fields
             log_dir: None,
@@ -2523,6 +2530,84 @@ impl From<InnerTracingConfig> for TracingConfig {
             tracing_on: inner.on,
             tracing_capture_log_level: inner.capture_log_level,
             tracing_otlp: inner.otlp.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct PersistentLogConfig {
+    #[clap(
+        long = "log-persistentlog-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub log_persistentlog_on: bool,
+
+    /// Specifies the interval in seconds for how often the persistent log is flushed
+    #[clap(
+        long = "log-persistentlog-interval",
+        value_name = "VALUE",
+        default_value = "2"
+    )]
+    #[serde(rename = "interval")]
+    pub log_persistentlog_interval: usize,
+
+    /// Specifies the name of the staging area that temporarily holds log data before it is finally copied into the table
+    #[clap(
+        long = "log-persistentlog-stage-name",
+        value_name = "VALUE",
+        default_value = "log_1f93b76af0bd4b1d8e018667865fbc65"
+    )]
+    #[serde(rename = "stage_name")]
+    pub log_persistentlog_stage_name: String,
+
+    /// Specifies how long the persistent log should be retained, in hours
+    #[clap(
+        long = "log-persistentlog-retention",
+        value_name = "VALUE",
+        default_value = "72"
+    )]
+    #[serde(rename = "retention")]
+    pub log_persistentlog_retention: usize,
+
+    /// Log level <DEBUG|INFO|WARN|ERROR>
+    #[clap(
+        long = "log-persistentlog-level",
+        value_name = "VALUE",
+        default_value = "WARN"
+    )]
+    #[serde(rename = "level")]
+    pub log_persistentlog_level: String,
+}
+
+impl Default for PersistentLogConfig {
+    fn default() -> Self {
+        InnerPersistentLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerPersistentLogConfig> for PersistentLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerPersistentLogConfig> {
+        Ok(InnerPersistentLogConfig {
+            on: self.log_persistentlog_on,
+            interval: self.log_persistentlog_interval,
+            stage_name: self.log_persistentlog_stage_name,
+            level: self.log_persistentlog_level,
+            retention: self.log_persistentlog_retention,
+        })
+    }
+}
+
+impl From<InnerPersistentLogConfig> for PersistentLogConfig {
+    fn from(inner: InnerPersistentLogConfig) -> Self {
+        Self {
+            log_persistentlog_on: inner.on,
+            log_persistentlog_interval: inner.interval,
+            log_persistentlog_stage_name: inner.stage_name,
+            log_persistentlog_level: inner.level,
+            log_persistentlog_retention: inner.retention,
         }
     }
 }
@@ -3117,7 +3202,6 @@ mod cache_config_converters {
                     .collect(),
                 cache: inner.cache.into(),
                 spill: inner.spill.into(),
-                background: inner.background.into(),
             }
         }
     }
@@ -3136,7 +3220,6 @@ mod cache_config_converters {
                 catalog,
                 cache,
                 spill,
-                background,
                 catalogs: input_catalogs,
                 ..
             } = self;
@@ -3167,7 +3250,6 @@ mod cache_config_converters {
                 catalogs,
                 cache: cache.try_into()?,
                 spill,
-                background: background.try_into()?,
             })
         }
     }

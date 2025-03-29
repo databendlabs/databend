@@ -17,7 +17,6 @@ ignored = ["strum"]
 
 [dependencies]
 anyhow = { workspace = true }
-chrono-tz = { workspace = true }
 clap = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }

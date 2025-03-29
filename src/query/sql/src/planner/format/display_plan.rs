@@ -15,25 +15,39 @@
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use itertools::Itertools;
 
-use crate::format_scalar;
+use super::display::DefaultOperatorHumanizer;
+use super::display::FormatOptions;
+use super::display::IdHumanizer;
+use super::display::MetadataIdHumanizer;
+use super::display::TreeHumanizer;
 use crate::optimizer::SExpr;
 use crate::plans::CreateTablePlan;
-use crate::plans::Mutation;
 use crate::plans::Plan;
 
+impl SExpr {
+    pub(crate) fn to_format_tree<I: IdHumanizer>(
+        &self,
+        id_humanizer: &I,
+    ) -> Result<FormatTreeNode> {
+        let operator_humanizer = DefaultOperatorHumanizer;
+        let tree_humanizer = TreeHumanizer::new(id_humanizer, &operator_humanizer);
+        tree_humanizer.humanize_s_expr(self)
+    }
+}
+
 impl Plan {
-    pub fn format_indent(&self, verbose: bool) -> Result<String> {
+    pub fn format_indent(&self, options: FormatOptions) -> Result<String> {
         match self {
             Plan::Query {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                Ok(s_expr.to_format_tree(metadata, verbose)?.format_pretty()?)
+                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                Ok(s_expr.to_format_tree(&humanizer)?.format_pretty()?)
             }
             Plan::Explain { kind, plan, .. } => {
-                let result = plan.format_indent(false)?;
+                let result = plan.format_indent(options)?;
                 Ok(format!("{:?}:\n{}", kind, result))
             }
             Plan::ExplainAst { .. } => Ok("ExplainAst".to_string()),
@@ -57,7 +71,7 @@ impl Plan {
             Plan::RenameDatabase(_) => Ok("RenameDatabase".to_string()),
 
             // Tables
-            Plan::CreateTable(create_table) => format_create_table(create_table),
+            Plan::CreateTable(create_table) => format_create_table(create_table, options),
             Plan::ShowCreateTable(_) => Ok("ShowCreateTable".to_string()),
             Plan::DropTable(_) => Ok("DropTable".to_string()),
             Plan::UndropTable(_) => Ok("UndropTable".to_string()),
@@ -114,7 +128,16 @@ impl Plan {
             Plan::Insert(_) => Ok("Insert".to_string()),
             Plan::InsertMultiTable(_) => Ok("InsertMultiTable".to_string()),
             Plan::Replace(_) => Ok("Replace".to_string()),
-            Plan::DataMutation { s_expr, .. } => format_merge_into(s_expr),
+            Plan::DataMutation {
+                s_expr, metadata, ..
+            } => {
+                let metadata = &*metadata.read();
+                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                Ok(format!(
+                    "MergeInto:\n{}",
+                    s_expr.to_format_tree(&humanizer)?.format_pretty()?
+                ))
+            }
 
             // Stages
             Plan::CreateStage(_) => Ok("CreateStage".to_string()),
@@ -231,14 +254,15 @@ impl Plan {
     }
 }
 
-fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
+fn format_create_table(create_table: &CreateTablePlan, options: FormatOptions) -> Result<String> {
     match &create_table.as_select {
         Some(plan) => match plan.as_ref() {
             Plan::Query {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                let res = s_expr.to_format_tree(metadata, false)?;
+                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                let res = s_expr.to_format_tree(&humanizer)?;
                 Ok(
                     FormatTreeNode::with_children("CreateTableAsSelect".to_string(), vec![res])
                         .format_pretty()?,
@@ -248,105 +272,4 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
         },
         None => Ok("CreateTable".to_string()),
     }
-}
-
-fn format_merge_into(s_expr: &SExpr) -> Result<String> {
-    let merge_into: Mutation = s_expr.plan().clone().try_into()?;
-    // add merge into target_table
-    let table_index = merge_into
-        .metadata
-        .read()
-        .get_table_index(
-            Some(merge_into.database_name.as_str()),
-            merge_into.table_name.as_str(),
-        )
-        .unwrap();
-
-    let table_entry = merge_into.metadata.read().table(table_index).clone();
-    let target_table_format = format!(
-        "target_table: {}.{}.{}",
-        table_entry.catalog(),
-        table_entry.database(),
-        table_entry.name(),
-    );
-
-    let target_build_optimization = false;
-    let target_build_optimization_format = FormatTreeNode::new(format!(
-        "target_build_optimization: {}",
-        target_build_optimization
-    ));
-    let distributed_format =
-        FormatTreeNode::new(format!("distributed: {}", merge_into.distributed));
-    let can_try_update_column_only_format = FormatTreeNode::new(format!(
-        "can_try_update_column_only: {}",
-        merge_into.can_try_update_column_only
-    ));
-    // add matched clauses
-    let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
-    let taregt_schema = table_entry.table().schema_with_stream();
-    for evaluator in &merge_into.matched_evaluators {
-        let condition_format = evaluator.condition.as_ref().map_or_else(
-            || "condition: None".to_string(),
-            |predicate| format!("condition: {}", format_scalar(predicate)),
-        );
-        if evaluator.update.is_none() {
-            matched_children.push(FormatTreeNode::new(format!(
-                "matched delete: [{}]",
-                condition_format
-            )));
-        } else {
-            let map = evaluator.update.as_ref().unwrap();
-            let mut field_indexes: Vec<usize> =
-                map.iter().map(|(field_idx, _)| *field_idx).collect();
-            field_indexes.sort();
-            let update_format = field_indexes
-                .iter()
-                .map(|field_idx| {
-                    let expr = map.get(field_idx).unwrap();
-                    format!(
-                        "{} = {}",
-                        taregt_schema.field(*field_idx).name(),
-                        format_scalar(expr)
-                    )
-                })
-                .join(",");
-            matched_children.push(FormatTreeNode::new(format!(
-                "matched update: [{},update set {}]",
-                condition_format, update_format
-            )));
-        }
-    }
-    // add unmatched clauses
-    let mut unmatched_children = Vec::with_capacity(merge_into.unmatched_evaluators.len());
-    for evaluator in &merge_into.unmatched_evaluators {
-        let condition_format = evaluator.condition.as_ref().map_or_else(
-            || "condition: None".to_string(),
-            |predicate| format!("condition: {}", format_scalar(predicate)),
-        );
-        let insert_schema_format = evaluator
-            .source_schema
-            .fields
-            .iter()
-            .map(|field| field.name())
-            .join(",");
-        let values_format = evaluator.values.iter().map(format_scalar).join(",");
-        let unmatched_format = format!(
-            "insert into ({}) values({})",
-            insert_schema_format, values_format
-        );
-        unmatched_children.push(FormatTreeNode::new(format!(
-            "unmatched insert: [{},{}]",
-            condition_format, unmatched_format
-        )));
-    }
-    let all_children = [
-        vec![distributed_format],
-        vec![target_build_optimization_format],
-        vec![can_try_update_column_only_format],
-        matched_children,
-        unmatched_children,
-    ]
-    .concat();
-    let res = FormatTreeNode::with_children(target_table_format, all_children).format_pretty()?;
-    Ok(format!("MergeInto:\n{res}"))
 }

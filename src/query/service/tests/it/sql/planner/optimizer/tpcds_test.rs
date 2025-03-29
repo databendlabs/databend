@@ -259,7 +259,7 @@ async fn test_tpcds_optimizer() -> Result<()> {
         (test.stats_setup)(&mut raw_plan)?;
 
         // Print and verify raw plan
-        let raw_plan_str = raw_plan.format_indent(false)?;
+        let raw_plan_str = raw_plan.format_indent(Default::default())?;
         println!("Raw plan:\n{}", raw_plan_str);
 
         // Verify raw plan matches expected
@@ -282,7 +282,7 @@ async fn test_tpcds_optimizer() -> Result<()> {
 
         // Optimize the plan
         let optimized_plan = optimize_plan(&ctx, raw_plan).await?;
-        let optimized_plan_str = optimized_plan.format_indent(false)?;
+        let optimized_plan_str = optimized_plan.format_indent(Default::default())?;
         println!("Optimized plan:\n{}", optimized_plan_str);
 
         // Verify the optimized plan matches expected output

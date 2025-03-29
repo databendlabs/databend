@@ -38,7 +38,6 @@ use databend_common_tracing::Config as LogConfig;
 use super::config::Commands;
 use super::config::Config;
 use super::config::ResourcesManagementConfig;
-use crate::background_config::InnerBackgroundConfig;
 use crate::BuiltInConfig;
 
 /// Inner config for query.
@@ -70,9 +69,6 @@ pub struct InnerConfig {
 
     // Spill Config
     pub spill: SpillConfig,
-
-    // Background Config
-    pub background: InnerBackgroundConfig,
 }
 
 impl InnerConfig {
@@ -149,7 +145,6 @@ impl Debug for InnerConfig {
             .field("catalogs", &self.catalogs)
             .field("cache", &self.cache)
             .field("spill", &self.spill)
-            .field("background", &self.background)
             .finish()
     }
 }
