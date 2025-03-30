@@ -112,8 +112,6 @@ impl MemStat {
                 if NEED_ROLLBACK {
                     // We only roll back the memory that alloc failed
                     self.used.fetch_sub(current_memory_alloc, Ordering::Relaxed);
-
-                    parent_memory_stat.rollback(current_memory_alloc);
                 }
 
                 return Err(cause);
