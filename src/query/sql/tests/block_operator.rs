@@ -50,6 +50,7 @@ fn test_cse() {
                 RawExpr::Constant {
                     span: None,
                     scalar: Scalar::Number(NumberScalar::UInt64(1)),
+                    data_type: None,
                 },
             ],
         },
@@ -72,12 +73,14 @@ fn test_cse() {
                         RawExpr::Constant {
                             span: None,
                             scalar: Scalar::Number(NumberScalar::UInt64(1)),
+                            data_type: None,
                         },
                     ],
                 },
                 RawExpr::Constant {
                     span: None,
                     scalar: Scalar::Number(NumberScalar::UInt64(2)),
+                    data_type: None,
                 },
             ],
         },

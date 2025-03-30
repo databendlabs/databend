@@ -29,9 +29,9 @@ use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropInvertedIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
-use databend_common_storages_fuse::table_functions::HilbertClusteringInfoFunc;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
+use databend_common_storages_iceberg::IcebergInspectTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
@@ -39,9 +39,7 @@ use itertools::Itertools;
 use parking_lot::RwLock;
 
 use super::others::UdfEchoTable;
-use super::ExecuteBackgroundJobTable;
 use super::LicenseInfoTable;
-use super::SuggestedBackgroundTasksTable;
 use super::TenantQuotaTable;
 use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
@@ -208,14 +206,6 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
-            "hilbert_clustering_information".to_string(),
-            (
-                next_id(),
-                Arc::new(TableFunctionTemplate::<HilbertClusteringInfoFunc>::create),
-            ),
-        );
-
-        creators.insert(
             "fuse_vacuum_temporary_table".to_string(),
             (
                 next_id(),
@@ -268,18 +258,8 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
-            "execute_background_job".to_string(),
-            (next_id(), Arc::new(ExecuteBackgroundJobTable::create)),
-        );
-
-        creators.insert(
             "license_info".to_string(),
             (next_id(), Arc::new(LicenseInfoTable::create)),
-        );
-
-        creators.insert(
-            "suggested_background_tasks".to_string(),
-            (next_id(), Arc::new(SuggestedBackgroundTasksTable::create)),
         );
 
         creators.insert(
@@ -352,6 +332,16 @@ impl TableFunctionFactory {
         creators.insert(
             "show_roles".to_string(),
             (next_id(), Arc::new(ShowRoles::create)),
+        );
+
+        creators.insert(
+            "iceberg_snapshot".to_string(),
+            (next_id(), Arc::new(IcebergInspectTable::create)),
+        );
+
+        creators.insert(
+            "iceberg_manifest".to_string(),
+            (next_id(), Arc::new(IcebergInspectTable::create)),
         );
 
         TableFunctionFactory {

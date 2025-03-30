@@ -236,6 +236,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             if_exists: false,
             tenant: tenant(),
             db_id,
+            db_name: db_name().to_string(),
             table_name: table_name(),
             tb_id: t.ident.table_id,
             engine: "FUSE".to_string(),

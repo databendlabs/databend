@@ -12,15 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_sql::DefaultExprBinder;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
+use crate::pipelines::processors::transforms::TransformAsyncFunction;
+use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
@@ -42,14 +47,46 @@ impl PipelineBuilder {
 
         // Fill missing default columns and resort the columns.
         if source_schema != default_schema {
-            pipeline.try_add_transformer(|| {
-                TransformResortAddOn::try_new(
-                    ctx.clone(),
-                    source_schema.clone(),
-                    default_schema.clone(),
-                    table.clone(),
-                )
-            })?;
+            let mut default_expr_binder = DefaultExprBinder::try_new(ctx.clone())?;
+            if let Some((async_funcs, new_default_schema, new_default_schema_no_cast)) =
+                default_expr_binder
+                    .split_async_default_exprs(source_schema.clone(), default_schema.clone())?
+            {
+                pipeline.try_add_async_transformer(|| {
+                    Ok(TransformAsyncFunction::new(
+                        ctx.clone(),
+                        async_funcs.clone(),
+                        BTreeMap::new(),
+                    ))
+                })?;
+                if new_default_schema != new_default_schema_no_cast {
+                    pipeline.try_add_transformer(|| {
+                        TransformCastSchema::try_new(
+                            new_default_schema_no_cast.clone(),
+                            new_default_schema.clone(),
+                            ctx.get_function_context().unwrap(),
+                        )
+                    })?;
+                }
+
+                pipeline.try_add_transformer(|| {
+                    TransformResortAddOn::try_new(
+                        ctx.clone(),
+                        new_default_schema.clone(),
+                        default_schema.clone(),
+                        table.clone(),
+                    )
+                })?;
+            } else {
+                pipeline.try_add_transformer(|| {
+                    TransformResortAddOn::try_new(
+                        ctx.clone(),
+                        source_schema.clone(),
+                        default_schema.clone(),
+                        table.clone(),
+                    )
+                })?;
+            }
         }
 
         // Fill computed columns.

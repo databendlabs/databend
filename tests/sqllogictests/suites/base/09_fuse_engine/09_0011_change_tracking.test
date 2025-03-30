@@ -11,6 +11,9 @@ statement ok
 create table t(a int) cluster by(a) change_tracking = false
 
 statement ok
+set enable_compact_after_write = 0;
+
+statement ok
 insert into t values(1),(2)
 
 statement error 1065
@@ -94,7 +97,7 @@ statement ok
 insert into t2 values(0),(2),(1)
 
 statement ok
-set enable_experimental_merge_into = 1
+set enable_compact_after_write = 1;
 
 query TTT
 merge into t using t2 on t.a = t2.a when matched and t2.a = 1 then update set t.a = 8 when matched and t2.a = 2 then delete when not matched then insert *
@@ -180,8 +183,6 @@ merge into t3 using t4 on t3.a = t4.a when matched and t4.a = 4 then delete when
 ----
 1 1 1
 
-statement ok
-set enable_compact_after_write = 0;
 
 query IIBBII
 select a, b, _row_version from t3 order by a
@@ -227,9 +228,6 @@ drop table test_select all
 ######################
 # end of issue 15412 #
 ######################
-
-statement ok
-set enable_experimental_merge_into = 0
 
 statement ok
 drop table t all

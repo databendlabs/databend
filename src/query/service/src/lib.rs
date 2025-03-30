@@ -44,12 +44,14 @@
 extern crate core;
 
 pub mod auth;
+pub mod builtin;
 pub mod catalogs;
 pub mod clusters;
 pub mod databases;
 pub mod interpreters;
 pub mod local;
 pub mod locks;
+pub mod persistent_log;
 pub mod pipelines;
 pub mod schedulers;
 pub mod servers;
@@ -59,7 +61,6 @@ pub mod stream;
 pub mod table_functions;
 pub mod test_kits;
 
-mod builtin;
 mod global_services;
 
 pub use databend_common_sql as sql;

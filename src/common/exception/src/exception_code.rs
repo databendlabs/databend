@@ -198,9 +198,6 @@ build_exceptions! {
     EnterpriseFeatureNotEnable(1403),
     LicenseKeyExpired(1404),
 
-    BackgroundJobAlreadyExists(1501),
-    UnknownBackgroundJob(1502),
-
     InvalidRowIdIndex(1503),
     // Index related errors.
     UnsupportedIndex(1601),
@@ -427,7 +424,6 @@ build_exceptions! {
     InvalidSessionState(4004),
 
     // recluster error codes
-    NoNeedToRecluster(4011),
     NoNeedToCompact(4012),
     UnsupportedClusterType(4013),
 

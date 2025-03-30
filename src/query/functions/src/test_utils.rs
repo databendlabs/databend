@@ -113,6 +113,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         AExpr::Literal { span, value } => RawExpr::Constant {
             span,
             scalar: transform_literal(value),
+            data_type: None,
         },
         AExpr::ColumnRef {
             span,
@@ -374,6 +375,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     RawExpr::Constant {
                         span,
                         scalar: Scalar::String(key.name),
+                        data_type: Some(DataType::String),
                     },
                 ]),
                 MapAccessor::DotNumber { key } => {

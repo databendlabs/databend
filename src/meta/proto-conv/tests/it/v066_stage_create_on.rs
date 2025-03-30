@@ -15,6 +15,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
@@ -55,6 +56,7 @@ fn test_decode_v66_stage() -> anyhow::Result<()> {
         is_temporary: false,
         file_format_params: mt::principal::FileFormatParams::Parquet(
             mt::principal::ParquetFileFormatParams {
+                compression: StageFileCompression::Zstd,
                 missing_field_as: Default::default(),
                 null_if: vec![],
             },

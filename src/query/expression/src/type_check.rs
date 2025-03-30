@@ -44,10 +44,17 @@ pub fn check<Index: ColumnIndex>(
     fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
     match expr {
-        RawExpr::Constant { span, scalar } => Ok(Expr::Constant {
+        RawExpr::Constant {
+            span,
+            scalar,
+            data_type,
+        } => Ok(Expr::Constant {
             span: *span,
             scalar: scalar.clone(),
-            data_type: scalar.as_ref().infer_data_type(),
+            data_type: data_type
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| scalar.as_ref().infer_data_type()),
         }),
         RawExpr::ColumnRef {
             span,

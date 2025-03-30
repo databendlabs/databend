@@ -220,6 +220,7 @@ impl PhysicalPlanBuilder {
                     expr: Box::new(RawExpr::Constant {
                         span: w.span,
                         scalar: scalar.clone(),
+                        data_type: None,
                     }),
                     dest_type: common_ty.clone(),
                 };

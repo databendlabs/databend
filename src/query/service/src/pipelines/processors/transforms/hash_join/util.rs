@@ -77,6 +77,7 @@ pub(crate) fn inlist_filter(
         let array = RawExpr::Constant {
             span: None,
             scalar: build_column.as_scalar().unwrap().to_owned(),
+            data_type: None,
         };
 
         let args = vec![array, raw_probe_key];
@@ -120,6 +121,7 @@ pub(crate) fn dedup_build_key_column(
         list.push(RawExpr::Constant {
             span: None,
             scalar: value.to_owned(),
+            data_type: None,
         })
     }
     let array = RawExpr::FunctionCall {
@@ -245,10 +247,12 @@ pub(crate) fn min_max_filter(
         let min = RawExpr::Constant {
             span: None,
             scalar: min,
+            data_type: None,
         };
         let max = RawExpr::Constant {
             span: None,
             scalar: max,
+            data_type: None,
         };
         // Make gte and lte function
         let gte_func = RawExpr::FunctionCall {

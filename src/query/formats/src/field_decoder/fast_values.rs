@@ -709,3 +709,134 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod test {
+
+    use std::io::Write;
+
+    use databend_common_exception::ErrorCode;
+    use databend_common_exception::Result;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::ColumnBuilder;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Scalar;
+    use databend_common_io::prelude::FormatSettings;
+    use goldenfile::Mint;
+
+    use super::FastFieldDecoderValues;
+    use super::FastValuesDecodeFallback;
+    use super::FastValuesDecoder;
+
+    struct DummyFastValuesDecodeFallback {}
+
+    #[async_trait::async_trait]
+    impl FastValuesDecodeFallback for DummyFastValuesDecodeFallback {
+        async fn parse_fallback(&self, _data: &str) -> Result<Vec<Scalar>> {
+            Err(ErrorCode::Unimplemented("fallback".to_string()))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fast_values_decoder_multi() -> Result<()> {
+        let mut mint = Mint::new("testdata");
+        let file = &mut mint.new_goldenfile("fast_values.txt").unwrap();
+
+        struct Test {
+            data: &'static str,
+            column_types: Vec<DataType>,
+        }
+
+        let cases = vec![
+            Test {
+                data: "(0, 1, 2), (3,4,5)",
+                column_types: vec![
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                ],
+            },
+            Test {
+                data: "(0, 1, 2), (3,4,5), ",
+                column_types: vec![
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                ],
+            },
+            Test {
+                data: "('', '', '')",
+                column_types: vec![
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                ],
+            },
+            Test {
+                data: "( 1, '', '2022-10-01')",
+                column_types: vec![
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::String,
+                    DataType::Date,
+                ],
+            },
+            Test {
+                data: "(1, 2, 3), (1, 1, 1), (1, 1, 1);",
+                column_types: vec![
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                ],
+            },
+            Test {
+                data: "(1, 2, 3), (1, 1, 1), (1, 1, 1);  ",
+                column_types: vec![
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                ],
+            },
+            Test {
+                data: "(1.2, -2.9, 3.55), (3.12e2, 3.45e+3, -1.9e-3);",
+                column_types: vec![
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                    DataType::Number(NumberDataType::Int16),
+                ],
+            },
+        ];
+
+        for case in cases {
+            writeln!(file, "---------- Input Data ----------")?;
+            writeln!(file, "{:?}", case.data)?;
+
+            writeln!(file, "---------- Input Column Types ----------")?;
+            writeln!(file, "{:?}", case.column_types)?;
+
+            let field_decoder =
+                FastFieldDecoderValues::create_for_insert(FormatSettings::default(), true);
+            let mut values_decoder = FastValuesDecoder::new(case.data, &field_decoder);
+            let fallback = DummyFastValuesDecodeFallback {};
+            let mut columns = case
+                .column_types
+                .into_iter()
+                .map(|dt| ColumnBuilder::with_capacity(&dt, values_decoder.estimated_rows()))
+                .collect::<Vec<_>>();
+            let result = values_decoder.parse(&mut columns, &fallback).await;
+
+            writeln!(file, "---------- Output ---------")?;
+
+            if let Err(err) = result {
+                writeln!(file, "{}", err)?;
+            } else {
+                let columns = columns.into_iter().map(|cb| cb.build()).collect::<Vec<_>>();
+                let got = DataBlock::new_from_columns(columns);
+                writeln!(file, "{}", got)?;
+            }
+            writeln!(file, "\n")?;
+        }
+
+        Ok(())
+    }
+}

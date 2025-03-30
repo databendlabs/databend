@@ -134,7 +134,7 @@ impl AccessChecker for ManagementModeAccess {
             if !ok {
                 return Err(ErrorCode::ManagementModePermissionDenied(format!(
                     "Management Mode Error: Access denied for operation:{:?} in management-mode",
-                    plan.format_indent(false)?
+                    plan.format_indent(Default::default())?
                 )));
             }
         };

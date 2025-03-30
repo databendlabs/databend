@@ -138,6 +138,7 @@ fn test_decode_v32_parquet_file_format_params() -> anyhow::Result<()> {
 
     let want = || {
         mt::principal::FileFormatParams::Parquet(ParquetFileFormatParams {
+            compression: StageFileCompression::Zstd,
             missing_field_as: Default::default(),
             null_if: vec![],
         })

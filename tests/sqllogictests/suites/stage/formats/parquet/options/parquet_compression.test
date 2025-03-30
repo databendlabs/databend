@@ -1,0 +1,24 @@
+statement ok
+create or replace file format parquet_snappy type=parquet compression=snappy
+
+statement ok
+remove @data/unload/parquet_compression/snappy.parquet
+
+statement ok
+copy into @data/unload/parquet_compression/snappy.parquet from (select * from numbers(3)) file_format=(format_name='parquet_snappy')
+
+statement ok
+copy into @data/unload/parquet_compression/zstd.parquet from (select * from numbers(3))
+
+query
+select * from @data/unload/parquet_compression/snappy.parquet
+----
+0
+1
+2
+
+statement ok
+remove @data/unload/parquet_compression/snappy.parquet
+
+statement ok
+remove @data/unload/parquet_compression/zstd.parquet

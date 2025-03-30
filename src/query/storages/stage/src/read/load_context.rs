@@ -26,7 +26,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::RemoteExpr;
+use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
@@ -42,7 +42,7 @@ pub struct LoadContext {
     pub internal_columns: Vec<InternalColumn>,
 
     pub schema: TableSchemaRef,
-    pub default_values: Option<Vec<RemoteExpr>>,
+    pub default_exprs: Option<Vec<RemoteDefaultExpr>>,
     pub pos_projection: Option<Vec<usize>>,
     pub is_copy: bool,
     pub stage_root: String,
@@ -78,7 +78,7 @@ impl LoadContext {
             .cloned()
             .collect::<Vec<_>>();
         let schema = TableSchemaRefExt::create(fields);
-        let default_values = stage_table_info.default_values.clone();
+        let default_exprs = stage_table_info.default_exprs.clone();
         let is_copy = ctx.get_query_kind() == QueryKind::CopyIntoTable;
         Ok(Self {
             table_context: ctx,
@@ -86,7 +86,7 @@ impl LoadContext {
             func_ctx,
             block_compact_thresholds,
             schema,
-            default_values,
+            default_exprs,
             pos_projection,
             is_copy,
             stage_root: stage_table_info.stage_root.clone(),
@@ -104,7 +104,7 @@ impl LoadContext {
         column_index: usize,
         required: bool,
     ) -> std::result::Result<(), FileParseError> {
-        match &self.default_values {
+        match &self.default_exprs {
             None => {
                 if required {
                 } else {
@@ -113,7 +113,19 @@ impl LoadContext {
             }
             Some(values) => {
                 if let Some(remote_expr) = &values.get(column_index) {
-                    let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
+                    let expr = match remote_expr {
+                        RemoteDefaultExpr::RemoteExpr(remote_expr) => {
+                            remote_expr.as_expr(&BUILTIN_FUNCTIONS)
+                        }
+                        RemoteDefaultExpr::Sequence(_) => {
+                            let field = self.schema.field(column_index);
+                            return Err(FileParseError::ColumnMissingError {
+                                column_index,
+                                column_name: field.name().to_string(),
+                                column_type: field.data_type().to_string(),
+                            });
+                        }
+                    };
                     if let Expr::Constant { scalar, .. } = expr {
                         column_builder.push(scalar.as_ref());
                     } else {

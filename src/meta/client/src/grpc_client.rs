@@ -58,6 +58,7 @@ use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaHandshakeError;
@@ -986,6 +987,26 @@ impl MetaGrpcClient {
         debug!("{}: handle watch request: {:?}", self, watch_request);
 
         let mut client = self.get_established_client().await?;
+
+        if watch_request.initial_flush {
+            let server_version = client.server_protocol_version();
+            let least_server_version = 1002677;
+
+            if server_version < least_server_version {
+                let err = format!(
+                    "WatchRequest::initial_flush requires databend-meta is at least {}, but: {}",
+                    least_server_version, server_version
+                );
+
+                error!("{}", err);
+
+                return Err(InvalidArgument::new(
+                    AnyError::error("databend-meta version too low"),
+                    err,
+                )
+                .into());
+            }
+        }
         let res = client.watch(watch_request).await?;
         Ok(res.into_inner())
     }

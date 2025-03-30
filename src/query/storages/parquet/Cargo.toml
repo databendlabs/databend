@@ -6,10 +6,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }

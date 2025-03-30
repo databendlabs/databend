@@ -6,13 +6,8 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 chrono = { workspace = true }
-chrono-tz = { workspace = true, features = ["serde"] }
 databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app = { workspace = true }

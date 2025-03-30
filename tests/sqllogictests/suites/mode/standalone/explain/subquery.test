@@ -80,8 +80,8 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 ----
 Filter
 ├── output columns: [t.number (#0)]
-├── filters: [is_true((2 (#2) OR CAST(t.number (#0) > 1 AS Boolean NULL)))]
-├── estimated rows: 1.00
+├── filters: [(is_true(2 (#2)) OR t.number (#0) > 1)]
+├── estimated rows: 0.20
 └── HashJoin
     ├── output columns: [t.number (#0), marker (#2)]
     ├── join type: RIGHT MARK
@@ -584,7 +584,7 @@ EvalScalar
     ├── probe keys: []
     ├── other filters: []
     ├── Scan
-    │   ├── table: default.t
+    │   ├── table: default.t (#0)
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
@@ -592,17 +592,17 @@ EvalScalar
         ├── scalars: [eq(count(*) (#3), 1) AS (#4)]
         └── Aggregate(Final)
             ├── group items: []
-            ├── aggregate functions: [count(*) (#3)]
+            ├── aggregate functions: [count(*) AS (#3)]
             └── Aggregate(Partial)
                 ├── group items: []
-                ├── aggregate functions: [count(*) (#3)]
+                ├── aggregate functions: [count(*) AS (#3)]
                 └── Limit
                     ├── limit: [1]
                     ├── offset: [0]
                     └── Filter
                         ├── filters: [gt(t.i (#1), 10)]
                         └── Scan
-                            ├── table: default.t
+                            ├── table: default.t (#1)
                             ├── filters: [gt(t.i (#1), 10)]
                             ├── order by: []
                             └── limit: NONE
@@ -618,7 +618,7 @@ EvalScalar
     ├── probe keys: []
     ├── other filters: []
     ├── Scan
-    │   ├── table: default.t
+    │   ├── table: default.t (#0)
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
@@ -626,7 +626,7 @@ EvalScalar
         ├── scalars: [eq(count(*) (#3), 1) AS (#4)]
         └── Aggregate(Initial)
             ├── group items: []
-            ├── aggregate functions: [count(*) (#3)]
+            ├── aggregate functions: [count(*) AS (#3)]
             └── Limit
                 ├── limit: [1]
                 ├── offset: [0]
@@ -635,7 +635,7 @@ EvalScalar
                     └── Filter
                         ├── filters: [gt(t.i (#1), 10)]
                         └── Scan
-                            ├── table: default.t
+                            ├── table: default.t (#1)
                             ├── filters: []
                             ├── order by: []
                             └── limit: NONE
@@ -646,7 +646,7 @@ explain select t.number from numbers(10) as t where t.number = (select 1);
 Filter
 ├── output columns: [t.number (#0)]
 ├── filters: [t.number (#0) = 1]
-├── estimated rows: 0.00
+├── estimated rows: 2.00
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
