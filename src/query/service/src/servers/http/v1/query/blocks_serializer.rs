@@ -99,7 +99,7 @@ impl serde::Serialize for BlocksSerializer {
                     serialize_seq.serialize_element(&RowSerializer {
                         format,
                         data_block: columns,
-                        encodeer: &encoder,
+                        encoder: &encoder,
                         buf: &mut buf,
                         row_index: i,
                     })?
@@ -113,7 +113,7 @@ impl serde::Serialize for BlocksSerializer {
 struct RowSerializer<'a> {
     format: &'a FormatSettings,
     data_block: &'a [Column],
-    encodeer: &'a FieldEncoderValues,
+    encoder: &'a FieldEncoderValues,
     buf: &'a RefCell<Vec<u8>>,
     row_index: usize,
 }
@@ -203,7 +203,7 @@ impl serde::Serialize for RowSerializer<'_> {
             let string = self.try_direct_as_string(column).unwrap_or_else(|| {
                 let mut buf = self.buf.borrow_mut();
                 buf.clear();
-                self.encodeer
+                self.encoder
                     .write_field(column, self.row_index, buf.deref_mut(), false);
                 String::from_utf8_lossy(buf.deref_mut()).into_owned()
             });
