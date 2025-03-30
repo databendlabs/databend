@@ -938,3 +938,39 @@ error:
 
 
 
+ast            : glob('Michael!', '*')
+raw expr       : glob('Michael!', '*')
+checked expr   : glob<String, String>("Michael!", "*")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : glob('a', 'a')
+raw expr       : glob('a', 'a')
+checked expr   : glob<String, String>("a", "a")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : glob('abc', 'a*')
+raw expr       : glob('abc', 'a*')
+checked expr   : glob<String, String>("abc", "a*")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : glob('abc', '*bc')
+raw expr       : glob('abc', '*bc')
+checked expr   : glob<String, String>("abc", "*bc")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
