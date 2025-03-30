@@ -123,7 +123,6 @@ use crate::binder::Binder;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
-use crate::field_default_value;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::parse_lambda_expr;
@@ -171,6 +170,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
+use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
@@ -4476,7 +4476,7 @@ impl<'a> TypeChecker<'a> {
         };
         let attr_field = dictionary.schema.field_with_name(attr_name)?;
         let attr_type: DataType = (&attr_field.data_type).into();
-        let default_value = field_default_value(self.ctx.clone(), attr_field)?;
+        let default_value = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(attr_field)?;
 
         // Get primary_key_value and check type.
         let primary_column_id = dictionary.primary_column_ids[0];

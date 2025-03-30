@@ -1,0 +1,71 @@
+>>>> create or replace stage sequence_as_default url='fs:///tmp/sequence_as_default/'
+>>>> create or replace table src1(a int)
+>>>> insert into src1 values (1), (2)
+2
+>>>> create or replace table src2(seq int, a int)
+>>>> insert into src2 values (-1, 3), (-2, 4)
+2
+---- csv
+>>>> remove @sequence_as_default
+>>>> create or replace sequence seq
+>>>> create or replace table dest(seq int default nextval(seq), a int)
+>>>> copy INTO @sequence_as_default/src1/ from src1 file_format=(type=csv);
+2	4	4
+>>>> copy INTO @sequence_as_default/src2/ from src2 file_format=(type=csv);
+2	10	10
+>>>> copy INTO dest(a) from @sequence_as_default/src1 file_format=(type=csv) return_failed_only=true;
+>>>> copy INTO dest from @sequence_as_default/src2 file_format=(type=csv) return_failed_only=true;
+>>>> select * from dest order by seq
+-2	4
+-1	3
+2	1
+3	2
+<<<<
+---- ndjson
+>>>> remove @sequence_as_default
+>>>> create or replace sequence seq
+>>>> create or replace table dest(seq int default nextval(seq), a int)
+>>>> copy INTO @sequence_as_default/src1/ from src1 file_format=(type=ndjson);
+2	16	16
+>>>> copy INTO @sequence_as_default/src2/ from src2 file_format=(type=ndjson);
+2	34	34
+>>>> copy INTO dest(a) from @sequence_as_default/src1 file_format=(type=ndjson) return_failed_only=true;
+>>>> copy INTO dest from @sequence_as_default/src2 file_format=(type=ndjson) return_failed_only=true;
+>>>> select * from dest order by seq
+-2	4
+-1	3
+2	1
+3	2
+<<<<
+---- parquet
+>>>> remove @sequence_as_default
+>>>> create or replace sequence seq
+>>>> create or replace table dest(seq int default nextval(seq), a int)
+>>>> copy INTO @sequence_as_default/src1/ from src1 file_format=(type=parquet);
+2	9	397
+>>>> copy INTO @sequence_as_default/src2/ from src2 file_format=(type=parquet);
+2	18	594
+>>>> copy INTO dest(a) from @sequence_as_default/src1 file_format=(type=parquet) return_failed_only=true;
+>>>> copy INTO dest from @sequence_as_default/src2 file_format=(type=parquet) return_failed_only=true;
+>>>> select * from dest order by seq
+-2	4
+-1	3
+2	1
+3	2
+<<<<
+---- tsv
+>>>> remove @sequence_as_default
+>>>> create or replace sequence seq
+>>>> create or replace table dest(seq int default nextval(seq), a int)
+>>>> copy INTO @sequence_as_default/src1/ from src1 file_format=(type=tsv);
+2	4	4
+>>>> copy INTO @sequence_as_default/src2/ from src2 file_format=(type=tsv);
+2	10	10
+>>>> copy INTO dest(a) from @sequence_as_default/src1 file_format=(type=tsv) return_failed_only=true;
+>>>> copy INTO dest from @sequence_as_default/src2 file_format=(type=tsv) return_failed_only=true;
+>>>> select * from dest order by seq
+-2	4
+-1	3
+2	1
+3	2
+<<<<

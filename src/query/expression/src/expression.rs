@@ -784,3 +784,9 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
         }
     }
 }
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, EnumAsInner)]
+pub enum RemoteDefaultExpr {
+    RemoteExpr(RemoteExpr),
+    Sequence(String),
+}
