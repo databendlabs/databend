@@ -123,7 +123,6 @@ use crate::binder::Binder;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
-use crate::field_default_value;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::parse_lambda_expr;
@@ -171,6 +170,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
+use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
@@ -2979,6 +2979,59 @@ impl<'a> TypeChecker<'a> {
                 let name = op.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[left, right])
             }
+            BinaryOperator::Eq | BinaryOperator::NotEq => {
+                let name = op.to_func_name();
+                let box (res, ty) =
+                    self.resolve_function(span, name.as_str(), vec![], &[left, right])?;
+                // When a variant type column is compared with a scalar string value,
+                // we try to cast the scalar string value to variant type,
+                // because casting variant column data is a time-consuming operation.
+                if let ScalarExpr::FunctionCall(ref func) = res {
+                    if func.arguments.len() != 2 {
+                        return Ok(Box::new((res, ty)));
+                    }
+                    let arg0 = &func.arguments[0];
+                    let arg1 = &func.arguments[1];
+                    let (constant_arg_index, constant_arg) = match (arg0, arg1) {
+                        (ScalarExpr::ConstantExpr(_), _)
+                            if arg1.data_type()?.remove_nullable() == DataType::Variant
+                                && !arg1.used_columns().is_empty()
+                                && arg0.data_type()? == DataType::String =>
+                        {
+                            (0, arg0)
+                        }
+                        (_, ScalarExpr::ConstantExpr(_))
+                            if arg0.data_type()?.remove_nullable() == DataType::Variant
+                                && !arg0.used_columns().is_empty()
+                                && arg1.data_type()? == DataType::String =>
+                        {
+                            (1, arg1)
+                        }
+                        _ => {
+                            return Ok(Box::new((res, ty)));
+                        }
+                    };
+
+                    let wrap_new_arg = ScalarExpr::FunctionCall(FunctionCall {
+                        span: func.span,
+                        func_name: "to_variant".to_string(),
+                        params: vec![],
+                        arguments: vec![constant_arg.clone()],
+                    });
+                    let mut new_arguments = func.arguments.clone();
+                    new_arguments[constant_arg_index] = wrap_new_arg;
+
+                    let new_func = ScalarExpr::FunctionCall(FunctionCall {
+                        span: func.span,
+                        func_name: func.func_name.clone(),
+                        params: func.params.clone(),
+                        arguments: new_arguments,
+                    });
+
+                    return Ok(Box::new((new_func, ty)));
+                }
+                Ok(Box::new((res, ty)))
+            }
             other => {
                 let name = other.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[left, right])
@@ -3270,8 +3323,7 @@ impl<'a> TypeChecker<'a> {
             outer_columns: rel_prop.outer_columns.clone(),
             contain_agg,
         };
-
-        let data_type = subquery_expr.data_type();
+        let data_type = subquery_expr.output_data_type();
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
@@ -4424,7 +4476,7 @@ impl<'a> TypeChecker<'a> {
         };
         let attr_field = dictionary.schema.field_with_name(attr_name)?;
         let attr_type: DataType = (&attr_field.data_type).into();
-        let default_value = field_default_value(self.ctx.clone(), attr_field)?;
+        let default_value = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(attr_field)?;
 
         // Get primary_key_value and check type.
         let primary_column_id = dictionary.primary_column_ids[0];
@@ -4859,7 +4911,7 @@ impl<'a> TypeChecker<'a> {
             outer_columns: rel_prop.outer_columns.clone(),
             contain_agg: None,
         };
-        let data_type = subquery_expr.data_type();
+        let data_type = subquery_expr.output_data_type();
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 

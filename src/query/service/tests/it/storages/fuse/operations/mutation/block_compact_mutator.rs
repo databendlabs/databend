@@ -173,13 +173,7 @@ async fn test_safety() -> Result<()> {
     settings.set_max_threads(2)?;
     settings.set_max_storage_io_requests(4)?;
 
-    let threshold = BlockThresholds {
-        max_rows_per_block: 5,
-        min_rows_per_block: 4,
-        max_bytes_per_block: 1024,
-        max_bytes_per_file: 100,
-        block_per_segment: 5,
-    };
+    let threshold = BlockThresholds::new(5, 1024, 100, 10);
 
     let schema = TestFixture::default_table_schema();
     let mut rand = thread_rng();

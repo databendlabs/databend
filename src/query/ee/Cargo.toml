@@ -7,16 +7,11 @@ name = "databend-enterprise-query"
 publish = { workspace = true }
 version = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
-chrono-tz = { workspace = true }
 dashmap = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
@@ -42,10 +37,8 @@ databend-common-storage = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-tracing = { workspace = true }
-databend-common-users = { workspace = true }
 databend-enterprise-aggregating-index = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
-databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-fail-safe = { workspace = true }
 databend-enterprise-hilbert-clustering = { workspace = true }

@@ -48,6 +48,7 @@ use databend_common_tracing::FileConfig as InnerFileLogConfig;
 use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
 use databend_common_tracing::OTLPEndpointConfig as InnerOTLPEndpointConfig;
 use databend_common_tracing::OTLPProtocol;
+use databend_common_tracing::PersistentLogConfig as InnerPersistentLogConfig;
 use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
 use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
@@ -60,7 +61,6 @@ use serde_with::with_prefix;
 use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
-use serfig::parsers::Toml;
 
 use super::inner;
 use super::inner::CatalogConfig as InnerCatalogConfig;
@@ -69,10 +69,10 @@ use super::inner::InnerConfig;
 use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
-use crate::background_config::BackgroundConfig;
 use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
+use crate::toml::TomlIgnored;
 use crate::DATABEND_COMMIT_VERSION;
 
 const CATALOG_HIVE: &str = "hive";
@@ -138,10 +138,6 @@ pub struct Config {
     #[clap(flatten)]
     pub spill: SpillConfig,
 
-    // background configs
-    #[clap(flatten)]
-    pub background: BackgroundConfig,
-
     /// external catalog config.
     ///
     /// - Later, catalog information SHOULD be kept in KV Service
@@ -204,7 +200,7 @@ impl Config {
 
         // Load from config file first.
         {
-            let config_file = if !arg_conf.config_file.is_empty() {
+            let final_config_file = if !arg_conf.config_file.is_empty() {
                 // TODO: remove this `allow(clippy::redundant_clone)`
                 // as soon as this issue is fixed:
                 // https://github.com/rust-lang/rust-clippy/issues/10940
@@ -216,8 +212,11 @@ impl Config {
                 "".to_string()
             };
 
-            if !config_file.is_empty() {
-                builder = builder.collect(from_file(Toml, &config_file));
+            if !final_config_file.is_empty() {
+                let toml = TomlIgnored::new(Box::new(|path| {
+                    log::warn!("unknown field in config: {}", &path);
+                }));
+                builder = builder.collect(from_file(toml, &final_config_file));
             }
         }
 
@@ -228,6 +227,37 @@ impl Config {
         if with_args {
             builder = builder.collect(from_self(arg_conf));
         }
+
+        // Check obsoleted.
+        let conf = builder.build()?;
+        conf.check_obsoleted()?;
+
+        Ok(conf)
+    }
+
+    pub fn load_with_config_file(config_file: &str) -> Result<Self> {
+        let mut builder: serfig::Builder<Self> = serfig::Builder::default();
+
+        // Load from config file first.
+        {
+            let config_file = if !config_file.is_empty() {
+                config_file.to_string()
+            } else if let Ok(path) = env::var("CONFIG_FILE") {
+                path
+            } else {
+                "".to_string()
+            };
+
+            if !config_file.is_empty() {
+                let toml = TomlIgnored::new(Box::new(|path| {
+                    log::warn!("unknown field in config: {}", &path);
+                }));
+                builder = builder.collect(from_file(toml, &config_file));
+            }
+        }
+
+        // Then, load from env.
+        builder = builder.collect(from_env());
 
         // Check obsoleted.
         let conf = builder.build()?;
@@ -1394,7 +1424,7 @@ impl serde::de::Visitor<'_> for SettingVisitor {
 
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     #[clap(long, value_name = "VALUE", default_value = "admin")]
@@ -1992,6 +2022,9 @@ pub struct LogConfig {
 
     #[clap(flatten)]
     pub tracing: TracingConfig,
+
+    #[clap(flatten)]
+    pub persistentlog: PersistentLogConfig,
 }
 
 impl Default for LogConfig {
@@ -2075,6 +2108,12 @@ impl TryInto<InnerLogConfig> for LogConfig {
 
         let tracing: InnerTracingConfig = self.tracing.try_into()?;
 
+        let mut persistentlog: InnerPersistentLogConfig = self.persistentlog.try_into()?;
+
+        if persistentlog.on && persistentlog.level.is_empty() && file.on && !file.level.is_empty() {
+            persistentlog.level = file.level.clone();
+        }
+
         Ok(InnerLogConfig {
             file,
             stderr: self.stderr.try_into()?,
@@ -2083,6 +2122,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
             profile,
             structlog,
             tracing,
+            persistentlog,
         })
     }
 }
@@ -2099,6 +2139,7 @@ impl From<InnerLogConfig> for LogConfig {
             profile: inner.profile.into(),
             structlog: inner.structlog.into(),
             tracing: inner.tracing.into(),
+            persistentlog: inner.persistentlog.into(),
 
             // Deprecated fields
             log_dir: None,
@@ -2491,6 +2532,84 @@ impl From<InnerTracingConfig> for TracingConfig {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct PersistentLogConfig {
+    #[clap(
+        long = "log-persistentlog-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub log_persistentlog_on: bool,
+
+    /// Specifies the interval in seconds for how often the persistent log is flushed
+    #[clap(
+        long = "log-persistentlog-interval",
+        value_name = "VALUE",
+        default_value = "2"
+    )]
+    #[serde(rename = "interval")]
+    pub log_persistentlog_interval: usize,
+
+    /// Specifies the name of the staging area that temporarily holds log data before it is finally copied into the table
+    #[clap(
+        long = "log-persistentlog-stage-name",
+        value_name = "VALUE",
+        default_value = "log_1f93b76af0bd4b1d8e018667865fbc65"
+    )]
+    #[serde(rename = "stage_name")]
+    pub log_persistentlog_stage_name: String,
+
+    /// Specifies how long the persistent log should be retained, in hours
+    #[clap(
+        long = "log-persistentlog-retention",
+        value_name = "VALUE",
+        default_value = "72"
+    )]
+    #[serde(rename = "retention")]
+    pub log_persistentlog_retention: usize,
+
+    /// Log level <DEBUG|INFO|WARN|ERROR>
+    #[clap(
+        long = "log-persistentlog-level",
+        value_name = "VALUE",
+        default_value = "WARN"
+    )]
+    #[serde(rename = "level")]
+    pub log_persistentlog_level: String,
+}
+
+impl Default for PersistentLogConfig {
+    fn default() -> Self {
+        InnerPersistentLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerPersistentLogConfig> for PersistentLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerPersistentLogConfig> {
+        Ok(InnerPersistentLogConfig {
+            on: self.log_persistentlog_on,
+            interval: self.log_persistentlog_interval,
+            stage_name: self.log_persistentlog_stage_name,
+            level: self.log_persistentlog_level,
+            retention: self.log_persistentlog_retention,
+        })
+    }
+}
+
+impl From<InnerPersistentLogConfig> for PersistentLogConfig {
+    fn from(inner: InnerPersistentLogConfig) -> Self {
+        Self {
+            log_persistentlog_on: inner.on,
+            log_persistentlog_interval: inner.interval,
+            log_persistentlog_stage_name: inner.stage_name,
+            log_persistentlog_level: inner.level,
+            log_persistentlog_retention: inner.retention,
+        }
+    }
+}
+
 with_prefix!(prefix_otlp "otlp_");
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
@@ -2537,10 +2656,9 @@ impl From<InnerOTLPEndpointConfig> for OTLPEndpointConfig {
 }
 
 /// Meta config group.
-/// deny_unknown_fields to check unknown field, like the deprecated `address`.
 /// TODO(xuanwo): All meta_xxx should be rename to xxx.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     #[clap(long = "meta-embedded-dir", value_name = "VALUE", default_value_t)]
@@ -2746,7 +2864,7 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct CacheConfig {
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
@@ -2984,7 +3102,7 @@ impl Default for DiskCacheKeyReloadPolicy {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
     #[clap(
@@ -3022,7 +3140,7 @@ impl Default for DiskCacheConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
     #[clap(long, value_name = "VALUE", default_value = "")]
@@ -3048,7 +3166,7 @@ impl Default for SpillConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct ResourcesManagementConfig {
     #[clap(long = "type", value_name = "VALUE", default_value = "self_managed")]
     #[serde(rename = "type")]
@@ -3082,7 +3200,6 @@ mod cache_config_converters {
                     .collect(),
                 cache: inner.cache.into(),
                 spill: inner.spill.into(),
-                background: inner.background.into(),
             }
         }
     }
@@ -3101,7 +3218,6 @@ mod cache_config_converters {
                 catalog,
                 cache,
                 spill,
-                background,
                 catalogs: input_catalogs,
                 ..
             } = self;
@@ -3132,7 +3248,6 @@ mod cache_config_converters {
                 catalogs,
                 cache: cache.try_into()?,
                 spill,
-                background: background.try_into()?,
             })
         }
     }
@@ -3302,5 +3417,30 @@ mod cache_config_converters {
                 inner::DiskCacheKeyReloadPolicy::Fuzzy => DiskCacheKeyReloadPolicy::Fuzzy,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::ffi::OsString;
+
+    use clap::Parser;
+    use pretty_assertions::assert_eq;
+
+    use crate::Config;
+    use crate::InnerConfig;
+
+    /// It's required to make sure setting's default value is the same with clap.
+    #[test]
+    fn test_config_default() {
+        let setting_default = InnerConfig::default();
+        let config_default: InnerConfig = Config::parse_from(Vec::<OsString>::new())
+            .try_into()
+            .expect("parse from args must succeed");
+
+        assert_eq!(
+            setting_default, config_default,
+            "default setting is different from default config, please check again"
+        )
     }
 }

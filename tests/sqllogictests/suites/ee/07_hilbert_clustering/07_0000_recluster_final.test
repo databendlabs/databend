@@ -19,10 +19,10 @@ statement ok
 USE test_hilbert
 
 statement ok
-set enable_parallel_multi_merge_sort = 0;
+create or replace table t(a int, b int) cluster by hilbert(a, b) row_per_block=2 block_per_segment=2 block_size_threshold = 18;
 
 statement ok
-create or replace table t(a int, b int) cluster by hilbert(a, b) row_per_block=2 block_per_segment=2;
+set hilbert_clustering_min_bytes = 35;
 
 statement ok
 insert into t values(1, 1), (3, 3);
@@ -41,13 +41,11 @@ select count() from fuse_snapshot('test_hilbert','t');
 ----
 4
 
-statement error 4013
+query T
 select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
-
-query TTIIII
-select * EXCLUDE(timestamp) from hilbert_clustering_information('test_hilbert','t');
 ----
-(a, b) hilbert 4 0 0 4
+(a, b) hilbert {"partial_block_count":0,"partial_segment_count":0,"stable_block_count":0,"stable_segment_count":0,"total_block_count":4,"total_segment_count":4,"unclustered_block_count":4,"unclustered_segment_count":4}
+
 
 statement ok
 alter table t recluster final;
@@ -71,10 +69,10 @@ insert into t values(9, 9);
 statement ok
 alter table t recluster final;
 
-query TTIIII
-select * EXCLUDE(timestamp) from hilbert_clustering_information('test_hilbert','t');
+query T
+select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 ----
-(a, b) hilbert 3 2 1 0
+(a, b) hilbert {"partial_block_count":1,"partial_segment_count":1,"stable_block_count":4,"stable_segment_count":2,"total_block_count":5,"total_segment_count":3,"unclustered_block_count":0,"unclustered_segment_count":0}
 
 query I
 select count() from fuse_snapshot('test_hilbert','t');
@@ -91,18 +89,77 @@ select block_count,row_count from fuse_segment('test_hilbert','t');
 statement ok
 alter table t cluster by hilbert(b, a);
 
-query TTIIII
-select * EXCLUDE(timestamp) from hilbert_clustering_information('test_hilbert','t');
+query T
+select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 ----
-(b, a) hilbert 3 0 0 3
+(b, a) hilbert {"partial_block_count":0,"partial_segment_count":0,"stable_block_count":0,"stable_segment_count":0,"total_block_count":5,"total_segment_count":3,"unclustered_block_count":5,"unclustered_segment_count":3}
 
 statement ok
 alter table t recluster final;
 
-query TTIIII
-select * EXCLUDE(timestamp) from hilbert_clustering_information('test_hilbert','t');
+query T
+select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 ----
-(b, a) hilbert 2 2 0 0
+(b, a) hilbert {"partial_block_count":0,"partial_segment_count":0,"stable_block_count":5,"stable_segment_count":2,"total_block_count":5,"total_segment_count":2,"unclustered_block_count":0,"unclustered_segment_count":0}
+
+########################################################
+#  force eval as linear clustering by specify columns  #
+########################################################
+
+query T
+select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t', 'a,b');
+----
+(a, b) linear {"average_depth":1.4,"average_overlaps":0.4,"block_depth_histogram":{"00001":3,"00002":2},"constant_block_count":0,"total_block_count":5}
+
+# column specified not exist
+statement error 1065
+select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t', 'a,not_exist');
+
+######################
+#  linear clustered  #
+######################
+statement ok
+create or replace table t_linear(a int, b int) cluster by (a, b) row_per_block=2 block_per_segment=2;
+
+# no
+query T
+select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t_linear');
+----
+(a, b) linear {"average_depth":0.0,"average_overlaps":0.0,"block_depth_histogram":{},"constant_block_count":0,"total_block_count":0}
+
+statement ok
+insert into t_linear values(1, 1), (3, 3);
+
+statement ok
+insert into t_linear values(0, 0), (5, 5);
+
+statement ok
+insert into t_linear values(2, 2), (6, 6);
+
+statement ok
+insert into t_linear values(4, 4), (7, 7);
+
+statement ok
+set enable_parallel_multi_merge_sort = 0;
+
+statement ok
+alter table t_linear recluster final;
+
+query T
+select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t_linear');
+----
+(a, b) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":4},"constant_block_count":0,"total_block_count":4}
+
+#################
+# non-clustered #
+#################
+statement ok
+create or replace table t_none(a int, b int);
+
+statement error 1118.*Unclustered table
+select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t_none');
+
+
 
 statement ok
 drop table t all;

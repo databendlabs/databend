@@ -20,8 +20,6 @@
 
 extern crate core;
 
-mod background_jobs_table;
-mod background_tasks_table;
 mod backtrace_table;
 mod build_options_table;
 mod caches_table;
@@ -69,8 +67,6 @@ mod users_table;
 mod util;
 mod virtual_columns_table;
 
-pub use background_jobs_table::BackgroundJobTable;
-pub use background_tasks_table::BackgroundTaskTable;
 pub use backtrace_table::BacktraceTable;
 pub use build_options_table::BuildOptionsTable;
 pub use caches_table::CachesTable;

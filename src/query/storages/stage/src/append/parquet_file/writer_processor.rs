@@ -21,18 +21,21 @@ use arrow_schema::Schema;
 use async_trait::async_trait;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_config::DATABEND_SEMVER;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 use parquet::arrow::ArrowWriter;
+use parquet::basic::Compression;
 use parquet::basic::Encoding;
+use parquet::basic::ZstdLevel;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 
@@ -47,6 +50,7 @@ pub struct ParquetFileWriter {
 
     table_info: StageTableInfo,
     arrow_schema: Arc<Schema>,
+    compression: Compression,
 
     input_data: Vec<DataBlock>,
 
@@ -76,6 +80,7 @@ const CREATE_BY_LEN: usize = 24; // "Databend 1.2.333-nightly".len();
 fn create_writer(
     arrow_schema: Arc<Schema>,
     targe_file_size: Option<usize>,
+    compression: Compression,
 ) -> Result<ArrowWriter<Vec<u8>>> {
     // example:  1.2.333-nightly
     // tags may contain other items like `1.2.680-p2`, we will fill it with `1.2.680-p2.....`
@@ -93,7 +98,7 @@ fn create_writer(
     }
 
     let props = WriterProperties::builder()
-        .set_compression(TableCompression::Zstd.into())
+        .set_compression(compression)
         .set_max_row_group_size(MAX_ROW_GROUP_SIZE)
         .set_encoding(Encoding::PLAIN)
         .set_dictionary_enabled(false)
@@ -123,13 +128,24 @@ impl ParquetFileWriter {
             UnloadOutput::create(table_info.copy_into_location_options.detailed_output);
 
         let arrow_schema = Arc::new(Schema::from(table_info.schema.as_ref()));
-        let writer = create_writer(arrow_schema.clone(), targe_file_size)?;
+        let compression = table_info.stage_info.file_format_params.compression();
+        let compression = match &compression {
+            StageFileCompression::Zstd => Compression::ZSTD(ZstdLevel::default()),
+            StageFileCompression::Snappy => Compression::SNAPPY,
+            _ => {
+                return Err(ErrorCode::Internal(format!(
+                    "unexpected compression {compression}"
+                )))
+            }
+        };
+        let writer = create_writer(arrow_schema.clone(), targe_file_size, compression)?;
 
         Ok(ProcessorPtr::create(Box::new(ParquetFileWriter {
             input,
             output,
             table_info,
             arrow_schema,
+            compression,
             unload_output,
             unload_output_blocks: None,
             writer,
@@ -145,7 +161,11 @@ impl ParquetFileWriter {
         })))
     }
     pub fn reinit_writer(&mut self) -> Result<()> {
-        self.writer = create_writer(self.arrow_schema.clone(), self.targe_file_size)?;
+        self.writer = create_writer(
+            self.arrow_schema.clone(),
+            self.targe_file_size,
+            self.compression,
+        )?;
         self.row_counts = 0;
         self.input_bytes = 0;
         Ok(())

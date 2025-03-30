@@ -35,12 +35,13 @@ use crate::plans::walk_expr_mut;
 use crate::plans::ConstantExpr;
 use crate::plans::VisitorMut;
 use crate::BindContext;
+use crate::DefaultExprBinder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 
-struct ExprValuesRewriter {
+pub(crate) struct ExprValuesRewriter {
     ctx: Arc<dyn TableContext>,
     scalars: Vec<ScalarExpr>,
 }
@@ -116,12 +117,13 @@ impl BindContext {
 
         // check invalid ScalarExpr
         let mut rewriter = ExprValuesRewriter::new(ctx.clone());
+        let mut default_values_binder = DefaultExprBinder::try_new(ctx.clone())?;
         for (i, expr) in exprs.iter().enumerate() {
             // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
             if let AExpr::ColumnRef { column, .. } = expr {
                 if column.column.name().eq_ignore_ascii_case("default") {
                     let field = schema.field(i);
-                    map_exprs.push(scalar_binder.get_default_value(field, schema).await?);
+                    map_exprs.push(default_values_binder.get_expr(field, schema)?);
                     continue;
                 }
             }

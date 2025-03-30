@@ -134,12 +134,12 @@ EvalScalar
         ├── probe keys: []
         ├── other filters: []
         ├── Scan
-        │   ├── table: default.t1
+        │   ├── table: default.t1 (#0)
         │   ├── filters: []
         │   ├── order by: []
         │   └── limit: NONE
         └── Scan
-            ├── table: default.t2
+            ├── table: default.t2 (#1)
             ├── filters: []
             ├── order by: []
             └── limit: NONE
@@ -156,12 +156,12 @@ EvalScalar
     ├── Filter
     │   ├── filters: [gt(t1.a (#0), 2)]
     │   └── Scan
-    │       ├── table: default.t1
+    │       ├── table: default.t1 (#0)
     │       ├── filters: []
     │       ├── order by: []
     │       └── limit: NONE
     └── Scan
-        ├── table: default.t2
+        ├── table: default.t2 (#1)
         ├── filters: []
         ├── order by: []
         └── limit: NONE

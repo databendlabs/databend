@@ -18,10 +18,6 @@
 #![feature(try_blocks)]
 
 extern crate databend_common_meta_types;
-
-mod background_api;
-mod background_api_impl;
-mod background_api_test_suite;
 mod data_mask_api;
 mod data_mask_api_impl;
 pub mod kv_app_error;
@@ -42,8 +38,6 @@ pub mod util;
 pub mod crud;
 mod sequence_api_impl;
 
-pub use background_api::BackgroundApi;
-pub use background_api_test_suite::BackgroundApiTestSuite;
 pub use data_mask_api::DatamaskApi;
 pub use schema_api::SchemaApi;
 pub use schema_api_test_suite::SchemaApiTestSuite;

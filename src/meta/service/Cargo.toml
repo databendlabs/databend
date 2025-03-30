@@ -7,10 +7,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [features]
 default = []
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
@@ -64,6 +60,7 @@ tonic-reflection = { workspace = true }
 watcher = { workspace = true }
 
 [dev-dependencies]
+databend-common-meta-semaphore = { workspace = true }
 env_logger = { workspace = true }
 maplit = { workspace = true }
 pretty_assertions = { workspace = true }

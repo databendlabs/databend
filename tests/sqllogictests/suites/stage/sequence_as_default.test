@@ -1,0 +1,25 @@
+statement ok
+create or replace sequence seq
+
+statement ok
+create or replace table tmp (seq int default nextval(seq), a int);
+
+statement ok
+INSERT INTO tmp(seq, a) values (-1, 11),(-2, 22);
+
+statement ok
+INSERT INTO tmp(a) values (21),(22);
+
+statement ok
+INSERT INTO tmp(a) select * from numbers(3);
+
+query
+select * from tmp order by seq;
+----
+-2 22
+-1 11
+2 21
+3 22
+4 0
+5 1
+6 2

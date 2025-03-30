@@ -28,7 +28,6 @@ use databend_common_functions::aggregates::AggregateCountFunction;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
@@ -57,6 +56,7 @@ use crate::IndexType;
 use crate::MetadataRef;
 
 #[allow(clippy::enum_variant_names)]
+#[derive(Debug)]
 pub enum UnnestResult {
     // Semi/Anti Join, Cross join for EXISTS
     SimpleJoin { output_index: Option<IndexType> },
@@ -201,7 +201,6 @@ impl SubqueryRewriter {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
-            | RelOperator::Recluster(_)
             | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
         }
     }
@@ -218,6 +217,7 @@ impl SubqueryRewriter {
             ScalarExpr::AsyncFunctionCall(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::BoundColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
+            ScalarExpr::TypedConstantExpr(_, _) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::WindowFunction(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::AggregateFunction(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::LambdaFunction(_) => Ok((scalar.clone(), s_expr.clone())),
@@ -265,8 +265,7 @@ impl SubqueryRewriter {
                 // Check if the subquery is a correlated subquery.
                 // If it is, we'll try to flatten it and rewrite to join.
                 // If it is not, we'll just rewrite it to join
-                let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                let prop = rel_expr.derive_relational_prop()?;
+                let prop = subquery.subquery.derive_relational_prop()?;
                 let mut flatten_info = FlattenInfo {
                     from_count_func: false,
                 };
@@ -277,6 +276,7 @@ impl SubqueryRewriter {
                         is_conjunctive_predicate,
                     )?
                 } else {
+                    // todo: optimize outer before decorrelate subquery
                     self.try_decorrelate_subquery(
                         s_expr,
                         &subquery,
@@ -307,6 +307,15 @@ impl SubqueryRewriter {
                     };
                     return Ok((scalar_expr, s_expr));
                 }
+
+                let data_type = if subquery.typ == SubqueryType::Scalar {
+                    Box::new(subquery.data_type.wrap_nullable())
+                } else if matches! {result, UnnestResult::MarkJoin {..}} {
+                    Box::new(DataType::Nullable(Box::new(DataType::Boolean)))
+                } else {
+                    subquery.data_type.clone()
+                };
+
                 let (index, name) = if let UnnestResult::MarkJoin { marker_index } = result {
                     (marker_index, marker_index.to_string())
                 } else if let UnnestResult::SingleJoin = result {
@@ -321,14 +330,6 @@ impl SubqueryRewriter {
                 } else {
                     let index = subquery.output_column.index;
                     (index, format!("subquery_{}", index))
-                };
-
-                let data_type = if subquery.typ == SubqueryType::Scalar {
-                    Box::new(subquery.data_type.wrap_nullable())
-                } else if matches! {result, UnnestResult::MarkJoin {..}} {
-                    Box::new(DataType::Nullable(Box::new(DataType::Boolean)))
-                } else {
-                    subquery.data_type.clone()
                 };
 
                 let column_ref = ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -382,6 +383,13 @@ impl SubqueryRewriter {
                             params: vec![],
                             arguments: vec![column_ref],
                         })],
+                    })
+                } else if subquery.typ == SubqueryType::Exists {
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: subquery.span,
+                        func_name: "is_true".to_string(),
+                        params: vec![],
+                        arguments: vec![column_ref],
                     })
                 } else {
                     column_ref
@@ -540,11 +548,10 @@ impl SubqueryRewriter {
                             .build(),
                         }
                         .into(),
-                        ConstantExpr {
+                        ScalarExpr::ConstantExpr(ConstantExpr {
                             span: subquery.span,
                             value: Scalar::Number(NumberScalar::UInt64(1)),
-                        }
-                        .into(),
+                        }),
                     ],
                 };
 
@@ -564,7 +571,7 @@ impl SubqueryRewriter {
                 } else {
                     let column_index = self.metadata.write().add_derived_column(
                         "_exists_scalar_subquery".to_string(),
-                        DataType::Number(NumberDataType::UInt64),
+                        DataType::Boolean,
                         None,
                     );
                     output_index = Some(column_index);

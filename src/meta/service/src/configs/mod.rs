@@ -13,6 +13,6 @@
 // limitations under the License.
 
 mod inner;
-mod outer_v0;
+pub mod outer_v0;
 
 pub use inner::Config;

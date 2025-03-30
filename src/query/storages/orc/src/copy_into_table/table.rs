@@ -54,7 +54,7 @@ impl OrcTableForCopy {
         let parts = read_partitions_simple(ctx, stage_table_info).await?;
         let projections = Arc::new(ProjectionFactory::try_create(
             stage_table_info.schema.clone(),
-            stage_table_info.default_values.clone(),
+            stage_table_info.default_exprs.clone(),
             fmt.missing_field_as.clone(),
         )?);
         let op = init_stage_operator(&stage_table_info.stage_info)?;
@@ -104,7 +104,7 @@ impl OrcTableForCopy {
         pipeline.resize(max_threads, true)?;
         let projections = Arc::new(ProjectionFactory::try_create(
             stage_table_info.schema.clone(),
-            stage_table_info.default_values.clone(),
+            stage_table_info.default_exprs.clone(),
             fmt.missing_field_as.clone(),
         )?);
         let output_data_schema = Arc::new(DataSchema::from(stage_table_info.schema()));

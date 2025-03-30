@@ -19,7 +19,6 @@ mod query;
 pub mod roles;
 mod session;
 mod stage;
-mod suggestions;
 pub mod users;
 mod verify;
 
@@ -48,8 +47,6 @@ pub use session::ClientSessionManager;
 pub(crate) use session::SessionClaim;
 pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
-pub use suggestions::list_suggestions;
-pub use suggestions::SuggestionsResponse;
 pub use users::create_user_handler;
 pub use users::list_users_handler;
 pub use verify::verify_handler;

@@ -14,6 +14,7 @@
 
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::ParquetFileFormatParams;
+use databend_common_meta_app::principal::StageFileCompression;
 use fastrace::func_name;
 
 use crate::common;
@@ -35,6 +36,7 @@ fn test_decode_v99_parquet_file_format_params() -> anyhow::Result<()> {
         168, 6, 24,
     ];
     let want = || ParquetFileFormatParams {
+        compression: StageFileCompression::Zstd,
         missing_field_as: NullAs::FieldDefault,
         null_if: vec!["".to_string(), "a".to_string()],
     };
