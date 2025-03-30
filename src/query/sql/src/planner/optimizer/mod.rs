@@ -28,7 +28,7 @@ mod memo;
 #[allow(clippy::module_inception)]
 mod optimizer;
 mod property;
-mod rule;
+pub mod rule;
 pub mod s_expr;
 mod statistics;
 mod util;
