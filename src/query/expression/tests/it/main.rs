@@ -26,6 +26,7 @@ extern crate core;
 
 mod arrow;
 mod block;
+mod block_thresholds;
 mod common;
 mod decimal;
 mod fill_field_default_value;

@@ -756,6 +756,56 @@ impl ScalarRef<'_> {
             },
         }
     }
+
+    /// Estimates the memory size of a scalar value if it were repeated `n` times,
+    /// without actually converting it into a column. This avoids unnecessary allocations
+    /// and provides a direct calculation based on the scalar type and its associated DataType.
+    ///
+    /// # Parameters:
+    /// - `scalar`: The scalar value to estimate memory size for.
+    /// - `n`: The number of times the scalar is hypothetically repeated.
+    /// - `data_type`: The data type of the scalar, used for correct size calculations.
+    ///
+    /// # Returns:
+    /// The estimated memory size (in bytes) that `n` repetitions of `scalar` would occupy.
+    pub fn estimated_scalar_repeat_size(&self, n: usize, data_type: &DataType) -> usize {
+        if let DataType::Nullable(ty) = data_type {
+            let mut memory_size = (n + 7) / 8;
+            if !self.is_null() {
+                memory_size += self.estimated_scalar_repeat_size(n, ty);
+            }
+            return memory_size;
+        }
+
+        match self {
+            ScalarRef::Null => std::mem::size_of::<usize>(),
+            ScalarRef::EmptyArray | ScalarRef::EmptyMap => std::mem::size_of::<usize>(),
+            ScalarRef::Number(_) => n * self.memory_size(),
+            ScalarRef::Decimal(_) => n * self.memory_size(),
+            ScalarRef::Boolean(_) => (n + 7) / 8,
+            ScalarRef::Binary(s) => s.len() * n + (n + 1) * 8,
+            ScalarRef::String(s) => s.len() * n + n * 12,
+            ScalarRef::Timestamp(_) => n * 8,
+            ScalarRef::Date(_) => n * 4,
+            ScalarRef::Interval(_) => n * 16,
+            ScalarRef::Array(col) => col.memory_size() * n + (n + 1) * 8,
+            ScalarRef::Map(col) => col.memory_size() * n + (n + 1) * 8,
+            ScalarRef::Bitmap(b) => b.len() * n + (n + 1) * 8,
+            ScalarRef::Tuple(fields) => {
+                let DataType::Tuple(fields_ty) = data_type else {
+                    unreachable!()
+                };
+                fields
+                    .iter()
+                    .zip(fields_ty.iter())
+                    .map(|(v, ty)| v.estimated_scalar_repeat_size(n, ty))
+                    .sum()
+            }
+            ScalarRef::Variant(s) => s.len() * n + (n + 1) * 8,
+            ScalarRef::Geometry(s) => s.len() * n + (n + 1) * 8,
+            ScalarRef::Geography(s) => s.0.len() * n + (n + 1) * 8,
+        }
+    }
 }
 
 impl PartialOrd for Scalar {
@@ -1386,10 +1436,23 @@ impl Column {
                 })
                 .take(len),
             )),
-            DataType::Nullable(ty) => NullableColumn::new_column(
-                Column::random(ty, len, options),
-                Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>()),
-            ),
+            DataType::Nullable(ty) => {
+                let column = Column::random(ty, len, options);
+                let bitmap =
+                    Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>());
+
+                // If the value is NULL, insert default value in underlying column
+                let mut builder = ColumnBuilder::with_capacity(ty, len);
+                for (valid, value) in bitmap.iter().zip(column.iter()) {
+                    if valid {
+                        builder.push(value);
+                    } else {
+                        builder.push_default();
+                    }
+                }
+                let new_column = builder.build();
+                NullableColumn::new_column(new_column, bitmap)
+            }
             DataType::Array(inner_ty) => {
                 let mut inner_len = 0;
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
@@ -1708,9 +1771,8 @@ impl ColumnBuilder {
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
             ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat(b, n)),
             ScalarRef::Tuple(fields) => {
-                let fields_ty = match data_type {
-                    DataType::Tuple(fields_ty) => fields_ty,
-                    _ => unreachable!(),
+                let DataType::Tuple(fields_ty) = data_type else {
+                    unreachable!()
                 };
                 ColumnBuilder::Tuple(
                     fields

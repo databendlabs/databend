@@ -27,6 +27,7 @@ use databend_common_pipeline_core::LockGuard;
 
 use super::insert::format_insert_source;
 use crate::plans::InsertInputSource;
+use crate::FormatOptions;
 
 #[derive(Clone)]
 pub struct Replace {
@@ -63,7 +64,7 @@ impl Replace {
     #[async_backtrace::framed]
     pub async fn explain(
         &self,
-        verbose: bool,
+        options: FormatOptions,
     ) -> databend_common_exception::Result<Vec<DataBlock>> {
         let mut result = vec![];
 
@@ -88,7 +89,7 @@ impl Replace {
             FormatTreeNode::new(format!("on columns: [{on_columns}]")),
         ];
 
-        let formatted_plan = format_insert_source("ReplacePlan", source, verbose, children)?;
+        let formatted_plan = format_insert_source("ReplacePlan", source, options, children)?;
         let line_split_result: Vec<&str> = formatted_plan.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         result.push(DataBlock::new_from_columns(vec![formatted_plan]));

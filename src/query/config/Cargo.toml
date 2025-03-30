@@ -7,9 +7,6 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[lib]
-doctest = false
-test = true
 
 [features]
 default = []
@@ -19,7 +16,7 @@ storage-hdfs = ["databend-common-storage/storage-hdfs"]
 ignored = ["strum"]
 
 [dependencies]
-chrono-tz = { workspace = true }
+anyhow = { workspace = true }
 clap = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -29,11 +26,14 @@ databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
+serde_ignored = { workspace = true }
 serde_with = { workspace = true }
 serfig = { workspace = true }
+toml = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { workspace = true }

@@ -7,10 +7,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [features]
 default = ["simd"]
 simd = ["databend-common-column/simd"]
@@ -105,7 +101,6 @@ databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-aggregating-index = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
-databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-hilbert-clustering = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
@@ -173,7 +168,7 @@ sysinfo = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true, features = ["net"] }
-toml = { workspace = true, default-features = false }
+toml = { workspace = true, features = ["parse"] }
 tonic = { workspace = true }
 typetag = { workspace = true }
 url = { workspace = true }

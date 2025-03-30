@@ -53,7 +53,6 @@ impl Config {
             catalog: self.catalog,
             cache: self.cache,
             spill: self.spill.mask_display(),
-            background: self.background,
             catalogs: self.catalogs,
         }
     }

@@ -22,8 +22,6 @@ use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
-use databend_common_storages_system::BackgroundJobTable;
-use databend_common_storages_system::BackgroundTaskTable;
 use databend_common_storages_system::BacktraceTable;
 use databend_common_storages_system::BuildOptionsTable;
 use databend_common_storages_system::CachesTable;
@@ -134,8 +132,6 @@ impl SystemDatabase {
             TableFunctionsTable::create(sys_db_meta.next_table_id()),
             CachesTable::create(sys_db_meta.next_table_id()),
             IndexesTable::create(sys_db_meta.next_table_id()),
-            BackgroundTaskTable::create(sys_db_meta.next_table_id()),
-            BackgroundJobTable::create(sys_db_meta.next_table_id()),
             BacktraceTable::create(sys_db_meta.next_table_id()),
             TempFilesTable::create(sys_db_meta.next_table_id()),
             TasksTable::create(sys_db_meta.next_table_id()),

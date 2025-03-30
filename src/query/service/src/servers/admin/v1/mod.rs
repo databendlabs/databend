@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod background_tasks;
 pub mod cluster;
 pub mod config;
 pub mod instance_status;

@@ -110,7 +110,7 @@ impl CopyIntoLocationInterpreter {
                 files_to_copy: None,
                 duplicated_files_detected: vec![],
                 is_select: false,
-                default_values: None,
+                default_exprs: None,
                 copy_into_location_options: options.clone(),
                 copy_into_table_options: Default::default(),
                 stage_root: "".to_string(),

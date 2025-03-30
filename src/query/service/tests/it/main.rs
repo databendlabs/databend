@@ -29,6 +29,7 @@ mod distributed;
 mod frame;
 mod metrics;
 mod parquet_rs;
+mod persistent_log;
 mod pipelines;
 mod servers;
 mod sessions;

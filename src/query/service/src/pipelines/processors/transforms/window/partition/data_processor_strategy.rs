@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_transforms::memory_size;
 use databend_common_pipeline_transforms::sort_merge;
 use databend_common_settings::Settings;
 
@@ -27,16 +25,24 @@ pub trait DataProcessorStrategy: Send + Sync + 'static {
 }
 
 pub struct CompactStrategy {
-    thresholds: BlockThresholds,
+    max_bytes_per_block: usize,
+    max_rows_per_block: usize,
 }
 
 impl CompactStrategy {
-    pub fn new(thresholds: BlockThresholds) -> Self {
-        Self { thresholds }
+    pub fn new(max_rows_per_block: usize, max_bytes_per_block: usize) -> Self {
+        Self {
+            max_bytes_per_block,
+            max_rows_per_block,
+        }
     }
 
     fn concat_blocks(blocks: Vec<DataBlock>) -> Result<DataBlock> {
         DataBlock::concat(&blocks)
+    }
+
+    fn check_large_enough(&self, rows: usize, bytes: usize) -> bool {
+        rows >= self.max_rows_per_block || bytes >= self.max_bytes_per_block
     }
 }
 
@@ -56,30 +62,15 @@ impl DataProcessorStrategy for CompactStrategy {
         let mut result = Vec::with_capacity(blocks_num);
         for block in data_blocks {
             accumulated_rows += block.num_rows();
-            accumulated_bytes += memory_size(&block);
-            if !self
-                .thresholds
-                .check_large_enough(accumulated_rows, accumulated_bytes)
-            {
-                pending_blocks.push(block);
+            accumulated_bytes += block.estimate_block_size();
+            pending_blocks.push(block);
+            if !self.check_large_enough(accumulated_rows, accumulated_bytes) {
                 continue;
             }
-
             if !staged_blocks.is_empty() {
                 result.push(Self::concat_blocks(std::mem::take(&mut staged_blocks))?);
             }
-
-            if pending_blocks.is_empty()
-                || self
-                    .thresholds
-                    .check_for_compact(accumulated_rows, accumulated_bytes)
-            {
-                std::mem::swap(&mut staged_blocks, &mut pending_blocks);
-            } else {
-                result.push(Self::concat_blocks(std::mem::take(&mut pending_blocks))?);
-            }
-
-            staged_blocks.push(block);
+            std::mem::swap(&mut staged_blocks, &mut pending_blocks);
             accumulated_rows = 0;
             accumulated_bytes = 0;
         }

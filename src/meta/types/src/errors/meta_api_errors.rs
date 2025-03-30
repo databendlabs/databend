@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::io;
 
 use anyerror::AnyError;
 use databend_common_exception::ErrorCode;
@@ -215,5 +216,21 @@ impl From<RaftError<ClientWriteError>> for MetaAPIError {
 impl From<MetaAPIError> for ErrorCode {
     fn from(e: MetaAPIError) -> Self {
         ErrorCode::MetaServiceError(e.to_string())
+    }
+}
+
+impl From<MetaAPIError> for io::Error {
+    fn from(e: MetaAPIError) -> Self {
+        match e {
+            MetaAPIError::NetworkError(net_err) => net_err.into(),
+            MetaAPIError::DataError(e) => io::Error::new(io::ErrorKind::Other, e.to_string()),
+            MetaAPIError::RemoteError(e) => io::Error::new(io::ErrorKind::Other, e.to_string()),
+            MetaAPIError::ForwardToLeader(e) => {
+                io::Error::new(io::ErrorKind::Interrupted, e.to_string())
+            }
+            MetaAPIError::CanNotForward(e) => {
+                io::Error::new(io::ErrorKind::Interrupted, e.to_string())
+            }
+        }
     }
 }

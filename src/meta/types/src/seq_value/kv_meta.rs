@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use map_api::expirable::Expirable;
 use serde::Deserialize;
 use serde::Serialize;
@@ -39,6 +41,15 @@ impl KVMeta {
     /// Returns expire time in millisecond since 1970.
     pub fn get_expire_at_ms(&self) -> Option<u64> {
         self.expire_at.map(|t| t * 1000)
+    }
+}
+
+impl fmt::Display for KVMeta {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.expire_at {
+            Some(expire_at) => write!(f, "(expire_at: {})", expire_at),
+            None => write!(f, "()"),
+        }
     }
 }
 

@@ -23,6 +23,7 @@ use databend_common_meta_types::MetaStartupError;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
 use databend_common_tracing::OTLPConfig;
+use databend_common_tracing::PersistentLogConfig;
 use databend_common_tracing::ProfileLogConfig;
 use databend_common_tracing::QueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
@@ -689,6 +690,7 @@ impl Into<InnerLogConfig> for LogConfig {
             profile: ProfileLogConfig::default(),
             structlog: StructLogConfig::default(),
             tracing: TracingConfig::default(),
+            persistentlog: PersistentLogConfig::default(),
         }
     }
 }

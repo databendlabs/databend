@@ -52,6 +52,8 @@ use crate::MetadataRef;
 pub enum ScalarExpr {
     BoundColumnRef(BoundColumnRef),
     ConstantExpr(ConstantExpr),
+    // A special case of constant expr that has been type checked before
+    TypedConstantExpr(ConstantExpr, DataType),
     WindowFunction(WindowFunc),
     AggregateFunction(AggregateFunction),
     LambdaFunction(LambdaFunc),
@@ -70,6 +72,9 @@ impl Clone for ScalarExpr {
         match self {
             ScalarExpr::BoundColumnRef(v) => ScalarExpr::BoundColumnRef(v.clone()),
             ScalarExpr::ConstantExpr(v) => ScalarExpr::ConstantExpr(v.clone()),
+            ScalarExpr::TypedConstantExpr(v, t) => {
+                ScalarExpr::TypedConstantExpr(v.clone(), t.clone())
+            }
             ScalarExpr::WindowFunction(v) => ScalarExpr::WindowFunction(v.clone()),
             ScalarExpr::AggregateFunction(v) => ScalarExpr::AggregateFunction(v.clone()),
             ScalarExpr::LambdaFunction(v) => ScalarExpr::LambdaFunction(v.clone()),
@@ -118,6 +123,7 @@ impl Hash for ScalarExpr {
                 v.column.table_index.hash(state);
             }
             ScalarExpr::ConstantExpr(v) => v.hash(state),
+            ScalarExpr::TypedConstantExpr(v, _) => v.hash(state),
             ScalarExpr::WindowFunction(v) => v.hash(state),
             ScalarExpr::AggregateFunction(v) => v.hash(state),
             ScalarExpr::LambdaFunction(v) => v.hash(state),
@@ -190,6 +196,7 @@ impl ScalarExpr {
         match self {
             ScalarExpr::BoundColumnRef(expr) => expr.span,
             ScalarExpr::ConstantExpr(expr) => expr.span,
+            ScalarExpr::TypedConstantExpr(expr, _) => expr.span,
             ScalarExpr::FunctionCall(expr) => expr.span.or_else(|| {
                 let (start, end) = expr
                     .arguments
@@ -840,13 +847,13 @@ pub struct SubqueryExpr {
 }
 
 impl SubqueryExpr {
-    pub fn data_type(&self) -> DataType {
+    pub fn output_data_type(&self) -> DataType {
         match &self.typ {
             SubqueryType::Scalar => (*self.data_type).clone(),
-            SubqueryType::Any
-            | SubqueryType::All
-            | SubqueryType::Exists
-            | SubqueryType::NotExists => DataType::Nullable(Box::new(DataType::Boolean)),
+            SubqueryType::Exists | SubqueryType::NotExists => DataType::Boolean,
+            SubqueryType::Any | SubqueryType::All => {
+                DataType::Nullable(Box::new(DataType::Boolean))
+            }
         }
     }
 }
@@ -1125,6 +1132,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
     match expr {
         ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
         ScalarExpr::ConstantExpr(expr) => visitor.visit_constant(expr),
+        ScalarExpr::TypedConstantExpr(expr, _) => visitor.visit_constant(expr),
         ScalarExpr::WindowFunction(expr) => visitor.visit_window_function(expr),
         ScalarExpr::AggregateFunction(expr) => visitor.visit_aggregate_function(expr),
         ScalarExpr::LambdaFunction(expr) => visitor.visit_lambda_function(expr),
@@ -1240,6 +1248,7 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
     match expr {
         ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
         ScalarExpr::ConstantExpr(expr) => visitor.visit_constant_expr(expr),
+        ScalarExpr::TypedConstantExpr(expr, _) => visitor.visit_constant_expr(expr),
         ScalarExpr::WindowFunction(expr) => visitor.visit_window_function(expr),
         ScalarExpr::AggregateFunction(expr) => visitor.visit_aggregate_function(expr),
         ScalarExpr::LambdaFunction(expr) => visitor.visit_lambda_function(expr),

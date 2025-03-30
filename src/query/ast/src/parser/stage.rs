@@ -103,7 +103,7 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
 
     let option_compression = map(
         rule! {
-            COMPRESSION ~ "=" ~ ( AUTO | NONE | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ )
+            COMPRESSION ~ "=" ~ ( AUTO | NONE | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ | SNAPPY)
         },
         |(_, _, v)| {
             (

@@ -22,6 +22,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Error as SerdeJsonError;
 use sqllogictest::TestError;
+use testcontainers::core::error::ClientError;
 use thiserror::Error;
 use walkdir::Error as WalkDirError;
 
@@ -78,5 +79,11 @@ pub enum DSqlLogicTestError {
 impl From<String> for DSqlLogicTestError {
     fn from(value: String) -> Self {
         DSqlLogicTestError::SelfError(value)
+    }
+}
+
+impl From<ClientError> for DSqlLogicTestError {
+    fn from(value: ClientError) -> Self {
+        DSqlLogicTestError::SelfError(value.to_string())
     }
 }

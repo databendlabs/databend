@@ -15,9 +15,9 @@
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::executor::physical_plans::HilbertPartition;
@@ -25,6 +25,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_storages_common_cache::TempDirManager;
 use opendal::services::Fs;
 use opendal::Operator;
@@ -73,7 +74,13 @@ impl PipelineBuilder {
 
         let window_spill_settings = MemorySettings::from_window_settings(&self.ctx)?;
         let processor_id = AtomicUsize::new(0);
-        let thresholds = table.get_block_thresholds();
+        let max_bytes_per_block = std::cmp::min(
+            4 * table.get_option(
+                FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+                DEFAULT_BLOCK_BUFFER_SIZE,
+            ),
+            400 * 1024 * 1024,
+        );
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(Box::new(
                 TransformWindowPartitionCollect::new(
@@ -86,7 +93,7 @@ impl PipelineBuilder {
                     partition.num_partitions,
                     window_spill_settings.clone(),
                     disk_spill.clone(),
-                    CompactStrategy::new(thresholds),
+                    CompactStrategy::new(partition.rows_per_block, max_bytes_per_block),
                 )?,
             )))
         })?;

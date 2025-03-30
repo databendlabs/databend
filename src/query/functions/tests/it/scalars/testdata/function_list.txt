@@ -3449,6 +3449,7 @@ Functions overloads:
 1 strcmp(String NULL, String NULL) :: Int8 NULL
 0 string_to_h3(String) :: UInt64
 1 string_to_h3(String NULL) :: UInt64 NULL
+0 strip_null_value(Variant NULL) :: Variant NULL
 0 sub_bitmap(Bitmap, UInt64, UInt64) :: Bitmap
 1 sub_bitmap(Bitmap NULL, UInt64 NULL, UInt64 NULL) :: Bitmap NULL
 0 substr(String, Int64) :: String

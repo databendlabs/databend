@@ -15,7 +15,6 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(no_sanitize)]
 
-mod background_config;
 mod builtin;
 /// Config mods provide config support.
 ///
@@ -34,6 +33,7 @@ mod global;
 mod inner;
 mod mask;
 mod obsolete;
+mod toml;
 pub use builtin::*;
 pub use config::CacheStorageTypeConfig;
 pub use config::Commands;
