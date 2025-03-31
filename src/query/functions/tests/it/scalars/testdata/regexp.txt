@@ -1205,3 +1205,30 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------+
 
 
+ast            : regexp_extract(null, '(\d+)-(\d+)-(\d+)', ['y', 'm'])
+raw expr       : regexp_extract(NULL, '(\d+)-(\d+)-(\d+)', array('y', 'm'))
+checked expr   : regexp_extract<String NULL, String NULL, Array(String) NULL>(CAST(NULL AS String NULL), CAST("(\\d+)-(\\d+)-(\\d+)" AS String NULL), CAST(array<T0=String><T0, T0>("y", "m") AS Array(String) NULL))
+optimized expr : NULL
+output type    : Map(String, String) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : regexp_extract_all(null, 'Order-(\d+)-(\d+)', 2)
+raw expr       : regexp_extract_all(NULL, 'Order-(\d+)-(\d+)', 2)
+checked expr   : regexp_extract_all<String NULL, String NULL, UInt32 NULL>(CAST(NULL AS String NULL), CAST("Order-(\\d+)-(\\d+)" AS String NULL), CAST(2_u8 AS UInt32 NULL))
+optimized expr : NULL
+output type    : Array(String) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : regexp_extract(null, '([A-Za-z]+) ([A-Za-z]+), Age: (\d+)', 3)
+raw expr       : regexp_extract(NULL, '([A-Za-z]+) ([A-Za-z]+), Age: (\d+)', 3)
+checked expr   : regexp_extract<String NULL, String NULL, UInt32 NULL>(CAST(NULL AS String NULL), CAST("([A-Za-z]+) ([A-Za-z]+), Age: (\\d+)" AS String NULL), CAST(3_u8 AS UInt32 NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+

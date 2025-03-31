@@ -762,4 +762,21 @@ fn test_regexp_extract(file: &mut impl Write) {
             ]),
         )],
     );
+
+    // null source
+    run_ast(
+        file,
+        "regexp_extract(null, '(\\d+)-(\\d+)-(\\d+)', ['y', 'm'])",
+        &[],
+    );
+    run_ast(
+        file,
+        "regexp_extract_all(null, 'Order-(\\d+)-(\\d+)', 2)",
+        &[],
+    );
+    run_ast(
+        file,
+        "regexp_extract(null, '([A-Za-z]+) ([A-Za-z]+), Age: (\\d+)', 3)",
+        &[],
+    );
 }
