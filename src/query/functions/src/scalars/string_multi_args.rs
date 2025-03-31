@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_expression::passthrough_nullable;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::string::StringDomain;
@@ -342,7 +341,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
     );
 
-    registry.register_passthrough_nullable_3_arg::<StringType, StringType, ArrayType<StringType>, MapType<StringType, NullableType<StringType>>, _, _>(
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, ArrayType<StringType>, MapType<StringType, StringType>, _, _>(
         "regexp_extract",
         |_, _, _, _| FunctionDomain::MayThrow,
         |source_arg, pat_arg, name_list_arg, ctx| {
@@ -366,7 +365,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
             let size = len.unwrap_or(1);
             let mut builder =
-                MapType::<StringType, NullableType<StringType>>::create_builder(size, ctx.generics);
+                MapType::<StringType, StringType>::create_builder(size, ctx.generics);
 
             for idx in 0..size {
                 let source = unsafe { source_arg.index_unchecked(idx) };
@@ -399,7 +398,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 for (i, name) in name_list.iter().enumerate() {
                     let value = captures
                         .as_ref()
-                        .and_then(|caps| caps.get(i + 1).as_ref().map(Match::as_str));
+                        .and_then(|caps| caps.get(i + 1).as_ref().map(Match::as_str))
+                        .unwrap_or("");
                     builder.put_item((name, value))
                 }
                 builder.commit_row();
@@ -412,15 +412,16 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
     );
 
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<NullableType<StringType>>, _, _>(
-        "regexp_extract_all",
-        |_, _, _| FunctionDomain::MayThrow,
-        |source_arg, pat_arg, ctx| {
-            regexp_extract_all(&source_arg, &pat_arg, &Value::Scalar(0), ctx)
-        }
-    );
+    registry
+        .register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<StringType>, _, _>(
+            "regexp_extract_all",
+            |_, _, _| FunctionDomain::MayThrow,
+            |source_arg, pat_arg, ctx| {
+                regexp_extract_all(&source_arg, &pat_arg, &Value::Scalar(0), ctx)
+            },
+        );
 
-    registry.register_passthrough_nullable_3_arg::<StringType, StringType, UInt32Type, ArrayType<NullableType<StringType>>, _, _>(
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, UInt32Type, ArrayType<StringType>, _, _>(
         "regexp_extract_all",
         |_, _, _, _| FunctionDomain::MayThrow,
         |source_arg, pat_arg, group_arg, ctx| {
@@ -528,7 +529,7 @@ fn regexp_extract_all(
     pat_arg: &Value<StringType>,
     group_arg: &Value<UInt32Type>,
     ctx: &mut EvalContext,
-) -> Value<ArrayType<NullableType<StringType>>> {
+) -> Value<ArrayType<StringType>> {
     let len = [&source_arg, &pat_arg]
         .iter()
         .find_map(|arg| match arg {
@@ -550,8 +551,7 @@ fn regexp_extract_all(
     };
 
     let size = len.unwrap_or(1);
-    let mut builder =
-        ArrayColumnBuilder::<NullableType<StringType>>::with_capacity(size, 0, ctx.generics);
+    let mut builder = ArrayColumnBuilder::<StringType>::with_capacity(size, 0, ctx.generics);
     for idx in 0..size {
         let source = unsafe { source_arg.index_unchecked(idx) };
         let pat = unsafe { pat_arg.index_unchecked(idx) };
@@ -574,13 +574,11 @@ fn regexp_extract_all(
         let re = cached_reg
             .as_ref()
             .unwrap_or_else(|| local_re.as_ref().unwrap());
-        let mut row = NullableColumnBuilder::<StringType>::with_capacity(0, ctx.generics);
+        let mut row = StringColumnBuilder::with_capacity(0);
+        if group > 9 {
+            ctx.set_error(builder.len(), "Group index must be between 0 and 9!");
+        }
         for caps in re.captures_iter(source) {
-            if group > 9 {
-                ctx.set_error(builder.len(), "Group index must be between 0 and 9!");
-                row.push_null();
-                continue;
-            }
             if group >= caps.len() {
                 ctx.set_error(
                     builder.len(),
@@ -590,14 +588,16 @@ fn regexp_extract_all(
                         group
                     ),
                 );
-                row.push_null();
+                row.put_str("");
+                row.commit_row();
                 continue;
             }
             if let Some(v) = caps.get(group).map(|ma| ma.as_str()) {
-                row.push(v);
+                row.put_str(v);
             } else {
-                row.push_null();
+                row.put_str("");
             }
+            row.commit_row();
         }
         builder.push(row.build());
     }

@@ -128,7 +128,7 @@ select regexp_extract_all('Order-123-456 Order-789-012', 'Order-(\d+)-(\d+)', 2)
 query T
 select regexp_extract_all('img.jpg readme', '(\w+)(?:\.(\w+))?', 2)
 ----
-['jpg',NULL]
+['jpg','']
 
 statement error
 select regexp_extract_all('A1 B2 C3', '([A-Z])(\d)', 3)
@@ -171,13 +171,13 @@ query T
 SELECT id, regexp_extract(input_string, '(\d+)-(\d+)-(\d+)', ['x', 'y', 'z']) AS no_match
 FROM regex_test_1 WHERE id = 4;
 ----
-4 {'x':NULL,'y':NULL,'z':NULL}
+4 {'x':'','y':'','z':''}
 
 query T
 SELECT id, regexp_extract(input_string, '(\d+)-(\d+)-(\d+)', ['a', 'b', 'c']) AS empty_string_result
 FROM regex_test_1 WHERE id = 5;
 ----
-5 {'a':NULL,'b':NULL,'c':NULL}
+5 {'a':'','b':'','c':''}
 
 query T
 select regexp_extract('2023-04-15', '(\d+)-(\d+)-(\d+)', ['y', 'm', 'd']);
@@ -197,12 +197,12 @@ SELECT regexp_extract('hello_world_rust', '(\w+)_([\w]+)_(\w+)', ['part1', 'part
 query T
 SELECT regexp_extract('no-match-here', '(\d+)-(\d+)-(\d+)', ['x', 'y', 'z']);
 ----
-{'x':NULL,'y':NULL,'z':NULL}
+{'x':'','y':'','z':''}
 
 query T
 SELECT regexp_extract('', '(\d+)-(\d+)-(\d+)', ['a', 'b', 'c']);
 ----
-{'a':NULL,'b':NULL,'c':NULL}
+{'a':'','b':'','c':''}
 
 query T
 select regexp_extract('2023-04-15', '(\d+)-(\d+)-(\d+)', ['y', 'm']);
