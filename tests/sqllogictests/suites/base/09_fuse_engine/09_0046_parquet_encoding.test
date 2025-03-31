@@ -3,6 +3,7 @@ create or replace database test_tbl_opt_parquet_encoding;
 
 statement ok
 use test_tbl_opt_parquet_encoding;
+
 #############################################
 # Create table with parquet encoding option #
 #############################################
