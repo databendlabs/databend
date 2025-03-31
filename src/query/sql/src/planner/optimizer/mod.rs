@@ -51,7 +51,6 @@ pub use optimizer::OptimizerContext;
 pub use optimizer::RecursiveOptimizer;
 pub use property::*;
 pub use rule::agg_index;
-pub use rule::try_push_down_filter_join;
 pub use rule::RuleFactory;
 pub use rule::RuleID;
 pub use rule::RuleSet;

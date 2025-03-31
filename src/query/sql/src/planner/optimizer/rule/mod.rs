@@ -23,7 +23,7 @@ mod utils;
 
 pub use factory::RuleFactory;
 pub use rewrite::agg_index;
-pub use rewrite::*;
+pub use rewrite::RulePushDownFilterJoin;
 pub use rule::Rule;
 pub use rule::RuleID;
 pub use rule::RulePtr;

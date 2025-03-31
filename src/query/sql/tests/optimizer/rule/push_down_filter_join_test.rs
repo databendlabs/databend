@@ -75,33 +75,23 @@ impl ExprBuilder {
     }
 
     fn constant_int32(&self, value: i32) -> ScalarExpr {
-        let expr = Self::create_constant_int32(value);
-
-        expr
+        Self::create_constant_int32(value)
     }
 
     fn null(&self) -> ScalarExpr {
-        let expr = Self::create_constant(Scalar::Null);
-
-        expr
+        Self::create_constant(Scalar::Null)
     }
 
     fn comparison(&self, left: ScalarExpr, right: ScalarExpr, op: ComparisonOp) -> ScalarExpr {
-        let expr = Self::create_comparison(left, right, op.clone());
-
-        expr
+        Self::create_comparison(left, right, op)
     }
 
     fn and(&self, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-        let expr = Self::create_and(left, right);
-
-        expr
+        Self::create_and(left, right)
     }
 
     fn or(&self, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-        let expr = Self::create_or(left, right);
-
-        expr
+        Self::create_or(left, right)
     }
 
     fn if_expr(
@@ -110,14 +100,12 @@ impl ExprBuilder {
         then_expr: ScalarExpr,
         else_expr: ScalarExpr,
     ) -> ScalarExpr {
-        let expr = ScalarExpr::FunctionCall(FunctionCall {
+        ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "if".to_string(),
             arguments: vec![condition, then_expr, else_expr],
             params: vec![],
-        });
-
-        expr
+        })
     }
 
     // Static helper methods
@@ -305,11 +293,7 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
                         format_scalar_expr(&func.arguments[2])
                     )
                 } else {
-                    let args: Vec<String> = func
-                        .arguments
-                        .iter()
-                        .map(|arg| format_scalar_expr(arg))
-                        .collect();
+                    let args: Vec<String> = func.arguments.iter().map(format_scalar_expr).collect();
                     format!("{}({})", func.func_name, args.join(", "))
                 }
             }
@@ -320,11 +304,7 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
     fn format_operator(s_expr: &SExpr) -> String {
         match s_expr.plan() {
             RelOperator::Filter(filter) => {
-                let preds: Vec<String> = filter
-                    .predicates
-                    .iter()
-                    .map(|p| format_scalar_expr(p))
-                    .collect();
+                let preds: Vec<String> = filter.predicates.iter().map(format_scalar_expr).collect();
                 format!("Filter [{}]", preds.join(", "))
             }
             RelOperator::Join(join) => {
