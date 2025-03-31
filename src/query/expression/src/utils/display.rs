@@ -666,7 +666,7 @@ struct ExprFormatter<'a, 'b> {
     with_id: bool,
 }
 
-impl<'a> std::fmt::Write for ExprFormatter<'a, '_> {
+impl std::fmt::Write for ExprFormatter<'_, '_> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         self.f.write_str(s)
     }
@@ -680,7 +680,7 @@ impl<'a> std::fmt::Write for ExprFormatter<'a, '_> {
     }
 }
 
-impl<'a, I: ColumnIndex> ExprVisitor<I> for ExprFormatter<'a, '_> {
+impl<I: ColumnIndex> ExprVisitor<I> for ExprFormatter<'_, '_> {
     type Error = std::fmt::Error;
 
     fn enter_constant(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {

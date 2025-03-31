@@ -262,20 +262,44 @@ pub fn check_function<Index: ColumnIndex>(
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
 
     let mut fail_reasons = Vec::with_capacity(candidates.len());
+    let mut checked_candidates = vec![];
+    let need_sort = candidates.len() > 1 && args.iter().any(|arg| !arg.contains_column_ref());
     for (id, func) in &candidates {
         match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
-            Ok((checked_args, return_type, generics)) => {
-                return Ok(Expr::FunctionCall {
+            Ok((args, return_type, generics)) => {
+                let score = if need_sort {
+                    args.iter()
+                        .map(|arg| {
+                            if arg.is_cast() && arg.contains_column_ref() {
+                                1
+                            } else {
+                                0
+                            }
+                        })
+                        .sum::<usize>()
+                } else {
+                    0
+                };
+                let expr = Expr::FunctionCall {
                     span,
                     id: id.clone(),
                     function: func.clone(),
                     generics,
-                    args: checked_args,
+                    args,
                     return_type,
-                });
+                };
+                if !need_sort {
+                    return Ok(expr);
+                }
+                checked_candidates.push((expr, score));
             }
             Err(err) => fail_reasons.push(err),
         }
+    }
+
+    if !checked_candidates.is_empty() {
+        checked_candidates.sort_by_key(|checked| std::cmp::Reverse(checked.1));
+        return Ok(checked_candidates.pop().unwrap().0);
     }
 
     let mut msg = if params.is_empty() {
