@@ -14,5 +14,6 @@
 
 mod global_persistent_log;
 mod session;
+mod table_schemas;
 
 pub use global_persistent_log::GlobalPersistentLog;
