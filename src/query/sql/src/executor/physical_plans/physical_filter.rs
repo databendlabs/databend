@@ -61,7 +61,6 @@ impl PhysicalPlanBuilder {
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        log::info!("filter {filter:#?}");
         // 1. Prune unused Columns.
         let used = filter.predicates.iter().fold(required.clone(), |acc, v| {
             acc.union(&v.used_columns()).cloned().collect()
@@ -90,17 +89,13 @@ impl PhysicalPlanBuilder {
                 .predicates
                 .iter()
                 .map(|scalar| {
-                    log::info!("scalar {scalar:#?}");
                     let expr = scalar
                         .type_check(input_schema.as_ref())?
                         .project_column_ref(|index| {
                             input_schema.index_of(&index.to_string()).unwrap()
                         });
-                    log::info!("expr 1 {expr:#?}");
                     let expr = cast_expr_to_non_null_boolean(expr)?;
-                    log::info!("expr 2 {expr:#?}");
                     let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                    log::info!("expr 3 {expr:#?}");
                     Ok(expr.as_remote_expr())
                 })
                 .collect::<Result<_>>()?,
