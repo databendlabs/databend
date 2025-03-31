@@ -90,7 +90,7 @@ impl FlightSqlServiceImpl {
         data_schema: &DataSchema,
     ) -> impl Stream<Item = Result<FlightData>> + '_ {
         stream! {
-            let remain_size = 10 * 1024 * 1024;
+            let remain_size = 4 * 1024 * 1024;
             let options = writer::IpcWriteOptions::default();
             let data_gen = writer::IpcDataGenerator::default();
 
