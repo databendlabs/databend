@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::fmt::Display;
+use std::fmt::Write;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -31,11 +31,21 @@ use crate::function::FunctionRegistry;
 use crate::types::DataType;
 use crate::values::Scalar;
 
-pub trait ColumnIndex: Debug + Display + Clone + Serialize + Hash + Eq + 'static {}
+pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq + 'static {
+    fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result;
+}
 
-impl ColumnIndex for usize {}
+impl ColumnIndex for usize {
+    fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result {
+        write!(f, "{self}")
+    }
+}
 
-impl ColumnIndex for String {}
+impl ColumnIndex for String {
+    fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result {
+        write!(f, "{self}")
+    }
+}
 
 /// An unchecked expression that is directly discarded from SQL or constructed by the planner.
 /// It can be type-checked and then converted to an evaluable [`Expr`].

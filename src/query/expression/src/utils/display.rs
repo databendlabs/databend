@@ -700,7 +700,7 @@ impl<'a, I: ColumnIndex> ExprVisitor<I> for ExprFormatter<'a, '_> {
         };
         self.write_str(display_name)?;
         if self.with_id {
-            write!(self, " (#{id})")?;
+            id.unique_name(self)?;
         }
         Ok(None)
     }
