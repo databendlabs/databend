@@ -18,32 +18,50 @@ statement ok
 insert into t_encoded(c, s) select number as c, to_string(number) as s from numbers(500000);
 
 statement ok
+optimize table t_encoded compact;
+
+statement ok
 insert into t(c, s) select number as c, to_string(number) as s from numbers(500000);
 
-query T
-select humanize_size(file_size) from fuse_block('test_tbl_opt_parquet_encoding', 't_encoded');
-----
-2.30 MiB
+statement ok
+optimize table t compact;
 
+# In this case, lz4 with encoding produces smaller block files
 query T
-select humanize_size(file_size) from fuse_block('test_tbl_opt_parquet_encoding', 't');
+with
+  e as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 't_encoded')  limit 1),
+  p as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 't') limit 1)
+  select e.c < p.c from e,  p
 ----
-3.91 MiB
+1
+
 
 ################################
 # Alter table parquet encoding #
 ################################
 
+
+# 1. prepare plain encoded data and keep the file size
 statement ok
 create or replace table tbl (c int, s string) compression = 'lz4';
 
 statement ok
 insert into tbl(c, s) select number as c, to_string(number) as s from numbers(500000);
 
-query T
-select humanize_size(file_size) from fuse_block('test_tbl_opt_parquet_encoding', 'tbl');
-----
-3.91 MiB
+# insertion might be executed in a distributed manner, in this case, data blocks might be fragmented
+statement ok
+optimize table tbl compact;
+
+statement ok
+create temp table tbl_size(s uint64);
+
+statement ok
+insert into tbl_size select bytes_compressed from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1;
+
+
+# 2. truncate table data and insert the same data with parquet encoding enabled
+statement ok
+truncate table tbl;
 
 statement ok
 ALTER TABLE tbl SET OPTIONS (enable_parquet_encoding = 'true');
@@ -51,12 +69,32 @@ ALTER TABLE tbl SET OPTIONS (enable_parquet_encoding = 'true');
 statement ok
 insert into tbl(c, s) select number as c, to_string(number) as s from numbers(500000);
 
-# newly created block should be smaller, since enable_parquet_encoding is 'true'
+# insertion might be executed in a distributed manner, in this case, data blocks might be fragmented, let's compact them
+statement ok
+optimize table tbl compact;
+
+
+# 3. check that file size of newly created blocks with encoding is smaller
+
 query T
-select humanize_size(file_size) from fuse_block('test_tbl_opt_parquet_encoding', 'tbl');
+with
+ e as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1),
+ p as (select s as c from tbl_size)
+ select e.c < p.c from e,p
 ----
-2.30 MiB
-3.91 MiB
+1
+
+# keep the size, will be used later
+statement ok
+create temp table e_tbl_size(s uint64);
+
+statement ok
+insert into e_tbl_size select bytes_compressed from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1;
+
+# 4. check that table option `enable_parquet_encoding` could be turned off
+
+statement ok
+truncate table tbl;
 
 statement ok
 ALTER TABLE tbl SET OPTIONS (enable_parquet_encoding = 'false');
@@ -64,13 +102,19 @@ ALTER TABLE tbl SET OPTIONS (enable_parquet_encoding = 'false');
 statement ok
 insert into tbl(c, s) select number as c, to_string(number) as s from numbers(500000);
 
-# newly created block should be larger, since enable_parquet_encoding is 'false'
+statement ok
+optimize table tbl compact;
+
+
+# 3. check that file size of newly created blocks with encoding is smaller
 query T
-select humanize_size(file_size) from fuse_block('test_tbl_opt_parquet_encoding', 'tbl');
+with
+ p as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1),
+ e as (select s as c from e_tbl_size)
+ select e.c < p.c from e,p
 ----
-3.91 MiB
-2.30 MiB
-3.91 MiB
+1
+
 
 # Test invalid option value
 
