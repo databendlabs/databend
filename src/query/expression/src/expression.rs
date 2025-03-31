@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -30,7 +31,7 @@ use crate::function::FunctionRegistry;
 use crate::types::DataType;
 use crate::values::Scalar;
 
-pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq + 'static {}
+pub trait ColumnIndex: Debug + Display + Clone + Serialize + Hash + Eq + 'static {}
 
 impl ColumnIndex for usize {}
 

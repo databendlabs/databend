@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fmt::Write;
 
 use comfy_table::Cell;
 use comfy_table::Table;
@@ -63,9 +64,11 @@ use crate::types::ValueType;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::values::Value;
+use crate::visit_expr;
 use crate::with_integer_mapped_type;
 use crate::Column;
 use crate::ColumnIndex;
+use crate::ExprVisitor;
 use crate::FunctionEval;
 use crate::TableDataType;
 
@@ -627,87 +630,179 @@ impl Display for NumberClass {
 
 impl<Index: ColumnIndex> Display for Expr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Expr::Constant { scalar, .. } => write!(f, "{:?}", scalar.as_ref()),
-            Expr::ColumnRef { display_name, .. } => write!(f, "{display_name}"),
-            Expr::Cast {
-                is_try,
-                expr,
-                dest_type,
-                ..
-            } => {
-                if *is_try {
-                    write!(f, "TRY_")?;
-                }
-                write!(f, "CAST<{}>({expr} AS {dest_type})", expr.data_type())
-            }
-            Expr::FunctionCall {
-                function,
-                args,
-                generics,
-                id,
-                ..
-            } => {
-                write!(f, "{}", function.signature.name)?;
-                if !generics.is_empty() {
-                    write!(f, "<")?;
-                    for (i, ty) in generics.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "T{i}={ty}")?;
-                    }
-                    write!(f, ">")?;
-                }
-                write!(f, "<")?;
-                for (i, ty) in function.signature.args_type.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{ty}")?;
-                }
-                write!(f, ">")?;
+        let mut visitor = ExprFormatter { f, with_id: false };
+        visit_expr(self, &mut visitor)?;
+        Ok(())
+    }
+}
 
-                let params = id.params();
-                if !params.is_empty() {
-                    write!(f, "(")?;
-                    for (i, ty) in params.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{ty}")?;
-                    }
-                    write!(f, ")")?;
-                }
+pub struct FmtExpr<'a, I: ColumnIndex> {
+    expr: &'a Expr<I>,
+    with_id: bool,
+}
 
-                write!(f, "(")?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{arg}")?;
-                }
-                write!(f, ")")
-            }
-            Expr::LambdaFunctionCall {
-                name,
-                args,
-                lambda_display,
-                ..
-            } => {
-                write!(f, "{name}")?;
-                write!(f, "(")?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{arg}")?;
-                }
-                write!(f, ", ")?;
-                write!(f, "{lambda_display}")?;
-                write!(f, ")")
-            }
+impl<I: ColumnIndex> Display for FmtExpr<'_, I> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut visitor = ExprFormatter {
+            f,
+            with_id: self.with_id,
+        };
+        visit_expr(self.expr, &mut visitor)?;
+        Ok(())
+    }
+}
+
+impl<I: ColumnIndex> Expr<I> {
+    pub fn fmt_with_options(&self, with_id: bool) -> FmtExpr<'_, I> {
+        FmtExpr {
+            expr: self,
+            with_id,
         }
+    }
+}
+
+struct ExprFormatter<'a, 'b> {
+    f: &'a mut std::fmt::Formatter<'b>,
+    with_id: bool,
+}
+
+impl<'a> std::fmt::Write for ExprFormatter<'a, '_> {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.f.write_str(s)
+    }
+
+    fn write_char(&mut self, c: char) -> std::fmt::Result {
+        self.f.write_char(c)
+    }
+
+    fn write_fmt(&mut self, args: std::fmt::Arguments<'_>) -> std::fmt::Result {
+        self.f.write_fmt(args)
+    }
+}
+
+impl<'a, I: ColumnIndex> ExprVisitor<I> for ExprFormatter<'a, '_> {
+    type Error = std::fmt::Error;
+
+    fn enter_constant(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        let Expr::Constant { scalar, .. } = expr else {
+            unreachable!()
+        };
+        write!(self, "{:?}", scalar.as_ref())?;
+        Ok(None)
+    }
+
+    fn enter_column_ref(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        let Expr::ColumnRef {
+            display_name, id, ..
+        } = expr
+        else {
+            unreachable!()
+        };
+        self.write_str(display_name)?;
+        if self.with_id {
+            write!(self, " (#{id})")?;
+        }
+        Ok(None)
+    }
+
+    fn enter_cast(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        let Expr::Cast {
+            is_try,
+            expr,
+            dest_type,
+            ..
+        } = expr
+        else {
+            unreachable!()
+        };
+        if *is_try {
+            self.write_str("TRY_")?;
+        }
+        write!(self, "CAST<{}>(", expr.data_type())?;
+        visit_expr(expr, self)?;
+        write!(self, " AS {dest_type})")?;
+        Ok(None)
+    }
+
+    fn enter_function_call(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        let Expr::FunctionCall {
+            function,
+            args,
+            generics,
+            id,
+            ..
+        } = expr
+        else {
+            unreachable!()
+        };
+        self.write_str(&function.signature.name)?;
+        if !generics.is_empty() {
+            self.write_char('<')?;
+            for (i, ty) in generics.iter().enumerate() {
+                if i > 0 {
+                    self.write_str(", ")?;
+                }
+                write!(self, "T{i}={ty}")?;
+            }
+            self.write_char('>')?;
+        }
+        self.write_char('<')?;
+        for (i, ty) in function.signature.args_type.iter().enumerate() {
+            if i > 0 {
+                self.write_str(", ")?;
+            }
+            write!(self, "{ty}")?;
+        }
+        self.write_char('>')?;
+
+        let params = id.params();
+        if !params.is_empty() {
+            self.write_char('(')?;
+            for (i, ty) in params.iter().enumerate() {
+                if i > 0 {
+                    self.write_str(", ")?;
+                }
+                write!(self, "{ty}")?;
+            }
+            self.write_char(')')?;
+        }
+
+        self.write_char('(')?;
+        for (i, arg) in args.iter().enumerate() {
+            if i > 0 {
+                self.write_str(", ")?;
+            }
+            visit_expr(arg, self)?;
+        }
+        self.write_char(')')?;
+        Ok(None)
+    }
+
+    fn enter_lambda_function_call(
+        &mut self,
+        expr: &Expr<I>,
+    ) -> Result<Option<Expr<I>>, Self::Error> {
+        let Expr::LambdaFunctionCall {
+            name,
+            args,
+            lambda_display,
+            ..
+        } = expr
+        else {
+            unreachable!()
+        };
+        self.write_str(name)?;
+        self.write_char('(')?;
+        for (i, arg) in args.iter().enumerate() {
+            if i > 0 {
+                self.write_str(", ")?;
+            }
+            visit_expr(arg, self)?;
+        }
+        self.write_str(", ")?;
+        self.write_str(lambda_display)?;
+        self.write_char(')')?;
+        Ok(None)
     }
 }
 
