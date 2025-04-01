@@ -92,16 +92,22 @@ impl RangeJoinState {
     }
 
     pub(crate) fn sink_right(&self, block: DataBlock) -> Result<()> {
-        // Sink block to right table
-        let mut right_table = self.right_table.write();
-        right_table.push(block);
+        if !block.is_empty() {
+            // Sink block to right table
+            let mut right_table = self.right_table.write();
+            right_table.push(block);
+        }
+
         Ok(())
     }
 
     pub(crate) fn sink_left(&self, block: DataBlock) -> Result<()> {
-        // Sink block to left table
-        let mut left_table = self.left_table.write();
-        left_table.push(block);
+        if !block.is_empty() {
+            // Sink block to left table
+            let mut left_table = self.left_table.write();
+            left_table.push(block);
+        }
+
         Ok(())
     }
 
@@ -178,6 +184,7 @@ impl RangeJoinState {
         let left_table = self.left_table.read();
         // Right table is bigger than left table
         let mut right_table = self.right_table.write();
+
         if !left_table.is_empty()
             && !right_table.is_empty()
             && left_table.len() * right_table.len() < max_threads
@@ -274,6 +281,7 @@ impl RangeJoinState {
             right_offset = 0;
             left_offset += left_block.num_rows();
         }
+
         Ok(())
     }
 }

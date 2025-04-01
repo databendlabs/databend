@@ -120,7 +120,7 @@ impl TransformPartitionDispatch {
     fn ready_partition(&mut self) -> Option<isize> {
         let storage_min_partition = self.partitions.min_partition()?;
 
-        if storage_min_partition >= self.working_partition {
+        if storage_min_partition > self.working_partition {
             return None;
         }
 
@@ -220,7 +220,7 @@ impl Processor for TransformPartitionDispatch {
         let mut has_data = false;
         let input_is_finished = self.input.is_finished();
         for (idx, output) in self.outputs.iter().enumerate() {
-            if self.outputs_data[idx].is_empty() {
+            if self.outputs_data[idx].is_empty() && self.partitions.is_empty() {
                 if input_is_finished {
                     output.finish();
                 }
@@ -238,6 +238,8 @@ impl Processor for TransformPartitionDispatch {
         }
 
         if self.input.is_finished() && !has_data {
+            debug_assert!(self.partitions.is_empty());
+
             for output in &self.outputs {
                 output.finish();
             }
@@ -258,7 +260,7 @@ impl Processor for TransformPartitionDispatch {
     }
 }
 
-struct ResortingPartition {
+pub struct ResortingPartition {
     global_max_partition: AtomicUsize,
 }
 
@@ -398,6 +400,10 @@ impl UnalignedPartitions {
             params,
             data: HashMap::new(),
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
 
     fn insert_data(&mut self, idx: usize, meta: AggregateMeta, block: DataBlock) {
@@ -578,6 +584,10 @@ struct AlignedPartitions {
 }
 
 impl AlignedPartitions {
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
     pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
         let (partition, max_partition, global_max_partition) = match &meta {
             AggregateMeta::Serialized(_) => unreachable!(),
@@ -616,6 +626,13 @@ enum Partitions {
 impl Partitions {
     pub fn create_unaligned(params: Arc<AggregatorParams>) -> Partitions {
         Partitions::Unaligned(UnalignedPartitions::create(params))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Partitions::Aligned(v) => v.is_empty(),
+            Partitions::Unaligned(v) => v.is_empty(),
+        }
     }
 
     fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {

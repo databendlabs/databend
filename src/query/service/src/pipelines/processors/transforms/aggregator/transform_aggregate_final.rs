@@ -56,6 +56,8 @@ impl AccumulatingTransform for TransformFinalAggregate {
         match aggregate_meta {
             AggregateMeta::SpilledPayload(_) => unreachable!(),
             AggregateMeta::Serialized(payload) => {
+                debug_assert_eq!(payload.max_partition, payload.global_max_partition);
+
                 let payload = payload.convert_to_partitioned_payload(
                     self.params.group_data_types.clone(),
                     self.params.aggregate_functions.clone(),
@@ -67,7 +69,9 @@ impl AccumulatingTransform for TransformFinalAggregate {
                 self.hash_table
                     .combine_payloads(&payload, &mut self.flush_state)?;
             }
-            AggregateMeta::InFlightPayload(_payload) => {
+            AggregateMeta::InFlightPayload(payload) => {
+                debug_assert_eq!(payload.max_partition, payload.global_max_partition);
+
                 if !data.is_empty() {
                     let payload = self.deserialize_flight(data)?;
                     self.hash_table
@@ -75,6 +79,8 @@ impl AccumulatingTransform for TransformFinalAggregate {
                 }
             }
             AggregateMeta::AggregatePayload(payload) => {
+                debug_assert_eq!(payload.max_partition, payload.global_max_partition);
+
                 if payload.payload.len() != 0 {
                     self.hash_table
                         .combine_payload(&payload.payload, &mut self.flush_state)?;
@@ -82,20 +88,16 @@ impl AccumulatingTransform for TransformFinalAggregate {
             }
             AggregateMeta::FinalPartition => {
                 if self.hash_table.len() == 0 {
-                    return Ok(vec![self.params.empty_result_block()]);
+                    return Ok(vec![]);
                 }
 
                 let mut blocks = vec![];
                 self.flush_state.clear();
 
-                loop {
-                    if self.hash_table.merge_result(&mut self.flush_state)? {
-                        let mut cols = self.flush_state.take_aggregate_results();
-                        cols.extend_from_slice(&self.flush_state.take_group_columns());
-                        blocks.push(DataBlock::new_from_columns(cols));
-                    } else {
-                        break;
-                    }
+                while self.hash_table.merge_result(&mut self.flush_state)? {
+                    let mut cols = self.flush_state.take_aggregate_results();
+                    cols.extend_from_slice(&self.flush_state.take_group_columns());
+                    blocks.push(DataBlock::new_from_columns(cols));
                 }
 
                 let config = HashTableConfig::default().with_initial_radix_bits(0);
@@ -115,6 +117,8 @@ impl AccumulatingTransform for TransformFinalAggregate {
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
+        assert_eq!(self.hash_table.len(), 0);
+
         if output && !self.has_output {
             return Ok(vec![self.params.empty_result_block()]);
         }
