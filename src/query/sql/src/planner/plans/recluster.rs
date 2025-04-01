@@ -24,9 +24,9 @@ use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
-use crate::optimizer::SExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::Plan;
 use crate::plans::RelOperator;

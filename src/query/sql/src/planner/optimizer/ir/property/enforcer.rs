@@ -21,11 +21,11 @@ use databend_common_expression::type_check::common_super_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
-use crate::optimizer::property::Distribution;
-use crate::optimizer::PhysicalProperty;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::expr::SExpr;
+use crate::optimizer::ir::property::Distribution;
+use crate::optimizer::ir::property::PhysicalProperty;
+use crate::optimizer::ir::property::RelExpr;
+use crate::optimizer::ir::property::RequiredProperty;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
 

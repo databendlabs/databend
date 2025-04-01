@@ -21,11 +21,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
-use super::RelExpr;
-use super::RelationalProperty;
+use crate::optimizer::ir::property::RelExpr;
+use crate::optimizer::ir::property::RelationalProperty;
+use crate::optimizer::ir::StatInfo;
 use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RuleID;
-use crate::optimizer::StatInfo;
 use crate::plans::Exchange;
 use crate::plans::Operator;
 use crate::plans::RelOperator;

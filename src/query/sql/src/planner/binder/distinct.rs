@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;

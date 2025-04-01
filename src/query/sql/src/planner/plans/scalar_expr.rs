@@ -43,8 +43,8 @@ use itertools::Itertools;
 use super::WindowFuncFrame;
 use super::WindowFuncType;
 use crate::binder::ColumnBinding;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::SExpr;
 use crate::IndexType;
 use crate::MetadataRef;
 

@@ -17,7 +17,7 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_exception::Result;
 
 use crate::binder::Binder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::BindContext;
 
 impl Binder {

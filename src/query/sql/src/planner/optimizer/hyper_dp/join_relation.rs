@@ -20,8 +20,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::optimizer::dynamic_sample::dynamic_sample;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::query_executor::QueryExecutor;
 use crate::IndexType;
 use crate::MetadataRef;

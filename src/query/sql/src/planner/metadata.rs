@@ -32,7 +32,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use parking_lot::RwLock;
 
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::ScalarExpr;
 
 /// Planner use [`usize`] as it's index type.

@@ -23,7 +23,6 @@ use crate::plans::SortItem;
 use crate::IndexType;
 
 pub type ColumnSet = HashSet<IndexType>;
-pub type TableSet = HashSet<IndexType>;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RequiredProperty {

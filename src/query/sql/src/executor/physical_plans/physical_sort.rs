@@ -28,7 +28,7 @@ use crate::executor::physical_plans::WindowPartitionTopN;
 use crate::executor::physical_plans::WindowPartitionTopNFunc;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::WindowFuncType;
 use crate::ColumnSet;
 use crate::IndexType;

@@ -12,23 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::optimizer::ir::SExpr;
+mod extract;
+mod m_expr;
+mod s_expr;
 
-#[derive(Clone, Default)]
-pub struct TransformResult {
-    results: Vec<SExpr>,
-}
-
-impl TransformResult {
-    pub fn new() -> Self {
-        TransformResult { results: vec![] }
-    }
-
-    pub fn add_result(&mut self, result: SExpr) {
-        self.results.push(result);
-    }
-
-    pub fn results(&self) -> &[SExpr] {
-        &self.results
-    }
-}
+pub use extract::Matcher;
+pub use extract::PatternExtractor;
+pub use m_expr::MExpr;
+pub use s_expr::get_udf_names;
+pub use s_expr::SExpr;

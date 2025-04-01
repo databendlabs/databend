@@ -17,9 +17,9 @@ use databend_common_base::base::format_byte_size;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
-use crate::optimizer::group::Group;
-use crate::optimizer::MExpr;
-use crate::optimizer::Memo;
+use crate::optimizer::ir::Group;
+use crate::optimizer::ir::MExpr;
+use crate::optimizer::ir::Memo;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
 

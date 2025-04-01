@@ -42,7 +42,7 @@ use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;

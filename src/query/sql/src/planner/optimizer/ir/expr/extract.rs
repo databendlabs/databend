@@ -17,10 +17,10 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::optimizer::group::Group;
-use crate::optimizer::m_expr::MExpr;
-use crate::optimizer::memo::Memo;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::expr::MExpr;
+use crate::optimizer::ir::expr::SExpr;
+use crate::optimizer::ir::Group;
+use crate::optimizer::ir::Memo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;

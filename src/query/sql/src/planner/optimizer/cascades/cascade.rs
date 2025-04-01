@@ -25,14 +25,14 @@ use crate::optimizer::cascades::tasks::OptimizeGroupTask;
 use crate::optimizer::cascades::tasks::Task;
 use crate::optimizer::cost::CostModel;
 use crate::optimizer::cost::DefaultCostModel;
-use crate::optimizer::format::display_memo;
-use crate::optimizer::memo::Memo;
+use crate::optimizer::ir::display_memo;
+use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::Memo;
+use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::Distribution;
 use crate::optimizer::OptimizerContext;
-use crate::optimizer::RequiredProperty;
 use crate::optimizer::RuleSet;
-use crate::optimizer::SExpr;
 use crate::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and

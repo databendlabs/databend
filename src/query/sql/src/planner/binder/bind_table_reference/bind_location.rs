@@ -26,7 +26,7 @@ use databend_common_storage::StageFilesInfo;
 
 use crate::binder::copy_into_table::resolve_file_location;
 use crate::binder::Binder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::BindContext;
 
 impl Binder {

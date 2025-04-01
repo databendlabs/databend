@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use crate::optimizer::extract::Matcher;
+use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
-use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::Limit;
 use crate::plans::Operator;

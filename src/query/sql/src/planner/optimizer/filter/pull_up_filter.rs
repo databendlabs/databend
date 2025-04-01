@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use crate::binder::split_conjunctions;
 use crate::optimizer::filter::InferFilterOptimizer;
 use crate::optimizer::filter::NormalizeDisjunctiveFilterOptimizer;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;

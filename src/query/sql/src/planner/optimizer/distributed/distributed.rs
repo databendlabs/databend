@@ -18,11 +18,11 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use super::sort_and_limit::SortAndLimitPushDownOptimizer;
-use crate::optimizer::property::require_property;
-use crate::optimizer::Distribution;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::require_property;
+use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Exchange;
 
 /// TODO(leiysky): deprecate this, should use cascades planner instead.

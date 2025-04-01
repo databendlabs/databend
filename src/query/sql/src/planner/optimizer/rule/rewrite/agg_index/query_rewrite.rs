@@ -29,7 +29,7 @@ use itertools::Itertools;
 use log::info;
 
 use crate::binder::ColumnBindingBuilder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunctionScalarSortDesc;

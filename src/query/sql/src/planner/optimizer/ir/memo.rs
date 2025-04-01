@@ -18,13 +18,13 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::group::GroupState;
-use super::RelExpr;
-use super::RelationalProperty;
-use crate::optimizer::group::Group;
-use crate::optimizer::m_expr::MExpr;
-use crate::optimizer::s_expr::SExpr;
-use crate::optimizer::StatInfo;
+use crate::optimizer::ir::expr::MExpr;
+use crate::optimizer::ir::expr::SExpr;
+use crate::optimizer::ir::property::RelExpr;
+use crate::optimizer::ir::property::RelationalProperty;
+use crate::optimizer::ir::property::StatInfo;
+use crate::optimizer::ir::Group;
+use crate::optimizer::ir::GroupState;
 use crate::plans::RelOperator;
 use crate::IndexType;
 

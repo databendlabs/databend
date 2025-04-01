@@ -17,9 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::group::Group;
-use crate::optimizer::extract::PatternExtractor;
-use crate::optimizer::memo::Memo;
+use crate::optimizer::ir::expr::PatternExtractor;
+use crate::optimizer::ir::group::Group;
+use crate::optimizer::ir::Memo;
 use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RulePtr;
 use crate::optimizer::rule::TransformResult;

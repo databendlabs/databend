@@ -15,8 +15,8 @@
 use databend_common_exception::Result;
 use itertools::Itertools;
 
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::ColumnSet;

@@ -18,13 +18,13 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::optimizer::MExpr;
-use crate::optimizer::Memo;
-use crate::optimizer::PhysicalProperty;
-use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
+use crate::optimizer::ir::expr::MExpr;
+use crate::optimizer::ir::expr::SExpr;
+use crate::optimizer::ir::memo::Memo;
+use crate::optimizer::ir::property::PhysicalProperty;
+use crate::optimizer::ir::property::RelationalProperty;
+use crate::optimizer::ir::property::RequiredProperty;
+use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::IndexType;
 

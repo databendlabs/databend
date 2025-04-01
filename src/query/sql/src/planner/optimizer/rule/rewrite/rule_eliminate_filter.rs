@@ -19,13 +19,13 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use itertools::Itertools;
 
-use crate::optimizer::extract::Matcher;
+use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::Rule;
-use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
+use crate::optimizer::RuleID;
 use crate::plans::ConstantTableScan;
 use crate::plans::Filter;
 use crate::plans::Operator;

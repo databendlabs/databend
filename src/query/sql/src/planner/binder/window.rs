@@ -25,7 +25,7 @@ use itertools::Itertools;
 use super::select::SelectList;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;

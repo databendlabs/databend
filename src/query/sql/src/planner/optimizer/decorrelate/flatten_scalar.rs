@@ -16,7 +16,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::binder::ColumnBindingBuilder;
-use crate::optimizer::ColumnSet;
+use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::SubqueryRewriter;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;

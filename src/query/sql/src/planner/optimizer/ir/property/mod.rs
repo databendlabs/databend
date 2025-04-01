@@ -37,7 +37,5 @@ pub use property::RelationalProperty;
 pub use property::RequiredProperty;
 pub use property::StatInfo;
 pub use property::Statistics;
-pub use property::TableSet;
 pub use selectivity::SelectivityEstimator;
-pub use selectivity::DEFAULT_SELECTIVITY;
 pub use selectivity::MAX_SELECTIVITY;

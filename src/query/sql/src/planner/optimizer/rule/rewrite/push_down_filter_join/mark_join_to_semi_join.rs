@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
