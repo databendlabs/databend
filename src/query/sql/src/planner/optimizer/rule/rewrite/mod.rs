@@ -62,7 +62,6 @@ pub use rule_merge_filter_into_mutation::RuleMergeFilterIntoMutation;
 pub use rule_normalize_scalar::RuleNormalizeScalarFilter;
 pub use rule_push_down_filter_aggregate::RulePushDownFilterAggregate;
 pub use rule_push_down_filter_eval_scalar::RulePushDownFilterEvalScalar;
-pub use rule_push_down_filter_join::try_push_down_filter_join;
 pub use rule_push_down_filter_join::RulePushDownFilterJoin;
 pub use rule_push_down_filter_project_set::RulePushDownFilterProjectSet;
 pub use rule_push_down_filter_scan::RulePushDownFilterScan;
