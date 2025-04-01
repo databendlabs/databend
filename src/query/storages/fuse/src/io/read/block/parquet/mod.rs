@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
@@ -94,6 +95,7 @@ impl BlockReader {
 
         let mut blocks = Vec::with_capacity(record_batches.len());
 
+        let mut offset = 0;
         for record_batch in record_batches {
             let num_rows_record_batch = record_batch.num_rows();
             let mut columns = Vec::with_capacity(self.projected_schema.fields.len());
@@ -118,7 +120,7 @@ impl BlockReader {
                 //         corresponding field, and a default value has been declared for
                 //         the corresponding field.
                 //
-                //  Yes, it is too obscure, we need to polish it SOON.
+                //  It is too confusing, we need to polish it SOON.
 
                 let value = match column_chunks.get(&field.column_id) {
                     Some(DataItem::RawData(data)) => {
@@ -140,19 +142,21 @@ impl BlockReader {
                         Value::from_arrow_rs(arrow_array, &data_type)?
                     }
                     Some(DataItem::ColumnArray(cached)) => {
-                        // TODO this is NOT correct!
                         if column_node.is_nested {
                             // a defensive check, should never happen
                             return Err(ErrorCode::StorageOther(
                                 "unexpected nested field: nested leaf field hits cached",
                             ));
                         }
-                        Value::from_arrow_rs(cached.0.clone(), &data_type)?
+                        let array = cached.0.slice(offset, record_batch.num_rows());
+                        Value::from_arrow_rs(array, &data_type)?
                     }
                     None => Value::Scalar(self.default_vals[i].clone()),
                 };
                 columns.push(BlockEntry::new(data_type, value));
             }
+
+            offset += record_batch.num_rows();
             blocks.push(DataBlock::new(columns, num_rows_record_batch));
         }
 
