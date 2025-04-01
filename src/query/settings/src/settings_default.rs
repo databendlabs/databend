@@ -1333,6 +1333,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("fuse_parquet_read_batch_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8192),
+                    desc: "The batch size while deserializing fuse table with parquet storage format",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1_000_000)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

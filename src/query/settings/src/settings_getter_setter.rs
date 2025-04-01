@@ -983,4 +983,8 @@ impl Settings {
     pub fn get_max_aggregate_restore_worker(&self) -> Result<u64> {
         self.try_get_u64("max_aggregate_restore_worker")
     }
+
+    pub fn get_fuse_parquet_read_batch_size(&self) -> Result<usize> {
+        Ok(self.try_get_u64("fuse_parquet_read_batch_size")? as usize)
+    }
 }

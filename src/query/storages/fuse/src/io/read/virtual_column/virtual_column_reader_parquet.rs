@@ -15,6 +15,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use arrow_array::RecordBatch;
+use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_exception::Result;
 use databend_common_expression::eval_function;
 use databend_common_expression::types::DataType;
@@ -22,6 +24,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
