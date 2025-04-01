@@ -60,7 +60,7 @@ use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
-use crate::planner::query_executor::QueryExecutor;
+use crate::planner::QueryExecutor;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::DescConnectionPlan;

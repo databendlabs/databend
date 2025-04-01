@@ -30,7 +30,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::SelectivityEstimator;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
-use crate::planner::query_executor::QueryExecutor;
+use crate::planner::QueryExecutor;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;

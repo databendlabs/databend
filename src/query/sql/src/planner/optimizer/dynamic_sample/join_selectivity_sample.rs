@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 use crate::optimizer::dynamic_sample::dynamic_sample;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatInfo;
-use crate::planner::query_executor::QueryExecutor;
+use crate::planner::QueryExecutor;
 use crate::plans::Join;
 use crate::MetadataRef;
 
