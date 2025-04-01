@@ -54,6 +54,7 @@ use super::HttpQueryContext;
 use super::RemoveReason;
 use crate::servers::http::error::QueryError;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
+use crate::servers::http::v1::query::blocks_serializer::BlocksSerializer;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
 use crate::servers::http::v1::query::execute_state::ExecutorSessionState;
@@ -109,7 +110,7 @@ impl HttpQueryRequest {
             stats: QueryStats::default(),
             state: ExecuteStateKind::Failed,
             affect: None,
-            data: vec![],
+            data: Arc::new(BlocksSerializer::empty()),
             schema: vec![],
             session_id: None,
             warnings: vec![],

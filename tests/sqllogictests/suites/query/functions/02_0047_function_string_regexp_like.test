@@ -351,11 +351,57 @@ select regexp_like('µå周çб', '周')
 1
 
 
-
 query B
 select regexp_like('周周周周', '.*')
 ----
 1
 
+query B
+SELECT GLOB('abc', 'a?c')
+----
+1
 
+query B
+SELECT GLOB('abc', 'a??')
+----
+1
 
+query B
+SELECT GLOB('abc', 'a*')
+----
+1
+
+query B
+SELECT GLOB('abc', 'a*c')
+----
+1
+
+query B
+SELECT GLOB('abc', 'a*d')
+----
+0
+
+query B
+SELECT GLOB('abc', '?bc')
+----
+1
+
+query B
+SELECT GLOB('abc', '*bc')
+----
+1
+
+query B
+SELECT GLOB('abc', '*bd')
+----
+0
+
+query B
+SELECT GLOB('abc', 'abc')
+----
+1
+
+query B
+SELECT GLOB('abc', 'abcd')
+----
+0

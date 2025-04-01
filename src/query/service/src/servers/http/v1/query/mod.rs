@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod blocks_serializer;
 pub mod execute_state;
 pub mod expirable;
 pub mod expiring_map;
@@ -20,7 +21,6 @@ mod http_query_context;
 mod http_query_manager;
 mod page_manager;
 pub mod sized_spsc;
-pub mod string_block;
 
 pub(crate) use execute_state::ExecuteState;
 pub use execute_state::ExecuteStateKind;
