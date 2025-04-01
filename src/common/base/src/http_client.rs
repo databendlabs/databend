@@ -52,6 +52,9 @@ impl HttpClient {
         // Disable http2 for better performance.
         builder = builder.http1_only();
 
+        // Enforce to use native tls backend.
+        builder = builder.use_native_tls();
+
         // Set dns resolver.
         builder = builder.dns_resolver(GLOBAL_HICKORY_RESOLVER.clone());
 
