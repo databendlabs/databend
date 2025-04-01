@@ -397,7 +397,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
                 let user_api = UserApiProvider::instance();
                 let ownerships = user_api
                     .role_api(&self.session_ctx.get_current_tenant())
-                    .get_ownerships()
+                    .list_ownerships()
                     .await?;
                 let mut ownership_objects = vec![];
                 for ownership in ownerships {

@@ -211,7 +211,7 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
+    async fn list_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
         let object_owner_prefix = self.ownership_object_prefix();
         let values = self
             .kv_api
@@ -229,7 +229,7 @@ impl RoleApi for RoleMgr {
                 // After rollback the old version, deserialize will return Err Ownership can not be none.
                 // But get ownerships should try to ensure success because in this version.
                 Err(err) => error!(
-                    "deserialize key {} Got err {} while (get_ownerships)",
+                    "deserialize key {} Got err {} while (list_ownerships)",
                     &key, err
                 ),
             }
@@ -270,11 +270,11 @@ impl RoleApi for RoleMgr {
 
     /// Only drop role will call transfer.
     ///
-    /// If a role is dropped, but the owner object is exists,
+    /// If a role is dropped, but the owner object is existing,
     ///
     /// The owner role need to update to account_admin.
     ///
-    /// get_ownerships use prefix_list_kv that will generate once meta call
+    /// list_ownerships use prefix_list_kv that will generate once meta call
     ///
     /// According to Txn reduce meta call. If role own n objects, will generate once meta call.
     #[async_backtrace::framed]
@@ -288,7 +288,7 @@ impl RoleApi for RoleMgr {
             trials.next().unwrap().map_err(AppError::from)?.await;
             let mut if_then = vec![];
             let mut condition = vec![];
-            let seq_owns = self.get_ownerships().await.map_err(|e| {
+            let seq_owns = self.list_ownerships().await.map_err(|e| {
                 e.add_message_back("(while in transfer_ownership_to_admin get ownerships).")
             })?;
             let mut need_transfer = false;
