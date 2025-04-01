@@ -57,6 +57,7 @@ static TXN_MAX_RETRY_TIMES: u32 = 60;
 
 static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 
+#[derive(Clone)]
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     tenant: Tenant,
