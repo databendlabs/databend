@@ -35,7 +35,6 @@ use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_sql::binder::MutationType;
-use databend_common_sql::optimizer::ir::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
@@ -1109,23 +1108,23 @@ impl AccessChecker for PrivilegeAccess {
                     let unmatched_evaluators = &plan.unmatched_evaluators;
                     for matched_evaluator in matched_evaluators {
                         if let Some(condition) = &matched_evaluator.condition {
-                            let udf = get_udf_names(condition)?;
+                            let udf = condition.get_udf_names()?;
                             self.validate_udf_access(udf).await?;
                         }
                         if let Some(updates) = &matched_evaluator.update {
                             for scalar in updates.values() {
-                                let udf = get_udf_names(scalar)?;
+                                let udf = scalar.get_udf_names()?;
                                 self.validate_udf_access(udf).await?;
                             }
                         }
                     }
                     for unmatched_evaluator in unmatched_evaluators {
                         if let Some(condition) = &unmatched_evaluator.condition {
-                            let udf = get_udf_names(condition)?;
+                            let udf = condition.get_udf_names()?;
                             self.validate_udf_access(udf).await?;
                         }
                         for value in &unmatched_evaluator.values {
-                            let udf = get_udf_names(value)?;
+                            let udf = value.get_udf_names()?;
                             self.validate_udf_access(udf).await?;
                         }
                     }

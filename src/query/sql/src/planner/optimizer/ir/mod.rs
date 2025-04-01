@@ -19,7 +19,6 @@ mod memo;
 mod property;
 mod stats;
 
-pub use expr::get_udf_names;
 pub use expr::MExpr;
 pub use expr::Matcher;
 pub use expr::PatternExtractor;

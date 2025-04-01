@@ -19,5 +19,4 @@ mod s_expr;
 pub use extract::Matcher;
 pub use extract::PatternExtractor;
 pub use m_expr::MExpr;
-pub use s_expr::get_udf_names;
 pub use s_expr::SExpr;
