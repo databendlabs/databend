@@ -19,6 +19,7 @@ use arrow_schema::Schema;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::Compression;
+use itertools::Itertools;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::ArrowSchemaConverter;
@@ -34,7 +35,8 @@ pub fn column_chunks_to_record_batch(
     num_rows: usize,
     column_chunks: &HashMap<ColumnId, DataItem>,
     compression: &Compression,
-) -> databend_common_exception::Result<RecordBatch> {
+    batch_size: usize,
+) -> databend_common_exception::Result<Vec<RecordBatch>> {
     let arrow_schema = Schema::from(original_schema);
     let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
 
@@ -66,13 +68,17 @@ pub fn column_chunks_to_record_batch(
         ProjectionMask::leaves(&parquet_schema, projection_mask),
         Some(arrow_schema.fields()),
     )?;
-    let mut record_reader = ParquetRecordBatchReader::try_new_with_row_groups(
+    let record_reader = ParquetRecordBatchReader::try_new_with_row_groups(
         &field_levels,
         row_group.as_ref(),
-        num_rows,
+        batch_size,
         None,
     )?;
-    let record = record_reader.next().unwrap()?;
-    assert!(record_reader.next().is_none());
-    Ok(record)
+
+    let records: Vec<_> = record_reader.try_collect()?;
+    assert_eq!(
+        num_rows,
+        records.iter().map(|r| r.num_rows()).sum::<usize>()
+    );
+    Ok(records)
 }

@@ -64,7 +64,7 @@ pub struct DeserializeDataTransform {
 
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: Option<DataBlock>,
+    output_data: Vec<DataBlock>,
     src_schema: DataSchema,
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
@@ -79,6 +79,8 @@ pub struct DeserializeDataTransform {
     need_reserve_block_info: bool,
     need_wait_runtime_filter: bool,
     runtime_filter_ready: Option<Arc<RuntimeFilterReady>>,
+
+    batch_size: usize,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -114,6 +116,8 @@ impl DeserializeDataTransform {
         output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
         let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
+
+        let batch_size = ctx.get_settings().get_fuse_parquet_read_batch_size()? as usize;
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             ctx,
             table_index: plan.table_index,
@@ -122,7 +126,7 @@ impl DeserializeDataTransform {
             block_reader,
             input,
             output,
-            output_data: None,
+            output_data: vec![],
             src_schema,
             output_schema,
             parts: vec![],
@@ -134,10 +138,11 @@ impl DeserializeDataTransform {
             need_reserve_block_info,
             need_wait_runtime_filter,
             runtime_filter_ready: None,
+            batch_size,
         })))
     }
 
-    fn runtime_filter(&mut self, data_block: DataBlock) -> Result<Option<Bitmap>> {
+    fn runtime_filter(&mut self, data_block: &DataBlock) -> Result<Option<Bitmap>> {
         // Check if already cached runtime filters
         if self.cached_runtime_filter.is_none() {
             let bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.table_index);
@@ -222,7 +227,7 @@ impl Processor for DeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.take() {
+        if let Some(data_block) = self.output_data.pop() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -264,48 +269,39 @@ impl Processor for DeserializeDataTransform {
             match read_res {
                 ParquetDataSource::AggIndex((actual_part, data)) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize_parquet_data(actual_part, data)?;
+                    let blocks = agg_index_reader.deserialize_parquet_data(
+                        actual_part,
+                        data,
+                        self.batch_size,
+                    )?;
 
-                    let progress_values = ProgressValues {
-                        rows: block.num_rows(),
-                        bytes: block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
-                    Profile::record_usize_profile(
-                        ProfileStatisticsName::ScanBytes,
-                        block.memory_size(),
-                    );
+                    self.update_scan_metrics(blocks.as_slice());
 
-                    self.output_data = Some(block);
+                    self.output_data = blocks;
                 }
+
                 ParquetDataSource::Normal((data, virtual_data)) => {
                     let start = Instant::now();
                     let columns_chunks = data.columns_chunks()?;
                     let part = FuseBlockPartInfo::from_part(&part)?;
 
-                    let mut data_block = self.block_reader.deserialize_parquet_chunks(
+                    let data_blocks = self.block_reader.deserialize_parquet_to_blocks(
                         part.nums_rows,
                         &part.columns_meta,
                         columns_chunks,
                         &part.compression,
                         &part.location,
+                        self.batch_size,
                     )?;
 
-                    let origin_num_rows = data_block.num_rows();
-
-                    let mut filter = None;
-                    if self.ctx.has_bloom_runtime_filters(self.table_index) {
-                        if let Some(bitmap) = self.runtime_filter(data_block.clone())? {
-                            data_block = data_block.filter_with_bitmap(&bitmap)?;
-                            filter = Some(bitmap);
-                        }
-                    }
-
-                    // Add optional virtual columns
-                    if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                        data_block = virtual_reader
-                            .deserialize_virtual_columns(data_block.clone(), virtual_data)?;
-                    }
+                    let mut virtual_columns_paster =
+                        if let Some(virtual_column_reader) = self.virtual_reader.as_ref() {
+                            let record_batches = virtual_column_reader
+                                .try_create_paster(virtual_data, self.batch_size)?;
+                            Some(record_batches)
+                        } else {
+                            None
+                        };
 
                     // Perf.
                     {
@@ -314,42 +310,53 @@ impl Processor for DeserializeDataTransform {
                         );
                     }
 
-                    let progress_values = ProgressValues {
-                        rows: data_block.num_rows(),
-                        bytes: data_block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
-                    Profile::record_usize_profile(
-                        ProfileStatisticsName::ScanBytes,
-                        data_block.memory_size(),
-                    );
+                    self.update_scan_metrics(data_blocks.as_slice());
 
-                    let mut data_block =
-                        data_block.resort(&self.src_schema, &self.output_schema)?;
+                    let mut output_blocks = Vec::with_capacity(data_blocks.len());
+                    for mut data_block in data_blocks {
+                        let origin_num_rows = data_block.num_rows();
 
-                    // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-                    // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
-                    let offsets = if self.block_reader.query_internal_columns() {
-                        filter.as_ref().map(|bitmap| {
-                            (0..origin_num_rows)
-                                .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
-                                .collect()
-                        })
-                    } else {
-                        None
-                    };
+                        let mut filter = None;
+                        if self.ctx.has_bloom_runtime_filters(self.table_index) {
+                            if let Some(bitmap) = self.runtime_filter(&data_block)? {
+                                data_block = data_block.filter_with_bitmap(&bitmap)?;
+                                filter = Some(bitmap);
+                            }
+                        }
 
-                    data_block = add_data_block_meta(
-                        data_block,
-                        part,
-                        offsets,
-                        self.base_block_ids.clone(),
-                        self.block_reader.update_stream_columns(),
-                        self.block_reader.query_internal_columns(),
-                        self.need_reserve_block_info,
-                    )?;
+                        // Add optional virtual columns
+                        if let Some(virtual_columns_paster) = &mut virtual_columns_paster {
+                            data_block = virtual_columns_paster.paste_virtual_column(data_block)?;
+                        }
 
-                    self.output_data = Some(data_block);
+                        let mut data_block =
+                            data_block.resort(&self.src_schema, &self.output_schema)?;
+
+                        // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
+                        // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
+                        let offsets = if self.block_reader.query_internal_columns() {
+                            filter.as_ref().map(|bitmap| {
+                                (0..origin_num_rows)
+                                    .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
+                                    .collect()
+                            })
+                        } else {
+                            None
+                        };
+
+                        data_block = add_data_block_meta(
+                            data_block,
+                            part,
+                            offsets,
+                            self.base_block_ids.clone(),
+                            self.block_reader.update_stream_columns(),
+                            self.block_reader.query_internal_columns(),
+                            self.need_reserve_block_info,
+                        )?;
+                        output_blocks.push(data_block);
+                    }
+
+                    self.output_data = output_blocks;
                 }
             }
         }
@@ -368,5 +375,20 @@ impl Processor for DeserializeDataTransform {
             .await
             .map_err(|_| ErrorCode::TokioError("watcher's sender is dropped"))?;
         Ok(())
+    }
+}
+
+impl DeserializeDataTransform {
+    fn update_scan_metrics(&self, blocks: &[DataBlock]) {
+        let (num_rows, memory_size) = blocks.iter().fold((0, 0), |(rows, size), block| {
+            (block.num_rows() + rows, block.memory_size() + size)
+        });
+
+        let progress_values = ProgressValues {
+            rows: num_rows,
+            bytes: memory_size,
+        };
+        self.scan_progress.incr(&progress_values);
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, memory_size);
     }
 }
