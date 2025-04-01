@@ -1063,13 +1063,13 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Interval { span, expr, unit } => {
                 let ex = Expr::Cast {
-                    span: span.clone(),
+                    span: *span,
                     expr: Box::new(expr.as_ref().clone()),
                     target_type: TypeName::String,
                     pg_style: false,
                 };
                 let ex = Expr::FunctionCall {
-                    span: span.clone(),
+                    span: *span,
                     func: ASTFunctionCall {
                         name: Identifier::from_name(None, "concat".to_string()),
                         args: vec![ex, Expr::Literal {
@@ -1084,7 +1084,7 @@ impl<'a> TypeChecker<'a> {
                     },
                 };
                 let ex = Expr::FunctionCall {
-                    span: span.clone(),
+                    span: *span,
                     func: ASTFunctionCall {
                         name: Identifier::from_name(None, "to_interval".to_string()),
                         args: vec![ex],
