@@ -12,19 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod builder;
-mod enforcer;
-#[allow(clippy::module_inception)]
-mod property;
+mod column_stat;
+mod histogram;
+mod selectivity;
 
-pub use builder::RelExpr;
-pub use enforcer::require_property;
-pub use enforcer::DistributionEnforcer;
-pub use enforcer::Enforcer;
-pub use property::ColumnSet;
-pub use property::Distribution;
-pub use property::PhysicalProperty;
-pub use property::RelationalProperty;
-pub use property::RequiredProperty;
-pub use property::StatInfo;
-pub use property::Statistics;
+pub use column_stat::ColumnStat;
+pub use column_stat::ColumnStatSet;
+pub use column_stat::NewStatistic;
+pub use histogram::histogram_from_ndv;
+pub use histogram::UniformSampleSet;
+pub use selectivity::SelectivityEstimator;
+pub use selectivity::MAX_SELECTIVITY;

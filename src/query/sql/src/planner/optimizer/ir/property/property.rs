@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use super::column_stat::ColumnStatSet;
+use crate::optimizer::ir::ColumnStatSet;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SortItem;

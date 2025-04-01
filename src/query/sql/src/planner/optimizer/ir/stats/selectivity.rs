@@ -31,9 +31,9 @@ use databend_common_storage::Datum;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storage::F64;
 
-use crate::optimizer::ir::property::histogram_from_ndv;
-use crate::optimizer::ir::property::ColumnStat;
-use crate::optimizer::ir::property::Statistics;
+use crate::optimizer::ir::histogram_from_ndv;
+use crate::optimizer::ir::ColumnStat;
+use crate::optimizer::ir::Statistics;
 use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;

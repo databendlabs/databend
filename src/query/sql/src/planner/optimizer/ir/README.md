@@ -16,12 +16,17 @@ ir/
 ├── group.rs                   # Group representation for equivalent expressions
 ├── property/                  # Property system
 │   ├── builder.rs             # Property builder utilities
-│   ├── column_stat.rs         # Column statistics
 │   ├── enforcer.rs            # Property enforcers
-│   ├── histogram.rs           # Histogram for statistics
 │   ├── property.rs            # Core property definitions
+│   └── mod.rs                 # Module exports
+│
+├── stats/                     # Statistics system
+│   ├── column_stat.rs         # Column statistics
+│   ├── histogram.rs           # Histogram for statistics
 │   ├── selectivity.rs         # Selectivity estimation
 │   └── mod.rs                 # Module exports
+│
+├── format.rs                  # Formatting utilities for IR components
 └── mod.rs                     # Main module exports
 ```
 
@@ -60,11 +65,16 @@ The `Group` represents a set of logically equivalent relational expressions:
 The property system manages plan properties and requirements:
 
 - **property.rs**: Defines core property types like `RelationalProperty`, `PhysicalProperty`, and `RequiredProperty`
-- **column_stat.rs**: Implements column-level statistics for cost estimation
 - **enforcer.rs**: Provides property enforcers to satisfy physical requirements
-- **histogram.rs**: Implements histogram-based statistics for data distribution
-- **selectivity.rs**: Contains utilities for estimating predicate selectivity
 - **builder.rs**: Provides utilities for building and deriving properties
+
+### Statistics System (`stats/`)
+
+The statistics system provides components for statistical analysis and cost estimation:
+
+- **column_stat.rs**: Implements column-level statistics for data distribution analysis
+- **histogram.rs**: Provides histogram-based statistics for more detailed data distribution
+- **selectivity.rs**: Contains utilities for estimating predicate selectivity
 
 ## Usage
 
