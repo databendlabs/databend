@@ -49,8 +49,8 @@ use databend_common_storage::DataOperator;
 use tokio::sync::Semaphore;
 
 use super::AggregatePayload;
-use super::TransformAggregateSpillReader;
 use super::TransformFinalAggregate;
+use super::TransformSpillReader;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
@@ -201,7 +201,10 @@ impl Processor for TransformPartitionDispatch {
 
         if self.input.is_finished() {
             self.working_partition = self.max_partition as isize;
-            self.fetch_ready_partition()?;
+            // fetch all partition
+            while !self.partitions.is_empty() {
+                self.fetch_ready_partition()?;
+            }
         }
 
         if self.input.has_data() {
@@ -217,37 +220,33 @@ impl Processor for TransformPartitionDispatch {
 
         self.input.set_need_data();
 
-        let mut has_data = false;
-        let input_is_finished = self.input.is_finished();
+        let mut all_output_finished = true;
         for (idx, output) in self.outputs.iter().enumerate() {
+            if output.is_finished() {
+                continue;
+            }
+
             if self.outputs_data[idx].is_empty() && self.partitions.is_empty() {
-                if input_is_finished {
+                if self.input.is_finished() {
                     output.finish();
                 }
 
                 continue;
             }
 
+            all_output_finished = false;
+
             if output.can_push() {
                 if let Some(block) = self.outputs_data[idx].pop_front() {
                     output.push_data(Ok(block));
                 }
             }
-
-            has_data |= !self.outputs_data[idx].is_empty();
         }
 
-        if self.input.is_finished() && !has_data {
-            debug_assert!(self.partitions.is_empty());
-
-            for output in &self.outputs {
-                output.finish();
-            }
-
-            return Ok(Event::Finished);
+        match all_output_finished {
+            true => Ok(Event::Finished),
+            false => Ok(Event::NeedData),
         }
-
-        Ok(Event::NeedData)
     }
 
     fn process(&mut self) -> Result<()> {
@@ -362,13 +361,7 @@ pub fn build_partition_bucket(
     let operator = DataOperator::instance().spill_operator();
     pipeline.add_transform(|input, output| {
         let operator = operator.clone();
-        TransformAggregateSpillReader::create(
-            input,
-            output,
-            operator,
-            semaphore.clone(),
-            params.clone(),
-        )
+        TransformSpillReader::create(input, output, operator, semaphore.clone(), params.clone())
     })?;
 
     pipeline.add_transform(|input, output| {
@@ -419,7 +412,6 @@ impl UnalignedPartitions {
 
     pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
         match &meta {
-            AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::SpilledPayload(payload) => {
                 let max_partition = payload.max_partition;
@@ -532,7 +524,6 @@ impl UnalignedPartitions {
         for (_, repartition_data) in repartition_data {
             for (meta, block) in repartition_data {
                 match meta {
-                    AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::FinalPartition => unreachable!(),
                     AggregateMeta::SpilledPayload(_) => unreachable!(),
                     AggregateMeta::InFlightPayload(payload) => {
@@ -590,7 +581,6 @@ impl AlignedPartitions {
 
     pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
         let (partition, max_partition, global_max_partition) = match &meta {
-            AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::SpilledPayload(v) => {
                 (v.partition, v.max_partition, v.global_max_partition)

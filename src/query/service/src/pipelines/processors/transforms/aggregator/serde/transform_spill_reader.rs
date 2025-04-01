@@ -119,9 +119,7 @@ impl Processor for TransformSpillReader {
                 AggregateMeta::SpilledPayload(payload) => {
                     debug_assert!(read_data.len() == 1);
                     let data = read_data.pop_front().unwrap();
-                    self.output_data = Some(DataBlock::empty_with_meta(Box::new(
-                        self.deserialize(payload, data),
-                    )));
+                    self.output_data = Some(self.deserialize(payload, data)?);
                 }
                 _ => unreachable!(),
             }
@@ -179,7 +177,7 @@ impl TransformSpillReader {
         })))
     }
 
-    fn deserialize(&self, payload: SpilledPayload, data: Vec<u8>) -> AggregateMeta {
+    fn deserialize(&self, payload: SpilledPayload, data: Vec<u8>) -> Result<DataBlock> {
         let columns = self.params.group_data_types.len() + self.params.aggregate_functions.len();
 
         let mut blocks = vec![];
@@ -201,13 +199,10 @@ impl TransformSpillReader {
 
         let block = DataBlock::concat(&blocks).unwrap();
 
-        AggregateMeta::Serialized(SerializedPayload {
-            bucket: payload.partition,
-            data_block: block,
-            max_partition: payload.max_partition,
-            global_max_partition: payload.global_max_partition,
-        })
+        block.add_meta(Some(AggregateMeta::create_in_flight_payload(
+            payload.partition,
+            payload.max_partition,
+            payload.global_max_partition,
+        )))
     }
 }
-
-pub type TransformAggregateSpillReader = TransformSpillReader;

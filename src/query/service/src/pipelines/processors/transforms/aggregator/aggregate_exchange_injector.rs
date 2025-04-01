@@ -156,7 +156,6 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
         assert!(MULTIWAY_SORT);
         assert_eq!(self.node_list_lookup.len(), n);
         match AggregateMeta::downcast_from(meta).unwrap() {
-            AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::InFlightPayload(_) => unreachable!(),
             AggregateMeta::SpilledPayload(v) => {

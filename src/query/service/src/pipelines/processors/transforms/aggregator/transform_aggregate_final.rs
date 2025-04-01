@@ -55,20 +55,6 @@ impl AccumulatingTransform for TransformFinalAggregate {
 
         match aggregate_meta {
             AggregateMeta::SpilledPayload(_) => unreachable!(),
-            AggregateMeta::Serialized(payload) => {
-                debug_assert_eq!(payload.max_partition, payload.global_max_partition);
-
-                let payload = payload.convert_to_partitioned_payload(
-                    self.params.group_data_types.clone(),
-                    self.params.aggregate_functions.clone(),
-                    self.params.num_states(),
-                    0,
-                    Arc::new(Bump::new()),
-                )?;
-
-                self.hash_table
-                    .combine_payloads(&payload, &mut self.flush_state)?;
-            }
             AggregateMeta::InFlightPayload(payload) => {
                 debug_assert_eq!(payload.max_partition, payload.global_max_partition);
 

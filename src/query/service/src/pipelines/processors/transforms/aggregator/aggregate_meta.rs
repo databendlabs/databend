@@ -145,7 +145,6 @@ pub struct FinalPayload {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum AggregateMeta {
-    Serialized(SerializedPayload),
     SpilledPayload(SpilledPayload),
     AggregatePayload(AggregatePayload),
     InFlightPayload(InFlightPayload),
@@ -179,19 +178,6 @@ impl AggregateMeta {
         }))
     }
 
-    pub fn create_serialized(
-        bucket: isize,
-        block: DataBlock,
-        max_partition: usize,
-    ) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Serialized(SerializedPayload {
-            bucket,
-            data_block: block,
-            max_partition,
-            global_max_partition: max_partition,
-        }))
-    }
-
     pub fn create_spilled_payload(payload: SpilledPayload) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::SpilledPayload(payload))
     }
@@ -202,7 +188,6 @@ impl AggregateMeta {
 
     pub fn get_global_max_partition(&self) -> usize {
         match self {
-            AggregateMeta::Serialized(v) => v.global_max_partition,
             AggregateMeta::SpilledPayload(v) => v.global_max_partition,
             AggregateMeta::AggregatePayload(v) => v.global_max_partition,
             AggregateMeta::InFlightPayload(v) => v.global_max_partition,
@@ -212,7 +197,6 @@ impl AggregateMeta {
 
     pub fn get_partition(&self) -> isize {
         match self {
-            AggregateMeta::Serialized(v) => v.bucket,
             AggregateMeta::SpilledPayload(v) => v.partition,
             AggregateMeta::AggregatePayload(v) => v.partition,
             AggregateMeta::InFlightPayload(v) => v.partition,
@@ -222,7 +206,6 @@ impl AggregateMeta {
 
     pub fn get_sorting_partition(&self) -> isize {
         match self {
-            AggregateMeta::Serialized(v) => v.bucket,
             AggregateMeta::AggregatePayload(v) => v.partition,
             AggregateMeta::InFlightPayload(v) => v.partition,
             AggregateMeta::SpilledPayload(v) => v.get_sorting_partition(),
@@ -232,7 +215,6 @@ impl AggregateMeta {
 
     pub fn get_max_partition(&self) -> usize {
         match self {
-            AggregateMeta::Serialized(v) => v.max_partition,
             AggregateMeta::SpilledPayload(v) => v.max_partition,
             AggregateMeta::AggregatePayload(v) => v.max_partition,
             AggregateMeta::InFlightPayload(v) => v.max_partition,
@@ -242,9 +224,6 @@ impl AggregateMeta {
 
     pub fn set_global_max_partition(&mut self, global_max_partition: usize) {
         match self {
-            AggregateMeta::Serialized(v) => {
-                v.global_max_partition = global_max_partition;
-            }
             AggregateMeta::SpilledPayload(v) => {
                 v.global_max_partition = global_max_partition;
             }
@@ -263,9 +242,6 @@ impl Debug for AggregateMeta {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             AggregateMeta::FinalPartition => f.debug_struct("AggregateMeta::Partitioned").finish(),
-            AggregateMeta::Serialized { .. } => {
-                f.debug_struct("AggregateMeta::Serialized").finish()
-            }
             AggregateMeta::SpilledPayload(_) => {
                 f.debug_struct("Aggregate::SpilledPayload").finish()
             }
