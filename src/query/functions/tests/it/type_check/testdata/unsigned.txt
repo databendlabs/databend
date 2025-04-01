@@ -1402,3 +1402,647 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
+ast            : u32 > 1
+raw expr       : gt(u32::UInt32, 1)
+checked expr   : gt<UInt32, UInt32>(u32, to_uint32<UInt8>(1_u8))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u32 = 1
+raw expr       : eq(u32::UInt32, 1)
+checked expr   : eq<UInt32, UInt32>(u32, 1_u32)
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1 > u32
+raw expr       : gt(1, u32::UInt32)
+checked expr   : gt<UInt32, UInt32>(to_uint32<UInt8>(1_u8), u32)
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1 = u32
+raw expr       : eq(1, u32::UInt32)
+checked expr   : eq<UInt32, UInt32>(1_u32, u32)
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u32 > 1.0
+raw expr       : gt(u32::UInt32, 1.0)
+checked expr   : gt<Decimal(10, 0), Decimal(2, 1)>(to_decimal<UInt32>(10, 0)(u32), 1.0_d128(2,1))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u32 = 1.0
+raw expr       : eq(u32::UInt32, 1.0)
+checked expr   : eq<Decimal(10, 0), Decimal(2, 1)>(to_decimal<UInt32>(10, 0)(u32), 1.0_d128(2,1))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1.0 > u32
+raw expr       : gt(1.0, u32::UInt32)
+checked expr   : gt<Decimal(2, 1), Decimal(10, 0)>(1.0_d128(2,1), to_decimal<UInt32>(10, 0)(u32))
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1.0 = u32
+raw expr       : eq(1.0, u32::UInt32)
+checked expr   : eq<Decimal(2, 1), Decimal(10, 0)>(1.0_d128(2,1), to_decimal<UInt32>(10, 0)(u32))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | u32 > '1'
+  |     ^ no function matches signature `gt(UInt32, String)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `UInt32` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `UInt32` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `UInt32` with `String`
+... and 33 more
+
+
+
+ast            : u32 = '1'
+raw expr       : eq(u32::UInt32, '1')
+checked expr   : eq<UInt64, UInt64>(to_uint64<UInt32>(u32), to_uint64<String>("1"))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | '1' > u32
+  |     ^ no function matches signature `gt(String, UInt32)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `UInt32` with `String`
+... and 33 more
+
+
+
+ast            : '1' = u32
+raw expr       : eq('1', u32::UInt32)
+checked expr   : eq<UInt64, UInt64>(to_uint64<String>("1"), to_uint64<UInt32>(u32))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u32 > 1::uint64
+raw expr       : gt(u32::UInt32, CAST(1 AS UInt64))
+checked expr   : gt<UInt64, UInt64>(to_uint64<UInt32>(u32), to_uint64<UInt8>(1_u8))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u32 = 1::uint64
+raw expr       : eq(u32::UInt32, CAST(1 AS UInt64))
+checked expr   : eq<UInt64, UInt64>(to_uint64<UInt32>(u32), to_uint64<UInt8>(1_u8))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1::uint64 > u32
+raw expr       : gt(CAST(1 AS UInt64), u32::UInt32)
+checked expr   : gt<UInt64, UInt64>(to_uint64<UInt8>(1_u8), to_uint64<UInt32>(u32))
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1::uint64 = u32
+raw expr       : eq(CAST(1 AS UInt64), u32::UInt32)
+checked expr   : eq<UInt64, UInt64>(to_uint64<UInt8>(1_u8), to_uint64<UInt32>(u32))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u64 > 1
+raw expr       : gt(u64::UInt64, 1)
+checked expr   : gt<UInt64, UInt64>(u64, to_uint64<UInt8>(1_u8))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u64 = 1
+raw expr       : eq(u64::UInt64, 1)
+checked expr   : eq<UInt64, UInt64>(u64, 1_u64)
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1 > u64
+raw expr       : gt(1, u64::UInt64)
+checked expr   : gt<UInt64, UInt64>(to_uint64<UInt8>(1_u8), u64)
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1 = u64
+raw expr       : eq(1, u64::UInt64)
+checked expr   : eq<UInt64, UInt64>(1_u64, u64)
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u64 > 1.0
+raw expr       : gt(u64::UInt64, 1.0)
+checked expr   : gt<Decimal(20, 0), Decimal(2, 1)>(to_decimal<UInt64>(20, 0)(u64), 1.0_d128(2,1))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u64 = 1.0
+raw expr       : eq(u64::UInt64, 1.0)
+checked expr   : eq<Decimal(20, 0), Decimal(2, 1)>(to_decimal<UInt64>(20, 0)(u64), 1.0_d128(2,1))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1.0 > u64
+raw expr       : gt(1.0, u64::UInt64)
+checked expr   : gt<Decimal(2, 1), Decimal(20, 0)>(1.0_d128(2,1), to_decimal<UInt64>(20, 0)(u64))
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1.0 = u64
+raw expr       : eq(1.0, u64::UInt64)
+checked expr   : eq<Decimal(2, 1), Decimal(20, 0)>(1.0_d128(2,1), to_decimal<UInt64>(20, 0)(u64))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | u64 > '1'
+  |     ^ no function matches signature `gt(UInt64, String)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `UInt64` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `UInt64` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `UInt64` with `String`
+... and 33 more
+
+
+
+ast            : u64 = '1'
+raw expr       : eq(u64::UInt64, '1')
+checked expr   : eq<UInt64, UInt64>(u64, to_uint64<String>("1"))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | '1' > u64
+  |     ^ no function matches signature `gt(String, UInt64)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `UInt64` with `String`
+... and 33 more
+
+
+
+ast            : '1' = u64
+raw expr       : eq('1', u64::UInt64)
+checked expr   : eq<UInt64, UInt64>(to_uint64<String>("1"), u64)
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u64 > 1::uint64
+raw expr       : gt(u64::UInt64, CAST(1 AS UInt64))
+checked expr   : gt<UInt64, UInt64>(u64, to_uint64<UInt8>(1_u8))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u64 = 1::uint64
+raw expr       : eq(u64::UInt64, CAST(1 AS UInt64))
+checked expr   : eq<UInt64, UInt64>(u64, to_uint64<UInt8>(1_u8))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1::uint64 > u64
+raw expr       : gt(CAST(1 AS UInt64), u64::UInt64)
+checked expr   : gt<UInt64, UInt64>(to_uint64<UInt8>(1_u8), u64)
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1::uint64 = u64
+raw expr       : eq(CAST(1 AS UInt64), u64::UInt64)
+checked expr   : eq<UInt64, UInt64>(to_uint64<UInt8>(1_u8), u64)
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+

@@ -1402,3 +1402,647 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
+ast            : n_u32 > 1
+raw expr       : gt(n_u32::UInt32 NULL, 1)
+checked expr   : gt<UInt32 NULL, UInt32 NULL>(n_u32, CAST(1_u8 AS UInt32 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u32 = 1
+raw expr       : eq(n_u32::UInt32 NULL, 1)
+checked expr   : eq<UInt32 NULL, UInt32 NULL>(n_u32, CAST(1_u32 AS UInt32 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1 > n_u32
+raw expr       : gt(1, n_u32::UInt32 NULL)
+checked expr   : gt<UInt32 NULL, UInt32 NULL>(CAST(1_u8 AS UInt32 NULL), n_u32)
+optimized expr : true
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {TRUE}       |
+| Row 0  | 0           | true         |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1 = n_u32
+raw expr       : eq(1, n_u32::UInt32 NULL)
+checked expr   : eq<UInt32 NULL, UInt32 NULL>(CAST(1_u32 AS UInt32 NULL), n_u32)
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u32 > 1.0
+raw expr       : gt(n_u32::UInt32 NULL, 1.0)
+checked expr   : gt<Decimal(10, 0) NULL, Decimal(2, 1) NULL>(CAST(n_u32 AS Decimal(10, 0) NULL), CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u32 = 1.0
+raw expr       : eq(n_u32::UInt32 NULL, 1.0)
+checked expr   : eq<Decimal(10, 0) NULL, Decimal(2, 1) NULL>(CAST(n_u32 AS Decimal(10, 0) NULL), CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1.0 > n_u32
+raw expr       : gt(1.0, n_u32::UInt32 NULL)
+checked expr   : gt<Decimal(2, 1) NULL, Decimal(10, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST(n_u32 AS Decimal(10, 0) NULL))
+optimized expr : true
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {TRUE}       |
+| Row 0  | 0           | true         |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1.0 = n_u32
+raw expr       : eq(1.0, n_u32::UInt32 NULL)
+checked expr   : eq<Decimal(2, 1) NULL, Decimal(10, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST(n_u32 AS Decimal(10, 0) NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | n_u32 > '1'
+  |       ^ no function matches signature `gt(UInt32 NULL, String)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `UInt32 NULL` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `UInt32` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `UInt32 NULL` with `String`
+... and 33 more
+
+
+
+ast            : n_u32 = '1'
+raw expr       : eq(n_u32::UInt32 NULL, '1')
+checked expr   : eq<UInt64 NULL, UInt64 NULL>(CAST(n_u32 AS UInt64 NULL), CAST("1" AS UInt64 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | '1' > n_u32
+  |     ^ no function matches signature `gt(String, UInt32 NULL)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `UInt32 NULL` with `String`
+... and 33 more
+
+
+
+ast            : '1' = n_u32
+raw expr       : eq('1', n_u32::UInt32 NULL)
+checked expr   : eq<UInt64 NULL, UInt64 NULL>(CAST("1" AS UInt64 NULL), CAST(n_u32 AS UInt64 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u32 > 1::uint64
+raw expr       : gt(n_u32::UInt32 NULL, CAST(1 AS UInt64))
+checked expr   : gt<UInt64 NULL, UInt64 NULL>(CAST(n_u32 AS UInt64 NULL), CAST(to_uint64<UInt8>(1_u8) AS UInt64 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u32 = 1::uint64
+raw expr       : eq(n_u32::UInt32 NULL, CAST(1 AS UInt64))
+checked expr   : eq<UInt64 NULL, UInt64 NULL>(CAST(n_u32 AS UInt64 NULL), CAST(to_uint64<UInt8>(1_u8) AS UInt64 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1::uint64 > n_u32
+raw expr       : gt(CAST(1 AS UInt64), n_u32::UInt32 NULL)
+checked expr   : gt<UInt64 NULL, UInt64 NULL>(CAST(to_uint64<UInt8>(1_u8) AS UInt64 NULL), CAST(n_u32 AS UInt64 NULL))
+optimized expr : true
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {TRUE}       |
+| Row 0  | 0           | true         |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1::uint64 = n_u32
+raw expr       : eq(CAST(1 AS UInt64), n_u32::UInt32 NULL)
+checked expr   : eq<UInt64 NULL, UInt64 NULL>(CAST(to_uint64<UInt8>(1_u8) AS UInt64 NULL), CAST(n_u32 AS UInt64 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u32       | Output       |
++--------+-------------+--------------+
+| Type   | UInt32 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u64 > 1
+raw expr       : gt(n_u64::UInt64 NULL, 1)
+checked expr   : gt<UInt64 NULL, UInt64 NULL>(n_u64, CAST(1_u8 AS UInt64 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u64 = 1
+raw expr       : eq(n_u64::UInt64 NULL, 1)
+checked expr   : eq<UInt64 NULL, UInt64 NULL>(n_u64, CAST(1_u64 AS UInt64 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1 > n_u64
+raw expr       : gt(1, n_u64::UInt64 NULL)
+checked expr   : gt<UInt64 NULL, UInt64 NULL>(CAST(1_u8 AS UInt64 NULL), n_u64)
+optimized expr : true
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {TRUE}       |
+| Row 0  | 0           | true         |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1 = n_u64
+raw expr       : eq(1, n_u64::UInt64 NULL)
+checked expr   : eq<UInt64 NULL, UInt64 NULL>(CAST(1_u64 AS UInt64 NULL), n_u64)
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u64 > 1.0
+raw expr       : gt(n_u64::UInt64 NULL, 1.0)
+checked expr   : gt<Decimal(20, 0) NULL, Decimal(2, 1) NULL>(CAST(n_u64 AS Decimal(20, 0) NULL), CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u64 = 1.0
+raw expr       : eq(n_u64::UInt64 NULL, 1.0)
+checked expr   : eq<Decimal(20, 0) NULL, Decimal(2, 1) NULL>(CAST(n_u64 AS Decimal(20, 0) NULL), CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1.0 > n_u64
+raw expr       : gt(1.0, n_u64::UInt64 NULL)
+checked expr   : gt<Decimal(2, 1) NULL, Decimal(20, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST(n_u64 AS Decimal(20, 0) NULL))
+optimized expr : true
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {TRUE}       |
+| Row 0  | 0           | true         |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1.0 = n_u64
+raw expr       : eq(1.0, n_u64::UInt64 NULL)
+checked expr   : eq<Decimal(2, 1) NULL, Decimal(20, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST(n_u64 AS Decimal(20, 0) NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | n_u64 > '1'
+  |       ^ no function matches signature `gt(UInt64 NULL, String)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `UInt64 NULL` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `UInt64` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `UInt64 NULL` with `String`
+... and 33 more
+
+
+
+ast            : n_u64 = '1'
+raw expr       : eq(n_u64::UInt64 NULL, '1')
+checked expr   : eq<UInt64 NULL, UInt64 NULL>(n_u64, CAST("1" AS UInt64 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | '1' > n_u64
+  |     ^ no function matches signature `gt(String, UInt64 NULL)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `UInt64 NULL` with `String`
+... and 33 more
+
+
+
+ast            : '1' = n_u64
+raw expr       : eq('1', n_u64::UInt64 NULL)
+checked expr   : eq<UInt64 NULL, UInt64 NULL>(CAST("1" AS UInt64 NULL), n_u64)
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u64 > 1::uint64
+raw expr       : gt(n_u64::UInt64 NULL, CAST(1 AS UInt64))
+checked expr   : gt<UInt64 NULL, UInt64 NULL>(n_u64, CAST(to_uint64<UInt8>(1_u8) AS UInt64 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_u64 = 1::uint64
+raw expr       : eq(n_u64::UInt64 NULL, CAST(1 AS UInt64))
+checked expr   : eq<UInt64 NULL, UInt64 NULL>(n_u64, CAST(to_uint64<UInt8>(1_u8) AS UInt64 NULL))
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1::uint64 > n_u64
+raw expr       : gt(CAST(1 AS UInt64), n_u64::UInt64 NULL)
+checked expr   : gt<UInt64 NULL, UInt64 NULL>(CAST(to_uint64<UInt8>(1_u8) AS UInt64 NULL), n_u64)
+optimized expr : true
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {TRUE}       |
+| Row 0  | 0           | true         |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1::uint64 = n_u64
+raw expr       : eq(CAST(1 AS UInt64), n_u64::UInt64 NULL)
+checked expr   : eq<UInt64 NULL, UInt64 NULL>(CAST(to_uint64<UInt8>(1_u8) AS UInt64 NULL), n_u64)
+optimized expr : false
+evaluation:
++--------+-------------+--------------+
+|        | n_u64       | Output       |
++--------+-------------+--------------+
+| Type   | UInt64 NULL | Boolean NULL |
+| Domain | {0..=0}     | {FALSE}      |
+| Row 0  | 0           | false        |
++--------+-------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+

@@ -123,25 +123,27 @@ fn test_type_check() {
             run_ast(file, &format!("{lhs} > {rhs}"), &columns);
             run_ast(file, &format!("{lhs} = {rhs}"), &columns);
         }
-    }
 
-    {
-        let file = &mut mint.new_goldenfile(format!("constant.txt")).unwrap();
-        for int in &all_num {
-            run_ast(file, &format!("{int} > 1"), &columns);
-            run_ast(file, &format!("{int} = 1"), &columns);
-            run_ast(file, &format!("1 > {int}"), &columns);
-            run_ast(file, &format!("1 = {int}"), &columns);
+        for ty in types {
+            run_ast(file, &format!("{ty} > 1"), &columns);
+            run_ast(file, &format!("{ty} = 1"), &columns);
+            run_ast(file, &format!("1 > {ty}"), &columns);
+            run_ast(file, &format!("1 = {ty}"), &columns);
 
-            run_ast(file, &format!("{int} > 1.0"), &columns);
-            run_ast(file, &format!("{int} = 1.0"), &columns);
-            run_ast(file, &format!("1.0 > {int}"), &columns);
-            run_ast(file, &format!("1.0 = {int}"), &columns);
+            run_ast(file, &format!("{ty} > 1.0"), &columns);
+            run_ast(file, &format!("{ty} = 1.0"), &columns);
+            run_ast(file, &format!("1.0 > {ty}"), &columns);
+            run_ast(file, &format!("1.0 = {ty}"), &columns);
 
-            run_ast(file, &format!("{int} > '1'"), &columns);
-            run_ast(file, &format!("{int} = '1'"), &columns);
-            run_ast(file, &format!("'1' > {int}"), &columns);
-            run_ast(file, &format!("'1' = {int}"), &columns);
+            run_ast(file, &format!("{ty} > '1'"), &columns);
+            run_ast(file, &format!("{ty} = '1'"), &columns);
+            run_ast(file, &format!("'1' > {ty}"), &columns);
+            run_ast(file, &format!("'1' = {ty}"), &columns);
+
+            run_ast(file, &format!("{ty} > 1::uint64"), &columns);
+            run_ast(file, &format!("{ty} = 1::uint64"), &columns);
+            run_ast(file, &format!("1::uint64 > {ty}"), &columns);
+            run_ast(file, &format!("1::uint64 = {ty}"), &columns);
         }
     }
 }

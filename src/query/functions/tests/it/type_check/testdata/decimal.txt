@@ -2806,3 +2806,1291 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
+ast            : d128 > 1
+raw expr       : gt(d128::Decimal(38, 0), 1)
+checked expr   : gt<Decimal(38, 0), Decimal(3, 0)>(d128, to_decimal<UInt8>(3, 0)(1_u8))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : d128 = 1
+raw expr       : eq(d128::Decimal(38, 0), 1)
+checked expr   : eq<Decimal(38, 0), Decimal(3, 0)>(d128, to_decimal<UInt8>(3, 0)(1_u8))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1 > d128
+raw expr       : gt(1, d128::Decimal(38, 0))
+checked expr   : gt<Decimal(3, 0), Decimal(38, 0)>(to_decimal<UInt8>(3, 0)(1_u8), d128)
+optimized expr : true
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {TRUE}  |
+| Row 0  | 0              | true    |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1 = d128
+raw expr       : eq(1, d128::Decimal(38, 0))
+checked expr   : eq<Decimal(3, 0), Decimal(38, 0)>(to_decimal<UInt8>(3, 0)(1_u8), d128)
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : d128 > 1.0
+raw expr       : gt(d128::Decimal(38, 0), 1.0)
+checked expr   : gt<Decimal(38, 0), Decimal(2, 1)>(d128, 1.0_d128(2,1))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : d128 = 1.0
+raw expr       : eq(d128::Decimal(38, 0), 1.0)
+checked expr   : eq<Decimal(38, 0), Decimal(2, 1)>(d128, 1.0_d128(2,1))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1.0 > d128
+raw expr       : gt(1.0, d128::Decimal(38, 0))
+checked expr   : gt<Decimal(2, 1), Decimal(38, 0)>(1.0_d128(2,1), d128)
+optimized expr : true
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {TRUE}  |
+| Row 0  | 0              | true    |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1.0 = d128
+raw expr       : eq(1.0, d128::Decimal(38, 0))
+checked expr   : eq<Decimal(2, 1), Decimal(38, 0)>(1.0_d128(2,1), d128)
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+error: 
+  --> SQL:1:6
+  |
+1 | d128 > '1'
+  |      ^ no function matches signature `gt(Decimal(38, 0), String)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `Decimal(38, 0)` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(38, 0)` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0)` with `String`
+... and 33 more
+
+
+
+ast            : d128 = '1'
+raw expr       : eq(d128::Decimal(38, 0), '1')
+checked expr   : eq<Float64, Float64>(to_float64<Decimal(38, 0)>(d128), to_float64<String>("1"))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | '1' > d128
+  |     ^ no function matches signature `gt(String, Decimal(38, 0))`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0)` with `String`
+... and 33 more
+
+
+
+ast            : '1' = d128
+raw expr       : eq('1', d128::Decimal(38, 0))
+checked expr   : eq<Float64, Float64>(to_float64<String>("1"), to_float64<Decimal(38, 0)>(d128))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : d128 > 1::uint64
+raw expr       : gt(d128::Decimal(38, 0), CAST(1 AS UInt64))
+checked expr   : gt<Decimal(38, 0), Decimal(20, 0)>(d128, to_decimal<UInt64>(20, 0)(to_uint64<UInt8>(1_u8)))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : d128 = 1::uint64
+raw expr       : eq(d128::Decimal(38, 0), CAST(1 AS UInt64))
+checked expr   : eq<Decimal(38, 0), Decimal(20, 0)>(d128, to_decimal<UInt64>(20, 0)(to_uint64<UInt8>(1_u8)))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1::uint64 > d128
+raw expr       : gt(CAST(1 AS UInt64), d128::Decimal(38, 0))
+checked expr   : gt<Decimal(20, 0), Decimal(38, 0)>(to_decimal<UInt64>(20, 0)(to_uint64<UInt8>(1_u8)), d128)
+optimized expr : true
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {TRUE}  |
+| Row 0  | 0              | true    |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1::uint64 = d128
+raw expr       : eq(CAST(1 AS UInt64), d128::Decimal(38, 0))
+checked expr   : eq<Decimal(20, 0), Decimal(38, 0)>(to_decimal<UInt64>(20, 0)(to_uint64<UInt8>(1_u8)), d128)
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : n_d128 > 1
+raw expr       : gt(n_d128::Decimal(38, 0) NULL, 1)
+checked expr   : gt<Decimal(38, 0) NULL, Decimal(3, 0) NULL>(n_d128, CAST(1_u8 AS Decimal(3, 0) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_d128 = 1
+raw expr       : eq(n_d128::Decimal(38, 0) NULL, 1)
+checked expr   : eq<Decimal(38, 0) NULL, Decimal(3, 0) NULL>(n_d128, CAST(1_u8 AS Decimal(3, 0) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1 > n_d128
+raw expr       : gt(1, n_d128::Decimal(38, 0) NULL)
+checked expr   : gt<Decimal(3, 0) NULL, Decimal(38, 0) NULL>(CAST(1_u8 AS Decimal(3, 0) NULL), n_d128)
+optimized expr : true
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {TRUE}       |
+| Row 0  | 0                   | true         |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1 = n_d128
+raw expr       : eq(1, n_d128::Decimal(38, 0) NULL)
+checked expr   : eq<Decimal(3, 0) NULL, Decimal(38, 0) NULL>(CAST(1_u8 AS Decimal(3, 0) NULL), n_d128)
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_d128 > 1.0
+raw expr       : gt(n_d128::Decimal(38, 0) NULL, 1.0)
+checked expr   : gt<Decimal(38, 0) NULL, Decimal(2, 1) NULL>(n_d128, CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_d128 = 1.0
+raw expr       : eq(n_d128::Decimal(38, 0) NULL, 1.0)
+checked expr   : eq<Decimal(38, 0) NULL, Decimal(2, 1) NULL>(n_d128, CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1.0 > n_d128
+raw expr       : gt(1.0, n_d128::Decimal(38, 0) NULL)
+checked expr   : gt<Decimal(2, 1) NULL, Decimal(38, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), n_d128)
+optimized expr : true
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {TRUE}       |
+| Row 0  | 0                   | true         |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1.0 = n_d128
+raw expr       : eq(1.0, n_d128::Decimal(38, 0) NULL)
+checked expr   : eq<Decimal(2, 1) NULL, Decimal(38, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), n_d128)
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:8
+  |
+1 | n_d128 > '1'
+  |        ^ no function matches signature `gt(Decimal(38, 0) NULL, String)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `Decimal(38, 0) NULL` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(38, 0)` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0) NULL` with `String`
+... and 33 more
+
+
+
+ast            : n_d128 = '1'
+raw expr       : eq(n_d128::Decimal(38, 0) NULL, '1')
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST(n_d128 AS Float64 NULL), CAST("1" AS Float64 NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | '1' > n_d128
+  |     ^ no function matches signature `gt(String, Decimal(38, 0) NULL)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0) NULL` with `String`
+... and 33 more
+
+
+
+ast            : '1' = n_d128
+raw expr       : eq('1', n_d128::Decimal(38, 0) NULL)
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST("1" AS Float64 NULL), CAST(n_d128 AS Float64 NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_d128 > 1::uint64
+raw expr       : gt(n_d128::Decimal(38, 0) NULL, CAST(1 AS UInt64))
+checked expr   : gt<Decimal(38, 0) NULL, Decimal(20, 0) NULL>(n_d128, CAST(to_uint64<UInt8>(1_u8) AS Decimal(20, 0) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_d128 = 1::uint64
+raw expr       : eq(n_d128::Decimal(38, 0) NULL, CAST(1 AS UInt64))
+checked expr   : eq<Decimal(38, 0) NULL, Decimal(20, 0) NULL>(n_d128, CAST(to_uint64<UInt8>(1_u8) AS Decimal(20, 0) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1::uint64 > n_d128
+raw expr       : gt(CAST(1 AS UInt64), n_d128::Decimal(38, 0) NULL)
+checked expr   : gt<Decimal(20, 0) NULL, Decimal(38, 0) NULL>(CAST(to_uint64<UInt8>(1_u8) AS Decimal(20, 0) NULL), n_d128)
+optimized expr : true
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {TRUE}       |
+| Row 0  | 0                   | true         |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1::uint64 = n_d128
+raw expr       : eq(CAST(1 AS UInt64), n_d128::Decimal(38, 0) NULL)
+checked expr   : eq<Decimal(20, 0) NULL, Decimal(38, 0) NULL>(CAST(to_uint64<UInt8>(1_u8) AS Decimal(20, 0) NULL), n_d128)
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : d256 > 1
+raw expr       : gt(d256::Decimal(76, 0), 1)
+checked expr   : gt<Decimal(76, 0), Decimal(3, 0)>(d256, to_decimal<UInt8>(3, 0)(1_u8))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : d256 = 1
+raw expr       : eq(d256::Decimal(76, 0), 1)
+checked expr   : eq<Decimal(76, 0), Decimal(3, 0)>(d256, to_decimal<UInt8>(3, 0)(1_u8))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1 > d256
+raw expr       : gt(1, d256::Decimal(76, 0))
+checked expr   : gt<Decimal(3, 0), Decimal(76, 0)>(to_decimal<UInt8>(3, 0)(1_u8), d256)
+optimized expr : true
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {TRUE}  |
+| Row 0  | 0              | true    |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1 = d256
+raw expr       : eq(1, d256::Decimal(76, 0))
+checked expr   : eq<Decimal(3, 0), Decimal(76, 0)>(to_decimal<UInt8>(3, 0)(1_u8), d256)
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : d256 > 1.0
+raw expr       : gt(d256::Decimal(76, 0), 1.0)
+checked expr   : gt<Decimal(76, 0), Decimal(2, 1)>(d256, 1.0_d128(2,1))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : d256 = 1.0
+raw expr       : eq(d256::Decimal(76, 0), 1.0)
+checked expr   : eq<Decimal(76, 0), Decimal(2, 1)>(d256, 1.0_d128(2,1))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1.0 > d256
+raw expr       : gt(1.0, d256::Decimal(76, 0))
+checked expr   : gt<Decimal(2, 1), Decimal(76, 0)>(1.0_d128(2,1), d256)
+optimized expr : true
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {TRUE}  |
+| Row 0  | 0              | true    |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1.0 = d256
+raw expr       : eq(1.0, d256::Decimal(76, 0))
+checked expr   : eq<Decimal(2, 1), Decimal(76, 0)>(1.0_d128(2,1), d256)
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+error: 
+  --> SQL:1:6
+  |
+1 | d256 > '1'
+  |      ^ no function matches signature `gt(Decimal(76, 0), String)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `Decimal(76, 0)` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(76, 0)` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0)` with `String`
+... and 33 more
+
+
+
+ast            : d256 = '1'
+raw expr       : eq(d256::Decimal(76, 0), '1')
+checked expr   : eq<Float64, Float64>(to_float64<Decimal(76, 0)>(d256), to_float64<String>("1"))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | '1' > d256
+  |     ^ no function matches signature `gt(String, Decimal(76, 0))`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0)` with `String`
+... and 33 more
+
+
+
+ast            : '1' = d256
+raw expr       : eq('1', d256::Decimal(76, 0))
+checked expr   : eq<Float64, Float64>(to_float64<String>("1"), to_float64<Decimal(76, 0)>(d256))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : d256 > 1::uint64
+raw expr       : gt(d256::Decimal(76, 0), CAST(1 AS UInt64))
+checked expr   : gt<Decimal(76, 0), Decimal(20, 0)>(d256, to_decimal<UInt64>(20, 0)(to_uint64<UInt8>(1_u8)))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : d256 = 1::uint64
+raw expr       : eq(d256::Decimal(76, 0), CAST(1 AS UInt64))
+checked expr   : eq<Decimal(76, 0), Decimal(20, 0)>(d256, to_decimal<UInt64>(20, 0)(to_uint64<UInt8>(1_u8)))
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : 1::uint64 > d256
+raw expr       : gt(CAST(1 AS UInt64), d256::Decimal(76, 0))
+checked expr   : gt<Decimal(20, 0), Decimal(76, 0)>(to_decimal<UInt64>(20, 0)(to_uint64<UInt8>(1_u8)), d256)
+optimized expr : true
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {TRUE}  |
+| Row 0  | 0              | true    |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
+
+
+ast            : 1::uint64 = d256
+raw expr       : eq(CAST(1 AS UInt64), d256::Decimal(76, 0))
+checked expr   : eq<Decimal(20, 0), Decimal(76, 0)>(to_decimal<UInt64>(20, 0)(to_uint64<UInt8>(1_u8)), d256)
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : n_d256 > 1
+raw expr       : gt(n_d256::Decimal(76, 0) NULL, 1)
+checked expr   : gt<Decimal(76, 0) NULL, Decimal(3, 0) NULL>(n_d256, CAST(1_u8 AS Decimal(3, 0) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_d256 = 1
+raw expr       : eq(n_d256::Decimal(76, 0) NULL, 1)
+checked expr   : eq<Decimal(76, 0) NULL, Decimal(3, 0) NULL>(n_d256, CAST(1_u8 AS Decimal(3, 0) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1 > n_d256
+raw expr       : gt(1, n_d256::Decimal(76, 0) NULL)
+checked expr   : gt<Decimal(3, 0) NULL, Decimal(76, 0) NULL>(CAST(1_u8 AS Decimal(3, 0) NULL), n_d256)
+optimized expr : true
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {TRUE}       |
+| Row 0  | 0                   | true         |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1 = n_d256
+raw expr       : eq(1, n_d256::Decimal(76, 0) NULL)
+checked expr   : eq<Decimal(3, 0) NULL, Decimal(76, 0) NULL>(CAST(1_u8 AS Decimal(3, 0) NULL), n_d256)
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_d256 > 1.0
+raw expr       : gt(n_d256::Decimal(76, 0) NULL, 1.0)
+checked expr   : gt<Decimal(76, 0) NULL, Decimal(2, 1) NULL>(n_d256, CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_d256 = 1.0
+raw expr       : eq(n_d256::Decimal(76, 0) NULL, 1.0)
+checked expr   : eq<Decimal(76, 0) NULL, Decimal(2, 1) NULL>(n_d256, CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1.0 > n_d256
+raw expr       : gt(1.0, n_d256::Decimal(76, 0) NULL)
+checked expr   : gt<Decimal(2, 1) NULL, Decimal(76, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), n_d256)
+optimized expr : true
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {TRUE}       |
+| Row 0  | 0                   | true         |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1.0 = n_d256
+raw expr       : eq(1.0, n_d256::Decimal(76, 0) NULL)
+checked expr   : eq<Decimal(2, 1) NULL, Decimal(76, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), n_d256)
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:8
+  |
+1 | n_d256 > '1'
+  |        ^ no function matches signature `gt(Decimal(76, 0) NULL, String)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `Decimal(76, 0) NULL` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(76, 0)` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0) NULL` with `String`
+... and 33 more
+
+
+
+ast            : n_d256 = '1'
+raw expr       : eq(n_d256::Decimal(76, 0) NULL, '1')
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST(n_d256 AS Float64 NULL), CAST("1" AS Float64 NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:5
+  |
+1 | '1' > n_d256
+  |     ^ no function matches signature `gt(String, Decimal(76, 0) NULL)`, you might need to add explicit type casts.
+
+candidate functions:
+  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
+  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
+  gt(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0) NULL` with `String`
+... and 33 more
+
+
+
+ast            : '1' = n_d256
+raw expr       : eq('1', n_d256::Decimal(76, 0) NULL)
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST("1" AS Float64 NULL), CAST(n_d256 AS Float64 NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_d256 > 1::uint64
+raw expr       : gt(n_d256::Decimal(76, 0) NULL, CAST(1 AS UInt64))
+checked expr   : gt<Decimal(76, 0) NULL, Decimal(20, 0) NULL>(n_d256, CAST(to_uint64<UInt8>(1_u8) AS Decimal(20, 0) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_d256 = 1::uint64
+raw expr       : eq(n_d256::Decimal(76, 0) NULL, CAST(1 AS UInt64))
+checked expr   : eq<Decimal(76, 0) NULL, Decimal(20, 0) NULL>(n_d256, CAST(to_uint64<UInt8>(1_u8) AS Decimal(20, 0) NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1::uint64 > n_d256
+raw expr       : gt(CAST(1 AS UInt64), n_d256::Decimal(76, 0) NULL)
+checked expr   : gt<Decimal(20, 0) NULL, Decimal(76, 0) NULL>(CAST(to_uint64<UInt8>(1_u8) AS Decimal(20, 0) NULL), n_d256)
+optimized expr : true
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {TRUE}       |
+| Row 0  | 0                   | true         |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : 1::uint64 = n_d256
+raw expr       : eq(CAST(1 AS UInt64), n_d256::Decimal(76, 0) NULL)
+checked expr   : eq<Decimal(20, 0) NULL, Decimal(76, 0) NULL>(CAST(to_uint64<UInt8>(1_u8) AS Decimal(20, 0) NULL), n_d256)
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
