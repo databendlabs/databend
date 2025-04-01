@@ -24,7 +24,6 @@ pub use expr::MExpr;
 pub use expr::Matcher;
 pub use expr::PatternExtractor;
 pub use expr::SExpr;
-pub use format::display_memo;
 pub use group::Group;
 pub use group::GroupState;
 pub use memo::Memo;

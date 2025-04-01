@@ -35,7 +35,6 @@ use crate::optimizer::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
-use crate::optimizer::ir::display_memo;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::join::SingleToInnerOptimizer;
@@ -254,7 +253,7 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
                     let memo = get_optimized_memo(&mut opt_ctx, *s_expr.clone()).await?;
                     Ok(Plan::Explain {
                         config,
-                        kind: ExplainKind::Memo(display_memo(&memo)?),
+                        kind: ExplainKind::Memo(memo.display()?),
                         plan,
                     })
                 } else {

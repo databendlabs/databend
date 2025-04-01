@@ -25,7 +25,6 @@ use crate::optimizer::cascades::tasks::OptimizeGroupTask;
 use crate::optimizer::cascades::tasks::Task;
 use crate::optimizer::cost::CostModel;
 use crate::optimizer::cost::DefaultCostModel;
-use crate::optimizer::ir::display_memo;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::RequiredProperty;
@@ -88,7 +87,7 @@ impl CascadesOptimizer {
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.init(s_expr)?;
 
-        debug!("Init memo:\n{}", display_memo(&self.memo)?);
+        debug!("Init memo:\n{}", self.memo.display()?);
 
         let root_index = self
             .memo
@@ -121,7 +120,7 @@ impl CascadesOptimizer {
         scheduler.add_task(Task::OptimizeGroup(root_task));
         scheduler.run(self)?;
 
-        debug!("Memo:\n{}", display_memo(&self.memo)?);
+        debug!("Memo:\n{}", self.memo.display()?);
 
         self.find_best_plan(root_index, &root_required_prop)
     }
