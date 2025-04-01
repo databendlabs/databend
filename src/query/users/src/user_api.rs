@@ -28,7 +28,6 @@ use databend_common_management::PasswordPolicyMgr;
 use databend_common_management::ProcedureMgr;
 use databend_common_management::QuotaApi;
 use databend_common_management::QuotaMgr;
-use databend_common_management::RoleApi;
 use databend_common_management::RoleMgr;
 use databend_common_management::SettingMgr;
 use databend_common_management::StageApi;
@@ -45,6 +44,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use log::debug;
 
 use crate::builtin::BuiltIn;
 use crate::BUILTIN_ROLE_PUBLIC;
@@ -125,13 +125,14 @@ impl UserApiProvider {
         Arc::new(user_mgr)
     }
 
-    pub fn role_api(&self, tenant: &Tenant) -> Arc<impl RoleApi> {
+    pub fn role_api(&self, tenant: &Tenant) -> RoleMgr {
         let role_mgr = RoleMgr::create(
             self.client.clone(),
             tenant,
             GlobalConfig::instance().query.upgrade_to_pb,
         );
-        Arc::new(role_mgr)
+        debug!("RoleMgr created");
+        role_mgr
     }
 
     pub fn stage_api(&self, tenant: &Tenant) -> Arc<dyn StageApi> {
