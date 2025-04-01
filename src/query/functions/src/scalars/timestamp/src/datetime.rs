@@ -1451,6 +1451,21 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
             }
         }),
     );
+
+    registry.register_passthrough_nullable_1_arg::<DateType, UInt16Type, _, _>(
+        "to_iso_year",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<DateType, UInt16Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToISOYear, _>(val, ctx.func_ctx.tz.clone()) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
+        }),
+    );
+
     registry.register_passthrough_nullable_1_arg::<DateType, UInt8Type, _, _>(
         "to_quarter",
         |_, _| FunctionDomain::Full,
@@ -1563,6 +1578,13 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, UInt16Type>(|val, ctx| {
             ToNumberImpl::eval_timestamp::<ToYear, _>(val, ctx.func_ctx.tz.clone())
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt16Type, _, _>(
+        "to_iso_year",
+        |_, _| FunctionDomain::Full,
+        vectorize_1_arg::<TimestampType, UInt16Type>(|val, ctx| {
+            ToNumberImpl::eval_timestamp::<ToISOYear, _>(val, ctx.func_ctx.tz.clone())
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(

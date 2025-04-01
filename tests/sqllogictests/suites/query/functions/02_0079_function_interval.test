@@ -5,6 +5,15 @@ select interval '1 month 1 hour 1 microsecond ago'
 -1 month -1:00:00.000001
 
 onlyif http
+query T
+select interval  (number::string) month  a , a * 3, -3 * a  from numbers(4) where number > 0;
+----
+1 month 3 months -3 months
+2 months 6 months -6 months
+3 months 9 months -9 months
+
+
+onlyif http
 statement ok
 create or replace table t(c1 interval, c2 interval);
 

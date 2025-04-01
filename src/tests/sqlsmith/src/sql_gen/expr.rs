@@ -514,6 +514,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         8 => IntervalKind::Dow,
                         9 => IntervalKind::Week,
                         10 => IntervalKind::Epoch,
+                        11 => IntervalKind::ISOYear,
                         _ => unreachable!(),
                     };
                     Expr::Extract {
@@ -567,6 +568,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                     4 => IntervalKind::Hour,
                     5 => IntervalKind::Minute,
                     6 => IntervalKind::Second,
+                    7 => IntervalKind::ISOYear,
                     _ => unreachable!(),
                 };
                 let interval_ty = DataType::Number(NumberDataType::Int64);
