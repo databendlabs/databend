@@ -149,37 +149,171 @@ impl VirtualColumnReader {
         ))
     }
 
-    pub fn deserialize_virtual_columns(
+    // pub fn deserialize_virtual_columns(
+    //    &self,
+    //    mut data_block: DataBlock,
+    //    virtual_data: Option<VirtualBlockReadResult>,
+    //) -> Result<DataBlock> {
+    //    let orig_schema = virtual_data
+    //        .as_ref()
+    //        .map(|virtual_data| virtual_data.schema.clone())
+    //        .unwrap_or_default();
+    //    let record_batch = virtual_data
+    //        .map(|virtual_data| {
+    //            let columns_chunks = virtual_data.data.columns_chunks()?;
+    //            column_chunks_to_record_batch(
+    //                &virtual_data.schema,
+    //                virtual_data.num_rows,
+    //                &columns_chunks,
+    //                &virtual_data.compression,
+    //            )
+    //        })
+    //        .transpose()?;
+
+    //    // If the virtual column has already generated, add it directly,
+    //    // otherwise extract it from the source column
+    //    let func_ctx = self.ctx.get_function_context()?;
+    //    for virtual_column_field in self.virtual_column_info.virtual_column_fields.iter() {
+    //        let name = format!("{}", virtual_column_field.column_id);
+    //        if let Some(arrow_array) = record_batch
+    //            .as_ref()
+    //            .and_then(|r| r.column_by_name(&name).cloned())
+    //        {
+    //            let orig_field = orig_schema.field_with_name(&name).unwrap();
+    //            let orig_type: DataType = orig_field.data_type().into();
+    //            let value = Value::Column(Column::from_arrow_rs(arrow_array, &orig_type)?);
+    //            let data_type: DataType = virtual_column_field.data_type.as_ref().into();
+    //            let column = if orig_type != data_type {
+    //                let cast_func_name = format!(
+    //                    "to_{}",
+    //                    data_type.remove_nullable().to_string().to_lowercase()
+    //                );
+    //                let (cast_value, cast_data_type) = eval_function(
+    //                    None,
+    //                    &cast_func_name,
+    //                    [(value, orig_type)],
+    //                    &func_ctx,
+    //                    data_block.num_rows(),
+    //                    &BUILTIN_FUNCTIONS,
+    //                )?;
+    //                BlockEntry::new(cast_data_type, cast_value)
+    //            } else {
+    //                BlockEntry::new(data_type, value)
+    //            };
+    //            data_block.add_column(column);
+    //            continue;
+    //        }
+    //        let src_index = self
+    //            .source_schema
+    //            .index_of(&virtual_column_field.source_name)
+    //            .unwrap();
+    //        let source = data_block.get_by_offset(src_index);
+    //        let src_arg = (source.value.clone(), source.data_type.clone());
+    //        let path_arg = (
+    //            Value::Scalar(virtual_column_field.key_paths.clone()),
+    //            DataType::String,
+    //        );
+
+    //        let (value, data_type) = eval_function(
+    //            None,
+    //            "get_by_keypath",
+    //            [src_arg, path_arg],
+    //            &func_ctx,
+    //            data_block.num_rows(),
+    //            &BUILTIN_FUNCTIONS,
+    //        )?;
+
+    //        let column = if let Some(cast_func_name) = &virtual_column_field.cast_func_name {
+    //            let (cast_value, cast_data_type) = eval_function(
+    //                None,
+    //                cast_func_name,
+    //                [(value, data_type)],
+    //                &func_ctx,
+    //                data_block.num_rows(),
+    //                &BUILTIN_FUNCTIONS,
+    //            )?;
+    //            BlockEntry::new(cast_data_type, cast_value)
+    //        } else {
+    //            BlockEntry::new(data_type, value)
+    //        };
+    //        data_block.add_column(column);
+    //    }
+
+    //    Ok(data_block)
+    //}
+    /// Deserialize virtual column data into record batches, according to the `batch_size`.
+    pub fn try_create_paster(
         &self,
-        mut data_block: DataBlock,
         virtual_data: Option<VirtualBlockReadResult>,
-    ) -> Result<DataBlock> {
+        batch_size_hint: Option<usize>,
+    ) -> Result<VirtualColumnDataPaster> {
         let orig_schema = virtual_data
             .as_ref()
             .map(|virtual_data| virtual_data.schema.clone())
             .unwrap_or_default();
-        let record_batch = virtual_data
-            .map(|virtual_data| {
-                let columns_chunks = virtual_data.data.columns_chunks()?;
-                column_chunks_to_record_batch(
-                    &virtual_data.schema,
-                    virtual_data.num_rows,
-                    &columns_chunks,
-                    &virtual_data.compression,
-                )
-            })
-            .transpose()?;
+
+        let record_batches = if let Some(virtual_data) = virtual_data {
+            let columns_chunks = virtual_data.data.columns_chunks()?;
+            let chunks = column_chunks_to_record_batch(
+                &self.virtual_column_info.schema,
+                virtual_data.num_rows,
+                &columns_chunks,
+                &virtual_data.compression,
+                batch_size_hint,
+            )?;
+            Some(chunks)
+        } else {
+            None
+        };
+
+        let function_context = self.ctx.get_function_context()?;
+
+        // Unfortunately, Paster cannot hold references to the fields that being cloned,
+        // since the caller `DeserializeDataTransform` will take mutable reference of
+        // VirtualColumnReader indirectly.
+        Ok(VirtualColumnDataPaster {
+            record_batches,
+            function_context,
+            next_record_batch_index: 0,
+            virtual_column_fields: self.virtual_column_info.virtual_column_fields.clone(),
+            source_schema: self.source_schema.clone(),
+            orig_schema,
+        })
+    }
+}
+
+pub struct VirtualColumnDataPaster {
+    record_batches: Option<Vec<RecordBatch>>,
+    next_record_batch_index: usize,
+    function_context: FunctionContext,
+    virtual_column_fields: Vec<VirtualColumnField>,
+    source_schema: TableSchemaRef,
+    orig_schema: TableSchemaRef,
+}
+
+impl VirtualColumnDataPaster {
+    /// Paste virtual column to `data_block` if necessary
+    pub fn paste_virtual_column(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        let record_batch = if let Some(record_batches) = &self.record_batches {
+            assert!(record_batches.len() > self.next_record_batch_index);
+            Some(&record_batches[self.next_record_batch_index])
+        } else {
+            None
+        };
+
+        self.next_record_batch_index += 1;
+
+        let func_ctx = &self.function_context;
 
         // If the virtual column has already generated, add it directly,
         // otherwise extract it from the source column
-        let func_ctx = self.ctx.get_function_context()?;
-        for virtual_column_field in self.virtual_column_info.virtual_column_fields.iter() {
+        for virtual_column_field in self.virtual_column_fields.iter() {
             let name = format!("{}", virtual_column_field.column_id);
             if let Some(arrow_array) = record_batch
                 .as_ref()
                 .and_then(|r| r.column_by_name(&name).cloned())
             {
-                let orig_field = orig_schema.field_with_name(&name).unwrap();
+                let orig_field = self.orig_schema.field_with_name(&name).unwrap();
                 let orig_type: DataType = orig_field.data_type().into();
                 let value = Value::Column(Column::from_arrow_rs(arrow_array, &orig_type)?);
                 let data_type: DataType = virtual_column_field.data_type.as_ref().into();
@@ -240,5 +374,52 @@ impl VirtualColumnReader {
         }
 
         Ok(data_block)
+
+        // for virtual_column_field in self.virtual_column_fields.iter() {
+        //    if let Some(arrow_array) =
+        //        record_batch.and_then(|r| r.column_by_name(&virtual_column_field.name).cloned())
+        //    {
+        //        let data_type: DataType = virtual_column_field.data_type.as_ref().into();
+        //        let value = Value::Column(Column::from_arrow_rs(arrow_array, &data_type)?);
+        //        data_block.add_column(BlockEntry::new(data_type, value));
+        //        continue;
+        //    }
+        //    let src_index = self
+        //        .source_schema
+        //        .index_of(&virtual_column_field.source_name)
+        //        .unwrap();
+        //    let source = data_block.get_by_offset(src_index);
+        //    let src_arg = (source.value.clone(), source.data_type.clone());
+        //    let path_arg = (
+        //        Value::Scalar(virtual_column_field.key_paths.clone()),
+        //        DataType::String,
+        //    );
+
+        //    let (value, data_type) = eval_function(
+        //        None,
+        //        "get_by_keypath",
+        //        [src_arg, path_arg],
+        //        func_ctx,
+        //        data_block.num_rows(),
+        //        &BUILTIN_FUNCTIONS,
+        //    )?;
+
+        //    let column = if let Some(cast_func_name) = &virtual_column_field.cast_func_name {
+        //        let (cast_value, cast_data_type) = eval_function(
+        //            None,
+        //            cast_func_name,
+        //            [(value, data_type)],
+        //            func_ctx,
+        //            data_block.num_rows(),
+        //            &BUILTIN_FUNCTIONS,
+        //        )?;
+        //        BlockEntry::new(cast_data_type, cast_value)
+        //    } else {
+        //        BlockEntry::new(data_type, value)
+        //    };
+        //    data_block.add_column(column);
+        //}
+
+        // Ok(data_block)
     }
 }

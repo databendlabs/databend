@@ -139,7 +139,7 @@ impl AggIndexReader {
         }
     }
 
-    pub fn deserialize_native_data(&self, data: &mut NativeSourceData) -> Result<Vec<DataBlock>> {
+    pub fn deserialize_native_data(&self, data: &mut NativeSourceData) -> Result<DataBlock> {
         let mut all_columns_arrays = vec![];
 
         for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
@@ -149,9 +149,9 @@ impl AggIndexReader {
             all_columns_arrays.push(arrays);
         }
         if all_columns_arrays.is_empty() {
-            return Ok(vec![DataBlock::empty_with_schema(Arc::new(
+            return Ok(DataBlock::empty_with_schema(Arc::new(
                 self.reader.data_schema(),
-            ))]);
+            )));
         }
         debug_assert!(all_columns_arrays
             .iter()
@@ -167,6 +167,7 @@ impl AggIndexReader {
             let block = DataBlock::new_from_columns(columns);
             blocks.push(block);
         }
-        self.apply_agg_info(blocks)
+        let block = DataBlock::concat(&blocks)?;
+        self.apply_agg_info_to_block(block)
     }
 }

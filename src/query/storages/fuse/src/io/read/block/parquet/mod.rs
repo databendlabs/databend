@@ -56,7 +56,7 @@ impl BlockReader {
             column_chunks,
             compression,
             block_path,
-            num_rows,
+            None,
         )?;
         // Defensive check: using `num_rows` as batch_size, expects only one block
         assert_eq!(blocks.len(), 1);
@@ -70,7 +70,7 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         compression: &Compression,
         block_path: &str,
-        batch_size: usize,
+        batch_size_hint: Option<usize>,
     ) -> Result<Vec<DataBlock>> {
         if column_chunks.is_empty() {
             return Ok(vec![self.build_default_values_block(num_rows)?]);
@@ -81,7 +81,7 @@ impl BlockReader {
             num_rows,
             &column_chunks,
             compression,
-            batch_size,
+            batch_size_hint,
         )?;
 
         let name_paths = column_name_paths(&self.projection, &self.original_schema);

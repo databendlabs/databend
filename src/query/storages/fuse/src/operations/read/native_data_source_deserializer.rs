@@ -191,7 +191,7 @@ pub struct NativeDeserializeDataTransform {
     // Structures for driving the pipeline:
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: Vec<DataBlock>,
+    output_data: Option<DataBlock>,
     parts: VecDeque<PartInfoPtr>,
     columns: VecDeque<NativeDataSource>,
     scan_progress: Arc<Progress>,
@@ -309,7 +309,7 @@ impl NativeDeserializeDataTransform {
                 block_reader,
                 input,
                 output,
-                output_data: vec![],
+                output_data: None,
                 parts: VecDeque::new(),
                 columns: VecDeque::new(),
                 prewhere_columns,
@@ -353,7 +353,7 @@ impl NativeDeserializeDataTransform {
         };
         self.scan_progress.incr(&progress_values);
         Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, data_block.memory_size());
-        self.output_data = vec![data_block];
+        self.output_data = Some(data_block);
     }
 
     /// Check if can skip the whole block by default values.
@@ -846,7 +846,7 @@ impl Processor for NativeDeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.pop() {
+        if let Some(data_block) = self.output_data.take() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -891,8 +891,8 @@ impl Processor for NativeDeserializeDataTransform {
                 let columns = match columns {
                     NativeDataSource::AggIndex(data) => {
                         let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                        let blocks = agg_index_reader.deserialize_native_data(data)?;
-                        self.output_data = blocks;
+                        let block = agg_index_reader.deserialize_native_data(data)?;
+                        self.output_data = Some(block);
                         self.finish_partition();
                         return Ok(());
                     }
