@@ -65,6 +65,7 @@ impl UserApiProvider {
     ) -> Result<()> {
         GlobalInstance::set(Self::try_create(conf, builtin, tenant).await?);
         let user_mgr = UserApiProvider::instance();
+
         if let Some(q) = quota {
             let i = user_mgr.tenant_quota_api(tenant);
             let res = i.get_quota(MatchSeq::GE(0)).await?;

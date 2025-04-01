@@ -495,7 +495,7 @@ async fn show_account_grants(
         // 2. not expand roles
         // So no need to get ownerships.
         if !roles.is_empty() {
-            let ownerships = user_api.role_api(&tenant).get_ownerships().await?;
+            let ownerships = user_api.role_api(&tenant).list_ownerships().await?;
             for ownership in ownerships {
                 if roles.contains(&ownership.data.role) {
                     match ownership.data.object {
@@ -807,7 +807,7 @@ async fn show_object_grant(
         }
     }
 
-    let ownerships = user_api.role_api(&tenant).get_ownerships().await?;
+    let ownerships = user_api.role_api(&tenant).list_ownerships().await?;
     for ownership in ownerships {
         if ownership.data.object == owner_object {
             privileges.push("OWNERSHIP".to_string());
