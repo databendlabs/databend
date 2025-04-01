@@ -35,7 +35,7 @@ pub fn column_chunks_to_record_batch(
     num_rows: usize,
     column_chunks: &HashMap<ColumnId, DataItem>,
     compression: &Compression,
-    batch_size: usize,
+    batch_size: Option<usize>,
 ) -> databend_common_exception::Result<Vec<RecordBatch>> {
     let arrow_schema = Schema::from(original_schema);
     let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
@@ -68,6 +68,8 @@ pub fn column_chunks_to_record_batch(
         ProjectionMask::leaves(&parquet_schema, projection_mask),
         Some(arrow_schema.fields()),
     )?;
+
+    let batch_size = batch_size.unwrap_or(num_rows);
     let record_reader = ParquetRecordBatchReader::try_new_with_row_groups(
         &field_levels,
         row_group.as_ref(),

@@ -23,6 +23,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -80,7 +81,7 @@ pub struct DeserializeDataTransform {
     need_wait_runtime_filter: bool,
     runtime_filter_ready: Option<Arc<RuntimeFilterReady>>,
 
-    batch_size: usize,
+    batch_size_hint: Option<usize>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -98,6 +99,12 @@ impl DeserializeDataTransform {
         let scan_progress = ctx.get_scan_progress();
         let need_wait_runtime_filter =
             !ctx.get_cluster().is_empty() && ctx.get_wait_runtime_filter(plan.scan_id);
+
+        // Unfortunately, batch size is hint is only safe for Query now.
+        let batch_size_hint = match ctx.get_query_kind() {
+            QueryKind::Query => Some(ctx.get_settings().get_fuse_parquet_read_batch_size()?),
+            _ => None,
+        };
 
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
         if let Some(virtual_reader) = virtual_reader.as_ref() {
@@ -117,7 +124,6 @@ impl DeserializeDataTransform {
         let output_schema: DataSchema = (&output_schema).into();
         let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
 
-        let batch_size = ctx.get_settings().get_fuse_parquet_read_batch_size()?;
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             ctx,
             table_index: plan.table_index,
@@ -138,7 +144,7 @@ impl DeserializeDataTransform {
             need_reserve_block_info,
             need_wait_runtime_filter,
             runtime_filter_ready: None,
-            batch_size,
+            batch_size_hint,
         })))
     }
 
@@ -272,7 +278,7 @@ impl Processor for DeserializeDataTransform {
                     let blocks = agg_index_reader.deserialize_parquet_data(
                         actual_part,
                         data,
-                        self.batch_size,
+                        self.batch_size_hint,
                     )?;
 
                     self.update_scan_metrics(blocks.as_slice());
@@ -291,13 +297,13 @@ impl Processor for DeserializeDataTransform {
                         columns_chunks,
                         &part.compression,
                         &part.location,
-                        self.batch_size,
+                        self.batch_size_hint,
                     )?;
 
                     let mut virtual_columns_paster =
                         if let Some(virtual_column_reader) = self.virtual_reader.as_ref() {
                             let record_batches = virtual_column_reader
-                                .try_create_paster(virtual_data, self.batch_size)?;
+                                .try_create_paster(virtual_data, self.batch_size_hint)?;
                             Some(record_batches)
                         } else {
                             None
