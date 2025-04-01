@@ -28,11 +28,11 @@ use databend_common_storage::Datum;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use itertools::Itertools;
 
-use crate::optimizer::ir::histogram_from_ndv;
 use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -202,7 +202,7 @@ impl Operator for ConstantTableScan {
                 (false, None) => 0,
             };
 
-            let histogram = histogram_from_ndv(
+            let histogram = HistogramBuilder::from_ndv(
                 ndv,
                 self.num_rows as u64,
                 Some((min.clone(), max.clone())),

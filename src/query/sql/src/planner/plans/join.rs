@@ -26,10 +26,10 @@ use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
-use crate::optimizer::ir::histogram_from_ndv;
 use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::NewStatistic;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -364,7 +364,7 @@ impl Join {
                                 left.min = Datum::Float(F64::from(left.min.to_double()?));
                                 left.max = Datum::Float(F64::from(left.max.to_double()?));
                             }
-                            Some(histogram_from_ndv(
+                            Some(HistogramBuilder::from_ndv(
                                 left.ndv as u64,
                                 max(join_card as u64, left.ndv as u64),
                                 Some((left.min.clone(), left.max.clone())),
@@ -389,7 +389,7 @@ impl Join {
                                 right.min = Datum::Float(F64::from(right.min.to_double()?));
                                 right.max = Datum::Float(F64::from(right.max.to_double()?));
                             }
-                            Some(histogram_from_ndv(
+                            Some(HistogramBuilder::from_ndv(
                                 right.ndv as u64,
                                 max(join_card as u64, right.ndv as u64),
                                 Some((right.min.clone(), right.max.clone())),

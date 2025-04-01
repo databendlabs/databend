@@ -31,8 +31,8 @@ use databend_common_storage::Datum;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storage::F64;
 
-use crate::optimizer::ir::histogram_from_ndv;
 use crate::optimizer::ir::ColumnStat;
+use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::Statistics;
 use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
@@ -626,7 +626,7 @@ fn update_statistic(
                 column_stat.histogram = None;
                 return Ok(());
             }
-            Some(histogram_from_ndv(
+            Some(HistogramBuilder::from_ndv(
                 new_ndv,
                 max(new_num_values, new_ndv),
                 Some((new_min, new_max)),

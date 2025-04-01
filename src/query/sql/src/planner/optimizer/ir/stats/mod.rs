@@ -19,7 +19,7 @@ mod selectivity;
 pub use column_stat::ColumnStat;
 pub use column_stat::ColumnStatSet;
 pub use column_stat::NewStatistic;
-pub use histogram::histogram_from_ndv;
+pub use histogram::HistogramBuilder;
 pub use histogram::UniformSampleSet;
 pub use selectivity::SelectivityEstimator;
 pub use selectivity::MAX_SELECTIVITY;
