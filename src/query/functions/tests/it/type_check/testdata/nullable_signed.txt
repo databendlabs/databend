@@ -1,6 +1,6 @@
 ast            : n_i32 > i32
 raw expr       : gt(n_i32::Int32 NULL, i32::Int32)
-checked expr   : gt<Int32 NULL, Int32 NULL>(n_i32, CAST(i32 AS Int32 NULL))
+checked expr   : gt<Int32 NULL, Int32 NULL>(n_i32, CAST<Int32>(i32 AS Int32 NULL))
 optimized expr : false
 evaluation:
 +--------+---------+------------+--------------+
@@ -22,7 +22,7 @@ evaluation (internal):
 
 ast            : n_i32 = i32
 raw expr       : eq(n_i32::Int32 NULL, i32::Int32)
-checked expr   : eq<Int32 NULL, Int32 NULL>(n_i32, CAST(i32 AS Int32 NULL))
+checked expr   : eq<Int32 NULL, Int32 NULL>(n_i32, CAST<Int32>(i32 AS Int32 NULL))
 optimized expr : true
 evaluation:
 +--------+---------+------------+--------------+
@@ -44,7 +44,7 @@ evaluation (internal):
 
 ast            : n_i32 > i64
 raw expr       : gt(n_i32::Int32 NULL, i64::Int64)
-checked expr   : gt<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(i64 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<Int64>(i64 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+---------+--------------+
@@ -66,7 +66,7 @@ evaluation (internal):
 
 ast            : n_i32 = i64
 raw expr       : eq(n_i32::Int32 NULL, i64::Int64)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(i64 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<Int64>(i64 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+---------+--------------+
@@ -88,7 +88,7 @@ evaluation (internal):
 
 ast            : n_i32 > u32
 raw expr       : gt(n_i32::Int32 NULL, u32::UInt32)
-checked expr   : gt<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(u32 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<UInt32>(u32 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+---------+--------------+
@@ -110,7 +110,7 @@ evaluation (internal):
 
 ast            : n_i32 = u32
 raw expr       : eq(n_i32::Int32 NULL, u32::UInt32)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(u32 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<UInt32>(u32 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+---------+--------------+
@@ -132,7 +132,7 @@ evaluation (internal):
 
 ast            : n_i32 > u64
 raw expr       : gt(n_i32::Int32 NULL, u64::UInt64)
-checked expr   : gt<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(u64 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<UInt64>(u64 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+---------+--------------+
@@ -154,7 +154,7 @@ evaluation (internal):
 
 ast            : n_i32 = u64
 raw expr       : eq(n_i32::Int32 NULL, u64::UInt64)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(u64 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<UInt64>(u64 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+---------+--------------+
@@ -218,7 +218,7 @@ evaluation (internal):
 
 ast            : n_i32 > n_i64
 raw expr       : gt(n_i32::Int32 NULL, n_i64::Int64 NULL)
-checked expr   : gt<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), n_i64)
+checked expr   : gt<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), n_i64)
 optimized expr : false
 evaluation:
 +--------+------------+------------+--------------+
@@ -240,7 +240,7 @@ evaluation (internal):
 
 ast            : n_i32 = n_i64
 raw expr       : eq(n_i32::Int32 NULL, n_i64::Int64 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), n_i64)
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), n_i64)
 optimized expr : true
 evaluation:
 +--------+------------+------------+--------------+
@@ -262,7 +262,7 @@ evaluation (internal):
 
 ast            : n_i32 > n_u32
 raw expr       : gt(n_i32::Int32 NULL, n_u32::UInt32 NULL)
-checked expr   : gt<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(n_u32 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<UInt32 NULL>(n_u32 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+-------------+--------------+
@@ -284,7 +284,7 @@ evaluation (internal):
 
 ast            : n_i32 = n_u32
 raw expr       : eq(n_i32::Int32 NULL, n_u32::UInt32 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(n_u32 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<UInt32 NULL>(n_u32 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+-------------+--------------+
@@ -306,7 +306,7 @@ evaluation (internal):
 
 ast            : n_i32 > n_u64
 raw expr       : gt(n_i32::Int32 NULL, n_u64::UInt64 NULL)
-checked expr   : gt<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(n_u64 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<UInt64 NULL>(n_u64 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+-------------+--------------+
@@ -328,7 +328,7 @@ evaluation (internal):
 
 ast            : n_i32 = n_u64
 raw expr       : eq(n_i32::Int32 NULL, n_u64::UInt64 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(n_u64 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<UInt64 NULL>(n_u64 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+-------------+--------------+
@@ -350,7 +350,7 @@ evaluation (internal):
 
 ast            : n_i32 > f32
 raw expr       : gt(n_i32::Int32 NULL, f32::Float32)
-checked expr   : gt<Float64 NULL, Float64 NULL>(CAST(n_i32 AS Float64 NULL), CAST(f32 AS Float64 NULL))
+checked expr   : gt<Float64 NULL, Float64 NULL>(CAST<Int32 NULL>(n_i32 AS Float64 NULL), CAST<Float32>(f32 AS Float64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+---------+--------------+
@@ -372,7 +372,7 @@ evaluation (internal):
 
 ast            : n_i32 = f32
 raw expr       : eq(n_i32::Int32 NULL, f32::Float32)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST(n_i32 AS Float64 NULL), CAST(f32 AS Float64 NULL))
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<Int32 NULL>(n_i32 AS Float64 NULL), CAST<Float32>(f32 AS Float64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+---------+--------------+
@@ -394,7 +394,7 @@ evaluation (internal):
 
 ast            : n_i32 > n_f32
 raw expr       : gt(n_i32::Int32 NULL, n_f32::Float32 NULL)
-checked expr   : gt<Float64 NULL, Float64 NULL>(CAST(n_i32 AS Float64 NULL), CAST(n_f32 AS Float64 NULL))
+checked expr   : gt<Float64 NULL, Float64 NULL>(CAST<Int32 NULL>(n_i32 AS Float64 NULL), CAST<Float32 NULL>(n_f32 AS Float64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+--------------+
@@ -416,7 +416,7 @@ evaluation (internal):
 
 ast            : n_i32 = n_f32
 raw expr       : eq(n_i32::Int32 NULL, n_f32::Float32 NULL)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST(n_i32 AS Float64 NULL), CAST(n_f32 AS Float64 NULL))
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<Int32 NULL>(n_i32 AS Float64 NULL), CAST<Float32 NULL>(n_f32 AS Float64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+--------------+--------------+
@@ -438,7 +438,7 @@ evaluation (internal):
 
 ast            : n_i32 > f64
 raw expr       : gt(n_i32::Int32 NULL, f64::Float64)
-checked expr   : gt<Float64 NULL, Float64 NULL>(CAST(n_i32 AS Float64 NULL), CAST(f64 AS Float64 NULL))
+checked expr   : gt<Float64 NULL, Float64 NULL>(CAST<Int32 NULL>(n_i32 AS Float64 NULL), CAST<Float64>(f64 AS Float64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+---------+--------------+
@@ -460,7 +460,7 @@ evaluation (internal):
 
 ast            : n_i32 = f64
 raw expr       : eq(n_i32::Int32 NULL, f64::Float64)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST(n_i32 AS Float64 NULL), CAST(f64 AS Float64 NULL))
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<Int32 NULL>(n_i32 AS Float64 NULL), CAST<Float64>(f64 AS Float64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+---------+--------------+
@@ -482,7 +482,7 @@ evaluation (internal):
 
 ast            : n_i32 > n_f64
 raw expr       : gt(n_i32::Int32 NULL, n_f64::Float64 NULL)
-checked expr   : gt<Float64 NULL, Float64 NULL>(CAST(n_i32 AS Float64 NULL), n_f64)
+checked expr   : gt<Float64 NULL, Float64 NULL>(CAST<Int32 NULL>(n_i32 AS Float64 NULL), n_f64)
 optimized expr : false
 evaluation:
 +--------+------------+--------------+--------------+
@@ -504,7 +504,7 @@ evaluation (internal):
 
 ast            : n_i32 = n_f64
 raw expr       : eq(n_i32::Int32 NULL, n_f64::Float64 NULL)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST(n_i32 AS Float64 NULL), n_f64)
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<Int32 NULL>(n_i32 AS Float64 NULL), n_f64)
 optimized expr : true
 evaluation:
 +--------+------------+--------------+--------------+
@@ -526,7 +526,7 @@ evaluation (internal):
 
 ast            : n_i32 > d128
 raw expr       : gt(n_i32::Int32 NULL, d128::Decimal(38, 0))
-checked expr   : gt<Decimal(10, 0) NULL, Decimal(38, 0) NULL>(CAST(n_i32 AS Decimal(10, 0) NULL), CAST(d128 AS Decimal(38, 0) NULL))
+checked expr   : gt<Decimal(10, 0) NULL, Decimal(38, 0) NULL>(CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL), CAST<Decimal(38, 0)>(d128 AS Decimal(38, 0) NULL))
 optimized expr : false
 evaluation:
 +--------+------------+----------------+--------------+
@@ -548,7 +548,7 @@ evaluation (internal):
 
 ast            : n_i32 = d128
 raw expr       : eq(n_i32::Int32 NULL, d128::Decimal(38, 0))
-checked expr   : eq<Decimal(10, 0) NULL, Decimal(38, 0) NULL>(CAST(n_i32 AS Decimal(10, 0) NULL), CAST(d128 AS Decimal(38, 0) NULL))
+checked expr   : eq<Decimal(10, 0) NULL, Decimal(38, 0) NULL>(CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL), CAST<Decimal(38, 0)>(d128 AS Decimal(38, 0) NULL))
 optimized expr : true
 evaluation:
 +--------+------------+----------------+--------------+
@@ -570,7 +570,7 @@ evaluation (internal):
 
 ast            : n_i32 > n_d128
 raw expr       : gt(n_i32::Int32 NULL, n_d128::Decimal(38, 0) NULL)
-checked expr   : gt<Decimal(10, 0) NULL, Decimal(38, 0) NULL>(CAST(n_i32 AS Decimal(10, 0) NULL), n_d128)
+checked expr   : gt<Decimal(10, 0) NULL, Decimal(38, 0) NULL>(CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL), n_d128)
 optimized expr : false
 evaluation:
 +--------+------------+---------------------+--------------+
@@ -592,7 +592,7 @@ evaluation (internal):
 
 ast            : n_i32 = n_d128
 raw expr       : eq(n_i32::Int32 NULL, n_d128::Decimal(38, 0) NULL)
-checked expr   : eq<Decimal(10, 0) NULL, Decimal(38, 0) NULL>(CAST(n_i32 AS Decimal(10, 0) NULL), n_d128)
+checked expr   : eq<Decimal(10, 0) NULL, Decimal(38, 0) NULL>(CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL), n_d128)
 optimized expr : true
 evaluation:
 +--------+------------+---------------------+--------------+
@@ -614,7 +614,7 @@ evaluation (internal):
 
 ast            : n_i32 > d256
 raw expr       : gt(n_i32::Int32 NULL, d256::Decimal(76, 0))
-checked expr   : gt<Decimal(10, 0) NULL, Decimal(76, 0) NULL>(CAST(n_i32 AS Decimal(10, 0) NULL), CAST(d256 AS Decimal(76, 0) NULL))
+checked expr   : gt<Decimal(10, 0) NULL, Decimal(76, 0) NULL>(CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL), CAST<Decimal(76, 0)>(d256 AS Decimal(76, 0) NULL))
 optimized expr : false
 evaluation:
 +--------+------------+----------------+--------------+
@@ -636,7 +636,7 @@ evaluation (internal):
 
 ast            : n_i32 = d256
 raw expr       : eq(n_i32::Int32 NULL, d256::Decimal(76, 0))
-checked expr   : eq<Decimal(10, 0) NULL, Decimal(76, 0) NULL>(CAST(n_i32 AS Decimal(10, 0) NULL), CAST(d256 AS Decimal(76, 0) NULL))
+checked expr   : eq<Decimal(10, 0) NULL, Decimal(76, 0) NULL>(CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL), CAST<Decimal(76, 0)>(d256 AS Decimal(76, 0) NULL))
 optimized expr : true
 evaluation:
 +--------+------------+----------------+--------------+
@@ -658,7 +658,7 @@ evaluation (internal):
 
 ast            : n_i32 > n_d256
 raw expr       : gt(n_i32::Int32 NULL, n_d256::Decimal(76, 0) NULL)
-checked expr   : gt<Decimal(10, 0) NULL, Decimal(76, 0) NULL>(CAST(n_i32 AS Decimal(10, 0) NULL), n_d256)
+checked expr   : gt<Decimal(10, 0) NULL, Decimal(76, 0) NULL>(CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL), n_d256)
 optimized expr : false
 evaluation:
 +--------+------------+---------------------+--------------+
@@ -680,7 +680,7 @@ evaluation (internal):
 
 ast            : n_i32 = n_d256
 raw expr       : eq(n_i32::Int32 NULL, n_d256::Decimal(76, 0) NULL)
-checked expr   : eq<Decimal(10, 0) NULL, Decimal(76, 0) NULL>(CAST(n_i32 AS Decimal(10, 0) NULL), n_d256)
+checked expr   : eq<Decimal(10, 0) NULL, Decimal(76, 0) NULL>(CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL), n_d256)
 optimized expr : true
 evaluation:
 +--------+------------+---------------------+--------------+
@@ -702,7 +702,7 @@ evaluation (internal):
 
 ast            : n_i64 > i32
 raw expr       : gt(n_i64::Int64 NULL, i32::Int32)
-checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST(i32 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST<Int32>(i32 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+---------+------------+--------------+
@@ -724,7 +724,7 @@ evaluation (internal):
 
 ast            : n_i64 = i32
 raw expr       : eq(n_i64::Int64 NULL, i32::Int32)
-checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST(i32 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST<Int32>(i32 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+---------+------------+--------------+
@@ -746,7 +746,7 @@ evaluation (internal):
 
 ast            : n_i64 > i64
 raw expr       : gt(n_i64::Int64 NULL, i64::Int64)
-checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST(i64 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST<Int64>(i64 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+---------+------------+--------------+
@@ -768,7 +768,7 @@ evaluation (internal):
 
 ast            : n_i64 = i64
 raw expr       : eq(n_i64::Int64 NULL, i64::Int64)
-checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST(i64 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST<Int64>(i64 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+---------+------------+--------------+
@@ -790,7 +790,7 @@ evaluation (internal):
 
 ast            : n_i64 > u32
 raw expr       : gt(n_i64::Int64 NULL, u32::UInt32)
-checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST(u32 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt32>(u32 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+---------+------------+--------------+
@@ -812,7 +812,7 @@ evaluation (internal):
 
 ast            : n_i64 = u32
 raw expr       : eq(n_i64::Int64 NULL, u32::UInt32)
-checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST(u32 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt32>(u32 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+---------+------------+--------------+
@@ -834,7 +834,7 @@ evaluation (internal):
 
 ast            : n_i64 > u64
 raw expr       : gt(n_i64::Int64 NULL, u64::UInt64)
-checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST(u64 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt64>(u64 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+---------+--------------+
@@ -856,7 +856,7 @@ evaluation (internal):
 
 ast            : n_i64 = u64
 raw expr       : eq(n_i64::Int64 NULL, u64::UInt64)
-checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST(u64 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt64>(u64 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+---------+--------------+
@@ -878,7 +878,7 @@ evaluation (internal):
 
 ast            : n_i64 > n_i32
 raw expr       : gt(n_i64::Int64 NULL, n_i32::Int32 NULL)
-checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST(n_i32 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST<Int32 NULL>(n_i32 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+------------+--------------+
@@ -900,7 +900,7 @@ evaluation (internal):
 
 ast            : n_i64 = n_i32
 raw expr       : eq(n_i64::Int64 NULL, n_i32::Int32 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST(n_i32 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST<Int32 NULL>(n_i32 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+------------+--------------+
@@ -964,7 +964,7 @@ evaluation (internal):
 
 ast            : n_i64 > n_u32
 raw expr       : gt(n_i64::Int64 NULL, n_u32::UInt32 NULL)
-checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST(n_u32 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt32 NULL>(n_u32 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+-------------+------------+--------------+
@@ -986,7 +986,7 @@ evaluation (internal):
 
 ast            : n_i64 = n_u32
 raw expr       : eq(n_i64::Int64 NULL, n_u32::UInt32 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST(n_u32 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt32 NULL>(n_u32 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+-------------+------------+--------------+
@@ -1008,7 +1008,7 @@ evaluation (internal):
 
 ast            : n_i64 > n_u64
 raw expr       : gt(n_i64::Int64 NULL, n_u64::UInt64 NULL)
-checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST(n_u64 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt64 NULL>(n_u64 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+-------------+--------------+
@@ -1030,7 +1030,7 @@ evaluation (internal):
 
 ast            : n_i64 = n_u64
 raw expr       : eq(n_i64::Int64 NULL, n_u64::UInt64 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST(n_u64 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt64 NULL>(n_u64 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+-------------+--------------+
@@ -1052,7 +1052,7 @@ evaluation (internal):
 
 ast            : n_i64 > f32
 raw expr       : gt(n_i64::Int64 NULL, f32::Float32)
-checked expr   : gt<Float64 NULL, Float64 NULL>(CAST(n_i64 AS Float64 NULL), CAST(f32 AS Float64 NULL))
+checked expr   : gt<Float64 NULL, Float64 NULL>(CAST<Int64 NULL>(n_i64 AS Float64 NULL), CAST<Float32>(f32 AS Float64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+---------+--------------+
@@ -1074,7 +1074,7 @@ evaluation (internal):
 
 ast            : n_i64 = f32
 raw expr       : eq(n_i64::Int64 NULL, f32::Float32)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST(n_i64 AS Float64 NULL), CAST(f32 AS Float64 NULL))
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<Int64 NULL>(n_i64 AS Float64 NULL), CAST<Float32>(f32 AS Float64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+---------+--------------+
@@ -1096,7 +1096,7 @@ evaluation (internal):
 
 ast            : n_i64 > n_f32
 raw expr       : gt(n_i64::Int64 NULL, n_f32::Float32 NULL)
-checked expr   : gt<Float64 NULL, Float64 NULL>(CAST(n_i64 AS Float64 NULL), CAST(n_f32 AS Float64 NULL))
+checked expr   : gt<Float64 NULL, Float64 NULL>(CAST<Int64 NULL>(n_i64 AS Float64 NULL), CAST<Float32 NULL>(n_f32 AS Float64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+--------------+
@@ -1118,7 +1118,7 @@ evaluation (internal):
 
 ast            : n_i64 = n_f32
 raw expr       : eq(n_i64::Int64 NULL, n_f32::Float32 NULL)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST(n_i64 AS Float64 NULL), CAST(n_f32 AS Float64 NULL))
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<Int64 NULL>(n_i64 AS Float64 NULL), CAST<Float32 NULL>(n_f32 AS Float64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+--------------+--------------+
@@ -1140,7 +1140,7 @@ evaluation (internal):
 
 ast            : n_i64 > f64
 raw expr       : gt(n_i64::Int64 NULL, f64::Float64)
-checked expr   : gt<Float64 NULL, Float64 NULL>(CAST(n_i64 AS Float64 NULL), CAST(f64 AS Float64 NULL))
+checked expr   : gt<Float64 NULL, Float64 NULL>(CAST<Int64 NULL>(n_i64 AS Float64 NULL), CAST<Float64>(f64 AS Float64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+---------+--------------+
@@ -1162,7 +1162,7 @@ evaluation (internal):
 
 ast            : n_i64 = f64
 raw expr       : eq(n_i64::Int64 NULL, f64::Float64)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST(n_i64 AS Float64 NULL), CAST(f64 AS Float64 NULL))
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<Int64 NULL>(n_i64 AS Float64 NULL), CAST<Float64>(f64 AS Float64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+---------+--------------+
@@ -1184,7 +1184,7 @@ evaluation (internal):
 
 ast            : n_i64 > n_f64
 raw expr       : gt(n_i64::Int64 NULL, n_f64::Float64 NULL)
-checked expr   : gt<Float64 NULL, Float64 NULL>(CAST(n_i64 AS Float64 NULL), n_f64)
+checked expr   : gt<Float64 NULL, Float64 NULL>(CAST<Int64 NULL>(n_i64 AS Float64 NULL), n_f64)
 optimized expr : false
 evaluation:
 +--------+------------+--------------+--------------+
@@ -1206,7 +1206,7 @@ evaluation (internal):
 
 ast            : n_i64 = n_f64
 raw expr       : eq(n_i64::Int64 NULL, n_f64::Float64 NULL)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST(n_i64 AS Float64 NULL), n_f64)
+checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<Int64 NULL>(n_i64 AS Float64 NULL), n_f64)
 optimized expr : true
 evaluation:
 +--------+------------+--------------+--------------+
@@ -1228,7 +1228,7 @@ evaluation (internal):
 
 ast            : n_i64 > d128
 raw expr       : gt(n_i64::Int64 NULL, d128::Decimal(38, 0))
-checked expr   : gt<Decimal(19, 0) NULL, Decimal(38, 0) NULL>(CAST(n_i64 AS Decimal(19, 0) NULL), CAST(d128 AS Decimal(38, 0) NULL))
+checked expr   : gt<Decimal(19, 0) NULL, Decimal(38, 0) NULL>(CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL), CAST<Decimal(38, 0)>(d128 AS Decimal(38, 0) NULL))
 optimized expr : false
 evaluation:
 +--------+------------+----------------+--------------+
@@ -1250,7 +1250,7 @@ evaluation (internal):
 
 ast            : n_i64 = d128
 raw expr       : eq(n_i64::Int64 NULL, d128::Decimal(38, 0))
-checked expr   : eq<Decimal(19, 0) NULL, Decimal(38, 0) NULL>(CAST(n_i64 AS Decimal(19, 0) NULL), CAST(d128 AS Decimal(38, 0) NULL))
+checked expr   : eq<Decimal(19, 0) NULL, Decimal(38, 0) NULL>(CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL), CAST<Decimal(38, 0)>(d128 AS Decimal(38, 0) NULL))
 optimized expr : true
 evaluation:
 +--------+------------+----------------+--------------+
@@ -1272,7 +1272,7 @@ evaluation (internal):
 
 ast            : n_i64 > n_d128
 raw expr       : gt(n_i64::Int64 NULL, n_d128::Decimal(38, 0) NULL)
-checked expr   : gt<Decimal(19, 0) NULL, Decimal(38, 0) NULL>(CAST(n_i64 AS Decimal(19, 0) NULL), n_d128)
+checked expr   : gt<Decimal(19, 0) NULL, Decimal(38, 0) NULL>(CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL), n_d128)
 optimized expr : false
 evaluation:
 +--------+------------+---------------------+--------------+
@@ -1294,7 +1294,7 @@ evaluation (internal):
 
 ast            : n_i64 = n_d128
 raw expr       : eq(n_i64::Int64 NULL, n_d128::Decimal(38, 0) NULL)
-checked expr   : eq<Decimal(19, 0) NULL, Decimal(38, 0) NULL>(CAST(n_i64 AS Decimal(19, 0) NULL), n_d128)
+checked expr   : eq<Decimal(19, 0) NULL, Decimal(38, 0) NULL>(CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL), n_d128)
 optimized expr : true
 evaluation:
 +--------+------------+---------------------+--------------+
@@ -1316,7 +1316,7 @@ evaluation (internal):
 
 ast            : n_i64 > d256
 raw expr       : gt(n_i64::Int64 NULL, d256::Decimal(76, 0))
-checked expr   : gt<Decimal(19, 0) NULL, Decimal(76, 0) NULL>(CAST(n_i64 AS Decimal(19, 0) NULL), CAST(d256 AS Decimal(76, 0) NULL))
+checked expr   : gt<Decimal(19, 0) NULL, Decimal(76, 0) NULL>(CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL), CAST<Decimal(76, 0)>(d256 AS Decimal(76, 0) NULL))
 optimized expr : false
 evaluation:
 +--------+------------+----------------+--------------+
@@ -1338,7 +1338,7 @@ evaluation (internal):
 
 ast            : n_i64 = d256
 raw expr       : eq(n_i64::Int64 NULL, d256::Decimal(76, 0))
-checked expr   : eq<Decimal(19, 0) NULL, Decimal(76, 0) NULL>(CAST(n_i64 AS Decimal(19, 0) NULL), CAST(d256 AS Decimal(76, 0) NULL))
+checked expr   : eq<Decimal(19, 0) NULL, Decimal(76, 0) NULL>(CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL), CAST<Decimal(76, 0)>(d256 AS Decimal(76, 0) NULL))
 optimized expr : true
 evaluation:
 +--------+------------+----------------+--------------+
@@ -1360,7 +1360,7 @@ evaluation (internal):
 
 ast            : n_i64 > n_d256
 raw expr       : gt(n_i64::Int64 NULL, n_d256::Decimal(76, 0) NULL)
-checked expr   : gt<Decimal(19, 0) NULL, Decimal(76, 0) NULL>(CAST(n_i64 AS Decimal(19, 0) NULL), n_d256)
+checked expr   : gt<Decimal(19, 0) NULL, Decimal(76, 0) NULL>(CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL), n_d256)
 optimized expr : false
 evaluation:
 +--------+------------+---------------------+--------------+
@@ -1382,7 +1382,7 @@ evaluation (internal):
 
 ast            : n_i64 = n_d256
 raw expr       : eq(n_i64::Int64 NULL, n_d256::Decimal(76, 0) NULL)
-checked expr   : eq<Decimal(19, 0) NULL, Decimal(76, 0) NULL>(CAST(n_i64 AS Decimal(19, 0) NULL), n_d256)
+checked expr   : eq<Decimal(19, 0) NULL, Decimal(76, 0) NULL>(CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL), n_d256)
 optimized expr : true
 evaluation:
 +--------+------------+---------------------+--------------+
@@ -1404,7 +1404,7 @@ evaluation (internal):
 
 ast            : n_i32 > 1
 raw expr       : gt(n_i32::Int32 NULL, 1)
-checked expr   : gt<Int32 NULL, Int32 NULL>(n_i32, CAST(1_u8 AS Int32 NULL))
+checked expr   : gt<Int32 NULL, Int32 NULL>(n_i32, CAST<UInt8>(1_u8 AS Int32 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1425,7 +1425,7 @@ evaluation (internal):
 
 ast            : n_i32 = 1
 raw expr       : eq(n_i32::Int32 NULL, 1)
-checked expr   : eq<Int32 NULL, Int32 NULL>(n_i32, CAST(1_i32 AS Int32 NULL))
+checked expr   : eq<Int32 NULL, Int32 NULL>(n_i32, CAST<Int32>(1_i32 AS Int32 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1446,7 +1446,7 @@ evaluation (internal):
 
 ast            : 1 > n_i32
 raw expr       : gt(1, n_i32::Int32 NULL)
-checked expr   : gt<Int32 NULL, Int32 NULL>(CAST(1_u8 AS Int32 NULL), n_i32)
+checked expr   : gt<Int32 NULL, Int32 NULL>(CAST<UInt8>(1_u8 AS Int32 NULL), n_i32)
 optimized expr : true
 evaluation:
 +--------+------------+--------------+
@@ -1467,7 +1467,7 @@ evaluation (internal):
 
 ast            : 1 = n_i32
 raw expr       : eq(1, n_i32::Int32 NULL)
-checked expr   : eq<Int32 NULL, Int32 NULL>(CAST(1_i32 AS Int32 NULL), n_i32)
+checked expr   : eq<Int32 NULL, Int32 NULL>(CAST<Int32>(1_i32 AS Int32 NULL), n_i32)
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1488,7 +1488,7 @@ evaluation (internal):
 
 ast            : n_i32 > 1.0
 raw expr       : gt(n_i32::Int32 NULL, 1.0)
-checked expr   : gt<Decimal(10, 0) NULL, Decimal(2, 1) NULL>(CAST(n_i32 AS Decimal(10, 0) NULL), CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+checked expr   : gt<Decimal(10, 0) NULL, Decimal(2, 1) NULL>(CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL), CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1509,7 +1509,7 @@ evaluation (internal):
 
 ast            : n_i32 = 1.0
 raw expr       : eq(n_i32::Int32 NULL, 1.0)
-checked expr   : eq<Decimal(10, 0) NULL, Decimal(2, 1) NULL>(CAST(n_i32 AS Decimal(10, 0) NULL), CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+checked expr   : eq<Decimal(10, 0) NULL, Decimal(2, 1) NULL>(CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL), CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1530,7 +1530,7 @@ evaluation (internal):
 
 ast            : 1.0 > n_i32
 raw expr       : gt(1.0, n_i32::Int32 NULL)
-checked expr   : gt<Decimal(2, 1) NULL, Decimal(10, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST(n_i32 AS Decimal(10, 0) NULL))
+checked expr   : gt<Decimal(2, 1) NULL, Decimal(10, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL))
 optimized expr : true
 evaluation:
 +--------+------------+--------------+
@@ -1551,7 +1551,7 @@ evaluation (internal):
 
 ast            : 1.0 = n_i32
 raw expr       : eq(1.0, n_i32::Int32 NULL)
-checked expr   : eq<Decimal(2, 1) NULL, Decimal(10, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST(n_i32 AS Decimal(10, 0) NULL))
+checked expr   : eq<Decimal(2, 1) NULL, Decimal(10, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST<Int32 NULL>(n_i32 AS Decimal(10, 0) NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1586,7 +1586,7 @@ candidate functions:
 
 ast            : n_i32 = '1'
 raw expr       : eq(n_i32::Int32 NULL, '1')
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST("1" AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<String>("1" AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1621,7 +1621,7 @@ candidate functions:
 
 ast            : '1' = n_i32
 raw expr       : eq('1', n_i32::Int32 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST("1" AS Int64 NULL), CAST(n_i32 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<String>("1" AS Int64 NULL), CAST<Int32 NULL>(n_i32 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1642,7 +1642,7 @@ evaluation (internal):
 
 ast            : n_i32 > 1::uint64
 raw expr       : gt(n_i32::Int32 NULL, CAST(1 AS UInt64))
-checked expr   : gt<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(to_uint64<UInt8>(1_u8) AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1663,7 +1663,7 @@ evaluation (internal):
 
 ast            : n_i32 = 1::uint64
 raw expr       : eq(n_i32::Int32 NULL, CAST(1 AS UInt64))
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(n_i32 AS Int64 NULL), CAST(to_uint64<UInt8>(1_u8) AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<Int32 NULL>(n_i32 AS Int64 NULL), CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1684,7 +1684,7 @@ evaluation (internal):
 
 ast            : 1::uint64 > n_i32
 raw expr       : gt(CAST(1 AS UInt64), n_i32::Int32 NULL)
-checked expr   : gt<Int64 NULL, Int64 NULL>(CAST(to_uint64<UInt8>(1_u8) AS Int64 NULL), CAST(n_i32 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Int64 NULL), CAST<Int32 NULL>(n_i32 AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+------------+--------------+
@@ -1705,7 +1705,7 @@ evaluation (internal):
 
 ast            : 1::uint64 = n_i32
 raw expr       : eq(CAST(1 AS UInt64), n_i32::Int32 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(to_uint64<UInt8>(1_u8) AS Int64 NULL), CAST(n_i32 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Int64 NULL), CAST<Int32 NULL>(n_i32 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1726,7 +1726,7 @@ evaluation (internal):
 
 ast            : n_i64 > 1
 raw expr       : gt(n_i64::Int64 NULL, 1)
-checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST(1_u8 AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt8>(1_u8 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1747,7 +1747,7 @@ evaluation (internal):
 
 ast            : n_i64 = 1
 raw expr       : eq(n_i64::Int64 NULL, 1)
-checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST(1_i64 AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST<Int64>(1_i64 AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1768,7 +1768,7 @@ evaluation (internal):
 
 ast            : 1 > n_i64
 raw expr       : gt(1, n_i64::Int64 NULL)
-checked expr   : gt<Int64 NULL, Int64 NULL>(CAST(1_u8 AS Int64 NULL), n_i64)
+checked expr   : gt<Int64 NULL, Int64 NULL>(CAST<UInt8>(1_u8 AS Int64 NULL), n_i64)
 optimized expr : true
 evaluation:
 +--------+------------+--------------+
@@ -1789,7 +1789,7 @@ evaluation (internal):
 
 ast            : 1 = n_i64
 raw expr       : eq(1, n_i64::Int64 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(1_i64 AS Int64 NULL), n_i64)
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<Int64>(1_i64 AS Int64 NULL), n_i64)
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1810,7 +1810,7 @@ evaluation (internal):
 
 ast            : n_i64 > 1.0
 raw expr       : gt(n_i64::Int64 NULL, 1.0)
-checked expr   : gt<Decimal(19, 0) NULL, Decimal(2, 1) NULL>(CAST(n_i64 AS Decimal(19, 0) NULL), CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+checked expr   : gt<Decimal(19, 0) NULL, Decimal(2, 1) NULL>(CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL), CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1831,7 +1831,7 @@ evaluation (internal):
 
 ast            : n_i64 = 1.0
 raw expr       : eq(n_i64::Int64 NULL, 1.0)
-checked expr   : eq<Decimal(19, 0) NULL, Decimal(2, 1) NULL>(CAST(n_i64 AS Decimal(19, 0) NULL), CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+checked expr   : eq<Decimal(19, 0) NULL, Decimal(2, 1) NULL>(CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL), CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1852,7 +1852,7 @@ evaluation (internal):
 
 ast            : 1.0 > n_i64
 raw expr       : gt(1.0, n_i64::Int64 NULL)
-checked expr   : gt<Decimal(2, 1) NULL, Decimal(19, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST(n_i64 AS Decimal(19, 0) NULL))
+checked expr   : gt<Decimal(2, 1) NULL, Decimal(19, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL))
 optimized expr : true
 evaluation:
 +--------+------------+--------------+
@@ -1873,7 +1873,7 @@ evaluation (internal):
 
 ast            : 1.0 = n_i64
 raw expr       : eq(1.0, n_i64::Int64 NULL)
-checked expr   : eq<Decimal(2, 1) NULL, Decimal(19, 0) NULL>(CAST(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST(n_i64 AS Decimal(19, 0) NULL))
+checked expr   : eq<Decimal(2, 1) NULL, Decimal(19, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL), CAST<Int64 NULL>(n_i64 AS Decimal(19, 0) NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1908,7 +1908,7 @@ candidate functions:
 
 ast            : n_i64 = '1'
 raw expr       : eq(n_i64::Int64 NULL, '1')
-checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST("1" AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST<String>("1" AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1943,7 +1943,7 @@ candidate functions:
 
 ast            : '1' = n_i64
 raw expr       : eq('1', n_i64::Int64 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST("1" AS Int64 NULL), n_i64)
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<String>("1" AS Int64 NULL), n_i64)
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1964,7 +1964,7 @@ evaluation (internal):
 
 ast            : n_i64 > 1::uint64
 raw expr       : gt(n_i64::Int64 NULL, CAST(1 AS UInt64))
-checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST(to_uint64<UInt8>(1_u8) AS Int64 NULL))
+checked expr   : gt<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -1985,7 +1985,7 @@ evaluation (internal):
 
 ast            : n_i64 = 1::uint64
 raw expr       : eq(n_i64::Int64 NULL, CAST(1 AS UInt64))
-checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST(to_uint64<UInt8>(1_u8) AS Int64 NULL))
+checked expr   : eq<Int64 NULL, Int64 NULL>(n_i64, CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Int64 NULL))
 optimized expr : false
 evaluation:
 +--------+------------+--------------+
@@ -2006,7 +2006,7 @@ evaluation (internal):
 
 ast            : 1::uint64 > n_i64
 raw expr       : gt(CAST(1 AS UInt64), n_i64::Int64 NULL)
-checked expr   : gt<Int64 NULL, Int64 NULL>(CAST(to_uint64<UInt8>(1_u8) AS Int64 NULL), n_i64)
+checked expr   : gt<Int64 NULL, Int64 NULL>(CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Int64 NULL), n_i64)
 optimized expr : true
 evaluation:
 +--------+------------+--------------+
@@ -2027,7 +2027,7 @@ evaluation (internal):
 
 ast            : 1::uint64 = n_i64
 raw expr       : eq(CAST(1 AS UInt64), n_i64::Int64 NULL)
-checked expr   : eq<Int64 NULL, Int64 NULL>(CAST(to_uint64<UInt8>(1_u8) AS Int64 NULL), n_i64)
+checked expr   : eq<Int64 NULL, Int64 NULL>(CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Int64 NULL), n_i64)
 optimized expr : false
 evaluation:
 +--------+------------+--------------+

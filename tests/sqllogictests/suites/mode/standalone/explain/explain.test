@@ -873,7 +873,7 @@ Sort
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
     │   ├── output columns: [numbers.number (#2), register_at (#3)]
-    │   ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#2))))]
+    │   ├── expressions: [to_yyyymmdd(to_timestamp(CAST(numbers.number (#2) AS Int64)))]
     │   ├── estimated rows: 0.00
     │   └── Filter
     │       ├── output columns: [numbers.number (#2)]
@@ -890,7 +890,7 @@ Sort
     │           └── estimated rows: 10.00
     └── EvalScalar(Probe)
         ├── output columns: [numbers.number (#0), pt (#1)]
-        ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#0))))]
+        ├── expressions: [to_yyyymmdd(to_timestamp(CAST(numbers.number (#0) AS Int64)))]
         ├── estimated rows: 0.00
         └── Filter
             ├── output columns: [numbers.number (#0)]

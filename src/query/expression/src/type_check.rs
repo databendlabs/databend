@@ -337,7 +337,6 @@ pub fn check_function<Index: ColumnIndex>(
 
     if !checked_candidates.is_empty() {
         checked_candidates.sort_by_key(|(_, score, seq)| std::cmp::Reverse((*score, *seq)));
-        println!("checked_candidates {:#?}", checked_candidates);
         return Ok(checked_candidates.pop().unwrap().0);
     }
 

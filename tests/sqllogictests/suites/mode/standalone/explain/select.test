@@ -75,7 +75,7 @@ explain select * from numbers(1) where number = pow(1, 1 + 1)
 ----
 Filter
 ├── output columns: [numbers.number (#0)]
-├── filters: [to_float64(numbers.number (#0)) = 1]
+├── filters: [CAST(numbers.number (#0) AS Float64) = 1]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
@@ -84,7 +84,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [to_float64(numbers.number (#0)) = 1], limit: NONE]
+    ├── push downs: [filters: [CAST(numbers.number (#0) AS Float64) = 1], limit: NONE]
     └── estimated rows: 1.00
 
 query T
