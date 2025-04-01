@@ -90,9 +90,9 @@ result   : MustFalse
 | 2         | Map(UInt8, String)   | Column(ArrayColumn { values: Tuple([UInt8([1, 2, 1, 2, 1, 2, 3]), StringColumn[a, b, a, b, b, c, d]]), offsets: [0, 2, 4, 6, 7] })                                                                                                                                                                                        |
 | 3         | Map(String, Variant) | Column(ArrayColumn { values: Tuple([StringColumn[a, b, a, b, b, c, d], BinaryColumn { data: 0x20000000100000036162632000000020000002506420000000100000036162632000000020000002506420000000100000036465662000000040000000200000001000000378797a, offsets: [0, 11, 21, 32, 42, 53, 61, 72] }]), offsets: [0, 2, 4, 6, 7] }) |
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(2 AS Map(UInt8, String NULL)), 1_u8), CAST("a" AS String NULL)))
-fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(2 AS Map(UInt8, String NULL)), 1_u8), "a"))
-filter   : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(2 AS Map(UInt8, String NULL)), 1_u8), "a"))
+expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 1_u8), CAST<String>("a" AS String NULL)))
+fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 1_u8), "a"))
+filter   : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 1_u8), "a"))
 domains  : {"2": Map(Some(Tuple([Number(UInt8(SimpleDomain { min: 0, max: 255 })), String(StringDomain { min: "", max: None })])))}
 result   : Uncertain
 
@@ -105,9 +105,9 @@ result   : Uncertain
 | 2         | Map(UInt8, String)   | Column(ArrayColumn { values: Tuple([UInt8([1, 2, 1, 2, 1, 2, 3]), StringColumn[a, b, a, b, b, c, d]]), offsets: [0, 2, 4, 6, 7] })                                                                                                                                                                                        |
 | 3         | Map(String, Variant) | Column(ArrayColumn { values: Tuple([StringColumn[a, b, a, b, b, c, d], BinaryColumn { data: 0x20000000100000036162632000000020000002506420000000100000036162632000000020000002506420000000100000036465662000000040000000200000001000000378797a, offsets: [0, 11, 21, 32, 42, 53, 61, 72] }]), offsets: [0, 2, 4, 6, 7] }) |
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(2 AS Map(UInt8, String NULL)), 2_u8), CAST("b" AS String NULL)))
-fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(2 AS Map(UInt8, String NULL)), 2_u8), "b"))
-filter   : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(2 AS Map(UInt8, String NULL)), 2_u8), "b"))
+expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 2_u8), CAST<String>("b" AS String NULL)))
+fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 2_u8), "b"))
+filter   : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 2_u8), "b"))
 domains  : {"2": Map(Some(Tuple([Number(UInt8(SimpleDomain { min: 0, max: 255 })), String(StringDomain { min: "", max: None })])))}
 result   : Uncertain
 
@@ -120,8 +120,8 @@ result   : Uncertain
 | 2         | Map(UInt8, String)   | Column(ArrayColumn { values: Tuple([UInt8([1, 2, 1, 2, 1, 2, 3]), StringColumn[a, b, a, b, b, c, d]]), offsets: [0, 2, 4, 6, 7] })                                                                                                                                                                                        |
 | 3         | Map(String, Variant) | Column(ArrayColumn { values: Tuple([StringColumn[a, b, a, b, b, c, d], BinaryColumn { data: 0x20000000100000036162632000000020000002506420000000100000036162632000000020000002506420000000100000036465662000000040000000200000001000000378797a, offsets: [0, 11, 21, 32, 42, 53, 61, 72] }]), offsets: [0, 2, 4, 6, 7] }) |
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(2 AS Map(UInt8, String NULL)), 3_u8), CAST("x" AS String NULL)))
-fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(2 AS Map(UInt8, String NULL)), 3_u8), "x"))
+expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 3_u8), CAST<String>("x" AS String NULL)))
+fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 3_u8), "x"))
 filter   : is_true<Boolean NULL>(__bloom_column_2_1)
 domains  : {"2": Map(Some(Tuple([Number(UInt8(SimpleDomain { min: 0, max: 255 })), String(StringDomain { min: "", max: None })]))), "__bloom_column_2_1": Nullable(NullableDomain { has_null: false, value: Some(Boolean(BooleanDomain { has_false: true, has_true: false })) })}
 result   : MustFalse
@@ -135,9 +135,9 @@ result   : MustFalse
 | 2         | Map(UInt8, String)   | Column(ArrayColumn { values: Tuple([UInt8([1, 2, 1, 2, 1, 2, 3]), StringColumn[a, b, a, b, b, c, d]]), offsets: [0, 2, 4, 6, 7] })                                                                                                                                                                                        |
 | 3         | Map(String, Variant) | Column(ArrayColumn { values: Tuple([StringColumn[a, b, a, b, b, c, d], BinaryColumn { data: 0x20000000100000036162632000000020000002506420000000100000036162632000000020000002506420000000100000036465662000000040000000200000001000000378797a, offsets: [0, 11, 21, 32, 42, 53, 61, 72] }]), offsets: [0, 2, 4, 6, 7] }) |
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST(3 AS Map(String, Variant NULL)), "b") AS String NULL), CAST("def" AS String NULL)))
-fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST(3 AS Map(String, Variant NULL)), "b") AS String NULL), "def"))
-filter   : is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST(3 AS Map(String, Variant NULL)), "b") AS String NULL), "def"))
+expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "b") AS String NULL), CAST<String>("def" AS String NULL)))
+fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "b") AS String NULL), "def"))
+filter   : is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "b") AS String NULL), "def"))
 domains  : {"3": Map(Some(Tuple([String(StringDomain { min: "", max: None }), Undefined])))}
 result   : Uncertain
 
@@ -150,8 +150,8 @@ result   : Uncertain
 | 2         | Map(UInt8, String)   | Column(ArrayColumn { values: Tuple([UInt8([1, 2, 1, 2, 1, 2, 3]), StringColumn[a, b, a, b, b, c, d]]), offsets: [0, 2, 4, 6, 7] })                                                                                                                                                                                        |
 | 3         | Map(String, Variant) | Column(ArrayColumn { values: Tuple([StringColumn[a, b, a, b, b, c, d], BinaryColumn { data: 0x20000000100000036162632000000020000002506420000000100000036162632000000020000002506420000000100000036465662000000040000000200000001000000378797a, offsets: [0, 11, 21, 32, 42, 53, 61, 72] }]), offsets: [0, 2, 4, 6, 7] }) |
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST(3 AS Map(String, Variant NULL)), "d") AS String NULL), CAST("xxx" AS String NULL)))
-fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST(3 AS Map(String, Variant NULL)), "d") AS String NULL), "xxx"))
+expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "d") AS String NULL), CAST<String>("xxx" AS String NULL)))
+fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "d") AS String NULL), "xxx"))
 filter   : is_true<Boolean NULL>(__bloom_column_3_1)
 domains  : {"3": Map(Some(Tuple([String(StringDomain { min: "", max: None }), Undefined]))), "__bloom_column_3_1": Nullable(NullableDomain { has_null: false, value: Some(Boolean(BooleanDomain { has_false: true, has_true: false })) })}
 result   : MustFalse
@@ -165,9 +165,9 @@ result   : MustFalse
 | 2         | Map(UInt8, String)   | Column(ArrayColumn { values: Tuple([UInt8([1, 2, 1, 2, 1, 2, 3]), StringColumn[a, b, a, b, b, c, d]]), offsets: [0, 2, 4, 6, 7] })                                                                                                                                                                                        |
 | 3         | Map(String, Variant) | Column(ArrayColumn { values: Tuple([StringColumn[a, b, a, b, b, c, d], BinaryColumn { data: 0x20000000100000036162632000000020000002506420000000100000036162632000000020000002506420000000100000036465662000000040000000200000001000000378797a, offsets: [0, 11, 21, 32, 42, 53, 61, 72] }]), offsets: [0, 2, 4, 6, 7] }) |
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-expr     : is_true<Boolean NULL>(eq<Boolean NULL, Boolean NULL>(TRY_CAST(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST(3 AS Map(String, Variant NULL)), "c") AS Boolean NULL), CAST(true AS Boolean NULL)))
-fold_expr: is_true<Boolean NULL>(eq<Boolean NULL, Boolean NULL>(TRY_CAST(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST(3 AS Map(String, Variant NULL)), "c") AS Boolean NULL), true))
-filter   : is_true<Boolean NULL>(eq<Boolean NULL, Boolean NULL>(TRY_CAST(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST(3 AS Map(String, Variant NULL)), "c") AS Boolean NULL), true))
+expr     : is_true<Boolean NULL>(eq<Boolean NULL, Boolean NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "c") AS Boolean NULL), CAST<Boolean>(true AS Boolean NULL)))
+fold_expr: is_true<Boolean NULL>(eq<Boolean NULL, Boolean NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "c") AS Boolean NULL), true))
+filter   : is_true<Boolean NULL>(eq<Boolean NULL, Boolean NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "c") AS Boolean NULL), true))
 domains  : {"3": Map(Some(Tuple([String(StringDomain { min: "", max: None }), Undefined])))}
 result   : Uncertain
 
@@ -201,7 +201,7 @@ result   : Uncertain
 +-----------+-------+-----------------------+
 | 0         | UInt8 | Column(UInt8([1, 2])) |
 +-----------+-------+-----------------------+
-expr     : eq<String, String>(CAST(x AS String), "5")
+expr     : eq<String, String>(CAST<UInt8>(x AS String), "5")
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(UInt8(SimpleDomain { min: 1, max: 2 }))}
 result   : MustFalse
@@ -212,8 +212,8 @@ result   : MustFalse
 +-----------+------+-------------------------+
 | 0         | Int8 | Column(Int8([0, 1, 2])) |
 +-----------+------+-------------------------+
-expr     : eq<Decimal(5, 0), Decimal(2, 1)>(CAST(x AS Decimal(5, 0)), 1.2_d128(2,1))
-filter   : eq<Decimal(5, 0), Decimal(2, 1)>(CAST(x AS Decimal(5, 0)), 1.2_d128(2,1))
+expr     : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int8>(x AS Decimal(5, 0)), 1.2_d128(2,1))
+filter   : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int8>(x AS Decimal(5, 0)), 1.2_d128(2,1))
 domains  : {"x": Number(Int8(SimpleDomain { min: 0, max: 2 }))}
 result   : Uncertain
 
@@ -223,7 +223,7 @@ result   : Uncertain
 +-----------+------+----------------------+
 | 0         | Int8 | Column(Int8([0, 1])) |
 +-----------+------+----------------------+
-expr     : eq<Decimal(5, 0), Decimal(3, 2)>(CAST(x AS Decimal(5, 0)), 2.00_d128(3,2))
+expr     : eq<Decimal(5, 0), Decimal(3, 2)>(CAST<Int8>(x AS Decimal(5, 0)), 2.00_d128(3,2))
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(Int8(SimpleDomain { min: 0, max: 1 }))}
 result   : MustFalse
@@ -234,8 +234,8 @@ result   : MustFalse
 +-----------+-------+--------------------------+
 | 0         | Int16 | Column(Int16([0, 1, 2])) |
 +-----------+-------+--------------------------+
-expr     : eq<Decimal(5, 0), Decimal(2, 1)>(CAST(x AS Decimal(5, 0)), 1.2_d128(2,1))
-filter   : eq<Decimal(5, 0), Decimal(2, 1)>(CAST(x AS Decimal(5, 0)), 1.2_d128(2,1))
+expr     : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int16>(x AS Decimal(5, 0)), 1.2_d128(2,1))
+filter   : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int16>(x AS Decimal(5, 0)), 1.2_d128(2,1))
 domains  : {"x": Number(Int16(SimpleDomain { min: 0, max: 2 }))}
 result   : Uncertain
 
@@ -245,8 +245,8 @@ result   : Uncertain
 +-----------+-------+----------------------------+
 | 0         | Int16 | Column(Int16([1, 3, 100])) |
 +-----------+-------+----------------------------+
-expr     : eq<String, String>(CAST(x AS String), "+3")
-filter   : eq<String, String>(CAST(x AS String), "+3")
+expr     : eq<String, String>(CAST<Int16>(x AS String), "+3")
+filter   : eq<String, String>(CAST<Int16>(x AS String), "+3")
 domains  : {"x": Number(Int16(SimpleDomain { min: 1, max: 100 }))}
 result   : Uncertain
 
@@ -256,7 +256,7 @@ result   : Uncertain
 +-----------+-------+---------------------------+
 | 0         | Int16 | Column(Int16([100, 200])) |
 +-----------+-------+---------------------------+
-expr     : eq<String, String>(CAST(x AS String), "+3")
+expr     : eq<String, String>(CAST<Int16>(x AS String), "+3")
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(Int16(SimpleDomain { min: 100, max: 200 }))}
 result   : MustFalse
@@ -267,8 +267,8 @@ result   : MustFalse
 +-----------+------+----------------------+
 | 0         | Int8 | Column(Int8([0, 2])) |
 +-----------+------+----------------------+
-expr     : eq<Decimal(10, 0), Decimal(2, 1)>(CAST(to_int32<Int16>(to_int16<Int8>(x)) AS Decimal(10, 0)), 1.2_d128(2,1))
-filter   : eq<Decimal(10, 0), Decimal(2, 1)>(CAST(to_int32<Int16>(to_int16<Int8>(x)) AS Decimal(10, 0)), 1.2_d128(2,1))
+expr     : eq<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(to_int32<Int16>(to_int16<Int8>(x)) AS Decimal(10, 0)), 1.2_d128(2,1))
+filter   : eq<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(to_int32<Int16>(to_int16<Int8>(x)) AS Decimal(10, 0)), 1.2_d128(2,1))
 domains  : {"x": Number(Int8(SimpleDomain { min: 0, max: 2 }))}
 result   : Uncertain
 
@@ -278,9 +278,8 @@ result   : Uncertain
 +-----------+-------+--------------------------+
 | 0         | Int32 | Column(Int32([0, 6000])) |
 +-----------+-------+--------------------------+
-expr     : eq<Int16, Int16>(CAST(CAST(x AS Int8) AS Int16), CAST(10_u8 AS Int16))
-fold_expr: eq<Int16, Int16>(CAST(CAST(x AS Int8) AS Int16), 10_i16)
-filter   : eq<Int16, Int16>(CAST(CAST(x AS Int8) AS Int16), 10_i16)
+expr     : eq<Int8, Int8>(CAST<Int32>(x AS Int8), 10_i8)
+filter   : eq<Int8, Int8>(CAST<Int32>(x AS Int8), 10_i8)
 domains  : {"x": Number(Int32(SimpleDomain { min: 0, max: 6000 }))}
 result   : Uncertain
 
@@ -290,9 +289,9 @@ result   : Uncertain
 +-----------+--------+----------------------------------------------------------------+
 | 0         | String | Column(StringColumn[2021-03-05 01:01:01, 2021-03-05 01:01:02]) |
 +-----------+--------+----------------------------------------------------------------+
-expr     : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), CAST("2021-03-05 01:01:01" AS Timestamp))
-fold_expr: eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614906061000000)
-filter   : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614906061000000)
+expr     : eq<Timestamp, Timestamp>(CAST<String>(x AS Timestamp), CAST<String>("2021-03-05 01:01:01" AS Timestamp))
+fold_expr: eq<Timestamp, Timestamp>(CAST<String>(x AS Timestamp), 1614906061000000)
+filter   : eq<Timestamp, Timestamp>(CAST<String>(x AS Timestamp), 1614906061000000)
 domains  : {"x": String(StringDomain { min: "2021-03-05 01:01:01", max: Some("2021-03-05 01:01:02") })}
 result   : Uncertain
 
@@ -302,9 +301,9 @@ result   : Uncertain
 +-----------+------+-------------------------------+
 | 0         | Date | Column([18600, 18691, 19000]) |
 +-----------+------+-------------------------------+
-expr     : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), CAST("2021-03-05 01:01:03" AS Timestamp))
-fold_expr: eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614906063000000)
-filter   : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614906063000000)
+expr     : eq<Timestamp, Timestamp>(CAST<Date>(x AS Timestamp), CAST<String>("2021-03-05 01:01:03" AS Timestamp))
+fold_expr: eq<Timestamp, Timestamp>(CAST<Date>(x AS Timestamp), 1614906063000000)
+filter   : eq<Timestamp, Timestamp>(CAST<Date>(x AS Timestamp), 1614906063000000)
 domains  : {"x": Date(SimpleDomain { min: 18600, max: 19000 })}
 result   : Uncertain
 
@@ -314,9 +313,9 @@ result   : Uncertain
 +-----------+------+-------------------------------+
 | 0         | Date | Column([18600, 18691, 19000]) |
 +-----------+------+-------------------------------+
-expr     : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), CAST("2021-03-05 00:00:00" AS Timestamp))
-fold_expr: eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614902400000000)
-filter   : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1614902400000000)
+expr     : eq<Timestamp, Timestamp>(CAST<Date>(x AS Timestamp), CAST<String>("2021-03-05 00:00:00" AS Timestamp))
+fold_expr: eq<Timestamp, Timestamp>(CAST<Date>(x AS Timestamp), 1614902400000000)
+filter   : eq<Timestamp, Timestamp>(CAST<Date>(x AS Timestamp), 1614902400000000)
 domains  : {"x": Date(SimpleDomain { min: 18600, max: 19000 })}
 result   : Uncertain
 
@@ -326,8 +325,8 @@ result   : Uncertain
 +-----------+------+-------------------------------+
 | 0         | Date | Column([18600, 18691, 19000]) |
 +-----------+------+-------------------------------+
-expr     : eq<Timestamp, Timestamp>(CAST(x AS Timestamp), CAST("2030-03-05 00:00:00" AS Timestamp))
-fold_expr: eq<Timestamp, Timestamp>(CAST(x AS Timestamp), 1898899200000000)
+expr     : eq<Timestamp, Timestamp>(CAST<Date>(x AS Timestamp), CAST<String>("2030-03-05 00:00:00" AS Timestamp))
+fold_expr: eq<Timestamp, Timestamp>(CAST<Date>(x AS Timestamp), 1898899200000000)
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Date(SimpleDomain { min: 18600, max: 19000 })}
 result   : MustFalse
@@ -338,8 +337,8 @@ result   : MustFalse
 +-----------+-------+-------------------------+
 | 0         | Int16 | Column(Int16([0, 300])) |
 +-----------+-------+-------------------------+
-expr     : eq<Decimal(3, 0), Decimal(2, 1)>(CAST(to_int8<Int16>(x) AS Decimal(3, 0)), 1.2_d128(2,1))
-filter   : eq<Decimal(3, 0), Decimal(2, 1)>(CAST(to_int8<Int16>(x) AS Decimal(3, 0)), 1.2_d128(2,1))
+expr     : eq<Decimal(3, 0), Decimal(2, 1)>(CAST<Int8>(to_int8<Int16>(x) AS Decimal(3, 0)), 1.2_d128(2,1))
+filter   : eq<Decimal(3, 0), Decimal(2, 1)>(CAST<Int8>(to_int8<Int16>(x) AS Decimal(3, 0)), 1.2_d128(2,1))
 domains  : {"x": Number(Int16(SimpleDomain { min: 0, max: 300 }))}
 result   : Uncertain
 
@@ -349,7 +348,7 @@ result   : Uncertain
 +-----------+------------+----------------------------------------------------------------------------+
 | 0         | Int16 NULL | Column(NullableColumn { column: Int16([0, 100]), validity: [0b______11] }) |
 +-----------+------------+----------------------------------------------------------------------------+
-expr     : eq<Int16, Int16>(x, CAST(CAST(1_u8 AS Int8) AS Int16))
+expr     : eq<Int16, Int16>(x, CAST<Int8>(CAST<UInt8>(1_u8 AS Int8) AS Int16))
 fold_expr: eq<Int16, Int16>(x, 1_i16)
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(Int16(SimpleDomain { min: 0, max: 100 }))}
@@ -361,9 +360,9 @@ result   : MustFalse
 +-----------+------------+----------------------------------------------------------------------------+
 | 0         | Int16 NULL | Column(NullableColumn { column: Int16([0, 100]), validity: [0b______11] }) |
 +-----------+------------+----------------------------------------------------------------------------+
-expr     : eq<Int8 NULL, Int8 NULL>(CAST(x AS Int8 NULL), CAST(CAST(1_u8 AS Int8) AS Int8 NULL))
-fold_expr: eq<Int8 NULL, Int8 NULL>(CAST(x AS Int8 NULL), 1_i8)
-filter   : eq<Int8 NULL, Int8 NULL>(CAST(x AS Int8 NULL), 1_i8)
+expr     : eq<Int8 NULL, Int8 NULL>(CAST<Int16>(x AS Int8 NULL), CAST<Int8>(CAST<UInt8>(1_u8 AS Int8) AS Int8 NULL))
+fold_expr: eq<Int8 NULL, Int8 NULL>(CAST<Int16>(x AS Int8 NULL), 1_i8)
+filter   : eq<Int8 NULL, Int8 NULL>(CAST<Int16>(x AS Int8 NULL), 1_i8)
 domains  : {"x": Number(Int16(SimpleDomain { min: 0, max: 100 }))}
 result   : Uncertain
 

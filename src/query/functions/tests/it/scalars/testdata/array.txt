@@ -564,7 +564,7 @@ output         : true
 
 ast            : nullable_col in (null, 9, 10, 12)
 raw expr       : or(or(eq(nullable_col::Int64 NULL, 9), eq(nullable_col::Int64 NULL, 10)), eq(nullable_col::Int64 NULL, 12))
-checked expr   : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(nullable_col, CAST<UInt8>(9_u8 AS Int64 NULL)), eq<Int64 NULL, Int64 NULL>(nullable_col, CAST<UInt8>(10_u8 AS Int64 NULL))), eq<Int64 NULL, Int64 NULL>(nullable_col, CAST<UInt8>(12_u8 AS Int64 NULL)))
+checked expr   : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(nullable_col, CAST<Int64>(9_i64 AS Int64 NULL)), eq<Int64 NULL, Int64 NULL>(nullable_col, CAST<Int64>(10_i64 AS Int64 NULL))), eq<Int64 NULL, Int64 NULL>(nullable_col, CAST<Int64>(12_i64 AS Int64 NULL)))
 optimized expr : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(nullable_col, 9_i64), eq<Int64 NULL, Int64 NULL>(nullable_col, 10_i64)), eq<Int64 NULL, Int64 NULL>(nullable_col, 12_i64))
 evaluation:
 +--------+-------------------+------------------------+

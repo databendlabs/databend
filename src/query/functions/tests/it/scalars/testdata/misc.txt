@@ -8,7 +8,7 @@ error:
 
 ast            : const_false AND CAST('1000' AS UINT32) = 1000
 raw expr       : and(const_false::Boolean, eq(CAST('1000' AS UInt32), 1000))
-checked expr   : and<Boolean, Boolean>(const_false, eq<UInt32, UInt32>(CAST<String>("1000" AS UInt32), CAST<UInt16>(1000_u16 AS UInt32)))
+checked expr   : and<Boolean, Boolean>(const_false, eq<UInt32, UInt32>(CAST<String>("1000" AS UInt32), 1000_u32))
 optimized expr : false
 evaluation:
 +--------+-------------+---------+
@@ -29,7 +29,7 @@ evaluation (internal):
 
 ast            : false AND CAST(str AS UINT32) = 1000
 raw expr       : and(false, eq(CAST(str::String AS UInt32), 1000))
-checked expr   : and<Boolean, Boolean>(false, eq<UInt32, UInt32>(CAST<String>(str AS UInt32), CAST<UInt16>(1000_u16 AS UInt32)))
+checked expr   : and<Boolean, Boolean>(false, eq<UInt32, UInt32>(CAST<String>(str AS UInt32), 1000_u32))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}

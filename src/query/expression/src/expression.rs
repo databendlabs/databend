@@ -436,6 +436,7 @@ pub trait ExprVisitor<I: ColumnIndex>: Sized {
     }
 }
 
+#[recursive::recursive]
 pub fn visit_expr<Index: ColumnIndex, V: ExprVisitor<Index>>(
     expr: &Expr<Index>,
     visitor: &mut V,
