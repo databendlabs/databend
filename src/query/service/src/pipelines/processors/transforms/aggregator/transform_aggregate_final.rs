@@ -103,7 +103,7 @@ impl AccumulatingTransform for TransformFinalAggregate {
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
-        assert_eq!(self.hash_table.len(), 0);
+        assert!(!output || self.hash_table.len() == 0);
 
         if output && !self.has_output {
             return Ok(vec![self.params.empty_result_block()]);
