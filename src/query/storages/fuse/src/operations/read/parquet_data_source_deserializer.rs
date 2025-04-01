@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::ops::BitAnd;
 use std::sync::Arc;
 use std::time::Instant;
@@ -65,7 +66,7 @@ pub struct DeserializeDataTransform {
 
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: Vec<DataBlock>,
+    output_data: VecDeque<DataBlock>,
     src_schema: DataSchema,
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
@@ -132,7 +133,7 @@ impl DeserializeDataTransform {
             block_reader,
             input,
             output,
-            output_data: vec![],
+            output_data: VecDeque::new(),
             src_schema,
             output_schema,
             parts: vec![],
@@ -231,7 +232,7 @@ impl Processor for DeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.pop() {
+        if let Some(data_block) = self.output_data.pop_front() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -281,7 +282,7 @@ impl Processor for DeserializeDataTransform {
 
                     self.update_scan_metrics(blocks.as_slice());
 
-                    self.output_data = blocks;
+                    self.output_data = blocks.into();
                 }
 
                 ParquetDataSource::Normal((data, virtual_data)) => {
@@ -316,7 +317,7 @@ impl Processor for DeserializeDataTransform {
 
                     self.update_scan_metrics(data_blocks.as_slice());
 
-                    let mut output_blocks = Vec::with_capacity(data_blocks.len());
+                    let mut output_blocks = VecDeque::with_capacity(data_blocks.len());
                     for mut data_block in data_blocks {
                         let origin_num_rows = data_block.num_rows();
 
@@ -357,7 +358,7 @@ impl Processor for DeserializeDataTransform {
                             self.block_reader.query_internal_columns(),
                             self.need_reserve_block_info,
                         )?;
-                        output_blocks.push(data_block);
+                        output_blocks.push_back(data_block);
                     }
 
                     self.output_data = output_blocks;
