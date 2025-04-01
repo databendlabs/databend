@@ -136,7 +136,7 @@ impl VirtualColumnReader {
     pub fn try_create_paster(
         &self,
         virtual_data: Option<VirtualBlockReadResult>,
-        batch_size: usize,
+        batch_size_hint: Option<usize>,
     ) -> Result<VirtualColumnDataPaster> {
         let record_batches = if let Some(virtual_data) = virtual_data {
             let columns_chunks = virtual_data.data.columns_chunks()?;
@@ -145,7 +145,7 @@ impl VirtualColumnReader {
                 virtual_data.num_rows,
                 &columns_chunks,
                 &virtual_data.compression,
-                batch_size,
+                batch_size_hint,
             )?;
             Some(chunks)
         } else {
