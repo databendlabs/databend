@@ -974,3 +974,261 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : regexp_extract('abc def ghi', '[a-z]+')
+raw expr       : regexp_extract('abc def ghi', '[a-z]+')
+checked expr   : regexp_extract<String, String>("abc def ghi", "[a-z]+")
+optimized expr : "abc"
+output type    : String
+output domain  : {"abc"..="abc"}
+output         : 'abc'
+
+
+ast            : regexp_extract('abc def ghi', '[a-z]+', 2)
+raw expr       : regexp_extract('abc def ghi', '[a-z]+', 2)
+checked expr   : regexp_extract<String, String, UInt32>("abc def ghi", "[a-z]+", to_uint32<UInt8>(2_u8))
+optimized expr : ""
+output type    : String
+output domain  : {""..=""}
+output         : ''
+
+
+ast            : regexp_extract('abc def ghi', NULL)
+raw expr       : regexp_extract('abc def ghi', NULL)
+checked expr   : regexp_extract<String NULL, String NULL>(CAST("abc def ghi" AS String NULL), CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : regexp_extract('abc def ghi', '')
+raw expr       : regexp_extract('abc def ghi', '')
+checked expr   : regexp_extract<String, String>("abc def ghi", "")
+optimized expr : ""
+output type    : String
+output domain  : {""..=""}
+output         : ''
+
+
+ast            : regexp_extract('', '[a-z]+')
+raw expr       : regexp_extract('', '[a-z]+')
+checked expr   : regexp_extract<String, String>("", "[a-z]+")
+optimized expr : ""
+output type    : String
+output domain  : {""..=""}
+output         : ''
+
+
+ast            : regexp_extract('123 456', '[a-z]+')
+raw expr       : regexp_extract('123 456', '[a-z]+')
+checked expr   : regexp_extract<String, String>("123 456", "[a-z]+")
+optimized expr : ""
+output type    : String
+output domain  : {""..=""}
+output         : ''
+
+
+ast            : regexp_extract('John Doe', '([A-Za-z]+) ([A-Za-z]+)', 1)
+raw expr       : regexp_extract('John Doe', '([A-Za-z]+) ([A-Za-z]+)', 1)
+checked expr   : regexp_extract<String, String, UInt32>("John Doe", "([A-Za-z]+) ([A-Za-z]+)", to_uint32<UInt8>(1_u8))
+optimized expr : "John"
+output type    : String
+output domain  : {"John"..="John"}
+output         : 'John'
+
+
+ast            : regexp_extract(s, '([A-Za-z]+) ([A-Za-z]+)', 1)
+raw expr       : regexp_extract(s::String, '([A-Za-z]+) ([A-Za-z]+)', 1)
+checked expr   : regexp_extract<String, String, UInt32>(s, "([A-Za-z]+) ([A-Za-z]+)", to_uint32<UInt8>(1_u8))
+optimized expr : regexp_extract<String, String, UInt32>(s, "([A-Za-z]+) ([A-Za-z]+)", 1_u32)
+evaluation:
++--------+---------------------------------+---------+
+|        | s                               | Output  |
++--------+---------------------------------+---------+
+| Type   | String                          | String  |
+| Domain | {"James Davis"..="Lisa Taylor"} | Unknown |
+| Row 0  | 'John Doe'                      | 'John'  |
+| Row 1  | 'James Davis'                   | 'James' |
+| Row 2  | 'Lisa Taylor'                   | 'Lisa'  |
++--------+---------------------------------+---------+
+evaluation (internal):
++--------+--------------------------------------------------+
+| Column | Data                                             |
++--------+--------------------------------------------------+
+| s      | StringColumn[John Doe, James Davis, Lisa Taylor] |
+| Output | StringColumn[John, James, Lisa]                  |
++--------+--------------------------------------------------+
+
+
+ast            : regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])
+raw expr       : regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', array('name', 'age'))
+checked expr   : regexp_extract<String, String, Array(String)>("name: John, age: 30", "name: ([A-Za-z]+), age: ([0-9]+)", array<T0=String><T0, T0>("name", "age"))
+optimized expr : {"name":"John", "age":"30"}
+output type    : Map(String, String)
+output domain  : {[{"age"..="name"}], [{"30"..="John"}]}
+output         : {'name':'John', 'age':'30'}
+
+
+ast            : regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])
+raw expr       : regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', array('name', 'age'))
+checked expr   : regexp_extract<String, String, Array(String)>("name: John, age: 30", "name: ([A-Za-z]+), age: ([0-9]+)", array<T0=String><T0, T0>("name", "age"))
+optimized expr : {"name":"John", "age":"30"}
+output type    : Map(String, String)
+output domain  : {[{"age"..="name"}], [{"30"..="John"}]}
+output         : {'name':'John', 'age':'30'}
+
+
+ast            : regexp_extract('name: John, age: 30', NULL, ['name', 'age'])
+raw expr       : regexp_extract('name: John, age: 30', NULL, array('name', 'age'))
+checked expr   : regexp_extract<String NULL, String NULL, Array(String) NULL>(CAST("name: John, age: 30" AS String NULL), CAST(NULL AS String NULL), CAST(array<T0=String><T0, T0>("name", "age") AS Array(String) NULL))
+optimized expr : NULL
+output type    : Map(String, String) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', [])
+raw expr       : regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', array())
+checked expr   : regexp_extract<String, String, Array(String)>("name: John, age: 30", "name: ([A-Za-z]+), age: ([0-9]+)", CAST(array<>() AS Array(String)))
+optimized expr : {}
+output type    : Map(String, String)
+output domain  : {}
+output         : {}
+
+
+ast            : regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])
+raw expr       : regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', array('name', 'age'))
+checked expr   : regexp_extract<String, String, Array(String)>("name: John, age: 30", "name: ([A-Za-z]+), age: ([0-9]+)", array<T0=String><T0, T0>("name", "age"))
+optimized expr : {"name":"John", "age":"30"}
+output type    : Map(String, String)
+output domain  : {[{"age"..="name"}], [{"30"..="John"}]}
+output         : {'name':'John', 'age':'30'}
+
+
+ast            : regexp_extract(s, 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])
+raw expr       : regexp_extract(s::String, 'name: ([A-Za-z]+), age: ([0-9]+)', array('name', 'age'))
+checked expr   : regexp_extract<String, String, Array(String)>(s, "name: ([A-Za-z]+), age: ([0-9]+)", array<T0=String><T0, T0>("name", "age"))
+optimized expr : regexp_extract<String, String, Array(String)>(s, "name: ([A-Za-z]+), age: ([0-9]+)", ['name', 'age'])
+evaluation:
++--------+--------------------------------------------------+------------------------------+
+|        | s                                                | Output                       |
++--------+--------------------------------------------------+------------------------------+
+| Type   | String                                           | Map(String, String)          |
+| Domain | {"name: James, age: 25"..="name: Lisa, age: 19"} | Unknown                      |
+| Row 0  | 'name: John, age: 30'                            | {'name':'John', 'age':'30'}  |
+| Row 1  | 'name: James, age: 25'                           | {'name':'James', 'age':'25'} |
+| Row 2  | 'name: Lisa, age: 19'                            | {'name':'Lisa', 'age':'19'}  |
++--------+--------------------------------------------------+------------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                               |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn[name: John, age: 30, name: James, age: 25, name: Lisa, age: 19]                                                                       |
+| Output | ArrayColumn { values: Tuple([StringColumn[name, age, name, age, name, age], StringColumn[John, 30, James, 25, Lisa, 19]]), offsets: [0, 2, 4, 6] } |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_extract_all('abc def ghi', '[a-z]+')
+raw expr       : regexp_extract_all('abc def ghi', '[a-z]+')
+checked expr   : regexp_extract_all<String, String>("abc def ghi", "[a-z]+")
+optimized expr : ['abc', 'def', 'ghi']
+output type    : Array(String)
+output domain  : [{"abc"..="ghi"}]
+output         : ['abc', 'def', 'ghi']
+
+
+ast            : regexp_extract_all('John Doe, Jane Smith', '([A-Za-z]+) ([A-Za-z]+)', 1)
+raw expr       : regexp_extract_all('John Doe, Jane Smith', '([A-Za-z]+) ([A-Za-z]+)', 1)
+checked expr   : regexp_extract_all<String, String, UInt32>("John Doe, Jane Smith", "([A-Za-z]+) ([A-Za-z]+)", to_uint32<UInt8>(1_u8))
+optimized expr : ['John', 'Jane']
+output type    : Array(String)
+output domain  : [{"Jane"..="John"}]
+output         : ['John', 'Jane']
+
+
+ast            : regexp_extract_all('abc def ghi', NULL)
+raw expr       : regexp_extract_all('abc def ghi', NULL)
+checked expr   : regexp_extract_all<String NULL, String NULL>(CAST("abc def ghi" AS String NULL), CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : Array(String) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : regexp_extract_all('', '[a-z]+')
+raw expr       : regexp_extract_all('', '[a-z]+')
+checked expr   : regexp_extract_all<String, String>("", "[a-z]+")
+optimized expr : []
+output type    : Array(String)
+output domain  : []
+output         : []
+
+
+ast            : regexp_extract_all('123 456', '[a-z]+')
+raw expr       : regexp_extract_all('123 456', '[a-z]+')
+checked expr   : regexp_extract_all<String, String>("123 456", "[a-z]+")
+optimized expr : []
+output type    : Array(String)
+output domain  : []
+output         : []
+
+
+ast            : regexp_extract_all('name: John, age: 30; name: Jane, age: 25', 'name: ([A-Za-z]+), age: ([0-9]+)')
+raw expr       : regexp_extract_all('name: John, age: 30; name: Jane, age: 25', 'name: ([A-Za-z]+), age: ([0-9]+)')
+checked expr   : regexp_extract_all<String, String>("name: John, age: 30; name: Jane, age: 25", "name: ([A-Za-z]+), age: ([0-9]+)")
+optimized expr : ['name: John, age: 30', 'name: Jane, age: 25']
+output type    : Array(String)
+output domain  : [{"name: Jane, age: 25"..="name: John, age: 30"}]
+output         : ['name: John, age: 30', 'name: Jane, age: 25']
+
+
+ast            : regexp_extract_all(s, '([A-Za-z]+) ([A-Za-z]+)', 1)
+raw expr       : regexp_extract_all(s::String, '([A-Za-z]+) ([A-Za-z]+)', 1)
+checked expr   : regexp_extract_all<String, String, UInt32>(s, "([A-Za-z]+) ([A-Za-z]+)", to_uint32<UInt8>(1_u8))
+optimized expr : regexp_extract_all<String, String, UInt32>(s, "([A-Za-z]+) ([A-Za-z]+)", 1_u32)
+evaluation:
++--------+----------------------------------------------------------------+---------------------+
+|        | s                                                              | Output              |
++--------+----------------------------------------------------------------+---------------------+
+| Type   | String                                                         | Array(String)       |
+| Domain | {"James Davis, Robert Wilson"..="Lisa Taylor, Sarah Williams"} | Unknown             |
+| Row 0  | 'John Doe, Jane Smith'                                         | ['John', 'Jane']    |
+| Row 1  | 'James Davis, Robert Wilson'                                   | ['James', 'Robert'] |
+| Row 2  | 'Lisa Taylor, Sarah Williams'                                  | ['Lisa', 'Sarah']   |
++--------+----------------------------------------------------------------+---------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                |
++--------+-----------------------------------------------------------------------------------------------------+
+| s      | StringColumn[John Doe, Jane Smith, James Davis, Robert Wilson, Lisa Taylor, Sarah Williams]         |
+| Output | ArrayColumn { values: StringColumn[John, Jane, James, Robert, Lisa, Sarah], offsets: [0, 2, 4, 6] } |
++--------+-----------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_extract(null, '(\d+)-(\d+)-(\d+)', ['y', 'm'])
+raw expr       : regexp_extract(NULL, '(\d+)-(\d+)-(\d+)', array('y', 'm'))
+checked expr   : regexp_extract<String NULL, String NULL, Array(String) NULL>(CAST(NULL AS String NULL), CAST("(\\d+)-(\\d+)-(\\d+)" AS String NULL), CAST(array<T0=String><T0, T0>("y", "m") AS Array(String) NULL))
+optimized expr : NULL
+output type    : Map(String, String) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : regexp_extract_all(null, 'Order-(\d+)-(\d+)', 2)
+raw expr       : regexp_extract_all(NULL, 'Order-(\d+)-(\d+)', 2)
+checked expr   : regexp_extract_all<String NULL, String NULL, UInt32 NULL>(CAST(NULL AS String NULL), CAST("Order-(\\d+)-(\\d+)" AS String NULL), CAST(2_u8 AS UInt32 NULL))
+optimized expr : NULL
+output type    : Array(String) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : regexp_extract(null, '([A-Za-z]+) ([A-Za-z]+), Age: (\d+)', 3)
+raw expr       : regexp_extract(NULL, '([A-Za-z]+) ([A-Za-z]+), Age: (\d+)', 3)
+checked expr   : regexp_extract<String NULL, String NULL, UInt32 NULL>(CAST(NULL AS String NULL), CAST("([A-Za-z]+) ([A-Za-z]+), Age: (\\d+)" AS String NULL), CAST(3_u8 AS UInt32 NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
