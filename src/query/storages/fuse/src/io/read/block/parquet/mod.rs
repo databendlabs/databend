@@ -94,6 +94,7 @@ impl BlockReader {
         };
 
         let mut blocks = Vec::with_capacity(record_batches.len());
+        let mut array_cache_buffer = HashMap::with_capacity(record_batches.len());
 
         let mut offset = 0;
         for record_batch in record_batches {
@@ -126,18 +127,17 @@ impl BlockReader {
                     Some(DataItem::RawData(data)) => {
                         // get the deserialized arrow array, which may be a nested array
                         let arrow_array = column_by_name(&record_batch, &name_paths[i]);
-                        if !column_node.is_nested {
-                            if let Some(cache) = &array_cache {
-                                let meta = column_metas.get(&field.column_id).unwrap();
-                                let (offset, len) = meta.offset_length();
-                                let key = TableDataCacheKey::new(
-                                    block_path,
-                                    field.column_id,
-                                    offset,
-                                    len,
-                                );
-                                cache.insert(key.into(), (arrow_array.clone(), data.len()));
-                            }
+                        if !column_node.is_nested && array_cache.is_some() {
+                            let meta = column_metas.get(&field.column_id).unwrap();
+                            let (offset, len) = meta.offset_length();
+                            let key =
+                                TableDataCacheKey::new(block_path, field.column_id, offset, len);
+                            array_cache_buffer
+                                .entry(key)
+                                .and_modify(|v: &mut Vec<_>| {
+                                    v.push((arrow_array.clone(), data.len()))
+                                })
+                                .or_insert(vec![(arrow_array.clone(), data.len())]);
                         }
                         Value::from_arrow_rs(arrow_array, &data_type)?
                     }
@@ -158,6 +158,21 @@ impl BlockReader {
 
             offset += record_batch.num_rows();
             blocks.push(DataBlock::new(columns, num_rows_record_batch));
+        }
+
+        // TODO doc this
+        if let Some(array_cache) = &array_cache {
+            for (key, items) in array_cache_buffer {
+                let mut arrays = Vec::with_capacity(items.len());
+                let mut len = 0;
+                for (array, size) in &items {
+                    arrays.push(array.as_ref());
+                    len += size;
+                }
+                use arrow::compute::concat;
+                let result = concat(&arrays)?;
+                array_cache.insert(key.into(), (result, len));
+            }
         }
 
         Ok(blocks)
