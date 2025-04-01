@@ -82,7 +82,7 @@ fn test_type_check() {
     ];
 
     // 8 and 16 are just smaller 32.
-    let size = vec!["32", "64"];
+    let size = ["32", "64"];
 
     let signed = size.iter().map(|s| format!("i{}", s)).collect::<Vec<_>>();
     let unsigned = size.iter().map(|s| format!("u{}", s)).collect::<Vec<_>>();
@@ -120,30 +120,30 @@ fn test_type_check() {
             .flat_map(|lhs| all_num.iter().map(move |rhs| (lhs, *rhs)))
             .collect::<Vec<_>>();
         for (lhs, rhs) in pair {
-            run_ast(file, &format!("{lhs} > {rhs}"), &columns);
-            run_ast(file, &format!("{lhs} = {rhs}"), &columns);
+            run_ast(file, format!("{lhs} > {rhs}"), &columns);
+            run_ast(file, format!("{lhs} = {rhs}"), &columns);
         }
 
         for ty in types {
-            run_ast(file, &format!("{ty} > 1"), &columns);
-            run_ast(file, &format!("{ty} = 1"), &columns);
-            run_ast(file, &format!("1 > {ty}"), &columns);
-            run_ast(file, &format!("1 = {ty}"), &columns);
+            run_ast(file, format!("{ty} > 1"), &columns);
+            run_ast(file, format!("{ty} = 1"), &columns);
+            run_ast(file, format!("1 > {ty}"), &columns);
+            run_ast(file, format!("1 = {ty}"), &columns);
 
-            run_ast(file, &format!("{ty} > 1.0"), &columns);
-            run_ast(file, &format!("{ty} = 1.0"), &columns);
-            run_ast(file, &format!("1.0 > {ty}"), &columns);
-            run_ast(file, &format!("1.0 = {ty}"), &columns);
+            run_ast(file, format!("{ty} > 1.0"), &columns);
+            run_ast(file, format!("{ty} = 1.0"), &columns);
+            run_ast(file, format!("1.0 > {ty}"), &columns);
+            run_ast(file, format!("1.0 = {ty}"), &columns);
 
-            run_ast(file, &format!("{ty} > '1'"), &columns);
-            run_ast(file, &format!("{ty} = '1'"), &columns);
-            run_ast(file, &format!("'1' > {ty}"), &columns);
-            run_ast(file, &format!("'1' = {ty}"), &columns);
+            run_ast(file, format!("{ty} > '1'"), &columns);
+            run_ast(file, format!("{ty} = '1'"), &columns);
+            run_ast(file, format!("'1' > {ty}"), &columns);
+            run_ast(file, format!("'1' = {ty}"), &columns);
 
-            run_ast(file, &format!("{ty} > 1::uint64"), &columns);
-            run_ast(file, &format!("{ty} = 1::uint64"), &columns);
-            run_ast(file, &format!("1::uint64 > {ty}"), &columns);
-            run_ast(file, &format!("1::uint64 = {ty}"), &columns);
+            run_ast(file, format!("{ty} > 1::uint64"), &columns);
+            run_ast(file, format!("{ty} = 1::uint64"), &columns);
+            run_ast(file, format!("1::uint64 > {ty}"), &columns);
+            run_ast(file, format!("1::uint64 = {ty}"), &columns);
         }
     }
 }
