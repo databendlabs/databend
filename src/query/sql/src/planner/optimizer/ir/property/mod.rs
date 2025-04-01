@@ -18,9 +18,9 @@ mod enforcer;
 mod property;
 
 pub use builder::RelExpr;
-pub use enforcer::require_property;
 pub use enforcer::DistributionEnforcer;
 pub use enforcer::Enforcer;
+pub use enforcer::PropertyEnforcer;
 pub use property::ColumnSet;
 pub use property::Distribution;
 pub use property::PhysicalProperty;
