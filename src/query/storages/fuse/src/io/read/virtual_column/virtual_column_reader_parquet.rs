@@ -14,6 +14,8 @@
 
 use std::collections::HashSet;
 
+use arrow_array::RecordBatch;
+use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_exception::Result;
 use databend_common_expression::eval_function;
 use databend_common_expression::types::DataType;
@@ -21,6 +23,8 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_io::MergeIOReader;
@@ -128,30 +132,65 @@ impl VirtualColumnReader {
         ))
     }
 
-    pub fn deserialize_virtual_columns(
+    /// Deserialize virtual column data into record batches, according to the `batch_size`.
+    pub fn try_create_paster(
         &self,
-        mut data_block: DataBlock,
         virtual_data: Option<VirtualBlockReadResult>,
-    ) -> Result<DataBlock> {
-        let record_batch = virtual_data
-            .map(|virtual_data| {
-                let columns_chunks = virtual_data.data.columns_chunks()?;
-                column_chunks_to_record_batch(
-                    &self.virtual_column_info.schema,
-                    virtual_data.num_rows,
-                    &columns_chunks,
-                    &virtual_data.compression,
-                )
-            })
-            .transpose()?;
+        batch_size: usize,
+    ) -> Result<VirtualColumnDataPaster> {
+        let record_batches = if let Some(virtual_data) = virtual_data {
+            let columns_chunks = virtual_data.data.columns_chunks()?;
+            let chunks = column_chunks_to_record_batch(
+                &self.virtual_column_info.schema,
+                virtual_data.num_rows,
+                &columns_chunks,
+                &virtual_data.compression,
+                batch_size,
+            )?;
+            Some(chunks)
+        } else {
+            None
+        };
 
-        // If the virtual column has already generated, add it directly,
-        // otherwise extract it from the source column
-        let func_ctx = self.ctx.get_function_context()?;
-        for virtual_column_field in self.virtual_column_info.virtual_column_fields.iter() {
-            if let Some(arrow_array) = record_batch
-                .as_ref()
-                .and_then(|r| r.column_by_name(&virtual_column_field.name).cloned())
+        let function_context = self.ctx.get_function_context()?;
+
+        // Unfortunately, Paster cannot hold references to the fields that being cloned,
+        // since the caller `DeserializeDataTransform` will take mutable reference of
+        // VirtualColumnReader indirectly.
+        Ok(VirtualColumnDataPaster {
+            record_batches,
+            function_context,
+            next_record_batch_index: 0,
+            virtual_column_fields: self.virtual_column_info.virtual_column_fields.clone(),
+            source_schema: self.source_schema.clone(),
+        })
+    }
+}
+
+pub struct VirtualColumnDataPaster {
+    record_batches: Option<Vec<RecordBatch>>,
+    next_record_batch_index: usize,
+    function_context: FunctionContext,
+    virtual_column_fields: Vec<VirtualColumnField>,
+    source_schema: TableSchemaRef,
+}
+
+impl VirtualColumnDataPaster {
+    /// Paste virtual column to `data_block` if necessary
+    pub fn paste_virtual_column(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        let record_batch = if let Some(record_batches) = &self.record_batches {
+            assert!(record_batches.len() > self.next_record_batch_index);
+            Some(&record_batches[self.next_record_batch_index])
+        } else {
+            None
+        };
+
+        self.next_record_batch_index += 1;
+
+        let func_ctx = &self.function_context;
+        for virtual_column_field in self.virtual_column_fields.iter() {
+            if let Some(arrow_array) =
+                record_batch.and_then(|r| r.column_by_name(&virtual_column_field.name).cloned())
             {
                 let data_type: DataType = virtual_column_field.data_type.as_ref().into();
                 let value = Value::Column(Column::from_arrow_rs(arrow_array, &data_type)?);
@@ -173,7 +212,7 @@ impl VirtualColumnReader {
                 None,
                 "get_by_keypath",
                 [src_arg, path_arg],
-                &func_ctx,
+                func_ctx,
                 data_block.num_rows(),
                 &BUILTIN_FUNCTIONS,
             )?;
@@ -183,7 +222,7 @@ impl VirtualColumnReader {
                     None,
                     cast_func_name,
                     [(value, data_type)],
-                    &func_ctx,
+                    func_ctx,
                     data_block.num_rows(),
                     &BUILTIN_FUNCTIONS,
                 )?;

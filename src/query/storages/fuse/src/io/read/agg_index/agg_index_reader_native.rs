@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::vec;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -138,7 +139,7 @@ impl AggIndexReader {
         }
     }
 
-    pub fn deserialize_native_data(&self, data: &mut NativeSourceData) -> Result<DataBlock> {
+    pub fn deserialize_native_data(&self, data: &mut NativeSourceData) -> Result<Vec<DataBlock>> {
         let mut all_columns_arrays = vec![];
 
         for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
@@ -148,9 +149,9 @@ impl AggIndexReader {
             all_columns_arrays.push(arrays);
         }
         if all_columns_arrays.is_empty() {
-            return Ok(DataBlock::empty_with_schema(Arc::new(
+            return Ok(vec![DataBlock::empty_with_schema(Arc::new(
                 self.reader.data_schema(),
-            )));
+            ))]);
         }
         debug_assert!(all_columns_arrays
             .iter()
@@ -166,7 +167,6 @@ impl AggIndexReader {
             let block = DataBlock::new_from_columns(columns);
             blocks.push(block);
         }
-        let block = DataBlock::concat(&blocks)?;
-        self.apply_agg_info(block)
+        self.apply_agg_info(blocks)
     }
 }
