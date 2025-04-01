@@ -100,7 +100,7 @@ impl DeserializeDataTransform {
         let need_wait_runtime_filter =
             !ctx.get_cluster().is_empty() && ctx.get_wait_runtime_filter(plan.scan_id);
 
-        // Unfortunately, batch size is hint is only safe for Query now.
+        // Unfortunately, the batch size hint is only safe for Query now.
         let batch_size_hint = match ctx.get_query_kind() {
             QueryKind::Query => Some(ctx.get_settings().get_fuse_parquet_read_batch_size()?),
             _ => None,

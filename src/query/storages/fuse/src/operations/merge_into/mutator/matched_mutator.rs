@@ -201,7 +201,7 @@ impl MatchedAggregator {
                         .insert(offset as usize)
                     {
                         return Err(ErrorCode::UnresolvableConflict(
-                            "1 multi rows from source match one and the same row in the target_table multi times",
+                            "multi rows from source match one and the same row in the target_table multi times",
                         ));
                     }
                 }
@@ -335,7 +335,7 @@ impl MatchedAggregator {
                 < update_modified_offsets.len() + delete_modified_offsets.len()
             {
                 return Err(ErrorCode::UnresolvableConflict(
-                    "2 multi rows from source match one and the same row in the target_table multi times",
+                    "multi rows from source match one and the same row in the target_table multi times",
                 ));
             }
 
