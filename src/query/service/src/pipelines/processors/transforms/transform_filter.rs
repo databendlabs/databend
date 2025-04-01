@@ -25,7 +25,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::BlockingTransform;
 use databend_common_pipeline_transforms::processors::BlockingTransformer;
-use databend_common_sql::optimizer::ColumnSet;
+use databend_common_sql::optimizer::ir::ColumnSet;
 
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;

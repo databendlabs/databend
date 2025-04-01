@@ -22,9 +22,9 @@ use databend_common_exception::Result;
 
 use crate::optimizer::dynamic_sample::filter_selectivity_sample::filter_selectivity_sample;
 use crate::optimizer::dynamic_sample::join_selectivity_sample::join_selectivity_sample;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatInfo;
 use crate::planner::query_executor::QueryExecutor;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;

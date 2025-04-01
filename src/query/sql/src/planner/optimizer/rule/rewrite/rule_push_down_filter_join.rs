@@ -17,9 +17,11 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
-use crate::optimizer::extract::Matcher;
 use crate::optimizer::filter::InferFilterOptimizer;
 use crate::optimizer::filter::JoinProperty;
+use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::rule::constant::false_constant;
 use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::rewrite::push_down_filter_join::can_filter_null;
@@ -28,9 +30,7 @@ use crate::optimizer::rule::rewrite::push_down_filter_join::outer_join_to_inner_
 use crate::optimizer::rule::rewrite::push_down_filter_join::rewrite_predicates;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
-use crate::optimizer::SExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;

@@ -22,13 +22,13 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
-use crate::optimizer::extract::Matcher;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
-use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;

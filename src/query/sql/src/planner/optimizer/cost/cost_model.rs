@@ -20,8 +20,8 @@ use databend_common_exception::Result;
 
 use super::Cost;
 use super::CostModel;
-use crate::optimizer::MExpr;
-use crate::optimizer::Memo;
+use crate::optimizer::ir::MExpr;
+use crate::optimizer::ir::Memo;
 use crate::plans::ConstantTableScan;
 use crate::plans::Exchange;
 use crate::plans::Join;

@@ -26,18 +26,18 @@ use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
-use crate::optimizer::histogram_from_ndv;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::ColumnStat;
-use crate::optimizer::Distribution;
-use crate::optimizer::NewStatistic;
-use crate::optimizer::PhysicalProperty;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
-use crate::optimizer::UniformSampleSet;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::ColumnStat;
+use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::HistogramBuilder;
+use crate::optimizer::ir::NewStatistic;
+use crate::optimizer::ir::PhysicalProperty;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatInfo;
+use crate::optimizer::ir::Statistics;
+use crate::optimizer::ir::UniformSampleSet;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -364,7 +364,7 @@ impl Join {
                                 left.min = Datum::Float(F64::from(left.min.to_double()?));
                                 left.max = Datum::Float(F64::from(left.max.to_double()?));
                             }
-                            Some(histogram_from_ndv(
+                            Some(HistogramBuilder::from_ndv(
                                 left.ndv as u64,
                                 max(join_card as u64, left.ndv as u64),
                                 Some((left.min.clone(), left.max.clone())),
@@ -389,7 +389,7 @@ impl Join {
                                 right.min = Datum::Float(F64::from(right.min.to_double()?));
                                 right.max = Datum::Float(F64::from(right.max.to_double()?));
                             }
-                            Some(histogram_from_ndv(
+                            Some(HistogramBuilder::from_ndv(
                                 right.ndv as u64,
                                 max(join_card as u64, right.ndv as u64),
                                 Some((right.min.clone(), right.max.clone())),

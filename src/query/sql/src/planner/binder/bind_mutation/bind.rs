@@ -39,7 +39,7 @@ use crate::binder::util::TableIdentifier;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;

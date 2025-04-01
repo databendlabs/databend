@@ -25,7 +25,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
 use crate::binder::Visibility;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;

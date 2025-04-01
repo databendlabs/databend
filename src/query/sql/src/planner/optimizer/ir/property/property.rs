@@ -16,14 +16,13 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use super::column_stat::ColumnStatSet;
+use crate::optimizer::ir::ColumnStatSet;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SortItem;
 use crate::IndexType;
 
 pub type ColumnSet = HashSet<IndexType>;
-pub type TableSet = HashSet<IndexType>;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RequiredProperty {

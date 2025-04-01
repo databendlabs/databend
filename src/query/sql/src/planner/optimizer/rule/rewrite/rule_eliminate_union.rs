@@ -18,12 +18,12 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 
-use crate::optimizer::extract::Matcher;
+use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::rule::Rule;
-use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
+use crate::optimizer::RuleID;
 use crate::plans::ConstantTableScan;
 use crate::plans::Operator;
 use crate::plans::RelOp;

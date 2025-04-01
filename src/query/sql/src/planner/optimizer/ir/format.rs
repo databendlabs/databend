@@ -17,27 +17,33 @@ use databend_common_base::base::format_byte_size;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
-use crate::optimizer::group::Group;
-use crate::optimizer::MExpr;
-use crate::optimizer::Memo;
+use crate::optimizer::ir::Group;
+use crate::optimizer::ir::MExpr;
+use crate::optimizer::ir::Memo;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
 
-pub fn display_memo(memo: &Memo) -> Result<String> {
-    let mem_size = format_byte_size(memo.mem_size());
-    let mut children = vec![
-        FormatTreeNode::new(format!("root group: #{}", memo.root.unwrap_or(0))),
-        FormatTreeNode::new(format!("estimated memory: {}", mem_size)),
-    ];
+impl Memo {
+    /// Format the memo structure for display
+    ///
+    /// Returns a formatted string representation of the memo structure
+    /// including root group, memory usage, and all groups
+    pub fn display(&self) -> Result<String> {
+        let mem_size = format_byte_size(self.mem_size());
+        let mut children = vec![
+            FormatTreeNode::new(format!("root group: #{}", self.root.unwrap_or(0))),
+            FormatTreeNode::new(format!("estimated memory: {}", mem_size)),
+        ];
 
-    children.extend(memo.groups.iter().map(group_to_format_tree));
+        children.extend(self.groups.iter().map(group_to_format_tree));
 
-    let root = FormatTreeNode::with_children("Memo".to_string(), children);
+        let root = FormatTreeNode::with_children("Memo".to_string(), children);
 
-    Ok(root.format_pretty()?)
+        Ok(root.format_pretty()?)
+    }
 }
 
-pub fn display_rel_op(rel_op: &RelOperator) -> String {
+fn display_rel_op(rel_op: &RelOperator) -> String {
     match rel_op {
         RelOperator::Scan(_) => "Scan".to_string(),
         RelOperator::Join(_) => "Join".to_string(),

@@ -16,13 +16,13 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
-use crate::optimizer::extract::Matcher;
+use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::Statistics;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
-use crate::optimizer::SExpr;
-use crate::optimizer::Statistics;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;

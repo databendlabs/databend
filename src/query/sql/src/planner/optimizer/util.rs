@@ -14,7 +14,7 @@
 
 use databend_common_catalog::table::DistributionLevel;
 
-use super::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::RelOperator;
 use crate::MetadataRef;
 

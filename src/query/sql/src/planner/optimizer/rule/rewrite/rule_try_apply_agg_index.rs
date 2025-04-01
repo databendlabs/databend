@@ -15,10 +15,10 @@
 use databend_common_exception::Result;
 
 use super::agg_index;
-use crate::optimizer::extract::Matcher;
+use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
-use crate::optimizer::SExpr;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::IndexType;

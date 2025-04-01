@@ -24,7 +24,7 @@ use super::Task;
 use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
-use crate::optimizer::group::GroupState;
+use crate::optimizer::ir::GroupState;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]

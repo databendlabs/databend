@@ -25,8 +25,8 @@ use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::ExploreGroupTask;
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RequiredProperty;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RequiredProperty;
 use crate::plans::Operator;
 use crate::IndexType;
 

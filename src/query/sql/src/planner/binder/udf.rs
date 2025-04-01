@@ -34,7 +34,7 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::resolve_type_name_udf;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;

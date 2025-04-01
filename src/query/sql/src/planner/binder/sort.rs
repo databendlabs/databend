@@ -28,7 +28,7 @@ use crate::binder::select::SelectList;
 use crate::binder::window::WindowRewriter;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;

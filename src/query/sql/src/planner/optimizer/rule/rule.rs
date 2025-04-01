@@ -20,9 +20,9 @@ use databend_common_exception::Result;
 use num_derive::FromPrimitive;
 use num_derive::ToPrimitive;
 
-use crate::optimizer::extract::Matcher;
+use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::SExpr;
 
 pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![

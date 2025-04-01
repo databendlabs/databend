@@ -35,7 +35,7 @@ use databend_common_expression::TableDataType;
 use crate::binder::table_args::bind_table_args;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::BindContext;
 use crate::ScalarBinder;
 

@@ -19,10 +19,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::optimizer::cost::CostContext;
-use crate::optimizer::m_expr::MExpr;
-use crate::optimizer::property::RelationalProperty;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::StatInfo;
+use crate::optimizer::ir::expr::MExpr;
+use crate::optimizer::ir::property::RelationalProperty;
+use crate::optimizer::ir::property::RequiredProperty;
+use crate::optimizer::ir::StatInfo;
 use crate::IndexType;
 
 /// State of a `Group`

@@ -23,8 +23,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::SExpr;
 use crate::IndexType;
 use crate::TypeCheck;
 

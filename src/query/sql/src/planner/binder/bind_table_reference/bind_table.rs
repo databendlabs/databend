@@ -40,7 +40,7 @@ use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::IndexType;

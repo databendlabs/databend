@@ -24,8 +24,6 @@ use log::info;
 
 use super::aggregate::RuleStatsAggregateOptimizer;
 use super::distributed::BroadcastToShuffleOptimizer;
-use super::format::display_memo;
-use super::Memo;
 use crate::binder::target_probe;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
@@ -37,6 +35,8 @@ use crate::optimizer::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
+use crate::optimizer::ir::Memo;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::join::SingleToInnerOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
@@ -44,7 +44,6 @@ use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::util::contains_warehouse_table_scan;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
-use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::planner::query_executor::QueryExecutor;
 use crate::plans::ConstantTableScan;
@@ -254,7 +253,7 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
                     let memo = get_optimized_memo(&mut opt_ctx, *s_expr.clone()).await?;
                     Ok(Plan::Explain {
                         config,
-                        kind: ExplainKind::Memo(display_memo(&memo)?),
+                        kind: ExplainKind::Memo(memo.display()?),
                         plan,
                     })
                 } else {

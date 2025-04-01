@@ -45,7 +45,7 @@ use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
 
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::query_executor::QueryExecutor;

@@ -17,8 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::hyper_dp::join_relation::JoinRelation;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;

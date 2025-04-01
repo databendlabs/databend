@@ -19,7 +19,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use log::debug;
 
 use super::BlockOperator;
-use crate::optimizer::ColumnSet;
+use crate::optimizer::ir::ColumnSet;
 
 /// Eliminate common expression in `Map` operator
 pub fn apply_cse(

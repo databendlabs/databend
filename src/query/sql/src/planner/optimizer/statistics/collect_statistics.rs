@@ -22,7 +22,7 @@ use databend_common_expression::types::F64;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;

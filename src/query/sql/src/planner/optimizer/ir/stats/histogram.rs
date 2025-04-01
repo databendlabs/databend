@@ -23,86 +23,124 @@ use databend_common_storage::HistogramBucket;
 
 pub type F64 = OrderedFloat<f64>;
 
-/// Construct a histogram from NDV and total number of rows.
-///
-/// # Arguments
-///  * `ndv` - number of distinct values
-///  * `num_rows` - total number of rows
-///  * `bound` - min and max value of the column
-///  * `buckets` - number of buckets
-pub fn histogram_from_ndv(
-    ndv: u64,
-    num_rows: u64,
-    bound: Option<(Datum, Datum)>,
-    num_buckets: usize,
-) -> std::result::Result<Histogram, String> {
-    if ndv <= 2 {
-        return if num_rows != 0 {
-            Err(format!(
-                "NDV must be greater than 0 when the number of rows is greater than 0, got NDV: {}, num_rows: {}",
-                ndv, num_rows
-            ))
-        } else {
-            Ok(Histogram {
-                buckets: vec![],
-                accuracy: false,
-            })
+/// Builder for creating histograms from statistical information
+pub struct HistogramBuilder;
+
+impl HistogramBuilder {
+    /// Construct a histogram from NDV and total number of rows.
+    ///
+    /// # Arguments
+    ///  * `ndv` - number of distinct values
+    ///  * `num_rows` - total number of rows
+    ///  * `bound` - min and max value of the column
+    ///  * `num_buckets` - number of buckets
+    pub fn from_ndv(
+        ndv: u64,
+        num_rows: u64,
+        bound: Option<(Datum, Datum)>,
+        num_buckets: usize,
+    ) -> std::result::Result<Histogram, String> {
+        // Handle special case for empty or very small datasets
+        if ndv <= 2 {
+            return if num_rows != 0 {
+                Err(format!(
+                    "NDV must be greater than 0 when the number of rows is greater than 0, got NDV: {}, num_rows: {}",
+                    ndv, num_rows
+                ))
+            } else {
+                Ok(Histogram {
+                    buckets: vec![],
+                    accuracy: false,
+                })
+            };
+        }
+
+        // Validate input parameters
+        Self::validate_inputs(ndv, num_rows, num_buckets)?;
+
+        // Extract min and max values
+        let (min, max) = match bound {
+            Some((min, max)) => (min.to_float(), max.to_float()),
+            None => {
+                return Err(format!(
+                    "Must have min and max value when NDV is greater than 0, got NDV: {}",
+                    ndv
+                ));
+            }
         };
+
+        // Adjust number of buckets if needed
+        let adjusted_num_buckets = if num_buckets > ndv as usize {
+            ndv as usize
+        } else {
+            num_buckets
+        };
+
+        // Create uniform sample set and generate buckets
+        let sample_set = UniformSampleSet::new(min, max);
+        let buckets = Self::generate_buckets(&sample_set, adjusted_num_buckets, ndv, num_rows)?;
+
+        Ok(Histogram {
+            buckets,
+            accuracy: false,
+        })
     }
 
-    if num_buckets < 2 {
-        return Err(format!("Must have at least 2 buckets, got {}", num_buckets));
-    }
+    /// Validate input parameters for histogram creation
+    fn validate_inputs(
+        ndv: u64,
+        num_rows: u64,
+        num_buckets: usize,
+    ) -> std::result::Result<(), String> {
+        if num_buckets < 2 {
+            return Err(format!("Must have at least 2 buckets, got {}", num_buckets));
+        }
 
-    if ndv > num_rows {
-        return Err(format!(
-            "NDV must be less than or equal to the number of rows, got NDV: {}, num_rows: {}",
-            ndv, num_rows
-        ));
-    }
-
-    let (min, max) = match bound {
-        Some((min, max)) => (min.to_float(), max.to_float()),
-        None => {
+        if ndv > num_rows {
             return Err(format!(
-                "Must have min and max value when NDV is greater than 0, got NDV: {}",
-                ndv
+                "NDV must be less than or equal to the number of rows, got NDV: {}, num_rows: {}",
+                ndv, num_rows
             ));
         }
-    };
 
-    let num_buckets = if num_buckets > ndv as usize {
-        ndv as usize
-    } else {
-        num_buckets
-    };
-
-    let mut buckets: Vec<HistogramBucket> = Vec::with_capacity(num_buckets);
-    let sample_set = UniformSampleSet { min, max };
-
-    for idx in 0..num_buckets {
-        let lower_bound = if idx == 0 {
-            sample_set.min.clone()
-        } else {
-            buckets[idx - 1].upper_bound().clone()
-        };
-        let upper_bound = sample_set.get_upper_bound(num_buckets, idx + 1)?;
-        let bucket = HistogramBucket::new(
-            lower_bound,
-            upper_bound,
-            (num_rows / num_buckets as u64) as f64,
-            (ndv / num_buckets as u64) as f64,
-        );
-        buckets.push(bucket);
+        Ok(())
     }
 
-    Ok(Histogram {
-        buckets,
-        accuracy: false,
-    })
+    /// Generate histogram buckets based on the sample set
+    fn generate_buckets(
+        sample_set: &UniformSampleSet,
+        num_buckets: usize,
+        ndv: u64,
+        num_rows: u64,
+    ) -> std::result::Result<Vec<HistogramBucket>, String> {
+        let mut buckets: Vec<HistogramBucket> = Vec::with_capacity(num_buckets);
+
+        for idx in 0..num_buckets {
+            let lower_bound = if idx == 0 {
+                sample_set.min().clone()
+            } else {
+                buckets[idx - 1].upper_bound().clone()
+            };
+
+            let upper_bound = sample_set.get_upper_bound(num_buckets, idx + 1)?;
+
+            let bucket = HistogramBucket::new(
+                lower_bound,
+                upper_bound,
+                (num_rows / num_buckets as u64) as f64,
+                (ndv / num_buckets as u64) as f64,
+            );
+
+            buckets.push(bucket);
+        }
+
+        Ok(buckets)
+    }
 }
 
-trait SampleSet {
+/// Trait defining methods for sample sets used in histogram generation
+pub trait SampleSet {
+    /// Get the upper bound for a specific bucket
     fn get_upper_bound(
         &self,
         num_buckets: usize,
@@ -110,17 +148,29 @@ trait SampleSet {
     ) -> std::result::Result<Datum, String>;
 }
 
+/// A sample set with uniformly distributed values
 pub struct UniformSampleSet {
     min: Datum,
     max: Datum,
 }
 
 impl UniformSampleSet {
+    /// Create a new uniform sample set with given min and max values
     pub fn new(min: Datum, max: Datum) -> Self {
         UniformSampleSet { min, max }
     }
 
-    // Check if two `UniformSampleSet` have intersection
+    /// Get the minimum value of the sample set
+    pub fn min(&self) -> &Datum {
+        &self.min
+    }
+
+    /// Get the maximum value of the sample set
+    pub fn max(&self) -> &Datum {
+        &self.max
+    }
+
+    /// Check if two UniformSampleSet have intersection
     pub fn has_intersection(&self, other: &UniformSampleSet) -> Result<bool> {
         // If data type is string, we don't need to compare, just return true
         if let Datum::Bytes(_) = self.min {
@@ -134,6 +184,7 @@ impl UniformSampleSet {
         ))
     }
 
+    /// Calculate the intersection of two sample sets
     pub fn intersection(&self, other: &UniformSampleSet) -> Result<(Option<Datum>, Option<Datum>)> {
         match (&self.min, &other.min) {
             (Datum::Bytes(_), Datum::Bytes(_)) => Ok((None, None)),
