@@ -26,3 +26,9 @@ select sum(added_data_files_count) from iceberg_manifest('tpch', 'lineitem');
 
 statement ok
 select sum(summary['total-records']::Int64), count() from iceberg_snapshot('tpch', 'lineitem') where operation = 'append';
+
+statement ok
+select * from tpch.lineitem at (timestamp=>'2025-03-12 23:18:22.665000'::Timestamp) limit 1;
+
+statement ok
+select * from tpch.lineitem at (snapshot=>'4524280171191816067') limit 1;

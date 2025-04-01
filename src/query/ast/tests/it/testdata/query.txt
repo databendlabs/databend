@@ -766,6 +766,226 @@ Query {
 
 
 ---------- Input ----------
+select * from t12_0004 at (TIMESTAMP => 'xxxx') as t
+---------- Output ---------
+SELECT * FROM t12_0004 AT (TIMESTAMP => 'xxxx') AS t
+---------- AST ------------
+Query {
+    span: Some(
+        0..52,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..52,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..52,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        span: Some(
+                            14..22,
+                        ),
+                        name: "t12_0004",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                span: Some(
+                                    51..52,
+                                ),
+                                name: "t",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            columns: [],
+                        },
+                    ),
+                    temporal: Some(
+                        TimeTravel(
+                            Timestamp(
+                                Literal {
+                                    span: Some(
+                                        40..46,
+                                    ),
+                                    value: String(
+                                        "xxxx",
+                                    ),
+                                },
+                            ),
+                        ),
+                    ),
+                    with_options: None,
+                    pivot: None,
+                    unpivot: None,
+                    sample: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select count(t.c) from t12_0004 at (snapshot => 'xxxx') as t
+---------- Output ---------
+SELECT count(t.c) FROM t12_0004 AT (SNAPSHOT => 'xxxx') AS t
+---------- AST ------------
+Query {
+    span: Some(
+        0..60,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..60,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                AliasedExpr {
+                    expr: FunctionCall {
+                        span: Some(
+                            7..17,
+                        ),
+                        func: FunctionCall {
+                            distinct: false,
+                            name: Identifier {
+                                span: Some(
+                                    7..12,
+                                ),
+                                name: "count",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            args: [
+                                ColumnRef {
+                                    span: Some(
+                                        13..14,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                span: Some(
+                                                    13..14,
+                                                ),
+                                                name: "t",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    15..16,
+                                                ),
+                                                name: "c",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                            ],
+                            params: [],
+                            order_by: [],
+                            window: None,
+                            lambda: None,
+                        },
+                    },
+                    alias: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        23..60,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        span: Some(
+                            23..31,
+                        ),
+                        name: "t12_0004",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                span: Some(
+                                    59..60,
+                                ),
+                                name: "t",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            columns: [],
+                        },
+                    ),
+                    temporal: Some(
+                        TimeTravel(
+                            Snapshot(
+                                "xxxx",
+                            ),
+                        ),
+                    ),
+                    with_options: None,
+                    pivot: None,
+                    unpivot: None,
+                    sample: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
 select * from customer inner join orders
 ---------- Output ---------
 SELECT * FROM customer INNER JOIN orders
