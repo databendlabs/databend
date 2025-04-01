@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
+use crate::cast_scalar;
 use crate::expression::Expr;
 use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
@@ -83,10 +84,41 @@ pub fn check<Index: ColumnIndex>(
             args,
             params,
         } => {
-            let args_expr: Vec<_> = args
+            let mut args_expr: Vec<_> = args
                 .iter()
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
+
+            // https://github.com/datafuselabs/databend/issues/11541
+            // c:int16 = 12456 will be resolve as `to_int32(c) == to_int32(12456)`
+            // This may hurt the bloom filter, we should try cast to literal as the datatype of column
+            if name == "eq" && args_expr.len() == 2 {
+                match args_expr.as_mut_slice() {
+                    [e, Expr::Constant {
+                        span,
+                        scalar,
+                        data_type,
+                    }]
+                    | [Expr::Constant {
+                        span,
+                        scalar,
+                        data_type,
+                    }, e] => {
+                        let src_ty = data_type.remove_nullable();
+                        let dest_ty = e.data_type().remove_nullable();
+
+                        if dest_ty.is_integer() && src_ty.is_integer() {
+                            if let Ok(casted_scalar) =
+                                cast_scalar(*span, scalar.clone(), dest_ty, fn_registry)
+                            {
+                                *scalar = casted_scalar;
+                                *data_type = scalar.as_ref().infer_data_type();
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
 
             check_function(*span, name, params, &args_expr, fn_registry)
         }
@@ -263,14 +295,20 @@ pub fn check_function<Index: ColumnIndex>(
 
     let mut fail_reasons = Vec::with_capacity(candidates.len());
     let mut checked_candidates = vec![];
-    let need_sort = candidates.len() > 1 && args.iter().any(|arg| !arg.contains_column_ref());
-    for (id, func) in &candidates {
+    let args_not_const = args
+        .iter()
+        .map(Expr::contains_column_ref)
+        .collect::<Vec<_>>();
+    let need_sort = candidates.len() > 1 && args_not_const.iter().any(|contain| !*contain);
+    for (seq, (id, func)) in candidates.iter().enumerate() {
         match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
             Ok((args, return_type, generics)) => {
                 let score = if need_sort {
                     args.iter()
-                        .map(|arg| {
-                            if arg.is_cast() && arg.contains_column_ref() {
+                        .zip(args_not_const.iter().copied())
+                        .map(|(expr, not_const)| {
+                            // smaller score win
+                            if not_const && expr.is_cast() {
                                 1
                             } else {
                                 0
@@ -291,14 +329,15 @@ pub fn check_function<Index: ColumnIndex>(
                 if !need_sort {
                     return Ok(expr);
                 }
-                checked_candidates.push((expr, score));
+                checked_candidates.push((expr, score, seq));
             }
             Err(err) => fail_reasons.push(err),
         }
     }
 
     if !checked_candidates.is_empty() {
-        checked_candidates.sort_by_key(|checked| std::cmp::Reverse(checked.1));
+        checked_candidates.sort_by_key(|(_, score, seq)| std::cmp::Reverse((*score, *seq)));
+        println!("checked_candidates {:#?}", checked_candidates);
         return Ok(checked_candidates.pop().unwrap().0);
     }
 
