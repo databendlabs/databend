@@ -117,7 +117,7 @@ impl DeserializeDataTransform {
         let output_schema: DataSchema = (&output_schema).into();
         let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
 
-        let batch_size = ctx.get_settings().get_fuse_parquet_read_batch_size()? as usize;
+        let batch_size = ctx.get_settings().get_fuse_parquet_read_batch_size()?;
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             ctx,
             table_index: plan.table_index,

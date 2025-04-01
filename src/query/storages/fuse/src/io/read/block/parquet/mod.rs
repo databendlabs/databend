@@ -118,7 +118,7 @@ impl BlockReader {
                 //         corresponding field, and a default value has been declared for
                 //         the corresponding field.
                 //
-                //  Yes, it is too obscure, we need to polish it later.
+                //  Yes, it is too obscure, we need to polish it SOON.
 
                 let value = match column_chunks.get(&field.column_id) {
                     Some(DataItem::RawData(data)) => {
