@@ -177,8 +177,8 @@ OWNERSHIP s1 NULL ROLE account_admin (empty)
 query TT
 select * EXCLUDE(object_id) from show_grants('database', 'db1', 'default');
 ----
-CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role2 (empty)
-CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role3 (empty)
+USAGE,CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role2 (empty)
+USAGE,CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role3 (empty)
 OWNERSHIP db1 ROLE account_admin (empty)
 
 query TT
