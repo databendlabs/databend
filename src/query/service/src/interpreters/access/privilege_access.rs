@@ -764,7 +764,7 @@ impl AccessChecker for PrivilegeAccess {
                         let user_api = UserApiProvider::instance();
                         let ownerships = user_api
                             .role_api(&tenant)
-                            .get_ownerships()
+                            .list_ownerships()
                             .await?;
                         let roles = self.ctx.get_all_effective_roles().await?;
                         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
@@ -782,7 +782,7 @@ impl AccessChecker for PrivilegeAccess {
                         let user_api = UserApiProvider::instance();
                         let ownerships = user_api
                             .role_api(&tenant)
-                            .get_ownerships()
+                            .list_ownerships()
                             .await?;
                         let roles = self.ctx.get_all_effective_roles().await?;
                         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
@@ -937,7 +937,7 @@ impl AccessChecker for PrivilegeAccess {
                 let user_api = UserApiProvider::instance();
                 let ownerships = user_api
                     .role_api(&tenant)
-                    .get_ownerships()
+                    .list_ownerships()
                     .await?;
                 let roles = self.ctx.get_all_effective_roles().await?;
                 let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();

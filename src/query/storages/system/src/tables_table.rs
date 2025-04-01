@@ -543,7 +543,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 dbs.clear();
 
                 let ownership = if get_ownership {
-                    user_api.get_ownerships(&tenant).await.unwrap_or_default()
+                    user_api.list_ownerships(&tenant).await.unwrap_or_default()
                 } else {
                     HashMap::new()
                 };
