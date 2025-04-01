@@ -48,7 +48,7 @@ use log::warn;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
-use crate::planner::query_executor::QueryExecutor;
+use crate::planner::QueryExecutor;
 use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
 

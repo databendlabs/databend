@@ -22,7 +22,7 @@ use databend_common_exception::Result;
 use crate::optimizer::dynamic_sample::dynamic_sample;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
-use crate::planner::query_executor::QueryExecutor;
+use crate::planner::QueryExecutor;
 use crate::IndexType;
 use crate::MetadataRef;
 

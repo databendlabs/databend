@@ -45,7 +45,7 @@ use crate::optimizer::util::contains_warehouse_table_scan;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
-use crate::planner::query_executor::QueryExecutor;
+use crate::planner::QueryExecutor;
 use crate::plans::ConstantTableScan;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;

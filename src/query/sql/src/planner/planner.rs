@@ -41,7 +41,7 @@ use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
-use crate::planner::query_executor::QueryExecutor;
+use crate::planner::QueryExecutor;
 use crate::plans::Plan;
 use crate::Binder;
 use crate::CountSetOps;

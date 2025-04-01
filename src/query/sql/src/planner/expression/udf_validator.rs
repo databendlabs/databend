@@ -26,7 +26,7 @@ use databend_common_functions::is_builtin_function;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 
-use super::plans::UDFLanguage;
+use crate::plans::UDFLanguage;
 
 #[derive(Default, Visitor)]
 #[visitor(ColumnRef(enter), FunctionCall(enter), Lambda(enter))]
