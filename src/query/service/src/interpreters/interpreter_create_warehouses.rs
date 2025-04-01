@@ -83,8 +83,8 @@ impl Interpreter for CreateWarehouseInterpreter {
                 .await?;
 
             if let WarehouseInfo::SystemManaged(sw) = warehouse {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
                 if let Some(current_role) = self.ctx.get_current_role() {
+                    let role_api = UserApiProvider::instance().role_api(&tenant);
                     role_api
                         .grant_ownership(
                             &OwnershipObject::Warehouse { id: sw.role_id },
@@ -114,8 +114,8 @@ impl Interpreter for CreateWarehouseInterpreter {
             .await?;
 
         if let WarehouseInfo::SystemManaged(sw) = warehouse {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
             if let Some(current_role) = self.ctx.get_current_role() {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
                 role_api
                     .grant_ownership(
                         &OwnershipObject::Warehouse { id: sw.role_id },
