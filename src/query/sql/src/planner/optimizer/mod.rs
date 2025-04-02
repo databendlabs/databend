@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate;
 mod cascades;
 mod cost;
 mod distributed;
 mod hyper_dp;
 pub mod ir;
+pub mod operator;
 #[allow(clippy::module_inception)]
 mod optimizer;
 pub mod rule;
@@ -25,7 +25,6 @@ mod statistics;
 mod util;
 
 mod dynamic_sample;
-pub mod operator;
 
 pub use cascades::CascadesOptimizer;
 pub use hyper_dp::DPhpy;

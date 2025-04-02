@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate;
 mod decorrelate;
 mod filter;
 mod join;
 
+pub use aggregate::RuleNormalizeAggregateOptimizer;
+pub use aggregate::RuleStatsAggregateOptimizer;
 pub use decorrelate::FlattenInfo;
 pub use decorrelate::SubqueryRewriter;
 pub use decorrelate::UnnestResult;
