@@ -586,16 +586,17 @@ impl AggregationContext {
         let new_block_meta = BlockWriter::write_down(&self.data_accessor, serialized).await?;
 
         metrics_inc_replace_block_number_write(1);
-        metrics_inc_replace_row_number_write(new_block_meta.row_count);
+        metrics_inc_replace_row_number_write(new_block_meta.block_meta.row_count);
         metrics_inc_replace_replaced_blocks_rows(num_rows as u64);
 
         // generate log
+        // todo
         let mutation = MutationLogEntry::ReplacedBlock {
             index: BlockMetaIndex {
                 segment_idx: segment_index,
                 block_idx: block_index,
             },
-            block_meta: Arc::new(new_block_meta),
+            block_meta: Arc::new(new_block_meta.block_meta),
         };
 
         Ok(Some(mutation))

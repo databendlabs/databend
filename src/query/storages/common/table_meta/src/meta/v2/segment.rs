@@ -22,6 +22,7 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableField;
+use databend_common_expression::VariantDataType;
 use databend_common_native::ColumnMeta as NativeColumnMeta;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -59,6 +60,87 @@ impl SegmentInfo {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct VirtualColumnMeta {
+    /// where the data of column start
+    pub offset: u64,
+    /// the length of the column
+    pub len: u64,
+    /// num of "rows"
+    pub num_values: u64,
+    /// the type of virtual column in a block
+    // To make BlockMeta more compatible, use numbers to represent variant types
+    // 1 => jsonb
+    // 2 => bool
+    // 3 => uint64
+    // 4 => int64
+    // 5 => float64
+    // 6 => string
+    // 71 => array(jsonb)
+    // 72 => array(bool)
+    // 73 => array(uint64)
+    // 74 => array(int64)
+    // 75 => array(float64)
+    // 76 => array(string)
+    pub data_type: u8,
+}
+
+impl VirtualColumnMeta {
+    pub fn total_rows(&self) -> usize {
+        self.num_values as usize
+    }
+
+    pub fn offset_length(&self) -> (u64, u64) {
+        (self.offset, self.len)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct VirtualBlockMeta {
+    /// key is columnId, value is VirtualColumnMeta
+    pub virtual_col_metas: HashMap<ColumnId, VirtualColumnMeta>,
+    /// The file size of virtual columns.
+    pub virtual_col_size: u64,
+    /// The file location of virtual columns.
+    pub virtual_location: Location,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DraftVirtualColumnMeta {
+    pub source_column_id: ColumnId,
+    pub name: String,
+    pub column_id: Option<ColumnId>,
+    pub data_type: VariantDataType,
+    pub column_meta: VirtualColumnMeta,
+    // pub column_stat: ColumnStatistics,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DraftVirtualBlockMeta {
+    pub virtual_col_metas: Vec<DraftVirtualColumnMeta>,
+    /// The file size of virtual columns.
+    pub virtual_col_size: u64,
+    /// The file location of virtual columns.
+    pub virtual_location: Location,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ExtendedBlockMeta {
+    pub block_meta: BlockMeta,
+    pub draft_virtual_block_meta: Option<DraftVirtualBlockMeta>,
+}
+
+#[typetag::serde(name = "extended_block_meta")]
+impl BlockMetaInfo for ExtendedBlockMeta {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        ExtendedBlockMeta::downcast_ref_from(info).is_some_and(|other| self == other)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
+
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -78,6 +160,9 @@ pub struct BlockMeta {
     #[serde(default)]
     pub bloom_filter_index_size: u64,
     pub inverted_index_size: Option<u64>,
+    /// The block meta of virtual columns.
+    pub virtual_block_meta: Option<VirtualBlockMeta>,
+
     pub compression: Compression,
 
     // block create_on
@@ -97,6 +182,7 @@ impl BlockMeta {
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
         inverted_index_size: Option<u64>,
+        virtual_block_meta: Option<VirtualBlockMeta>,
         compression: Compression,
         create_on: Option<DateTime<Utc>>,
     ) -> Self {
@@ -111,6 +197,7 @@ impl BlockMeta {
             bloom_filter_index_location,
             bloom_filter_index_size,
             inverted_index_size,
+            virtual_block_meta,
             compression,
             create_on,
         }
@@ -253,6 +340,7 @@ impl BlockMeta {
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
             inverted_index_size: None,
+            virtual_block_meta: None,
             create_on: None,
         }
     }
@@ -277,6 +365,7 @@ impl BlockMeta {
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
             inverted_index_size: None,
+            virtual_block_meta: None,
             create_on: None,
         }
     }

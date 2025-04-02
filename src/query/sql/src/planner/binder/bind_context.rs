@@ -119,11 +119,7 @@ pub struct VirtualColumnContext {
     pub virtual_column_indices: HashMap<IndexType, Vec<IndexType>>,
     /// Mapping: (table index) -> (virtual column names and data types)
     /// This is used to check whether the virtual column has be created
-    pub virtual_column_names: HashMap<IndexType, HashMap<String, TableDataType>>,
-    /// Mapping: (table index) -> (next virtual column id)
-    /// The is used to generate virtual column id for virtual columns.
-    /// Not a real column id, only used to identify a virtual column.
-    pub next_column_ids: HashMap<IndexType, u32>,
+    pub virtual_column_names: HashMap<IndexType, HashMap<String, (TableDataType, ColumnId)>>,
     /// virtual column alias names
     pub virtual_columns: Vec<ColumnBinding>,
 }
@@ -135,7 +131,6 @@ impl VirtualColumnContext {
             table_indices: HashSet::new(),
             virtual_column_indices: HashMap::new(),
             virtual_column_names: HashMap::new(),
-            next_column_ids: HashMap::new(),
             virtual_columns: Vec::new(),
         }
     }
@@ -147,7 +142,6 @@ impl VirtualColumnContext {
             .extend(other.virtual_column_indices.clone());
         self.virtual_column_names
             .extend(other.virtual_column_names.clone());
-        self.next_column_ids.extend(other.next_column_ids.clone());
         self.virtual_columns.extend(other.virtual_columns.clone());
     }
 }

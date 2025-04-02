@@ -17,7 +17,12 @@ mod cluster_statistics;
 mod column_statistic;
 pub mod reducers;
 
+<<<<<<< HEAD
 pub use accumulator::RowOrientedSegmentBuilder;
+=======
+pub use accumulator::StatisticsAccumulator;
+pub use accumulator::VirtualColumnAccumulator;
+>>>>>>> 31bba40384 (refactor(query): auto generate virtual columns for variant column)
 pub use cluster_statistics::sort_by_cluster_stats;
 pub use cluster_statistics::ClusterStatsGenerator;
 pub use column_statistic::calc_column_distinct_of_values;

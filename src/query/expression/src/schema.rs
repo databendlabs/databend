@@ -177,7 +177,7 @@ pub struct DataField {
     computed_expr: Option<ComputedExpr>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum VariantDataType {
     Jsonb,
     Boolean,

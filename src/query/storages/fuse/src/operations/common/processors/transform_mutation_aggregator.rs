@@ -26,6 +26,7 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::VirtualDataSchema;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -75,6 +76,7 @@ pub struct TableMutationAggregator {
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     appended_segments: Vec<Location>,
+    virtual_schema: Option<VirtualDataSchema>,
     appended_statistics: Statistics,
     removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
@@ -118,7 +120,12 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             _ => self.apply_mutation(&mut new_segment_locs).await?,
         };
 
-        let meta = CommitMeta::new(conflict_resolve_context, new_segment_locs, self.table_id);
+        let meta = CommitMeta::new(
+            conflict_resolve_context,
+            new_segment_locs,
+            self.table_id,
+            self.virtual_schema.clone(),
+        );
         debug!("mutations {:?}", meta);
         let block_meta: BlockMetaInfoPtr = Box::new(meta);
         Ok(Some(DataBlock::empty_with_meta(block_meta)))
@@ -157,6 +164,7 @@ impl TableMutationAggregator {
             set_hilbert_level,
             mutations: HashMap::new(),
             appended_segments: vec![],
+            virtual_schema: None,
             base_segments,
             recluster_merged_blocks,
             appended_statistics: Statistics::default(),
@@ -220,6 +228,7 @@ impl TableMutationAggregator {
                 segment_location,
                 format_version,
                 summary,
+                virtual_schema,
             } => {
                 merge_statistics_mut(
                     &mut self.appended_statistics,
@@ -228,7 +237,8 @@ impl TableMutationAggregator {
                 );
 
                 self.appended_segments
-                    .push((segment_location, format_version))
+                    .push((segment_location, format_version));
+                self.virtual_schema = virtual_schema.clone();
             }
             MutationLogEntry::CompactExtras { extras } => {
                 match self.mutations.entry(extras.segment_index) {

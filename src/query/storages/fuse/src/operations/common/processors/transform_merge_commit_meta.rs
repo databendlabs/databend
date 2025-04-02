@@ -98,6 +98,7 @@ impl TransformMergeCommitMeta {
                 .chain(r.new_segment_locs)
                 .collect(),
             table_id: l.table_id,
+            virtual_schema: None,
         }
     }
 }

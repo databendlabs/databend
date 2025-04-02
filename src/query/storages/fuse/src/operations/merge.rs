@@ -102,6 +102,8 @@ impl FuseTable {
             cluster_stats_gen,
             bloom_columns_map,
             inverted_index_builders,
+            // todo
+            virtual_column_builder: None,
             table_meta_timestamps,
         };
         let aggregator = MatchedAggregator::create(

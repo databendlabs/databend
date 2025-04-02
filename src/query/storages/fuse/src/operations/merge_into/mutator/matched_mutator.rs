@@ -462,12 +462,13 @@ impl AggregationContext {
         metrics_inc_merge_into_replace_blocks_counter(1);
         metrics_inc_merge_into_replace_blocks_rows_counter(origin_num_rows as u32);
         // generate log
+        // todo
         let mutation = MutationLogEntry::ReplacedBlock {
             index: BlockMetaIndex {
                 segment_idx,
                 block_idx,
             },
-            block_meta: Arc::new(new_block_meta),
+            block_meta: Arc::new(new_block_meta.block_meta),
         };
 
         Ok(Some(mutation))

@@ -14,9 +14,6 @@
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::TableDataType;
-use databend_common_meta_app::schema::VirtualField;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -50,25 +47,6 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let dal = fuse_table.get_operator_ref();
 
-    let virtual_columns = vec![
-        VirtualField {
-            expr: "v['a']".to_string(),
-            data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-            alias_name: None,
-        },
-        VirtualField {
-            expr: "v[0]".to_string(),
-            data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-            alias_name: None,
-        },
-        VirtualField {
-            expr: "v['b']".to_string(),
-            data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
-                NumberDataType::Int64,
-            ))),
-            alias_name: None,
-        },
-    ];
     let table_ctx = fixture.new_query_ctx().await?;
 
     let snapshot_opt = fuse_table.read_table_snapshot().await?;
@@ -82,7 +60,6 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
     do_refresh_virtual_column(
         table_ctx.clone(),
         fuse_table,
-        virtual_columns,
         segment_locs,
         &mut build_res.main_pipeline,
     )

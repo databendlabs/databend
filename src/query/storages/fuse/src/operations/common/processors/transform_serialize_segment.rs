@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -28,19 +29,31 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
+<<<<<<< HEAD
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
+=======
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CachedObject;
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
+>>>>>>> 31bba40384 (refactor(query): auto generate virtual columns for variant column)
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use log::info;
 use opendal::Operator;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
+<<<<<<< HEAD
 use crate::statistics::RowOrientedSegmentBuilder;
 use crate::FuseSegmentFormat;
+=======
+use crate::statistics::StatisticsAccumulator;
+use crate::statistics::VirtualColumnAccumulator;
+>>>>>>> 31bba40384 (refactor(query): auto generate virtual columns for variant column)
 use crate::FuseTable;
 enum State<B: SegmentBuilder> {
     None,
@@ -60,8 +73,14 @@ enum State<B: SegmentBuilder> {
 pub struct TransformSerializeSegment<B: SegmentBuilder> {
     data_accessor: Operator,
     meta_locations: TableMetaLocationGenerator,
+<<<<<<< HEAD
     segment_builder: B,
     state: State<B>,
+=======
+    accumulator: StatisticsAccumulator,
+    virtual_column_accumulator: VirtualColumnAccumulator,
+    state: State,
+>>>>>>> 31bba40384 (refactor(query): auto generate virtual columns for variant column)
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
@@ -81,6 +100,9 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
         segment_builder: B,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
+        let table_meta = &table.table_info.meta;
+        let virtual_column_accumulator = VirtualColumnAccumulator::new(&table_meta.virtual_schema);
+
         let default_cluster_key_id = table.cluster_key_id();
 
         TransformSerializeSegment {
@@ -90,7 +112,12 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             data_accessor: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             state: State::None,
+<<<<<<< HEAD
             segment_builder,
+=======
+            accumulator: Default::default(),
+            virtual_column_accumulator,
+>>>>>>> 31bba40384 (refactor(query): auto generate virtual columns for variant column)
             thresholds,
             default_cluster_key_id,
             table_meta_timestamps,
@@ -229,12 +256,41 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 .get_meta()
                 .cloned()
                 .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
-            let block_meta = BlockMeta::downcast_ref_from(&input_meta)
+            let extended_block_meta = ExtendedBlockMeta::downcast_ref_from(&input_meta)
                 .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?
                 .clone();
 
+<<<<<<< HEAD
             self.segment_builder.add_block(block_meta)?;
             if self.segment_builder.block_count() >= self.thresholds.block_per_segment {
+=======
+            if let Some(draft_virtual_block_meta) = extended_block_meta.draft_virtual_block_meta {
+                let mut block_meta = extended_block_meta.block_meta.clone();
+
+                // generate ColumnId for virtual columns.
+                let mut virtual_column_metas = HashMap::new();
+                for draft_virtual_column_meta in &draft_virtual_block_meta.virtual_col_metas {
+                    self.virtual_column_accumulator.add_virtual_column_meta(
+                        draft_virtual_column_meta,
+                        &mut virtual_column_metas,
+                    );
+                }
+
+                let virtual_block_meta = VirtualBlockMeta {
+                    virtual_col_metas: virtual_column_metas,
+                    virtual_col_size: draft_virtual_block_meta.virtual_col_size,
+                    virtual_location: draft_virtual_block_meta.virtual_location.clone(),
+                };
+                block_meta.virtual_block_meta = Some(virtual_block_meta);
+
+                self.accumulator.add_with_block_meta(block_meta);
+            } else {
+                self.accumulator
+                    .add_with_block_meta(extended_block_meta.block_meta);
+            }
+
+            if self.accumulator.summary_block_count >= self.thresholds.block_per_segment as u64 {
+>>>>>>> 31bba40384 (refactor(query): auto generate virtual columns for variant column)
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
             }
@@ -273,7 +329,14 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     entries: vec![MutationLogEntry::AppendSegment {
                         segment_location: location,
                         format_version,
+<<<<<<< HEAD
                         summary: segment.summary().clone(),
+=======
+                        summary: segment.summary.clone(),
+                        virtual_schema: Some(
+                            self.virtual_column_accumulator.virtual_schema.clone(),
+                        ),
+>>>>>>> 31bba40384 (refactor(query): auto generate virtual columns for variant column)
                     }],
                 };
 

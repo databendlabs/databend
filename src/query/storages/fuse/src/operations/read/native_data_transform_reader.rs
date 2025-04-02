@@ -35,7 +35,6 @@ use super::native_data_source::NativeDataSource;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::VirtualColumnReader;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
@@ -46,7 +45,6 @@ pub struct ReadNativeDataTransform<const BLOCKING_IO: bool> {
     block_reader: Arc<BlockReader>,
 
     index_reader: Arc<Option<AggIndexReader>>,
-    virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
@@ -60,7 +58,6 @@ impl ReadNativeDataTransform<true> {
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
         index_reader: Arc<Option<AggIndexReader>>,
-        virtual_reader: Arc<Option<VirtualColumnReader>>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
@@ -72,7 +69,6 @@ impl ReadNativeDataTransform<true> {
                 func_ctx,
                 block_reader,
                 index_reader,
-                virtual_reader,
                 table_schema,
                 scan_id,
                 context: ctx,
@@ -88,7 +84,6 @@ impl ReadNativeDataTransform<false> {
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
         index_reader: Arc<Option<AggIndexReader>>,
-        virtual_reader: Arc<Option<VirtualColumnReader>>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
@@ -100,7 +95,6 @@ impl ReadNativeDataTransform<false> {
                 func_ctx,
                 block_reader,
                 index_reader,
-                virtual_reader,
                 table_schema,
                 scan_id,
                 context: ctx,
@@ -143,28 +137,6 @@ impl Transform for ReadNativeDataTransform<true> {
                         return Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
                             vec![part.clone()],
                             vec![NativeDataSource::AggIndex(data)],
-                        )));
-                    }
-                }
-
-                if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
-                    let virtual_block_meta = fuse_part
-                        .block_meta_index
-                        .as_ref()
-                        .and_then(|b| b.virtual_block_meta.as_ref());
-
-                    // If virtual column file exists, read the data from the virtual columns directly.
-                    if let Some((mut virtual_source_data, ignore_column_ids)) =
-                        virtual_reader.sync_read_native_data(&virtual_block_meta)
-                    {
-                        let mut source_data = self
-                            .block_reader
-                            .sync_read_native_columns_data(&part, &ignore_column_ids)?;
-                        source_data.append(&mut virtual_source_data);
-                        return Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
-                            vec![part.clone()],
-                            vec![NativeDataSource::Normal(source_data)],
                         )));
                     }
                 }
@@ -214,7 +186,6 @@ impl AsyncTransform for ReadNativeDataTransform<false> {
                         native_part_infos.push(part.clone());
                         let block_reader = self.block_reader.clone();
                         let index_reader = self.index_reader.clone();
-                        let virtual_reader = self.virtual_reader.clone();
                         let ctx = self.context.clone();
                         chunks.push(async move {
                             let handler = databend_common_base::runtime::spawn(async move {
@@ -228,21 +199,6 @@ impl AsyncTransform for ReadNativeDataTransform<false> {
                                     if let Some(data) = index_reader.read_native_data(&loc).await {
                                         // Read from aggregating index.
                                         return Ok::<_, ErrorCode>(NativeDataSource::AggIndex(data));
-                                    }
-                                }
-
-                                if let Some(virtual_reader) = virtual_reader.as_ref() {
-                                    let virtual_block_meta = fuse_part.block_meta_index.as_ref().and_then(|b| b.virtual_block_meta.as_ref());
-
-                                    // If virtual column file exists, read the data from the virtual columns directly.
-                                    if let Some((mut virtual_source_data, ignore_column_ids)) =
-                                        virtual_reader.read_native_data(&virtual_block_meta).await
-                                    {
-                                        let mut source_data = block_reader
-                                            .async_read_native_columns_data(&part, &ctx, &ignore_column_ids)
-                                            .await?;
-                                        source_data.append(&mut virtual_source_data);
-                                        return Ok(NativeDataSource::Normal(source_data));
                                     }
                                 }
 
