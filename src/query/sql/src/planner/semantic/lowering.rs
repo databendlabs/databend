@@ -224,7 +224,7 @@ impl ScalarExpr {
                 span: None,
                 name: func.func_name.clone(),
                 args: func.args.iter().map(ScalarExpr::as_raw_expr).collect(),
-                lambda_expr: (*func.lambda_expr).clone(),
+                lambda_expr: func.lambda_expr.clone(),
                 lambda_display: func.lambda_display.clone(),
                 return_type: (*func.return_type).clone(),
             },

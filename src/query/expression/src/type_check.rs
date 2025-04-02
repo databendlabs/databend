@@ -283,7 +283,7 @@ pub fn check_function<Index: ColumnIndex>(
         let return_type = function.signature.return_type.clone();
         return Ok(Expr::FunctionCall {
             span,
-            id,
+            id: Box::new(id),
             function,
             generics: vec![],
             args: args.to_vec(),
@@ -320,7 +320,7 @@ pub fn check_function<Index: ColumnIndex>(
                 };
                 let expr = Expr::FunctionCall {
                     span,
-                    id: id.clone(),
+                    id: Box::new(id.clone()),
                     function: func.clone(),
                     generics,
                     args,

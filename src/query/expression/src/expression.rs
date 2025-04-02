@@ -79,7 +79,7 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
         span: Span,
         name: String,
         args: Vec<RawExpr<Index>>,
-        lambda_expr: RemoteExpr,
+        lambda_expr: Box<RemoteExpr>,
         lambda_display: String,
         return_type: DataType,
     },
@@ -115,7 +115,7 @@ pub enum Expr<Index: ColumnIndex = usize> {
     FunctionCall {
         #[educe(Hash(ignore))]
         span: Span,
-        id: FunctionID,
+        id: Box<FunctionID>,
         #[educe(Hash(ignore))]
         function: Arc<Function>,
         generics: Vec<DataType>,
@@ -127,7 +127,7 @@ pub enum Expr<Index: ColumnIndex = usize> {
         span: Span,
         name: String,
         args: Vec<Expr<Index>>,
-        lambda_expr: RemoteExpr,
+        lambda_expr: Box<RemoteExpr>,
         lambda_display: String,
         return_type: DataType,
     },
@@ -477,7 +477,7 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
     FunctionCall {
         #[educe(Hash(ignore), PartialEq(ignore))]
         span: Span,
-        id: FunctionID,
+        id: Box<FunctionID>,
         generics: Vec<DataType>,
         args: Vec<RemoteExpr<Index>>,
         return_type: DataType,
@@ -782,7 +782,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 span: *span,
                 name: name.clone(),
                 args: args.iter().map(Expr::as_remote_expr).collect(),
-                lambda_expr: Box::new(lambda_expr.clone()),
+                lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },
@@ -941,7 +941,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 span: *span,
                 name: name.clone(),
                 args: args.iter().map(|arg| arg.as_expr(fn_registry)).collect(),
-                lambda_expr: *lambda_expr.clone(),
+                lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },
