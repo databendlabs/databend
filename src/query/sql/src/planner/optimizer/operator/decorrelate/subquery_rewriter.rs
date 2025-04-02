@@ -100,6 +100,11 @@ impl SubqueryRewriter {
     /// More information can be found in the paper: Unnesting Arbitrary Queries
     #[recursive::recursive]
     pub fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        // If there is no subquery, return directly
+        if !s_expr.contain_subquery() {
+            return Ok(s_expr.clone());
+        }
+
         match s_expr.plan().clone() {
             RelOperator::EvalScalar(mut plan) => {
                 let mut input = self.rewrite(s_expr.child(0)?)?;

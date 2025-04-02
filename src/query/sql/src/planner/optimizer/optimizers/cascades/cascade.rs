@@ -44,14 +44,16 @@ pub struct CascadesOptimizer {
 }
 
 impl CascadesOptimizer {
-    pub fn new(opt_ctx: Arc<OptimizerContext>, mut optimized: bool) -> Result<Self> {
+    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Result<Self> {
         let table_ctx = opt_ctx.get_table_ctx();
         let settings = table_ctx.get_settings();
         let explore_rule_set = if settings.get_enable_cbo()? {
+            let mut dphyp_optimized = opt_ctx.get_flag("dphyp_optimized");
+
             if unsafe { settings.get_disable_join_reorder()? } {
-                optimized = true;
+                dphyp_optimized = true;
             }
-            get_explore_rule_set(optimized)
+            get_explore_rule_set(dphyp_optimized)
         } else {
             RuleSet::create()
         };

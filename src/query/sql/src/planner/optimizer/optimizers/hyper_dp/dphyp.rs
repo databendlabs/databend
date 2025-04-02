@@ -105,8 +105,8 @@ impl DPhpy {
         let right_res = right_res
             .await
             .map_err(|e| ErrorCode::TokioError(format!("Cannot join tokio job, err: {:?}", e)))?;
-        let (left_expr, _) = left_res.0?;
-        let (right_expr, _) = right_res.0?;
+        let left_expr = left_res.0?;
+        let right_expr = right_res.0?;
 
         // Merge `table_index_map` of left and right into current `table_index_map`.
         let relation_idx = self.join_relations.len() as IndexType;
@@ -116,7 +116,7 @@ impl DPhpy {
         for table_index in right_res.1.keys() {
             self.table_index_map.insert(*table_index, relation_idx);
         }
-        Ok(s_expr.replace_children([left_expr, right_expr]))
+        Ok(s_expr.replace_children([Arc::new(left_expr), Arc::new(right_expr)]))
     }
 
     // Traverse the s_expr and get all base relations and join conditions
@@ -132,7 +132,7 @@ impl DPhpy {
         if is_subquery {
             // If it's a subquery, start a new dphyp
             let mut dphyp = DPhpy::new(self.opt_ctx.clone());
-            let (new_s_expr, _) = dphyp.optimize(s_expr).await?;
+            let new_s_expr = dphyp.optimize(s_expr).await?;
             // Merge `table_index_map` of subquery into current `table_index_map`.
             let relation_idx = self.join_relations.len() as IndexType;
             for table_index in dphyp.table_index_map.keys() {
@@ -303,7 +303,7 @@ impl DPhpy {
     // The input plan tree has been optimized by heuristic optimizer
     // So filters have pushed down join and cross join has been converted to inner join as possible as we can
     // The output plan will have optimal join order theoretically
-    pub async fn optimize(&mut self, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
+    pub async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         // Firstly, we need to extract all join conditions and base tables
         // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
@@ -311,10 +311,12 @@ impl DPhpy {
             .get_base_relations(s_expr, &mut join_conditions, false, None, false)
             .await?;
         if !optimized {
-            return Ok((s_expr, false));
+            self.opt_ctx.set_flag("dphyp_optimized", false);
+            return Ok(s_expr.as_ref().clone());
         }
         if self.join_relations.len() == 1 || join_conditions.is_empty() {
-            return Ok((s_expr, true));
+            self.opt_ctx.set_flag("dphyp_optimized", true);
+            return Ok(s_expr.as_ref().clone());
         }
 
         // Second, use `join_conditions` to create edges in `query_graph`
@@ -355,7 +357,8 @@ impl DPhpy {
                 continue;
             } else {
                 // If one of `left_relation_set` and `right_relation_set` is empty, we need to forbid dphyp algo
-                return Ok((s_expr, false));
+                self.opt_ctx.set_flag("dphyp_optimized", false);
+                return Ok(s_expr.as_ref().clone());
             }
         }
         for (_, neighbors) in self.query_graph.cached_neighbors.iter_mut() {
@@ -367,10 +370,13 @@ impl DPhpy {
             .relation_set_tree
             .get_relation_set(&(0..self.join_relations.len()).collect())?;
         if let Some(final_plan) = self.dp_table.get(&all_relations) {
-            self.generate_final_plan(final_plan, &s_expr)
+            let (s_expr, optimized) = self.generate_final_plan(final_plan, &s_expr)?;
+            self.opt_ctx.set_flag("dphyp_optimized", optimized);
+            Ok(s_expr.as_ref().clone())
         } else {
             // Maybe exist cross join, which make graph disconnected
-            Ok((s_expr, false))
+            self.opt_ctx.set_flag("dphyp_optimized", false);
+            Ok(s_expr.as_ref().clone())
         }
     }
 

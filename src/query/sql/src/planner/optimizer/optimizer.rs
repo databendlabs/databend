@@ -259,9 +259,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
-    if s_expr.contain_subquery() {
-        s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).rewrite(&s_expr)?;
-    }
+    s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).rewrite(&s_expr)?;
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
         .run(&s_expr)
@@ -285,13 +283,8 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate]).run(&s_expr)?;
 
     // Cost based optimization
-    let mut dphyp_optimized = false;
     if opt_ctx.get_enable_dphyp() && opt_ctx.get_enable_join_reorder() {
-        let (dp_res, optimized) = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
-        if optimized {
-            s_expr = (*dp_res).clone();
-            dphyp_optimized = true;
-        }
+        s_expr = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
     }
 
     // After join reorder, Convert some single join to inner join.
@@ -299,14 +292,13 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     // Deduplicate join conditions.
     s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
 
-    let mut cascades = CascadesOptimizer::new(opt_ctx.clone(), dphyp_optimized)?;
-
     if opt_ctx.get_enable_join_reorder() {
         s_expr = RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice())
             .run(&s_expr)?;
     }
 
     // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
+    let mut cascades = CascadesOptimizer::new(opt_ctx.clone())?;
     s_expr = match cascades.optimize(s_expr.clone()) {
         Ok(mut s_expr) => {
             // Push down sort and limit
@@ -378,15 +370,10 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate]).run(&s_expr)?;
 
     // Cost based optimization
-    let mut dphyp_optimized = false;
     if opt_ctx.get_enable_dphyp() && opt_ctx.get_enable_join_reorder() {
-        let (dp_res, optimized) = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
-        if optimized {
-            s_expr = (*dp_res).clone();
-            dphyp_optimized = true;
-        }
+        s_expr = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
     }
-    let mut cascades = CascadesOptimizer::new(opt_ctx.clone(), dphyp_optimized)?;
+    let mut cascades = CascadesOptimizer::new(opt_ctx.clone())?;
     cascades.optimize(s_expr)?;
 
     Ok(cascades.memo)
