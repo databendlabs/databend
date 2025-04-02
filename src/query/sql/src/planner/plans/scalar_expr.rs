@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -902,6 +903,7 @@ pub struct UDFCall {
     pub name: String,
     // name in handler
     pub handler: String,
+    pub headers: Option<BTreeMap<String, String>>,
     pub display_name: String,
     pub arg_types: Vec<DataType>,
     pub return_type: Box<DataType>,

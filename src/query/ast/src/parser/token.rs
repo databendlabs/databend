@@ -1312,6 +1312,8 @@ pub enum TokenKind {
     UDF,
     #[token("HANDLER", ignore(ascii_case))]
     HANDLER,
+    #[token("HEADERS", ignore(ascii_case))]
+    HEADERS,
     #[token("LANGUAGE", ignore(ascii_case))]
     LANGUAGE,
     #[token("STATE", ignore(ascii_case))]

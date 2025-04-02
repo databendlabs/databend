@@ -24107,6 +24107,40 @@ CreateUDF(
             return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
+            headers: {},
+            language: "python",
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' HEADERS = ('X-Authorization' = '123') ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+CREATE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' HEADERS = ('X-Authorization' = '123') ADDRESS = 'http://0.0.0.0:8815'
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: Create,
+        udf_name: Identifier {
+            span: Some(
+                16..30,
+            ),
+            name: "binary_reverse",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDFServer {
+            arg_types: [
+                Binary,
+            ],
+            return_type: Binary,
+            address: "http://0.0.0.0:8815",
+            handler: "binary_reverse",
+            headers: {
+                "X-Authorization": "123",
+            },
             language: "python",
         },
     },
@@ -24136,6 +24170,7 @@ AlterUDF(
             return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
+            headers: {},
             language: "python",
         },
     },
@@ -24166,6 +24201,7 @@ CreateUDF(
             return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
+            headers: {},
             language: "python",
         },
     },
@@ -24408,6 +24444,7 @@ CreateUDF(
             ],
             return_type: Boolean,
             address: "http://0.0.0.0:8815",
+            headers: {},
             language: "javascript",
         },
     },

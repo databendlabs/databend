@@ -160,7 +160,9 @@ impl TransformUdfServer {
             .with_func_name(&func.name)?
             .with_handler_name(&func.func_name)?
             .with_query_id(&ctx.get_id())?;
-
+        if let Some(headers) = func.headers {
+            client = client.with_headers(headers)?;
+        }
         let connect_duration = instant.elapsed();
         record_connect_external_duration(func.func_name.clone(), connect_duration);
 
