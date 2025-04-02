@@ -15,12 +15,14 @@
 use databend_common_expression::types::*;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
+use jsonb::OwnedJsonb;
 
 use crate::scalars::run_ast;
 
 #[test]
 fn test_type_check() {
     let mut mint = Mint::new("tests/it/type_check/testdata");
+    let json = "{}".parse::<OwnedJsonb>().unwrap().to_vec();
 
     let columns = [
         ("s", StringType::from_data(vec!["s"])),
@@ -63,10 +65,10 @@ fn test_type_check() {
             "n_ts",
             TimestampType::from_data(vec![0]).wrap_nullable(None),
         ),
-        ("j", VariantType::from_data(vec![b"1".into()])),
+        ("j", VariantType::from_data(vec![json.clone()])),
         (
             "n_j",
-            VariantType::from_data(vec![b"1".into()]).wrap_nullable(None),
+            VariantType::from_data(vec![json.clone()]).wrap_nullable(None),
         ),
         ("d128", Decimal128Type::from_data(vec![0_i128])),
         (
