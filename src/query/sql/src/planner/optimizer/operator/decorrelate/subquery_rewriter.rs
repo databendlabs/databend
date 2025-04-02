@@ -89,7 +89,7 @@ impl SubqueryRewriter {
     /// Decorrelate subqueries inside `s_expr`.
     ///
     /// We only need to process three kinds of join: Scalar Subquery, Any Subquery, and Exists Subquery.
-    /// Other kinds of subqueries have be converted to one of the above subqueries in `type_check`.
+    /// Other kinds of subqueries have been converted to one of the above subqueries in `type_check`.
     ///
     /// It will rewrite `s_expr` to all kinds of join.
     /// Correlated scalar subquery -> Single join
