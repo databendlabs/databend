@@ -21,12 +21,12 @@ use educe::Educe;
 
 use super::optimize_expr::OptimizeExprTask;
 use super::Task;
-use crate::optimizer::cascades::scheduler::Scheduler;
-use crate::optimizer::cascades::tasks::ExploreGroupTask;
-use crate::optimizer::cascades::tasks::SharedCounter;
-use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::optimizers::cascades::CascadesOptimizer;
+use crate::optimizer::optimizers::cascades::ExploreGroupTask;
+use crate::optimizer::optimizers::cascades::Scheduler;
+use crate::optimizer::optimizers::cascades::SharedCounter;
 use crate::plans::Operator;
 use crate::IndexType;
 

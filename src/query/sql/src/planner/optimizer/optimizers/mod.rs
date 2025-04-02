@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cascade;
-mod explore_rules;
-mod scheduler;
-mod tasks;
+mod cascades;
+mod hyper_dp;
+mod recursive;
 
-pub use cascade::CascadesOptimizer;
+pub use cascades::CascadesOptimizer;
+pub use cascades::Scheduler;
+pub use hyper_dp::DPhpy;
+pub use recursive::RecursiveOptimizer;

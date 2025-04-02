@@ -19,3 +19,7 @@ mod query_graph;
 mod util;
 
 pub use dphyp::DPhpy;
+pub use join_node::JoinNode;
+pub use join_relation::JoinRelation;
+pub use join_relation::RelationSetTree;
+pub use query_graph::QueryGraph;
