@@ -42,6 +42,7 @@
 #![feature(trait_upcasting)]
 #![feature(alloc_layout_extra)]
 #![feature(debug_closure_helpers)]
+#![feature(never_type)]
 
 #[allow(dead_code)]
 mod block;
