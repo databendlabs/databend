@@ -132,7 +132,7 @@ impl DPhpy {
         if is_subquery {
             // If it's a subquery, start a new dphyp
             let mut dphyp = DPhpy::new(self.opt_ctx.clone());
-            let new_s_expr = dphyp.optimize(s_expr).await?;
+            let new_s_expr = Arc::new(dphyp.optimize(s_expr).await?);
             // Merge `table_index_map` of subquery into current `table_index_map`.
             let relation_idx = self.join_relations.len() as IndexType;
             for table_index in dphyp.table_index_map.keys() {

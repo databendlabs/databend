@@ -47,25 +47,26 @@ impl CascadesOptimizer {
     pub fn new(opt_ctx: Arc<OptimizerContext>) -> Result<Self> {
         let table_ctx = opt_ctx.get_table_ctx();
         let settings = table_ctx.get_settings();
-        let explore_rule_set = if settings.get_enable_cbo()? {
-            let mut dphyp_optimized = opt_ctx.get_flag("dphyp_optimized");
 
-            if unsafe { settings.get_disable_join_reorder()? } {
-                dphyp_optimized = true;
-            }
-            get_explore_rule_set(dphyp_optimized)
-        } else {
+        // Determine rule set
+        let explore_rule_set = if !settings.get_enable_cbo()? {
             RuleSet::create()
+        } else {
+            // Use dphyp optimization flag or join reorder setting
+            let skip_join_reorder = opt_ctx.get_flag("dphyp_optimized")
+                || unsafe { settings.get_disable_join_reorder()? };
+            get_explore_rule_set(skip_join_reorder)
         };
 
-        let cluster_peers = table_ctx.get_cluster().nodes.len();
-        let dop = settings.get_max_threads()? as usize;
+        // Build cost model
         let cost_model = Box::new(
             DefaultCostModel::new(table_ctx.clone())?
-                .with_cluster_peers(cluster_peers)
-                .with_degree_of_parallelism(dop),
+                .with_cluster_peers(table_ctx.get_cluster().nodes.len())
+                .with_degree_of_parallelism(settings.get_max_threads()? as usize),
         );
-        Ok(CascadesOptimizer {
+
+        // Create optimizer
+        Ok(Self {
             opt_ctx,
             memo: Memo::create(),
             cost_model,

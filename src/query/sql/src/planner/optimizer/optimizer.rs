@@ -246,6 +246,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -> Result<SExpr> {
     let metadata = opt_ctx.get_metadata();
 
+    // 1. Configure distributed optimization based on table types
     if contains_local_table_scan(&s_expr, &metadata) {
         opt_ctx.set_enable_distributed_optimization(false);
         info!("Disable distributed optimization due to local table scan.");
@@ -258,50 +259,53 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
         }
     }
 
-    // Decorrelate subqueries, after this step, there should be no subquery in the expression.
+    // 2. Eliminate subqueries by rewriting them into more efficient forms
     s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).rewrite(&s_expr)?;
 
+    // 3. Apply statistics aggregation to gather and propagate statistics
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
         .run(&s_expr)
         .await?;
 
-    // Collect statistics for each leaf node in SExpr.
+    // 4. Collect statistics for SExpr nodes to support cost estimation
     s_expr = CollectStatisticsOptimizer::new(opt_ctx.clone())
         .run(&s_expr)
         .await?;
 
-    // Normalize aggregate, it should be executed before RuleSplitAggregate.
+    // 5. Normalize aggregate, it should be executed before RuleSplitAggregate.
     s_expr = RuleNormalizeAggregateOptimizer::new().run(&s_expr)?;
 
-    // Pull up and infer filter.
+    // 6. Pull up and infer filter.
     s_expr = PullUpFilterOptimizer::new(opt_ctx.clone()).run(&s_expr)?;
 
-    // Run default rewrite rules
+    // 7. Run default rewrite rules
     s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).run(&s_expr)?;
 
-    // Run post rewrite rules
+    // 8. Run post rewrite rules
     s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate]).run(&s_expr)?;
 
-    // Cost based optimization
+    // 9. Apply DPhyp algorithm for cost-based join reordering
     if opt_ctx.get_enable_dphyp() && opt_ctx.get_enable_join_reorder() {
         s_expr = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
     }
 
-    // After join reorder, Convert some single join to inner join.
+    // 10. After join reorder, Convert some single join to inner join.
     s_expr = SingleToInnerOptimizer::new().run(&s_expr)?;
-    // Deduplicate join conditions.
+
+    // 11. Deduplicate join conditions.
     s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
 
+    // 12. Apply join commutativity to further optimize join ordering
     if opt_ctx.get_enable_join_reorder() {
         s_expr = RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice())
             .run(&s_expr)?;
     }
 
-    // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
+    // 13. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
     let mut cascades = CascadesOptimizer::new(opt_ctx.clone())?;
     s_expr = match cascades.optimize(s_expr.clone()) {
         Ok(mut s_expr) => {
-            // Push down sort and limit
+            // 14. Push down sort and limit operations for distributed execution
             // TODO(leiysky): do this optimization in cascades optimizer
             if opt_ctx.get_enable_distributed_optimization() {
                 let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
@@ -323,6 +327,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
         }
     };
 
+    // 16. Eliminate unnecessary scalar calculations to clean up the final plan
     if !opt_ctx.get_planning_agg_index() {
         s_expr = RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice())
             .run(&s_expr)?;
