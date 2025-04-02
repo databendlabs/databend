@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -35,6 +36,10 @@ pub struct OptimizerContext {
     pub(crate) planning_agg_index: bool,
     #[educe(Debug(ignore))]
     pub(crate) sample_executor: Option<Arc<dyn QueryExecutor>>,
+
+    // Optimizer state flags
+    #[educe(Debug(ignore))]
+    pub(crate) flags: HashMap<String, bool>,
 }
 
 impl OptimizerContext {
@@ -49,6 +54,7 @@ impl OptimizerContext {
             max_push_down_limit: 10000,
             sample_executor: None,
             planning_agg_index: false,
+            flags: HashMap::new(),
         }
     }
 
@@ -80,5 +86,13 @@ impl OptimizerContext {
     pub fn with_max_push_down_limit(mut self, max_push_down_limit: usize) -> Self {
         self.max_push_down_limit = max_push_down_limit;
         self
+    }
+
+    pub fn set_flag(&mut self, name: &str, value: bool) {
+        self.flags.insert(name.to_string(), value);
+    }
+
+    pub fn get_flag(&self, name: &str) -> bool {
+        *self.flags.get(name).unwrap_or(&false)
     }
 }
