@@ -67,27 +67,27 @@ impl OptimizerContext {
         self.metadata.clone()
     }
 
-    pub fn set_enable_distributed_optimization(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
+    pub fn set_enable_distributed_optimization(self: &Arc<Self>, enable: bool) -> Arc<Self> {
         *self.enable_distributed_optimization.write() = enable;
-        self
+        self.clone()
     }
 
     pub fn get_enable_distributed_optimization(self: &Arc<Self>) -> bool {
         *self.enable_distributed_optimization.read()
     }
 
-    pub fn set_enable_join_reorder(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
+    pub fn set_enable_join_reorder(self: &Arc<Self>, enable: bool) -> Arc<Self> {
         *self.enable_join_reorder.write() = enable;
-        self
+        self.clone()
     }
 
     pub fn get_enable_join_reorder(self: &Arc<Self>) -> bool {
         *self.enable_join_reorder.read()
     }
 
-    pub fn set_enable_dphyp(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
+    pub fn set_enable_dphyp(self: &Arc<Self>, enable: bool) -> Arc<Self> {
         *self.enable_dphyp.write() = enable;
-        self
+        self.clone()
     }
 
     pub fn get_enable_dphyp(self: &Arc<Self>) -> bool {
@@ -106,28 +106,28 @@ impl OptimizerContext {
         self.sample_executor.read().clone()
     }
 
-    pub fn set_planning_agg_index(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
+    pub fn set_planning_agg_index(self: &Arc<Self>, enable: bool) -> Arc<Self> {
         *self.planning_agg_index.write() = enable;
-        self
+        self.clone()
     }
 
     pub fn get_planning_agg_index(self: &Arc<Self>) -> bool {
         *self.planning_agg_index.read()
     }
 
-    pub fn set_max_push_down_limit(self: &Arc<Self>, max_push_down_limit: usize) -> &Arc<Self> {
+    pub fn set_max_push_down_limit(self: &Arc<Self>, max_push_down_limit: usize) -> Arc<Self> {
         *self.max_push_down_limit.write() = max_push_down_limit;
-        self
+        self.clone()
     }
 
     pub fn get_max_push_down_limit(self: &Arc<Self>) -> usize {
         *self.max_push_down_limit.read()
     }
 
-    pub fn set_flag(self: &Arc<Self>, name: &str, value: bool) -> &Arc<Self> {
+    pub fn set_flag(self: &Arc<Self>, name: &str, value: bool) -> Arc<Self> {
         let mut flags = self.flags.write();
         flags.insert(name.to_string(), value);
-        self
+        self.clone()
     }
 
     pub fn get_flag(self: &Arc<Self>, name: &str) -> bool {

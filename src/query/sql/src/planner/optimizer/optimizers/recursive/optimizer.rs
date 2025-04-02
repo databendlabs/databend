@@ -31,7 +31,7 @@ pub struct RecursiveOptimizer {
 }
 
 impl RecursiveOptimizer {
-    pub fn new(rules: &'static [RuleID], ctx: Arc<OptimizerContext>) -> Self {
+    pub fn new(ctx: Arc<OptimizerContext>, rules: &'static [RuleID]) -> Self {
         Self { ctx, rules }
     }
 

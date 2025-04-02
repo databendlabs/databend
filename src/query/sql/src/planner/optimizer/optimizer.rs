@@ -279,10 +279,10 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     s_expr = PullUpFilterOptimizer::new(opt_ctx.clone()).run(&s_expr)?;
 
     // Run default rewrite rules
-    s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, opt_ctx.clone()).run(&s_expr)?;
+    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).run(&s_expr)?;
 
     // Run post rewrite rules
-    s_expr = RecursiveOptimizer::new(&[RuleID::SplitAggregate], opt_ctx.clone()).run(&s_expr)?;
+    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate]).run(&s_expr)?;
 
     // Cost based optimization
     let mut dphyp_optimized = false;
@@ -302,7 +302,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     let mut cascades = CascadesOptimizer::new(opt_ctx.clone(), dphyp_optimized)?;
 
     if opt_ctx.get_enable_join_reorder() {
-        s_expr = RecursiveOptimizer::new([RuleID::CommuteJoin].as_slice(), opt_ctx.clone())
+        s_expr = RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice())
             .run(&s_expr)?;
     }
 
@@ -332,7 +332,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     };
 
     if !opt_ctx.get_planning_agg_index() {
-        s_expr = RecursiveOptimizer::new([RuleID::EliminateEvalScalar].as_slice(), opt_ctx)
+        s_expr = RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice())
             .run(&s_expr)?;
     }
 
@@ -373,9 +373,9 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     // Pull up and infer filter.
     s_expr = PullUpFilterOptimizer::new(opt_ctx.clone()).run(&s_expr)?;
     // Run default rewrite rules
-    s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, opt_ctx.clone()).run(&s_expr)?;
+    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).run(&s_expr)?;
     // Run post rewrite rules
-    s_expr = RecursiveOptimizer::new(&[RuleID::SplitAggregate], opt_ctx.clone()).run(&s_expr)?;
+    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate]).run(&s_expr)?;
 
     // Cost based optimization
     let mut dphyp_optimized = false;
@@ -395,7 +395,7 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
 async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Plan> {
     // Optimize the input plan.
     let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
-    input_s_expr = RecursiveOptimizer::new(&[RuleID::MergeFilterIntoMutation], opt_ctx.clone())
+    input_s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::MergeFilterIntoMutation])
         .run(&input_s_expr)?;
 
     // For distributed query optimization, we need to remove the Exchange operator at the top of the plan.
