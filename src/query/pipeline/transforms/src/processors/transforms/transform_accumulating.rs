@@ -70,6 +70,7 @@ pub struct AccumulatingTransformer<T: AccumulatingTransform + 'static> {
     input_data: Option<DataBlock>,
     output_data: VecDeque<DataBlock>,
 
+    has_spill: bool,
     flush_spill_payload: bool,
     prepare_spill_payload: bool,
 }
@@ -83,6 +84,7 @@ impl<T: AccumulatingTransform + 'static> AccumulatingTransformer<T> {
             input_data: None,
             output_data: VecDeque::with_capacity(1),
             called_on_finish: false,
+            has_spill: false,
             flush_spill_payload: false,
             prepare_spill_payload: false,
         })
@@ -149,7 +151,15 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
 
         if self.input.is_finished() {
             return match !self.called_on_finish {
-                true => Ok(Event::Sync),
+                true => {
+                    // To avoid downstream out-of-memory, once a spill occurs, all data must be spilled entirely.
+                    if self.has_spill {
+                        self.has_spill = false;
+                        self.prepare_spill_payload = true;
+                    }
+
+                    Ok(Event::Sync)
+                }
                 false => {
                     self.output.finish();
                     Ok(Event::Finished)
@@ -165,10 +175,6 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
         self.inner.interrupt();
     }
 
-    fn configure_peer_nodes(&mut self, nodes: &[String]) {
-        self.inner.configure_peer_nodes(nodes)
-    }
-
     fn process(&mut self) -> Result<()> {
         if self.prepare_spill_payload {
             self.prepare_spill_payload = false;
@@ -179,6 +185,7 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
         if let Some(data_block) = self.input_data.take() {
             self.output_data.extend(self.inner.transform(data_block)?);
             self.prepare_spill_payload = self.inner.need_spill();
+            self.has_spill |= self.prepare_spill_payload;
             return Ok(());
         }
 
@@ -205,6 +212,10 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
 
     async fn flush_spill_payload(&mut self) -> Result<bool> {
         self.inner.flush_spill_payload().await
+    }
+
+    fn configure_peer_nodes(&mut self, nodes: &[String]) {
+        self.inner.configure_peer_nodes(nodes)
     }
 }
 

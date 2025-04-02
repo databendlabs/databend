@@ -279,15 +279,17 @@ impl AccumulatingTransform for TransformPartialAggregate {
                     convert_byte_size(self.processed_bytes as f64),
                 );
 
-                for (partition, payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    self.output_blocks.push(DataBlock::empty_with_meta(
-                        AggregateMeta::create_agg_payload(
-                            payload,
-                            partition as isize,
-                            partition_count,
-                            partition_count,
-                        ),
-                    ));
+                if hashtable.len() != 0 {
+                    for (partition, payload) in hashtable.payload.payloads.into_iter().enumerate() {
+                        self.output_blocks.push(DataBlock::empty_with_meta(
+                            AggregateMeta::create_agg_payload(
+                                payload,
+                                partition as isize,
+                                partition_count,
+                                partition_count,
+                            ),
+                        ));
+                    }
                 }
 
                 std::mem::take(&mut self.output_blocks)
