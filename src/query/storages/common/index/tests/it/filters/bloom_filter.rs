@@ -468,7 +468,7 @@ fn eval_index_expr(
     };
 
     let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
-    let (_, scalars) = BloomIndex::filter_index_field(expr.clone(), &fields).unwrap();
+    let (_, scalars) = BloomIndex::filter_index_field(&expr, &fields).unwrap();
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
     for (scalar, ty) in scalars.into_iter() {
