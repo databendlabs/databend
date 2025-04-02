@@ -26,10 +26,10 @@ pub use jemalloc::JEAllocator;
 pub use std_::StdAllocator;
 
 mod default;
+mod mmap;
 #[cfg(feature = "memory-profiling")]
 mod profiling;
 mod tracker;
-mod mmap;
 
 #[cfg(feature = "memory-profiling")]
 pub use profiling::dump_profile;

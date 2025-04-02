@@ -17,7 +17,9 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::alloc::Allocator;
-use crate::mem_allocator::{JEAllocator, StdAllocator};
+
+use crate::mem_allocator::JEAllocator;
+use crate::mem_allocator::StdAllocator;
 
 /// mmap allocator.
 /// For better performance, we use jemalloc as the inner allocator.
@@ -28,9 +30,7 @@ pub struct MmapAllocator<T: Allocator> {
 
 impl<T: Allocator> MmapAllocator<T> {
     pub fn new(inner: T) -> Self {
-        Self {
-            allocator: inner
-        }
+        Self { allocator: inner }
     }
 }
 
@@ -38,7 +38,7 @@ impl<T: Allocator> MmapAllocator<T> {
 impl MmapAllocator<JEAllocator> {
     pub const fn create() -> MmapAllocator<JEAllocator> {
         MmapAllocator::<JEAllocator> {
-            allocator: JEAllocator::create()
+            allocator: JEAllocator::create(),
         }
     }
 
@@ -54,7 +54,7 @@ impl MmapAllocator<JEAllocator> {
 impl MmapAllocator<StdAllocator> {
     pub const fn create() -> MmapAllocator<StdAllocator> {
         MmapAllocator::<StdAllocator> {
-            allocator: StdAllocator::create()
+            allocator: StdAllocator::create(),
         }
     }
 
