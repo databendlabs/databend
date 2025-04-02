@@ -19,7 +19,6 @@ mod decorrelate;
 mod distributed;
 mod hyper_dp;
 pub mod ir;
-mod join;
 #[allow(clippy::module_inception)]
 mod optimizer;
 pub mod rule;
@@ -38,6 +37,7 @@ pub use operator::InferFilterOptimizer;
 pub use operator::JoinProperty;
 pub use operator::NormalizeDisjunctiveFilterOptimizer;
 pub use operator::PullUpFilterOptimizer;
+pub use operator::SingleToInnerOptimizer;
 pub use optimizer::optimize;
 pub use optimizer::optimize_query;
 pub use optimizer::OptimizerContext;

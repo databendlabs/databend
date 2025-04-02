@@ -13,9 +13,11 @@
 // limitations under the License.
 
 mod filter;
+mod join;
 
 pub use filter::DeduplicateJoinConditionOptimizer;
 pub use filter::InferFilterOptimizer;
 pub use filter::JoinProperty;
 pub use filter::NormalizeDisjunctiveFilterOptimizer;
 pub use filter::PullUpFilterOptimizer;
+pub use join::SingleToInnerOptimizer;
