@@ -29,7 +29,7 @@ pub use aggregator_params::AggregatorParams;
 pub use transform_aggregate_expand::TransformExpandGroupingSets;
 pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;
-pub use transform_partition_bucket::build_partition_bucket;
+pub use transform_partition_bucket::build_partition_dispatch;
 pub use transform_single_key::FinalSingleStateAggregator;
 pub use transform_single_key::PartialSingleStateAggregator;
 pub use udaf_script::*;

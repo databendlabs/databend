@@ -37,7 +37,7 @@ use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
-use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
+use crate::pipelines::processors::transforms::aggregator::build_partition_dispatch;
 use crate::pipelines::processors::transforms::aggregator::create_udaf_script_function;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
@@ -205,7 +205,7 @@ impl PipelineBuilder {
 
         self.build_pipeline(&aggregate.input)?;
         self.enable_multiway_sort = old_value;
-        build_partition_bucket(&mut self.main_pipeline, params.clone())
+        build_partition_dispatch(&mut self.main_pipeline, params.clone())
     }
 
     fn build_aggregator_params(

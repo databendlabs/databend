@@ -62,6 +62,7 @@ pub struct TransformPartitionDispatch {
     outputs_data: Vec<VecDeque<DataBlock>>,
     output_index: usize,
     initialized_input: bool,
+    finished: bool,
 
     max_partition: usize,
     working_partition: isize,
@@ -87,6 +88,7 @@ impl TransformPartitionDispatch {
             initialized_input: false,
             partitions: Partitions::create_unaligned(params),
             working_partition: 0,
+            finished: false,
         })
     }
 
@@ -128,7 +130,7 @@ impl TransformPartitionDispatch {
     }
 
     fn fetch_ready_partition(&mut self) -> Result<()> {
-        while let Some(ready_partition_id) = self.ready_partition() {
+        if let Some(ready_partition_id) = self.ready_partition() {
             let ready_partition = self.partitions.take_partition(ready_partition_id);
 
             for (meta, data_block) in ready_partition {
@@ -160,92 +162,79 @@ impl Processor for TransformPartitionDispatch {
     }
 
     fn event(&mut self) -> Result<Event> {
-        let mut all_output_finished = true;
+        loop {
+            let mut all_output_finished = true;
+            let mut all_data_pushed_output = true;
 
-        for output in &self.outputs {
-            if !output.is_finished() {
+            for (idx, output) in self.outputs.iter().enumerate() {
+                if output.is_finished() {
+                    self.outputs_data[idx].clear();
+                    continue;
+                }
+
+                if self.finished && self.outputs_data[idx].is_empty() {
+                    output.finish();
+                    continue;
+                }
+
                 all_output_finished = false;
-                break;
+
+                if output.can_push() {
+                    if let Some(block) = self.outputs_data[idx].pop_front() {
+                        if !block.is_empty() || block.get_meta().is_some() {
+                            output.push_data(Ok(block));
+                        }
+
+                        continue;
+                    }
+                }
+
+                if !self.outputs_data[idx].is_empty() {
+                    all_data_pushed_output = false;
+                }
             }
-        }
 
-        if all_output_finished {
-            self.input.finish();
-            return Ok(Event::Finished);
-        }
+            if all_output_finished {
+                self.input.finish();
+                return Ok(Event::Finished);
+            }
 
-        // We pull the first unsplitted data block
-        if !self.initialized_input {
-            if self.initialize_input()? {
-                return Ok(Event::Sync);
+            if !all_data_pushed_output {
+                self.input.set_not_need_data();
+                return Ok(Event::NeedConsume);
+            }
+
+            // We pull the first unaligned partition
+            if !self.initialized_input {
+                if self.initialize_input()? {
+                    return Ok(Event::Sync);
+                }
+
+                self.input.set_need_data();
+                return Ok(Event::NeedData);
+            }
+
+            if self.input.has_data() {
+                let data_block = self.input.pull_data().unwrap()?;
+                let (partition, _, _) = self.partitions.add_block(data_block)?;
+
+                if partition != self.working_partition {
+                    self.fetch_ready_partition()?;
+                    self.working_partition = partition;
+                    continue;
+                }
+            }
+
+            if self.input.is_finished() {
+                self.working_partition = self.max_partition as isize;
+
+                self.fetch_ready_partition()?;
+                self.finished = self.partitions.is_empty();
+                continue;
             }
 
             self.input.set_need_data();
             return Ok(Event::NeedData);
-        }
-
-        let mut output_can_push = false;
-        for (idx, output) in self.outputs.iter().enumerate() {
-            if output.can_push() {
-                output_can_push = true;
-                if let Some(block) = self.outputs_data[idx].pop_front() {
-                    output.push_data(Ok(block));
-                }
-            }
-        }
-
-        if !output_can_push {
-            self.input.set_not_need_data();
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input.is_finished() {
-            self.working_partition = self.max_partition as isize;
-            // fetch all partition
-            while !self.partitions.is_empty() {
-                self.fetch_ready_partition()?;
-            }
-        }
-
-        if self.input.has_data() {
-            let data_block = self.input.pull_data().unwrap()?;
-            let (partition, _, _) = self.partitions.add_block(data_block)?;
-
-            if partition != self.working_partition {
-                // ready partition
-                self.fetch_ready_partition()?;
-                self.working_partition = partition;
-            }
-        }
-
-        self.input.set_need_data();
-
-        let mut all_output_finished = true;
-        for (idx, output) in self.outputs.iter().enumerate() {
-            if output.is_finished() {
-                continue;
-            }
-
-            if self.outputs_data[idx].is_empty() && self.partitions.is_empty() {
-                if self.input.is_finished() {
-                    output.finish();
-                }
-
-                continue;
-            }
-
-            all_output_finished = false;
-
-            if output.can_push() {
-                if let Some(block) = self.outputs_data[idx].pop_front() {
-                    output.push_data(Ok(block));
-                }
-            }
-        }
-
-        match all_output_finished {
-            true => Ok(Event::Finished),
-            false => Ok(Event::NeedData),
         }
     }
 
@@ -332,7 +321,7 @@ impl Exchange for ResortingPartition {
     }
 }
 
-pub fn build_partition_bucket(
+pub fn build_partition_dispatch(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
 ) -> Result<()> {
