@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::mem_allocator::mmap::MmapAllocator;
+
 // Default allocator is jemalloc, you can change it to std:
 #[cfg(feature = "jemalloc")]
-pub type DefaultAllocator = crate::mem_allocator::JEAllocator;
+pub type DefaultAllocator = MmapAllocator<crate::mem_allocator::JEAllocator>;
 #[cfg(not(feature = "jemalloc"))]
-pub type DefaultAllocator = crate::mem_allocator::StdAllocator;
+pub type DefaultAllocator = MmapAllocator<crate::mem_allocator::StdAllocator>;

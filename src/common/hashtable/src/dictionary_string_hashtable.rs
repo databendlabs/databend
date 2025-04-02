@@ -116,7 +116,7 @@ impl<V> DictionaryStringHashTable<V> {
             arena: bump.clone(),
             dict_keys,
             entries_len: 0,
-            entries: unsafe { HeapContainer::new_zeroed(256, DefaultAllocator {}) },
+            entries: unsafe { HeapContainer::new_zeroed(256, DefaultAllocator::create()) },
             dictionary_hashset: StringHashSet::new(bump),
         }
     }
@@ -452,7 +452,7 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
                 }
             }
 
-            self.entries = HeapContainer::new_zeroed(0, DefaultAllocator {});
+            self.entries = HeapContainer::new_zeroed(0, DefaultAllocator::create());
         }
 
         self.dictionary_hashset.clear();
