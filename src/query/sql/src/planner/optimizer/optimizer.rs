@@ -16,10 +16,8 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use databend_common_ast::ast::ExplainKind;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use educe::Educe;
 use log::info;
 
 use crate::binder::target_probe;
@@ -42,9 +40,9 @@ use crate::optimizer::optimizers::RecursiveOptimizer;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::util::contains_warehouse_table_scan;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::RuleID;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
-use crate::planner::QueryExecutor;
 use crate::plans::ConstantTableScan;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
@@ -57,70 +55,6 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::SetScalarsOrQuery;
 use crate::InsertInputSource;
-use crate::MetadataRef;
-
-#[derive(Clone, Educe)]
-#[educe(Debug)]
-pub struct OptimizerContext {
-    #[educe(Debug(ignore))]
-    pub(crate) table_ctx: Arc<dyn TableContext>,
-    pub(crate) metadata: MetadataRef,
-
-    // Optimizer configurations
-    pub(crate) enable_distributed_optimization: bool,
-    enable_join_reorder: bool,
-    enable_dphyp: bool,
-    pub(crate) max_push_down_limit: usize,
-    planning_agg_index: bool,
-    #[educe(Debug(ignore))]
-    pub(crate) sample_executor: Option<Arc<dyn QueryExecutor>>,
-}
-
-impl OptimizerContext {
-    pub fn new(table_ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
-        Self {
-            table_ctx,
-            metadata,
-
-            enable_distributed_optimization: false,
-            enable_join_reorder: true,
-            enable_dphyp: true,
-            max_push_down_limit: 10000,
-            sample_executor: None,
-            planning_agg_index: false,
-        }
-    }
-
-    pub fn with_enable_distributed_optimization(mut self, enable: bool) -> Self {
-        self.enable_distributed_optimization = enable;
-        self
-    }
-
-    pub fn with_enable_join_reorder(mut self, enable: bool) -> Self {
-        self.enable_join_reorder = enable;
-        self
-    }
-
-    pub fn with_enable_dphyp(mut self, enable: bool) -> Self {
-        self.enable_dphyp = enable;
-        self
-    }
-
-    pub fn with_sample_executor(mut self, sample_executor: Option<Arc<dyn QueryExecutor>>) -> Self {
-        self.sample_executor = sample_executor;
-        self
-    }
-
-    pub fn with_planning_agg_index(mut self) -> Self {
-        self.planning_agg_index = true;
-        self
-    }
-
-    pub fn with_max_push_down_limit(mut self, max_push_down_limit: usize) -> Self {
-        self.max_push_down_limit = max_push_down_limit;
-        self
-    }
-}
 
 #[fastrace::trace]
 #[async_recursion(#[recursive::recursive])]

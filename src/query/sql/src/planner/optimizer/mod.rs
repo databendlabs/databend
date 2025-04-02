@@ -18,6 +18,7 @@ pub mod ir;
 pub mod operator;
 #[allow(clippy::module_inception)]
 mod optimizer;
+mod optimizer_context;
 pub mod optimizers;
 pub mod rule;
 mod statistics;
@@ -27,7 +28,7 @@ mod dynamic_sample;
 
 pub use optimizer::optimize;
 pub use optimizer::optimize_query;
-pub use optimizer::OptimizerContext;
+pub use optimizer_context::OptimizerContext;
 pub use rule::agg_index;
 pub use rule::RuleFactory;
 pub use rule::RuleID;
