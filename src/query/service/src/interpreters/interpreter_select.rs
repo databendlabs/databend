@@ -51,7 +51,7 @@ use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalPlanBuilder;
-use crate::sql::optimizer::SExpr;
+use crate::sql::optimizer::ir::SExpr;
 use crate::sql::BindContext;
 
 /// Interpret SQL query with new SQL planner

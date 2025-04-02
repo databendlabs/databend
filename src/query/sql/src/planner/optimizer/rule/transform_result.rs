@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::optimizer::s_expr::SExpr;
+use crate::optimizer::ir::SExpr;
 
 #[derive(Clone, Default)]
 pub struct TransformResult {

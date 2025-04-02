@@ -32,8 +32,8 @@ use databend_common_expression::Evaluator;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;

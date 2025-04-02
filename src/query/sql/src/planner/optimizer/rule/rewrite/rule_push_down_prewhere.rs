@@ -21,11 +21,11 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 
-use crate::optimizer::extract::Matcher;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::rule::Rule;
-use crate::optimizer::ColumnSet;
 use crate::optimizer::RuleID;
-use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::Prewhere;

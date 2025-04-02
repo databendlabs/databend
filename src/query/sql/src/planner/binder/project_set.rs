@@ -25,7 +25,7 @@ use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::select::SelectList;
 use crate::binder::ColumnBindingBuilder;
 use crate::format_scalar;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;

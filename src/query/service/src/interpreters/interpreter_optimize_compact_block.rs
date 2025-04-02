@@ -21,7 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::PhysicalPlanBuilder;
-use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::MetadataRef;
 

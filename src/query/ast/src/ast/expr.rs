@@ -832,6 +832,7 @@ impl Display for Weekday {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum IntervalKind {
+    ISOYear,
     Year,
     Quarter,
     Month,
@@ -849,6 +850,7 @@ pub enum IntervalKind {
 impl Display for IntervalKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.write_str(match self {
+            IntervalKind::ISOYear => "ISOYEAR",
             IntervalKind::Year => "YEAR",
             IntervalKind::Quarter => "QUARTER",
             IntervalKind::Month => "MONTH",

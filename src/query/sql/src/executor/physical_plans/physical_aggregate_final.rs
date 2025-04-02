@@ -30,7 +30,7 @@ use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::AggregateMode;
 use crate::plans::DummyTableScan;
 use crate::ColumnSet;

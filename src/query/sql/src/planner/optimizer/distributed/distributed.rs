@@ -18,11 +18,11 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use super::sort_and_limit::SortAndLimitPushDownOptimizer;
-use crate::optimizer::property::require_property;
-use crate::optimizer::Distribution;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::PropertyEnforcer;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Exchange;
 
 /// TODO(leiysky): deprecate this, should use cascades planner instead.
@@ -30,7 +30,8 @@ pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) ->
     let required = RequiredProperty {
         distribution: Distribution::Any,
     };
-    let result = require_property(ctx, &required, s_expr)?;
+    let enforcer = PropertyEnforcer::new(ctx);
+    let result = enforcer.require_property(&required, s_expr)?;
 
     let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
     let mut result = sort_and_limit_optimizer.optimize(&result)?;

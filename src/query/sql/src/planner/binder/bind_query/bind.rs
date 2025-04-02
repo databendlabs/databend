@@ -32,7 +32,7 @@ use databend_common_exception::Result;
 
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;

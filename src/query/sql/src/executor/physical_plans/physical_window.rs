@@ -35,7 +35,7 @@ use crate::executor::physical_plans::common::AggregateFunctionSignature;
 use crate::executor::physical_plans::common::SortDesc;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;

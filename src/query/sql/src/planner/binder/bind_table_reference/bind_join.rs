@@ -30,11 +30,11 @@ use crate::binder::Finder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::FlattenInfo;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
-use crate::optimizer::SubqueryRewriter;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::operator::FlattenInfo;
+use crate::optimizer::operator::SubqueryRewriter;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
@@ -98,6 +98,12 @@ impl Binder {
         let mut right_column_bindings = right_context.columns.clone();
 
         let mut bind_context = bind_context.replace();
+        bind_context
+            .virtual_column_context
+            .merge(&left_context.virtual_column_context);
+        bind_context
+            .virtual_column_context
+            .merge(&right_context.virtual_column_context);
 
         self.check_table_name_and_condition(
             &left_column_bindings,
@@ -762,7 +768,7 @@ impl<'a> JoinConditionResolver<'a> {
     }
 
     fn resolve_predicate(
-        &self,
+        &mut self,
         predicate: &Expr,
         left_join_conditions: &mut Vec<ScalarExpr>,
         right_join_conditions: &mut Vec<ScalarExpr>,
@@ -810,6 +816,9 @@ impl<'a> JoinConditionResolver<'a> {
                 non_equi_conditions.push(predicate);
             }
         }
+        self.join_context
+            .virtual_column_context
+            .merge(&join_context.virtual_column_context);
         Ok(())
     }
 

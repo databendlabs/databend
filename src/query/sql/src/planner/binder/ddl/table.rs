@@ -104,7 +104,7 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;

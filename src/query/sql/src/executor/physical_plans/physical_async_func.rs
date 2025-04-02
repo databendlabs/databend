@@ -22,7 +22,7 @@ use databend_common_expression::DataSchemaRefExt;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::AsyncFunctionArgument;
 use crate::ColumnSet;
 use crate::IndexType;

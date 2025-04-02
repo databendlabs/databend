@@ -24,7 +24,7 @@ use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::evaluator::apply_cse;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::optimizer::ColumnSet;
+use databend_common_sql::optimizer::ir::ColumnSet;
 use itertools::Itertools;
 
 #[test]

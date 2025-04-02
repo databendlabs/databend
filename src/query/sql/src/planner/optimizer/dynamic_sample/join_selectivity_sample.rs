@@ -18,9 +18,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::optimizer::dynamic_sample::dynamic_sample;
-use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
-use crate::planner::query_executor::QueryExecutor;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatInfo;
+use crate::planner::QueryExecutor;
 use crate::plans::Join;
 use crate::MetadataRef;
 

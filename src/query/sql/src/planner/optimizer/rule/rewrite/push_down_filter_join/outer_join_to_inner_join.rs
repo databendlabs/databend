@@ -30,8 +30,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::executor::cast_expr_to_non_null_boolean;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
