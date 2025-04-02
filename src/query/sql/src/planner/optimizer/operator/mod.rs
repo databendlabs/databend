@@ -12,9 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod decorrelate;
 mod filter;
 mod join;
 
+pub use decorrelate::decorrelate_subquery;
+pub use decorrelate::FlattenInfo;
+pub use decorrelate::SubqueryRewriter;
+pub use decorrelate::UnnestResult;
 pub use filter::DeduplicateJoinConditionOptimizer;
 pub use filter::InferFilterOptimizer;
 pub use filter::JoinProperty;

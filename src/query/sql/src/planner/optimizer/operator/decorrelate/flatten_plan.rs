@@ -25,11 +25,11 @@ use databend_common_expression::DataSchema;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::decorrelate::subquery_rewriter::FlattenInfo;
 use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::SubqueryRewriter;
+use crate::optimizer::operator::FlattenInfo;
+use crate::optimizer::operator::SubqueryRewriter;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;

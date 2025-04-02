@@ -21,3 +21,4 @@ mod subquery_rewriter;
 pub use decorrelate::decorrelate_subquery;
 pub use subquery_rewriter::FlattenInfo;
 pub use subquery_rewriter::SubqueryRewriter;
+pub use subquery_rewriter::UnnestResult;
