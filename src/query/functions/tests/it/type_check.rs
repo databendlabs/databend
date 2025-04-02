@@ -63,12 +63,11 @@ fn test_type_check() {
             "n_ts",
             TimestampType::from_data(vec![0]).wrap_nullable(None),
         ),
-        // BinaryColumn != BinaryColumn
-        // ("j", VariantType::from_data(vec![b"{}".into()])),
-        // (
-        //     "n_j",
-        //     VariantType::from_data(vec![b"{}".into()]).wrap_nullable(None),
-        // ),
+        ("j", VariantType::from_data(vec![b"1".into()])),
+        (
+            "n_j",
+            VariantType::from_data(vec![b"1".into()]).wrap_nullable(None),
+        ),
         ("d128", Decimal128Type::from_data(vec![0_i128])),
         (
             "n_d128",
