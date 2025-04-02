@@ -29,13 +29,15 @@ pub fn write_value<W: Write>(array: &BinaryColumn, index: usize, f: &mut W) -> R
 }
 
 impl Debug for BinaryColumn {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        f.debug_struct("BinaryColumn")
-            .field(
-                "data",
-                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
-            )
-            .field("offsets", &self.offsets())
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        struct FmtBinary<'a>(&'a [u8]);
+        impl Debug for FmtBinary<'_> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                write!(f, "0x{}", hex::encode(self.0))
+            }
+        }
+        f.debug_tuple("Binary")
+            .field_with(|f| f.debug_list().entries(self.iter().map(FmtBinary)).finish())
             .finish()
     }
 }
