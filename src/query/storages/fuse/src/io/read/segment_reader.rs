@@ -31,12 +31,6 @@ use opendal::Operator;
 
 use super::meta::bytes_reader;
 use crate::io::SegmentsIO;
-use crate::operations::ColumnOrientedCompactTaskBuilder;
-use crate::operations::ColumnOrientedSegmentsWithIndices;
-use crate::operations::CompactSegmentsWithIndices;
-use crate::operations::CompactTaskBuilder;
-use crate::operations::RowOrientedCompactTaskBuilder;
-use crate::operations::SegmentsWithIndices;
 use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
 use crate::pruning_pipeline::PrunedSegmentMeta;
@@ -47,8 +41,6 @@ pub trait SegmentReader: Send + Sync + 'static {
     type Segment: AbstractSegment;
     type CompactSegment: AbstractSegment;
     type SegmentBuilder: SegmentBuilder;
-    type SegmentsWithIndices: SegmentsWithIndices<Segment = Self::CompactSegment> + Clone;
-    type CompactTaskBuilder: CompactTaskBuilder<Segment = Self::CompactSegment>;
     type PrunedSegmentMeta: PrunedSegmentMeta<Segment = Self::CompactSegment>;
     async fn read_compact_segment_through_cache(
         dal: Operator,
@@ -83,8 +75,6 @@ impl SegmentReader for RowOrientedSegmentReader {
     type Segment = SegmentInfo;
     type CompactSegment = CompactSegmentInfo;
     type SegmentBuilder = RowOrientedSegmentBuilder;
-    type SegmentsWithIndices = CompactSegmentsWithIndices;
-    type CompactTaskBuilder = RowOrientedCompactTaskBuilder;
     type PrunedSegmentMeta = PrunedCompactSegmentMeta;
     async fn read_compact_segment(
         dal: Operator,
@@ -116,8 +106,6 @@ impl SegmentReader for ColumnOrientedSegmentReader {
     type Segment = ColumnOrientedSegment;
     type CompactSegment = ColumnOrientedSegment;
     type SegmentBuilder = ColumnOrientedSegmentBuilder;
-    type SegmentsWithIndices = ColumnOrientedSegmentsWithIndices;
-    type CompactTaskBuilder = ColumnOrientedCompactTaskBuilder;
     type PrunedSegmentMeta = PrunedColumnOrientedSegmentMeta;
     async fn read_compact_segment(
         dal: Operator,

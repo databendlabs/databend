@@ -23,9 +23,6 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
-use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
-use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -34,21 +31,22 @@ use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 
+/// Compact segment part information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
-pub struct CompactSegmentsWithIndices {
+pub struct CompactLazyPartInfo {
     pub segment_indices: Vec<SegmentIndex>,
     pub compact_segments: Vec<Arc<CompactSegmentInfo>>,
 }
 
 #[typetag::serde(name = "compact_lazy")]
-impl PartInfo for CompactSegmentsWithIndices {
+impl PartInfo for CompactLazyPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
         info.as_any()
-            .downcast_ref::<CompactSegmentsWithIndices>()
+            .downcast_ref::<CompactLazyPartInfo>()
             .is_some_and(|other| self == other)
     }
 
@@ -63,98 +61,18 @@ impl PartInfo for CompactSegmentsWithIndices {
     }
 }
 
-#[derive(Clone)]
-pub struct ColumnOrientedSegmentsWithIndices {
-    pub segment_indices: Vec<SegmentIndex>,
-    pub segments: Vec<Arc<ColumnOrientedSegment>>,
-}
-
-impl serde::Serialize for ColumnOrientedSegmentsWithIndices {
-    fn serialize<S>(&self, _serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        todo!()
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for ColumnOrientedSegmentsWithIndices {
-    fn deserialize<D>(_deserializer: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        todo!()
-    }
-}
-
-impl PartialEq for ColumnOrientedSegmentsWithIndices {
-    fn eq(&self, other: &Self) -> bool {
-        self.segment_indices == other.segment_indices
-    }
-}
-
-#[typetag::serde(name = "compact_column_oriented")]
-impl PartInfo for ColumnOrientedSegmentsWithIndices {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        info.as_any()
-            .downcast_ref::<ColumnOrientedSegmentsWithIndices>()
-            .is_some_and(|other| self == other)
-    }
-
-    fn hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        self.segment_indices.hash(&mut s);
-        s.finish()
-    }
-
-    fn part_type(&self) -> PartInfoType {
-        PartInfoType::LazyLevel
-    }
-}
-
-pub trait SegmentsWithIndices: Send + Sync + 'static + Sized {
-    type Segment: AbstractSegment;
-    fn create(
-        segment_indices: Vec<SegmentIndex>,
-        compact_segments: Vec<Arc<Self::Segment>>,
-    ) -> PartInfoPtr;
-
-    fn into_parts(self) -> (Vec<SegmentIndex>, Vec<Arc<Self::Segment>>);
-}
-
-impl SegmentsWithIndices for CompactSegmentsWithIndices {
-    type Segment = CompactSegmentInfo;
-    fn create(
+impl CompactLazyPartInfo {
+    pub fn create(
         segment_indices: Vec<SegmentIndex>,
         compact_segments: Vec<Arc<CompactSegmentInfo>>,
     ) -> PartInfoPtr {
-        Arc::new(Box::new(CompactSegmentsWithIndices {
+        Arc::new(Box::new(CompactLazyPartInfo {
             segment_indices,
             compact_segments,
         }))
     }
-
-    fn into_parts(self) -> (Vec<SegmentIndex>, Vec<Arc<Self::Segment>>) {
-        (self.segment_indices, self.compact_segments)
-    }
 }
 
-impl SegmentsWithIndices for ColumnOrientedSegmentsWithIndices {
-    type Segment = ColumnOrientedSegment;
-    fn create(
-        segment_indices: Vec<SegmentIndex>,
-        compact_segments: Vec<Arc<ColumnOrientedSegment>>,
-    ) -> PartInfoPtr {
-        Arc::new(Box::new(ColumnOrientedSegmentsWithIndices {
-            segment_indices,
-            segments: compact_segments,
-        }))
-    }
-
-    fn into_parts(self) -> (Vec<SegmentIndex>, Vec<Arc<Self::Segment>>) {
-        (self.segment_indices, self.segments)
-    }
-}
 /// Compact block part information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum CompactBlockPartInfo {
@@ -224,18 +142,18 @@ impl CompactExtraInfo {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct CompactTaskInfo {
-    pub blocks: Vec<Arc<BlockReadInfo>>,
+    pub blocks: Vec<Arc<BlockMeta>>,
     pub index: BlockMetaIndex,
 }
 
 impl CompactTaskInfo {
-    pub fn create(blocks: Vec<Arc<BlockReadInfo>>, index: BlockMetaIndex) -> Self {
+    pub fn create(blocks: Vec<Arc<BlockMeta>>, index: BlockMetaIndex) -> Self {
         CompactTaskInfo { blocks, index }
     }
 
     fn hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
-        self.blocks[0].location.hash(&mut s);
+        self.blocks[0].location.0.hash(&mut s);
         s.finish()
     }
 }

@@ -22,7 +22,6 @@ use databend_common_expression::FieldIndex;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
-use crate::io::read::ColumnOrientedSegmentReader;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::FuseTable;
@@ -61,7 +60,6 @@ impl FuseTable {
             self.meta_location_generator().clone(),
             self.operator.clone(),
             self.cluster_key_id(),
-            self.is_column_oriented(),
         )?;
 
         if !segment_mutator.target_select().await? {
@@ -87,22 +85,13 @@ impl FuseTable {
         };
 
         let thresholds = self.get_block_thresholds();
-        let mut mutator = match self.is_column_oriented() {
-            true => BlockCompactMutator::<ColumnOrientedSegmentReader>::new(
-                ctx.clone(),
-                thresholds,
-                compact_options,
-                self.operator.clone(),
-                self.cluster_key_id(),
-            ),
-            false => BlockCompactMutator::<ColumnOrientedSegmentReader>::new(
-                ctx.clone(),
-                thresholds,
-                compact_options,
-                self.operator.clone(),
-                self.cluster_key_id(),
-            ),
-        };
+        let mut mutator = BlockCompactMutator::new(
+            ctx.clone(),
+            thresholds,
+            compact_options,
+            self.operator.clone(),
+            self.cluster_key_id(),
+        );
 
         let partitions = mutator.target_select().await?;
         if partitions.is_empty() {

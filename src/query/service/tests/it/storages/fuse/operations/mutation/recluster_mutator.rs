@@ -28,7 +28,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
-use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterMode;
@@ -137,7 +136,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(test_segment_locations, None);
-    let compact_segments = FuseTable::segment_pruning::<RowOrientedSegmentReader>(
+    let compact_segments = FuseTable::segment_pruning(
         &ctx,
         schema.clone(),
         data_accessor.clone(),
@@ -148,7 +147,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     .await?;
 
     let column_ids = snapshot.schema.to_leaf_column_id_set();
-    let mutator = ReclusterMutator::<RowOrientedSegmentReader>::new(
+    let mutator = ReclusterMutator::new(
         ctx,
         schema,
         vec![DataType::Number(NumberDataType::Int64)],
@@ -261,7 +260,7 @@ async fn test_safety_for_recluster() -> Result<()> {
 
         let ctx: Arc<dyn TableContext> = ctx.clone();
         let segment_locations = create_segment_location_vector(locations.clone(), None);
-        let compact_segments = FuseTable::segment_pruning::<RowOrientedSegmentReader>(
+        let compact_segments = FuseTable::segment_pruning(
             &ctx,
             schema.clone(),
             data_accessor.clone(),
@@ -273,7 +272,7 @@ async fn test_safety_for_recluster() -> Result<()> {
 
         let column_ids = snapshot.schema.to_leaf_column_id_set();
         let mut parts = ReclusterParts::new_recluster_parts();
-        let mutator = Arc::new(ReclusterMutator::<RowOrientedSegmentReader>::new(
+        let mutator = Arc::new(ReclusterMutator::new(
             ctx.clone(),
             schema.clone(),
             vec![DataType::Number(NumberDataType::Int32)],
@@ -364,42 +363,30 @@ fn test_check_point() {
     // [1,2] [2,3], check point 2
     let start = vec![1];
     let end = vec![0];
-    assert!(ReclusterMutator::<RowOrientedSegmentReader>::check_point(
-        &start, &end
-    ));
+    assert!(ReclusterMutator::check_point(&start, &end));
 
     // [1,2] [2,2], check point 2
     let start = vec![1];
     let end = vec![0, 1];
-    assert!(ReclusterMutator::<RowOrientedSegmentReader>::check_point(
-        &start, &end
-    ));
+    assert!(ReclusterMutator::check_point(&start, &end));
 
     // [1,1] [1,2], check point 1
     let start = vec![0, 1];
     let end = vec![0];
-    assert!(ReclusterMutator::<RowOrientedSegmentReader>::check_point(
-        &start, &end
-    ));
+    assert!(ReclusterMutator::check_point(&start, &end));
 
     // [1,2] [1,3], check point 1
     let start = vec![0, 1];
     let end = vec![];
-    assert!(!ReclusterMutator::<RowOrientedSegmentReader>::check_point(
-        &start, &end
-    ));
+    assert!(!ReclusterMutator::check_point(&start, &end));
 
     // [1,3] [2,3], check point 3
     let start = vec![];
     let end = vec![0, 1];
-    assert!(!ReclusterMutator::<RowOrientedSegmentReader>::check_point(
-        &start, &end
-    ));
+    assert!(!ReclusterMutator::check_point(&start, &end));
 
     // [1,3] [3,3] [3,4], check point 3
     let start = vec![1, 2];
     let end = vec![0, 1];
-    assert!(!ReclusterMutator::<RowOrientedSegmentReader>::check_point(
-        &start, &end
-    ));
+    assert!(!ReclusterMutator::check_point(&start, &end));
 }

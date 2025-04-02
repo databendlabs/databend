@@ -32,7 +32,6 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::Value;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::io::CompactSegmentInfoReader;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -268,7 +267,6 @@ async fn build_mutator(
         tbl.meta_location_generator().clone(),
         tbl.get_operator(),
         tbl.cluster_key_id(),
-        tbl.is_column_oriented(),
     )?;
 
     if segment_mutator.target_select().await? {
@@ -661,19 +659,16 @@ impl CompactSegmentTestFixture {
         let location_gen = &self.location_gen;
 
         let schema = TestFixture::default_table_schema();
-        let column_ids = schema.to_leaf_column_ids();
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
 
-        let seg_acc = SegmentCompactor::<RowOrientedSegmentReader>::new(
+        let seg_acc = SegmentCompactor::new(
             self.threshold.block_per_segment as u64,
             cluster_key_id,
             max_threads,
             &fuse_segment_io,
             data_accessor,
             location_gen,
-            column_ids,
-            false,
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
@@ -973,7 +968,6 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
     let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
     let schema = TestFixture::default_table_schema();
-    let column_ids = schema.to_leaf_column_ids();
 
     let settings = ctx.get_settings();
     settings.set_max_threads(2)?;
@@ -1025,15 +1019,13 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
         }
 
         eprintln!("running compact, limit {}", limit);
-        let seg_acc = SegmentCompactor::<RowOrientedSegmentReader>::new(
+        let seg_acc = SegmentCompactor::new(
             threshold.block_per_segment as u64,
             Some(cluster_key_id),
             chunk_size,
             &fuse_segment_io,
             &data_accessor,
             &location_gen,
-            column_ids.clone(),
-            false,
         );
         let state = seg_acc
             .compact(locations, limit, |status| {

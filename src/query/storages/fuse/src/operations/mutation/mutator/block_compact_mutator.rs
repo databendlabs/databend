@@ -30,41 +30,37 @@ use databend_common_expression::is_stream_column_id;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
-use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
 use opendal::Operator;
 
-use super::compact_task_builder::CompactTaskBuilder;
-use crate::io::read::SegmentReader;
 use crate::io::SegmentsIO;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::CompactBlockPartInfo;
 use crate::operations::mutation::CompactExtraInfo;
+use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::CompactOptions;
-use crate::operations::SegmentsWithIndices;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
 use crate::TableContext;
 
 #[derive(Clone)]
-pub struct BlockCompactMutator<R: SegmentReader> {
+pub struct BlockCompactMutator {
     pub ctx: Arc<dyn TableContext>,
     pub operator: Operator,
 
     pub thresholds: BlockThresholds,
     pub compact_params: CompactOptions,
     pub cluster_key_id: Option<u32>,
-    _marker: std::marker::PhantomData<R>,
 }
 
-impl<R: SegmentReader> BlockCompactMutator<R> {
+impl BlockCompactMutator {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         thresholds: BlockThresholds,
@@ -78,7 +74,6 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
             thresholds,
             compact_params,
             cluster_key_id,
-            _marker: std::marker::PhantomData,
         }
     }
 
@@ -113,22 +108,16 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
             self.operator.clone(),
             Arc::new(self.compact_params.base_snapshot.schema.clone()),
         );
-        let mut checker = SegmentCompactChecker::<R>::new(self.thresholds, self.cluster_key_id);
+        let mut checker = SegmentCompactChecker::new(self.thresholds, self.cluster_key_id);
 
         let mut segment_idx = 0;
         let mut is_end = false;
         let mut parts = Vec::new();
         let chunk_size = max_threads * 4;
-        // let column_ids = self
-        //     .compact_params
-        //     .base_snapshot
-        //     .schema
-        //     .to_leaf_column_ids();
-        let projection = HashSet::new();
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
             let mut segment_infos = segments_io
-                .generic_read_compact_segments::<R>(chunk, false, &projection)
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
                 .await?
                 .into_iter()
                 .map(|sg| {
@@ -144,8 +133,8 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
                 // sort descending.
                 segment_infos.sort_by(|a, b| {
                     sort_by_cluster_stats(
-                        &b.1.summary().cluster_stats,
-                        &a.1.summary().cluster_stats,
+                        &b.1.summary.cluster_stats,
+                        &a.1.summary.cluster_stats,
                         default_cluster_key,
                     )
                 });
@@ -210,15 +199,14 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
                 .into_iter()
                 .map(|v| {
                     v.as_any()
-                        .downcast_ref::<R::SegmentsWithIndices>()
+                        .downcast_ref::<CompactLazyPartInfo>()
                         .unwrap()
-                        // TODO(Sky): avoid clone
                         .clone()
                 })
                 .collect::<Vec<_>>();
             Partitions::create(
                 PartitionsShuffleKind::Mod,
-                BlockCompactMutator::<R>::build_compact_tasks(
+                BlockCompactMutator::build_compact_tasks(
                     self.ctx.clone(),
                     column_ids,
                     self.cluster_key_id,
@@ -239,7 +227,7 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
         column_ids: HashSet<ColumnId>,
         cluster_key_id: Option<u32>,
         thresholds: BlockThresholds,
-        mut lazy_parts: Vec<R::SegmentsWithIndices>,
+        mut lazy_parts: Vec<CompactLazyPartInfo>,
     ) -> Result<Vec<PartInfoPtr>> {
         let start = Instant::now();
 
@@ -263,10 +251,13 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
                 let mut res = vec![];
                 for lazy_part in batch {
                     let mut builder =
-                        R::CompactTaskBuilder::new(column_ids.clone(), cluster_key_id, thresholds);
-                    let (segment_indices, compact_segments) = lazy_part.into_parts();
+                        CompactTaskBuilder::new(column_ids.clone(), cluster_key_id, thresholds);
                     let parts = builder
-                        .build_tasks(segment_indices, compact_segments, semaphore.clone())
+                        .build_tasks(
+                            lazy_part.segment_indices,
+                            lazy_part.compact_segments,
+                            semaphore.clone(),
+                        )
                         .await?;
                     res.extend(parts);
                 }
@@ -299,9 +290,9 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
     }
 }
 
-pub struct SegmentCompactChecker<R: SegmentReader> {
+pub struct SegmentCompactChecker {
     thresholds: BlockThresholds,
-    segments: Vec<(SegmentIndex, Arc<R::CompactSegment>)>,
+    segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
     total_block_count: u64,
     cluster_key_id: Option<u32>,
 
@@ -309,7 +300,7 @@ pub struct SegmentCompactChecker<R: SegmentReader> {
     compacted_block_cnt: u64,
 }
 
-impl<R: SegmentReader> SegmentCompactChecker<R> {
+impl SegmentCompactChecker {
     pub fn new(thresholds: BlockThresholds, cluster_key_id: Option<u32>) -> Self {
         Self {
             segments: vec![],
@@ -346,19 +337,19 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
                 .check_perfect_block(avg_rows, avg_uncompressed, avg_compressed)
     }
 
-    fn check_for_compact(&mut self, segments: &[(SegmentIndex, Arc<R::CompactSegment>)]) -> bool {
+    fn check_for_compact(&mut self, segments: &[(SegmentIndex, Arc<CompactSegmentInfo>)]) -> bool {
         if segments.is_empty() {
             return false;
         }
 
-        if segments.len() == 1 && self.check_not_need_compact(segments[0].1.summary()) {
+        if segments.len() == 1 && self.check_not_need_compact(&segments[0].1.summary) {
             return false;
         }
 
         self.compacted_segment_cnt += segments.len();
         self.compacted_block_cnt += segments
             .iter()
-            .map(|(_, info)| info.summary().block_count)
+            .map(|(_, info)| info.summary.block_count)
             .sum::<u64>();
         true
     }
@@ -366,11 +357,11 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
     pub fn add(
         &mut self,
         idx: SegmentIndex,
-        segment: Arc<R::CompactSegment>,
-    ) -> Vec<Vec<(SegmentIndex, Arc<R::CompactSegment>)>> {
+        segment: Arc<CompactSegmentInfo>,
+    ) -> Vec<Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>> {
         let block_per_segment = self.thresholds.block_per_segment as u64;
 
-        self.total_block_count += segment.summary().block_count;
+        self.total_block_count += segment.summary.block_count;
         self.segments.push((idx, segment));
 
         if self.total_block_count < block_per_segment {
@@ -394,12 +385,12 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
 
     pub fn generate_part(
         &mut self,
-        segments: Vec<(SegmentIndex, Arc<R::CompactSegment>)>,
+        segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
         parts: &mut Vec<PartInfoPtr>,
     ) {
         if !segments.is_empty() && self.check_for_compact(&segments) {
             let (segment_indices, compact_segments) = segments.into_iter().unzip();
-            parts.push(R::SegmentsWithIndices::create(
+            parts.push(CompactLazyPartInfo::create(
                 segment_indices,
                 compact_segments,
             ));
@@ -416,14 +407,14 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
         let residual_block_cnt: u64 = self
             .segments
             .iter()
-            .map(|(_, info)| info.summary().block_count)
+            .map(|(_, info)| info.summary.block_count)
             .sum();
         self.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
             || self.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
     }
 }
 
-pub struct RowOrientedCompactTaskBuilder {
+struct CompactTaskBuilder {
     column_ids: HashSet<ColumnId>,
     cluster_key_id: Option<u32>,
     thresholds: BlockThresholds,
@@ -434,7 +425,23 @@ pub struct RowOrientedCompactTaskBuilder {
     total_compressed: usize,
 }
 
-impl RowOrientedCompactTaskBuilder {
+impl CompactTaskBuilder {
+    fn new(
+        column_ids: HashSet<ColumnId>,
+        cluster_key_id: Option<u32>,
+        thresholds: BlockThresholds,
+    ) -> Self {
+        Self {
+            column_ids,
+            cluster_key_id,
+            thresholds,
+            blocks: vec![],
+            total_rows: 0,
+            total_size: 0,
+            total_compressed: 0,
+        }
+    }
+
     fn is_empty(&self) -> bool {
         self.blocks.is_empty()
     }
@@ -524,11 +531,6 @@ impl RowOrientedCompactTaskBuilder {
             true
         }
     }
-}
-
-#[async_trait::async_trait]
-impl CompactTaskBuilder for RowOrientedCompactTaskBuilder {
-    type Segment = CompactSegmentInfo;
 
     // Select the row_count >= min_rows_per_block or block_size >= max_bytes_per_block
     // as the perfect_block condition(N for short). Gets a set of segments, iterates
@@ -536,29 +538,23 @@ impl CompactTaskBuilder for RowOrientedCompactTaskBuilder {
     async fn build_tasks(
         &mut self,
         segment_indices: Vec<usize>,
-        compact_segments: Vec<Arc<Self::Segment>>,
+        compact_segments: Vec<Arc<CompactSegmentInfo>>,
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PartInfoPtr>> {
         let mut block_idx = 0;
         // Used to identify whether the latest block is unchanged or needs to be compacted.
         let mut latest_flag = true;
         let mut unchanged_blocks = Vec::new();
-        let removed_segment_summary =
-            compact_segments
-                .iter()
-                .fold(Statistics::default(), |mut summary, segment| {
-                    merge_statistics_mut(&mut summary, segment.summary(), self.cluster_key_id);
-                    summary
-                });
+        let mut removed_segment_summary = Statistics::default();
 
         let runtime = GlobalIORuntime::instance();
         let mut handlers = Vec::with_capacity(compact_segments.len());
         for segment in compact_segments.into_iter().rev() {
             let permit = acquire_task_permit(semaphore.clone()).await?;
             let handler = runtime.spawn(async move {
-                let blocks: Vec<Arc<BlockMeta>> = segment.block_metas()?;
+                let blocks = segment.block_metas()?;
                 drop(permit);
-                Ok::<_, ErrorCode>(blocks)
+                Ok::<_, ErrorCode>((blocks, segment.summary.clone()))
             });
             handlers.push(handler);
         }
@@ -571,7 +567,10 @@ impl CompactTaskBuilder for RowOrientedCompactTaskBuilder {
             .into_iter()
             .collect::<Result<Vec<_>>>()?
             .into_iter()
-            .flatten()
+            .flat_map(|(blocks, summary)| {
+                merge_statistics_mut(&mut removed_segment_summary, &summary, self.cluster_key_id);
+                blocks
+            })
             .collect::<Vec<_>>();
 
         if let Some(default_cluster_key) = self.cluster_key_id {
@@ -632,10 +631,6 @@ impl CompactTaskBuilder for RowOrientedCompactTaskBuilder {
         let segment_idx = removed_segment_indexes.pop().unwrap();
         let mut partitions: Vec<PartInfoPtr> = Vec::with_capacity(tasks.len() + 1);
         for (block_idx, blocks) in tasks.into_iter() {
-            let blocks = blocks
-                .into_iter()
-                .map(|v| Arc::new(v.as_ref().into()))
-                .collect::<Vec<_>>();
             partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactTaskInfo(
                 CompactTaskInfo::create(blocks, BlockMetaIndex {
                     segment_idx,
@@ -653,21 +648,5 @@ impl CompactTaskBuilder for RowOrientedCompactTaskBuilder {
             ),
         ))));
         Ok(partitions)
-    }
-
-    fn new(
-        column_ids: HashSet<ColumnId>,
-        cluster_key_id: Option<u32>,
-        thresholds: BlockThresholds,
-    ) -> Self {
-        Self {
-            column_ids,
-            cluster_key_id,
-            thresholds,
-            blocks: vec![],
-            total_rows: 0,
-            total_size: 0,
-            total_compressed: 0,
-        }
     }
 }

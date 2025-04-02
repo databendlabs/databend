@@ -22,7 +22,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
-use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::FuseTable;
@@ -81,7 +80,7 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
         );
         'FOR: for chunk in segment_locations.chunks(chunk_size) {
             // read segments.
-            let compact_segments = FuseTable::segment_pruning::<RowOrientedSegmentReader>(
+            let compact_segments = FuseTable::segment_pruning(
                 &ctx,
                 fuse_table.schema_with_stream(),
                 fuse_table.get_operator(),

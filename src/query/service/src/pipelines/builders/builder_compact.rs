@@ -26,14 +26,11 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::CompactSource as PhysicalCompactSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
-use databend_common_storages_fuse::io::read::ColumnOrientedSegmentReader;
-use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
-use databend_common_storages_fuse::operations::add_table_mutation_aggregator;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
-use databend_common_storages_fuse::operations::ColumnOrientedSegmentsWithIndices;
-use databend_common_storages_fuse::operations::CompactSegmentsWithIndices;
+use databend_common_storages_fuse::operations::CompactLazyPartInfo;
 use databend_common_storages_fuse::operations::CompactSource;
 use databend_common_storages_fuse::operations::CompactTransform;
+use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 
@@ -57,60 +54,39 @@ impl PipelineBuilder {
         let thresholds = table.get_block_thresholds();
         let cluster_key_id = table.cluster_key_id();
         let mut max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        let partitions = compact_block.parts.partitions.clone();
 
         if is_lazy {
             let query_ctx = self.ctx.clone();
-            let column_ids = compact_block.column_ids.clone();
-            let is_column_oriented = table.is_column_oriented();
 
+            let lazy_parts = compact_block
+                .parts
+                .partitions
+                .iter()
+                .map(|v| {
+                    v.as_any()
+                        .downcast_ref::<CompactLazyPartInfo>()
+                        .unwrap()
+                        .clone()
+                })
+                .collect::<Vec<_>>();
+
+            let column_ids = compact_block.column_ids.clone();
             self.main_pipeline.set_on_init(move || {
                 let ctx = query_ctx.clone();
-                let partitions = Runtime::with_worker_threads(
-                    2,
-                    Some("build_compact_tasks".to_string()),
-                )?
-                .block_on(async move {
-                    let partitions = if is_column_oriented {
-                        let lazy_parts = partitions
-                            .iter()
-                            .map(|v| {
-                                v.as_any()
-                                    .downcast_ref::<ColumnOrientedSegmentsWithIndices>()
-                                    .unwrap()
-                                    .clone()
-                            })
-                            .collect::<Vec<_>>();
-                        BlockCompactMutator::<ColumnOrientedSegmentReader>::build_compact_tasks(
-                            ctx.clone(),
-                            column_ids.clone(),
-                            cluster_key_id,
-                            thresholds,
-                            lazy_parts,
-                        )
-                        .await?
-                    } else {
-                        let lazy_parts = partitions
-                            .iter()
-                            .map(|v| {
-                                v.as_any()
-                                    .downcast_ref::<CompactSegmentsWithIndices>()
-                                    .unwrap()
-                                    .clone()
-                            })
-                            .collect::<Vec<_>>();
-                        BlockCompactMutator::<RowOrientedSegmentReader>::build_compact_tasks(
-                            ctx.clone(),
-                            column_ids.clone(),
-                            cluster_key_id,
-                            thresholds,
-                            lazy_parts,
-                        )
-                        .await?
-                    };
+                let partitions =
+                    Runtime::with_worker_threads(2, Some("build_compact_tasks".to_string()))?
+                        .block_on(async move {
+                            let partitions = BlockCompactMutator::build_compact_tasks(
+                                ctx.clone(),
+                                column_ids.clone(),
+                                cluster_key_id,
+                                thresholds,
+                                lazy_parts,
+                            )
+                            .await?;
 
-                    Result::<_>::Ok(partitions)
-                })?;
+                            Result::<_>::Ok(partitions)
+                        })?;
 
                 let partitions = Partitions::create(PartitionsShuffleKind::Mod, partitions);
                 query_ctx.set_partitions(partitions)?;
@@ -179,17 +155,18 @@ impl PipelineBuilder {
 
         if is_lazy {
             self.main_pipeline.try_resize(1)?;
-            add_table_mutation_aggregator(
-                &mut self.main_pipeline,
-                table,
-                self.ctx.clone(),
-                vec![],
-                vec![],
-                vec![],
-                Default::default(),
-                MutationKind::Compact,
-                compact_block.table_meta_timestamps,
-            );
+            self.main_pipeline.add_async_accumulating_transformer(|| {
+                TableMutationAggregator::create(
+                    table,
+                    self.ctx.clone(),
+                    vec![],
+                    vec![],
+                    vec![],
+                    Default::default(),
+                    MutationKind::Compact,
+                    compact_block.table_meta_timestamps,
+                )
+            });
         }
         Ok(())
     }

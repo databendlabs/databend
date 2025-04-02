@@ -20,9 +20,9 @@ use databend_common_sql::executor::physical_plans::CommitSink as PhysicalCommitS
 use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::TruncateMode;
-use databend_common_storages_fuse::operations::add_table_mutation_aggregator;
 use databend_common_storages_fuse::operations::CommitSink;
 use databend_common_storages_fuse::operations::MutationGenerator;
+use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
 use databend_common_storages_fuse::operations::TruncateGenerator;
 use databend_common_storages_fuse::FuseTable;
@@ -81,28 +81,30 @@ impl PipelineBuilder {
                         TransformMergeCommitMeta::create(cluster_key_id)
                     });
                 } else {
-                    let base_segments = if matches!(
-                        kind,
-                        MutationKind::Compact | MutationKind::Insert | MutationKind::Recluster
-                    ) {
-                        vec![]
-                    } else {
-                        plan.snapshot.segments().to_vec()
-                    };
+                    self.main_pipeline.add_async_accumulating_transformer(|| {
+                        let base_segments = if matches!(
+                            kind,
+                            MutationKind::Compact | MutationKind::Insert | MutationKind::Recluster
+                        ) {
+                            vec![]
+                        } else {
+                            plan.snapshot.segments().to_vec()
+                        };
 
-                    // extract re-cluster related mutations from physical plan
-                    let recluster_info = plan.recluster_info.clone().unwrap_or_default();
-                    add_table_mutation_aggregator(
-                        &mut self.main_pipeline,
-                        table,
-                        self.ctx.clone(),
-                        base_segments,
-                        recluster_info.merged_blocks,
-                        recluster_info.removed_segment_indexes,
-                        recluster_info.removed_statistics,
-                        *kind,
-                        plan.table_meta_timestamps,
-                    );
+                        // extract re-cluster related mutations from physical plan
+                        let recluster_info = plan.recluster_info.clone().unwrap_or_default();
+
+                        TableMutationAggregator::create(
+                            table,
+                            self.ctx.clone(),
+                            base_segments,
+                            recluster_info.merged_blocks,
+                            recluster_info.removed_segment_indexes,
+                            recluster_info.removed_statistics,
+                            *kind,
+                            plan.table_meta_timestamps,
+                        )
+                    });
                 }
 
                 let snapshot_gen = MutationGenerator::new(plan.snapshot.clone(), *kind);
