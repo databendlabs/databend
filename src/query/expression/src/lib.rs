@@ -41,6 +41,7 @@
 #![feature(let_chains)]
 #![feature(trait_upcasting)]
 #![feature(alloc_layout_extra)]
+#![feature(debug_closure_helpers)]
 
 #[allow(dead_code)]
 mod block;
