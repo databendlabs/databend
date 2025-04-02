@@ -17,11 +17,11 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
-use crate::optimizer::filter::InferFilterOptimizer;
-use crate::optimizer::filter::JoinProperty;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::operator::InferFilterOptimizer;
+use crate::optimizer::operator::JoinProperty;
 use crate::optimizer::rule::constant::false_constant;
 use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::rewrite::push_down_filter_join::can_filter_null;

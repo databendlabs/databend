@@ -17,7 +17,6 @@ mod cascades;
 mod cost;
 mod decorrelate;
 mod distributed;
-mod filter;
 mod hyper_dp;
 pub mod ir;
 mod join;
@@ -28,14 +27,17 @@ mod statistics;
 mod util;
 
 mod dynamic_sample;
+mod operator;
 
 pub use cascades::CascadesOptimizer;
 pub use decorrelate::FlattenInfo;
 pub use decorrelate::SubqueryRewriter;
-pub use filter::DeduplicateJoinConditionOptimizer;
-pub use filter::InferFilterOptimizer;
-pub use filter::NormalizeDisjunctiveFilterOptimizer;
 pub use hyper_dp::DPhpy;
+pub use operator::DeduplicateJoinConditionOptimizer;
+pub use operator::InferFilterOptimizer;
+pub use operator::JoinProperty;
+pub use operator::NormalizeDisjunctiveFilterOptimizer;
+pub use operator::PullUpFilterOptimizer;
 pub use optimizer::optimize;
 pub use optimizer::optimize_query;
 pub use optimizer::OptimizerContext;
