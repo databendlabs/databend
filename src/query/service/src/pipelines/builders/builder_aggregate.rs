@@ -166,7 +166,6 @@ impl PipelineBuilder {
         })?;
 
         self.enable_multiway_sort = true;
-        // self.exchange_injector = AggregateInjector::create();
         Ok(())
     }
 

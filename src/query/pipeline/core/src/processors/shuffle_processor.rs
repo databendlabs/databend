@@ -211,7 +211,7 @@ impl<T: Exchange> PartitionProcessor<T> {
             exchange,
             partitioned_data,
             input_data: None,
-            initialized: false,
+            initialized: !T::MULTIWAY_SORT,
             index,
             barrier,
         }))
@@ -357,7 +357,10 @@ impl<T: Exchange> MergePartitionProcessor<T> {
 
 impl<T: Exchange> Processor for MergePartitionProcessor<T> {
     fn name(&self) -> String {
-        format!("ShuffleMergePartition({})", T::NAME)
+        match T::MULTIWAY_SORT {
+            true => format!("ShuffleSortMergePartition({})", T::NAME),
+            false => format!("ShuffleMergePartition({})", T::NAME),
+        }
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
