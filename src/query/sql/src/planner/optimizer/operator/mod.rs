@@ -16,7 +16,6 @@ mod decorrelate;
 mod filter;
 mod join;
 
-pub use decorrelate::decorrelate_subquery;
 pub use decorrelate::FlattenInfo;
 pub use decorrelate::SubqueryRewriter;
 pub use decorrelate::UnnestResult;
