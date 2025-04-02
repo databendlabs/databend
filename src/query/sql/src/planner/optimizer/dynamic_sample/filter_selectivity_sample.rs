@@ -30,6 +30,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::SelectivityEstimator;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
+use crate::optimizer::OptimizerContext;
 use crate::planner::QueryExecutor;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
@@ -68,8 +69,9 @@ pub async fn filter_selectivity_sample(
             scan.sample = Some(sample_conf);
             let new_child = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
             new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
-            let collect_statistics_optimizer =
-                CollectStatisticsOptimizer::new(ctx.clone(), metadata.clone());
+
+            let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
+            let collect_statistics_optimizer = CollectStatisticsOptimizer::new(opt_ctx);
             new_s_expr = collect_statistics_optimizer.run(&new_s_expr).await?;
         }
 

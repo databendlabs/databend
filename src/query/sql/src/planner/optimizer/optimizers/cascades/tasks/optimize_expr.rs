@@ -21,9 +21,6 @@ use educe::Educe;
 
 use super::optimize_group::OptimizeGroupTask;
 use super::Task;
-use crate::optimizer::cascades::scheduler::Scheduler;
-use crate::optimizer::cascades::tasks::SharedCounter;
-use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::cost::Cost;
 use crate::optimizer::cost::CostContext;
 use crate::optimizer::ir::Distribution;
@@ -34,6 +31,9 @@ use crate::optimizer::ir::PatternExtractor;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::cascades::CascadesOptimizer;
+use crate::optimizer::optimizers::cascades::Scheduler;
+use crate::optimizer::optimizers::cascades::SharedCounter;
 use crate::plans::RelOperator;
 use crate::IndexType;
 

@@ -19,16 +19,16 @@ use databend_common_exception::Result;
 use log::debug;
 
 use super::explore_rules::get_explore_rule_set;
-use crate::optimizer::cascades::scheduler::Scheduler;
-use crate::optimizer::cascades::scheduler::DEFAULT_TASK_LIMIT;
-use crate::optimizer::cascades::tasks::OptimizeGroupTask;
-use crate::optimizer::cascades::tasks::Task;
 use crate::optimizer::cost::CostModel;
 use crate::optimizer::cost::DefaultCostModel;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::cascades::OptimizeGroupTask;
+use crate::optimizer::optimizers::cascades::Scheduler;
+use crate::optimizer::optimizers::cascades::Task;
+use crate::optimizer::optimizers::cascades::DEFAULT_TASK_LIMIT;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::RuleSet;
@@ -37,36 +37,36 @@ use crate::IndexType;
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
 pub struct CascadesOptimizer {
-    pub(crate) opt_ctx: OptimizerContext,
+    pub(crate) opt_ctx: Arc<OptimizerContext>,
     pub(crate) memo: Memo,
     pub(crate) cost_model: Box<dyn CostModel>,
     pub(crate) explore_rule_set: RuleSet,
 }
 
 impl CascadesOptimizer {
-    pub fn new(opt_ctx: OptimizerContext, mut optimized: bool) -> Result<Self> {
-        let explore_rule_set = if opt_ctx.table_ctx.get_settings().get_enable_cbo()? {
-            if unsafe {
-                opt_ctx
-                    .table_ctx
-                    .get_settings()
-                    .get_disable_join_reorder()?
-            } {
-                optimized = true;
-            }
-            get_explore_rule_set(optimized)
-        } else {
+    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Result<Self> {
+        let table_ctx = opt_ctx.get_table_ctx();
+        let settings = table_ctx.get_settings();
+
+        // Determine rule set
+        let explore_rule_set = if !settings.get_enable_cbo()? {
             RuleSet::create()
+        } else {
+            // Use dphyp optimization flag or join reorder setting
+            let skip_join_reorder = opt_ctx.get_flag("dphyp_optimized")
+                || unsafe { settings.get_disable_join_reorder()? };
+            get_explore_rule_set(skip_join_reorder)
         };
 
-        let cluster_peers = opt_ctx.table_ctx.get_cluster().nodes.len();
-        let dop = opt_ctx.table_ctx.get_settings().get_max_threads()? as usize;
+        // Build cost model
         let cost_model = Box::new(
-            DefaultCostModel::new(opt_ctx.table_ctx.clone())?
-                .with_cluster_peers(cluster_peers)
-                .with_degree_of_parallelism(dop),
+            DefaultCostModel::new(table_ctx.clone())?
+                .with_cluster_peers(table_ctx.get_cluster().nodes.len())
+                .with_degree_of_parallelism(settings.get_max_threads()? as usize),
         );
-        Ok(CascadesOptimizer {
+
+        // Create optimizer
+        Ok(Self {
             opt_ctx,
             memo: Memo::create(),
             cost_model,
@@ -75,7 +75,7 @@ impl CascadesOptimizer {
     }
 
     pub(crate) fn enforce_distribution(&self) -> bool {
-        self.opt_ctx.enable_distributed_optimization
+        self.opt_ctx.get_enable_distributed_optimization()
     }
 
     fn init(&mut self, expression: SExpr) -> Result<()> {
@@ -104,13 +104,18 @@ impl CascadesOptimizer {
         };
 
         let root_task = OptimizeGroupTask::new(
-            self.opt_ctx.table_ctx.clone(),
+            self.opt_ctx.get_table_ctx().clone(),
             None,
             root_index,
             root_required_prop.clone(),
         );
 
-        let task_limit = if self.opt_ctx.table_ctx.get_settings().get_enable_cbo()? {
+        let task_limit = if self
+            .opt_ctx
+            .get_table_ctx()
+            .get_settings()
+            .get_enable_cbo()?
+        {
             DEFAULT_TASK_LIMIT
         } else {
             0

@@ -12,26 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cost;
-mod distributed;
-pub mod ir;
-pub mod operator;
-#[allow(clippy::module_inception)]
-mod optimizer;
-mod optimizer_context;
-pub mod optimizers;
-pub mod rule;
-mod statistics;
-mod util;
+mod cascade;
+mod explore_rules;
+mod scheduler;
+mod tasks;
 
-mod dynamic_sample;
-
-pub use optimizer::optimize;
-pub use optimizer::optimize_query;
-pub use optimizer_context::OptimizerContext;
-pub use rule::agg_index;
-pub use rule::RuleFactory;
-pub use rule::RuleID;
-pub use rule::RuleSet;
-pub use rule::DEFAULT_REWRITE_RULES;
-pub use util::contains_local_table_scan;
+pub use cascade::CascadesOptimizer;
+pub use scheduler::Scheduler;
+pub use scheduler::DEFAULT_TASK_LIMIT;
+pub use tasks::ExploreGroupTask;
+pub use tasks::OptimizeGroupTask;
+pub use tasks::SharedCounter;
+pub use tasks::Task;

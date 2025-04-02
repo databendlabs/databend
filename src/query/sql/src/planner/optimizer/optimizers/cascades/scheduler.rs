@@ -145,3 +145,9 @@ impl Scheduler {
         self.task_queue.push_back(task);
     }
 }
+
+impl Default for Scheduler {
+    fn default() -> Self {
+        Self::new()
+    }
+}

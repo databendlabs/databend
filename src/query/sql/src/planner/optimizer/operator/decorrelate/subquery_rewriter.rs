@@ -29,6 +29,7 @@ use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::OptimizerContext;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -77,10 +78,10 @@ pub struct SubqueryRewriter {
 }
 
 impl SubqueryRewriter {
-    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef, binder: Option<Binder>) -> Self {
+    pub fn new(opt_ctx: Arc<OptimizerContext>, binder: Option<Binder>) -> Self {
         Self {
-            ctx,
-            metadata,
+            ctx: opt_ctx.get_table_ctx(),
+            metadata: opt_ctx.get_metadata(),
             derived_columns: Default::default(),
             binder,
         }
@@ -99,6 +100,11 @@ impl SubqueryRewriter {
     /// More information can be found in the paper: Unnesting Arbitrary Queries
     #[recursive::recursive]
     pub fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        // If there is no subquery, return directly
+        if !s_expr.contain_subquery() {
+            return Ok(s_expr.clone());
+        }
+
         match s_expr.plan().clone() {
             RelOperator::EvalScalar(mut plan) => {
                 let mut input = self.rewrite(s_expr.child(0)?)?;

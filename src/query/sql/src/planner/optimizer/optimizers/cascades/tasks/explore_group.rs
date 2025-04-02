@@ -21,10 +21,10 @@ use educe::Educe;
 
 use super::explore_expr::ExploreExprTask;
 use super::Task;
-use crate::optimizer::cascades::scheduler::Scheduler;
-use crate::optimizer::cascades::tasks::SharedCounter;
-use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::ir::GroupState;
+use crate::optimizer::optimizers::cascades::CascadesOptimizer;
+use crate::optimizer::optimizers::cascades::Scheduler;
+use crate::optimizer::optimizers::cascades::SharedCounter;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]

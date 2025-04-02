@@ -15,8 +15,8 @@
 use databend_common_exception::Result;
 use educe::Educe;
 
-use crate::optimizer::cascades::tasks::SharedCounter;
-use crate::optimizer::cascades::CascadesOptimizer;
+use crate::optimizer::optimizers::cascades::CascadesOptimizer;
+use crate::optimizer::optimizers::cascades::SharedCounter;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;

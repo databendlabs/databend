@@ -20,6 +20,7 @@ use crate::binder::split_conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::operator::InferFilterOptimizer;
 use crate::optimizer::operator::NormalizeDisjunctiveFilterOptimizer;
+use crate::optimizer::OptimizerContext;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -33,15 +34,18 @@ use crate::ScalarExpr;
 
 // The PullUpFilterOptimizer will pull up filters to the top of the plan tree and infer new filters.
 pub struct PullUpFilterOptimizer {
+    opt_ctx: Arc<OptimizerContext>,
     pub predicates: Vec<ScalarExpr>,
     pub metadata: MetadataRef,
 }
 
 impl PullUpFilterOptimizer {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
+        let metadata = opt_ctx.get_metadata();
         PullUpFilterOptimizer {
+            opt_ctx,
             predicates: vec![],
-            metadata,
+            metadata: metadata.clone(),
         }
     }
 
@@ -97,8 +101,9 @@ impl PullUpFilterOptimizer {
             }
             _ => (false, false),
         };
-        let mut left_pull_up = PullUpFilterOptimizer::new(self.metadata.clone());
-        let mut right_pull_up = PullUpFilterOptimizer::new(self.metadata.clone());
+
+        let mut left_pull_up = PullUpFilterOptimizer::new(self.opt_ctx.clone());
+        let mut right_pull_up = PullUpFilterOptimizer::new(self.opt_ctx.clone());
         let mut left = left_pull_up.pull_up(s_expr.child(0)?)?;
         let mut right = right_pull_up.pull_up(s_expr.child(1)?)?;
         if left_need_pull_up {
@@ -152,7 +157,7 @@ impl PullUpFilterOptimizer {
     pub fn pull_up_others(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
-            let child = PullUpFilterOptimizer::new(self.metadata.clone()).run(child)?;
+            let child = PullUpFilterOptimizer::new(self.opt_ctx.clone()).run(child)?;
             children.push(Arc::new(child));
         }
         Ok(s_expr.replace_children(children))
