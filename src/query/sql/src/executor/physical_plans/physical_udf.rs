@@ -63,7 +63,7 @@ pub struct UdfFunctionDesc {
     pub arg_indices: Vec<IndexType>,
     pub arg_exprs: Vec<String>,
     pub data_type: Box<DataType>,
-    pub headers: Option<BTreeMap<String, String>>,
+    pub headers: BTreeMap<String, String>,
 
     pub udf_type: UDFType,
 }

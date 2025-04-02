@@ -205,19 +205,19 @@ impl Display for UDFDefinition {
                 }
                 write!(
                     f,
-                    " }} RETURNS {return_type} LANGUAGE {language}' HANDLER = {handler}"
+                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler}"
                 )?;
-                if !handler.is_empty() {
+                if !headers.is_empty() {
                     write!(f, " HEADERS = (")?;
                     for (i, (key, value)) in headers.iter().enumerate() {
                         if i > 0 {
                             write!(f, ", ")?;
                         }
-                        write!(f, "'{key}' = '{value}'")?;
+                        write!(f, "{key} = {value}")?;
                     }
                     write!(f, ")")?;
                 }
-                write!(f, " ADDRESS = '{address}'")?;
+                write!(f, " ADDRESS = {address}")?;
             }
             UDFDefinition::UDFScript(UDFScript {
                 code,

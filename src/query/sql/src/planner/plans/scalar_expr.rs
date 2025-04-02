@@ -903,7 +903,7 @@ pub struct UDFCall {
     pub name: String,
     // name in handler
     pub handler: String,
-    pub headers: Option<BTreeMap<String, String>>,
+    pub headers: BTreeMap<String, String>,
     pub display_name: String,
     pub arg_types: Vec<DataType>,
     pub return_type: Box<DataType>,

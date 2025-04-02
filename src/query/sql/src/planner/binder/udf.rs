@@ -113,10 +113,8 @@ impl Binder {
                     .with_tenant(self.ctx.get_tenant().tenant_name())?
                     .with_func_name(&name)?
                     .with_handler_name(handler)?
-                    .with_query_id(&self.ctx.get_id())?;
-                if !headers.is_empty() {
-                    client = client.with_headers(headers)?;
-                }
+                    .with_query_id(&self.ctx.get_id())?
+                    .with_headers(headers.iter())?;
                 client
                     .check_schema(handler, &arg_datatypes, &return_type)
                     .await?;
