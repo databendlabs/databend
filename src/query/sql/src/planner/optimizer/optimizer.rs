@@ -22,22 +22,22 @@ use databend_common_exception::Result;
 use educe::Educe;
 use log::info;
 
-use super::aggregate::RuleStatsAggregateOptimizer;
-use super::distributed::BroadcastToShuffleOptimizer;
 use crate::binder::target_probe;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
-use crate::optimizer::aggregate::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::cascades::CascadesOptimizer;
-use crate::optimizer::decorrelate::decorrelate_subquery;
 use crate::optimizer::distributed::optimize_distributed_query;
+use crate::optimizer::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::distributed::SortAndLimitPushDownOptimizer;
-use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
-use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::join::SingleToInnerOptimizer;
+use crate::optimizer::operator::DeduplicateJoinConditionOptimizer;
+use crate::optimizer::operator::PullUpFilterOptimizer;
+use crate::optimizer::operator::RuleNormalizeAggregateOptimizer;
+use crate::optimizer::operator::RuleStatsAggregateOptimizer;
+use crate::optimizer::operator::SingleToInnerOptimizer;
+use crate::optimizer::operator::SubqueryRewriter;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
@@ -229,11 +229,14 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
 
                 let mut s_expr = s_expr;
                 if s_expr.contain_subquery() {
-                    s_expr = Box::new(decorrelate_subquery(
-                        opt_ctx.table_ctx.clone(),
-                        opt_ctx.metadata.clone(),
-                        *s_expr.clone(),
-                    )?);
+                    s_expr = Box::new(
+                        SubqueryRewriter::new(
+                            opt_ctx.table_ctx.clone(),
+                            opt_ctx.metadata.clone(),
+                            None,
+                        )
+                        .rewrite(&s_expr)?,
+                    );
                 }
                 Ok(Plan::Explain {
                     kind,
@@ -394,11 +397,8 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(
-            opt_ctx.table_ctx.clone(),
-            opt_ctx.metadata.clone(),
-            s_expr.clone(),
-        )?;
+        s_expr = SubqueryRewriter::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone(), None)
+            .rewrite(&s_expr)?;
     }
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
@@ -492,11 +492,8 @@ async fn get_optimized_memo(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(
-            opt_ctx.table_ctx.clone(),
-            opt_ctx.metadata.clone(),
-            s_expr.clone(),
-        )?;
+        s_expr = SubqueryRewriter::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone(), None)
+            .rewrite(&s_expr)?;
     }
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())

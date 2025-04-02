@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::common_super_type;
@@ -31,13 +30,13 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
-use crate::optimizer::decorrelate::subquery_rewriter::FlattenInfo;
-use crate::optimizer::decorrelate::subquery_rewriter::SubqueryRewriter;
-use crate::optimizer::decorrelate::subquery_rewriter::UnnestResult;
 use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::operator::FlattenInfo;
+use crate::optimizer::operator::SubqueryRewriter;
+use crate::optimizer::operator::UnnestResult;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
@@ -53,27 +52,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::IndexType;
-use crate::MetadataRef;
-
-/// Decorrelate subqueries inside `s_expr`.
-///
-/// We only need to process three kinds of join: Scalar Subquery, Any Subquery, and Exists Subquery.
-/// Other kinds of subqueries have be converted to one of the above subqueries in `type_check`.
-///
-/// It will rewrite `s_expr` to all kinds of join.
-/// Correlated scalar subquery -> Single join
-/// Any subquery -> Marker join
-/// Correlated exists subquery -> Marker join
-///
-/// More information can be found in the paper: Unnesting Arbitrary Queries
-pub fn decorrelate_subquery(
-    ctx: Arc<dyn TableContext>,
-    metadata: MetadataRef,
-    s_expr: SExpr,
-) -> Result<SExpr> {
-    let mut rewriter = SubqueryRewriter::new(ctx, metadata, None);
-    rewriter.rewrite(&s_expr)
-}
 
 impl SubqueryRewriter {
     // Try to decorrelate a `CrossApply` into `SemiJoin` or `AntiJoin`.

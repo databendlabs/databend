@@ -12,29 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cascades;
-mod cost;
-mod distributed;
-mod hyper_dp;
-pub mod ir;
-pub mod operator;
-#[allow(clippy::module_inception)]
-mod optimizer;
-pub mod rule;
-mod statistics;
-mod util;
+mod aggregate;
+mod decorrelate;
+mod filter;
+mod join;
 
-mod dynamic_sample;
-
-pub use cascades::CascadesOptimizer;
-pub use hyper_dp::DPhpy;
-pub use optimizer::optimize;
-pub use optimizer::optimize_query;
-pub use optimizer::OptimizerContext;
-pub use optimizer::RecursiveOptimizer;
-pub use rule::agg_index;
-pub use rule::RuleFactory;
-pub use rule::RuleID;
-pub use rule::RuleSet;
-pub use rule::DEFAULT_REWRITE_RULES;
-pub use util::contains_local_table_scan;
+pub use aggregate::RuleNormalizeAggregateOptimizer;
+pub use aggregate::RuleStatsAggregateOptimizer;
+pub use decorrelate::FlattenInfo;
+pub use decorrelate::SubqueryRewriter;
+pub use decorrelate::UnnestResult;
+pub use filter::DeduplicateJoinConditionOptimizer;
+pub use filter::InferFilterOptimizer;
+pub use filter::JoinProperty;
+pub use filter::NormalizeDisjunctiveFilterOptimizer;
+pub use filter::PullUpFilterOptimizer;
+pub use join::SingleToInnerOptimizer;

@@ -171,3 +171,9 @@ impl RuleNormalizeAggregateOptimizer {
         }
     }
 }
+
+impl Default for RuleNormalizeAggregateOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}

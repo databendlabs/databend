@@ -86,6 +86,17 @@ impl SubqueryRewriter {
         }
     }
 
+    /// Decorrelate subqueries inside `s_expr`.
+    ///
+    /// We only need to process three kinds of join: Scalar Subquery, Any Subquery, and Exists Subquery.
+    /// Other kinds of subqueries have been converted to one of the above subqueries in `type_check`.
+    ///
+    /// It will rewrite `s_expr` to all kinds of join.
+    /// Correlated scalar subquery -> Single join
+    /// Any subquery -> Marker join
+    /// Correlated exists subquery -> Marker join
+    ///
+    /// More information can be found in the paper: Unnesting Arbitrary Queries
     #[recursive::recursive]
     pub fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan().clone() {

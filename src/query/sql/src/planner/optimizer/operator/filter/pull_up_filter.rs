@@ -17,9 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::binder::split_conjunctions;
-use crate::optimizer::filter::InferFilterOptimizer;
-use crate::optimizer::filter::NormalizeDisjunctiveFilterOptimizer;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::operator::InferFilterOptimizer;
+use crate::optimizer::operator::NormalizeDisjunctiveFilterOptimizer;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;

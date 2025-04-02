@@ -17,7 +17,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
-use databend_common_sql::optimizer::NormalizeDisjunctiveFilterOptimizer;
+use databend_common_sql::optimizer::operator::NormalizeDisjunctiveFilterOptimizer;
 use databend_common_sql::planner::binder::ColumnBinding;
 use databend_common_sql::planner::binder::Visibility;
 use databend_common_sql::planner::plans::BoundColumnRef;

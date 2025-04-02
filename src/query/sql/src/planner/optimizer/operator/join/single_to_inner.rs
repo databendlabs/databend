@@ -59,3 +59,9 @@ impl SingleToInnerOptimizer {
         Ok(s_expr)
     }
 }
+
+impl Default for SingleToInnerOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
