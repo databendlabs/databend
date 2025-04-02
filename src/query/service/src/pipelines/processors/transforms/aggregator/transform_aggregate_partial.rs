@@ -78,7 +78,7 @@ pub struct TransformPartialAggregate {
     configure_peer_nodes: Vec<String>,
     spilling_state: Option<HashtableSpillingState>,
     spiller: Arc<Spiller>,
-    spill_blocks: Vec<DataBlock>,
+    output_blocks: Vec<DataBlock>,
 }
 
 impl TransformPartialAggregate {
@@ -136,7 +136,7 @@ impl TransformPartialAggregate {
                 configure_peer_nodes: vec![GlobalConfig::instance().query.node_id.clone()],
                 spilling_state: None,
                 spiller: Arc::new(spiller),
-                spill_blocks: vec![],
+                output_blocks: vec![],
             },
         ))
     }
@@ -249,7 +249,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         self.execute_one_block(block)?;
 
-        Ok(std::mem::take(&mut self.spill_blocks))
+        Ok(vec![])
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
@@ -260,8 +260,6 @@ impl AccumulatingTransform for TransformPartialAggregate {
             },
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
-                let mut blocks = std::mem::take(&mut self.spill_blocks);
-                blocks.reserve(partition_count);
 
                 log::info!(
                     "Aggregated {} to {} rows in {} sec(real: {}). ({} rows/sec, {}/sec, {})",
@@ -283,7 +281,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
                 );
 
                 for (partition, payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    blocks.push(DataBlock::empty_with_meta(
+                    self.output_blocks.push(DataBlock::empty_with_meta(
                         AggregateMeta::create_agg_payload(
                             payload,
                             partition as isize,
@@ -293,7 +291,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
                     ));
                 }
 
-                blocks
+                std::mem::take(&mut self.output_blocks)
             }
         })
     }
@@ -362,7 +360,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
                         global_max_partition: max_partition,
                     };
 
-                    self.spill_blocks.push(DataBlock::empty_with_meta(
+                    self.output_blocks.push(DataBlock::empty_with_meta(
                         AggregateMeta::create_spilled_payload(spilled_payload),
                     ));
 

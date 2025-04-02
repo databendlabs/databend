@@ -14,12 +14,9 @@
 
 use std::any::Any;
 use std::cmp::Ordering;
-use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering as AtomicOrdering;
 use std::sync::Arc;
@@ -57,16 +54,18 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 
 pub struct TransformPartitionDispatch {
+    params: Arc<AggregatorParams>,
     outputs: Vec<Arc<OutputPort>>,
     input: Arc<InputPort>,
     outputs_data: Vec<VecDeque<DataBlock>>,
     output_index: usize,
-    initialized_input: bool,
+    // initialized_input: bool,
     finished: bool,
+    input_data: Option<(AggregateMeta, DataBlock)>,
 
     max_partition: usize,
     working_partition: isize,
-    partitions: Partitions,
+    partitions: AlignedPartitions,
 }
 
 impl TransformPartitionDispatch {
@@ -80,15 +79,16 @@ impl TransformPartitionDispatch {
         }
 
         Ok(TransformPartitionDispatch {
+            params,
             outputs,
             outputs_data,
             input: InputPort::create(),
             output_index: 0,
             max_partition: 0,
-            initialized_input: false,
-            partitions: Partitions::create_unaligned(params),
             working_partition: 0,
             finished: false,
+            input_data: None,
+            partitions: AlignedPartitions::create(),
         })
     }
 
@@ -98,25 +98,6 @@ impl TransformPartitionDispatch {
 
     pub fn get_outputs(&self) -> Vec<Arc<OutputPort>> {
         self.outputs.clone()
-    }
-
-    // Align each input's max_partition to the maximum max_partition.
-    // If an input's max_partition is smaller than the maximum, continuously fetch its data until either the stream ends or its max_partition reaches/exceeds the maximum value.
-    fn initialize_input(&mut self) -> Result<bool> {
-        if self.input.is_finished() {
-            return Ok(true);
-        }
-
-        if !self.input.has_data() {
-            self.input.set_need_data();
-            return Ok(false);
-        }
-
-        let data_block = self.input.pull_data().unwrap()?;
-        let (partition, max_partition, global_max_partition) =
-            self.partitions.add_block(data_block)?;
-        self.max_partition = global_max_partition;
-        Ok(partition > SINGLE_LEVEL_BUCKET_NUM && max_partition == global_max_partition)
     }
 
     fn ready_partition(&mut self) -> Option<isize> {
@@ -148,6 +129,22 @@ impl TransformPartitionDispatch {
         }
 
         Ok(())
+    }
+
+    fn unpark_block(&self, mut data_block: DataBlock) -> Result<(AggregateMeta, DataBlock)> {
+        let Some(meta) = data_block.take_meta() else {
+            return Err(ErrorCode::Internal(
+                "Internal, TransformPartitionBucket only recv DataBlock with meta.",
+            ));
+        };
+
+        let Some(meta) = AggregateMeta::downcast_from(meta) else {
+            return Err(ErrorCode::Internal(
+                "Internal, TransformPartitionBucket only recv AggregateMeta".to_string(),
+            ));
+        };
+
+        Ok((meta, data_block))
     }
 }
 
@@ -204,21 +201,20 @@ impl Processor for TransformPartitionDispatch {
                 return Ok(Event::NeedConsume);
             }
 
-            // We pull the first unaligned partition
-            if !self.initialized_input {
-                if self.initialize_input()? {
+            if self.input.has_data() {
+                let data_block = self.input.pull_data().unwrap()?;
+                let (meta, data_block) = self.unpark_block(data_block)?;
+
+                // need repartition
+                if meta.get_max_partition() != meta.get_global_max_partition() {
+                    self.input_data = Some((meta, data_block));
                     return Ok(Event::Sync);
                 }
 
-                self.input.set_need_data();
-                return Ok(Event::NeedData);
-            }
+                let partition = meta.get_sorting_partition();
+                self.partitions.add_data(meta, data_block);
 
-            if self.input.has_data() {
-                let data_block = self.input.pull_data().unwrap()?;
-                let (partition, _, _) = self.partitions.add_block(data_block)?;
-
-                if partition != self.working_partition {
+                if partition != SINGLE_LEVEL_BUCKET_NUM && partition != self.working_partition {
                     self.fetch_ready_partition()?;
                     self.working_partition = partition;
                     continue;
@@ -239,9 +235,45 @@ impl Processor for TransformPartitionDispatch {
     }
 
     fn process(&mut self) -> Result<()> {
-        if !self.initialized_input {
-            self.initialized_input = true;
-            return self.partitions.align(self.max_partition);
+        let Some((meta, data_block)) = self.input_data.take() else {
+            return Ok(());
+        };
+
+        match meta {
+            AggregateMeta::FinalPartition => unreachable!(),
+            AggregateMeta::SpilledPayload(_payload) => unreachable!(),
+            AggregateMeta::InFlightPayload(payload) => {
+                if data_block.is_empty() {
+                    return Ok(());
+                }
+
+                let payload = AggregatePayload {
+                    partition: payload.partition,
+                    max_partition: payload.max_partition,
+                    payload: self.deserialize_flight(data_block)?,
+                    global_max_partition: payload.global_max_partition,
+                };
+
+                let repartition = payload.global_max_partition;
+                let partitioned = self.partition_payload(payload, repartition);
+
+                for payload in partitioned {
+                    self.partitions
+                        .add_data(AggregateMeta::AggregatePayload(payload), DataBlock::empty());
+                }
+            }
+            AggregateMeta::AggregatePayload(payload) => {
+                if payload.payload.len() == 0 {
+                    return Ok(());
+                }
+
+                let repartition = payload.global_max_partition;
+                let partitioned = self.partition_payload(payload, repartition);
+                for payload in partitioned {
+                    self.partitions
+                        .add_data(AggregateMeta::AggregatePayload(payload), DataBlock::empty());
+                }
+            }
         }
 
         Ok(())
@@ -363,74 +395,8 @@ pub fn build_partition_dispatch(
     Ok(())
 }
 
-struct UnalignedPartitions {
-    params: Arc<AggregatorParams>,
-    data: HashMap<usize, Vec<(AggregateMeta, DataBlock)>>,
-}
-
-impl Debug for UnalignedPartitions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UnalignedPartitions")
-            .field("data", &self.data)
-            .finish()
-    }
-}
-
-impl UnalignedPartitions {
-    pub fn create(params: Arc<AggregatorParams>) -> UnalignedPartitions {
-        UnalignedPartitions {
-            params,
-            data: HashMap::new(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
-    }
-
-    fn insert_data(&mut self, idx: usize, meta: AggregateMeta, block: DataBlock) {
-        match self.data.entry(idx) {
-            Entry::Vacant(v) => {
-                v.insert(vec![(meta, block)]);
-            }
-            Entry::Occupied(mut v) => {
-                v.get_mut().push((meta, block));
-            }
-        }
-    }
-
-    pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
-        match &meta {
-            AggregateMeta::FinalPartition => unreachable!(),
-            AggregateMeta::SpilledPayload(payload) => {
-                let max_partition = payload.max_partition;
-                let global_max_partition = payload.global_max_partition;
-                self.insert_data(max_partition, meta, block);
-
-                (SINGLE_LEVEL_BUCKET_NUM, max_partition, global_max_partition)
-            }
-            AggregateMeta::InFlightPayload(payload) => {
-                let partition = payload.partition;
-                let max_partition = payload.max_partition;
-                let global_max_partition = payload.global_max_partition;
-
-                if !block.is_empty() {
-                    self.insert_data(max_partition, meta, block);
-                }
-
-                (partition, max_partition, global_max_partition)
-            }
-            AggregateMeta::AggregatePayload(payload) => {
-                let partition = payload.partition;
-                let max_partition = payload.max_partition;
-                let global_max_partition = payload.global_max_partition;
-
-                self.insert_data(max_partition, meta, block);
-                (partition, max_partition, global_max_partition)
-            }
-        }
-    }
-
+// repartition implementation
+impl TransformPartitionDispatch {
     fn deserialize_flight(&mut self, data: DataBlock) -> Result<Payload> {
         let rows_num = data.num_rows();
         let group_len = self.params.group_data_types.len();
@@ -492,78 +458,214 @@ impl UnalignedPartitions {
 
         partitioned
     }
-
-    pub fn align(mut self, max_partitions: usize) -> Result<AlignedPartitions> {
-        let repartition_data = self
-            .data
-            .extract_if(|k, _| *k != max_partitions)
-            .collect::<Vec<_>>();
-
-        let mut aligned_partitions = AlignedPartitions {
-            max_partition: max_partitions,
-            data: BTreeMap::new(),
-        };
-
-        for (_max_partition, data) in std::mem::take(&mut self.data) {
-            for (meta, block) in data {
-                aligned_partitions.add_data(meta, block);
-            }
-        }
-
-        for (_, repartition_data) in repartition_data {
-            for (meta, block) in repartition_data {
-                match meta {
-                    AggregateMeta::FinalPartition => unreachable!(),
-                    AggregateMeta::SpilledPayload(_) => unreachable!(),
-                    AggregateMeta::InFlightPayload(payload) => {
-                        if block.is_empty() {
-                            continue;
-                        }
-
-                        let payload = AggregatePayload {
-                            partition: payload.partition,
-                            max_partition: payload.max_partition,
-                            payload: self.deserialize_flight(block)?,
-                            global_max_partition: 0,
-                        };
-
-                        let partitioned = self.partition_payload(payload, max_partitions);
-
-                        for payload in partitioned {
-                            aligned_partitions.add_data(
-                                AggregateMeta::AggregatePayload(payload),
-                                DataBlock::empty(),
-                            );
-                        }
-                    }
-                    AggregateMeta::AggregatePayload(payload) => {
-                        if payload.payload.len() == 0 {
-                            continue;
-                        }
-
-                        let partitioned = self.partition_payload(payload, max_partitions);
-                        for payload in partitioned {
-                            aligned_partitions.add_data(
-                                AggregateMeta::AggregatePayload(payload),
-                                DataBlock::empty(),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(aligned_partitions)
-    }
 }
+
+// struct UnalignedPartitions {
+//     params: Arc<AggregatorParams>,
+//     data: HashMap<usize, Vec<(AggregateMeta, DataBlock)>>,
+// }
+//
+// impl Debug for UnalignedPartitions {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("UnalignedPartitions")
+//             .field("data", &self.data)
+//             .finish()
+//     }
+// }
+//
+// impl UnalignedPartitions {
+//     pub fn create(params: Arc<AggregatorParams>) -> UnalignedPartitions {
+//         UnalignedPartitions {
+//             params,
+//             data: HashMap::new(),
+//         }
+//     }
+//
+//     pub fn is_empty(&self) -> bool {
+//         self.data.is_empty()
+//     }
+//
+//     fn insert_data(&mut self, idx: usize, meta: AggregateMeta, block: DataBlock) {
+//         match self.data.entry(idx) {
+//             Entry::Vacant(v) => {
+//                 v.insert(vec![(meta, block)]);
+//             }
+//             Entry::Occupied(mut v) => {
+//                 v.get_mut().push((meta, block));
+//             }
+//         }
+//     }
+//
+//     pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
+//         match &meta {
+//             AggregateMeta::FinalPartition => unreachable!(),
+//             AggregateMeta::SpilledPayload(payload) => {
+//                 let max_partition = payload.max_partition;
+//                 let global_max_partition = payload.global_max_partition;
+//                 self.insert_data(max_partition, meta, block);
+//
+//                 (SINGLE_LEVEL_BUCKET_NUM, max_partition, global_max_partition)
+//             }
+//             AggregateMeta::InFlightPayload(payload) => {
+//                 let partition = payload.partition;
+//                 let max_partition = payload.max_partition;
+//                 let global_max_partition = payload.global_max_partition;
+//
+//                 if !block.is_empty() {
+//                     self.insert_data(max_partition, meta, block);
+//                 }
+//
+//                 (partition, max_partition, global_max_partition)
+//             }
+//             AggregateMeta::AggregatePayload(payload) => {
+//                 let partition = payload.partition;
+//                 let max_partition = payload.max_partition;
+//                 let global_max_partition = payload.global_max_partition;
+//
+//                 self.insert_data(max_partition, meta, block);
+//                 (partition, max_partition, global_max_partition)
+//             }
+//         }
+//     }
+//
+//     fn deserialize_flight(&mut self, data: DataBlock) -> Result<Payload> {
+//         let rows_num = data.num_rows();
+//         let group_len = self.params.group_data_types.len();
+//
+//         let mut state = ProbeState::default();
+//
+//         // create single partition hash table for deserialize
+//         let capacity = AggregateHashTable::get_capacity_for_count(rows_num);
+//         let config = HashTableConfig::default().with_initial_radix_bits(0);
+//         let mut hashtable = AggregateHashTable::new_directly(
+//             self.params.group_data_types.clone(),
+//             self.params.aggregate_functions.clone(),
+//             config,
+//             capacity,
+//             Arc::new(Bump::new()),
+//             false,
+//         );
+//
+//         let num_states = self.params.num_states();
+//         let states_index: Vec<usize> = (0..num_states).collect();
+//         let agg_states = InputColumns::new_block_proxy(&states_index, &data);
+//
+//         let group_index: Vec<usize> = (num_states..(num_states + group_len)).collect();
+//         let group_columns = InputColumns::new_block_proxy(&group_index, &data);
+//
+//         let _ = hashtable.add_groups(
+//             &mut state,
+//             group_columns,
+//             &[(&[]).into()],
+//             agg_states,
+//             rows_num,
+//         )?;
+//
+//         hashtable.payload.mark_min_cardinality();
+//         assert_eq!(hashtable.payload.payloads.len(), 1);
+//         Ok(hashtable.payload.payloads.pop().unwrap())
+//     }
+//
+//     fn partition_payload(&mut self, from: AggregatePayload, to: usize) -> Vec<AggregatePayload> {
+//         let mut partitioned = Vec::with_capacity(to);
+//         let mut partitioned_payload = PartitionedPayload::new(
+//             self.params.group_data_types.clone(),
+//             self.params.aggregate_functions.clone(),
+//             to as u64,
+//             vec![from.payload.arena.clone()],
+//         );
+//
+//         let mut flush_state = PayloadFlushState::default();
+//         partitioned_payload.combine_single(from.payload, &mut flush_state, None);
+//
+//         for (partition, payload) in partitioned_payload.payloads.into_iter().enumerate() {
+//             partitioned.push(AggregatePayload {
+//                 payload,
+//                 partition: partition as isize,
+//                 max_partition: to,
+//                 global_max_partition: 0,
+//             });
+//         }
+//
+//         partitioned
+//     }
+//
+//     pub fn align(mut self, max_partitions: usize) -> Result<AlignedPartitions> {
+//         let repartition_data = self
+//             .data
+//             .extract_if(|k, _| *k != max_partitions)
+//             .collect::<Vec<_>>();
+//
+//         let mut aligned_partitions = AlignedPartitions {
+//             max_partition: max_partitions,
+//             data: BTreeMap::new(),
+//         };
+//
+//         for (_max_partition, data) in std::mem::take(&mut self.data) {
+//             for (meta, block) in data {
+//                 aligned_partitions.add_data(meta, block);
+//             }
+//         }
+//
+//         for (_, repartition_data) in repartition_data {
+//             for (meta, block) in repartition_data {
+//                 match meta {
+//                     AggregateMeta::FinalPartition => unreachable!(),
+//                     AggregateMeta::SpilledPayload(_) => unreachable!(),
+//                     AggregateMeta::InFlightPayload(payload) => {
+//                         if block.is_empty() {
+//                             continue;
+//                         }
+//
+//                         let payload = AggregatePayload {
+//                             partition: payload.partition,
+//                             max_partition: payload.max_partition,
+//                             payload: self.deserialize_flight(block)?,
+//                             global_max_partition: 0,
+//                         };
+//
+//                         let partitioned = self.partition_payload(payload, max_partitions);
+//
+//                         for payload in partitioned {
+//                             aligned_partitions.add_data(
+//                                 AggregateMeta::AggregatePayload(payload),
+//                                 DataBlock::empty(),
+//                             );
+//                         }
+//                     }
+//                     AggregateMeta::AggregatePayload(payload) => {
+//                         if payload.payload.len() == 0 {
+//                             continue;
+//                         }
+//
+//                         let partitioned = self.partition_payload(payload, max_partitions);
+//                         for payload in partitioned {
+//                             aligned_partitions.add_data(
+//                                 AggregateMeta::AggregatePayload(payload),
+//                                 DataBlock::empty(),
+//                             );
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//
+//         Ok(aligned_partitions)
+//     }
+// }
 
 #[derive(Debug)]
 struct AlignedPartitions {
-    max_partition: usize,
     data: BTreeMap<isize, Vec<(AggregateMeta, DataBlock)>>,
 }
 
 impl AlignedPartitions {
+    pub fn create() -> AlignedPartitions {
+        AlignedPartitions {
+            data: BTreeMap::new(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
@@ -582,7 +684,6 @@ impl AlignedPartitions {
             }
         };
 
-        assert_eq!(max_partition, self.max_partition);
         match self.data.entry(partition) {
             std::collections::btree_map::Entry::Vacant(v) => {
                 v.insert(vec![(meta, block)]);
@@ -594,81 +695,67 @@ impl AlignedPartitions {
 
         (partition, max_partition, global_max_partition)
     }
-}
-
-#[derive(Debug)]
-enum Partitions {
-    Aligned(AlignedPartitions),
-    Unaligned(UnalignedPartitions),
-}
-
-impl Partitions {
-    pub fn create_unaligned(params: Arc<AggregatorParams>) -> Partitions {
-        Partitions::Unaligned(UnalignedPartitions::create(params))
-    }
-
-    pub fn is_empty(&self) -> bool {
-        match self {
-            Partitions::Aligned(v) => v.is_empty(),
-            Partitions::Unaligned(v) => v.is_empty(),
-        }
-    }
-
-    fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
-        match self {
-            Partitions::Aligned(v) => v.add_data(meta, block),
-            Partitions::Unaligned(v) => v.add_data(meta, block),
-        }
-    }
-
-    pub fn add_block(&mut self, mut block: DataBlock) -> Result<(isize, usize, usize)> {
-        let Some(meta) = block.take_meta() else {
-            return Err(ErrorCode::Internal(
-                "Internal, TransformPartitionBucket only recv DataBlock with meta.",
-            ));
-        };
-
-        let Some(meta) = AggregateMeta::downcast_from(meta) else {
-            return Err(ErrorCode::Internal(
-                "Internal, TransformPartitionBucket only recv AggregateMeta".to_string(),
-            ));
-        };
-
-        Ok(self.add_data(meta, block))
-    }
 
     pub fn min_partition(&self) -> Option<isize> {
-        match self {
-            Partitions::Unaligned(_) => unreachable!(),
-            Partitions::Aligned(v) => v.data.keys().min().cloned(),
-        }
+        self.data.keys().min().cloned()
     }
 
     pub fn take_partition(&mut self, partition: isize) -> Vec<(AggregateMeta, DataBlock)> {
-        match self {
-            Partitions::Unaligned(_) => unreachable!(),
-            Partitions::Aligned(v) => v.data.remove(&partition).unwrap_or_default(),
-        }
-    }
-
-    pub fn align(&mut self, max_partitions: usize) -> Result<()> {
-        let mut partitions = match self {
-            Partitions::Aligned(_) => {
-                return Ok(());
-            }
-            Partitions::Unaligned(v) => Self::create_unaligned(v.params.clone()),
-        };
-
-        std::mem::swap(self, &mut partitions);
-
-        *self = match partitions {
-            Partitions::Aligned(_) => unreachable!(),
-            Partitions::Unaligned(v) => Partitions::Aligned(v.align(max_partitions)?),
-        };
-
-        Ok(())
+        self.data.remove(&partition).unwrap_or_default()
     }
 }
+
+// #[derive(Debug)]
+// enum Partitions {
+//     Aligned(AlignedPartitions),
+//     Unaligned(UnalignedPartitions),
+// }
+//
+// impl Partitions {
+//     pub fn create_unaligned(params: Arc<AggregatorParams>) -> Partitions {
+//         Partitions::Unaligned(UnalignedPartitions::create(params))
+//     }
+//
+//     pub fn is_empty(&self) -> bool {
+//         match self {
+//             Partitions::Aligned(v) => v.is_empty(),
+//             Partitions::Unaligned(v) => v.is_empty(),
+//         }
+//     }
+//
+//     fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
+//         match self {
+//             Partitions::Aligned(v) => v.add_data(meta, block),
+//             Partitions::Unaligned(v) => v.add_data(meta, block),
+//         }
+//     }
+//
+//     pub fn min_partition(&self) -> Option<isize> {
+//         match self {
+//             Partitions::Unaligned(_) => unreachable!(),
+//             Partitions::Aligned(v) => v.data.keys().min().cloned(),
+//         }
+//     }
+//
+//
+//     pub fn align(&mut self, max_partitions: usize) -> Result<()> {
+//         let mut partitions = match self {
+//             Partitions::Aligned(_) => {
+//                 return Ok(());
+//             }
+//             Partitions::Unaligned(v) => Self::create_unaligned(v.params.clone()),
+//         };
+//
+//         std::mem::swap(self, &mut partitions);
+//
+//         *self = match partitions {
+//             Partitions::Aligned(_) => unreachable!(),
+//             Partitions::Unaligned(v) => Partitions::Aligned(v.align(max_partitions)?),
+//         };
+//
+//         Ok(())
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
