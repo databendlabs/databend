@@ -1061,11 +1061,41 @@ impl<'a> TypeChecker<'a> {
                 span, kind, expr, ..
             } => self.resolve_extract_expr(*span, kind, expr)?,
 
-            Expr::Interval { span, .. } => {
-                return Err(ErrorCode::SemanticError(
-                    "Unsupported interval expression yet".to_string(),
-                )
-                .set_span(*span));
+            Expr::Interval { span, expr, unit } => {
+                let ex = Expr::Cast {
+                    span: *span,
+                    expr: Box::new(expr.as_ref().clone()),
+                    target_type: TypeName::String,
+                    pg_style: false,
+                };
+                let ex = Expr::FunctionCall {
+                    span: *span,
+                    func: ASTFunctionCall {
+                        name: Identifier::from_name(None, "concat".to_string()),
+                        args: vec![ex, Expr::Literal {
+                            span: *span,
+                            value: Literal::String(format!(" {}", unit)),
+                        }],
+                        params: vec![],
+                        distinct: false,
+                        order_by: vec![],
+                        window: None,
+                        lambda: None,
+                    },
+                };
+                let ex = Expr::FunctionCall {
+                    span: *span,
+                    func: ASTFunctionCall {
+                        name: Identifier::from_name(None, "to_interval".to_string()),
+                        args: vec![ex],
+                        params: vec![],
+                        distinct: false,
+                        order_by: vec![],
+                        window: None,
+                        lambda: None,
+                    },
+                };
+                self.resolve(&ex)?
             }
             Expr::DateAdd {
                 span,
@@ -3065,6 +3095,7 @@ impl<'a> TypeChecker<'a> {
         arg: &Expr,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match interval_kind {
+            ASTIntervalKind::ISOYear => self.resolve_function(span, "to_iso_year", vec![], &[arg]),
             ASTIntervalKind::Year => self.resolve_function(span, "to_year", vec![], &[arg]),
             ASTIntervalKind::Quarter => self.resolve_function(span, "to_quarter", vec![], &[arg]),
             ASTIntervalKind::Month => self.resolve_function(span, "to_month", vec![], &[arg]),
@@ -3121,6 +3152,13 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_function(
                     span,
                     "to_start_of_year", vec![],
+                    &[date],
+                )
+            }
+            ASTIntervalKind::ISOYear => {
+                self.resolve_function(
+                    span,
+                    "to_start_of_iso_year", vec![],
                     &[date],
                 )
             }

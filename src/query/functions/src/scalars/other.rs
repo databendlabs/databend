@@ -495,18 +495,6 @@ pub fn compute_grouping(cols: &[usize], grouping_id: u32) -> u32 {
 }
 // this implementation comes from https://github.com/joshuaclayton/jaro_winkler
 pub(crate) mod jaro_winkler {
-    #![deny(missing_docs)]
-
-    //! `jaro_winkler` is a crate for calculating Jaro-Winkler distance of two strings.
-    //!
-    //! # Examples
-    //!
-    //! ```
-    //! assert_eq!(jaro_winkler("martha", "marhta"), 0.9611111111111111);
-    //! assert_eq!(jaro_winkler("", "words"), 0.0);
-    //! assert_eq!(jaro_winkler("same", "same"), 1.0);
-    //! ```
-
     enum DataWrapper {
         Vec(Vec<bool>),
         Bitwise(u128),
