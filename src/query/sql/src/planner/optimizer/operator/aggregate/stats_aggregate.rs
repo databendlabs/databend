@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::OptimizerContext;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -41,8 +42,11 @@ pub struct RuleStatsAggregateOptimizer {
 }
 
 impl RuleStatsAggregateOptimizer {
-    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
-        RuleStatsAggregateOptimizer { metadata, ctx }
+    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
+        RuleStatsAggregateOptimizer {
+            metadata: opt_ctx.get_metadata(),
+            ctx: opt_ctx.get_table_ctx(),
+        }
     }
 
     #[async_recursion::async_recursion(#[recursive::recursive])]

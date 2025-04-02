@@ -23,6 +23,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::OptimizerContext;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -40,10 +41,10 @@ pub struct CollectStatisticsOptimizer {
 }
 
 impl CollectStatisticsOptimizer {
-    pub fn new(table_ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
+    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
         CollectStatisticsOptimizer {
-            table_ctx,
-            metadata,
+            table_ctx: opt_ctx.get_table_ctx(),
+            metadata: opt_ctx.get_metadata(),
         }
     }
 

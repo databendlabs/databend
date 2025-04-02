@@ -35,6 +35,7 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::operator::FlattenInfo;
 use crate::optimizer::operator::SubqueryRewriter;
+use crate::optimizer::OptimizerContext;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
@@ -381,8 +382,8 @@ impl Binder {
         let mut is_lateral = false;
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
-            let mut decorrelator =
-                SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone(), Some(self.clone()));
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+            let mut decorrelator = SubqueryRewriter::new(opt_ctx, Some(self.clone()));
             right_child = decorrelator.flatten_plan(
                 &left_child,
                 &right_child,

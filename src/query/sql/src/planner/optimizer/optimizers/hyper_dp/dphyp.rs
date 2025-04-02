@@ -46,7 +46,7 @@ const RELATION_THRESHOLD: usize = 10;
 // The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
 // See the paper for more details.
 pub struct DPhpy {
-    opt_ctx: OptimizerContext,
+    opt_ctx: Arc<OptimizerContext>,
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
     table_index_map: HashMap<IndexType, IndexType>,
@@ -60,7 +60,7 @@ pub struct DPhpy {
 }
 
 impl DPhpy {
-    pub fn new(opt_ctx: OptimizerContext) -> Self {
+    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
         Self {
             opt_ctx,
             join_relations: vec![],
@@ -74,15 +74,15 @@ impl DPhpy {
     }
 
     fn table_ctx(&self) -> Arc<dyn TableContext> {
-        self.opt_ctx.table_ctx.clone()
+        self.opt_ctx.get_table_ctx()
     }
 
     fn metadata(&self) -> MetadataRef {
-        self.opt_ctx.metadata.clone()
+        self.opt_ctx.get_metadata()
     }
 
     fn sample_executor(&self) -> Option<Arc<dyn QueryExecutor>> {
-        self.opt_ctx.sample_executor.clone()
+        self.opt_ctx.get_sample_executor()
     }
 
     async fn new_children(&mut self, s_expr: &SExpr) -> Result<SExpr> {

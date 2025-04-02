@@ -25,13 +25,13 @@ use crate::optimizer::RuleID;
 /// A recursive optimizer that will apply the given rules recursively.
 /// It will keep applying the rules on the substituted expression
 /// until no more rules can be applied.
-pub struct RecursiveOptimizer<'a> {
-    ctx: &'a OptimizerContext,
+pub struct RecursiveOptimizer {
+    ctx: Arc<OptimizerContext>,
     rules: &'static [RuleID],
 }
 
-impl<'a> RecursiveOptimizer<'a> {
-    pub fn new(rules: &'static [RuleID], ctx: &'a OptimizerContext) -> Self {
+impl RecursiveOptimizer {
+    pub fn new(rules: &'static [RuleID], ctx: Arc<OptimizerContext>) -> Self {
         Self { ctx, rules }
     }
 
