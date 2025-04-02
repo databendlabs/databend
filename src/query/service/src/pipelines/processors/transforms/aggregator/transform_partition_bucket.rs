@@ -448,7 +448,7 @@ impl TransformPartitionDispatch {
                 payload,
                 partition: partition as isize,
                 max_partition: to,
-                global_max_partition: 0,
+                global_max_partition: from.global_max_partition,
             });
         }
 
