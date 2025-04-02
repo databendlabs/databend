@@ -248,7 +248,6 @@ impl AccumulatingTransform for TransformPartialAggregate {
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         self.execute_one_block(block)?;
-
         Ok(vec![])
     }
 
