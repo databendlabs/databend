@@ -1338,7 +1338,7 @@ impl DefaultSettings {
                     desc: "The batch size while deserializing fuse table with parquet storage format",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1_000_000)),
+                    range: Some(SettingRange::Numeric(1..=1_000_000)),
                 }),
             ]);
 
