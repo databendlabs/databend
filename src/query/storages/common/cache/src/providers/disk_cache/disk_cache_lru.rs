@@ -166,14 +166,14 @@ impl LruDiskCacheBuilder {
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
     ) -> Result<LruDiskCacheHolder> {
-        let external_cache = DiskCache::new(
+        let lru_disk_cache = DiskCache::new(
             path,
             disk_cache_bytes_size,
             disk_cache_reload_policy,
             sync_data,
         )
         .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
-        Ok(Arc::new(RwLock::new(external_cache)))
+        Ok(Arc::new(RwLock::new(lru_disk_cache)))
     }
 }
 

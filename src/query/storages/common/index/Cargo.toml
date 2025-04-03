@@ -16,7 +16,6 @@ databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
-
 anyerror = { workspace = true }
 bincode = { workspace = true, features = ["serde"] }
 cbordata = { workspace = true }

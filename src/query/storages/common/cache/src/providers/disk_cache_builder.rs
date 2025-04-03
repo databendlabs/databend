@@ -61,18 +61,19 @@ impl AsRef<str> for TableDataCacheKey {
     }
 }
 
+// TODO rename this, out of names now ... :(
 #[derive(Clone)]
 pub struct TableDataCache<T = LruDiskCacheHolder> {
     name: String,
-    external_cache: T,
+    lru_disk_cache: T,
     population_queue: crossbeam_channel::Sender<CacheItem>,
     _cache_populator: DiskCachePopulator,
 }
 
-pub struct TableDataCacheBuilder;
+pub struct DiskCacheBuilder;
 
-impl TableDataCacheBuilder {
-    pub fn new_table_data_disk_cache(
+impl DiskCacheBuilder {
+    pub fn try_build_disk_cache(
         name: String,
         path: &PathBuf,
         population_queue_size: u32,
@@ -90,7 +91,7 @@ impl TableDataCacheBuilder {
         let num_population_thread = 1;
         Ok(TableDataCache {
             name,
-            external_cache: disk_cache.clone(),
+            lru_disk_cache: disk_cache.clone(),
             population_queue: tx,
             _cache_populator: DiskCachePopulator::new(rx, disk_cache, num_population_thread)?,
         })
@@ -107,7 +108,7 @@ impl CacheAccessor for TableDataCache {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
         metrics_inc_cache_access_count(1, &self.name);
         let k = k.as_ref();
-        if let Some(item) = self.external_cache.get(k) {
+        if let Some(item) = self.lru_disk_cache.get(k) {
             Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, item.len());
             metrics_inc_cache_hit_count(1, &self.name);
             Some(item)
@@ -128,7 +129,7 @@ impl CacheAccessor for TableDataCache {
 
     fn insert(&self, k: String, v: Bytes) -> Arc<Bytes> {
         // check if already cached
-        if !self.external_cache.contains_key(&k) {
+        if !self.lru_disk_cache.contains_key(&k) {
             // populate the cache is necessary
             let msg = CacheItem {
                 key: k,
@@ -151,27 +152,27 @@ impl CacheAccessor for TableDataCache {
     }
 
     fn evict(&self, k: &str) -> bool {
-        self.external_cache.evict(k)
+        self.lru_disk_cache.evict(k)
     }
 
     fn contains_key(&self, k: &str) -> bool {
-        self.external_cache.contains_key(k)
+        self.lru_disk_cache.contains_key(k)
     }
 
     fn bytes_size(&self) -> u64 {
-        self.external_cache.bytes_size()
+        self.lru_disk_cache.bytes_size()
     }
 
     fn items_capacity(&self) -> u64 {
-        self.external_cache.items_capacity()
+        self.lru_disk_cache.items_capacity()
     }
 
     fn bytes_capacity(&self) -> u64 {
-        self.external_cache.bytes_capacity()
+        self.lru_disk_cache.bytes_capacity()
     }
 
     fn len(&self) -> usize {
-        self.external_cache.len()
+        self.lru_disk_cache.len()
     }
 }
 
