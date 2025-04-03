@@ -924,4 +924,8 @@ impl Settings {
     pub fn get_enable_use_vacuum2_to_purge_transient_table_data(&self) -> Result<bool> {
         Ok(self.try_get_u64("use_vacuum2_to_purge_transient_table_data")? == 1)
     }
+
+    pub fn get_fuse_parquet_read_batch_size(&self) -> Result<usize> {
+        Ok(self.try_get_u64("fuse_parquet_read_batch_size")? as usize)
+    }
 }
