@@ -13,10 +13,10 @@
 // limitations under the License.
 
 mod transform_deserializer;
-mod transform_spill_reader;
 
 pub use transform_deserializer::*;
-pub use transform_spill_reader::*;
+
+pub use crate::pipelines::processors::transforms::aggregator::transform_partition_restore::*;
 
 pub mod exchange_defines {
     use arrow_ipc::writer::IpcWriteOptions;

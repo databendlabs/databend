@@ -28,7 +28,6 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use opendal::Operator;
-use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
@@ -36,12 +35,11 @@ use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 
 type DeserializingMeta = (AggregateMeta, VecDeque<Vec<u8>>);
 
-pub struct TransformSpillReader {
+pub struct TransformPartitionRestore {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
     operator: Operator,
-    semaphore: Arc<Semaphore>,
     params: Arc<AggregatorParams>,
     output_data: Option<DataBlock>,
     reading_meta: Option<AggregateMeta>,
@@ -49,7 +47,7 @@ pub struct TransformSpillReader {
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformSpillReader {
+impl Processor for TransformPartitionRestore {
     fn name(&self) -> String {
         String::from("TransformSpillReader")
     }
@@ -132,19 +130,12 @@ impl Processor for TransformSpillReader {
         if let Some(block_meta) = self.reading_meta.take() {
             match &block_meta {
                 AggregateMeta::SpilledPayload(payload) => {
-                    let _guard = self.semaphore.acquire().await;
                     let data = self
                         .operator
                         .read_with(&payload.location)
                         .range(payload.data_range.clone())
                         .await?
                         .to_vec();
-
-                    // info!(
-                    //     "Read aggregate spill {} successfully, elapsed: {:?}",
-                    //     &payload.location,
-                    //     instant.elapsed()
-                    // );
 
                     self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
                 }
@@ -156,19 +147,17 @@ impl Processor for TransformSpillReader {
     }
 }
 
-impl TransformSpillReader {
+impl TransformPartitionRestore {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
-        semaphore: Arc<Semaphore>,
         params: Arc<AggregatorParams>,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(TransformSpillReader {
+        Ok(ProcessorPtr::create(Box::new(TransformPartitionRestore {
             input,
             output,
             operator,
-            semaphore,
             params,
             output_data: None,
             reading_meta: None,

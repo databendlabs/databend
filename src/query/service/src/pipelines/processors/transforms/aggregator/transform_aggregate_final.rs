@@ -39,6 +39,9 @@ pub struct TransformFinalAggregate {
     flush_state: PayloadFlushState,
     hash_table: AggregateHashTable,
     has_output: bool,
+
+    totals_upstream: usize,
+    recv_final_payload: usize,
 }
 
 impl AccumulatingTransform for TransformFinalAggregate {
@@ -60,6 +63,7 @@ impl AccumulatingTransform for TransformFinalAggregate {
 
                 if !data.is_empty() {
                     let payload = self.deserialize_flight(data)?;
+
                     self.hash_table
                         .combine_payload(&payload, &mut self.flush_state)?;
                 }
@@ -72,8 +76,16 @@ impl AccumulatingTransform for TransformFinalAggregate {
                         .combine_payload(&payload.payload, &mut self.flush_state)?;
                 }
             }
-            AggregateMeta::FinalPartition => {
+            AggregateMeta::FinalPartition(_) => {
+                self.recv_final_payload += 1;
+
                 if self.hash_table.len() == 0 {
+                    return Ok(vec![]);
+                }
+
+                // Due to the local shuffle, we will receive the same number of final partitions as the upstream.
+                // We must wait for all final partitions to arrive before we can flush out the results.
+                if self.recv_final_payload % self.totals_upstream != 0 {
                     return Ok(vec![]);
                 }
 
@@ -115,6 +127,7 @@ impl AccumulatingTransform for TransformFinalAggregate {
 
 impl TransformFinalAggregate {
     pub fn try_create(
+        totals_upstream: usize,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
@@ -136,6 +149,8 @@ impl TransformFinalAggregate {
                 hash_table,
                 flush_state: PayloadFlushState::default(),
                 has_output: false,
+                totals_upstream,
+                recv_final_payload: 0,
             },
         ))
     }
