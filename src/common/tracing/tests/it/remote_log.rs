@@ -21,6 +21,7 @@ use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_tracing::convert_to_batch;
 use databend_common_tracing::Config;
+use databend_common_tracing::LogMessage;
 use databend_common_tracing::RemoteLog;
 use databend_common_tracing::RemoteLogBuffer;
 use databend_common_tracing::RemoteLogElement;
@@ -96,7 +97,9 @@ async fn test_buffer_flush_with_buffer_limit() -> Result<()> {
         buffer.log(get_remote_log_elements())?
     }
     let res = rx.recv().await.unwrap();
-    assert_eq!(res.len(), 5000);
+    if let LogMessage::Flush(elements) = res {
+        assert_eq!(elements.len(), 5000);
+    }
     Ok(())
 }
 
@@ -111,7 +114,9 @@ async fn test_buffer_flush_with_buffer_interval() -> Result<()> {
     tokio::time::sleep(Duration::from_secs(1)).await;
     buffer.log(get_remote_log_elements())?;
     let res = rx.recv().await.unwrap();
-    assert_eq!(res.len(), 6);
+    if let LogMessage::Flush(elements) = res {
+        assert_eq!(elements.len(), 6);
+    }
     Ok(())
 }
 
@@ -126,7 +131,9 @@ async fn test_buffer_flush_with_force_collect() -> Result<()> {
     }
     buffer.collect()?;
     let res = rx.recv().await.unwrap();
-    assert_eq!(res.len(), 500);
+    if let LogMessage::Flush(elements) = res {
+        assert_eq!(elements.len(), 500);
+    }
     Ok(())
 }
 
