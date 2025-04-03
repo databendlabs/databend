@@ -175,9 +175,7 @@ impl RemoteLog {
         }
 
         let op = GlobalLogger::instance().get_operator().await;
-        if op.is_none() {
-            return None;
-        }
+        op.as_ref()?;
 
         let path = format!(
             "stage/internal/{}/{}.parquet",
