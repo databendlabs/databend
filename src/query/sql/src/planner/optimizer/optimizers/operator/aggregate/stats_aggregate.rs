@@ -50,10 +50,10 @@ impl RuleStatsAggregateOptimizer {
     }
 
     #[async_recursion::async_recursion(#[recursive::recursive])]
-    pub async fn run(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub async fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
-            let child = self.run(child).await?;
+            let child = self.optimize(child).await?;
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);

@@ -72,7 +72,7 @@ pub async fn filter_selectivity_sample(
 
             let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
             let collect_statistics_optimizer = CollectStatisticsOptimizer::new(opt_ctx);
-            new_s_expr = collect_statistics_optimizer.run(&new_s_expr).await?;
+            new_s_expr = collect_statistics_optimizer.optimize(&new_s_expr).await?;
         }
 
         new_s_expr = SExpr::create_unary(

@@ -393,8 +393,8 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
         query.clear_applied_rules();
 
         let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
-        let result =
-            RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::TryApplyAggIndex]).run(&query)?;
+        let result = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::TryApplyAggIndex])
+            .optimize(&query)?;
         let agg_index = find_push_down_index_info(&result)?;
         assert_eq!(
             suite.is_matched,
@@ -449,7 +449,7 @@ async fn plan_sql(
     {
         let s_expr = if optimize {
             let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
-            RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).run(&s_expr)?
+            RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize(&s_expr)?
         } else {
             *s_expr
         };

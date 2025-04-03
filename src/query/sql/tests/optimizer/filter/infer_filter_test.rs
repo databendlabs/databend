@@ -206,7 +206,7 @@ fn count_predicates(
 /// Runs the optimizer with the given predicates and returns the result
 fn run_optimizer(predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
     let optimizer = InferFilterOptimizer::new(None);
-    optimizer.run(predicates)
+    optimizer.optimize(predicates)
 }
 
 // ===== Test Cases for Equal Operator =====

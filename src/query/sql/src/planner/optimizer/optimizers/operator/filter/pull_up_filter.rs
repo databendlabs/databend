@@ -50,7 +50,7 @@ impl PullUpFilterOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn run(mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize(mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = self.pull_up(s_expr)?;
         s_expr = self.finish(s_expr)?;
         Ok(s_expr)
@@ -60,8 +60,8 @@ impl PullUpFilterOptimizer {
         if self.predicates.is_empty() {
             Ok(s_expr)
         } else {
-            let predicates = InferFilterOptimizer::new(None).run(self.predicates)?;
-            let predicates = NormalizeDisjunctiveFilterOptimizer::new().run(predicates)?;
+            let predicates = InferFilterOptimizer::new(None).optimize(self.predicates)?;
+            let predicates = NormalizeDisjunctiveFilterOptimizer::new().optimize(predicates)?;
             let filter = Filter { predicates };
             Ok(SExpr::create_unary(
                 Arc::new(filter.into()),
@@ -157,7 +157,7 @@ impl PullUpFilterOptimizer {
     pub fn pull_up_others(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
-            let child = PullUpFilterOptimizer::new(self.opt_ctx.clone()).run(child)?;
+            let child = PullUpFilterOptimizer::new(self.opt_ctx.clone()).optimize(child)?;
             children.push(Arc::new(child));
         }
         Ok(s_expr.replace_children(children))

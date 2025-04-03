@@ -99,7 +99,7 @@ impl SubqueryRewriter {
     ///
     /// More information can be found in the paper: Unnesting Arbitrary Queries
     #[recursive::recursive]
-    pub fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         // If there is no subquery, return directly
         if !s_expr.contain_subquery() {
             return Ok(s_expr.clone());
@@ -107,7 +107,7 @@ impl SubqueryRewriter {
 
         match s_expr.plan().clone() {
             RelOperator::EvalScalar(mut plan) => {
-                let mut input = self.rewrite(s_expr.child(0)?)?;
+                let mut input = self.optimize(s_expr.child(0)?)?;
 
                 for item in plan.items.iter_mut() {
                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
@@ -118,7 +118,7 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
             }
             RelOperator::Filter(mut plan) => {
-                let mut input = self.rewrite(s_expr.child(0)?)?;
+                let mut input = self.optimize(s_expr.child(0)?)?;
                 for pred in plan.predicates.iter_mut() {
                     let res = self.try_rewrite_subquery(pred, &input, true)?;
                     input = res.1;
@@ -128,7 +128,7 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
             }
             RelOperator::ProjectSet(mut plan) => {
-                let mut input = self.rewrite(s_expr.child(0)?)?;
+                let mut input = self.optimize(s_expr.child(0)?)?;
                 for item in plan.srfs.iter_mut() {
                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
                     input = res.1;
@@ -138,7 +138,7 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
             }
             RelOperator::Aggregate(mut plan) => {
-                let mut input = self.rewrite(s_expr.child(0)?)?;
+                let mut input = self.optimize(s_expr.child(0)?)?;
 
                 for item in plan.group_items.iter_mut() {
                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
@@ -156,7 +156,7 @@ impl SubqueryRewriter {
             }
 
             RelOperator::Window(mut plan) => {
-                let mut input = self.rewrite(s_expr.child(0)?)?;
+                let mut input = self.optimize(s_expr.child(0)?)?;
 
                 for item in plan.partition_by.iter_mut() {
                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
@@ -183,7 +183,7 @@ impl SubqueryRewriter {
             }
 
             RelOperator::Sort(mut sort) => {
-                let mut input = self.rewrite(s_expr.child(0)?)?;
+                let mut input = self.optimize(s_expr.child(0)?)?;
 
                 if let Some(window) = &mut sort.window_partition {
                     for item in window.partition_by.iter_mut() {
@@ -198,14 +198,14 @@ impl SubqueryRewriter {
 
             RelOperator::Join(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
                 Arc::new(s_expr.plan().clone()),
-                Arc::new(self.rewrite(s_expr.child(0)?)?),
-                Arc::new(self.rewrite(s_expr.child(1)?)?),
+                Arc::new(self.optimize(s_expr.child(0)?)?),
+                Arc::new(self.optimize(s_expr.child(1)?)?),
             )),
 
             RelOperator::Limit(_) | RelOperator::Udf(_) | RelOperator::AsyncFunction(_) => {
                 Ok(SExpr::create_unary(
                     Arc::new(s_expr.plan().clone()),
-                    Arc::new(self.rewrite(s_expr.child(0)?)?),
+                    Arc::new(self.optimize(s_expr.child(0)?)?),
                 ))
             }
 
@@ -273,7 +273,7 @@ impl SubqueryRewriter {
             ScalarExpr::SubqueryExpr(subquery) => {
                 // Rewrite subquery recursively
                 let mut subquery = subquery.clone();
-                subquery.subquery = Box::new(self.rewrite(&subquery.subquery)?);
+                subquery.subquery = Box::new(self.optimize(&subquery.subquery)?);
 
                 if let Some(constant_subquery) = self.try_fold_constant_subquery(&subquery)? {
                     return Ok((constant_subquery, s_expr.clone()));

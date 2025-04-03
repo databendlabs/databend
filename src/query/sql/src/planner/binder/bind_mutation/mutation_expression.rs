@@ -313,7 +313,7 @@ impl MutationExpression {
                     let opt_ctx =
                         OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());
                     let mut rewriter = SubqueryRewriter::new(opt_ctx, None);
-                    let s_expr = rewriter.rewrite(&s_expr)?;
+                    let s_expr = rewriter.optimize(&s_expr)?;
 
                     Ok(MutationExpressionBindResult {
                         input: s_expr,

@@ -98,7 +98,7 @@ impl DeduplicateJoinConditionOptimizer {
         }
     }
 
-    pub fn run(mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize(mut self, s_expr: &SExpr) -> Result<SExpr> {
         self.deduplicate(s_expr)
     }
 

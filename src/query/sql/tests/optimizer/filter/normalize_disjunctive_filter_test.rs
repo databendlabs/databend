@@ -102,7 +102,7 @@ fn create_constant_bool(value: bool) -> ScalarExpr {
 /// Runs the NormalizeDisjunctiveFilterOptimizer on the given predicates
 fn run_optimizer(predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
     let optimizer = NormalizeDisjunctiveFilterOptimizer::new();
-    optimizer.run(predicates)
+    optimizer.optimize(predicates)
 }
 
 /// Converts a ScalarExpr to a readable string representation

@@ -48,7 +48,7 @@ impl CollectStatisticsOptimizer {
         }
     }
 
-    pub async fn run(mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub async fn optimize(mut self, s_expr: &SExpr) -> Result<SExpr> {
         self.collect(s_expr).await
     }
 

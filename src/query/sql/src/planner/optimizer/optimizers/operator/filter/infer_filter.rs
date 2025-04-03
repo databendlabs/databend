@@ -66,7 +66,7 @@ impl<'a> InferFilterOptimizer<'a> {
         }
     }
 
-    pub fn run(mut self, mut predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
+    pub fn optimize(mut self, mut predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
         // Remove trivial type cast.
         for predicate in predicates.iter_mut() {
             if let ScalarExpr::FunctionCall(func) = predicate {

@@ -37,7 +37,7 @@ impl RecursiveOptimizer {
 
     /// Run the optimizer on the given expression.
     #[recursive::recursive]
-    pub fn run(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         self.optimize_expression(s_expr)
     }
 
@@ -46,7 +46,7 @@ impl RecursiveOptimizer {
         let mut optimized_children = Vec::with_capacity(s_expr.arity());
         let mut children_changed = false;
         for expr in s_expr.children() {
-            let optimized_child = self.run(expr)?;
+            let optimized_child = self.optimize(expr)?;
             if !optimized_child.eq(expr) {
                 children_changed = true;
             }

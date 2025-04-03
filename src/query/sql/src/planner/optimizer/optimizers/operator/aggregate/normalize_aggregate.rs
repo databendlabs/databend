@@ -34,10 +34,10 @@ impl RuleNormalizeAggregateOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn run(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
-            let child = self.run(child)?;
+            let child = self.optimize(child)?;
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);

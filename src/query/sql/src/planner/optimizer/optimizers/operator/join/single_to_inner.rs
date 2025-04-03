@@ -28,7 +28,7 @@ impl SingleToInnerOptimizer {
         SingleToInnerOptimizer {}
     }
 
-    pub fn run(self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize(self, s_expr: &SExpr) -> Result<SExpr> {
         Self::single_to_inner(s_expr)
     }
 

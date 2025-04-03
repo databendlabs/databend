@@ -34,7 +34,7 @@ impl NormalizeDisjunctiveFilterOptimizer {
 }
 
 impl NormalizeDisjunctiveFilterOptimizer {
-    pub fn run(self, predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
+    pub fn optimize(self, predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
         let mut rewritten_predicates = Vec::with_capacity(predicates.len());
         for predicate in predicates.iter() {
             let predicate_scalar = predicate_scalar(predicate);
