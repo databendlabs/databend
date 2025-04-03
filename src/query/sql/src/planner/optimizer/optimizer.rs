@@ -273,9 +273,14 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
         // 9. Additional optimizers that don't affect join order
         .add(SingleToInnerOptimizer::new())
         .add(DeduplicateJoinConditionOptimizer::new())
-        // 10. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case
+        // 10. CommuteJoin optimizer
+        .add_if(
+            opt_ctx.get_enable_join_reorder(),
+            RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice()),
+        )
+        // 11. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case
         .add(CascadesOptimizer::new(opt_ctx.clone())?)
-        // 11. Eliminate unnecessary scalar calculations to clean up the final plan
+        // 12. Eliminate unnecessary scalar calculations to clean up the final plan
         .add_if(
             !opt_ctx.get_planning_agg_index(),
             RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
