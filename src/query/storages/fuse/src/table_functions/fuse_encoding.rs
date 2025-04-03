@@ -425,7 +425,7 @@ pub fn as_expr(
                 span: *span,
                 name: name.clone(),
                 args,
-                lambda_expr: *lambda_expr.clone(),
+                lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             }

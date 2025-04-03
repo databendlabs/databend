@@ -137,7 +137,7 @@ impl SelectExprBuilder {
                             .can_reorder(can_reorder)
                         }
                         "not" => {
-                            self.not_function = Some((id.clone(), function.clone()));
+                            self.not_function = Some((*id.clone(), function.clone()));
                             let result = self.build_select_expr(&args[0], not ^ true);
                             if result.can_push_down_not {
                                 result
@@ -255,7 +255,7 @@ impl SelectExprBuilder {
         let (id, function) = self.not_function.as_ref().unwrap();
         Expr::FunctionCall {
             span: None,
-            id: id.clone(),
+            id: Box::new(id.clone()),
             function: function.clone(),
             generics: vec![],
             args: vec![expr.clone()],

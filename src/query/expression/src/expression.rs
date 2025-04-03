@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fmt::Write;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -29,11 +30,21 @@ use crate::function::FunctionRegistry;
 use crate::types::DataType;
 use crate::values::Scalar;
 
-pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq + 'static {}
+pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq + 'static {
+    fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result;
+}
 
-impl ColumnIndex for usize {}
+impl ColumnIndex for usize {
+    fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result {
+        write!(f, "{self}")
+    }
+}
 
-impl ColumnIndex for String {}
+impl ColumnIndex for String {
+    fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result {
+        write!(f, "{self}")
+    }
+}
 
 /// An unchecked expression that is directly discarded from SQL or constructed by the planner.
 /// It can be type-checked and then converted to an evaluable [`Expr`].
@@ -68,7 +79,7 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
         span: Span,
         name: String,
         args: Vec<RawExpr<Index>>,
-        lambda_expr: RemoteExpr,
+        lambda_expr: Box<RemoteExpr>,
         lambda_display: String,
         return_type: DataType,
     },
@@ -104,7 +115,7 @@ pub enum Expr<Index: ColumnIndex = usize> {
     FunctionCall {
         #[educe(Hash(ignore))]
         span: Span,
-        id: FunctionID,
+        id: Box<FunctionID>,
         #[educe(Hash(ignore))]
         function: Arc<Function>,
         generics: Vec<DataType>,
@@ -116,7 +127,7 @@ pub enum Expr<Index: ColumnIndex = usize> {
         span: Span,
         name: String,
         args: Vec<Expr<Index>>,
-        lambda_expr: RemoteExpr,
+        lambda_expr: Box<RemoteExpr>,
         lambda_display: String,
         return_type: DataType,
     },
@@ -287,6 +298,153 @@ impl<Index: ColumnIndex> PartialEq for Expr<Index> {
     }
 }
 
+pub trait ExprVisitor<I: ColumnIndex>: Sized {
+    type Error = !;
+
+    fn enter_constant(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        debug_assert!(expr.is_constant());
+        Ok(None)
+    }
+
+    fn enter_column_ref(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        debug_assert!(expr.is_column_ref());
+        Ok(None)
+    }
+
+    fn enter_cast(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        Self::visit_cast(expr, self)
+    }
+
+    fn visit_cast<V>(expr: &Expr<I>, visitor: &mut V) -> Result<Option<Expr<I>>, Self::Error>
+    where
+        I: ColumnIndex,
+        V: ExprVisitor<I, Error = Self::Error>,
+    {
+        let Expr::Cast {
+            span,
+            is_try,
+            expr: inner,
+            dest_type,
+        } = expr
+        else {
+            unreachable!()
+        };
+        if let Some(inner) = visit_expr(inner, visitor)? {
+            Ok(Some(Expr::Cast {
+                span: *span,
+                is_try: *is_try,
+                expr: Box::new(inner.clone()),
+                dest_type: dest_type.clone(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn enter_function_call(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        Self::visit_function_call(expr, self)
+    }
+
+    fn visit_function_call<V>(
+        expr: &Expr<I>,
+        visitor: &mut V,
+    ) -> Result<Option<Expr<I>>, Self::Error>
+    where
+        V: ExprVisitor<I, Error = Self::Error>,
+    {
+        let Expr::FunctionCall {
+            span,
+            id,
+            function,
+            generics,
+            args,
+            return_type,
+        } = expr
+        else {
+            unreachable!()
+        };
+        let new_args = args
+            .iter()
+            .map(|arg| Ok((visit_expr(arg, visitor)?, arg)))
+            .collect::<Result<Vec<_>, _>>()?;
+        if new_args.iter().all(|(v, _)| v.is_none()) {
+            Ok(None)
+        } else {
+            Ok(Some(Expr::FunctionCall {
+                span: *span,
+                id: id.clone(),
+                function: function.clone(),
+                generics: generics.clone(),
+                args: new_args
+                    .into_iter()
+                    .map(|(new, old)| new.unwrap_or_else(|| old.clone()))
+                    .collect(),
+                return_type: return_type.clone(),
+            }))
+        }
+    }
+
+    fn enter_lambda_function_call(
+        &mut self,
+        expr: &Expr<I>,
+    ) -> Result<Option<Expr<I>>, Self::Error> {
+        Self::visit_lambda_function_call(expr, self)
+    }
+
+    fn visit_lambda_function_call<V>(
+        expr: &Expr<I>,
+        visitor: &mut V,
+    ) -> Result<Option<Expr<I>>, Self::Error>
+    where
+        V: ExprVisitor<I, Error = Self::Error>,
+    {
+        let Expr::LambdaFunctionCall {
+            span,
+            name,
+            args,
+            lambda_expr,
+            lambda_display,
+            return_type,
+        } = expr
+        else {
+            unreachable!()
+        };
+        let new_args = args
+            .iter()
+            .map(|arg| Ok((visit_expr(arg, visitor)?, arg)))
+            .collect::<Result<Vec<_>, _>>()?;
+        if new_args.iter().all(|(v, _)| v.is_none()) {
+            Ok(None)
+        } else {
+            Ok(Some(Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: new_args
+                    .into_iter()
+                    .map(|(new, old)| new.unwrap_or_else(|| old.clone()))
+                    .collect(),
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            }))
+        }
+    }
+}
+
+#[recursive::recursive]
+pub fn visit_expr<Index: ColumnIndex, V: ExprVisitor<Index>>(
+    expr: &Expr<Index>,
+    visitor: &mut V,
+) -> Result<Option<Expr<Index>>, V::Error> {
+    match expr {
+        Expr::Constant { .. } => visitor.enter_constant(expr),
+        Expr::ColumnRef { .. } => visitor.enter_column_ref(expr),
+        Expr::Cast { .. } => visitor.enter_cast(expr),
+        Expr::FunctionCall { .. } => visitor.enter_function_call(expr),
+        Expr::LambdaFunctionCall { .. } => visitor.enter_lambda_function_call(expr),
+    }
+}
+
 /// Serializable expression used to share executable expression between nodes.
 ///
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
@@ -319,7 +477,7 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
     FunctionCall {
         #[educe(Hash(ignore), PartialEq(ignore))]
         span: Span,
-        id: FunctionID,
+        id: Box<FunctionID>,
         generics: Vec<DataType>,
         args: Vec<RemoteExpr<Index>>,
         return_type: DataType,
@@ -451,24 +609,20 @@ impl<Index: ColumnIndex> Expr<Index> {
     }
 
     pub fn column_refs(&self) -> HashMap<Index, DataType> {
-        #[recursive::recursive]
-        fn walk<Index: ColumnIndex>(expr: &Expr<Index>, buf: &mut HashMap<Index, DataType>) {
-            match expr {
-                Expr::ColumnRef { id, data_type, .. } => {
-                    buf.insert(id.clone(), data_type.clone());
-                }
-                Expr::Cast { expr, .. } => walk(expr, buf),
-                Expr::Constant { .. } => (),
-                Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
-                Expr::LambdaFunctionCall { args, .. } => {
-                    args.iter().for_each(|expr| walk(expr, buf))
-                }
+        struct ColumnRef<I>(HashMap<I, DataType>);
+        impl<I: ColumnIndex> ExprVisitor<I> for ColumnRef<I> {
+            fn enter_column_ref(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+                let Expr::ColumnRef { id, data_type, .. } = expr else {
+                    unreachable!()
+                };
+                self.0.insert(id.clone(), data_type.clone());
+                Ok(None)
             }
         }
 
-        let mut buf = HashMap::new();
-        walk(self, &mut buf);
-        buf
+        let mut visitor = ColumnRef(HashMap::new());
+        visit_expr(self, &mut visitor).unwrap();
+        visitor.0
     }
 
     pub fn project_column_ref<ToIndex: ColumnIndex>(
@@ -541,84 +695,32 @@ impl<Index: ColumnIndex> Expr<Index> {
     }
 
     pub fn fill_const_column(&self, consts: &HashMap<Index, Scalar>) -> Expr<Index> {
-        match self {
-            Expr::Constant {
-                span,
-                scalar,
-                data_type,
-            } => Expr::Constant {
-                span: *span,
-                scalar: scalar.clone(),
-                data_type: data_type.clone(),
-            },
-            Expr::ColumnRef {
-                span,
-                id,
-                data_type,
-                display_name,
-            } => {
-                if let Some(v) = consts.get(id) {
-                    Expr::Constant {
-                        span: *span,
-                        scalar: v.clone(),
-                        data_type: data_type.clone(),
-                    }
-                } else {
-                    Expr::ColumnRef {
-                        span: *span,
-                        id: id.clone(),
-                        data_type: data_type.clone(),
-                        display_name: display_name.clone(),
-                    }
-                }
+        struct FillConst<'a, Index>(&'a HashMap<Index, Scalar>);
+        impl<Index: ColumnIndex> ExprVisitor<Index> for FillConst<'_, Index> {
+            fn enter_column_ref(
+                &mut self,
+                expr: &Expr<Index>,
+            ) -> Result<Option<Expr<Index>>, Self::Error> {
+                let Expr::ColumnRef {
+                    span,
+                    id,
+                    data_type,
+                    ..
+                } = expr
+                else {
+                    unreachable!()
+                };
+                Ok(self.0.get(id).map(|v| Expr::Constant {
+                    span: *span,
+                    scalar: v.clone(),
+                    data_type: data_type.clone(),
+                }))
             }
-            Expr::Cast {
-                span,
-                is_try,
-                expr,
-                dest_type,
-            } => Expr::Cast {
-                span: *span,
-                is_try: *is_try,
-                expr: Box::new(expr.fill_const_column(consts)),
-                dest_type: dest_type.clone(),
-            },
-            Expr::FunctionCall {
-                span,
-                id,
-                function,
-                generics,
-                args,
-                return_type,
-            } => Expr::FunctionCall {
-                span: *span,
-                id: id.clone(),
-                function: function.clone(),
-                generics: generics.clone(),
-                args: args
-                    .iter()
-                    .map(|expr| expr.fill_const_column(consts))
-                    .collect(),
-                return_type: return_type.clone(),
-            },
-            Expr::LambdaFunctionCall {
-                span,
-                name,
-                args,
-                lambda_expr,
-                lambda_display,
-                return_type,
-            } => Expr::LambdaFunctionCall {
-                span: *span,
-                name: name.clone(),
-                args: args
-                    .iter()
-                    .map(|expr| expr.fill_const_column(consts))
-                    .collect(),
-                lambda_expr: lambda_expr.clone(),
-                lambda_display: lambda_display.clone(),
-                return_type: return_type.clone(),
-            },
+        }
+
+        match visit_expr(self, &mut FillConst(consts)).unwrap() {
+            Some(expr) => expr,
+            None => self.clone(),
         }
     }
 
@@ -680,7 +782,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 span: *span,
                 name: name.clone(),
                 args: args.iter().map(Expr::as_remote_expr).collect(),
-                lambda_expr: Box::new(lambda_expr.clone()),
+                lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },
@@ -688,30 +790,92 @@ impl<Index: ColumnIndex> Expr<Index> {
     }
 
     pub fn is_deterministic(&self, registry: &FunctionRegistry) -> bool {
-        match self {
-            Expr::Constant { .. } | Expr::ColumnRef { .. } => true,
-            Expr::Cast { expr, .. } => expr.is_deterministic(registry),
-            Expr::FunctionCall { function, args, .. } => {
-                !registry
+        struct Deterministic<'a> {
+            non_deterministic: bool,
+            registry: &'a FunctionRegistry,
+        }
+
+        impl<I: ColumnIndex> ExprVisitor<I> for Deterministic<'_> {
+            fn enter_function_call(
+                &mut self,
+                expr: &Expr<I>,
+            ) -> Result<Option<Expr<I>>, Self::Error> {
+                if self.non_deterministic {
+                    return Ok(None);
+                }
+
+                let Expr::FunctionCall { function, .. } = expr else {
+                    unreachable!()
+                };
+
+                if self
+                    .registry
                     .get_property(&function.signature.name)
                     .unwrap()
                     .non_deterministic
-                    && args.iter().all(|arg| arg.is_deterministic(registry))
+                {
+                    self.non_deterministic = true;
+                    Ok(None)
+                } else {
+                    Self::visit_function_call(expr, self)
+                }
             }
-            Expr::LambdaFunctionCall { args, .. } => {
-                args.iter().all(|arg| arg.is_deterministic(registry))
+
+            fn enter_lambda_function_call(
+                &mut self,
+                expr: &Expr<I>,
+            ) -> Result<Option<Expr<I>>, Self::Error> {
+                if self.non_deterministic {
+                    Ok(None)
+                } else {
+                    Self::visit_lambda_function_call(expr, self)
+                }
             }
         }
+
+        let mut visitor = Deterministic {
+            non_deterministic: false,
+            registry,
+        };
+        visit_expr(self, &mut visitor).unwrap();
+        !visitor.non_deterministic
     }
 
     pub fn contains_column_ref(&self) -> bool {
-        match self {
-            Expr::ColumnRef { .. } => true,
-            Expr::Constant { .. } => false,
-            Expr::Cast { expr, .. } => expr.contains_column_ref(),
-            Expr::FunctionCall { args, .. } => args.iter().any(Expr::contains_column_ref),
-            Expr::LambdaFunctionCall { args, .. } => args.iter().any(Expr::contains_column_ref),
+        struct AnyColumnRef(bool);
+        impl<I: ColumnIndex> ExprVisitor<I> for AnyColumnRef {
+            fn enter_column_ref(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
+                debug_assert!(expr.is_column_ref());
+                self.0 = true;
+                Ok(None)
+            }
+
+            fn enter_function_call(
+                &mut self,
+                expr: &Expr<I>,
+            ) -> Result<Option<Expr<I>>, Self::Error> {
+                if self.0 {
+                    Ok(None)
+                } else {
+                    Self::visit_function_call(expr, self)
+                }
+            }
+
+            fn enter_lambda_function_call(
+                &mut self,
+                expr: &Expr<I>,
+            ) -> Result<Option<Expr<I>>, Self::Error> {
+                if self.0 {
+                    Ok(None)
+                } else {
+                    Self::visit_lambda_function_call(expr, self)
+                }
+            }
         }
+
+        let mut visitor = AnyColumnRef(false);
+        visit_expr(self, &mut visitor).unwrap();
+        visitor.0
     }
 }
 
@@ -777,7 +941,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 span: *span,
                 name: name.clone(),
                 args: args.iter().map(|arg| arg.as_expr(fn_registry)).collect(),
-                lambda_expr: *lambda_expr.clone(),
+                lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },

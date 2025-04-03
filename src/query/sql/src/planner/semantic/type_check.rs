@@ -229,15 +229,6 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    #[allow(dead_code)]
-    fn post_resolve(
-        &mut self,
-        scalar: &ScalarExpr,
-        data_type: &DataType,
-    ) -> Result<(ScalarExpr, DataType)> {
-        Ok((scalar.clone(), data_type.clone()))
-    }
-
     #[recursive::recursive]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
@@ -942,7 +933,7 @@ impl<'a> TypeChecker<'a> {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
                     for param in params {
-                        let box (scalar, _data_type) = self.resolve(param)?;
+                        let box (scalar, _) = self.resolve(param)?;
                         let expr = scalar.as_expr()?;
                         let (expr, _) =
                             ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
@@ -2903,6 +2894,7 @@ impl<'a> TypeChecker<'a> {
         };
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        let expr = type_check::rewrite_function_to_cast(expr);
 
         // Run constant folding for arguments of the scalar function.
         // This will be helpful to simplify some constant expressions, especially
@@ -2936,6 +2928,26 @@ impl<'a> TypeChecker<'a> {
 
         if let Some(constant) = self.try_fold_constant(&expr, true) {
             return Ok(constant);
+        }
+
+        if let EExpr::Cast {
+            span,
+            is_try,
+            dest_type,
+            ..
+        } = expr
+        {
+            assert_eq!(folded_args.len(), 1);
+            return Ok(Box::new((
+                CastExpr {
+                    span,
+                    is_try,
+                    argument: Box::new(folded_args.pop().unwrap()),
+                    target_type: Box::new(dest_type.clone()),
+                }
+                .into(),
+                dest_type,
+            )));
         }
 
         // reorder
