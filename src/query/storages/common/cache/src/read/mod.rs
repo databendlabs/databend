@@ -20,5 +20,6 @@ pub use cached_reader::CachedReader;
 pub use loader::CacheKey;
 pub use loader::LoadParams;
 pub use loader::Loader;
+pub use readers::HybridCacheReader;
 pub use readers::InMemoryCacheReader;
 pub use readers::InMemoryItemCacheReader;

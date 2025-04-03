@@ -107,6 +107,7 @@ mod impls {
             v
         }
 
+        // TODO rename this
         fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
             let Some(cached_value) = self.get(k) else {
                 metrics_inc_cache_miss_bytes(len, &self.name);

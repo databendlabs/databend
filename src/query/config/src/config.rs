@@ -2929,7 +2929,18 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_meta_count: u64,
 
-    /// DEPRECATING, will be deprecated in the next prduction release.
+    /// Max bytes of cached bloom index meta data on disk. Default 1GB
+    /// Set it to 0 to disable it. It will NOT be enabled if
+    /// - table meta cache is disabled
+    /// - or bloom index meta is disabled
+    #[clap(
+        long = "disk-cache-table-bloom-index-meta-size",
+        value_name = "VALUE",
+        default_value = "1073741824"
+    )]
+    pub disk_cache_table_bloom_index_meta_size: u64,
+
+    /// DEPRECATING, will be deprecated in the next production release.
     ///
     /// Max number of cached bloom index filters. Set it to 0 to disable it.
     // One bloom index filter per column of data block being indexed will be generated if necessary.
@@ -3031,7 +3042,7 @@ pub struct CacheConfig {
     ///
     /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
     ///
-    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// Only if query nodes have plenty of unused memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
     #[clap(
         long = "cache-table-data-deserialized-data-bytes",
@@ -3044,7 +3055,7 @@ pub struct CacheConfig {
     ///
     /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
     ///
-    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// Only if query nodes have plenty of unused memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
     #[clap(
         long = "cache-table-data-deserialized-memory-ratio",
@@ -3278,6 +3289,8 @@ mod cache_config_converters {
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.try_into()?,
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
+                disk_cache_table_bloom_index_meta_size: value
+                    .disk_cache_table_bloom_index_meta_size,
             })
         }
     }
@@ -3292,6 +3305,8 @@ mod cache_config_converters {
                 block_meta_count: value.block_meta_count,
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
+                disk_cache_table_bloom_index_meta_size: value
+                    .disk_cache_table_bloom_index_meta_size,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
                 inverted_index_meta_count: value.inverted_index_meta_count,

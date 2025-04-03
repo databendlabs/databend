@@ -571,6 +571,9 @@ pub struct CacheConfig {
     /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
     pub table_bloom_index_meta_count: u64,
 
+    /// Max bytes of cached bloom index meta data on disk. Set it to 0 to disable it.
+    pub disk_cache_table_bloom_index_meta_size: u64,
+
     /// Max number of cached prune partitions objects. Set it to 0 to disable it.
     pub table_prune_partitions_count: u64,
 
@@ -725,6 +728,7 @@ impl Default for CacheConfig {
             data_cache_key_reload_policy: Default::default(),
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
+            disk_cache_table_bloom_index_meta_size: 1 * 1024 * 1024 * 1024,
         }
     }
 }

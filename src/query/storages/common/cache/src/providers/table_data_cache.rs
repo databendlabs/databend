@@ -27,7 +27,6 @@ use databend_common_metrics::cache::*;
 use log::error;
 use log::info;
 
-use crate::manager::DISK_TABLE_DATA_CACHE_NAME;
 use crate::providers::LruDiskCacheHolder;
 use crate::CacheAccessor;
 use crate::LruDiskCacheBuilder;
@@ -106,21 +105,21 @@ impl CacheAccessor for TableDataCache {
     }
 
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
-        metrics_inc_cache_access_count(1, DISK_TABLE_DATA_CACHE_NAME);
+        metrics_inc_cache_access_count(1, &self.name);
         let k = k.as_ref();
         if let Some(item) = self.external_cache.get(k) {
             Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, item.len());
-            metrics_inc_cache_hit_count(1, DISK_TABLE_DATA_CACHE_NAME);
+            metrics_inc_cache_hit_count(1, &self.name);
             Some(item)
         } else {
-            metrics_inc_cache_miss_count(1, DISK_TABLE_DATA_CACHE_NAME);
+            metrics_inc_cache_miss_count(1, &self.name);
             None
         }
     }
 
     fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
         let Some(cached_value) = self.get(k) else {
-            metrics_inc_cache_miss_bytes(len, DISK_TABLE_DATA_CACHE_NAME);
+            metrics_inc_cache_miss_bytes(len, &self.name);
             return None;
         };
 
@@ -137,11 +136,11 @@ impl CacheAccessor for TableDataCache {
             };
             match self.population_queue.try_send(msg) {
                 Ok(_) => {
-                    metrics_inc_cache_population_pending_count(1, DISK_TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(1, &self.name);
                 }
                 Err(TrySendError::Full(_)) => {
-                    metrics_inc_cache_population_pending_count(-1, DISK_TABLE_DATA_CACHE_NAME);
-                    metrics_inc_cache_population_overflow_count(1, DISK_TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(-1, &self.name);
+                    metrics_inc_cache_population_overflow_count(1, &self.name);
                 }
                 Err(TrySendError::Disconnected(_)) => {
                     error!("table data cache population thread is down");
@@ -192,10 +191,10 @@ impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<
                         }
                     }
                     self.cache.insert(key, value);
-                    metrics_inc_cache_population_pending_count(-1, DISK_TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(-1, self.cache.name());
                 }
-                Err(_) => {
-                    info!("table data cache worker shutdown");
+                Err(e) => {
+                    info!("table data cache worker shutdown, due to error: {:?}", e);
                     break;
                 }
             }
@@ -203,8 +202,7 @@ impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<
     }
 
     fn start(self: Arc<Self>) -> Result<JoinHandle<()>> {
-        let thread_builder =
-            std::thread::Builder::new().name("table-data-cache-population".to_owned());
+        let thread_builder = std::thread::Builder::new().name(self.cache.name().to_owned());
         thread_builder.spawn(move || self.populate()).map_err(|e| {
             ErrorCode::StorageOther(format!("spawn cache population worker thread failed, {e}"))
         })
