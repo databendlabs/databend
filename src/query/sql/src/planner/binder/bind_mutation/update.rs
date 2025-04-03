@@ -171,9 +171,23 @@ impl Binder {
             .iter()
             .flat_map(|eval| {
                 eval.update.iter().flat_map(|update| {
-                    update
-                        .values()
-                        .flat_map(|expr| expr.used_columns().into_iter())
+                    update.values().flat_map(|expr| {
+                        let processed_expr = expr
+                            .data_type()
+                            .map(|data_type| {
+                                if !data_type.is_nullable_or_null() {
+                                    expr.clone()
+                                        .unify_to_data_type(&data_type.nest_wrap_nullable())
+                                } else {
+                                    expr.clone()
+                                }
+                            })
+                            .unwrap_or_else(|_| {
+                                log::error!("Failed to get data type for expression");
+                                expr.clone()
+                            });
+                        processed_expr.used_columns().into_iter()
+                    })
                 })
             })
             .chain(mutation.required_columns.iter().copied())
