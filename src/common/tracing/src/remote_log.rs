@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -78,7 +80,7 @@ pub struct RemoteLogElement {
 pub struct LogBuffer {
     queue: ConcurrentQueue<RemoteLogElement>,
     last_collect: AtomicU64,
-    sender: Sender<Vec<RemoteLogElement>>,
+    sender: Sender<LogMessage>,
     /// interval is in microseconds
     interval: u64,
 }
@@ -89,13 +91,14 @@ pub struct RemoteLogGuard {
     buffer: Arc<LogBuffer>,
 }
 
+enum LogMessage {
+    Flush(Vec<RemoteLogElement>),
+    ForceFlush(Vec<RemoteLogElement>, mpsc::Sender<Result<()>>),
+}
+
 impl Drop for RemoteLogGuard {
     fn drop(&mut self) {
-        // buffer collect will send all logs and trigger the log flush
-        if self.buffer.collect().is_ok() {
-            // wait for the log to be flushed
-            std::thread::sleep(Duration::from_secs(3));
-        }
+        self.buffer.force_collect();
     }
 }
 
@@ -127,31 +130,62 @@ impl RemoteLog {
         Ok((remote_log, Box::new(guard)))
     }
 
-    pub async fn work(receiver: Receiver<Vec<RemoteLogElement>>, stage_name: &str) {
+    pub async fn work(receiver: Receiver<LogMessage>, stage_name: &str) {
         while let Ok(log_element) = receiver.recv().await {
-            Self::flush(log_element, stage_name).await;
+            match log_element {
+                LogMessage::Flush(flush_buffer) => {
+                    Self::flush_without_wait(flush_buffer, stage_name).await;
+                }
+                LogMessage::ForceFlush(flush_buffer, sender) => {
+                    let result = Self::flush_and_wait(flush_buffer, stage_name).await;
+                    let _ = sender.send(result);
+                }
+            }
         }
         let _ = receiver.close();
     }
 
-    pub async fn flush(flush_buffer: Vec<RemoteLogElement>, stage_name: &str) {
-        if flush_buffer.is_empty() {
-            return;
+    pub async fn flush_without_wait(flush_buffer: Vec<RemoteLogElement>, stage_name: &str) {
+        if let Some((op, path)) = Self::flush_operation(&flush_buffer, stage_name).await {
+            let path_clone = path.clone();
+            spawn(async move {
+                if let Err(e) = Self::do_flush(op, flush_buffer, &path_clone).await {
+                    eprintln!("Failed to flush logs: {:?}", e);
+                }
+            });
         }
+    }
+
+    pub async fn flush_and_wait(
+        flush_buffer: Vec<RemoteLogElement>,
+        stage_name: &str,
+    ) -> Result<()> {
+        match Self::flush_operation(&flush_buffer, stage_name).await {
+            Some((op, path)) => Self::do_flush(op, flush_buffer, &path).await,
+            None => Ok(()),
+        }
+    }
+
+    async fn flush_operation(
+        flush_buffer: &[RemoteLogElement],
+        stage_name: &str,
+    ) -> Option<(Operator, String)> {
+        if flush_buffer.is_empty() {
+            return None;
+        }
+
         let op = GlobalLogger::instance().get_operator().await;
         if op.is_none() {
-            return;
+            return None;
         }
+
         let path = format!(
             "stage/internal/{}/{}.parquet",
             stage_name,
             uuid::Uuid::new_v4()
         );
-        spawn(async move {
-            if let Err(e) = Self::do_flush(op.unwrap(), flush_buffer, &path).await {
-                eprintln!("Failed to flush logs: {:?}", e);
-            }
-        });
+
+        Some((op.unwrap(), path))
     }
 
     pub async fn do_flush(
@@ -221,12 +255,16 @@ impl Append for RemoteLog {
 
         Ok(())
     }
+
+    fn flush(&self) {
+        self.buffer.force_collect();
+    }
 }
 
 impl LogBuffer {
     const MAX_BUFFER_SIZE: usize = 5000;
 
-    pub fn new(sender: Sender<Vec<RemoteLogElement>>, interval: u64) -> Self {
+    pub fn new(sender: Sender<LogMessage>, interval: u64) -> Self {
         Self {
             queue: ConcurrentQueue::unbounded(),
             last_collect: AtomicU64::new(chrono::Local::now().timestamp_micros() as u64),
@@ -271,9 +309,23 @@ impl LogBuffer {
 
     pub fn collect(&self) -> anyhow::Result<()> {
         self.sender
-            .send_blocking(Vec::from_iter(self.queue.try_iter()))
+            .send_blocking(LogMessage::Flush(Vec::from_iter(self.queue.try_iter())))
             .map_err(|e| anyhow::anyhow!("Failed to send log element: {}", e))?;
         Ok(())
+    }
+
+    pub fn force_collect(&self) {
+        let (tx, rx) = channel();
+        if self
+            .sender
+            .send_blocking(LogMessage::ForceFlush(
+                Vec::from_iter(self.queue.try_iter()),
+                tx,
+            ))
+            .is_ok()
+        {
+            let _ = rx.recv_timeout(Duration::from_secs(3));
+        }
     }
 }
 
