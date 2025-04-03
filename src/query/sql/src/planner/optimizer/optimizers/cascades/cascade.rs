@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
+use log::info;
 
 use super::explore_rules::get_explore_rule_set;
 use crate::optimizer::cost::CostModel;
@@ -29,9 +30,11 @@ use crate::optimizer::optimizers::cascades::OptimizeGroupTask;
 use crate::optimizer::optimizers::cascades::Scheduler;
 use crate::optimizer::optimizers::cascades::Task;
 use crate::optimizer::optimizers::cascades::DEFAULT_TASK_LIMIT;
-use crate::optimizer::rule::TransformResult;
+use crate::optimizer::optimizers::distributed::DistributedOptimizer;
+use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
+use crate::optimizer::optimizers::rule::RuleSet;
+use crate::optimizer::optimizers::rule::TransformResult;
 use crate::optimizer::OptimizerContext;
-use crate::optimizer::RuleSet;
 use crate::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
@@ -84,7 +87,47 @@ impl CascadesOptimizer {
         Ok(())
     }
 
+    #[recursive::recursive]
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        let opt_ctx = self.opt_ctx.clone();
+
+        // Try to optimize using the internal optimizer
+        let result = self.optimize_internal(s_expr.clone());
+
+        // Process different cases based on the result
+        let optimized_expr = match result {
+            Ok(expr) => {
+                // After successful optimization, apply sort and limit push down if distributed optimization is enabled
+                if opt_ctx.get_enable_distributed_optimization() {
+                    let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
+                    sort_and_limit_optimizer.optimize(&expr)?
+                } else {
+                    expr
+                }
+            }
+
+            Err(e) => {
+                // Optimization failed, log the error and fall back to heuristic optimizer
+                info!(
+                    "CascadesOptimizer failed, fallback to heuristic optimizer: {}",
+                    e
+                );
+
+                // If distributed optimization is enabled, use the distributed optimizer
+                if opt_ctx.get_enable_distributed_optimization() {
+                    let distributed_optimizer = DistributedOptimizer::new(opt_ctx);
+                    distributed_optimizer.optimize(&s_expr)?
+                } else {
+                    // Otherwise return the original expression
+                    s_expr
+                }
+            }
+        };
+
+        Ok(optimized_expr)
+    }
+
+    fn optimize_internal(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.init(s_expr)?;
 
         debug!("Init memo:\n{}", self.memo.display()?);
