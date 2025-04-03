@@ -1605,7 +1605,7 @@ evaluation (internal):
 
 ast            : to_string(a)
 raw expr       : to_string(a::Int8)
-checked expr   : to_string<Int8>(a)
+checked expr   : CAST<Int8>(a AS String)
 evaluation:
 +--------+---------+--------+
 |        | a       | Output |
@@ -1627,7 +1627,7 @@ evaluation (internal):
 
 ast            : to_string(a2)
 raw expr       : to_string(a2::UInt8 NULL)
-checked expr   : to_string<UInt8 NULL>(a2)
+checked expr   : CAST<UInt8 NULL>(a2 AS String NULL)
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
@@ -1649,7 +1649,7 @@ evaluation (internal):
 
 ast            : to_string(b)
 raw expr       : to_string(b::Int16)
-checked expr   : to_string<Int16>(b)
+checked expr   : CAST<Int16>(b AS String)
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -1671,7 +1671,7 @@ evaluation (internal):
 
 ast            : to_string(c)
 raw expr       : to_string(c::UInt32)
-checked expr   : to_string<UInt32>(c)
+checked expr   : CAST<UInt32>(c AS String)
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
@@ -1693,7 +1693,7 @@ evaluation (internal):
 
 ast            : to_string(d)
 raw expr       : to_string(d::Float64)
-checked expr   : to_string<Float64>(d)
+checked expr   : CAST<Float64>(d AS String)
 evaluation:
 +--------+------------+--------+
 |        | d          | Output |
@@ -1715,7 +1715,7 @@ evaluation (internal):
 
 ast            : to_string(d2)
 raw expr       : to_string(d2::UInt8 NULL)
-checked expr   : to_string<UInt8 NULL>(d2)
+checked expr   : CAST<UInt8 NULL>(d2 AS String NULL)
 evaluation:
 +--------+------------------+-----------------+
 |        | d2               | Output          |
@@ -1737,7 +1737,7 @@ evaluation (internal):
 
 ast            : to_string(e)
 raw expr       : to_string(e::Decimal(10, 1))
-checked expr   : to_string<Decimal(10, 1)>(e)
+checked expr   : CAST<Decimal(10, 1)>(e AS String)
 evaluation:
 +--------+----------------+---------+
 |        | e              | Output  |
@@ -1759,7 +1759,7 @@ evaluation (internal):
 
 ast            : to_string(f)
 raw expr       : to_string(f::Decimal(76, 2))
-checked expr   : to_string<Decimal(76, 2)>(f)
+checked expr   : CAST<Decimal(76, 2)>(f AS String)
 evaluation:
 +--------+----------------+---------+
 |        | f              | Output  |

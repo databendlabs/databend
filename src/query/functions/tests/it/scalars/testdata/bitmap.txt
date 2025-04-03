@@ -49,7 +49,7 @@ evaluation (internal):
 
 ast            : to_bitmap('0, 1, 2')
 raw expr       : to_bitmap('0, 1, 2')
-checked expr   : to_bitmap<String>("0, 1, 2")
+checked expr   : CAST<String>("0, 1, 2" AS Bitmap)
 optimized expr : RoaringTreemap<[0, 1, 2]>
 output type    : Bitmap
 output domain  : Undefined
@@ -58,7 +58,7 @@ output         : '0,1,2'
 
 ast            : to_bitmap(1024)
 raw expr       : to_bitmap(1024)
-checked expr   : to_bitmap<UInt64>(CAST<UInt16>(1024_u16 AS UInt64))
+checked expr   : CAST<UInt64>(CAST<UInt16>(1024_u16 AS UInt64) AS Bitmap)
 optimized expr : RoaringTreemap<[1024]>
 output type    : Bitmap
 output domain  : Undefined

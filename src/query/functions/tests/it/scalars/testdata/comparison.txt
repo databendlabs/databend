@@ -149,7 +149,7 @@ output         : false
 
 ast            : to_interval('1 hour')=to_interval('3600 seconds')
 raw expr       : eq(to_interval('1 hour'), to_interval('3600 seconds'))
-checked expr   : eq<Interval, Interval>(to_interval<String>("1 hour"), to_interval<String>("3600 seconds"))
+checked expr   : eq<Interval, Interval>(CAST<String>("1 hour" AS Interval), CAST<String>("3600 seconds" AS Interval))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -158,7 +158,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)=to_timestamp(-100)
 raw expr       : eq(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : eq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)))
+checked expr   : eq<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -383,7 +383,7 @@ output         : true
 
 ast            : to_interval('1 hour')!=to_interval('3600 seconds')
 raw expr       : noteq(to_interval('1 hour'), to_interval('3600 seconds'))
-checked expr   : noteq<Interval, Interval>(to_interval<String>("1 hour"), to_interval<String>("3600 seconds"))
+checked expr   : noteq<Interval, Interval>(CAST<String>("1 hour" AS Interval), CAST<String>("3600 seconds" AS Interval))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -392,7 +392,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)!=to_timestamp(-100)
 raw expr       : noteq(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : noteq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)))
+checked expr   : noteq<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -557,7 +557,7 @@ output         : true
 
 ast            : to_interval('29 days')<to_interval('1 month')
 raw expr       : lt(to_interval('29 days'), to_interval('1 month'))
-checked expr   : lt<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
+checked expr   : lt<Interval, Interval>(CAST<String>("29 days" AS Interval), CAST<String>("1 month" AS Interval))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -566,7 +566,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)<to_timestamp(-100)
 raw expr       : lt(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : lt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)))
+checked expr   : lt<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -746,7 +746,7 @@ output         : true
 
 ast            : to_interval('29 days')<=to_interval('1 month')
 raw expr       : lte(to_interval('29 days'), to_interval('1 month'))
-checked expr   : lte<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
+checked expr   : lte<Interval, Interval>(CAST<String>("29 days" AS Interval), CAST<String>("1 month" AS Interval))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -755,7 +755,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-100)
 raw expr       : lte(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)))
+checked expr   : lte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -764,7 +764,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-315360000000000)
 raw expr       : lte(to_timestamp(minus(315360000000000)), to_timestamp(minus(315360000000000)))
-checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+checked expr   : lte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -918,7 +918,7 @@ output         : false
 
 ast            : to_interval('29 days')>to_interval('1 month')
 raw expr       : gt(to_interval('29 days'), to_interval('1 month'))
-checked expr   : gt<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
+checked expr   : gt<Interval, Interval>(CAST<String>("29 days" AS Interval), CAST<String>("1 month" AS Interval))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -927,7 +927,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)>to_timestamp(-100)
 raw expr       : gt(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)))
+checked expr   : gt<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -936,7 +936,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)>to_timestamp(-315360000000000)
 raw expr       : gt(to_timestamp(minus(315360000000000)), to_timestamp(minus(315360000000000)))
-checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+checked expr   : gt<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1125,7 +1125,7 @@ output         : false
 
 ast            : to_interval('29 days')>=to_interval('1 month')
 raw expr       : gte(to_interval('29 days'), to_interval('1 month'))
-checked expr   : gte<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
+checked expr   : gte<Interval, Interval>(CAST<String>("29 days" AS Interval), CAST<String>("1 month" AS Interval))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1134,7 +1134,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-100)
 raw expr       : gte(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)))
+checked expr   : gte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1143,7 +1143,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-315360000000000)
 raw expr       : gte(to_timestamp(minus(315360000000000)), to_timestamp(minus(315360000000000)))
-checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+checked expr   : gte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}

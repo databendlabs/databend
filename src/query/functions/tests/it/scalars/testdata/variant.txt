@@ -1530,7 +1530,7 @@ evaluation (internal):
 
 ast            : to_boolean(parse_json('null'))
 raw expr       : to_boolean(parse_json('null'))
-checked expr   : to_boolean<Variant>(CAST<String>("null" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("null" AS Variant) AS Boolean NULL)
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -1539,7 +1539,7 @@ output         : NULL
 
 ast            : to_boolean(parse_json('true'))
 raw expr       : to_boolean(parse_json('true'))
-checked expr   : to_boolean<Variant>(CAST<String>("true" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("true" AS Variant) AS Boolean NULL)
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -1550,7 +1550,7 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')` in expr `to_boolean(CAST('123' AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')` in expr `to_boolean()`, during run expr: `CAST(CAST('123' AS Variant) AS Boolean NULL)`
 
 
 
@@ -1558,13 +1558,13 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')` in expr `to_boolean(CAST('"abc"' AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')` in expr `to_boolean()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS Boolean NULL)`
 
 
 
 ast            : to_uint64(parse_json('null'))
 raw expr       : to_uint64(parse_json('null'))
-checked expr   : to_uint64<Variant>(CAST<String>("null" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("null" AS Variant) AS UInt64 NULL)
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -1573,7 +1573,7 @@ output         : NULL
 
 ast            : to_uint64(parse_json('123'))
 raw expr       : to_uint64(parse_json('123'))
-checked expr   : to_uint64<Variant>(CAST<String>("123" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("123" AS Variant) AS UInt64 NULL)
 optimized expr : 123_u64
 output type    : UInt64 NULL
 output domain  : {123..=123}
@@ -1584,7 +1584,7 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('-123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')` in expr `to_uint64(CAST('-123' AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')` in expr `to_uint64()`, during run expr: `CAST(CAST('-123' AS Variant) AS UInt64 NULL)`
 
 
 
@@ -1592,13 +1592,13 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')` in expr `to_uint64(CAST('"abc"' AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')` in expr `to_uint64()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS UInt64 NULL)`
 
 
 
 ast            : to_int64(parse_json('123'))
 raw expr       : to_int64(parse_json('123'))
-checked expr   : to_int64<Variant>(CAST<String>("123" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("123" AS Variant) AS Int64 NULL)
 optimized expr : 123_i64
 output type    : Int64 NULL
 output domain  : {123..=123}
@@ -1607,7 +1607,7 @@ output         : 123
 
 ast            : to_int64(parse_json('-123'))
 raw expr       : to_int64(parse_json('-123'))
-checked expr   : to_int64<Variant>(CAST<String>("-123" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("-123" AS Variant) AS Int64 NULL)
 optimized expr : -123_i64
 output type    : Int64 NULL
 output domain  : {-123..=-123}
@@ -1618,13 +1618,13 @@ error:
   --> SQL:1:1
   |
 1 | to_int64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')` in expr `to_int64(CAST('"abc"' AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')` in expr `to_int64()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS Int64 NULL)`
 
 
 
 ast            : to_float64(parse_json('12.34'))
 raw expr       : to_float64(parse_json('12.34'))
-checked expr   : to_float64<Variant>(CAST<String>("12.34" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("12.34" AS Variant) AS Float64 NULL)
 optimized expr : 12.34_f64
 output type    : Float64 NULL
 output domain  : {12.34..=12.34}
@@ -1635,13 +1635,13 @@ error:
   --> SQL:1:1
   |
 1 | to_float64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')` in expr `to_float64(CAST('"abc"' AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')` in expr `to_float64()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS Float64 NULL)`
 
 
 
 ast            : to_date(parse_json('null'))
 raw expr       : to_date(parse_json('null'))
-checked expr   : to_date<Variant>(CAST<String>("null" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("null" AS Variant) AS Date NULL)
 optimized expr : NULL
 output type    : Date NULL
 output domain  : {NULL}
@@ -1650,7 +1650,7 @@ output         : NULL
 
 ast            : to_date(parse_json('"2023-01-01"'))
 raw expr       : to_date(parse_json('"2023-01-01"'))
-checked expr   : to_date<Variant>(CAST<String>("\"2023-01-01\"" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("\"2023-01-01\"" AS Variant) AS Date NULL)
 optimized expr : 19358
 output type    : Date NULL
 output domain  : {19358..=19358}
@@ -1661,13 +1661,13 @@ error:
   --> SQL:1:1
   |
 1 | to_date(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(CAST('"abc"' AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS Date NULL)`
 
 
 
 ast            : to_timestamp(parse_json('null'))
 raw expr       : to_timestamp(parse_json('null'))
-checked expr   : to_timestamp<Variant>(CAST<String>("null" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("null" AS Variant) AS Timestamp NULL)
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}
@@ -1676,7 +1676,7 @@ output         : NULL
 
 ast            : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 raw expr       : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
-checked expr   : to_timestamp<Variant>(CAST<String>("\"2023-01-01 00:00:00\"" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("\"2023-01-01 00:00:00\"" AS Variant) AS Timestamp NULL)
 optimized expr : 1672531200000000
 output type    : Timestamp NULL
 output domain  : {1672531200000000..=1672531200000000}
@@ -1687,13 +1687,13 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(CAST('"abc"' AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS Timestamp NULL)`
 
 
 
 ast            : to_string(parse_json('null'))
 raw expr       : to_string(parse_json('null'))
-checked expr   : to_string<Variant>(CAST<String>("null" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("null" AS Variant) AS String NULL)
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1702,7 +1702,7 @@ output         : NULL
 
 ast            : to_string(parse_json('12.34'))
 raw expr       : to_string(parse_json('12.34'))
-checked expr   : to_string<Variant>(CAST<String>("12.34" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("12.34" AS Variant) AS String NULL)
 optimized expr : "12.34"
 output type    : String NULL
 output domain  : {"12.34"..="12.34"}
@@ -1711,7 +1711,7 @@ output         : '12.34'
 
 ast            : to_string(parse_json('"abc"'))
 raw expr       : to_string(parse_json('"abc"'))
-checked expr   : to_string<Variant>(CAST<String>("\"abc\"" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS String NULL)
 optimized expr : "abc"
 output type    : String NULL
 output domain  : {"abc"..="abc"}
@@ -1720,7 +1720,7 @@ output         : 'abc'
 
 ast            : to_boolean(parse_json(s))
 raw expr       : to_boolean(parse_json(s::String NULL))
-checked expr   : to_boolean<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Boolean NULL)
 evaluation:
 +--------+----------------------------+--------------+
 |        | s                          | Output       |
@@ -1742,7 +1742,7 @@ evaluation (internal):
 
 ast            : to_int64(parse_json(s))
 raw expr       : to_int64(parse_json(s::String NULL))
-checked expr   : to_int64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Int64 NULL)
 evaluation:
 +--------+------------------------+------------+
 |        | s                      | Output     |
@@ -1764,7 +1764,7 @@ evaluation (internal):
 
 ast            : to_uint64(parse_json(s))
 raw expr       : to_uint64(parse_json(s::String NULL))
-checked expr   : to_uint64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS UInt64 NULL)
 evaluation:
 +--------+-----------------------+-------------+
 |        | s                     | Output      |
@@ -1786,7 +1786,7 @@ evaluation (internal):
 
 ast            : to_float64(parse_json(s))
 raw expr       : to_float64(parse_json(s::String NULL))
-checked expr   : to_float64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Float64 NULL)
 evaluation:
 +--------+----------------------------+--------------+
 |        | s                          | Output       |
@@ -1808,7 +1808,7 @@ evaluation (internal):
 
 ast            : to_date(parse_json(s))
 raw expr       : to_date(parse_json(s::String NULL))
-checked expr   : to_date<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Date NULL)
 evaluation:
 +--------+------------------------------------------------+--------------+
 |        | s                                              | Output       |
@@ -1830,7 +1830,7 @@ evaluation (internal):
 
 ast            : to_timestamp(parse_json(s))
 raw expr       : to_timestamp(parse_json(s::String NULL))
-checked expr   : to_timestamp<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Timestamp NULL)
 evaluation:
 +--------+------------------------------------------------------------------+------------------------------+
 |        | s                                                                | Output                       |
@@ -1852,7 +1852,7 @@ evaluation (internal):
 
 ast            : to_string(parse_json(s))
 raw expr       : to_string(parse_json(s::String NULL))
-checked expr   : to_string<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS String NULL)
 evaluation:
 +--------+------------------------------+-------------+
 |        | s                            | Output      |
@@ -1874,7 +1874,7 @@ evaluation (internal):
 
 ast            : try_to_boolean(parse_json('null'))
 raw expr       : try_to_boolean(parse_json('null'))
-checked expr   : try_to_boolean<Variant>(CAST<String>("null" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("null" AS Variant) AS Boolean NULL)
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -1883,7 +1883,7 @@ output         : NULL
 
 ast            : try_to_boolean(parse_json('true'))
 raw expr       : try_to_boolean(parse_json('true'))
-checked expr   : try_to_boolean<Variant>(CAST<String>("true" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("true" AS Variant) AS Boolean NULL)
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}
@@ -1892,7 +1892,7 @@ output         : true
 
 ast            : try_to_boolean(parse_json('123'))
 raw expr       : try_to_boolean(parse_json('123'))
-checked expr   : try_to_boolean<Variant>(CAST<String>("123" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("123" AS Variant) AS Boolean NULL)
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -1901,7 +1901,7 @@ output         : NULL
 
 ast            : try_to_boolean(parse_json('"abc"'))
 raw expr       : try_to_boolean(parse_json('"abc"'))
-checked expr   : try_to_boolean<Variant>(CAST<String>("\"abc\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS Boolean NULL)
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -1910,7 +1910,7 @@ output         : NULL
 
 ast            : try_to_uint64(parse_json('null'))
 raw expr       : try_to_uint64(parse_json('null'))
-checked expr   : try_to_uint64<Variant>(CAST<String>("null" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("null" AS Variant) AS UInt64 NULL)
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -1919,7 +1919,7 @@ output         : NULL
 
 ast            : try_to_uint64(parse_json('123'))
 raw expr       : try_to_uint64(parse_json('123'))
-checked expr   : try_to_uint64<Variant>(CAST<String>("123" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("123" AS Variant) AS UInt64 NULL)
 optimized expr : 123_u64
 output type    : UInt64 NULL
 output domain  : {123..=123}
@@ -1928,7 +1928,7 @@ output         : 123
 
 ast            : try_to_uint64(parse_json('-123'))
 raw expr       : try_to_uint64(parse_json('-123'))
-checked expr   : try_to_uint64<Variant>(CAST<String>("-123" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("-123" AS Variant) AS UInt64 NULL)
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -1937,7 +1937,7 @@ output         : NULL
 
 ast            : try_to_uint64(parse_json('"abc"'))
 raw expr       : try_to_uint64(parse_json('"abc"'))
-checked expr   : try_to_uint64<Variant>(CAST<String>("\"abc\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS UInt64 NULL)
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -1946,7 +1946,7 @@ output         : NULL
 
 ast            : try_to_int64(parse_json('123'))
 raw expr       : try_to_int64(parse_json('123'))
-checked expr   : try_to_int64<Variant>(CAST<String>("123" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("123" AS Variant) AS Int64 NULL)
 optimized expr : 123_i64
 output type    : Int64 NULL
 output domain  : {123..=123}
@@ -1955,7 +1955,7 @@ output         : 123
 
 ast            : try_to_int64(parse_json('-123'))
 raw expr       : try_to_int64(parse_json('-123'))
-checked expr   : try_to_int64<Variant>(CAST<String>("-123" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("-123" AS Variant) AS Int64 NULL)
 optimized expr : -123_i64
 output type    : Int64 NULL
 output domain  : {-123..=-123}
@@ -1964,7 +1964,7 @@ output         : -123
 
 ast            : try_to_int64(parse_json('"abc"'))
 raw expr       : try_to_int64(parse_json('"abc"'))
-checked expr   : try_to_int64<Variant>(CAST<String>("\"abc\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS Int64 NULL)
 optimized expr : NULL
 output type    : Int64 NULL
 output domain  : {NULL}
@@ -1973,7 +1973,7 @@ output         : NULL
 
 ast            : try_to_float64(parse_json('12.34'))
 raw expr       : try_to_float64(parse_json('12.34'))
-checked expr   : try_to_float64<Variant>(CAST<String>("12.34" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("12.34" AS Variant) AS Float64 NULL)
 optimized expr : 12.34_f64
 output type    : Float64 NULL
 output domain  : {12.34..=12.34}
@@ -1982,7 +1982,7 @@ output         : 12.34
 
 ast            : try_to_float64(parse_json('"abc"'))
 raw expr       : try_to_float64(parse_json('"abc"'))
-checked expr   : try_to_float64<Variant>(CAST<String>("\"abc\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS Float64 NULL)
 optimized expr : NULL
 output type    : Float64 NULL
 output domain  : {NULL}
@@ -1991,7 +1991,7 @@ output         : NULL
 
 ast            : try_to_date(parse_json('null'))
 raw expr       : try_to_date(parse_json('null'))
-checked expr   : try_to_date<Variant>(CAST<String>("null" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("null" AS Variant) AS Date NULL)
 optimized expr : NULL
 output type    : Date NULL
 output domain  : {NULL}
@@ -2000,7 +2000,7 @@ output         : NULL
 
 ast            : try_to_date(parse_json('"2023-01-01"'))
 raw expr       : try_to_date(parse_json('"2023-01-01"'))
-checked expr   : try_to_date<Variant>(CAST<String>("\"2023-01-01\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"2023-01-01\"" AS Variant) AS Date NULL)
 optimized expr : 19358
 output type    : Date NULL
 output domain  : {19358..=19358}
@@ -2009,7 +2009,7 @@ output         : '2023-01-01'
 
 ast            : try_to_date(parse_json('"abc"'))
 raw expr       : try_to_date(parse_json('"abc"'))
-checked expr   : try_to_date<Variant>(CAST<String>("\"abc\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS Date NULL)
 optimized expr : NULL
 output type    : Date NULL
 output domain  : {NULL}
@@ -2018,7 +2018,7 @@ output         : NULL
 
 ast            : try_to_timestamp(parse_json('null'))
 raw expr       : try_to_timestamp(parse_json('null'))
-checked expr   : try_to_timestamp<Variant>(CAST<String>("null" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("null" AS Variant) AS Timestamp NULL)
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}
@@ -2027,7 +2027,7 @@ output         : NULL
 
 ast            : try_to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 raw expr       : try_to_timestamp(parse_json('"2023-01-01 00:00:00"'))
-checked expr   : try_to_timestamp<Variant>(CAST<String>("\"2023-01-01 00:00:00\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"2023-01-01 00:00:00\"" AS Variant) AS Timestamp NULL)
 optimized expr : 1672531200000000
 output type    : Timestamp NULL
 output domain  : {1672531200000000..=1672531200000000}
@@ -2036,7 +2036,7 @@ output         : '2023-01-01 00:00:00.000000'
 
 ast            : try_to_timestamp(parse_json('"abc"'))
 raw expr       : try_to_timestamp(parse_json('"abc"'))
-checked expr   : try_to_timestamp<Variant>(CAST<String>("\"abc\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS Timestamp NULL)
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}
@@ -2045,7 +2045,7 @@ output         : NULL
 
 ast            : try_to_string(parse_json('null'))
 raw expr       : try_to_string(parse_json('null'))
-checked expr   : try_to_string<Variant>(CAST<String>("null" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("null" AS Variant) AS String NULL)
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -2054,7 +2054,7 @@ output         : NULL
 
 ast            : try_to_string(parse_json('12.34'))
 raw expr       : try_to_string(parse_json('12.34'))
-checked expr   : try_to_string<Variant>(CAST<String>("12.34" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("12.34" AS Variant) AS String NULL)
 optimized expr : "12.34"
 output type    : String NULL
 output domain  : {"12.34"..="12.34"}
@@ -2063,7 +2063,7 @@ output         : '12.34'
 
 ast            : try_to_string(parse_json('"abc"'))
 raw expr       : try_to_string(parse_json('"abc"'))
-checked expr   : try_to_string<Variant>(CAST<String>("\"abc\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS String NULL)
 optimized expr : "abc"
 output type    : String NULL
 output domain  : {"abc"..="abc"}
@@ -2072,7 +2072,7 @@ output         : 'abc'
 
 ast            : try_to_boolean(parse_json(s))
 raw expr       : try_to_boolean(parse_json(s::String NULL))
-checked expr   : try_to_boolean<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : TRY_CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Boolean NULL)
 evaluation:
 +--------+--------------------------------------+--------------+
 |        | s                                    | Output       |
@@ -2099,7 +2099,7 @@ evaluation (internal):
 
 ast            : try_to_int64(parse_json(s))
 raw expr       : try_to_int64(parse_json(s::String NULL))
-checked expr   : try_to_int64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : TRY_CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Int64 NULL)
 evaluation:
 +--------+--------------------------------------+------------+
 |        | s                                    | Output     |
@@ -2126,7 +2126,7 @@ evaluation (internal):
 
 ast            : try_to_uint64(parse_json(s))
 raw expr       : try_to_uint64(parse_json(s::String NULL))
-checked expr   : try_to_uint64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : TRY_CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS UInt64 NULL)
 evaluation:
 +--------+--------------------------------------+-------------+
 |        | s                                    | Output      |
@@ -2153,7 +2153,7 @@ evaluation (internal):
 
 ast            : try_to_float64(parse_json(s))
 raw expr       : try_to_float64(parse_json(s::String NULL))
-checked expr   : try_to_float64<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : TRY_CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Float64 NULL)
 evaluation:
 +--------+--------------------------------------+--------------+
 |        | s                                    | Output       |
@@ -2180,7 +2180,7 @@ evaluation (internal):
 
 ast            : try_to_date(parse_json(s))
 raw expr       : try_to_date(parse_json(s::String NULL))
-checked expr   : try_to_date<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : TRY_CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Date NULL)
 evaluation:
 +--------+--------------------------------------+--------------+
 |        | s                                    | Output       |
@@ -2207,7 +2207,7 @@ evaluation (internal):
 
 ast            : try_to_timestamp(parse_json(s))
 raw expr       : try_to_timestamp(parse_json(s::String NULL))
-checked expr   : try_to_timestamp<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : TRY_CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Timestamp NULL)
 evaluation:
 +--------+--------------------------------------+------------------------------+
 |        | s                                    | Output                       |
@@ -2234,7 +2234,7 @@ evaluation (internal):
 
 ast            : try_to_string(parse_json(s))
 raw expr       : try_to_string(parse_json(s::String NULL))
-checked expr   : try_to_string<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : TRY_CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS String NULL)
 evaluation:
 +--------+--------------------------------------+-----------------------+
 |        | s                                    | Output                |
@@ -2731,7 +2731,7 @@ evaluation (internal):
 
 ast            : json_to_string(parse_json('true'))
 raw expr       : json_to_string(parse_json('true'))
-checked expr   : to_string<Variant>(CAST<String>("true" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("true" AS Variant) AS String NULL)
 optimized expr : "true"
 output type    : String NULL
 output domain  : {"true"..="true"}
@@ -2740,7 +2740,7 @@ output         : 'true'
 
 ast            : json_to_string(parse_json('123456'))
 raw expr       : json_to_string(parse_json('123456'))
-checked expr   : to_string<Variant>(CAST<String>("123456" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("123456" AS Variant) AS String NULL)
 optimized expr : "123456"
 output type    : String NULL
 output domain  : {"123456"..="123456"}
@@ -2749,7 +2749,7 @@ output         : '123456'
 
 ast            : json_to_string(parse_json('"abcd"'))
 raw expr       : json_to_string(parse_json('"abcd"'))
-checked expr   : to_string<Variant>(CAST<String>("\"abcd\"" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("\"abcd\"" AS Variant) AS String NULL)
 optimized expr : "abcd"
 output type    : String NULL
 output domain  : {"abcd"..="abcd"}
@@ -2758,7 +2758,7 @@ output         : 'abcd'
 
 ast            : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
 raw expr       : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
-checked expr   : to_string<Variant>(CAST<String>("[1, 2, 3, 4, 5, 6]" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("[1, 2, 3, 4, 5, 6]" AS Variant) AS String NULL)
 optimized expr : "[1,2,3,4,5,6]"
 output type    : String NULL
 output domain  : {"[1,2,3,4,5,6]"..="[1,2,3,4,5,6]"}
@@ -2767,7 +2767,7 @@ output         : '[1,2,3,4,5,6]'
 
 ast            : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
 raw expr       : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
-checked expr   : to_string<Variant>(CAST<String>("{\"k1\":123, \"k2\":\"abc\"}" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("{\"k1\":123, \"k2\":\"abc\"}" AS Variant) AS String NULL)
 optimized expr : "{\"k1\":123,\"k2\":\"abc\"}"
 output type    : String NULL
 output domain  : {"{\"k1\":123,\"k2\":\"abc\"}"..="{\"k1\":123,\"k2\":\"abc\"}"}

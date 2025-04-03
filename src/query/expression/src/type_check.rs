@@ -799,17 +799,17 @@ fn is_simple_cast_function(name: &str) -> bool {
     ALL_SIMPLE_CAST_FUNCTIONS.contains(&name)
 }
 
-pub fn rewrite_function_to_cast<Index: ColumnIndex>(expr: Expr<Index>) -> Result<Expr<Index>> {
+pub fn rewrite_function_to_cast<Index: ColumnIndex>(expr: Expr<Index>) -> Expr<Index> {
     match visit_expr(&expr, &mut RewriteCast).unwrap() {
-        None => Ok(expr),
-        Some(expr) => Ok(expr),
+        None => expr,
+        Some(expr) => expr,
     }
 }
 
 struct RewriteCast;
 
 impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast {
-    type Error = ();
+    type Error = !;
 
     fn enter_function_call(
         &mut self,
@@ -844,7 +844,10 @@ impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast {
                 dest_type: return_type.clone(),
             }));
         }
-        let func_name = format!("to_{}", return_type.remove_nullable());
+        let func_name = format!(
+            "to_{}",
+            return_type.remove_nullable().to_string().to_lowercase()
+        );
         if function.signature.name == func_name {
             return Ok(Some(Expr::Cast {
                 span: *span,

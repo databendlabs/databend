@@ -265,7 +265,7 @@ output         : '[0,"a"]'
 
 ast            : CAST(to_timestamp(1000000) AS VARIANT)
 raw expr       : CAST(to_timestamp(1000000) AS Variant)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1000000_u32 AS Int64)) AS Variant)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt32>(1000000_u32 AS Int64) AS Timestamp) AS Variant)
 optimized expr : 0x200000001000001a313937302d30312d31322031333a34363a34302e303030303030
 output type    : Variant
 output domain  : Undefined
@@ -493,7 +493,7 @@ evaluation (internal):
 
 ast            : CAST(TO_TIMESTAMP(-315360000000000) AS INT64)
 raw expr       : CAST(TO_TIMESTAMP(minus(315360000000000)) AS Int64)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)) AS Int64)
+checked expr   : CAST<Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp) AS Int64)
 optimized expr : -315360000000000_i64
 output type    : Int64
 output domain  : {-315360000000000..=-315360000000000}
@@ -502,7 +502,7 @@ output         : -315360000000000
 
 ast            : CAST(TO_TIMESTAMP(-315360000000) AS INT64)
 raw expr       : CAST(TO_TIMESTAMP(minus(315360000000)) AS Int64)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)) AS Int64)
+checked expr   : CAST<Timestamp>(CAST<Int64>(minus<UInt64>(315360000000_u64) AS Timestamp) AS Int64)
 optimized expr : -315360000000000_i64
 output type    : Int64
 output domain  : {-315360000000000..=-315360000000000}
@@ -511,7 +511,7 @@ output         : -315360000000000
 
 ast            : CAST(TO_TIMESTAMP(-100) AS INT64)
 raw expr       : CAST(TO_TIMESTAMP(minus(100)) AS Int64)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)) AS Int64)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp) AS Int64)
 optimized expr : -100000000_i64
 output type    : Int64
 output domain  : {-100000000..=-100000000}
@@ -520,7 +520,7 @@ output         : -100000000
 
 ast            : CAST(TO_TIMESTAMP(-0) AS INT64)
 raw expr       : CAST(TO_TIMESTAMP(minus(0)) AS Int64)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64)) AS Int64)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64) AS Timestamp) AS Int64)
 optimized expr : 0_i64
 output type    : Int64
 output domain  : {0..=0}
@@ -529,7 +529,7 @@ output         : 0
 
 ast            : CAST(TO_TIMESTAMP(0) AS INT64)
 raw expr       : CAST(TO_TIMESTAMP(0) AS Int64)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)) AS Int64)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt8>(0_u8 AS Int64) AS Timestamp) AS Int64)
 optimized expr : 0_i64
 output type    : Int64
 output domain  : {0..=0}
@@ -538,7 +538,7 @@ output         : 0
 
 ast            : CAST(TO_TIMESTAMP(100) AS INT64)
 raw expr       : CAST(TO_TIMESTAMP(100) AS Int64)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt8>(100_u8 AS Int64)) AS Int64)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt8>(100_u8 AS Int64) AS Timestamp) AS Int64)
 optimized expr : 100000000_i64
 output type    : Int64
 output domain  : {100000000..=100000000}
@@ -547,7 +547,7 @@ output         : 100000000
 
 ast            : CAST(TO_TIMESTAMP(315360000000) AS INT64)
 raw expr       : CAST(TO_TIMESTAMP(315360000000) AS Int64)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt64>(315360000000_u64 AS Int64)) AS Int64)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt64>(315360000000_u64 AS Int64) AS Timestamp) AS Int64)
 optimized expr : 315360000000000_i64
 output type    : Int64
 output domain  : {315360000000000..=315360000000000}
@@ -556,7 +556,7 @@ output         : 315360000000000
 
 ast            : CAST(TO_TIMESTAMP(315360000000000) AS INT64)
 raw expr       : CAST(TO_TIMESTAMP(315360000000000) AS Int64)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt64>(315360000000000_u64 AS Int64)) AS Int64)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt64>(315360000000000_u64 AS Int64) AS Timestamp) AS Int64)
 optimized expr : 315360000000000_i64
 output type    : Int64
 output domain  : {315360000000000..=315360000000000}
@@ -687,7 +687,7 @@ evaluation (internal):
 
 ast            : CAST(TO_DATE(-354285) AS INT64)
 raw expr       : CAST(TO_DATE(minus(354285)) AS Int64)
-checked expr   : CAST<Date>(to_date<Int64>(minus<UInt32>(354285_u32)) AS Int64)
+checked expr   : CAST<Date>(CAST<Int64>(minus<UInt32>(354285_u32) AS Date) AS Int64)
 optimized expr : -354285_i64
 output type    : Int64
 output domain  : {-354285..=-354285}
@@ -696,7 +696,7 @@ output         : -354285
 
 ast            : CAST(TO_DATE(-100) AS INT64)
 raw expr       : CAST(TO_DATE(minus(100)) AS Int64)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)) AS Int64)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Date) AS Int64)
 optimized expr : -100_i64
 output type    : Int64
 output domain  : {-100..=-100}
@@ -705,7 +705,7 @@ output         : -100
 
 ast            : CAST(TO_DATE(-0) AS INT64)
 raw expr       : CAST(TO_DATE(minus(0)) AS Int64)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64)) AS Int64)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64) AS Date) AS Int64)
 optimized expr : 0_i64
 output type    : Int64
 output domain  : {0..=0}
@@ -714,7 +714,7 @@ output         : 0
 
 ast            : CAST(TO_DATE(0) AS INT64)
 raw expr       : CAST(TO_DATE(0) AS Int64)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)) AS Int64)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<UInt8>(0_u8 AS Int64) AS Date) AS Int64)
 optimized expr : 0_i64
 output type    : Int64
 output domain  : {0..=0}
@@ -723,7 +723,7 @@ output         : 0
 
 ast            : CAST(TO_DATE(100) AS INT64)
 raw expr       : CAST(TO_DATE(100) AS Int64)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<UInt8>(100_u8 AS Int64)) AS Int64)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<UInt8>(100_u8 AS Int64) AS Date) AS Int64)
 optimized expr : 100_i64
 output type    : Int64
 output domain  : {100..=100}
@@ -732,7 +732,7 @@ output         : 100
 
 ast            : CAST(TO_DATE(2932896) AS INT64)
 raw expr       : CAST(TO_DATE(2932896) AS Int64)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<UInt32>(2932896_u32 AS Int64)) AS Int64)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<UInt32>(2932896_u32 AS Int64) AS Date) AS Int64)
 optimized expr : 2932896_i64
 output type    : Int64
 output domain  : {2932896..=2932896}
@@ -1256,7 +1256,7 @@ evaluation (internal):
 
 ast            : CAST(TO_DATE(1) AS TIMESTAMP)
 raw expr       : CAST(TO_DATE(1) AS Timestamp)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<UInt8>(1_u8 AS Int64)) AS Timestamp)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<UInt8>(1_u8 AS Int64) AS Date) AS Timestamp)
 optimized expr : 86400000000
 output type    : Timestamp
 output domain  : {86400000000..=86400000000}
@@ -1265,7 +1265,7 @@ output         : '1970-01-02 00:00:00.000000'
 
 ast            : CAST(TO_TIMESTAMP(1) AS DATE)
 raw expr       : CAST(TO_TIMESTAMP(1) AS Date)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt8>(1_u8 AS Int64)) AS Date)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt8>(1_u8 AS Int64) AS Timestamp) AS Date)
 optimized expr : 0
 output type    : Date
 output domain  : {0..=0}
@@ -1324,7 +1324,7 @@ evaluation (internal):
 
 ast            : CAST(TO_DATE(a) AS TIMESTAMP)
 raw expr       : CAST(TO_DATE(a::Int32) AS Timestamp)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<Int32>(a AS Int64)) AS Timestamp)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<Int32>(a AS Int64) AS Date) AS Timestamp)
 evaluation:
 +--------+---------------------+-------------------------------------------+
 |        | a                   | Output                                    |
@@ -1392,7 +1392,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022')
-  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('2022')` in expr `to_timestamp('2022')`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('2022')` in expr `to_timestamp()`, during run expr: `CAST('2022' AS Timestamp)`
 
 
 
@@ -1400,13 +1400,13 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022-01')
-  | ^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('2022-01')` in expr `to_timestamp('2022-01')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('2022-01')` in expr `to_timestamp()`, during run expr: `CAST('2022-01' AS Timestamp)`
 
 
 
 ast            : TO_TIMESTAMP('2022-01-02')
 raw expr       : TO_TIMESTAMP('2022-01-02')
-checked expr   : to_timestamp<String>("2022-01-02")
+checked expr   : CAST<String>("2022-01-02" AS Timestamp)
 optimized expr : 1641081600000000
 output type    : Timestamp
 output domain  : {1641081600000000..=1641081600000000}
@@ -1417,13 +1417,13 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('A NON-TIMESTAMP STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-TIME' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-TIME": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_timestamp('A NON-TIMESTAMP STR')` in expr `to_timestamp('A NON-TIMESTAMP STR')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-TIME' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-TIME": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_timestamp('A NON-TIMESTAMP STR')` in expr `to_timestamp()`, during run expr: `CAST('A NON-TIMESTAMP STR' AS Timestamp)`
 
 
 
 ast            : TO_TIMESTAMP('2022-01-02T03:25:02.868894-07:00')
 raw expr       : TO_TIMESTAMP('2022-01-02T03:25:02.868894-07:00')
-checked expr   : to_timestamp<String>("2022-01-02T03:25:02.868894-07:00")
+checked expr   : CAST<String>("2022-01-02T03:25:02.868894-07:00" AS Timestamp)
 optimized expr : 1641119102868894
 output type    : Timestamp
 output domain  : {1641119102868894..=1641119102868894}
@@ -1432,7 +1432,7 @@ output         : '2022-01-02 10:25:02.868894'
 
 ast            : TO_TIMESTAMP('2022-01-02 02:00:11')
 raw expr       : TO_TIMESTAMP('2022-01-02 02:00:11')
-checked expr   : to_timestamp<String>("2022-01-02 02:00:11")
+checked expr   : CAST<String>("2022-01-02 02:00:11" AS Timestamp)
 optimized expr : 1641088811000000
 output type    : Timestamp
 output domain  : {1641088811000000..=1641088811000000}
@@ -1441,7 +1441,7 @@ output         : '2022-01-02 02:00:11.000000'
 
 ast            : TO_TIMESTAMP('2022-01-02T02:00:22')
 raw expr       : TO_TIMESTAMP('2022-01-02T02:00:22')
-checked expr   : to_timestamp<String>("2022-01-02T02:00:22")
+checked expr   : CAST<String>("2022-01-02T02:00:22" AS Timestamp)
 optimized expr : 1641088822000000
 output type    : Timestamp
 output domain  : {1641088822000000..=1641088822000000}
@@ -1450,7 +1450,7 @@ output         : '2022-01-02 02:00:22.000000'
 
 ast            : TO_TIMESTAMP('2022-01-02T01:12:00-07:00')
 raw expr       : TO_TIMESTAMP('2022-01-02T01:12:00-07:00')
-checked expr   : to_timestamp<String>("2022-01-02T01:12:00-07:00")
+checked expr   : CAST<String>("2022-01-02T01:12:00-07:00" AS Timestamp)
 optimized expr : 1641111120000000
 output type    : Timestamp
 output domain  : {1641111120000000..=1641111120000000}
@@ -1459,7 +1459,7 @@ output         : '2022-01-02 08:12:00.000000'
 
 ast            : TO_TIMESTAMP('2022-01-02T01')
 raw expr       : TO_TIMESTAMP('2022-01-02T01')
-checked expr   : to_timestamp<String>("2022-01-02T01")
+checked expr   : CAST<String>("2022-01-02T01" AS Timestamp)
 optimized expr : 1641085200000000
 output type    : Timestamp
 output domain  : {1641085200000000..=1641085200000000}
@@ -1468,7 +1468,7 @@ output         : '2022-01-02 01:00:00.000000'
 
 ast            : TO_TIMESTAMP(a)
 raw expr       : TO_TIMESTAMP(a::String)
-checked expr   : to_timestamp<String>(a)
+checked expr   : CAST<String>(a AS Timestamp)
 evaluation:
 +--------+-----------------------------------------------------+---------------------------------------+
 |        | a                                                   | Output                                |
@@ -1492,7 +1492,7 @@ evaluation (internal):
 
 ast            : CAST(TO_TIMESTAMP(-315360000000000) AS VARCHAR)
 raw expr       : CAST(TO_TIMESTAMP(minus(315360000000000)) AS String)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)) AS String)
+checked expr   : CAST<Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp) AS String)
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String
 output domain  : {"1960-01-04 00:00:00.000000"..="1960-01-04 00:00:00.000000"}
@@ -1501,7 +1501,7 @@ output         : '1960-01-04 00:00:00.000000'
 
 ast            : CAST(TO_TIMESTAMP(-315360000000) AS VARCHAR)
 raw expr       : CAST(TO_TIMESTAMP(minus(315360000000)) AS String)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)) AS String)
+checked expr   : CAST<Timestamp>(CAST<Int64>(minus<UInt64>(315360000000_u64) AS Timestamp) AS String)
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String
 output domain  : {"1960-01-04 00:00:00.000000"..="1960-01-04 00:00:00.000000"}
@@ -1510,7 +1510,7 @@ output         : '1960-01-04 00:00:00.000000'
 
 ast            : CAST(TO_TIMESTAMP(-100) AS VARCHAR)
 raw expr       : CAST(TO_TIMESTAMP(minus(100)) AS String)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)) AS String)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp) AS String)
 optimized expr : "1969-12-31 23:58:20.000000"
 output type    : String
 output domain  : {"1969-12-31 23:58:20.000000"..="1969-12-31 23:58:20.000000"}
@@ -1519,7 +1519,7 @@ output         : '1969-12-31 23:58:20.000000'
 
 ast            : CAST(TO_TIMESTAMP(-0) AS VARCHAR)
 raw expr       : CAST(TO_TIMESTAMP(minus(0)) AS String)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64)) AS String)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64) AS Timestamp) AS String)
 optimized expr : "1970-01-01 00:00:00.000000"
 output type    : String
 output domain  : {"1970-01-01 00:00:00.000000"..="1970-01-01 00:00:00.000000"}
@@ -1528,7 +1528,7 @@ output         : '1970-01-01 00:00:00.000000'
 
 ast            : CAST(TO_TIMESTAMP(0) AS VARCHAR)
 raw expr       : CAST(TO_TIMESTAMP(0) AS String)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)) AS String)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt8>(0_u8 AS Int64) AS Timestamp) AS String)
 optimized expr : "1970-01-01 00:00:00.000000"
 output type    : String
 output domain  : {"1970-01-01 00:00:00.000000"..="1970-01-01 00:00:00.000000"}
@@ -1537,7 +1537,7 @@ output         : '1970-01-01 00:00:00.000000'
 
 ast            : CAST(TO_TIMESTAMP(100) AS VARCHAR)
 raw expr       : CAST(TO_TIMESTAMP(100) AS String)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt8>(100_u8 AS Int64)) AS String)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt8>(100_u8 AS Int64) AS Timestamp) AS String)
 optimized expr : "1970-01-01 00:01:40.000000"
 output type    : String
 output domain  : {"1970-01-01 00:01:40.000000"..="1970-01-01 00:01:40.000000"}
@@ -1546,7 +1546,7 @@ output         : '1970-01-01 00:01:40.000000'
 
 ast            : CAST(TO_TIMESTAMP(315360000000) AS VARCHAR)
 raw expr       : CAST(TO_TIMESTAMP(315360000000) AS String)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt64>(315360000000_u64 AS Int64)) AS String)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt64>(315360000000_u64 AS Int64) AS Timestamp) AS String)
 optimized expr : "1979-12-30 00:00:00.000000"
 output type    : String
 output domain  : {"1979-12-30 00:00:00.000000"..="1979-12-30 00:00:00.000000"}
@@ -1555,7 +1555,7 @@ output         : '1979-12-30 00:00:00.000000'
 
 ast            : CAST(TO_TIMESTAMP(315360000000000) AS VARCHAR)
 raw expr       : CAST(TO_TIMESTAMP(315360000000000) AS String)
-checked expr   : CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt64>(315360000000000_u64 AS Int64)) AS String)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt64>(315360000000000_u64 AS Int64) AS Timestamp) AS String)
 optimized expr : "1979-12-30 00:00:00.000000"
 output type    : String
 output domain  : {"1979-12-30 00:00:00.000000"..="1979-12-30 00:00:00.000000"}
@@ -1592,7 +1592,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022')
-  | ^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('2022')` in expr `to_date('2022')`
+  | ^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('2022')` in expr `to_date()`, during run expr: `CAST('2022' AS Date)`
 
 
 
@@ -1600,13 +1600,13 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022-01')
-  | ^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('2022-01')` in expr `to_date('2022-01')`
+  | ^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('2022-01')` in expr `to_date()`, during run expr: `CAST('2022-01' AS Date)`
 
 
 
 ast            : TO_DATE('2022-01-02')
 raw expr       : TO_DATE('2022-01-02')
-checked expr   : to_date<String>("2022-01-02")
+checked expr   : CAST<String>("2022-01-02" AS Date)
 optimized expr : 18994
 output type    : Date
 output domain  : {18994..=18994}
@@ -1617,13 +1617,13 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('A NON-DATE STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-DATE' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-DATE": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_date('A NON-DATE STR')` in expr `to_date('A NON-DATE STR')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-DATE' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-DATE": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_date('A NON-DATE STR')` in expr `to_date()`, during run expr: `CAST('A NON-DATE STR' AS Date)`
 
 
 
 ast            : TO_DATE('2022-01-02T03:25:02.868894-07:00')
 raw expr       : TO_DATE('2022-01-02T03:25:02.868894-07:00')
-checked expr   : to_date<String>("2022-01-02T03:25:02.868894-07:00")
+checked expr   : CAST<String>("2022-01-02T03:25:02.868894-07:00" AS Date)
 optimized expr : 18994
 output type    : Date
 output domain  : {18994..=18994}
@@ -1632,7 +1632,7 @@ output         : '2022-01-02'
 
 ast            : TO_DATE('2022-01-02 02:00:11')
 raw expr       : TO_DATE('2022-01-02 02:00:11')
-checked expr   : to_date<String>("2022-01-02 02:00:11")
+checked expr   : CAST<String>("2022-01-02 02:00:11" AS Date)
 optimized expr : 18994
 output type    : Date
 output domain  : {18994..=18994}
@@ -1641,7 +1641,7 @@ output         : '2022-01-02'
 
 ast            : TO_DATE('2022-01-02T02:00:22')
 raw expr       : TO_DATE('2022-01-02T02:00:22')
-checked expr   : to_date<String>("2022-01-02T02:00:22")
+checked expr   : CAST<String>("2022-01-02T02:00:22" AS Date)
 optimized expr : 18994
 output type    : Date
 output domain  : {18994..=18994}
@@ -1650,7 +1650,7 @@ output         : '2022-01-02'
 
 ast            : TO_DATE('2022-01-02T01:12:00-07:00')
 raw expr       : TO_DATE('2022-01-02T01:12:00-07:00')
-checked expr   : to_date<String>("2022-01-02T01:12:00-07:00")
+checked expr   : CAST<String>("2022-01-02T01:12:00-07:00" AS Date)
 optimized expr : 18994
 output type    : Date
 output domain  : {18994..=18994}
@@ -1659,7 +1659,7 @@ output         : '2022-01-02'
 
 ast            : TO_DATE('2022-01-02T01')
 raw expr       : TO_DATE('2022-01-02T01')
-checked expr   : to_date<String>("2022-01-02T01")
+checked expr   : CAST<String>("2022-01-02T01" AS Date)
 optimized expr : 18994
 output type    : Date
 output domain  : {18994..=18994}
@@ -1668,7 +1668,7 @@ output         : '2022-01-02'
 
 ast            : TO_DATE(a)
 raw expr       : TO_DATE(a::String)
-checked expr   : to_date<String>(a)
+checked expr   : CAST<String>(a AS Date)
 optimized expr : 18994
 evaluation:
 +--------+-----------------------------------------------------+-----------------+
@@ -1693,7 +1693,7 @@ evaluation (internal):
 
 ast            : CAST(TO_DATE(-354285) AS VARCHAR)
 raw expr       : CAST(TO_DATE(minus(354285)) AS String)
-checked expr   : CAST<Date>(to_date<Int64>(minus<UInt32>(354285_u32)) AS String)
+checked expr   : CAST<Date>(CAST<Int64>(minus<UInt32>(354285_u32) AS Date) AS String)
 optimized expr : "1000-01-01"
 output type    : String
 output domain  : {"1000-01-01"..="1000-01-01"}
@@ -1702,7 +1702,7 @@ output         : '1000-01-01'
 
 ast            : CAST(TO_DATE(-100) AS VARCHAR)
 raw expr       : CAST(TO_DATE(minus(100)) AS String)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)) AS String)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Date) AS String)
 optimized expr : "1969-09-23"
 output type    : String
 output domain  : {"1969-09-23"..="1969-09-23"}
@@ -1711,7 +1711,7 @@ output         : '1969-09-23'
 
 ast            : CAST(TO_DATE(-0) AS VARCHAR)
 raw expr       : CAST(TO_DATE(minus(0)) AS String)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64)) AS String)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64) AS Date) AS String)
 optimized expr : "1970-01-01"
 output type    : String
 output domain  : {"1970-01-01"..="1970-01-01"}
@@ -1720,7 +1720,7 @@ output         : '1970-01-01'
 
 ast            : CAST(TO_DATE(0) AS VARCHAR)
 raw expr       : CAST(TO_DATE(0) AS String)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)) AS String)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<UInt8>(0_u8 AS Int64) AS Date) AS String)
 optimized expr : "1970-01-01"
 output type    : String
 output domain  : {"1970-01-01"..="1970-01-01"}
@@ -1729,7 +1729,7 @@ output         : '1970-01-01'
 
 ast            : CAST(TO_DATE(100) AS VARCHAR)
 raw expr       : CAST(TO_DATE(100) AS String)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<UInt8>(100_u8 AS Int64)) AS String)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<UInt8>(100_u8 AS Int64) AS Date) AS String)
 optimized expr : "1970-04-11"
 output type    : String
 output domain  : {"1970-04-11"..="1970-04-11"}
@@ -1738,7 +1738,7 @@ output         : '1970-04-11'
 
 ast            : CAST(TO_DATE(2932896) AS VARCHAR)
 raw expr       : CAST(TO_DATE(2932896) AS String)
-checked expr   : CAST<Date>(to_date<Int64>(CAST<UInt32>(2932896_u32 AS Int64)) AS String)
+checked expr   : CAST<Date>(CAST<Int64>(CAST<UInt32>(2932896_u32 AS Int64) AS Date) AS String)
 optimized expr : "9999-12-31"
 output type    : String
 output domain  : {"9999-12-31"..="9999-12-31"}
@@ -2444,7 +2444,7 @@ output         : '[0,"a"]'
 
 ast            : TRY_CAST(to_timestamp(1000000) AS VARIANT)
 raw expr       : TRY_CAST(to_timestamp(1000000) AS Variant)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(1000000_u32 AS Int64)) AS Variant NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt32>(1000000_u32 AS Int64) AS Timestamp) AS Variant NULL)
 optimized expr : 0x200000001000001a313937302d30312d31322031333a34363a34302e303030303030
 output type    : Variant NULL
 output domain  : Undefined
@@ -2686,7 +2686,7 @@ evaluation (internal):
 
 ast            : TRY_CAST(TO_TIMESTAMP(-315360000000000) AS INT64)
 raw expr       : TRY_CAST(TO_TIMESTAMP(minus(315360000000000)) AS Int64)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp) AS Int64 NULL)
 optimized expr : -315360000000000_i64
 output type    : Int64 NULL
 output domain  : {-315360000000000..=-315360000000000}
@@ -2695,7 +2695,7 @@ output         : -315360000000000
 
 ast            : TRY_CAST(TO_TIMESTAMP(-315360000000) AS INT64)
 raw expr       : TRY_CAST(TO_TIMESTAMP(minus(315360000000)) AS Int64)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(minus<UInt64>(315360000000_u64) AS Timestamp) AS Int64 NULL)
 optimized expr : -315360000000000_i64
 output type    : Int64 NULL
 output domain  : {-315360000000000..=-315360000000000}
@@ -2704,7 +2704,7 @@ output         : -315360000000000
 
 ast            : TRY_CAST(TO_TIMESTAMP(-100) AS INT64)
 raw expr       : TRY_CAST(TO_TIMESTAMP(minus(100)) AS Int64)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp) AS Int64 NULL)
 optimized expr : -100000000_i64
 output type    : Int64 NULL
 output domain  : {-100000000..=-100000000}
@@ -2713,7 +2713,7 @@ output         : -100000000
 
 ast            : TRY_CAST(TO_TIMESTAMP(-0) AS INT64)
 raw expr       : TRY_CAST(TO_TIMESTAMP(minus(0)) AS Int64)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64) AS Timestamp) AS Int64 NULL)
 optimized expr : 0_i64
 output type    : Int64 NULL
 output domain  : {0..=0}
@@ -2722,7 +2722,7 @@ output         : 0
 
 ast            : TRY_CAST(TO_TIMESTAMP(0) AS INT64)
 raw expr       : TRY_CAST(TO_TIMESTAMP(0) AS Int64)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt8>(0_u8 AS Int64) AS Timestamp) AS Int64 NULL)
 optimized expr : 0_i64
 output type    : Int64 NULL
 output domain  : {0..=0}
@@ -2731,7 +2731,7 @@ output         : 0
 
 ast            : TRY_CAST(TO_TIMESTAMP(100) AS INT64)
 raw expr       : TRY_CAST(TO_TIMESTAMP(100) AS Int64)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt8>(100_u8 AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt8>(100_u8 AS Int64) AS Timestamp) AS Int64 NULL)
 optimized expr : 100000000_i64
 output type    : Int64 NULL
 output domain  : {100000000..=100000000}
@@ -2740,7 +2740,7 @@ output         : 100000000
 
 ast            : TRY_CAST(TO_TIMESTAMP(315360000000) AS INT64)
 raw expr       : TRY_CAST(TO_TIMESTAMP(315360000000) AS Int64)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt64>(315360000000_u64 AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt64>(315360000000_u64 AS Int64) AS Timestamp) AS Int64 NULL)
 optimized expr : 315360000000000_i64
 output type    : Int64 NULL
 output domain  : {315360000000000..=315360000000000}
@@ -2749,7 +2749,7 @@ output         : 315360000000000
 
 ast            : TRY_CAST(TO_TIMESTAMP(315360000000000) AS INT64)
 raw expr       : TRY_CAST(TO_TIMESTAMP(315360000000000) AS Int64)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt64>(315360000000000_u64 AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt64>(315360000000000_u64 AS Int64) AS Timestamp) AS Int64 NULL)
 optimized expr : 315360000000000_i64
 output type    : Int64 NULL
 output domain  : {315360000000000..=315360000000000}
@@ -2880,7 +2880,7 @@ evaluation (internal):
 
 ast            : TRY_CAST(TO_DATE(-354285) AS INT64)
 raw expr       : TRY_CAST(TO_DATE(minus(354285)) AS Int64)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(minus<UInt32>(354285_u32)) AS Int64 NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(minus<UInt32>(354285_u32) AS Date) AS Int64 NULL)
 optimized expr : -354285_i64
 output type    : Int64 NULL
 output domain  : {-354285..=-354285}
@@ -2889,7 +2889,7 @@ output         : -354285
 
 ast            : TRY_CAST(TO_DATE(-100) AS INT64)
 raw expr       : TRY_CAST(TO_DATE(minus(100)) AS Int64)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Date) AS Int64 NULL)
 optimized expr : -100_i64
 output type    : Int64 NULL
 output domain  : {-100..=-100}
@@ -2898,7 +2898,7 @@ output         : -100
 
 ast            : TRY_CAST(TO_DATE(-0) AS INT64)
 raw expr       : TRY_CAST(TO_DATE(minus(0)) AS Int64)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64) AS Date) AS Int64 NULL)
 optimized expr : 0_i64
 output type    : Int64 NULL
 output domain  : {0..=0}
@@ -2907,7 +2907,7 @@ output         : 0
 
 ast            : TRY_CAST(TO_DATE(0) AS INT64)
 raw expr       : TRY_CAST(TO_DATE(0) AS Int64)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<UInt8>(0_u8 AS Int64) AS Date) AS Int64 NULL)
 optimized expr : 0_i64
 output type    : Int64 NULL
 output domain  : {0..=0}
@@ -2916,7 +2916,7 @@ output         : 0
 
 ast            : TRY_CAST(TO_DATE(100) AS INT64)
 raw expr       : TRY_CAST(TO_DATE(100) AS Int64)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<UInt8>(100_u8 AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<UInt8>(100_u8 AS Int64) AS Date) AS Int64 NULL)
 optimized expr : 100_i64
 output type    : Int64 NULL
 output domain  : {100..=100}
@@ -2925,7 +2925,7 @@ output         : 100
 
 ast            : TRY_CAST(TO_DATE(2932896) AS INT64)
 raw expr       : TRY_CAST(TO_DATE(2932896) AS Int64)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<UInt32>(2932896_u32 AS Int64)) AS Int64 NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<UInt32>(2932896_u32 AS Int64) AS Date) AS Int64 NULL)
 optimized expr : 2932896_i64
 output type    : Int64 NULL
 output domain  : {2932896..=2932896}
@@ -3474,7 +3474,7 @@ evaluation (internal):
 
 ast            : TRY_CAST(TO_DATE(1) AS TIMESTAMP)
 raw expr       : TRY_CAST(TO_DATE(1) AS Timestamp)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<UInt8>(1_u8 AS Int64)) AS Timestamp NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<UInt8>(1_u8 AS Int64) AS Date) AS Timestamp NULL)
 optimized expr : 86400000000
 output type    : Timestamp NULL
 output domain  : {86400000000..=86400000000}
@@ -3483,7 +3483,7 @@ output         : '1970-01-02 00:00:00.000000'
 
 ast            : TRY_CAST(TO_TIMESTAMP(1) AS DATE)
 raw expr       : TRY_CAST(TO_TIMESTAMP(1) AS Date)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt8>(1_u8 AS Int64)) AS Date NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt8>(1_u8 AS Int64) AS Timestamp) AS Date NULL)
 optimized expr : 0
 output type    : Date NULL
 output domain  : {0..=0}
@@ -3542,7 +3542,7 @@ evaluation (internal):
 
 ast            : TRY_CAST(TO_DATE(a) AS TIMESTAMP)
 raw expr       : TRY_CAST(TO_DATE(a::Int32) AS Timestamp)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<Int32>(a AS Int64)) AS Timestamp NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<Int32>(a AS Int64) AS Date) AS Timestamp NULL)
 evaluation:
 +--------+---------------------+-------------------------------------------+
 |        | a                   | Output                                    |
@@ -3608,7 +3608,7 @@ evaluation (internal):
 
 ast            : TRY_TO_TIMESTAMP('2022')
 raw expr       : TRY_TO_TIMESTAMP('2022')
-checked expr   : try_to_timestamp<String>("2022")
+checked expr   : TRY_CAST<String>("2022" AS Timestamp NULL)
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}
@@ -3617,7 +3617,7 @@ output         : NULL
 
 ast            : TRY_TO_TIMESTAMP('2022-01')
 raw expr       : TRY_TO_TIMESTAMP('2022-01')
-checked expr   : try_to_timestamp<String>("2022-01")
+checked expr   : TRY_CAST<String>("2022-01" AS Timestamp NULL)
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}
@@ -3626,7 +3626,7 @@ output         : NULL
 
 ast            : TRY_TO_TIMESTAMP('2022-01-02')
 raw expr       : TRY_TO_TIMESTAMP('2022-01-02')
-checked expr   : try_to_timestamp<String>("2022-01-02")
+checked expr   : TRY_CAST<String>("2022-01-02" AS Timestamp NULL)
 optimized expr : 1641081600000000
 output type    : Timestamp NULL
 output domain  : {1641081600000000..=1641081600000000}
@@ -3635,7 +3635,7 @@ output         : '2022-01-02 00:00:00.000000'
 
 ast            : TRY_TO_TIMESTAMP('A NON-TIMESTAMP STR')
 raw expr       : TRY_TO_TIMESTAMP('A NON-TIMESTAMP STR')
-checked expr   : try_to_timestamp<String>("A NON-TIMESTAMP STR")
+checked expr   : TRY_CAST<String>("A NON-TIMESTAMP STR" AS Timestamp NULL)
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}
@@ -3644,7 +3644,7 @@ output         : NULL
 
 ast            : TRY_TO_TIMESTAMP('2022-01-02T03:25:02.868894-07:00')
 raw expr       : TRY_TO_TIMESTAMP('2022-01-02T03:25:02.868894-07:00')
-checked expr   : try_to_timestamp<String>("2022-01-02T03:25:02.868894-07:00")
+checked expr   : TRY_CAST<String>("2022-01-02T03:25:02.868894-07:00" AS Timestamp NULL)
 optimized expr : 1641119102868894
 output type    : Timestamp NULL
 output domain  : {1641119102868894..=1641119102868894}
@@ -3653,7 +3653,7 @@ output         : '2022-01-02 10:25:02.868894'
 
 ast            : TRY_TO_TIMESTAMP('2022-01-02 02:00:11')
 raw expr       : TRY_TO_TIMESTAMP('2022-01-02 02:00:11')
-checked expr   : try_to_timestamp<String>("2022-01-02 02:00:11")
+checked expr   : TRY_CAST<String>("2022-01-02 02:00:11" AS Timestamp NULL)
 optimized expr : 1641088811000000
 output type    : Timestamp NULL
 output domain  : {1641088811000000..=1641088811000000}
@@ -3662,7 +3662,7 @@ output         : '2022-01-02 02:00:11.000000'
 
 ast            : TRY_TO_TIMESTAMP('2022-01-02T02:00:22')
 raw expr       : TRY_TO_TIMESTAMP('2022-01-02T02:00:22')
-checked expr   : try_to_timestamp<String>("2022-01-02T02:00:22")
+checked expr   : TRY_CAST<String>("2022-01-02T02:00:22" AS Timestamp NULL)
 optimized expr : 1641088822000000
 output type    : Timestamp NULL
 output domain  : {1641088822000000..=1641088822000000}
@@ -3671,7 +3671,7 @@ output         : '2022-01-02 02:00:22.000000'
 
 ast            : TRY_TO_TIMESTAMP('2022-01-02T01:12:00-07:00')
 raw expr       : TRY_TO_TIMESTAMP('2022-01-02T01:12:00-07:00')
-checked expr   : try_to_timestamp<String>("2022-01-02T01:12:00-07:00")
+checked expr   : TRY_CAST<String>("2022-01-02T01:12:00-07:00" AS Timestamp NULL)
 optimized expr : 1641111120000000
 output type    : Timestamp NULL
 output domain  : {1641111120000000..=1641111120000000}
@@ -3680,7 +3680,7 @@ output         : '2022-01-02 08:12:00.000000'
 
 ast            : TRY_TO_TIMESTAMP('2022-01-02T01')
 raw expr       : TRY_TO_TIMESTAMP('2022-01-02T01')
-checked expr   : try_to_timestamp<String>("2022-01-02T01")
+checked expr   : TRY_CAST<String>("2022-01-02T01" AS Timestamp NULL)
 optimized expr : 1641085200000000
 output type    : Timestamp NULL
 output domain  : {1641085200000000..=1641085200000000}
@@ -3689,7 +3689,7 @@ output         : '2022-01-02 01:00:00.000000'
 
 ast            : TRY_TO_TIMESTAMP(a)
 raw expr       : TRY_TO_TIMESTAMP(a::String)
-checked expr   : try_to_timestamp<String>(a)
+checked expr   : TRY_CAST<String>(a AS Timestamp NULL)
 evaluation:
 +--------+-----------------------------------------------------+----------------------------------------------------+
 |        | a                                                   | Output                                             |
@@ -3713,7 +3713,7 @@ evaluation (internal):
 
 ast            : TRY_CAST(TO_TIMESTAMP(-315360000000000) AS VARCHAR)
 raw expr       : TRY_CAST(TO_TIMESTAMP(minus(315360000000000)) AS String)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)) AS String NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp) AS String NULL)
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String NULL
 output domain  : {"1960-01-04 00:00:00.000000"..="1960-01-04 00:00:00.000000"}
@@ -3722,7 +3722,7 @@ output         : '1960-01-04 00:00:00.000000'
 
 ast            : TRY_CAST(TO_TIMESTAMP(-315360000000) AS VARCHAR)
 raw expr       : TRY_CAST(TO_TIMESTAMP(minus(315360000000)) AS String)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)) AS String NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(minus<UInt64>(315360000000_u64) AS Timestamp) AS String NULL)
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String NULL
 output domain  : {"1960-01-04 00:00:00.000000"..="1960-01-04 00:00:00.000000"}
@@ -3731,7 +3731,7 @@ output         : '1960-01-04 00:00:00.000000'
 
 ast            : TRY_CAST(TO_TIMESTAMP(-100) AS VARCHAR)
 raw expr       : TRY_CAST(TO_TIMESTAMP(minus(100)) AS String)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp) AS String NULL)
 optimized expr : "1969-12-31 23:58:20.000000"
 output type    : String NULL
 output domain  : {"1969-12-31 23:58:20.000000"..="1969-12-31 23:58:20.000000"}
@@ -3740,7 +3740,7 @@ output         : '1969-12-31 23:58:20.000000'
 
 ast            : TRY_CAST(TO_TIMESTAMP(-0) AS VARCHAR)
 raw expr       : TRY_CAST(TO_TIMESTAMP(minus(0)) AS String)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64) AS Timestamp) AS String NULL)
 optimized expr : "1970-01-01 00:00:00.000000"
 output type    : String NULL
 output domain  : {"1970-01-01 00:00:00.000000"..="1970-01-01 00:00:00.000000"}
@@ -3749,7 +3749,7 @@ output         : '1970-01-01 00:00:00.000000'
 
 ast            : TRY_CAST(TO_TIMESTAMP(0) AS VARCHAR)
 raw expr       : TRY_CAST(TO_TIMESTAMP(0) AS String)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt8>(0_u8 AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt8>(0_u8 AS Int64) AS Timestamp) AS String NULL)
 optimized expr : "1970-01-01 00:00:00.000000"
 output type    : String NULL
 output domain  : {"1970-01-01 00:00:00.000000"..="1970-01-01 00:00:00.000000"}
@@ -3758,7 +3758,7 @@ output         : '1970-01-01 00:00:00.000000'
 
 ast            : TRY_CAST(TO_TIMESTAMP(100) AS VARCHAR)
 raw expr       : TRY_CAST(TO_TIMESTAMP(100) AS String)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt8>(100_u8 AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt8>(100_u8 AS Int64) AS Timestamp) AS String NULL)
 optimized expr : "1970-01-01 00:01:40.000000"
 output type    : String NULL
 output domain  : {"1970-01-01 00:01:40.000000"..="1970-01-01 00:01:40.000000"}
@@ -3767,7 +3767,7 @@ output         : '1970-01-01 00:01:40.000000'
 
 ast            : TRY_CAST(TO_TIMESTAMP(315360000000) AS VARCHAR)
 raw expr       : TRY_CAST(TO_TIMESTAMP(315360000000) AS String)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt64>(315360000000_u64 AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt64>(315360000000_u64 AS Int64) AS Timestamp) AS String NULL)
 optimized expr : "1979-12-30 00:00:00.000000"
 output type    : String NULL
 output domain  : {"1979-12-30 00:00:00.000000"..="1979-12-30 00:00:00.000000"}
@@ -3776,7 +3776,7 @@ output         : '1979-12-30 00:00:00.000000'
 
 ast            : TRY_CAST(TO_TIMESTAMP(315360000000000) AS VARCHAR)
 raw expr       : TRY_CAST(TO_TIMESTAMP(315360000000000) AS String)
-checked expr   : TRY_CAST<Timestamp>(to_timestamp<Int64>(CAST<UInt64>(315360000000000_u64 AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt64>(315360000000000_u64 AS Int64) AS Timestamp) AS String NULL)
 optimized expr : "1979-12-30 00:00:00.000000"
 output type    : String NULL
 output domain  : {"1979-12-30 00:00:00.000000"..="1979-12-30 00:00:00.000000"}
@@ -3811,7 +3811,7 @@ evaluation (internal):
 
 ast            : TRY_TO_DATE('2022')
 raw expr       : TRY_TO_DATE('2022')
-checked expr   : try_to_date<String>("2022")
+checked expr   : TRY_CAST<String>("2022" AS Date NULL)
 optimized expr : NULL
 output type    : Date NULL
 output domain  : {NULL}
@@ -3820,7 +3820,7 @@ output         : NULL
 
 ast            : TRY_TO_DATE('2022-01')
 raw expr       : TRY_TO_DATE('2022-01')
-checked expr   : try_to_date<String>("2022-01")
+checked expr   : TRY_CAST<String>("2022-01" AS Date NULL)
 optimized expr : NULL
 output type    : Date NULL
 output domain  : {NULL}
@@ -3829,7 +3829,7 @@ output         : NULL
 
 ast            : TRY_TO_DATE('2022-01-02')
 raw expr       : TRY_TO_DATE('2022-01-02')
-checked expr   : try_to_date<String>("2022-01-02")
+checked expr   : TRY_CAST<String>("2022-01-02" AS Date NULL)
 optimized expr : 18994
 output type    : Date NULL
 output domain  : {18994..=18994}
@@ -3838,7 +3838,7 @@ output         : '2022-01-02'
 
 ast            : TRY_TO_DATE('A NON-DATE STR')
 raw expr       : TRY_TO_DATE('A NON-DATE STR')
-checked expr   : try_to_date<String>("A NON-DATE STR")
+checked expr   : TRY_CAST<String>("A NON-DATE STR" AS Date NULL)
 optimized expr : NULL
 output type    : Date NULL
 output domain  : {NULL}
@@ -3847,7 +3847,7 @@ output         : NULL
 
 ast            : TRY_TO_DATE('2022-01-02T03:25:02.868894-07:00')
 raw expr       : TRY_TO_DATE('2022-01-02T03:25:02.868894-07:00')
-checked expr   : try_to_date<String>("2022-01-02T03:25:02.868894-07:00")
+checked expr   : TRY_CAST<String>("2022-01-02T03:25:02.868894-07:00" AS Date NULL)
 optimized expr : 18994
 output type    : Date NULL
 output domain  : {18994..=18994}
@@ -3856,7 +3856,7 @@ output         : '2022-01-02'
 
 ast            : TRY_TO_DATE('2022-01-02 02:00:11')
 raw expr       : TRY_TO_DATE('2022-01-02 02:00:11')
-checked expr   : try_to_date<String>("2022-01-02 02:00:11")
+checked expr   : TRY_CAST<String>("2022-01-02 02:00:11" AS Date NULL)
 optimized expr : 18994
 output type    : Date NULL
 output domain  : {18994..=18994}
@@ -3865,7 +3865,7 @@ output         : '2022-01-02'
 
 ast            : TRY_TO_DATE('2022-01-02T02:00:22')
 raw expr       : TRY_TO_DATE('2022-01-02T02:00:22')
-checked expr   : try_to_date<String>("2022-01-02T02:00:22")
+checked expr   : TRY_CAST<String>("2022-01-02T02:00:22" AS Date NULL)
 optimized expr : 18994
 output type    : Date NULL
 output domain  : {18994..=18994}
@@ -3874,7 +3874,7 @@ output         : '2022-01-02'
 
 ast            : TRY_TO_DATE('2022-01-02T01:12:00-07:00')
 raw expr       : TRY_TO_DATE('2022-01-02T01:12:00-07:00')
-checked expr   : try_to_date<String>("2022-01-02T01:12:00-07:00")
+checked expr   : TRY_CAST<String>("2022-01-02T01:12:00-07:00" AS Date NULL)
 optimized expr : 18994
 output type    : Date NULL
 output domain  : {18994..=18994}
@@ -3883,7 +3883,7 @@ output         : '2022-01-02'
 
 ast            : TRY_TO_DATE('2022-01-02T01')
 raw expr       : TRY_TO_DATE('2022-01-02T01')
-checked expr   : try_to_date<String>("2022-01-02T01")
+checked expr   : TRY_CAST<String>("2022-01-02T01" AS Date NULL)
 optimized expr : 18994
 output type    : Date NULL
 output domain  : {18994..=18994}
@@ -3892,7 +3892,7 @@ output         : '2022-01-02'
 
 ast            : TRY_TO_DATE(a)
 raw expr       : TRY_TO_DATE(a::String)
-checked expr   : try_to_date<String>(a)
+checked expr   : TRY_CAST<String>(a AS Date NULL)
 evaluation:
 +--------+-----------------------------------------------------+------------------------------+
 |        | a                                                   | Output                       |
@@ -3916,7 +3916,7 @@ evaluation (internal):
 
 ast            : TRY_CAST(TO_DATE(-354285) AS VARCHAR)
 raw expr       : TRY_CAST(TO_DATE(minus(354285)) AS String)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(minus<UInt32>(354285_u32)) AS String NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(minus<UInt32>(354285_u32) AS Date) AS String NULL)
 optimized expr : "1000-01-01"
 output type    : String NULL
 output domain  : {"1000-01-01"..="1000-01-01"}
@@ -3925,7 +3925,7 @@ output         : '1000-01-01'
 
 ast            : TRY_CAST(TO_DATE(-100) AS VARCHAR)
 raw expr       : TRY_CAST(TO_DATE(minus(100)) AS String)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Date) AS String NULL)
 optimized expr : "1969-09-23"
 output type    : String NULL
 output domain  : {"1969-09-23"..="1969-09-23"}
@@ -3934,7 +3934,7 @@ output         : '1969-09-23'
 
 ast            : TRY_CAST(TO_DATE(-0) AS VARCHAR)
 raw expr       : TRY_CAST(TO_DATE(minus(0)) AS String)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<Int16>(minus<UInt8>(0_u8) AS Int64) AS Date) AS String NULL)
 optimized expr : "1970-01-01"
 output type    : String NULL
 output domain  : {"1970-01-01"..="1970-01-01"}
@@ -3943,7 +3943,7 @@ output         : '1970-01-01'
 
 ast            : TRY_CAST(TO_DATE(0) AS VARCHAR)
 raw expr       : TRY_CAST(TO_DATE(0) AS String)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<UInt8>(0_u8 AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<UInt8>(0_u8 AS Int64) AS Date) AS String NULL)
 optimized expr : "1970-01-01"
 output type    : String NULL
 output domain  : {"1970-01-01"..="1970-01-01"}
@@ -3952,7 +3952,7 @@ output         : '1970-01-01'
 
 ast            : TRY_CAST(TO_DATE(100) AS VARCHAR)
 raw expr       : TRY_CAST(TO_DATE(100) AS String)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<UInt8>(100_u8 AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<UInt8>(100_u8 AS Int64) AS Date) AS String NULL)
 optimized expr : "1970-04-11"
 output type    : String NULL
 output domain  : {"1970-04-11"..="1970-04-11"}
@@ -3961,7 +3961,7 @@ output         : '1970-04-11'
 
 ast            : TRY_CAST(TO_DATE(2932896) AS VARCHAR)
 raw expr       : TRY_CAST(TO_DATE(2932896) AS String)
-checked expr   : TRY_CAST<Date>(to_date<Int64>(CAST<UInt32>(2932896_u32 AS Int64)) AS String NULL)
+checked expr   : TRY_CAST<Date>(CAST<Int64>(CAST<UInt32>(2932896_u32 AS Int64) AS Date) AS String NULL)
 optimized expr : "9999-12-31"
 output type    : String NULL
 output domain  : {"9999-12-31"..="9999-12-31"}

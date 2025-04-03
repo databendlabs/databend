@@ -18,7 +18,7 @@ output         : 0
 
 ast            : running_difference(to_datetime(10000))
 raw expr       : running_difference(to_datetime(10000))
-checked expr   : running_difference<Timestamp>(to_timestamp<Int64>(CAST<UInt16>(10000_u16 AS Int64)))
+checked expr   : running_difference<Timestamp>(CAST<Int64>(CAST<UInt16>(10000_u16 AS Int64) AS Timestamp))
 optimized expr : 0_i64
 output type    : Int64
 output domain  : {0..=0}
@@ -27,7 +27,7 @@ output         : 0
 
 ast            : running_difference(to_date(10000))
 raw expr       : running_difference(to_date(10000))
-checked expr   : running_difference<Date>(to_date<Int64>(CAST<UInt16>(10000_u16 AS Int64)))
+checked expr   : running_difference<Date>(CAST<Int64>(CAST<UInt16>(10000_u16 AS Int64) AS Date))
 optimized expr : 0_i32
 output type    : Int32
 output domain  : {0..=0}

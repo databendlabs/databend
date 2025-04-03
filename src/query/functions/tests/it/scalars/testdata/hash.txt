@@ -197,7 +197,7 @@ output         : 10246934130793054423
 
 ast            : city64withseed(to_datetime(100000), 1234)
 raw expr       : city64withseed(to_datetime(100000), 1234)
-checked expr   : city64withseed<Timestamp, UInt16>(to_timestamp<Int64>(CAST<UInt32>(100000_u32 AS Int64)), 1234_u16)
+checked expr   : city64withseed<Timestamp, UInt16>(CAST<Int64>(CAST<UInt32>(100000_u32 AS Int64) AS Timestamp), 1234_u16)
 optimized expr : 4538088127563444061_u64
 output type    : UInt64
 output domain  : {4538088127563444061..=4538088127563444061}
@@ -242,7 +242,7 @@ output         : 2939704650099116301
 
 ast            : city64withseed(to_date(100000), 1234)
 raw expr       : city64withseed(to_date(100000), 1234)
-checked expr   : city64withseed<Date, UInt16>(to_date<Int64>(CAST<UInt32>(100000_u32 AS Int64)), 1234_u16)
+checked expr   : city64withseed<Date, UInt16>(CAST<Int64>(CAST<UInt32>(100000_u32 AS Int64) AS Date), 1234_u16)
 optimized expr : 8535774936754559738_u64
 output type    : UInt64
 output domain  : {8535774936754559738..=8535774936754559738}
@@ -292,7 +292,7 @@ output         : 17684958587550623602
 
 ast            : siphash64(to_datetime(100000))
 raw expr       : siphash64(to_datetime(100000))
-checked expr   : siphash64<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
+checked expr   : siphash64<Timestamp>(CAST<Int64>(CAST<UInt32>(100000_u32 AS Int64) AS Timestamp))
 optimized expr : 6710305768027137259_u64
 output type    : UInt64
 output domain  : {6710305768027137259..=6710305768027137259}
@@ -337,7 +337,7 @@ output         : 14856193058643670405
 
 ast            : siphash64(to_date(100000))
 raw expr       : siphash64(to_date(100000))
-checked expr   : siphash64<Date>(to_date<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
+checked expr   : siphash64<Date>(CAST<Int64>(CAST<UInt32>(100000_u32 AS Int64) AS Date))
 optimized expr : 17230848539826186862_u64
 output type    : UInt64
 output domain  : {17230848539826186862..=17230848539826186862}
@@ -403,7 +403,7 @@ output         : 11989503812394966078
 
 ast            : xxhash64(to_datetime(100000))
 raw expr       : xxhash64(to_datetime(100000))
-checked expr   : xxhash64<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
+checked expr   : xxhash64<Timestamp>(CAST<Int64>(CAST<UInt32>(100000_u32 AS Int64) AS Timestamp))
 optimized expr : 14455582462593060490_u64
 output type    : UInt64
 output domain  : {14455582462593060490..=14455582462593060490}
@@ -430,7 +430,7 @@ output         : 18307966283998289030
 
 ast            : xxhash64(to_date(100000))
 raw expr       : xxhash64(to_date(100000))
-checked expr   : xxhash64<Date>(to_date<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
+checked expr   : xxhash64<Date>(CAST<Int64>(CAST<UInt32>(100000_u32 AS Int64) AS Date))
 optimized expr : 8691527656253933431_u64
 output type    : UInt64
 output domain  : {8691527656253933431..=8691527656253933431}
@@ -496,7 +496,7 @@ output         : 3980406955
 
 ast            : xxhash32(to_datetime(100000))
 raw expr       : xxhash32(to_datetime(100000))
-checked expr   : xxhash32<Timestamp>(to_timestamp<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
+checked expr   : xxhash32<Timestamp>(CAST<Int64>(CAST<UInt32>(100000_u32 AS Int64) AS Timestamp))
 optimized expr : 680734338_u32
 output type    : UInt32
 output domain  : {680734338..=680734338}
@@ -523,7 +523,7 @@ output         : 3252916525
 
 ast            : xxhash32(to_date(100000))
 raw expr       : xxhash32(to_date(100000))
-checked expr   : xxhash32<Date>(to_date<Int64>(CAST<UInt32>(100000_u32 AS Int64)))
+checked expr   : xxhash32<Date>(CAST<Int64>(CAST<UInt32>(100000_u32 AS Int64) AS Date))
 optimized expr : 2518126785_u32
 output type    : UInt32
 output domain  : {2518126785..=2518126785}

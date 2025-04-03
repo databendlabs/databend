@@ -442,7 +442,7 @@ fn eval_text(
 
     let raw_expr = parse_raw_expr(text, &columns);
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
-    let expr = type_check::rewrite_function_to_cast(expr).unwrap();
+    let expr = type_check::rewrite_function_to_cast(expr);
     let expr = expr.project_column_ref(|i| columns[*i].0.to_string());
 
     eval_index_expr(file, &block, &bloom_columns, schema, expr);
