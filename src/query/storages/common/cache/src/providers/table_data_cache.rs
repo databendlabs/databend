@@ -27,6 +27,7 @@ use databend_common_metrics::cache::*;
 use log::error;
 use log::info;
 
+use crate::manager::DISK_TABLE_DATA_CACHE_NAME;
 use crate::providers::LruDiskCacheHolder;
 use crate::CacheAccessor;
 use crate::LruDiskCacheBuilder;
@@ -63,17 +64,17 @@ impl AsRef<str> for TableDataCacheKey {
 
 #[derive(Clone)]
 pub struct TableDataCache<T = LruDiskCacheHolder> {
+    name: String,
     external_cache: T,
     population_queue: crossbeam_channel::Sender<CacheItem>,
     _cache_populator: DiskCachePopulator,
 }
 
-pub const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";
-
 pub struct TableDataCacheBuilder;
 
 impl TableDataCacheBuilder {
     pub fn new_table_data_disk_cache(
+        name: String,
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: usize,
@@ -89,6 +90,7 @@ impl TableDataCacheBuilder {
         let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
         Ok(TableDataCache {
+            name,
             external_cache: disk_cache.clone(),
             population_queue: tx,
             _cache_populator: DiskCachePopulator::new(rx, disk_cache, num_population_thread)?,
@@ -100,7 +102,7 @@ impl CacheAccessor for TableDataCache {
     type V = Bytes;
 
     fn name(&self) -> &str {
-        DISK_TABLE_DATA_CACHE_NAME
+        self.name.as_str()
     }
 
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {

@@ -43,6 +43,8 @@ use crate::TableDataCacheBuilder;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
 
+pub const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";
+
 struct CacheSlot<T> {
     cache: RwLock<Option<T>>,
 }
@@ -418,6 +420,7 @@ impl CacheManager {
     ) -> Result<CacheSlot<TableDataCache>> {
         if disk_cache_bytes_size > 0 {
             let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
+                DISK_TABLE_DATA_CACHE_NAME.to_owned(),
                 path,
                 population_queue_size,
                 disk_cache_bytes_size,
