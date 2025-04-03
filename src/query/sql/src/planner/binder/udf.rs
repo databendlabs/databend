@@ -81,6 +81,7 @@ impl Binder {
                 return_type,
                 address,
                 handler,
+                headers,
                 language,
             } => {
                 UDFValidator::is_udf_server_allowed(address.as_str())?;
@@ -112,7 +113,8 @@ impl Binder {
                     .with_tenant(self.ctx.get_tenant().tenant_name())?
                     .with_func_name(&name)?
                     .with_handler_name(handler)?
-                    .with_query_id(&self.ctx.get_id())?;
+                    .with_query_id(&self.ctx.get_id())?
+                    .with_headers(headers.iter())?;
                 client
                     .check_schema(handler, &arg_datatypes, &return_type)
                     .await?;
@@ -125,6 +127,7 @@ impl Binder {
                         arg_types: arg_datatypes,
                         return_type,
                         handler: handler.clone(),
+                        headers: headers.clone(),
                         language: language.clone(),
                     }),
                     created_on: Utc::now(),

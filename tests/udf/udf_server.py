@@ -17,11 +17,45 @@ import datetime
 from decimal import Decimal
 import time
 from typing import List, Dict, Any, Tuple, Optional
+from pyarrow import flight
 
 # https://github.com/datafuselabs/databend-udf
 from databend_udf import udf, UDFServer
 
 logging.basicConfig(level=logging.INFO)
+
+
+class HeadersMiddlewareFactory(flight.ServerMiddlewareFactory):
+    def start_call(self, info, headers):
+        return HeadersMiddleware(headers)
+
+class HeadersMiddleware(flight.ServerMiddleware):
+    _headers: Dict[str, str]
+
+    def __init__(self, headers, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._headers = headers
+
+    def get_token(self, key):
+        print(self._headers)
+        return self._headers.get(key)
+
+class CheckHeadersServer(UDFServer):
+
+    def do_exchange(self, context, descriptor, reader, writer):
+        headers = context.get_middleware("headers")
+
+        if descriptor.path == [b'check_headers']:
+            required_header = "x-authorization"
+            expect_token = ["123"]
+            token = headers.get_token(required_header)
+
+            if token is None:
+                raise flight.FlightUnauthenticatedError(f"Missing required header: {required_header.upper()}")
+            if token != expect_token:
+                raise flight.FlightUnauthenticatedError(f"Wrong token(expect: {expect_token}): {token}")
+
+        return super().do_exchange(context, descriptor, reader, writer)
 
 
 @udf(input_types=["TINYINT", "SMALLINT", "INT", "BIGINT"], result_type="BIGINT")
@@ -371,8 +405,15 @@ def ping(s: str) -> str:
     return s
 
 
+@udf(input_types=[], result_type="VARCHAR")
+def check_headers() -> str:
+    return "success"
+
+
 if __name__ == "__main__":
-    udf_server = UDFServer("0.0.0.0:8815")
+    udf_server = CheckHeadersServer(location="0.0.0.0:8815", middleware={
+        "headers": HeadersMiddlewareFactory()
+    })
     udf_server.add_function(add_signed)
     udf_server.add_function(add_unsigned)
     udf_server.add_function(add_float)
@@ -397,6 +438,7 @@ if __name__ == "__main__":
     udf_server.add_function(wait)
     udf_server.add_function(wait_concurrent)
     udf_server.add_function(url_len)
+    udf_server.add_function(check_headers)
 
     # Built-in function
     udf_server.add_function(ping)

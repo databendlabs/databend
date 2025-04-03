@@ -317,6 +317,7 @@ impl Binder {
                         span: udf.span,
                         name: udf.name.clone(),
                         handler: udf.handler.clone(),
+                        headers: udf.headers.clone(),
                         display_name: udf.display_name.clone(),
                         udf_type: udf.udf_type.clone(),
                         arg_types: udf.arg_types.clone(),
