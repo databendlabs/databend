@@ -14,9 +14,9 @@
 
 mod cascades;
 mod hyper_dp;
-mod recursive;
+pub mod operator;
+pub mod recursive;
 
 pub use cascades::CascadesOptimizer;
 pub use cascades::Scheduler;
 pub use hyper_dp::DPhpy;
-pub use recursive::RecursiveOptimizer;

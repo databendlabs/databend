@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::operator::DeduplicateJoinConditionOptimizer;
+use databend_common_sql::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
 use databend_common_sql::planner::binder::ColumnBinding;
 use databend_common_sql::planner::binder::Visibility;
 use databend_common_sql::planner::plans::BoundColumnRef;

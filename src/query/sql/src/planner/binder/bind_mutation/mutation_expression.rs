@@ -36,7 +36,7 @@ use crate::binder::InternalColumnBinding;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::operator::SubqueryRewriter;
+use crate::optimizer::optimizers::operator::SubqueryRewriter;
 use crate::optimizer::OptimizerContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;

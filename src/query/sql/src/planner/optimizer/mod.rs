@@ -15,7 +15,6 @@
 mod cost;
 mod distributed;
 pub mod ir;
-pub mod operator;
 #[allow(clippy::module_inception)]
 mod optimizer;
 mod optimizer_context;

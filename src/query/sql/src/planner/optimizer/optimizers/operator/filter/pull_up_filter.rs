@@ -18,8 +18,8 @@ use databend_common_exception::Result;
 
 use crate::binder::split_conjunctions;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::operator::InferFilterOptimizer;
-use crate::optimizer::operator::NormalizeDisjunctiveFilterOptimizer;
+use crate::optimizer::optimizers::operator::InferFilterOptimizer;
+use crate::optimizer::optimizers::operator::NormalizeDisjunctiveFilterOptimizer;
 use crate::optimizer::OptimizerContext;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
