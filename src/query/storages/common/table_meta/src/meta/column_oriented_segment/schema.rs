@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
@@ -31,6 +33,21 @@ pub const COMPRESSION: &str = "compression";
 pub const CREATE_ON: &str = "create_on";
 pub const LOCATION_PATH: &str = "path";
 pub const LOCATION_FORMAT_VERSION: &str = "format_version";
+
+pub fn block_level_field_names() -> HashSet<String> {
+    let mut set = HashSet::new();
+    set.insert(ROW_COUNT.to_string());
+    set.insert(BLOCK_SIZE.to_string());
+    set.insert(FILE_SIZE.to_string());
+    set.insert(CLUSTER_STATS.to_string());
+    set.insert(LOCATION.to_string());
+    set.insert(BLOOM_FILTER_INDEX_LOCATION.to_string());
+    set.insert(BLOOM_FILTER_INDEX_SIZE.to_string());
+    set.insert(INVERTED_INDEX_SIZE.to_string());
+    set.insert(COMPRESSION.to_string());
+    set.insert(CREATE_ON.to_string());
+    set
+}
 
 fn location_parts() -> (Vec<String>, Vec<TableDataType>) {
     (

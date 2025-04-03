@@ -19,6 +19,7 @@ mod schema;
 mod segment;
 mod segment_builder;
 pub use block_meta::AbstractBlockMeta;
+pub use schema::block_level_field_names;
 pub use schema::col_meta_type;
 pub use schema::col_stats_type;
 pub use schema::meta_name;

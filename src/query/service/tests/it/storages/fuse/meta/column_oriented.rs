@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -240,19 +239,23 @@ fn check_block_level_meta(
     for (bloom_filter_index_location, block_meta) in
         bloom_filter_index_location.iter().zip(block_metas.iter())
     {
-        let bloom_filter_index_location = bloom_filter_index_location.as_tuple().unwrap();
-        assert_eq!(
-            bloom_filter_index_location[0].as_string().unwrap(),
-            &block_meta.bloom_filter_index_location.as_ref().unwrap().0
-        );
-        assert_eq!(
-            bloom_filter_index_location[1]
-                .as_number()
-                .unwrap()
-                .as_u_int64()
-                .unwrap(),
-            &block_meta.bloom_filter_index_location.as_ref().unwrap().1
-        );
+        let bloom_filter_index_location = bloom_filter_index_location.as_tuple();
+        if let Some(bloom_filter_index_location) = bloom_filter_index_location {
+            assert_eq!(
+                bloom_filter_index_location[0].as_string().unwrap(),
+                &block_meta.bloom_filter_index_location.as_ref().unwrap().0
+            );
+            assert_eq!(
+                bloom_filter_index_location[1]
+                    .as_number()
+                    .unwrap()
+                    .as_u_int64()
+                    .unwrap(),
+                &block_meta.bloom_filter_index_location.as_ref().unwrap().1
+            );
+        } else {
+            assert!(block_meta.bloom_filter_index_location.is_none());
+        }
     }
 
     // check bloom filter index size
@@ -355,8 +358,13 @@ async fn test_segment_cache() -> Result<()> {
     assert!(cache.get(&location).is_none());
 
     // 1. only read and cache block level meta
-    let _column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, &HashSet::new(), false).await?;
+    let _column_oriented_segment = read_column_oriented_segment(
+        operator.clone(),
+        &location,
+        &block_level_field_names(),
+        true,
+    )
+    .await?;
     let cached = cache.get(&location).unwrap();
     assert_eq!(cached.segment_schema.fields.len(), 10);
     assert_eq!(cached.segment_schema, segment_schema(&TableSchema::empty()));
@@ -365,9 +373,11 @@ async fn test_segment_cache() -> Result<()> {
 
     // 2. read and cache meta and stats of column 1
     let col_id = 1;
-    let projection = HashSet::from([meta_name(col_id), stat_name(col_id)]);
+    let mut projection = block_level_field_names();
+    projection.insert(meta_name(col_id));
+    projection.insert(stat_name(col_id));
     let _column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, &projection, false).await?;
+        read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
     assert_eq!(cached.segment_schema.fields.len(), 12);
 
@@ -386,9 +396,11 @@ async fn test_segment_cache() -> Result<()> {
 
     // 3. read and cache meta and stats of column 2
     let col_id = 2;
-    let projection = HashSet::from([meta_name(col_id), stat_name(col_id)]);
+    let mut projection = block_level_field_names();
+    projection.insert(meta_name(col_id));
+    projection.insert(stat_name(col_id));
     let _column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, &projection, false).await?;
+        read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
     // column 2 does not have stats
     assert_eq!(cached.segment_schema.fields.len(), 13);
@@ -398,9 +410,11 @@ async fn test_segment_cache() -> Result<()> {
 
     // 4. read column 1 again, should hit cache
     let col_id = 1;
-    let projection = HashSet::from([meta_name(col_id), stat_name(col_id)]);
+    let mut projection = block_level_field_names();
+    projection.insert(meta_name(col_id));
+    projection.insert(stat_name(col_id));
     let column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, &projection, false).await?;
+        read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
     // column 2 does not have stats
     assert_eq!(cached.segment_schema.fields.len(), 13);
