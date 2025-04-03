@@ -32,7 +32,7 @@ pub trait RoleApi: Sync + Send {
 
     async fn get_raw_meta_roles(&self) -> Result<ListKVReply>;
 
-    async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>>;
+    async fn list_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>>;
 
     /// General role update.
     ///
