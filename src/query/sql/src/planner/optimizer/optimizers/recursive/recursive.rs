@@ -17,10 +17,10 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::rule::TransformResult;
+use crate::optimizer::optimizers::rule::RuleFactory;
+use crate::optimizer::optimizers::rule::RuleID;
+use crate::optimizer::optimizers::rule::TransformResult;
 use crate::optimizer::OptimizerContext;
-use crate::optimizer::RuleFactory;
-use crate::optimizer::RuleID;
 
 /// A recursive optimizer that will apply the given rules recursively.
 /// It will keep applying the rules on the substituted expression

@@ -32,9 +32,9 @@ use crate::optimizer::optimizers::cascades::Task;
 use crate::optimizer::optimizers::cascades::DEFAULT_TASK_LIMIT;
 use crate::optimizer::optimizers::distributed::DistributedOptimizer;
 use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
-use crate::optimizer::rule::TransformResult;
+use crate::optimizer::optimizers::rule::RuleSet;
+use crate::optimizer::optimizers::rule::TransformResult;
 use crate::optimizer::OptimizerContext;
-use crate::optimizer::RuleSet;
 use crate::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and

@@ -24,10 +24,10 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::optimizer::rule::constant::check_float_range;
-use crate::optimizer::rule::constant::check_int_range;
-use crate::optimizer::rule::constant::check_uint_range;
-use crate::optimizer::rule::constant::remove_trivial_type_cast;
+use crate::optimizer::optimizers::rule::constant::check_float_range;
+use crate::optimizer::optimizers::rule::constant::check_int_range;
+use crate::optimizer::optimizers::rule::constant::check_uint_range;
+use crate::optimizer::optimizers::rule::constant::remove_trivial_type_cast;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;

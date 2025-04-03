@@ -17,6 +17,7 @@ pub mod distributed;
 mod hyper_dp;
 pub mod operator;
 pub mod recursive;
+pub mod rule;
 
 pub use cascades::CascadesOptimizer;
 pub use cascades::Scheduler;
