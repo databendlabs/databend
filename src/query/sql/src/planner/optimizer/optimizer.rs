@@ -246,41 +246,36 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 
 pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -> Result<SExpr> {
     let mut pipeline = OptimizerPipeline::new(opt_ctx.clone())
-        // 1. Configure distributed optimization based on table types
-        // (This is now handled in the pipeline's configure_distributed_optimization method)
-        // 2. Eliminate subqueries by rewriting them into more efficient forms
+        // 1. Eliminate correlated subqueries
         .add(SubqueryRewriter::new(opt_ctx.clone(), None))
-        // 3. Apply statistics aggregation to gather and propagate statistics
+        // 2. Apply statistics aggregation to gather and propagate statistics
         .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
-        // 4. Collect statistics for SExpr nodes to support cost estimation
+        // 3. Collect statistics for SExpr nodes to support cost estimation
         .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
-        // 5. Normalize aggregate, it should be executed before RuleSplitAggregate
+        // 4. Normalize aggregate, it should be executed before RuleSplitAggregate
         .add(RuleNormalizeAggregateOptimizer::new(opt_ctx.clone()))
-        // 6. Pull up and infer filter
+        // 5. Pull up and infer filter
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
-        // 7. Run default rewrite rules
+        // 6. Run default rewrite rules (includes CommuteJoin)
         .add(RecursiveOptimizer::new(
             opt_ctx.clone(),
             &DEFAULT_REWRITE_RULES,
         ))
-        // 8. Run post rewrite rules
+        // 7. Run post rewrite rules
         .add(RecursiveOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
         ]))
-        // 9. Apply DPhyp algorithm for cost-based join reordering
-        .add(DPhpy::new(opt_ctx.clone()))
-        // 10. After join reorder, convert some single join to inner join
-        .add(SingleToInnerOptimizer::new())
-        // 11. Deduplicate join conditions
-        .add(DeduplicateJoinConditionOptimizer::new())
-        // 12. Apply join commutativity to further optimize join ordering
+        // 8. Apply DPhyp algorithm for cost-based join reordering (conditionally)
         .add_if(
-            opt_ctx.get_enable_join_reorder(),
-            RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice()),
+            opt_ctx.get_enable_dphyp() && opt_ctx.get_enable_join_reorder(),
+            DPhpy::new(opt_ctx.clone()),
         )
-        // 13. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case
+        // 9. Additional optimizers that don't affect join order
+        .add(SingleToInnerOptimizer::new())
+        .add(DeduplicateJoinConditionOptimizer::new())
+        // 10. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case
         .add(CascadesOptimizer::new(opt_ctx.clone())?)
-        // 14. Eliminate unnecessary scalar calculations to clean up the final plan
+        // 11. Eliminate unnecessary scalar calculations to clean up the final plan
         .add_if(
             !opt_ctx.get_planning_agg_index(),
             RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
