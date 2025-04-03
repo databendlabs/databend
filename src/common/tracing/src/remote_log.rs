@@ -91,7 +91,7 @@ pub struct RemoteLogGuard {
     buffer: Arc<LogBuffer>,
 }
 
-enum LogMessage {
+pub enum LogMessage {
     Flush(Vec<RemoteLogElement>),
     ForceFlush(Vec<RemoteLogElement>, mpsc::Sender<Result<()>>),
 }
