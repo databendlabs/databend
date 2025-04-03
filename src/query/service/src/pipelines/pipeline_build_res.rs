@@ -37,7 +37,6 @@ pub struct PipelineBuildResult {
     pub sources_pipelines: Vec<Pipeline>,
 
     pub enable_multiway_sort: bool,
-    // pub exchange_injector: Arc<dyn ExchangeInjector>,
     /// for local fragment data sharing
     pub builder_data: PipelineBuilderData,
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,

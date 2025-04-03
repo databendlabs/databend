@@ -129,6 +129,7 @@ impl Processor for TransformPartitionDispatch {
             } else if output.port.can_push() {
                 if self.sync_final_partition {
                     if self.sent_final_partition[*output_index] {
+                        output.status = PortStatus::Idle;
                         self.waiting_outputs_2.push_back(*output_index);
                         self.synchronized_final_partition[*output_index] = true;
                     } else {
@@ -154,22 +155,20 @@ impl Processor for TransformPartitionDispatch {
             return Ok(Event::Finished);
         }
 
-        if let EventCause::Input(_) = &cause {
-            if !self.sync_final_partition && self.input.has_data() && self.current_data.is_none() {
-                let data_block = self.input.pull_data().unwrap()?;
-                let (meta, data_block) = Self::unpark_block(data_block)?;
+        if !self.sync_final_partition && self.input.has_data() && self.current_data.is_none() {
+            let data_block = self.input.pull_data().unwrap()?;
+            let (meta, data_block) = Self::unpark_block(data_block)?;
 
-                match meta {
-                    AggregateMeta::FinalPartition(_) => {
-                        self.sync_final_partition = true;
-                        self.input.set_not_need_data();
-                    }
-                    meta => {
-                        self.input.set_need_data();
-                        self.current_data = Some(data_block.add_meta(Some(Box::new(meta)))?);
-                    }
-                };
-            }
+            match meta {
+                AggregateMeta::FinalPartition(_) => {
+                    self.sync_final_partition = true;
+                    self.input.set_not_need_data();
+                }
+                meta => {
+                    self.input.set_need_data();
+                    self.current_data = Some(data_block.add_meta(Some(Box::new(meta)))?);
+                }
+            };
         }
 
         while self.sync_final_partition {

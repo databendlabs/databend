@@ -139,7 +139,7 @@ impl ProcessorAsyncTask {
                         let elapsed = start.elapsed();
                         let active_workers = queue_clone.active_workers();
                         match elapsed >= Duration::from_secs(200)
-                            // && active_workers == 0
+                            && active_workers == 0
                             && !log_graph
                         {
                             false => {
