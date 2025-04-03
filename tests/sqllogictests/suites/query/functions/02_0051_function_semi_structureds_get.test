@@ -737,7 +737,7 @@ select id, json_path_query(obj, '$.obj.**{1}') from t5
 
 query IT
 select id, json_path_query(obj, '$.obj.**{1}.b') from t5
----
+----
 1 [1,2]
 
 query IT
