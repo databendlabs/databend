@@ -17,6 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::Optimizer;
+use crate::optimizer::OptimizerContext;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
@@ -29,15 +31,15 @@ use crate::Visibility;
 pub struct RuleNormalizeAggregateOptimizer {}
 
 impl RuleNormalizeAggregateOptimizer {
-    pub fn new() -> Self {
+    pub fn new(_opt_ctx: Arc<OptimizerContext>) -> Self {
         RuleNormalizeAggregateOptimizer {}
     }
 
     #[recursive::recursive]
-    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+    fn optimize_internal(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
-            let child = self.optimize(child)?;
+            let child = self.optimize_internal(child)?;
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);
@@ -172,8 +174,13 @@ impl RuleNormalizeAggregateOptimizer {
     }
 }
 
-impl Default for RuleNormalizeAggregateOptimizer {
-    fn default() -> Self {
-        Self::new()
+#[async_trait::async_trait]
+impl Optimizer for RuleNormalizeAggregateOptimizer {
+    fn name(&self) -> &'static str {
+        "RuleNormalizeAggregateOptimizer"
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_internal(s_expr)
     }
 }

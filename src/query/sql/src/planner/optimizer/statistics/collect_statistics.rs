@@ -23,6 +23,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
@@ -46,10 +47,6 @@ impl CollectStatisticsOptimizer {
             table_ctx: opt_ctx.get_table_ctx(),
             metadata: opt_ctx.get_metadata(),
         }
-    }
-
-    pub async fn optimize(mut self, s_expr: &SExpr) -> Result<SExpr> {
-        self.collect(s_expr).await
     }
 
     #[async_recursion::async_recursion(#[recursive::recursive])]
@@ -150,5 +147,16 @@ impl CollectStatisticsOptimizer {
                 Ok(s_expr.replace_children(children))
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for CollectStatisticsOptimizer {
+    fn name(&self) -> &'static str {
+        "CollectStatisticsOptimizer"
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.collect(s_expr).await
     }
 }

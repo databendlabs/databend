@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::Optimizer;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
@@ -98,12 +99,12 @@ impl DeduplicateJoinConditionOptimizer {
         }
     }
 
-    pub fn optimize(mut self, s_expr: &SExpr) -> Result<SExpr> {
+    fn optimize_internal(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         self.deduplicate(s_expr)
     }
 
     #[recursive::recursive]
-    pub fn deduplicate(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    fn deduplicate(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             // Only optimize inner joins
             RelOperator::Join(join) if join.join_type == JoinType::Inner => {
@@ -231,5 +232,16 @@ impl DeduplicateJoinConditionOptimizer {
     ///   3. After path compression, it would become: {t2.id → t1.id, t3.id → t1.id, t4.id → t1.id}
     fn union(&mut self, idx1: usize, idx2: usize) {
         self.column_group.insert(idx2, idx1);
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for DeduplicateJoinConditionOptimizer {
+    fn name(&self) -> &'static str {
+        "DeduplicateJoinConditionOptimizer"
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_internal(s_expr)
     }
 }
