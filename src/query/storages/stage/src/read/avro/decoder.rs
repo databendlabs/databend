@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use apache_avro::schema::RecordSchema;
 use apache_avro::types::Value;
 use apache_avro::Reader;
 use apache_avro::Schema;
+use databend_common_base::base::uuid;
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::types::months_days_micros;
@@ -28,18 +28,28 @@ use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Decimal;
+use databend_common_expression::types::DecimalColumnBuilder;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::AvroFileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use lexical_core::FromLexical;
+use num_bigint::BigInt;
 use num_traits::NumCast;
 
 use crate::read::avro::avro_to_jsonb::to_jsonb;
+use crate::read::avro::schema_match::MatchedField;
+use crate::read::avro::schema_match::MatchedSchema;
+use crate::read::avro::schema_match::SchemaMatcher;
 use crate::read::block_builder_state::BlockBuilderState;
+use crate::read::default_expr_evaluator::DefaultExprEvaluator;
+use crate::read::error_handler::ErrorHandler;
 use crate::read::load_context::LoadContext;
 use crate::read::whole_file_reader::WholeFileData;
 
@@ -57,10 +67,10 @@ impl Error {
         }
     }
 
-    pub fn not_match(schema: &Schema, value: &Value) -> Self {
+    pub fn value_schema_not_match(schema: &MatchedSchema, value: &Value) -> Self {
         Self {
             reason: Some(format!(
-                "schema ({schema}) and value ({value:?}) not match:"
+                "schema ({schema:?}) and value ({value:?}) not match:"
             )),
             path: vec![],
         }
@@ -68,72 +78,14 @@ impl Error {
 }
 
 type ReadFieldResult = std::result::Result<(), Error>;
-
-#[derive(Clone)]
-struct FieldMeta {
-    fill_to_dest: usize,
-    sub_record: Option<RecordMeta>,
-}
-
-#[derive(Clone)]
-struct RecordMeta {
-    src_fields: Vec<Option<FieldMeta>>,
-    dest_fields_with_defaults: Vec<usize>,
-}
-
-impl RecordMeta {
-    fn new(
-        fields_name: &[String],
-        fields_type: &[TableDataType],
-        src_schema: &RecordSchema,
-        allow_missing_field: bool,
-    ) -> Result<RecordMeta> {
-        let mut src_fields = vec![None; src_schema.fields.len()];
-        let mut defaults = vec![];
-        for (c, name) in fields_name.iter().enumerate() {
-            if let Some(pos) = src_schema.lookup.get(name) {
-                let sub_fill_to = match (
-                    &fields_type[c].remove_nullable(),
-                    &src_schema.fields[*pos].schema,
-                ) {
-                    (
-                        TableDataType::Tuple {
-                            fields_type,
-                            fields_name,
-                        },
-                        Schema::Record(record),
-                    ) => Some(Self::new(
-                        fields_name,
-                        fields_type,
-                        record,
-                        allow_missing_field,
-                    )?),
-                    _ => None,
-                };
-                src_fields[*pos] = Some(FieldMeta {
-                    fill_to_dest: c,
-                    sub_record: sub_fill_to,
-                });
-            } else {
-                if !allow_missing_field {
-                    return Err(ErrorCode::BadArguments(format!("missing field {name}. Consider add avro file format option `MISSING_FIELD_AS = FIELD_DEFAULT`")));
-                }
-                defaults.push(c)
-            }
-        }
-        if defaults.len() == src_schema.fields.len() {
-            return Err(ErrorCode::BadArguments("no fields match by name"));
-        }
-        Ok(RecordMeta {
-            src_fields,
-            dest_fields_with_defaults: defaults,
-        })
-    }
-}
 pub(super) struct AvroDecoder {
-    pub ctx: Arc<LoadContext>,
     pub is_rounding_mode: bool,
     pub params: AvroFileFormatParams,
+    // todo(youngsofun): impl error_mode::continue
+    #[allow(dead_code)]
+    pub error_handler: Arc<ErrorHandler>,
+    pub schema: TableSchemaRef,
+    pub default_expr_evaluator: Option<Arc<DefaultExprEvaluator>>,
 }
 
 impl AvroDecoder {
@@ -141,8 +93,10 @@ impl AvroDecoder {
         let is_rounding_mode = ctx.file_format_options_ext.is_rounding_mode;
         Self {
             is_rounding_mode,
-            ctx,
             params,
+            schema: ctx.schema.clone(),
+            error_handler: ctx.error_handler.clone(),
+            default_expr_evaluator: ctx.default_exprs.clone(),
         }
     }
 
@@ -161,30 +115,27 @@ impl AvroDecoder {
             ));
         };
         let names = self
-            .ctx
             .schema
             .fields
             .iter()
             .map(|f| f.name().clone())
             .collect::<Vec<_>>();
         let types = self
-            .ctx
             .schema
             .fields
             .iter()
             .map(|f| f.data_type().clone())
             .collect::<Vec<_>>();
-        let record_meta = RecordMeta::new(
-            &names,
-            &types,
-            &src_schema,
-            self.params.missing_field_as == NullAs::FieldDefault,
-        )?;
+        let matcher = SchemaMatcher {
+            allow_missing_field: self.params.missing_field_as == NullAs::FieldDefault,
+        };
+
+        let matched_fields = matcher.match_fields(&names, &types, &src_schema, 0)?;
 
         for (row, value) in reader.enumerate() {
             let value = value.unwrap();
             if let Value::Record(r) = value {
-                self.read_record(r, &record_meta, &mut state.column_builders, &src_schema)
+                self.read_record(r, &matched_fields, &mut state.column_builders)
                     .map_err(|e| {
                         let path: String = e
                             .path
@@ -208,35 +159,44 @@ impl AvroDecoder {
     fn read_record(
         &self,
         record: Vec<(String, Value)>,
-        record_meta: &RecordMeta,
+        matched_fields: &[MatchedField],
         column_builders: &mut [ColumnBuilder],
-        record_schema: &RecordSchema,
     ) -> ReadFieldResult {
-        for (i, (name, v)) in record.into_iter().enumerate() {
-            if let Some(Some(dest)) = record_meta.src_fields.get(i) {
-                let t = column_builders[dest.fill_to_dest].data_type();
-                self.read_field(
-                    &mut column_builders[dest.fill_to_dest],
-                    v,
-                    &Some(dest.clone()),
-                    &record_schema.fields[i].schema,
-                )
-                .map_err(|mut e| {
-                    e.path.push((i, name));
-                    Error {
-                        reason: Some(e.reason.unwrap_or_else(|| {
-                            format!(
-                                "can not load {:?} to {}",
-                                &record_schema.fields[i].schema, t
-                            )
-                        })),
-                        path: e.path,
+        assert_eq!(column_builders.len(), matched_fields.len());
+        for (i, (column_builder, mf)) in column_builders.iter_mut().zip(matched_fields).enumerate()
+        {
+            match mf {
+                MatchedField::FieldDefault => {
+                    if let Some(eval) = &self.default_expr_evaluator {
+                        eval.push_default_value(column_builder, i)
+                            .map_err(|e| Error::new_reason(e.to_string()))?;
+                    } else {
+                        column_builder.push_default();
                     }
-                })?;
+                }
+                MatchedField::TypeDefault => {
+                    column_builder.push_default();
+                }
+                MatchedField::Value(matched_schema, pos) => {
+                    let pos = *pos;
+                    assert!(pos < record.len());
+                    let name = record[pos].0.clone();
+                    self.read_field(column_builder, record[pos].1.clone(), matched_schema)
+                        .map_err(|mut e| {
+                            e.path.push((i, name));
+                            Error {
+                                reason: Some(e.reason.unwrap_or_else(|| {
+                                    format!(
+                                        "can not load value of type {:?} to {}",
+                                        &matched_schema,
+                                        column_builder.data_type()
+                                    )
+                                })),
+                                path: e.path,
+                            }
+                        })?;
+                }
             }
-        }
-        for c in &record_meta.dest_fields_with_defaults {
-            column_builders[*c].push_default();
         }
         Ok(())
     }
@@ -245,21 +205,24 @@ impl AvroDecoder {
         &self,
         column: &mut ColumnBuilder,
         value: Value,
-        field_meta: &Option<FieldMeta>,
-        schema: &Schema,
+        matched_schema: &MatchedSchema,
     ) -> ReadFieldResult {
-        let (schema, value) = if let Value::Union(i, v) = value {
-            let s = if let Schema::Union(u) = schema {
-                u.variants()[i as usize].clone()
+        let (matched_schema, value) = if let Value::Union(i, v) = value {
+            let s = if let MatchedSchema::Union(u) = matched_schema {
+                u.variants[i as usize].clone()
             } else {
-                return Err(Error::not_match(&schema.clone(), &Value::Union(i, v)));
+                return Err(Error::value_schema_not_match(
+                    &matched_schema.clone(),
+                    &Value::Union(i, v),
+                ));
             };
             (&s.clone(), *v)
         } else {
-            (schema, value)
+            (matched_schema, value)
         };
 
         match column {
+            ColumnBuilder::Nullable(c) => self.read_nullable(c, value, matched_schema),
             ColumnBuilder::Null { len } => self.read_null(len, value),
             ColumnBuilder::Boolean(c) => self.read_bool(c, value),
             ColumnBuilder::String(c) => self.read_string(c, value),
@@ -289,13 +252,14 @@ impl AvroDecoder {
             ColumnBuilder::Date(c) => self.read_date(c, value),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, value),
             ColumnBuilder::Interval(c) => self.read_interval(c, value),
-            ColumnBuilder::Nullable(c) => self.read_nullable(c, value, field_meta, schema),
-            ColumnBuilder::Array(c) => self.read_array(c, value, field_meta, schema),
-            ColumnBuilder::Map(c) => self.read_map(c, value, field_meta, schema),
-            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value, field_meta, schema),
-            // ColumnBuilder::Decimal(c) => with_decimal_type!(|DECIMAL_TYPE| match c {
-            //     DecimalColumnBuilder::DECIMAL_TYPE(c, size) => self.read_decimal(c, *size, value),
-            // }),
+            ColumnBuilder::Array(c) => self.read_array(c, value, matched_schema),
+            ColumnBuilder::Map(c) => self.read_map(c, value, matched_schema),
+            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value, matched_schema),
+            ColumnBuilder::Decimal(c) => with_decimal_type!(|DECIMAL_TYPE| match c {
+                DecimalColumnBuilder::DECIMAL_TYPE(c, size) =>
+                    self.read_decimal(c, *size, value, matched_schema),
+            }),
+            // todo: Bitmap, Geometry, Geography
             _ => Err(Error::new_reason(format!(
                 "loading avro to table with column of type {} not supported yet",
                 column.data_type()
@@ -339,6 +303,10 @@ impl AvroDecoder {
             Value::Enum(_, s) => {
                 column.put_str(s.as_str());
             }
+            Value::Uuid(u) => {
+                let mut encode_buffer = uuid::Uuid::encode_buffer();
+                column.put_str(u.hyphenated().encode_lower(&mut encode_buffer));
+            }
             _ => return Err(Error::default()),
         }
         column.commit_row();
@@ -371,29 +339,62 @@ impl AvroDecoder {
 
     fn read_timestamp(&self, column: &mut Vec<i64>, value: Value) -> ReadFieldResult {
         let v = match value {
-            Value::TimestampMicros(v) => v * 1000,
-            Value::TimestampMillis(v) => v * 1000000,
-            Value::TimestampNanos(v) => v,
+            Value::TimestampMillis(v) | Value::LocalTimestampMillis(v) => v * 1000000,
+            Value::TimestampMicros(v) | Value::LocalTimestampMicros(v) => v * 1000,
+            Value::TimestampNanos(v) | Value::LocalTimestampNanos(v) => v,
             _ => return Err(Error::default()),
         };
         column.push(v);
         Ok(())
     }
 
-    // fn read_decimal<D: Decimal>(
-    //     &self,
-    //     column: &mut Vec<D>,
-    //     size: DecimalSize,
-    //     value: Value,
-    // ) ->ReadFieldResult{
-    //     let v = match value {
-    //         Value::Decimal(v) => {v}
-    //         Value::BigDecimal(v) => {v}
-    //         _ => return Err(None),
-    //     };
-    //     column.push(v);
-    //     Ok(())
-    // }
+    fn read_decimal<D: Decimal>(
+        &self,
+        column: &mut Vec<D>,
+        size: DecimalSize,
+        value: Value,
+        schema: &MatchedSchema,
+    ) -> ReadFieldResult {
+        match (value, schema) {
+            (Value::Decimal(d1), MatchedSchema::Decimal { multiplier }) => {
+                let big_int = <BigInt>::from(d1);
+                if let Some(d1) = <D>::from_bigint(big_int) {
+                    let d = if let Some(m) = multiplier {
+                        d1.checked_mul(D::from_i256(*m)).unwrap()
+                    } else {
+                        d1
+                    };
+                    column.push(d);
+                } else {
+                    return Err(Error::default());
+                }
+            }
+            (Value::BigDecimal(v), MatchedSchema::Primary(Schema::BigDecimal)) => {
+                let v_precision = v.digits() as i64;
+                let v_leading_digits = v_precision - v.fractional_digit_count();
+                let (big_int, v_scale) = v.into_bigint_and_exponent();
+                if v_leading_digits <= (size.precision - size.scale) as i64
+                    && v_scale <= size.scale as i64
+                {
+                    if let Some(mut d1) = <D>::from_bigint(big_int) {
+                        let scale_diff = (size.scale as i64) - v_scale;
+                        if scale_diff > 0 {
+                            d1 = d1
+                                .checked_mul(D::e(scale_diff as u32))
+                                .expect("rescale should not overflow");
+                        }
+                        column.push(d1);
+                    } else {
+                        return Err(Error::default());
+                    }
+                } else {
+                    return Err(Error::default());
+                }
+            }
+            _ => return Err(Error::default()),
+        };
+        Ok(())
+    }
 
     fn read_interval(&self, column: &mut Vec<months_days_micros>, value: Value) -> ReadFieldResult {
         match value {
@@ -423,15 +424,14 @@ impl AvroDecoder {
         &self,
         column: &mut NullableColumnBuilder<AnyType>,
         value: Value,
-        field_meta: &Option<FieldMeta>,
-        schema: &Schema,
+        matched_schema: &MatchedSchema,
     ) -> ReadFieldResult {
         match value {
             Value::Null => {
                 column.push_null();
             }
             other => {
-                self.read_field(&mut column.builder, other, field_meta, schema)?;
+                self.read_field(&mut column.builder, other, matched_schema)?;
                 column.validity.push(true);
             }
         }
@@ -442,18 +442,20 @@ impl AvroDecoder {
         &self,
         column: &mut ArrayColumnBuilder<AnyType>,
         value: Value,
-        field_meta: &Option<FieldMeta>,
-        schema: &Schema,
+        matched_schema: &MatchedSchema,
     ) -> ReadFieldResult {
         match value {
             Value::Array(vals) => {
-                let schema = if let Schema::Array(a) = schema {
-                    a.items.as_ref()
+                let item_matched_schema = if let MatchedSchema::Array(a) = matched_schema {
+                    a
                 } else {
-                    return Err(Error::not_match(schema, &Value::Array(vals)));
+                    return Err(Error::value_schema_not_match(
+                        matched_schema,
+                        &Value::Array(vals),
+                    ));
                 };
                 for val in vals {
-                    self.read_field(&mut column.builder, val, field_meta, schema)?;
+                    self.read_field(&mut column.builder, val, item_matched_schema)?;
                 }
                 column.commit_row();
                 Ok(())
@@ -466,24 +468,26 @@ impl AvroDecoder {
         &self,
         column: &mut ArrayColumnBuilder<AnyType>,
         value: Value,
-        field_meta: &Option<FieldMeta>,
-        schema: &Schema,
+        matched_schema: &MatchedSchema,
     ) -> ReadFieldResult {
         const KEY: usize = 0;
         const VALUE: usize = 1;
         let map_builder = column.builder.as_tuple_mut().unwrap();
         match value {
             Value::Map(obj) => {
-                let schema = if let Schema::Map(m) = schema {
-                    m.types.as_ref()
+                let value_matched_schema = if let MatchedSchema::Map(m) = matched_schema {
+                    m
                 } else {
-                    return Err(Error::not_match(schema, &Value::Map(obj)));
+                    return Err(Error::value_schema_not_match(
+                        matched_schema,
+                        &Value::Map(obj),
+                    ));
                 };
                 for (key, val) in obj.into_iter() {
                     let key = Value::String(key.to_string());
                     let string_builder = map_builder[KEY].as_string_mut().unwrap();
                     self.read_string(string_builder, key)?;
-                    self.read_field(&mut map_builder[VALUE], val, field_meta, schema)?;
+                    self.read_field(&mut map_builder[VALUE], val, value_matched_schema)?;
                 }
                 column.commit_row();
                 Ok(())
@@ -496,22 +500,256 @@ impl AvroDecoder {
         &self,
         column_builders: &mut [ColumnBuilder],
         value: Value,
-        field_meta: &Option<FieldMeta>,
-        schema: &Schema,
+        matched_schema: &MatchedSchema,
     ) -> ReadFieldResult {
-        let field_meta = field_meta.as_ref().ok_or(Error::default())?;
-        let record_meta = field_meta.sub_record.as_ref().ok_or(Error::default())?;
         match value {
             Value::Record(r) => {
-                let schema = if let Schema::Record(s) = schema {
+                let matched_fields = if let MatchedSchema::Record(s) = matched_schema {
                     s
                 } else {
-                    return Err(Error::not_match(schema, &Value::Record(r)));
+                    return Err(Error::value_schema_not_match(
+                        matched_schema,
+                        &Value::Record(r),
+                    ));
                 };
-                self.read_record(r, record_meta, column_builders, schema)?;
+                self.read_record(r, matched_fields, column_builders)?;
                 Ok(())
             }
             _ => Err(Error::default()),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+    use std::sync::Arc;
+
+    use apache_avro::types::Value;
+    use apache_avro::BigDecimal;
+    use apache_avro::Decimal;
+    use apache_avro::Schema;
+    use apache_avro::Writer;
+    use databend_common_expression::types::DecimalDataType;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::ColumnBuilder;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::TableSchemaRef;
+    use ethnum::i256;
+    use num_bigint::BigInt;
+    use serde_json::json;
+
+    use crate::read::avro::decoder::AvroDecoder;
+    use crate::read::block_builder_state::BlockBuilderState;
+    use crate::read::error_handler::ErrorHandler;
+
+    fn make_file(fields: &[serde_json::value::Value], values: Vec<Value>) -> Vec<u8> {
+        let fields = fields
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                json!({
+                    "name": format!("c{i}"),
+                    "type": v
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let schema = json!(
+        {
+            "type": "record",
+            "name": "test_record",
+            "fields": fields,
+        });
+
+        let mut buffer = Vec::new();
+        let schema = Schema::parse(&schema).unwrap();
+        let mut writer = Writer::new(&schema, &mut buffer);
+        let values = values
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (format!("c{i}"), v.clone()))
+            .collect::<Vec<_>>();
+        let row = Value::Record(values);
+        writer.append(row).unwrap();
+        writer.flush().unwrap();
+        buffer
+    }
+
+    fn make_decoder(table_schema: TableSchemaRef) -> AvroDecoder {
+        AvroDecoder {
+            is_rounding_mode: false,
+            params: Default::default(),
+            error_handler: Arc::new(ErrorHandler {
+                on_error_mode: Default::default(),
+                on_error_count: Default::default(),
+            }),
+            schema: table_schema,
+            default_expr_evaluator: None,
+        }
+    }
+
+    fn make_table_schema(fields: Vec<TableDataType>) -> Arc<TableSchema> {
+        let fields = fields
+            .into_iter()
+            .enumerate()
+            .map(|(i, t)| TableField::new(&format!("c{i}"), t))
+            .collect();
+        Arc::new(TableSchema::new(fields))
+    }
+
+    fn test_single_field(
+        table_data_type: TableDataType,
+        avro_schema: serde_json::value::Value,
+        value: Value,
+        expected: ScalarRef,
+    ) -> databend_common_exception::Result<()> {
+        test_helper(vec![table_data_type], vec![avro_schema], vec![value], vec![
+            expected,
+        ])
+    }
+
+    fn test_helper(
+        table_fields: Vec<TableDataType>,
+        avro_fields: Vec<serde_json::value::Value>,
+        values: Vec<Value>,
+        expected: Vec<ScalarRef>,
+    ) -> databend_common_exception::Result<()> {
+        let f = make_file(&avro_fields, values);
+        let table_schema = make_table_schema(table_fields);
+        let decoder = make_decoder(table_schema.clone());
+        let column_builders: Vec<_> = table_schema
+            .fields()
+            .iter()
+            .map(|f| ColumnBuilder::with_capacity_hint(&f.data_type().into(), 1024, false))
+            .collect();
+        let mut state = BlockBuilderState {
+            column_builders,
+            ..Default::default()
+        };
+        decoder.read_file(&f, &mut state)?;
+        let columns = state.take_columns(true).unwrap();
+        let row = columns
+            .iter()
+            .map(|c| c.index(0).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(expected, row);
+        Ok(())
+    }
+    #[test]
+    fn test_decimal() -> Result<(), String> {
+        let avro_schema = json!(
+        {
+          "type": "bytes",
+          "logicalType": "decimal",
+          "precision": 5,
+          "scale": 2
+        });
+        let make_value = |s: &str| {
+            let big_int = BigInt::from_str(s).unwrap();
+            Value::Decimal(Decimal::from(big_int.to_signed_bytes_be()))
+        };
+        let value = make_value("12345");
+        let decimal_size = DecimalSize {
+            precision: 7,
+            scale: 4,
+        };
+        let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
+        let expected =
+            ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
+        test_single_field(
+            table_field,
+            avro_schema.clone(),
+            value.clone(),
+            expected.clone(),
+        )
+        .unwrap();
+
+        // smaller leading digits (p - s)
+        let decimal_size = DecimalSize {
+            precision: 6,
+            scale: 4,
+        };
+        let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
+        assert!(test_single_field(table_field, avro_schema, value, expected).is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_big_decimal() -> Result<(), String> {
+        let avro_schema = json!(
+        {
+          "type": "bytes",
+          "logicalType": "big-decimal",
+        });
+        let make_value = |s: &str| {
+            let big_int = BigInt::from_str(s).unwrap();
+            Value::BigDecimal(BigDecimal::new(big_int, 2))
+        };
+        let value = make_value("12345");
+        let decimal_size = DecimalSize {
+            precision: 7,
+            scale: 4,
+        };
+        let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
+        let expected =
+            ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
+        test_single_field(
+            table_field.clone(),
+            avro_schema.clone(),
+            value,
+            expected.clone(),
+        )
+        .unwrap();
+
+        let value = make_value("123456");
+        assert!(test_single_field(table_field, avro_schema, value, expected).is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_union() -> Result<(), String> {
+        let int64 = TableDataType::Number(NumberDataType::Int64);
+        let int64_nullable = TableDataType::Nullable(Box::new(int64.clone()));
+        assert!(test_single_field(
+            int64.clone(),
+            json!(["null", "int"]),
+            Value::Union(0, Box::new(Value::Null)),
+            ScalarRef::Null
+        )
+        .is_err());
+
+        assert!(test_single_field(
+            int64.clone(),
+            json!(["long", "int"]),
+            Value::Union(1, Box::new(Value::Int(100))),
+            ScalarRef::Number(NumberScalar::Int64(100))
+        )
+        .is_err());
+
+        assert!(test_single_field(
+            int64_nullable.clone(),
+            json!(["null", "int"]),
+            Value::Union(0, Box::new(Value::Null)),
+            ScalarRef::Null
+        )
+        .is_ok());
+
+        assert!(test_single_field(
+            int64_nullable.clone(),
+            json!(["null", "int"]),
+            Value::Union(1, Box::new(Value::Int(100))),
+            ScalarRef::Number(NumberScalar::Int64(100))
+        )
+        .is_ok());
+        Ok(())
     }
 }
