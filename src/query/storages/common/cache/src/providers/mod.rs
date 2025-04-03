@@ -26,4 +26,3 @@ pub use memory_cache::InMemoryLruCache;
 pub use table_data_cache::TableDataCache;
 pub use table_data_cache::TableDataCacheBuilder;
 pub use table_data_cache::TableDataCacheKey;
-pub use table_data_cache::DISK_TABLE_DATA_CACHE_NAME;
