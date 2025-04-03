@@ -28,7 +28,10 @@ statement ok
 select sum(summary['total-records']::Int64), count() from iceberg_snapshot('tpch', 'lineitem') where operation = 'append';
 
 statement ok
-select * from tpch.lineitem at (timestamp=>'2025-03-12 23:18:22.665000'::Timestamp) limit 1;
+select * from tpch.lineitem at (timestamp=>'2099-03-12 23:18:22.665000'::Timestamp) limit 1;
 
-statement ok
+statement error 2013
+select * from tpch.lineitem at (timestamp=>'2000-03-12 23:18:22.665000'::Timestamp) limit 1;
+
+statement error 2013
 select * from tpch.lineitem at (snapshot=>'4524280171191816067') limit 1;

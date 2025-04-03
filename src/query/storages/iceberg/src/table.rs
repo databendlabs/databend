@@ -462,6 +462,11 @@ impl Table for IcebergTable {
             }
         };
 
+        if snapshot_id.is_none() {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "No historical data found at given point",
+            ));
+        }
         let (table, statistics) = Self::parse_engine_options(&self.info.meta.engine_options)?;
         Ok(Arc::new(IcebergTable {
             info: self.info.clone(),
