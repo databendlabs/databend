@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod cascades;
+pub mod distributed;
 mod hyper_dp;
 pub mod operator;
 pub mod recursive;

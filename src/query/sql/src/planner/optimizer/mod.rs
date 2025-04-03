@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod cost;
-mod distributed;
 pub mod ir;
 #[allow(clippy::module_inception)]
 mod optimizer;

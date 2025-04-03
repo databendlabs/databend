@@ -23,11 +23,11 @@ use log::info;
 use crate::binder::target_probe;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
-use crate::optimizer::distributed::optimize_distributed_query;
-use crate::optimizer::distributed::BroadcastToShuffleOptimizer;
-use crate::optimizer::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
+use crate::optimizer::optimizers::distributed::DistributedOptimizer;
+use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
@@ -320,7 +320,8 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
                 e
             );
             if opt_ctx.get_enable_distributed_optimization() {
-                s_expr = optimize_distributed_query(opt_ctx.get_table_ctx().clone(), &s_expr)?;
+                let distributed_optimizer = DistributedOptimizer::new(opt_ctx.clone());
+                s_expr = distributed_optimizer.optimize(&s_expr)?;
             }
 
             s_expr
