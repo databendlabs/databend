@@ -23,6 +23,7 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::UInt64Type;
@@ -48,6 +49,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_null::NullTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::UserApiProvider;
 use log::warn;
@@ -75,6 +77,7 @@ pub trait HistoryAware {
         database_name: &str,
         with_history: bool,
         without_view: bool,
+        mock_table: bool,
     ) -> Result<Vec<Arc<dyn Table>>>;
 }
 
@@ -91,11 +94,41 @@ macro_rules! impl_history_aware {
                 database_name: &str,
                 with_history: bool,
                 _without_view: bool,
+                mock_table: bool,
             ) -> Result<Vec<Arc<dyn Table>>> {
-                if with_history {
-                    catalog.list_tables_history(tenant, database_name).await
+                if !mock_table {
+                    if with_history {
+                        catalog.list_tables_history(tenant, database_name).await
+                    } else {
+                        catalog.list_tables(tenant, database_name).await
+                    }
                 } else {
-                    catalog.list_tables(tenant, database_name).await
+                    let mut res = vec![];
+                    let names = catalog.list_tables_names(tenant, database_name).await?;
+                    let engine = match catalog.info().catalog_type() {
+                        CatalogType::Default => {
+                            return Err(ErrorCode::Internal(
+                                "Catalog type is Default, can not mock table".to_string(),
+                            ))
+                        }
+                        CatalogType::Iceberg => "Iceberg".to_string(),
+                        CatalogType::Hive => "Hive".to_string(),
+                    };
+                    for name in names {
+                        let t = TableInfo {
+                            ident: TableIdent::new(0, 0),
+                            desc: format!("'{}'.'{}'", database_name, name),
+                            name: name.to_string(),
+                            meta: TableMeta {
+                                engine: engine.to_string(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        };
+                        let table = NullTable::try_create(t)?;
+                        res.push(Arc::from(table));
+                    }
+                    Ok(res)
                 }
             }
         }
@@ -275,6 +308,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut owner_field_indexes: HashSet<usize> = HashSet::new();
         let mut stats_fields_indexes: HashSet<usize> = HashSet::new();
         let schema = TablesTable::<WITH_HISTORY, WITHOUT_VIEW>::schema();
+
+        let mut name_field_index: usize = 0;
+        let mut only_get_name = false;
         for (i, name) in schema.fields.iter().enumerate() {
             match name.name().as_str() {
                 "num_rows"
@@ -288,6 +324,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 "owner" => {
                     owner_field_indexes.insert(i);
                 }
+                "name" => {
+                    name_field_index = i;
+                }
                 _ => {}
             }
         }
@@ -295,6 +334,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut invalid_optimize = false;
         if let Some(push_downs) = &push_downs {
             if let Some(Projection::Columns(v)) = push_downs.projection.as_ref() {
+                if v.len() == 1 && v[0] == name_field_index {
+                    only_get_name = true;
+                }
                 get_stats = v
                     .iter()
                     .any(|field_index| stats_fields_indexes.contains(field_index));
@@ -446,6 +488,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         } else {
             let catalog_dbs = visibility_checker.get_visibility_database();
             for (ctl_name, ctl) in ctls.iter() {
+                let default_catalog = ctl.info().catalog_type() == CatalogType::Default;
+
                 if let Some(push_downs) = &push_downs {
                     if push_downs.filters.as_ref().map(|f| &f.filter).is_some() {
                         for db in &db_name {
@@ -476,8 +520,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 }
 
                 if dbs.is_empty() || invalid_optimize {
-                    // None means has global level privileges
-                    dbs = if let Some(catalog_dbs) = &catalog_dbs {
+                    // Only Default catalog can use mget api
+                    dbs = if catalog_dbs.is_some() && default_catalog {
+                        let catalog_dbs = catalog_dbs.as_ref().unwrap();
                         let mut final_dbs = vec![];
                         for (catalog_name, dbs) in catalog_dbs {
                             if ctl.name() == catalog_name.to_string() {
@@ -511,6 +556,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         }
                         final_dbs
                     } else {
+                        // None means has global level privileges
                         match ctl.list_databases(&tenant).await {
                             Ok(dbs) => dbs,
                             Err(err) => {
@@ -542,11 +588,12 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 // Now we get the final dbs, need to clear dbs vec.
                 dbs.clear();
 
-                let ownership = if get_ownership {
+                let ownership = if get_ownership && default_catalog {
                     user_api.get_ownerships(&tenant).await.unwrap_or_default()
                 } else {
                     HashMap::new()
                 };
+                let mock_table = !default_catalog && only_get_name;
                 for db in final_dbs {
                     let db_id = db.get_db_info().database_id.db_id;
                     let db_name = db.name();
@@ -555,8 +602,15 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         || invalid_tables_ids
                         || invalid_optimize
                     {
-                        match Self::list_tables(ctl, &tenant, db_name, WITH_HISTORY, WITHOUT_VIEW)
-                            .await
+                        match Self::list_tables(
+                            ctl,
+                            &tenant,
+                            db_name,
+                            WITH_HISTORY,
+                            WITHOUT_VIEW,
+                            mock_table,
+                        )
+                        .await
                         {
                             Ok(tables) => tables,
                             Err(err) => {
@@ -617,17 +671,22 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
                     for table in tables {
                         let table_id = table.get_id();
-                        // If db1 is visible, do not mean db1.table1 is visible. A user may have a grant about db1.table2, so db1 is visible
-                        // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
-                        if (table.get_table_info().engine() == "VIEW" || WITHOUT_VIEW)
-                            && !table.is_stream()
-                            && visibility_checker.check_table_visibility(
+                        let check_table_visibility = if default_catalog {
+                            visibility_checker.check_table_visibility(
                                 ctl_name,
                                 db_name,
                                 table.name(),
                                 db_id,
                                 table_id,
                             )
+                        } else {
+                            true
+                        };
+                        // If db1 is visible, do not mean db1.table1 is visible. A user may have a grant about db1.table2, so db1 is visible
+                        // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
+                        if (table.get_table_info().engine() == "VIEW" || WITHOUT_VIEW)
+                            && !table.is_stream()
+                            && check_table_visibility
                         {
                             // system.tables store view name but not store view query
                             // decrease information_schema.tables union.

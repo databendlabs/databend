@@ -123,4 +123,7 @@ statement ok
 drop database abc;
 
 statement ok
+select name from default.system.tables;
+
+statement ok
 drop database default.tpch;
