@@ -45,6 +45,7 @@ use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::SendPartState;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::pipelines::executor::ExecutorSettings;
@@ -88,13 +89,26 @@ async fn apply_snapshot_pruning(
     let mut prune_pipeline = Pipeline::create();
     let (segment_tx, segment_rx) = async_channel::bounded(8);
     let (res_tx, res_rx) = async_channel::unbounded();
+    let limit = push_down
+        .as_ref()
+        .filter(|p| p.order_by.is_empty() && p.filters.is_none())
+        .and_then(|p| p.limit);
+
+    let send_part_state = Arc::new(SendPartState::create(
+        cache_key.clone(),
+        limit,
+        fuse_pruner.clone(),
+        fuse_table.data_metrics.clone(),
+        0,
+    ));
     fuse_table.prune_segments_with_pipeline(
         fuse_pruner.clone(),
         &mut prune_pipeline,
         ctx.clone(),
         segment_rx,
         res_tx,
-        cache_key,
+        send_part_state,
+        false,
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {

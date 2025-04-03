@@ -21,6 +21,9 @@ use databend_common_pipeline_core::Pipeline;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
+use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilderData;
+use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::storages::Table;
@@ -45,12 +48,38 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
         ctx.set_partitions(plan.parts.clone())?;
+        let prune_pipeline = self.build_prune_pipeline(ctx.clone(), plan, &mut pipeline)?;
         self.read_data(ctx.clone(), plan, &mut pipeline, true)?;
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
+
         let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
-        let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
+        let pipelines = if let Some(prune) = prune_pipeline {
+            PipelineBuildResult {
+                main_pipeline: pipeline,
+                sources_pipelines: vec![prune],
+                exchange_injector: DefaultExchangeInjector::create(),
+                builder_data: PipelineBuilderData {
+                    input_join_state: None,
+                    input_probe_schema: None,
+                },
+                r_cte_scan_interpreters: vec![],
+            }
+        } else {
+            PipelineBuildResult {
+                main_pipeline: pipeline,
+                sources_pipelines: vec![],
+                exchange_injector: DefaultExchangeInjector::create(),
+                builder_data: PipelineBuilderData {
+                    input_join_state: None,
+                    input_probe_schema: None,
+                },
+                r_cte_scan_interpreters: vec![],
+            }
+        };
+
+        let executor = PipelinePullingExecutor::from_pipelines(pipelines, executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
         Ok(Box::pin(PullingExecutorStream::create(executor)?))
     }

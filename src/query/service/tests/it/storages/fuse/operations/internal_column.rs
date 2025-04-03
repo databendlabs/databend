@@ -18,6 +18,7 @@ use databend_common_base::base::tokio;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
@@ -188,6 +189,7 @@ async fn test_internal_column() -> Result<()> {
     let blocks = res.try_collect::<Vec<DataBlock>>().await?;
 
     let table = fixture.latest_default_table().await?;
+    ctx.get_settings().set_enable_prune_pipeline(0)?;
     let (_, parts) = table.read_partitions(ctx.clone(), None, true).await?;
     let expected = expected_data_block(&parts, &internal_columns)?;
     check_partitions(&parts, &fixture).await?;
@@ -213,6 +215,7 @@ async fn test_internal_column() -> Result<()> {
     let blocks = res.try_collect::<Vec<DataBlock>>().await?;
 
     let table = fixture.latest_default_table().await?;
+    ctx.get_settings().set_enable_prune_pipeline(0)?;
     let (_, parts) = table.read_partitions(ctx.clone(), None, true).await?;
     let expected = expected_data_block(&parts, &internal_columns)?;
     check_partitions(&parts, &fixture).await?;

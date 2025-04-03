@@ -28,7 +28,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
-use databend_common_storages_fuse::FuseBlockPartInfo;
+use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta;
@@ -182,6 +182,10 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
             projection: Some(proj),
             ..Default::default()
         };
+        // After https://github.com/databendlabs/databend/pull/17491, fuse table's read_partitions
+        // will only return lazy partitions and the actual prune will be done in prune pipeline
+
+        // So this stats will be estimated stats and parts will be lazy partitions
         let (stats, parts) = table
             .read_partitions(ctx.clone(), Some(push_downs), true)
             .await?;
@@ -189,8 +193,8 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         assert!(!parts.is_empty());
 
         let part = parts.partitions[0].clone();
-        let fuse_part = FuseBlockPartInfo::from_part(&part)?;
-        assert!(fuse_part.create_on.is_some())
+
+        let _ = FuseLazyPartInfo::from_part(&part)?;
     }
 
     Ok(())
