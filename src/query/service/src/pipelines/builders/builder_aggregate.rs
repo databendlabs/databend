@@ -204,7 +204,7 @@ impl PipelineBuilder {
 
         self.build_pipeline(&aggregate.input)?;
         self.enable_multiway_sort = old_value;
-        build_final_aggregate(&mut self.main_pipeline, params.clone())
+        build_final_aggregate(self.ctx.clone(), &mut self.main_pipeline, params.clone())
     }
 
     fn build_aggregator_params(

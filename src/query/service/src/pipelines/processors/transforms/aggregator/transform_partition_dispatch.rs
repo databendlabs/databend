@@ -172,7 +172,7 @@ impl Processor for TransformPartitionDispatch {
             }
         }
 
-        if self.sync_final_partition {
+        while self.sync_final_partition {
             while let Some(output_index) = self.waiting_outputs.pop_front() {
                 if self.outputs[output_index].port.is_finished() {
                     self.synchronized_final_partition[output_index] = true;
@@ -202,8 +202,25 @@ impl Processor for TransformPartitionDispatch {
             self.sent_final_partition = vec![false; self.sent_final_partition.len()];
             self.synchronized_final_partition = vec![false; self.sent_final_partition.len()];
             std::mem::swap(&mut self.waiting_outputs, &mut self.waiting_outputs_2);
+
+            if self.input.has_data() {
+                let data_block = self.input.pull_data().unwrap()?;
+                let (meta, data_block) = Self::unpark_block(data_block)?;
+
+                match meta {
+                    AggregateMeta::FinalPartition(_) => {
+                        self.sync_final_partition = true;
+                        self.input.set_not_need_data();
+                        continue;
+                    }
+                    meta => {
+                        self.current_data = Some(data_block.add_meta(Some(Box::new(meta)))?);
+                    }
+                };
+            }
+
             self.input.set_need_data();
-            return Ok(Event::NeedData);
+            break;
         }
 
         while !self.waiting_outputs.is_empty() && self.current_data.is_some() {

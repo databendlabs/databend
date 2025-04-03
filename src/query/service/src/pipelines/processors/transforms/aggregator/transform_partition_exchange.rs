@@ -155,7 +155,7 @@ impl ExchangePartition {
 }
 
 impl Exchange for ExchangePartition {
-    const NAME: &'static str = "PartitionResorting";
+    const NAME: &'static str = "AggregatePartitionExchange";
     const MULTIWAY_SORT: bool = false;
 
     fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {

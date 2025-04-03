@@ -29,10 +29,15 @@ use crate::pipelines::processors::transforms::aggregator::transform_partition_di
 use crate::pipelines::processors::transforms::aggregator::transform_partition_exchange::ExchangePartition;
 use crate::pipelines::processors::transforms::aggregator::transform_partition_resorting::ResortingPartition;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::sessions::QueryContext;
 
 pub static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 
-pub fn build_final_aggregate(pipeline: &mut Pipeline, params: Arc<AggregatorParams>) -> Result<()> {
+pub fn build_final_aggregate(
+    ctx: Arc<QueryContext>,
+    pipeline: &mut Pipeline,
+    params: Arc<AggregatorParams>,
+) -> Result<()> {
     let pipe_size = pipeline.output_len();
 
     // 1. resorting partition
@@ -43,7 +48,7 @@ pub fn build_final_aggregate(pipeline: &mut Pipeline, params: Arc<AggregatorPara
         Ok(ProcessorPtr::create(AccumulatingTransformer::create(
             input,
             output,
-            TransformPartitionAlign::create(params.clone())?,
+            TransformPartitionAlign::create(ctx.clone(), params.clone())?,
         )))
     })?;
 

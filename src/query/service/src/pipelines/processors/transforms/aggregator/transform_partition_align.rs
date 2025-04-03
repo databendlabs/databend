@@ -28,13 +28,17 @@ use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_pipeline_transforms::AccumulatingTransform;
+use databend_common_pipeline_transforms::MemorySettings;
 
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::SINGLE_LEVEL_BUCKET_NUM;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::sessions::QueryContext;
 
 pub struct TransformPartitionAlign {
+    settings: MemorySettings,
     params: Arc<AggregatorParams>,
 
     max_partition: usize,
@@ -43,9 +47,11 @@ pub struct TransformPartitionAlign {
 }
 
 impl TransformPartitionAlign {
-    pub fn create(params: Arc<AggregatorParams>) -> Result<Self> {
+    pub fn create(ctx: Arc<QueryContext>, params: Arc<AggregatorParams>) -> Result<Self> {
+        let settings = MemorySettings::from_aggregate_settings(&ctx)?;
         Ok(TransformPartitionAlign {
             params,
+            settings,
             max_partition: 0,
             working_partition: 0,
             partitions: Partitions::create(),
@@ -200,6 +206,7 @@ impl TransformPartitionAlign {
     }
 }
 
+#[async_trait::async_trait]
 impl AccumulatingTransform for TransformPartitionAlign {
     const NAME: &'static str = "TransformPartitionAlign";
 
@@ -231,8 +238,16 @@ impl AccumulatingTransform for TransformPartitionAlign {
     }
 
     fn need_spill(&self) -> bool {
-        // TODO: spill if need
-        false
+        self.settings.check_spill()
+    }
+
+    fn prepare_spill_payload(&mut self) -> Result<bool> {
+        // self.partitions.data.f
+        Ok(false)
+    }
+
+    async fn flush_spill_payload(&mut self) -> Result<bool> {
+        Ok(false)
     }
 }
 
@@ -249,6 +264,12 @@ impl Partitions {
     }
 
     pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) {
+        if matches!(&meta, AggregateMeta::AggregatePayload(v) if v.payload.len() == 0)
+            || matches!(&meta, AggregateMeta::InFlightPayload(_) if block.is_empty())
+        {
+            return;
+        }
+
         match self.data.entry(meta.get_partition()) {
             std::collections::btree_map::Entry::Vacant(v) => {
                 v.insert(vec![(meta, block)]);
