@@ -34,6 +34,7 @@ pub use manager::CacheManager;
 pub use manager::DISK_TABLE_DATA_CACHE_NAME;
 // Unfortunately, criterion benchmarks need it to be pub
 pub use providers::disk_cache::disk_cache_lru::read_cache_content;
+pub use providers::DiskCacheBuilder;
 pub use providers::DiskCacheError;
 pub use providers::DiskCacheKey;
 pub use providers::DiskCacheResult;
@@ -43,7 +44,6 @@ pub use providers::LruDiskCache;
 pub use providers::LruDiskCacheBuilder;
 pub use providers::LruDiskCacheHolder;
 pub use providers::TableDataCache;
-pub use providers::TableDataCacheBuilder;
 pub use providers::TableDataCacheKey;
 pub use read::CacheKey;
 pub use read::CachedReader;

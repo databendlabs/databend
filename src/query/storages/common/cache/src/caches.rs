@@ -45,8 +45,6 @@ pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
 pub type SegmentBlockMetasCache = InMemoryLruCache<Vec<Arc<BlockMeta>>>;
 
 /// In-memory cache of individual BlockMeta.
-// pub type BlockMetaCache = HybridCache<BlockMeta>;
-
 pub type BlockMetaCache = InMemoryLruCache<BlockMeta>;
 
 /// In memory object cache of TableSnapshot
@@ -55,7 +53,7 @@ pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
 pub type TableSnapshotStatisticCache = InMemoryLruCache<TableSnapshotStatistics>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
-pub type BloomIndexFilterCache = InMemoryLruCache<Xor8Filter>;
+pub type BloomIndexFilterCache = HybridCache<Xor8Filter>;
 /// In memory object cache of parquet FileMetaData of bloom index data
 // pub type BloomIndexMetaCache = InMemoryLruCache<BloomIndexMeta>;
 pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;

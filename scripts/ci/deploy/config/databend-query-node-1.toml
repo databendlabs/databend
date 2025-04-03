@@ -149,7 +149,7 @@ data_path = "./.databend/stateless_test_data"
 # available options: [none|disk]
 # default is "none", which disable table data cache
 # use "disk" to enabled disk cache
-data_cache_storage = "disk"
+data_cache_storage = "none"
 
 [cache.disk]
 # cache path

@@ -76,15 +76,18 @@ where
     Vec<u8>: for<'a> TryFrom<&'a T, Error = ErrorCode>,
     T: for<'a> TryFrom<&'a [u8], Error = ErrorCode>,
 {
-    pub fn insert_to_disk_cache(&self, k: &str, v: &T) {
+    pub fn insert_to_disk_cache_if_necessary(&self, k: &str, v: &T) {
         // `None` is also a CacheAccessor, avoid serialization for it
         if let Some(cache) = &self.disk_cache {
-            match TryInto::<Vec<u8>>::try_into(v) {
-                Ok(bytes) => {
-                    cache.insert(k.to_owned(), bytes.into());
-                }
-                Err(e) => {
-                    warn!("failed to encode cache value key {k}, {}", e);
+            // check before serialization, `contains_key` is a light operation, will not hit disk
+            if !cache.contains_key(k) {
+                match TryInto::<Vec<u8>>::try_into(v) {
+                    Ok(bytes) => {
+                        cache.insert(k.to_owned(), bytes.into());
+                    }
+                    Err(e) => {
+                        warn!("failed to encode cache value key {k}, {}", e);
+                    }
                 }
             }
         }
@@ -101,27 +104,25 @@ where
 
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Self::V>> {
         if let Some(item) = self.memory_cache.get(k.as_ref()) {
-            if !self.disk_cache.contains_key(k.as_ref()) {
-                // if disk cache does not have it, insert it
-                self.insert_to_disk_cache(k.as_ref(), item.as_ref());
-            }
+            // try putting it bach to on-disk cache if necessary
+            self.insert_to_disk_cache_if_necessary(k.as_ref(), item.as_ref());
             Some(item)
-        } else {
-            if let Some(bytes) = self.disk_cache.get(k.as_ref()) {
-                let bytes = bytes.as_bytes();
-                match bytes.try_into() {
-                    Ok(v) => Some(Arc::new(v)),
-                    Err(e) => {
-                        let key = k.as_ref();
-                        // Likely serialization format has been changed
-                        warn!("failed to decode cache value, key {key}, {}", e);
-                        self.disk_cache.evict(key);
-                        None
-                    }
+        } else if let Some(bytes) = self.disk_cache.get(k.as_ref()) {
+            let bytes = bytes.as_bytes();
+            match bytes.try_into() {
+                Ok(v) => Some(self.memory_cache.insert(k.as_ref().to_owned(), v)),
+                Err(e) => {
+                    let key = k.as_ref();
+                    // Disk cache crc is correct, but failed to deserialize.
+                    // Likely the serialization format has been changed, evict it.
+                    warn!("failed to decode cache value, key {key}, {}", e);
+                    self.disk_cache.evict(key);
+                    None
                 }
-            } else {
-                None
             }
+        } else {
+            // Cache Miss
+            None
         }
     }
 
@@ -139,7 +140,7 @@ where
 
     fn insert(&self, key: String, value: Self::V) -> Arc<Self::V> {
         let v = self.memory_cache.insert(key.clone(), value);
-        self.insert_to_disk_cache(&key, v.as_ref());
+        self.insert_to_disk_cache_if_necessary(&key, v.as_ref());
         v
     }
 

@@ -2929,10 +2929,9 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_meta_count: u64,
 
+    // TODO shall we disable it by default?
     /// Max bytes of cached bloom index meta data on disk. Default 1GB
-    /// Set it to 0 to disable it. It will NOT be enabled if
-    /// - table meta cache is disabled
-    /// - or bloom index meta is disabled
+    // Set it to 0 to disable it. It will NOT be enabled if table meta cache is disabled
     #[clap(
         long = "disk-cache-table-bloom-index-meta-size",
         value_name = "VALUE",
@@ -2962,6 +2961,14 @@ pub struct CacheConfig {
         default_value = "2147483648"
     )]
     pub table_bloom_index_filter_size: u64,
+
+    /// Max on-disk bytes of cached bloom index filters used. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-table-bloom-index-filter-size",
+        value_name = "VALUE",
+        default_value = "2147483648"
+    )]
+    pub disk_cache_table_bloom_index_filter_size: u64,
 
     /// Max number of cached inverted index meta objects. Set it to 0 to disable it.
     #[clap(
@@ -3278,6 +3285,8 @@ mod cache_config_converters {
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
+                disk_cache_table_bloom_index_filter_size: value
+                    .disk_cache_table_bloom_index_filter_size,
                 inverted_index_meta_count: value.inverted_index_meta_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
@@ -3309,6 +3318,8 @@ mod cache_config_converters {
                     .disk_cache_table_bloom_index_meta_size,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
+                disk_cache_table_bloom_index_filter_size: value
+                    .disk_cache_table_bloom_index_filter_size,
                 inverted_index_meta_count: value.inverted_index_meta_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
