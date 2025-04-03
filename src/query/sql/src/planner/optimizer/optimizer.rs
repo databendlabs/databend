@@ -26,8 +26,6 @@ use crate::binder::MutationType;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
-use crate::optimizer::optimizers::distributed::DistributedOptimizer;
-use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
@@ -286,9 +284,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
         RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate]).optimize(&s_expr)?;
 
     // 9. Apply DPhyp algorithm for cost-based join reordering
-    if opt_ctx.get_enable_dphyp() && opt_ctx.get_enable_join_reorder() {
-        s_expr = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
-    }
+    s_expr = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
 
     // 10. After join reorder, Convert some single join to inner join.
     s_expr = SingleToInnerOptimizer::new().optimize(&s_expr)?;
@@ -303,33 +299,9 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     }
 
     // 13. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
-    let mut cascades = CascadesOptimizer::new(opt_ctx.clone())?;
-    s_expr = match cascades.optimize(s_expr.clone()) {
-        Ok(mut s_expr) => {
-            // 14. Push down sort and limit operations for distributed execution
-            // TODO(leiysky): do this optimization in cascades optimizer
-            if opt_ctx.get_enable_distributed_optimization() {
-                let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
-                s_expr = sort_and_limit_optimizer.optimize(&s_expr)?;
-            }
-            s_expr
-        }
+    s_expr = CascadesOptimizer::new(opt_ctx.clone())?.optimize(s_expr)?;
 
-        Err(e) => {
-            info!(
-                "CascadesOptimizer failed, fallback to heuristic optimizer: {}",
-                e
-            );
-            if opt_ctx.get_enable_distributed_optimization() {
-                let distributed_optimizer = DistributedOptimizer::new(opt_ctx.clone());
-                s_expr = distributed_optimizer.optimize(&s_expr)?;
-            }
-
-            s_expr
-        }
-    };
-
-    // 16. Eliminate unnecessary scalar calculations to clean up the final plan
+    // 14. Eliminate unnecessary scalar calculations to clean up the final plan
     if !opt_ctx.get_planning_agg_index() {
         s_expr = RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice())
             .optimize(&s_expr)?;
