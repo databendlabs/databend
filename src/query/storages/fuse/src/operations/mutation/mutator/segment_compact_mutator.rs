@@ -357,7 +357,7 @@ impl<'a> SegmentCompactor<'a> {
         let new_segment = SegmentInfo::new(blocks, new_statistics);
         let location = self
             .location_generator
-            .gen_segment_info_location(Default::default());
+            .gen_segment_info_location(Default::default(), false);
         new_segment
             .write_meta_through_cache(self.operator, &location)
             .await?;

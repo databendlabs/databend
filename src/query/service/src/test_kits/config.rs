@@ -155,6 +155,16 @@ ADDRESS = 'https://databend.com';"
         self
     }
 
+    pub fn enable_table_meta_cache(mut self) -> ConfigBuilder {
+        self.conf.cache.enable_table_meta_cache = true;
+        self
+    }
+
+    pub fn table_meta_segment_bytes(mut self, value: u64) -> ConfigBuilder {
+        self.conf.cache.table_meta_segment_bytes = value;
+        self
+    }
+
     pub fn build(self) -> InnerConfig {
         self.conf
     }

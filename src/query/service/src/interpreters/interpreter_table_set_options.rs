@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -22,11 +25,25 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::SetOptionsPlan;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
+use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::segment_format_from_location;
+use databend_common_storages_fuse::FuseSegmentFormat;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
+use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
+use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
@@ -81,6 +98,7 @@ impl Interpreter for SetOptionsInterpreter {
                 OPT_KEY_STORAGE_FORMAT
             )));
         }
+
         if self.plan.set_options.contains_key(OPT_KEY_DATABASE_ID) {
             error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
@@ -140,6 +158,15 @@ impl Interpreter for SetOptionsInterpreter {
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
 
+        if let Some(new_snapshot_location) =
+            set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
+        {
+            options_map.insert(
+                OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+                Some(new_snapshot_location),
+            );
+        }
+
         let req = UpsertTableOptionReq {
             table_id: table.get_id(),
             seq: MatchSeq::Exact(table_version),
@@ -151,4 +178,94 @@ impl Interpreter for SetOptionsInterpreter {
             .await?;
         Ok(PipelineBuildResult::create())
     }
+}
+
+async fn set_segment_format(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    options: &BTreeMap<String, String>,
+) -> Result<Option<String>> {
+    let Some(value) = options.get(OPT_KEY_SEGMENT_FORMAT) else {
+        return Ok(None);
+    };
+    let segment_format = FuseSegmentFormat::from_str(value)?;
+    let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+        ErrorCode::Unimplemented(format!(
+            "table {}, engine type {}, does not support {}",
+            table.name(),
+            table.get_table_info().engine(),
+            OPT_KEY_SEGMENT_FORMAT,
+        ))
+    })?;
+
+    let Some(table_snapshot) = fuse_table.read_table_snapshot().await? else {
+        return Ok(None);
+    };
+    let segment_locations = &table_snapshot.segments;
+    if segment_locations.is_empty() {
+        return Ok(None);
+    }
+    let segment_format_now = segment_format_from_location(segment_locations[0].0.as_str());
+    if segment_format_now == segment_format {
+        return Ok(None);
+    }
+    let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
+    let mut new_segment_locations = Vec::with_capacity(segment_locations.len());
+    let block_per_segment = fuse_table.get_block_thresholds().block_per_segment;
+    let table_meta_timestamps =
+        ctx.get_table_meta_timestamps(table.as_ref(), Some(table_snapshot.clone()))?;
+    for chunk in segment_locations.chunks(chunk_size) {
+        let segments_io =
+            SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
+        match segment_format {
+            FuseSegmentFormat::Row => unimplemented!(),
+            FuseSegmentFormat::Column => {
+                let mut segment_builder =
+                    ColumnOrientedSegmentBuilder::new(table.schema().clone(), block_per_segment);
+                let segment_schema = segment_builder.segment_schema();
+                let mut projection = HashSet::new();
+                for field in segment_schema.fields().iter() {
+                    projection.insert(field.name.clone());
+                }
+                let segments = segments_io
+                    .generic_read_segments::<RowOrientedSegmentReader>(chunk, false, &projection)
+                    .await?;
+                for segment in segments {
+                    let segment = segment?;
+                    for block in segment.blocks {
+                        segment_builder.add_block(block.as_ref().clone())?;
+                    }
+                    let segment = segment_builder
+                        .build(
+                            fuse_table.get_block_thresholds(),
+                            fuse_table.cluster_key_id(),
+                        )?
+                        .serialize()?;
+                    let location_gen = fuse_table.meta_location_generator();
+                    let location =
+                        location_gen.gen_segment_info_location(table_meta_timestamps, true);
+                    fuse_table.get_operator().write(&location, segment).await?;
+                    new_segment_locations.push((location, SegmentInfo::VERSION));
+                }
+            }
+        }
+    }
+    let new_snapshot = TableSnapshot::try_new(
+        Some(fuse_table.get_table_info().ident.seq),
+        Some(table_snapshot.clone()),
+        table.schema().as_ref().clone(),
+        table_snapshot.summary.clone(),
+        new_segment_locations,
+        table_snapshot.table_statistics_location.clone(),
+        table_meta_timestamps,
+    )?;
+    let location = fuse_table
+        .meta_location_generator()
+        .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+
+    fuse_table
+        .get_operator()
+        .write(&location, new_snapshot.to_bytes()?)
+        .await?;
+    Ok(Some(location))
 }

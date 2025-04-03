@@ -64,3 +64,32 @@ impl FromStr for FuseStorageFormat {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FuseSegmentFormat {
+    Row,
+    Column,
+}
+
+pub fn segment_format_from_location(location: &str) -> FuseSegmentFormat {
+    if location.ends_with("col") {
+        FuseSegmentFormat::Column
+    } else {
+        FuseSegmentFormat::Row
+    }
+}
+
+impl FromStr for FuseSegmentFormat {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "" | "row_oriented" => Ok(FuseSegmentFormat::Row),
+            "column_oriented" => Ok(FuseSegmentFormat::Column),
+            other => Err(ErrorCode::UnknownFormat(format!(
+                "unknown fuse segment_format {}",
+                other
+            ))),
+        }
+    }
+}

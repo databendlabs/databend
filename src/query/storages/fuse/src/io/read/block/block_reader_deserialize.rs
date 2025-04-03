@@ -22,6 +22,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
@@ -99,12 +100,12 @@ impl BlockReader {
             .read_columns_data_by_merge_io(settings, &meta.location.0, &meta.col_metas, &None)
             .await?;
 
-        self.deserialize_chunks_with_meta(meta, storage_format, merge_io_read_result)
+        self.deserialize_chunks_with_meta(&meta.into(), storage_format, merge_io_read_result)
     }
 
     pub fn deserialize_chunks_with_meta(
         &self,
-        meta: &BlockMeta,
+        meta: &BlockReadInfo,
         storage_format: &FuseStorageFormat,
         data: BlockReadResult,
     ) -> Result<DataBlock> {
@@ -119,10 +120,10 @@ impl BlockReader {
                 &meta.col_metas,
                 column_chunks,
                 &meta.compression,
-                &meta.location.0,
+                &meta.location,
             ),
             FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
-                &meta.location.0,
+                &meta.location,
                 num_rows,
                 &meta.col_metas,
                 column_chunks,
