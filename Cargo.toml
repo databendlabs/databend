@@ -325,7 +325,7 @@ hashbrown_v0_14 = { package = "hashbrown", version = "0.14.0", default-features 
 hashlink = "0.8"
 headers = "0.4.0"
 hex = "0.4.3"
-hickory-resolver = "0.24"
+hickory-resolver = "0.25"
 highway = "1.1"
 hive_metastore = "0.1.0"
 hostname = "0.3.1"
@@ -443,7 +443,7 @@ reqwest = { version = "0.12", default-features = false, features = [
     "native-tls-vendored",
     "native-tls-alpn",
 ] }
-reqwest-hickory-resolver = "0.1"
+reqwest-hickory-resolver = "0.2"
 ringbuffer = "0.14.2"
 rmp-serde = "1.1.1"
 roaring = { version = "0.10.1", features = ["serde"] }
