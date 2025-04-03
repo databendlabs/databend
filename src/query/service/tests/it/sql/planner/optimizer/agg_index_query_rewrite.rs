@@ -31,6 +31,7 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
 use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
+use databend_common_sql::optimizer::Optimizer;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::AggIndexInfo;
 use databend_common_sql::plans::CreateTablePlan;
@@ -394,7 +395,8 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
 
         let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
         let result = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::TryApplyAggIndex])
-            .optimize(&query)?;
+            .optimize(&query)
+            .await?;
         let agg_index = find_push_down_index_info(&result)?;
         assert_eq!(
             suite.is_matched,
@@ -449,7 +451,9 @@ async fn plan_sql(
     {
         let s_expr = if optimize {
             let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
-            RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize(&s_expr)?
+            RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES)
+                .optimize(&s_expr)
+                .await?
         } else {
             *s_expr
         };

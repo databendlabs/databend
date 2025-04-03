@@ -31,6 +31,7 @@ use crate::optimizer::optimizers::hyper_dp::RelationSetTree;
 use crate::optimizer::optimizers::rule::RuleFactory;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::planner::QueryExecutor;
 use crate::plans::Filter;
@@ -303,11 +304,7 @@ impl DPhpy {
     // The input plan tree has been optimized by heuristic optimizer
     // So filters have pushed down join and cross join has been converted to inner join as possible as we can
     // The output plan will have optimal join order theoretically
-    pub async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        if !self.opt_ctx.get_enable_dphyp() || !self.opt_ctx.get_enable_join_reorder() {
-            return Ok(s_expr.clone());
-        }
-
+    async fn optimize_internal(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         // Firstly, we need to extract all join conditions and base tables
         // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
@@ -850,5 +847,16 @@ impl DPhpy {
             }
         }
         Ok(s_expr.clone())
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for DPhpy {
+    fn name(&self) -> &'static str {
+        "DPhyp"
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_internal(s_expr).await
     }
 }

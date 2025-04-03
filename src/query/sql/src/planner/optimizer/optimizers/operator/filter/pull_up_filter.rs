@@ -20,6 +20,7 @@ use crate::binder::split_conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::InferFilterOptimizer;
 use crate::optimizer::optimizers::operator::NormalizeDisjunctiveFilterOptimizer;
+use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
@@ -50,17 +51,17 @@ impl PullUpFilterOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn optimize(mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize_internal(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = self.pull_up(s_expr)?;
         s_expr = self.finish(s_expr)?;
         Ok(s_expr)
     }
 
-    pub fn finish(self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn finish(&mut self, s_expr: SExpr) -> Result<SExpr> {
         if self.predicates.is_empty() {
             Ok(s_expr)
         } else {
-            let predicates = InferFilterOptimizer::new(None).optimize(self.predicates)?;
+            let predicates = InferFilterOptimizer::new(None).optimize(self.predicates.clone())?;
             let predicates = NormalizeDisjunctiveFilterOptimizer::new().optimize(predicates)?;
             let filter = Filter { predicates };
             Ok(SExpr::create_unary(
@@ -157,7 +158,8 @@ impl PullUpFilterOptimizer {
     pub fn pull_up_others(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
-            let child = PullUpFilterOptimizer::new(self.opt_ctx.clone()).optimize(child)?;
+            let child =
+                PullUpFilterOptimizer::new(self.opt_ctx.clone()).optimize_internal(child)?;
             children.push(Arc::new(child));
         }
         Ok(s_expr.replace_children(children))
@@ -251,5 +253,16 @@ impl PullUpFilterOptimizer {
             _ => (),
         }
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for PullUpFilterOptimizer {
+    fn name(&self) -> &'static str {
+        "PullUpFilterOptimizer"
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_internal(s_expr)
     }
 }

@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cost;
-pub mod ir;
-#[allow(clippy::module_inception)]
-mod optimizer;
-mod optimizer_api;
-mod optimizer_context;
-pub mod optimizers;
-pub mod pipeline;
-mod statistics;
+use databend_common_exception::Result;
 
-pub use optimizer::optimize;
-pub use optimizer::optimize_query;
-pub use optimizer_api::Optimizer;
-pub use optimizer_context::OptimizerContext;
-pub use optimizers::rule::agg_index;
+use crate::optimizer::ir::SExpr;
+
+/// Trait defining the interface for query optimizers.
+
+#[async_trait::async_trait]
+pub trait Optimizer: Send + Sync {
+    /// Optimize the given expression and return the optimized version.
+    async fn optimize(&mut self, expr: &SExpr) -> Result<SExpr>;
+
+    /// Returns a unique identifier for this optimizer.
+    fn name(&self) -> &'static str;
+}

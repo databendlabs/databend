@@ -20,6 +20,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
+use databend_common_sql::optimizer::Optimizer;
 use databend_common_sql::planner::binder::ColumnBinding;
 use databend_common_sql::planner::binder::Visibility;
 use databend_common_sql::planner::plans::BoundColumnRef;
@@ -92,9 +93,9 @@ fn create_join_condition(
 }
 
 /// Runs the DeduplicateJoinConditionOptimizer on the given SExpr
-fn run_optimizer(s_expr: SExpr) -> Result<SExpr> {
-    let optimizer = DeduplicateJoinConditionOptimizer::new();
-    optimizer.optimize(&s_expr)
+async fn run_optimizer(s_expr: SExpr) -> Result<SExpr> {
+    let mut optimizer = DeduplicateJoinConditionOptimizer::new();
+    optimizer.optimize(&s_expr).await
 }
 
 /// Converts an SExpr to a readable string representation using a simple indented format
@@ -269,8 +270,9 @@ fn compare_trees(
 //
 // Optimization: Removes redundant join condition (t2.id = t3.id or t1.id = t3.id) since one can be
 // inferred from the transitive relationship t1.id = t2.id AND t1.id = t3.id (or t1.id = t2.id AND t2.id = t3.id)
-#[test]
-fn test_basic_deduplication() -> Result<()> {
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_basic_deduplication() -> Result<()> {
     // Create column references for t1.id, t2.id, and t3.id
     let t1_id = create_column_ref1(
         0,
@@ -343,7 +345,7 @@ Join [t2.id = t3.id]
     ];
 
     // Run the optimizer
-    let optimized = run_optimizer(join_tree.clone())?;
+    let optimized = run_optimizer(join_tree.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
@@ -355,8 +357,8 @@ Join [t2.id = t3.id]
 // For example: SELECT * FROM t1, t2, t3 WHERE t1.id = t2.id AND t2.id = t3.id AND t1.id = t3.id
 // where t1.id is INT32, t2.id is INT64, and t3.id is FLOAT64
 // This tests if the optimizer correctly handles join conditions with different data types
-#[test]
-fn test_different_data_types() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_different_data_types() -> Result<()> {
     // Create column references with different data types
     let t1_id = create_column_ref1(
         0,
@@ -429,7 +431,7 @@ fn test_different_data_types() -> Result<()> {
     ];
 
     // Run the optimizer
-    let optimized = run_optimizer(join_tree.clone())?;
+    let optimized = run_optimizer(join_tree.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
@@ -451,8 +453,8 @@ fn test_different_data_types() -> Result<()> {
 //   t1  t2
 //
 // Optimization: No change since the conditions are on different columns and not redundant
-#[test]
-fn test_no_redundant_conditions() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_no_redundant_conditions() -> Result<()> {
     // Create column references for different columns
     let t1_id = create_column_ref1(
         0,
@@ -503,7 +505,7 @@ Join [t1.id = t2.id, t1.name = t2.name]
     ];
 
     // Run the optimizer
-    let optimized = run_optimizer(join.clone())?;
+    let optimized = run_optimizer(join.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join, &optimized, &before_patterns, &after_patterns)?;
@@ -541,8 +543,8 @@ Join [t1.id = t2.id, t1.name = t2.name]
 //
 // Optimization: Removes 5 redundant join conditions, keeping only the minimum spanning tree
 // of join conditions (t1.id = t2.id, t2.id = t3.id, t3.id = t4.id)
-#[test]
-fn test_complex_transitive_conditions() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_complex_transitive_conditions() -> Result<()> {
     // Create column references for multiple tables
     let t1_id = create_column_ref1(
         0,
@@ -631,7 +633,7 @@ Join [t3.id = t4.id]
     ];
 
     // Run the optimizer
-    let optimized = run_optimizer(join_tree.clone())?;
+    let optimized = run_optimizer(join_tree.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
@@ -661,8 +663,8 @@ Join [t3.id = t4.id]
 //
 // Optimization: Removes redundant IS NOT DISTINCT FROM condition (t1.id IS NOT DISTINCT FROM t3.id)
 // since it can be inferred from the transitive relationship
-#[test]
-fn test_null_equal_conditions() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_null_equal_conditions() -> Result<()> {
     // Create column references
     let t1_id = create_column_ref1(
         0,
@@ -730,7 +732,7 @@ Join [t2.id IS NOT DISTINCT FROM t3.id]
     ];
 
     // Run the optimizer
-    let optimized = run_optimizer(join_tree.clone())?;
+    let optimized = run_optimizer(join_tree.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
@@ -759,8 +761,8 @@ Join [t2.id IS NOT DISTINCT FROM t3.id]
 // t1  t2
 //
 // Optimization: Removes redundant condition with mixed IS NOT DISTINCT FROM and equality operators
-#[test]
-fn test_mixed_null_equal_conditions() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_mixed_null_equal_conditions() -> Result<()> {
     // Create column references
     let t1_id = create_column_ref1(
         0,
@@ -828,7 +830,7 @@ Join [t2.id = t3.id]
     ];
 
     // Run the optimizer
-    let optimized = run_optimizer(join_tree.clone())?;
+    let optimized = run_optimizer(join_tree.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
@@ -857,8 +859,8 @@ Join [t2.id = t3.id]
 // t1  t2
 //
 // Optimization: No change for non-inner joins since removing conditions could change semantics
-#[test]
-fn test_non_inner_join_types() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_non_inner_join_types() -> Result<()> {
     // Create column references
     let t1_id = create_column_ref1(
         0,
@@ -921,7 +923,7 @@ Join [t2.id = t3.id, t1.id = t3.id]
     ];
 
     // Run the optimizer
-    let optimized = run_optimizer(join_tree.clone())?;
+    let optimized = run_optimizer(join_tree.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
@@ -942,8 +944,8 @@ Join [t2.id = t3.id, t1.id = t3.id]
 //
 // Optimization: Removes duplicate join condition (t1.id = t2.id appears twice),
 // but keeps the non-duplicate condition (t1.name = t2.name).
-#[test]
-fn test_multiple_conditions_same_tables() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_multiple_conditions_same_tables() -> Result<()> {
     // Create column references for different columns
     let t1_id = create_column_ref1(
         0,
@@ -1006,7 +1008,7 @@ fn test_multiple_conditions_same_tables() -> Result<()> {
     "#];
 
     // Run the optimizer
-    let optimized = run_optimizer(join_tree.clone())?;
+    let optimized = run_optimizer(join_tree.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
@@ -1028,8 +1030,8 @@ fn test_multiple_conditions_same_tables() -> Result<()> {
 //   t1  t2
 //
 // Optimization: No change since there are no conditions to deduplicate
-#[test]
-fn test_empty_conditions() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_empty_conditions() -> Result<()> {
     // Create table scans
     let t1 = create_table_scan(0, "t1");
     let t2 = create_table_scan(1, "t2");
@@ -1058,7 +1060,7 @@ Join []
     ];
 
     // Run the optimizer
-    let optimized = run_optimizer(join.clone())?;
+    let optimized = run_optimizer(join.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join, &optimized, &before_patterns, &after_patterns)?;
@@ -1080,8 +1082,8 @@ Join []
 //   t1  t2
 //
 // Optimization: Removes duplicate identical join condition
-#[test]
-fn test_duplicate_identical_conditions() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_duplicate_identical_conditions() -> Result<()> {
     // Create column references
     let t1_id = create_column_ref1(
         0,
@@ -1130,7 +1132,7 @@ Join [t1.id = t2.id]
     ];
 
     // Run the optimizer
-    let optimized = run_optimizer(join.clone())?;
+    let optimized = run_optimizer(join.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join, &optimized, &before_patterns, &after_patterns)?;
@@ -1160,8 +1162,8 @@ Join [t1.id = t2.id]
 //
 // Optimization: Removes redundant condition (t3.id = t1.id) that creates a circular dependency
 // since it can be inferred from the transitive relationship
-#[test]
-fn test_commutative_and_circular_conditions() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_commutative_and_circular_conditions() -> Result<()> {
     // Create column references
     let t1_id = create_column_ref1(
         0,
@@ -1224,7 +1226,7 @@ Join [t2.id = t3.id]
 "#];
 
     // Run the optimizer
-    let optimized = run_optimizer(join_tree.clone())?;
+    let optimized = run_optimizer(join_tree.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
@@ -1269,8 +1271,8 @@ Join [t2.id = t3.id]
 //
 // Optimization: Removes redundant condition (t1.id = t5.id) in a deeply nested join tree
 // since it can be inferred from the chain of transitive relationships
-#[test]
-fn test_deep_nested_join_tree() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_deep_nested_join_tree() -> Result<()> {
     // Create column references for 5 tables
     let t1_id = create_column_ref1(
         0,
@@ -1360,7 +1362,7 @@ Join [t4.id = t5.id]
 "#];
 
     // Run the optimizer
-    let optimized = run_optimizer(join_tree.clone())?;
+    let optimized = run_optimizer(join_tree.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
@@ -1390,8 +1392,8 @@ Join [t4.id = t5.id]
 //
 // Optimization: No change in the LEFT JOIN conditions since removing conditions from
 // non-inner joins could change semantics, but inner join conditions are optimized
-#[test]
-fn test_mixed_join_types() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_mixed_join_types() -> Result<()> {
     // Create column references
     let t1_id = create_column_ref1(
         0,
@@ -1454,7 +1456,7 @@ Join [t2.id = t3.id, t1.id = t3.id]
     ];
 
     // Run the optimizer
-    let optimized = run_optimizer(join_tree.clone())?;
+    let optimized = run_optimizer(join_tree.clone()).await?;
 
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
