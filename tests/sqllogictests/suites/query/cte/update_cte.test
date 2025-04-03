@@ -79,6 +79,23 @@ select * from t2;
 statement error (?s)1065.*?column a doesn't exist
 with tt1 as (select * from t1) update t2 set a = tt1.a;
 
-
 statement ok
 drop table t2;
+
+statement ok
+create or replace table test_merge(col1 varchar, col2 varchar, col3 varchar);
+
+statement ok
+insert into test_merge values(2,'abc',2),(3,'abc',3),(4,'abc',4);
+
+statement ok
+with tbb("col1", "col2", "col3") as (values ('1', 'add', '11'), ('4', 'add', '44')) update test_merge tba set tba.col1 =tbb.col1, tba.col2 = 'update', tba.col3 = tbb.col3 from tbb where tba.col1 = tbb.col1;
+
+statement ok
+with tbb as (select col0::string null col1,col1::string null col2,col2::string null col3 from (values ('1', 'add', '11'), ('4', 'add', '44'))) update test_merge tba set tba.col1 =tbb.col1, tba.col2 = 'update', tba.col3 = tbb.col3 from tbb where tba.col1 = tbb.col1;
+
+statement ok
+with tbb("col1", "col2", "col3") as (values ('1', 'add', '11'), ('4', 'add', '44')) update test_merge tba set tba.col1 =tbb.col1::string null, tba.col2 = 'update', tba.col3 = tbb.col3::string null from tbb where tba.col1 = tbb.col1::string null;
+
+statement ok
+drop table test_merge;
