@@ -10,14 +10,16 @@ edition = { workspace = true }
 ignored = ["xorfilter-rs", "match-template"]
 
 [dependencies]
-anyerror = { workspace = true }
-cbordata = { workspace = true }
-
 databend-common-ast = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+
+
+anyerror = { workspace = true }
+bincode = { workspace = true, features = ["serde"] }
+cbordata = { workspace = true }
 fastrace = { workspace = true }
 goldenfile = { workspace = true }
 jsonb = { workspace = true }
