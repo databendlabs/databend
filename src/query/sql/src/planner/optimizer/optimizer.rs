@@ -246,27 +246,41 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 
 pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -> Result<SExpr> {
     let mut pipeline = OptimizerPipeline::new(opt_ctx.clone())
-        // Add all optimizers as before
+        // 1. Configure distributed optimization based on table types
+        // (This is now handled in the pipeline's configure_distributed_optimization method)
+        // 2. Eliminate subqueries by rewriting them into more efficient forms
         .add(SubqueryRewriter::new(opt_ctx.clone(), None))
+        // 3. Apply statistics aggregation to gather and propagate statistics
         .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
+        // 4. Collect statistics for SExpr nodes to support cost estimation
         .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
+        // 5. Normalize aggregate, it should be executed before RuleSplitAggregate
         .add(RuleNormalizeAggregateOptimizer::new(opt_ctx.clone()))
+        // 6. Pull up and infer filter
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
+        // 7. Run default rewrite rules
         .add(RecursiveOptimizer::new(
             opt_ctx.clone(),
             &DEFAULT_REWRITE_RULES,
         ))
+        // 8. Run post rewrite rules
         .add(RecursiveOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
         ]))
+        // 9. Apply DPhyp algorithm for cost-based join reordering
         .add(DPhpy::new(opt_ctx.clone()))
+        // 10. After join reorder, convert some single join to inner join
         .add(SingleToInnerOptimizer::new())
+        // 11. Deduplicate join conditions
         .add(DeduplicateJoinConditionOptimizer::new())
+        // 12. Apply join commutativity to further optimize join ordering
         .add_if(
             opt_ctx.get_enable_join_reorder(),
             RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice()),
         )
+        // 13. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case
         .add(CascadesOptimizer::new(opt_ctx.clone())?)
+        // 14. Eliminate unnecessary scalar calculations to clean up the final plan
         .add_if(
             !opt_ctx.get_planning_agg_index(),
             RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
@@ -277,7 +291,6 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     Ok(s_expr)
 }
 
-// TODO(leiysky): reuse the optimization logic with `optimize_query`
 async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -> Result<Memo> {
     let mut pipeline = OptimizerPipeline::new(opt_ctx.clone())
         .add(SubqueryRewriter::new(opt_ctx.clone(), None))
