@@ -22,6 +22,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
@@ -44,6 +45,10 @@ use rand::random;
 
 use crate::interpreters::InterpreterFactory;
 use crate::persistent_log::session::create_session;
+use crate::persistent_log::table_schemas::PersistentLogTable;
+use crate::persistent_log::table_schemas::QueryDetailsTable;
+use crate::persistent_log::table_schemas::QueryLogTable;
+use crate::persistent_log::table_schemas::QueryProfileTable;
 use crate::sessions::QueryContext;
 
 pub struct GlobalPersistentLog {
@@ -55,6 +60,7 @@ pub struct GlobalPersistentLog {
     stage_name: String,
     initialized: AtomicBool,
     stopped: AtomicBool,
+    tables: Vec<Box<dyn PersistentLogTable>>,
     #[allow(dead_code)]
     retention: usize,
 }
@@ -66,6 +72,33 @@ impl GlobalPersistentLog {
         let provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         let meta_store = provider.create_meta_store().await?;
 
+        let mut tables: Vec<Box<dyn PersistentLogTable>> = vec![];
+
+        if cfg.log.query.on && !cfg.log.query.dir.is_empty() {
+            let query_details = QueryDetailsTable;
+            info!(
+                "Persistent query details table is enabled, persistent_system.{}",
+                query_details.table_name()
+            );
+            tables.push(Box::new(query_details));
+        }
+
+        if cfg.log.profile.on && !cfg.log.profile.dir.is_empty() {
+            let profile = QueryProfileTable;
+            info!(
+                "Persistent query profile table is enabled, persistent_system.{}",
+                profile.table_name()
+            );
+            tables.push(Box::new(profile));
+        }
+
+        let query_log = QueryLogTable;
+        info!(
+            "Persistent query log table is enabled, persistent_system.{}",
+            query_log.table_name()
+        );
+        tables.push(Box::new(query_log));
+
         let instance = Arc::new(Self {
             meta_store,
             interval: cfg.log.persistentlog.interval,
@@ -75,6 +108,7 @@ impl GlobalPersistentLog {
             stage_name: cfg.log.persistentlog.stage_name.clone(),
             initialized: AtomicBool::new(false),
             stopped: AtomicBool::new(false),
+            tables,
             retention: cfg.log.persistentlog.retention,
         });
         GlobalInstance::set(instance);
@@ -188,38 +222,47 @@ impl GlobalPersistentLog {
         Ok(())
     }
 
-    async fn prepare(&self) -> Result<()> {
+    pub async fn prepare(&self) -> Result<()> {
         let stage_name = self.stage_name.clone();
         let create_stage = format!("CREATE STAGE IF NOT EXISTS {}", stage_name);
         self.execute_sql(&create_stage).await?;
         let create_db = "CREATE DATABASE IF NOT EXISTS persistent_system";
         self.execute_sql(create_db).await?;
-        let create_table = "
-        CREATE TABLE IF NOT EXISTS persistent_system.query_log (
-            timestamp TIMESTAMP,
-            path VARCHAR,
-            target VARCHAR,
-            log_level VARCHAR,
-            cluster_id VARCHAR,
-            node_id VARCHAR,
-            warehouse_id VARCHAR,
-            query_id VARCHAR,
-            message VARCHAR,
-            fields VARIANT
-        ) CLUSTER BY (timestamp, query_id)";
-        self.execute_sql(create_table).await?;
+
+        for table in &self.tables {
+            let session = create_session(&self.tenant_id, &self.cluster_id).await?;
+            let context = session.create_query_context().await?;
+            let table_name = table.table_name();
+            let old_table = context
+                .get_table(CATALOG_DEFAULT, "persistent_system", table_name)
+                .await;
+            if old_table.is_ok() {
+                let old_schema = old_table?.schema();
+                if !table.schema_equal(old_schema) {
+                    let rename_target =
+                        format!("`{}_old_{}`", table_name, chrono::Utc::now().timestamp());
+                    let rename = format!(
+                        "ALTER TABLE persistent_system.{} RENAME TO {}",
+                        table_name, rename_target
+                    );
+                    info!("Persistent log table already exists, but schema is different, renaming to {}", rename_target);
+                    self.execute_sql(&rename).await?;
+                }
+            } else {
+                info!("Persistent log table {} not exists, creating", table_name);
+            }
+            let create_table = table.create_table_sql();
+            self.execute_sql(&create_table).await?;
+        }
         Ok(())
     }
 
     async fn do_copy_into(&self) -> Result<()> {
         let stage_name = GlobalPersistentLog::instance().stage_name.clone();
-        let sql = format!(
-            "COPY INTO persistent_system.query_log
-             FROM @{} PATTERN = '.*[.]parquet' file_format = (TYPE = PARQUET)
-             PURGE = TRUE",
-            stage_name
-        );
-        self.execute_sql(&sql).await
+        for table in &self.tables {
+            self.execute_sql(&table.copy_into_sql(&stage_name)).await?;
+        }
+        Ok(())
     }
 
     /// Do retention and vacuum

@@ -88,6 +88,69 @@ pub async fn test_persistent_log_write() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+pub async fn test_persistent_log_alter_if_schema_change() -> Result<()> {
+    let mut config = ConfigBuilder::create().config();
+    config.log.persistentlog.on = true;
+    config.log.persistentlog.interval = 1;
+    // Test the schema change of persistent log table
+    let fixture = TestFixture::setup_with_config(&config).await?;
+
+    let _ = fixture
+        .execute_query("create database persistent_system")
+        .await?;
+    // create a table with the same name
+    let _ = fixture
+        .execute_query(
+            "CREATE TABLE IF NOT EXISTS persistent_system.query_log (timestamp TIMESTAMP)",
+        )
+        .await?;
+
+    let _ = fixture
+        .execute_query("INSERT INTO persistent_system.query_log (timestamp) VALUES (now())")
+        .await?;
+
+    GlobalPersistentLog::instance().prepare().await?;
+
+    let res = fixture
+        .execute_query("show tables from persistent_system")
+        .await?;
+    let data_blocks: Vec<DataBlock> = res.try_collect().await?;
+    let tables = data_blocks[0].columns().get(0);
+    let mut two_tables = vec![];
+    for i in 0..2 {
+        two_tables.push(
+            tables
+                .unwrap()
+                .value
+                .index(i)
+                .unwrap()
+                .to_string()
+                .replace("'", ""),
+        );
+    }
+    two_tables.sort();
+    assert_eq!(two_tables[0], "query_log");
+    assert_eq!(two_tables[1].starts_with("query_log_old_"), true);
+
+    let res = fixture
+        .execute_query(&format!(
+            "select count(*) from persistent_system.{}",
+            two_tables[1]
+        ))
+        .await?;
+    let data_blocks: Vec<DataBlock> = res.try_collect().await?;
+    let cnt = data_blocks[0].clone().take_columns()[0]
+        .clone()
+        .value
+        .into_scalar()
+        .unwrap()
+        .get_i64();
+    assert_eq!(cnt, Some(1));
+
+    Ok(())
+}
+
 async fn write_remote_log(stage_name: &str) -> Result<()> {
     let path = format!(
         "stage/internal/{}/{}.parquet",
