@@ -22,8 +22,6 @@ pub mod rule;
 mod statistics;
 mod util;
 
-mod dynamic_sample;
-
 pub use optimizer::optimize;
 pub use optimizer::optimize_query;
 pub use optimizer_context::OptimizerContext;

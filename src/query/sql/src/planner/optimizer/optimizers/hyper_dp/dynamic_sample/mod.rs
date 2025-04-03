@@ -18,3 +18,5 @@ mod filter_selectivity_sample;
 mod join_selectivity_sample;
 
 pub use dynamic_sample::dynamic_sample;
+pub use filter_selectivity_sample::filter_selectivity_sample;
+pub use join_selectivity_sample::join_selectivity_sample;

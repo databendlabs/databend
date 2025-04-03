@@ -19,9 +19,9 @@ use ahash::HashMap;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
-use crate::optimizer::dynamic_sample::dynamic_sample;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::hyper_dp::dynamic_sample::dynamic_sample;
 use crate::planner::QueryExecutor;
 use crate::IndexType;
 use crate::MetadataRef;

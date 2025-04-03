@@ -20,11 +20,11 @@ use databend_common_base::base::tokio::time::Instant;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
-use crate::optimizer::dynamic_sample::filter_selectivity_sample::filter_selectivity_sample;
-use crate::optimizer::dynamic_sample::join_selectivity_sample::join_selectivity_sample;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatInfo;
+use crate::optimizer::optimizers::hyper_dp::dynamic_sample::filter_selectivity_sample;
+use crate::optimizer::optimizers::hyper_dp::dynamic_sample::join_selectivity_sample;
 use crate::planner::QueryExecutor;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
