@@ -549,16 +549,19 @@ impl<'a> Selector<'a> {
                 );
                 let mut eval_options = EvaluateOptions::new(selection);
                 let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
+                let expr_display = &expr.sql_display();
+                let src_type = expr.data_type();
                 let result = if *is_try {
                     self.evaluator
-                        .run_try_cast(*span, expr.data_type(), dest_type, value)?
+                        .run_try_cast(*span, src_type, dest_type, value, expr_display)?
                 } else {
                     self.evaluator.run_cast(
                         *span,
-                        expr.data_type(),
+                        src_type,
                         dest_type,
                         value,
                         None,
+                        expr_display,
                         &mut eval_options,
                     )?
                 };
