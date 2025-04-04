@@ -718,3 +718,50 @@ macro_rules! local_block_meta_serde {
         }
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Int32Type;
+    use crate::FromData;
+
+    #[test]
+    fn test_try_new_from_columns() {
+        use databend_common_exception::ErrorCode;
+
+        use crate::Column;
+
+        // Test case 1: Empty columns - should return error
+        let empty_columns: Vec<Column> = vec![];
+        let result = DataBlock::try_new_from_columns(empty_columns);
+        assert!(result.is_err());
+        if let Err(err) = result {
+            assert_eq!(err.code(), ErrorCode::INTERNAL);
+            assert!(err.to_string().contains("empty column set"));
+        }
+
+        // Test case 2: Create columns with different lengths
+        let column1 = Int32Type::from_data(vec![1, 2, 3]);
+        let column2 = Int32Type::from_data(vec![4, 5]);
+
+        let columns_diff_length = vec![column1, column2];
+        let result = DataBlock::try_new_from_columns(columns_diff_length);
+        assert!(result.is_err());
+        if let Err(err) = result {
+            assert_eq!(err.code(), ErrorCode::INTERNAL);
+            assert!(err.to_string().contains("different number of rows"));
+        }
+
+        // Test case 3: Valid columns with same length
+        let column1 = Int32Type::from_data(vec![1, 2, 3]);
+        let column2 = Int32Type::from_data(vec![4, 5, 6]);
+
+        let valid_columns = vec![column1, column2];
+        let result = DataBlock::try_new_from_columns(valid_columns);
+        assert!(result.is_ok());
+
+        let block = result.unwrap();
+        assert_eq!(block.num_rows(), 3);
+        assert_eq!(block.columns().len(), 2);
+    }
+}
