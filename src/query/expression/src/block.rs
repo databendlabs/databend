@@ -20,6 +20,7 @@ use std::ops::Range;
 use arrow_array::ArrayRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use itertools::Itertools;
 
 use crate::schema::DataSchema;
 use crate::types::AnyType;
@@ -184,8 +185,11 @@ impl DataBlock {
         }
         let num_rows = columns[0].len();
         if !columns.iter().all(|c| c.len() == num_rows) {
+            let num_rows_of_columns = columns.iter().map(|c| c.len()).join(",");
             return Err(ErrorCode::Internal(
-                "Building DataBlock with columns that have different number of rows is not expected",
+                format!(
+                 "Building DataBlock with columns that have different number of rows is not expected. \n\
+                  Number of rows of each column are: {}", num_rows_of_columns),
             ));
         }
         Ok(DataBlock::new_from_columns_internal(columns, num_rows))
