@@ -2929,13 +2929,12 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_meta_count: u64,
 
-    // TODO shall we disable it by default?
-    /// Max bytes of cached bloom index meta data on disk. Default 1GB
+    /// Max bytes of cached bloom index meta data on disk. Default value of is 0.
     // Set it to 0 to disable it. It will NOT be enabled if table meta cache is disabled
     #[clap(
         long = "disk-cache-table-bloom-index-meta-size",
         value_name = "VALUE",
-        default_value = "1073741824"
+        default_value = "0"
     )]
     pub disk_cache_table_bloom_index_meta_size: u64,
 
@@ -2962,11 +2961,11 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_filter_size: u64,
 
-    /// Max on-disk bytes of cached bloom index filters used. Set it to 0 to disable it.
+    /// Max on-disk bytes of cached bloom index filters used. Defalt value of it is 0.
     #[clap(
         long = "disk-cache-table-bloom-index-filter-size",
         value_name = "VALUE",
-        default_value = "2147483648"
+        default_value = "0"
     )]
     pub disk_cache_table_bloom_index_filter_size: u64,
 

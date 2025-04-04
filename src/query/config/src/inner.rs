@@ -721,7 +721,7 @@ impl Default for CacheConfig {
             table_bloom_index_meta_count: 3000,
             table_bloom_index_filter_count: 0,
             table_bloom_index_filter_size: 2147483648,
-            disk_cache_table_bloom_index_filter_size: 20 * 1024 * 1024 * 1024,
+            disk_cache_table_bloom_index_filter_size: 0,
             inverted_index_meta_count: 3000,
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
@@ -732,7 +732,7 @@ impl Default for CacheConfig {
             data_cache_key_reload_policy: Default::default(),
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
-            disk_cache_table_bloom_index_meta_size: 1024 * 1024 * 1024,
+            disk_cache_table_bloom_index_meta_size: 0,
         }
     }
 }
