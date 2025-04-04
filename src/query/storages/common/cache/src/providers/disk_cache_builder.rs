@@ -70,6 +70,16 @@ pub struct TableDataCache<T = LruDiskCacheHolder> {
     _cache_populator: DiskCachePopulator,
 }
 
+#[cfg(test)]
+impl TableDataCache {
+    fn is_populate_queue_drained(&self) -> bool {
+        self._cache_populator.receiver.is_empty()
+    }
+    pub fn till_no_pending_items_in_queue(&self) {
+        while !self.is_populate_queue_drained() {}
+    }
+}
+
 pub struct DiskCacheBuilder;
 
 impl DiskCacheBuilder {
@@ -211,9 +221,13 @@ impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<
 }
 
 #[derive(Clone)]
-struct DiskCachePopulator;
+struct DiskCachePopulator {
+    #[cfg(test)]
+    receiver: crossbeam_channel::Receiver<CacheItem>,
+}
 
 impl DiskCachePopulator {
+    #[cfg(test)]
     fn new<T>(
         incoming: crossbeam_channel::Receiver<CacheItem>,
         cache: T,
@@ -222,11 +236,37 @@ impl DiskCachePopulator {
     where
         T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
     {
+        let receiver = incoming.clone();
+        Self::kick_off(incoming, cache, _num_worker_thread)?;
+        Ok(Self { receiver })
+    }
+
+    #[cfg(not(test))]
+    fn new<T>(
+        incoming: crossbeam_channel::Receiver<CacheItem>,
+        cache: T,
+        _num_worker_thread: usize,
+    ) -> Result<Self>
+    where
+        T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
+    {
+        Self::kick_off(incoming, cache, _num_worker_thread)?;
+        Ok(Self {})
+    }
+
+    fn kick_off<T>(
+        incoming: crossbeam_channel::Receiver<CacheItem>,
+        cache: T,
+        _num_worker_thread: usize,
+    ) -> Result<()>
+    where
+        T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
+    {
         let worker = Arc::new(CachePopulationWorker {
             cache,
             population_queue: incoming,
         });
-        let _join_handler = worker.start()?;
-        Ok(Self)
+        let _join_handler = worker.start();
+        Ok(())
     }
 }

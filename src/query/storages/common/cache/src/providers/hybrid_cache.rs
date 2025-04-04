@@ -149,7 +149,7 @@ where
     }
 
     fn contains_key(&self, k: &str) -> bool {
-        self.memory_cache.contains_key(k) && self.disk_cache.contains_key(k)
+        self.memory_cache.contains_key(k) || self.disk_cache.contains_key(k)
     }
 
     fn bytes_size(&self) -> u64 {
@@ -157,15 +157,15 @@ where
     }
 
     fn items_capacity(&self) -> u64 {
-        self.disk_cache.items_capacity() + self.disk_cache.items_capacity()
+        self.memory_cache.items_capacity() + self.disk_cache.items_capacity()
     }
 
     fn bytes_capacity(&self) -> u64 {
-        self.disk_cache.bytes_capacity() + self.disk_cache.bytes_capacity()
+        self.memory_cache.bytes_capacity() + self.disk_cache.bytes_capacity()
     }
 
     fn len(&self) -> usize {
-        self.disk_cache.len() + self.disk_cache.len()
+        self.memory_cache.len() + self.disk_cache.len()
     }
 
     fn name(&self) -> &str {
@@ -348,9 +348,13 @@ mod tests {
 
         // This will cause key1 to be evicted from memory cache, but it should exist in disk cache
         cache.insert("key3".to_string(), test_data3.clone());
+        assert!(!cache.memory_cache.contains_key("key1"));
 
-        // TODO refine this
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        let disk_cache = cache.disk_cache.as_ref().unwrap();
+        // Since the on-disk cache is populated asynchronously, we need to
+        // wait until the populate-queue is empty. At that time, at least
+        // the first key `test_key` should be written into the on-disk cache.
+        disk_cache.till_no_pending_items_in_queue();
 
         // key1 should be retrieved from disk cache
         let retrieved1 = cache
@@ -410,6 +414,15 @@ mod tests {
 
         // Verify the memory cache doesn't have our test key anymore
         assert!(!cache.in_memory_cache().contains_key("test_key"));
+
+        // Since the on-disk cache is populated asynchronously, we need to
+        // wait until the populate-queue is empty. At that time, at least
+        // the first key `test_key` should be written into the on-disk cache.
+        cache
+            .on_disk_cache()
+            .as_ref()
+            .unwrap()
+            .till_no_pending_items_in_queue();
 
         // First access - should hit disk cache and populate memory cache
         let first_access = cache

@@ -2961,7 +2961,7 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_filter_size: u64,
 
-    /// Max on-disk bytes of cached bloom index filters used. Defalt value of it is 0.
+    /// Max on-disk bytes of cached bloom index filters used. The default value of it is 0.
     #[clap(
         long = "disk-cache-table-bloom-index-filter-size",
         value_name = "VALUE",
