@@ -61,19 +61,30 @@ impl AsRef<str> for TableDataCacheKey {
     }
 }
 
+// TODO rename this, out of names now ... :(
 #[derive(Clone)]
 pub struct TableDataCache<T = LruDiskCacheHolder> {
-    external_cache: T,
+    name: String,
+    lru_disk_cache: T,
     population_queue: crossbeam_channel::Sender<CacheItem>,
     _cache_populator: DiskCachePopulator,
 }
 
-pub const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";
+#[cfg(test)]
+impl TableDataCache {
+    fn is_populate_queue_drained(&self) -> bool {
+        self._cache_populator.receiver.is_empty()
+    }
+    pub fn till_no_pending_items_in_queue(&self) {
+        while !self.is_populate_queue_drained() {}
+    }
+}
 
-pub struct TableDataCacheBuilder;
+pub struct DiskCacheBuilder;
 
-impl TableDataCacheBuilder {
-    pub fn new_table_data_disk_cache(
+impl DiskCacheBuilder {
+    pub fn try_build_disk_cache(
+        name: String,
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: usize,
@@ -89,7 +100,8 @@ impl TableDataCacheBuilder {
         let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
         Ok(TableDataCache {
-            external_cache: disk_cache.clone(),
+            name,
+            lru_disk_cache: disk_cache.clone(),
             population_queue: tx,
             _cache_populator: DiskCachePopulator::new(rx, disk_cache, num_population_thread)?,
         })
@@ -100,25 +112,25 @@ impl CacheAccessor for TableDataCache {
     type V = Bytes;
 
     fn name(&self) -> &str {
-        DISK_TABLE_DATA_CACHE_NAME
+        self.name.as_str()
     }
 
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
-        metrics_inc_cache_access_count(1, DISK_TABLE_DATA_CACHE_NAME);
+        metrics_inc_cache_access_count(1, &self.name);
         let k = k.as_ref();
-        if let Some(item) = self.external_cache.get(k) {
+        if let Some(item) = self.lru_disk_cache.get(k) {
             Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, item.len());
-            metrics_inc_cache_hit_count(1, DISK_TABLE_DATA_CACHE_NAME);
+            metrics_inc_cache_hit_count(1, &self.name);
             Some(item)
         } else {
-            metrics_inc_cache_miss_count(1, DISK_TABLE_DATA_CACHE_NAME);
+            metrics_inc_cache_miss_count(1, &self.name);
             None
         }
     }
 
     fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
         let Some(cached_value) = self.get(k) else {
-            metrics_inc_cache_miss_bytes(len, DISK_TABLE_DATA_CACHE_NAME);
+            metrics_inc_cache_miss_bytes(len, &self.name);
             return None;
         };
 
@@ -127,7 +139,7 @@ impl CacheAccessor for TableDataCache {
 
     fn insert(&self, k: String, v: Bytes) -> Arc<Bytes> {
         // check if already cached
-        if !self.external_cache.contains_key(&k) {
+        if !self.lru_disk_cache.contains_key(&k) {
             // populate the cache is necessary
             let msg = CacheItem {
                 key: k,
@@ -135,11 +147,11 @@ impl CacheAccessor for TableDataCache {
             };
             match self.population_queue.try_send(msg) {
                 Ok(_) => {
-                    metrics_inc_cache_population_pending_count(1, DISK_TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(1, &self.name);
                 }
                 Err(TrySendError::Full(_)) => {
-                    metrics_inc_cache_population_pending_count(-1, DISK_TABLE_DATA_CACHE_NAME);
-                    metrics_inc_cache_population_overflow_count(1, DISK_TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(-1, &self.name);
+                    metrics_inc_cache_population_overflow_count(1, &self.name);
                 }
                 Err(TrySendError::Disconnected(_)) => {
                     error!("table data cache population thread is down");
@@ -150,27 +162,27 @@ impl CacheAccessor for TableDataCache {
     }
 
     fn evict(&self, k: &str) -> bool {
-        self.external_cache.evict(k)
+        self.lru_disk_cache.evict(k)
     }
 
     fn contains_key(&self, k: &str) -> bool {
-        self.external_cache.contains_key(k)
+        self.lru_disk_cache.contains_key(k)
     }
 
     fn bytes_size(&self) -> u64 {
-        self.external_cache.bytes_size()
+        self.lru_disk_cache.bytes_size()
     }
 
     fn items_capacity(&self) -> u64 {
-        self.external_cache.items_capacity()
+        self.lru_disk_cache.items_capacity()
     }
 
     fn bytes_capacity(&self) -> u64 {
-        self.external_cache.bytes_capacity()
+        self.lru_disk_cache.bytes_capacity()
     }
 
     fn len(&self) -> usize {
-        self.external_cache.len()
+        self.lru_disk_cache.len()
     }
 }
 
@@ -190,10 +202,10 @@ impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<
                         }
                     }
                     self.cache.insert(key, value);
-                    metrics_inc_cache_population_pending_count(-1, DISK_TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(-1, self.cache.name());
                 }
-                Err(_) => {
-                    info!("table data cache worker shutdown");
+                Err(e) => {
+                    info!("table data cache worker shutdown, due to error: {:?}", e);
                     break;
                 }
             }
@@ -201,8 +213,7 @@ impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<
     }
 
     fn start(self: Arc<Self>) -> Result<JoinHandle<()>> {
-        let thread_builder =
-            std::thread::Builder::new().name("table-data-cache-population".to_owned());
+        let thread_builder = std::thread::Builder::new().name(self.cache.name().to_owned());
         thread_builder.spawn(move || self.populate()).map_err(|e| {
             ErrorCode::StorageOther(format!("spawn cache population worker thread failed, {e}"))
         })
@@ -210,9 +221,13 @@ impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<
 }
 
 #[derive(Clone)]
-struct DiskCachePopulator;
+struct DiskCachePopulator {
+    #[cfg(test)]
+    receiver: crossbeam_channel::Receiver<CacheItem>,
+}
 
 impl DiskCachePopulator {
+    #[cfg(test)]
     fn new<T>(
         incoming: crossbeam_channel::Receiver<CacheItem>,
         cache: T,
@@ -221,11 +236,37 @@ impl DiskCachePopulator {
     where
         T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
     {
+        let receiver = incoming.clone();
+        Self::kick_off(incoming, cache, _num_worker_thread)?;
+        Ok(Self { receiver })
+    }
+
+    #[cfg(not(test))]
+    fn new<T>(
+        incoming: crossbeam_channel::Receiver<CacheItem>,
+        cache: T,
+        _num_worker_thread: usize,
+    ) -> Result<Self>
+    where
+        T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
+    {
+        Self::kick_off(incoming, cache, _num_worker_thread)?;
+        Ok(Self {})
+    }
+
+    fn kick_off<T>(
+        incoming: crossbeam_channel::Receiver<CacheItem>,
+        cache: T,
+        _num_worker_thread: usize,
+    ) -> Result<()>
+    where
+        T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
+    {
         let worker = Arc::new(CachePopulationWorker {
             cache,
             population_queue: incoming,
         });
-        let _join_handler = worker.start()?;
-        Ok(Self)
+        let _join_handler = worker.start();
+        Ok(())
     }
 }

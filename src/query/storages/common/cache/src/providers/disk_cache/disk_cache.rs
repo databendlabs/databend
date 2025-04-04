@@ -299,6 +299,7 @@ impl DiskCache {
         let cache_key = self.cache_key(key.as_ref());
         let path = self.abs_path_of_cache_key(&cache_key);
         if let Some(parent_path) = path.parent() {
+            // TODO optimize this, try creating file first, fall back to this
             fs::create_dir_all(parent_path)?;
         }
         let mut f = File::create(&path)?;
