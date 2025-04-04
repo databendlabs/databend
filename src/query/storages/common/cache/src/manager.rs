@@ -41,10 +41,9 @@ use crate::providers::HybridCache;
 use crate::DiskCacheBuilder;
 use crate::InMemoryLruCache;
 use crate::TableDataCache;
+use crate::Unit;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
-
-pub const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";
 
 struct CacheSlot<T> {
     cache: RwLock<Option<T>>,
@@ -179,11 +178,11 @@ impl CacheManager {
             let bloom_index_filter_cache = {
                 let bloom_filter_on_disk_cache_path = PathBuf::from(&config.disk_cache_config.path)
                     .join(tenant_id.clone())
-                    .join("bloom_v1")
-                    .join("filer");
+                    .join("bloom_filter_v1");
                 Self::new_hybrid_cache_slot(
                     HYBRID_CACHE_BLOOM_INDEX_FILTER,
                     config.table_bloom_index_filter_size as usize,
+                    Unit::Bytes,
                     &bloom_filter_on_disk_cache_path,
                     on_disk_cache_queue_size,
                     config.disk_cache_table_bloom_index_filter_size as usize,
@@ -196,11 +195,11 @@ impl CacheManager {
                 let bloom_filter_meta_on_disk_cache_path =
                     PathBuf::from(&config.disk_cache_config.path)
                         .join(tenant_id)
-                        .join("bloom_v1")
-                        .join("meta");
+                        .join("bloom_meta_v1");
                 Self::new_hybrid_cache_slot(
                     HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA,
                     config.table_bloom_index_meta_count as usize,
+                    Unit::Count,
                     &bloom_filter_meta_on_disk_cache_path,
                     on_disk_cache_queue_size,
                     config.disk_cache_table_bloom_index_meta_size as usize,
@@ -496,6 +495,7 @@ impl CacheManager {
     fn new_hybrid_cache_slot<V: Into<CacheValue<V>>>(
         name: impl Into<String>,
         in_memory_cache_capacity: usize,
+        unit: Unit,
         disk_cache_path: &PathBuf,
         disk_cache_population_queue_size: u32,
         disk_cache_bytes_size: usize,
@@ -505,10 +505,18 @@ impl CacheManager {
         let name = name.into();
         let in_mem_cache_name = HybridCache::<V>::build_in_memory_cache_name(&name);
         let disk_cache_name = HybridCache::<V>::build_on_disk_cache_name(&name);
+
         // Note that here we allow the capacity of in-memory cache to be zero,
         // this may be handy for some performance testing scenarios
-        let in_memory_cache =
-            InMemoryLruCache::with_items_capacity(in_mem_cache_name, in_memory_cache_capacity);
+        let in_memory_cache = match unit {
+            Unit::Bytes => {
+                InMemoryLruCache::with_bytes_capacity(in_mem_cache_name, in_memory_cache_capacity)
+            }
+            Unit::Count => {
+                InMemoryLruCache::with_items_capacity(in_mem_cache_name, in_memory_cache_capacity)
+            }
+        };
+
         if disk_cache_bytes_size > 0 {
             let on_disk_cache = DiskCacheBuilder::try_build_disk_cache(
                 disk_cache_name,
@@ -549,3 +557,5 @@ const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
 const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas";
 
 const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
+
+const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";

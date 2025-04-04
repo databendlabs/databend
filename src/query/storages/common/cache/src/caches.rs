@@ -55,7 +55,6 @@ pub type TableSnapshotStatisticCache = InMemoryLruCache<TableSnapshotStatistics>
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
 pub type BloomIndexFilterCache = HybridCache<Xor8Filter>;
 /// In memory object cache of parquet FileMetaData of bloom index data
-// pub type BloomIndexMetaCache = InMemoryLruCache<BloomIndexMeta>;
 pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 
 pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
