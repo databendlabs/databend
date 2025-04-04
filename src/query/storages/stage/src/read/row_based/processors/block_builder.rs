@@ -52,7 +52,20 @@ impl BlockBuilder {
         } else {
             let mut columns = self.decoder.flush(columns, num_rows);
             columns.extend(internal_columns);
-            Ok(vec![DataBlock::new_from_columns(columns)])
+            let data_block = DataBlock::try_new_from_columns(columns).map_err(|e| {
+                let msg = format!(
+                    "stage root: {}\n\
+                    file_full_path: {}\n\
+                    row_id_column_pos: {:?}\n\
+                    file_status: {:?}",
+                    &self.ctx.stage_root,
+                    &self.state.file_full_path,
+                    &self.state.row_id_column_pos,
+                    &self.state.file_status
+                );
+                e.add_detail_back(msg)
+            })?;
+            Ok(vec![data_block])
         }
     }
     pub fn try_flush_block_by_memory(&mut self) -> Result<Vec<DataBlock>> {

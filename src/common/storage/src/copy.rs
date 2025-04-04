@@ -45,7 +45,7 @@ impl CopyStatus {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug)]
 pub struct FileStatus {
     pub num_rows_loaded: usize,
     pub error: Option<FileErrorsInfo>,
@@ -79,7 +79,7 @@ impl FileStatus {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct FileErrorsInfo {
     pub num_errors: usize,
     pub first_error: FileErrorInfo,
@@ -94,7 +94,7 @@ impl FileErrorsInfo {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct FileErrorInfo {
     pub error: FileParseError,
     pub line: usize,

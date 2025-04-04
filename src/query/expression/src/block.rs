@@ -164,14 +164,31 @@ impl DataBlock {
     pub fn new_from_columns(columns: Vec<Column>) -> Self {
         assert!(!columns.is_empty());
         let num_rows = columns[0].len();
-        debug_assert!(columns.iter().all(|c| c.len() == num_rows));
+        assert!(columns.iter().all(|c| c.len() == num_rows));
+        Self::new_from_columns_internal(columns, num_rows)
+    }
 
+    fn new_from_columns_internal(columns: Vec<Column>, num_rows: usize) -> Self {
         let columns = columns
             .into_iter()
             .map(|col| BlockEntry::new(col.data_type(), Value::Column(col)))
             .collect();
-
         DataBlock::new(columns, num_rows)
+    }
+
+    pub fn try_new_from_columns(columns: Vec<Column>) -> Result<Self> {
+        if columns.is_empty() {
+            return Err(ErrorCode::Internal(
+                "Building DataBlock from an empty column set is not expected",
+            ));
+        }
+        let num_rows = columns[0].len();
+        if !columns.iter().all(|c| c.len() == num_rows) {
+            return Err(ErrorCode::Internal(
+                "Building DataBlock with columns that have different number of rows is not expected",
+            ));
+        }
+        Ok(DataBlock::new_from_columns_internal(columns, num_rows))
     }
 
     #[inline]
