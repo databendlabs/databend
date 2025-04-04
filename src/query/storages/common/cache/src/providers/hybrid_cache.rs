@@ -172,3 +172,326 @@ where
         self.name.as_str()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_cache::MemSized;
+    use databend_common_config::DiskCacheKeyReloadPolicy;
+    use databend_common_exception::ErrorCode;
+    use tempfile::TempDir;
+
+    use crate::CacheAccessor;
+    use crate::CacheValue;
+    use crate::DiskCacheBuilder;
+    use crate::HybridCache;
+    use crate::InMemoryLruCache;
+
+    // Custom test data type for serialization/deserialization testing
+    #[derive(Clone, Debug, PartialEq)]
+    struct TestData {
+        id: u32,
+        value: String,
+    }
+
+    // Implement TryFrom for serialization
+    impl TryFrom<&TestData> for Vec<u8> {
+        type Error = ErrorCode;
+        fn try_from(data: &TestData) -> Result<Self, Self::Error> {
+            let mut buf = Vec::new();
+            buf.extend_from_slice(&data.id.to_le_bytes());
+            buf.extend_from_slice(data.value.as_bytes());
+            Ok(buf)
+        }
+    }
+
+    // Implement TryFrom for deserialization
+    impl<'a> TryFrom<&'a [u8]> for TestData {
+        type Error = ErrorCode;
+        fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
+            if bytes.len() < 4 {
+                return Err(ErrorCode::BadBytes(
+                    "Not enough bytes for TestData".to_string(),
+                ));
+            }
+
+            let id = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+            let value = String::from_utf8(bytes[4..].to_vec())
+                .map_err(|e| ErrorCode::BadBytes(format!("Invalid UTF-8: {}", e)))?;
+
+            Ok(TestData { id, value })
+        }
+    }
+
+    // Implement CacheValue creation for TestData
+    impl From<TestData> for CacheValue<TestData> {
+        fn from(data: TestData) -> Self {
+            // Calculate approximate size: size of structure + size of string data
+            let mem_bytes = std::mem::size_of::<TestData>() + data.value.len();
+            CacheValue::new(data, mem_bytes)
+        }
+    }
+
+    // Implement MemSized for TestData to track memory usage
+    impl MemSized for TestData {
+        fn mem_bytes(&self) -> usize {
+            std::mem::size_of::<TestData>() + self.value.len()
+        }
+    }
+
+    #[test]
+    fn test_hybrid_cache_creation() {
+        // Create memory cache
+        let memory_cache: InMemoryLruCache<TestData> =
+            InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
+
+        // Create hybrid cache without disk cache
+        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache.clone(), None);
+
+        assert_eq!(cache.name(), "test_hybrid");
+        assert_eq!(cache.len(), 0);
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn test_hybrid_cache_with_disk_cache() {
+        // Create temporary directory
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_path_buf();
+
+        // Create memory cache
+        let memory_cache: InMemoryLruCache<TestData> =
+            InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
+
+        // Create disk cache
+        let table_cache = DiskCacheBuilder::try_build_disk_cache(
+            "test_disk".to_string(),
+            &cache_path,
+            100,         // population_queue_size
+            1024 * 1024, // disk_cache_bytes_size
+            DiskCacheKeyReloadPolicy::Fuzzy,
+            false, // sync_data
+        )
+        .unwrap();
+
+        // Create hybrid cache
+        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache, Some(table_cache));
+
+        assert_eq!(cache.name(), "test_hybrid");
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn test_hybrid_cache_insert_get() {
+        // Create memory cache
+        let memory_cache: InMemoryLruCache<TestData> =
+            InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
+
+        // Create hybrid cache without disk cache
+        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache, None);
+
+        // Insert data
+        let test_data = TestData {
+            id: 1,
+            value: "test value".to_string(),
+        };
+        let key = "test_key".to_string();
+        let _inserted = cache.insert(key.clone(), test_data.clone());
+
+        // Retrieve data
+        let retrieved = cache.get(&key).expect("Failed to retrieve data");
+
+        assert_eq!(*retrieved, test_data);
+        assert_eq!(cache.len(), 1);
+        assert!(cache.contains_key(&key));
+    }
+
+    #[test]
+    fn test_hybrid_cache_memory_to_disk_fallback() {
+        // Create temporary directory
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_path_buf();
+
+        // Create memory cache (small capacity for testing eviction)
+        let memory_cache: InMemoryLruCache<TestData> =
+            InMemoryLruCache::with_items_capacity("test_memory".to_string(), 2);
+
+        // Create disk cache
+        let table_cache = DiskCacheBuilder::try_build_disk_cache(
+            "test_disk".to_string(),
+            &cache_path,
+            100,         // population_queue_size
+            1024 * 1024, // disk_cache_bytes_size
+            DiskCacheKeyReloadPolicy::Fuzzy,
+            false, // sync_data
+        )
+        .unwrap();
+
+        // Create hybrid cache
+        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache, Some(table_cache));
+
+        // Insert data
+        let test_data1 = TestData {
+            id: 1,
+            value: "value1".to_string(),
+        };
+        let test_data2 = TestData {
+            id: 2,
+            value: "value2".to_string(),
+        };
+        let test_data3 = TestData {
+            id: 3,
+            value: "value3".to_string(),
+        };
+
+        cache.insert("key1".to_string(), test_data1.clone());
+        cache.insert("key2".to_string(), test_data2.clone());
+
+        // This will cause key1 to be evicted from memory cache, but it should exist in disk cache
+        cache.insert("key3".to_string(), test_data3.clone());
+
+        // TODO refine this
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+
+        // key1 should be retrieved from disk cache
+        let retrieved1 = cache
+            .get("key1")
+            .expect("Failed to retrieve data from disk");
+        assert_eq!(*retrieved1, test_data1);
+
+        // key3 should be in memory cache
+        let retrieved3 = cache
+            .get("key3")
+            .expect("Failed to retrieve data from memory");
+        assert_eq!(*retrieved3, test_data3);
+    }
+
+    #[test]
+    fn test_disk_cache_hit_populates_memory_cache() {
+        // Create temporary directory
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_path_buf();
+
+        // Create memory cache with very small capacity (1 item)
+        let memory_cache: InMemoryLruCache<TestData> =
+            InMemoryLruCache::with_items_capacity("test_memory".to_string(), 1);
+
+        // Create disk cache
+        let table_cache = DiskCacheBuilder::try_build_disk_cache(
+            "test_disk".to_string(),
+            &cache_path,
+            100,         // population_queue_size
+            1024 * 1024, // disk_cache_bytes_size
+            DiskCacheKeyReloadPolicy::Fuzzy,
+            false, // sync_data
+        )
+        .unwrap();
+
+        // Create hybrid cache
+        let cache = HybridCache::new(
+            "test_hybrid".to_string(),
+            memory_cache.clone(),
+            Some(table_cache),
+        );
+
+        // Create test data
+        let test_data = TestData {
+            id: 42,
+            value: "disk_cache_test".to_string(),
+        };
+
+        // Insert data using standard API - this will put it in both caches
+        cache.insert("test_key".to_string(), test_data.clone());
+
+        // Add a filler item to potentially evict the first item from memory
+        cache.insert("filler_key".to_string(), TestData {
+            id: 99,
+            value: "filler".to_string(),
+        });
+
+        // Verify the memory cache doesn't have our test key anymore
+        assert!(!cache.in_memory_cache().contains_key("test_key"));
+
+        // First access - should hit disk cache and populate memory cache
+        let first_access = cache
+            .get("test_key")
+            .expect("Failed to retrieve from disk cache");
+        assert_eq!(first_access.as_ref().id, 42);
+
+        // Verify it's now in memory cache after the first access
+        assert!(cache.in_memory_cache().contains_key("test_key"));
+
+        // Second access - should now hit memory cache
+        let second_access = cache
+            .get("test_key")
+            .expect("Failed to retrieve from memory cache");
+        assert_eq!(second_access.as_ref().id, 42);
+    }
+
+    #[test]
+    fn test_hybrid_cache_evict() {
+        // Create temporary directory
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_path_buf();
+
+        // Create memory cache
+        let memory_cache: InMemoryLruCache<TestData> =
+            InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
+
+        // Create disk cache
+        let table_cache = DiskCacheBuilder::try_build_disk_cache(
+            "test_disk".to_string(),
+            &cache_path,
+            100,         // population_queue_size
+            1024 * 1024, // disk_cache_bytes_size
+            DiskCacheKeyReloadPolicy::Fuzzy,
+            false, // sync_data
+        )
+        .unwrap();
+
+        // Create hybrid cache
+        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache, Some(table_cache));
+
+        // Insert data
+        let test_data = TestData {
+            id: 1,
+            value: "test value".to_string(),
+        };
+        let key = "test_key".to_string();
+        cache.insert(key.clone(), test_data);
+
+        // Verify data exists
+        assert!(cache.contains_key(&key));
+
+        // Evict data
+        let evicted = cache.evict(&key);
+        assert!(evicted);
+
+        // Verify data doesn't exist
+        assert!(!cache.contains_key(&key));
+        assert_eq!(cache.get(&key), None);
+    }
+
+    #[test]
+    fn test_hybrid_cache_metrics() {
+        // Create memory cache
+        let memory_cache: InMemoryLruCache<TestData> =
+            InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
+
+        // Create hybrid cache without disk cache
+        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache, None);
+
+        // Insert multiple items
+        for i in 0..5 {
+            let test_data = TestData {
+                id: i,
+                value: format!("value{}", i),
+            };
+            cache.insert(format!("key{}", i), test_data);
+        }
+
+        // Verify cache metrics
+        assert_eq!(cache.len(), 5);
+        assert!(!cache.is_empty());
+        assert!(cache.bytes_size() > 0);
+    }
+}
