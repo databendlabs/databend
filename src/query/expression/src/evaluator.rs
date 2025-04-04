@@ -1049,12 +1049,22 @@ impl<'a> Evaluator<'a> {
             vec![]
         };
 
-        let cast_expr = match check_function(span, cast_fn, &params, &[expr], self.fn_registry) {
+        let func_expr = match check_function(span, cast_fn, &params, &[expr], self.fn_registry) {
             Ok(cast_expr) => cast_expr,
             Err(_) => return Ok(None),
         };
 
-        if cast_expr.data_type() != dest_type {
+        let Expr::FunctionCall {
+            function,
+            generics,
+            return_type,
+            ..
+        } = &func_expr
+        else {
+            unreachable!()
+        };
+
+        if return_type != dest_type {
             return Ok(None);
         }
 
@@ -1066,9 +1076,34 @@ impl<'a> Evaluator<'a> {
                 Value::Column(col) => col.len(),
             });
 
-        let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], num_rows);
-        let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        Ok(Some(evaluator.partial_run(&cast_expr, validity, options)?))
+        let mut ctx = EvalContext {
+            generics,
+            num_rows,
+            validity,
+            errors: None,
+            func_ctx: self.func_ctx,
+            suppress_error: options.suppress_error,
+        };
+
+        let (_, eval) = function.eval.as_scalar().unwrap();
+        let args = [value];
+        let result = (eval)(&args, &mut ctx);
+
+        // inject errors into options, parent will handle it
+        if options.suppress_error {
+            options.errors = ctx.errors.take();
+        } else {
+            ctx.render_error(
+                span,
+                &params,
+                &args,
+                &function.signature.name,
+                &func_expr.sql_display(),
+                options.selection,
+            )?;
+        }
+
+        Ok(Some(result))
     }
 
     // `if` is a special builtin function that could partially evaluate its arguments
