@@ -218,10 +218,11 @@ impl AccumulatingTransform for TransformPartitionAlign {
             return Ok(vec![]);
         }
 
-        let partition = meta.get_sorting_partition();
+        let partition = meta.get_partition();
+        let sorting_partition = meta.get_sorting_partition();
         self.partitions.add_data(meta, data_block);
 
-        if partition > SINGLE_LEVEL_BUCKET_NUM && partition != self.working_partition {
+        if sorting_partition > SINGLE_LEVEL_BUCKET_NUM && partition != self.working_partition {
             let ready_partition = self.fetch_ready_partition()?;
             self.working_partition = partition;
             return Ok(ready_partition);
