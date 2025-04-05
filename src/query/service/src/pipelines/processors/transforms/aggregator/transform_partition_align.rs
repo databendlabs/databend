@@ -234,8 +234,8 @@ impl AccumulatingTransform for TransformPartitionAlign {
         let remain_size = self
             .partitions
             .data
-            .iter()
-            .map(|(_, x)| x.len())
+            .values()
+            .map(|x| x.len())
             .sum::<usize>();
 
         let mut remain_partitions = Vec::with_capacity(remain_size + self.partitions.data.len());
