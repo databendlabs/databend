@@ -67,8 +67,12 @@ impl AccumulatingTransform for TransformFinalAggregate {
             AggregateMeta::InFlightPayload(payload) => {
                 debug_assert_eq!(payload.max_partition, payload.global_max_partition);
 
-                if self.working_partition != payload.partition && self.hash_table.len() != 0 {
-                    flush_blocks = self.flush_result_blocks()?;
+                if self.working_partition != payload.partition {
+                    if self.hash_table.len() != 0 {
+                        flush_blocks = self.flush_result_blocks()?;
+                    }
+
+                    self.working_partition = payload.partition;
                 }
 
                 if !data.is_empty() {
@@ -81,8 +85,12 @@ impl AccumulatingTransform for TransformFinalAggregate {
             AggregateMeta::AggregatePayload(payload) => {
                 debug_assert_eq!(payload.max_partition, payload.global_max_partition);
 
-                if self.working_partition != payload.partition && self.hash_table.len() != 0 {
-                    flush_blocks = self.flush_result_blocks()?;
+                if self.working_partition != payload.partition {
+                    if self.hash_table.len() != 0 {
+                        flush_blocks = self.flush_result_blocks()?;
+                    }
+
+                    self.working_partition = payload.partition;
                 }
 
                 if payload.payload.len() != 0 {
