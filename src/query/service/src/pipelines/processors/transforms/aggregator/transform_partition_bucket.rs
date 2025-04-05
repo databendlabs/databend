@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
@@ -38,7 +39,8 @@ pub fn build_final_aggregate(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
 ) -> Result<()> {
-    let pipe_size = pipeline.output_len();
+    let settings = ctx.get_settings();
+    let pipe_size = settings.get_max_threads()? as usize;
 
     // 1. resorting partition
     pipeline.exchange(1, Arc::new(ResortingPartition::create()));
@@ -77,7 +79,6 @@ pub fn build_final_aggregate(
     // 6. final aggregate
     pipeline.add_transform(|input, output| {
         Ok(ProcessorPtr::create(TransformFinalAggregate::try_create(
-            pipe_size,
             input.clone(),
             output.clone(),
             params.clone(),

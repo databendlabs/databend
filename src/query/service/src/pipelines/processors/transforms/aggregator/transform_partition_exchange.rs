@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -31,6 +32,8 @@ use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::InFlightPayload;
 
+const HASH_SEED: u64 = 9263883436177860930;
+
 pub struct ExchangePartition {
     params: Arc<AggregatorParams>,
 }
@@ -44,14 +47,15 @@ impl ExchangePartition {
 impl ExchangePartition {
     fn partition_final_payload(n: usize) -> Result<Vec<DataBlock>> {
         Ok((0..n)
-            .map(|_| DataBlock::empty_with_meta(AggregateMeta::create_final(None)))
+            .map(|_| DataBlock::empty_with_meta(AggregateMeta::create_final()))
             .collect())
     }
 
-    fn partition_aggregate_payload(
-        mut payload: AggregatePayload,
-        n: usize,
-    ) -> Result<Vec<DataBlock>> {
+    fn partition_aggregate(mut payload: AggregatePayload, n: usize) -> Result<Vec<DataBlock>> {
+        if payload.payload.len() == 0 {
+            return Ok(vec![]);
+        }
+
         let mut repartition_payloads = Vec::with_capacity(n);
 
         let group_types = payload.payload.group_types.clone();
@@ -70,7 +74,7 @@ impl ExchangePartition {
         // scatter each page of the payload.
         while payload
             .payload
-            .scatter_with_seed::<9263883436177860930>(&mut state, repartition_payloads.len())
+            .scatter_with_seed::<HASH_SEED>(&mut state, repartition_payloads.len())
         {
             // copy to the corresponding bucket.
             for (idx, bucket) in repartition_payloads.iter_mut().enumerate() {
@@ -108,6 +112,11 @@ impl ExchangePartition {
         n: usize,
     ) -> Result<Vec<DataBlock>> {
         let rows_num = block.num_rows();
+
+        if rows_num == 0 {
+            return Ok(vec![]);
+        }
+
         let group_len = self.params.group_data_types.len();
 
         let mut state = ProbeState::default();
@@ -142,7 +151,7 @@ impl ExchangePartition {
         hashtable.payload.mark_min_cardinality();
         assert_eq!(hashtable.payload.payloads.len(), 1);
 
-        Self::partition_aggregate_payload(
+        Self::partition_aggregate(
             AggregatePayload {
                 partition: payload.partition,
                 payload: hashtable.payload.payloads.pop().unwrap(),
@@ -160,21 +169,23 @@ impl Exchange for ExchangePartition {
 
     fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let Some(meta) = data_block.take_meta() else {
-            return Ok(vec![data_block]);
+            return Err(ErrorCode::Internal(
+                "AggregatePartitionExchange only recv AggregateMeta",
+            ));
         };
 
         let Some(meta) = AggregateMeta::downcast_from(meta) else {
-            return Ok(vec![data_block]);
+            return Err(ErrorCode::Internal(
+                "AggregatePartitionExchange only recv AggregateMeta",
+            ));
         };
 
         match meta {
             // already restore in upstream
             AggregateMeta::SpilledPayload(_) => unreachable!(),
             // broadcast final partition to downstream
-            AggregateMeta::FinalPartition(_) => Self::partition_final_payload(n),
-            AggregateMeta::AggregatePayload(payload) => {
-                Self::partition_aggregate_payload(payload, n)
-            }
+            AggregateMeta::FinalPartition => Self::partition_final_payload(n),
+            AggregateMeta::AggregatePayload(payload) => Self::partition_aggregate(payload, n),
             AggregateMeta::InFlightPayload(payload) => {
                 self.partition_flight_payload(payload, data_block, n)
             }

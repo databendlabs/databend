@@ -77,9 +77,7 @@ impl TransformPartitionAlign {
                 ready_data.push(data_block.add_meta(Some(Box::new(meta)))?);
             }
 
-            ready_data.push(DataBlock::empty_with_meta(AggregateMeta::create_final(
-                None,
-            )));
+            ready_data.push(DataBlock::empty_with_meta(AggregateMeta::create_final()));
             return Ok(ready_data);
         }
 
@@ -104,7 +102,7 @@ impl TransformPartitionAlign {
 
     fn repartition(&mut self, meta: AggregateMeta, data_block: DataBlock) -> Result<()> {
         match meta {
-            AggregateMeta::FinalPartition(_) => unreachable!(),
+            AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::SpilledPayload(_payload) => unreachable!(),
             AggregateMeta::InFlightPayload(payload) => {
                 if data_block.is_empty() {

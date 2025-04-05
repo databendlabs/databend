@@ -118,6 +118,7 @@ impl Processor for TransformPartitionDispatch {
 
     #[allow(clippy::collapsible_if)]
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        // eprintln!("TransformPartitionDispatch cause: {:?}, sync_final_partition:{:?}, sent_final_partition: {:?}, synchronized_final_partition: {:?}, waiting_outputs: {:?}, waiting_outputs_2: {:?}", cause, self.sync_final_partition, self.sent_final_partition, self.synchronized_final_partition, self.waiting_outputs, self.waiting_outputs_2);
         if let EventCause::Output(output_index) = &cause {
             let output = &mut self.outputs[*output_index];
 
@@ -135,7 +136,7 @@ impl Processor for TransformPartitionDispatch {
                     } else {
                         self.sent_final_partition[*output_index] = true;
                         output.port.push_data(Ok(DataBlock::empty_with_meta(
-                            AggregateMeta::create_final(None),
+                            AggregateMeta::create_final(),
                         )));
                     }
                 } else if output.status != PortStatus::NeedData {
@@ -160,7 +161,7 @@ impl Processor for TransformPartitionDispatch {
             let (meta, data_block) = Self::unpark_block(data_block)?;
 
             match meta {
-                AggregateMeta::FinalPartition(_) => {
+                AggregateMeta::FinalPartition => {
                     self.sync_final_partition = true;
                     self.input.set_not_need_data();
                 }
@@ -184,9 +185,9 @@ impl Processor for TransformPartitionDispatch {
 
                 self.outputs[output_index]
                     .port
-                    .push_data(Ok(DataBlock::empty_with_meta(AggregateMeta::create_final(
-                        None,
-                    ))));
+                    .push_data(Ok(
+                        DataBlock::empty_with_meta(AggregateMeta::create_final()),
+                    ));
                 self.sent_final_partition[output_index] = true;
                 self.outputs[output_index].status = PortStatus::Idle;
             }
@@ -207,7 +208,7 @@ impl Processor for TransformPartitionDispatch {
                 let (meta, data_block) = Self::unpark_block(data_block)?;
 
                 match meta {
-                    AggregateMeta::FinalPartition(_) => {
+                    AggregateMeta::FinalPartition => {
                         self.sync_final_partition = true;
                         self.input.set_not_need_data();
                         continue;

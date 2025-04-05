@@ -49,7 +49,7 @@ pub struct TransformPartitionRestore {
 #[async_trait::async_trait]
 impl Processor for TransformPartitionRestore {
     fn name(&self) -> String {
-        String::from("TransformSpillReader")
+        String::from("TransformPartitionRestore")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

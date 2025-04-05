@@ -40,8 +40,7 @@ pub struct TransformFinalAggregate {
     hash_table: AggregateHashTable,
     has_output: bool,
 
-    totals_upstream: usize,
-    recv_final_payload: usize,
+    working_partition: isize,
 }
 
 impl AccumulatingTransform for TransformFinalAggregate {
@@ -49,17 +48,28 @@ impl AccumulatingTransform for TransformFinalAggregate {
 
     fn transform(&mut self, mut data: DataBlock) -> Result<Vec<DataBlock>> {
         let Some(meta) = data.take_meta() else {
-            return Err(ErrorCode::Internal(""));
+            return Err(ErrorCode::Internal(
+                "Internal, TransformFinalAggregate only recv DataBlock with meta.",
+            ));
         };
 
         let Some(aggregate_meta) = AggregateMeta::downcast_from(meta) else {
-            return Err(ErrorCode::Internal(""));
+            return Err(ErrorCode::Internal(
+                "Internal, TransformFinalAggregate only recv DataBlock with meta.",
+            ));
         };
+
+        let mut flush_blocks = vec![];
 
         match aggregate_meta {
             AggregateMeta::SpilledPayload(_) => unreachable!(),
+            AggregateMeta::FinalPartition => {}
             AggregateMeta::InFlightPayload(payload) => {
                 debug_assert_eq!(payload.max_partition, payload.global_max_partition);
+
+                if self.working_partition != payload.partition && self.hash_table.len() != 0 {
+                    flush_blocks = self.flush_result_blocks()?;
+                }
 
                 if !data.is_empty() {
                     let payload = self.deserialize_flight(data)?;
@@ -71,63 +81,39 @@ impl AccumulatingTransform for TransformFinalAggregate {
             AggregateMeta::AggregatePayload(payload) => {
                 debug_assert_eq!(payload.max_partition, payload.global_max_partition);
 
+                if self.working_partition != payload.partition && self.hash_table.len() != 0 {
+                    flush_blocks = self.flush_result_blocks()?;
+                }
+
                 if payload.payload.len() != 0 {
                     self.hash_table
                         .combine_payload(&payload.payload, &mut self.flush_state)?;
                 }
             }
-            AggregateMeta::FinalPartition(_) => {
-                self.recv_final_payload += 1;
-
-                if self.hash_table.len() == 0 {
-                    return Ok(vec![]);
-                }
-
-                // Due to the local shuffle, we will receive the same number of final partitions as the upstream.
-                // We must wait for all final partitions to arrive before we can flush out the results.
-                if self.recv_final_payload % self.totals_upstream != 0 {
-                    return Ok(vec![]);
-                }
-
-                let mut blocks = vec![];
-                self.flush_state.clear();
-
-                while self.hash_table.merge_result(&mut self.flush_state)? {
-                    let mut cols = self.flush_state.take_aggregate_results();
-                    cols.extend_from_slice(&self.flush_state.take_group_columns());
-                    blocks.push(DataBlock::new_from_columns(cols));
-                }
-
-                let config = HashTableConfig::default().with_initial_radix_bits(0);
-                self.hash_table = AggregateHashTable::new(
-                    self.params.group_data_types.clone(),
-                    self.params.aggregate_functions.clone(),
-                    config,
-                    Arc::new(Bump::new()),
-                );
-
-                self.has_output |= !blocks.is_empty();
-                return Ok(blocks);
-            }
         }
 
-        Ok(vec![])
+        Ok(flush_blocks)
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
-        assert!(!output || self.hash_table.len() == 0);
-
-        if output && !self.has_output {
-            return Ok(vec![self.params.empty_result_block()]);
+        if !output {
+            return Ok(vec![]);
         }
 
-        Ok(vec![])
+        let flush_blocks = match self.hash_table.len() == 0 {
+            true => vec![],
+            false => self.flush_result_blocks()?,
+        };
+
+        match self.has_output {
+            true => Ok(flush_blocks),
+            false => Ok(vec![self.params.empty_result_block()]),
+        }
     }
 }
 
 impl TransformFinalAggregate {
     pub fn try_create(
-        totals_upstream: usize,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
@@ -149,8 +135,7 @@ impl TransformFinalAggregate {
                 hash_table,
                 flush_state: PayloadFlushState::default(),
                 has_output: false,
-                totals_upstream,
-                recv_final_payload: 0,
+                working_partition: 0,
             },
         ))
     }
@@ -191,5 +176,27 @@ impl TransformFinalAggregate {
         hashtable.payload.mark_min_cardinality();
         assert_eq!(hashtable.payload.payloads.len(), 1);
         Ok(hashtable.payload.payloads.pop().unwrap())
+    }
+
+    fn flush_result_blocks(&mut self) -> Result<Vec<DataBlock>> {
+        let mut blocks = vec![];
+        self.flush_state.clear();
+
+        while self.hash_table.merge_result(&mut self.flush_state)? {
+            let mut cols = self.flush_state.take_aggregate_results();
+            cols.extend_from_slice(&self.flush_state.take_group_columns());
+            blocks.push(DataBlock::new_from_columns(cols));
+        }
+
+        let config = HashTableConfig::default().with_initial_radix_bits(0);
+        self.hash_table = AggregateHashTable::new(
+            self.params.group_data_types.clone(),
+            self.params.aggregate_functions.clone(),
+            config,
+            Arc::new(Bump::new()),
+        );
+
+        self.has_output |= !blocks.is_empty();
+        Ok(blocks)
     }
 }
