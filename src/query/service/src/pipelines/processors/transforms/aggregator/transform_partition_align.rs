@@ -218,11 +218,10 @@ impl AccumulatingTransform for TransformPartitionAlign {
             return Ok(vec![]);
         }
 
-        let partition = meta.get_partition();
-        let sorting_partition = meta.get_sorting_partition();
+        let partition = meta.get_sorting_partition();
         self.partitions.add_data(meta, data_block);
 
-        if sorting_partition > SINGLE_LEVEL_BUCKET_NUM && partition != self.working_partition {
+        if partition > SINGLE_LEVEL_BUCKET_NUM && partition != self.working_partition {
             let ready_partition = self.fetch_ready_partition()?;
             self.working_partition = partition;
             return Ok(ready_partition);
@@ -232,8 +231,26 @@ impl AccumulatingTransform for TransformPartitionAlign {
     }
 
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
+        let remain_size = self
+            .partitions
+            .data
+            .iter()
+            .map(|(_, x)| x.len())
+            .sum::<usize>();
+
+        let mut remain_partitions = Vec::with_capacity(remain_size + self.partitions.data.len());
         self.working_partition = self.max_partition as isize;
-        self.fetch_ready_partition()
+
+        loop {
+            let ready_partition = self.fetch_ready_partition()?;
+
+            if !ready_partition.is_empty() {
+                remain_partitions.extend(ready_partition);
+                continue;
+            }
+
+            return Ok(remain_partitions);
+        }
     }
 
     fn need_spill(&self) -> bool {

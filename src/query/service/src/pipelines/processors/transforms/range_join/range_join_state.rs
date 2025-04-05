@@ -92,7 +92,7 @@ impl RangeJoinState {
     }
 
     pub(crate) fn sink_right(&self, block: DataBlock) -> Result<()> {
-        if !block.is_empty() {
+        if !block.is_empty() || block.get_meta().is_some() {
             // Sink block to right table
             let mut right_table = self.right_table.write();
             right_table.push(block);
@@ -102,7 +102,7 @@ impl RangeJoinState {
     }
 
     pub(crate) fn sink_left(&self, block: DataBlock) -> Result<()> {
-        if !block.is_empty() {
+        if !block.is_empty() || block.get_meta().is_some() {
             // Sink block to left table
             let mut left_table = self.left_table.write();
             left_table.push(block);
