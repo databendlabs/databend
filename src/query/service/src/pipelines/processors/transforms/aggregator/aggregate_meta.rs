@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateHashTable;
@@ -36,7 +37,8 @@ pub struct SerializedPayload {
     pub bucket: isize,
     pub data_block: DataBlock,
     // use for new agg_hashtable
-    pub max_partition_count: usize,
+    pub max_partition: usize,
+    pub global_max_partition: usize,
 }
 
 impl SerializedPayload {
@@ -106,114 +108,158 @@ impl SerializedPayload {
     }
 }
 
-pub struct BucketSpilledPayload {
-    pub bucket: isize,
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct SpilledPayload {
+    pub partition: isize,
     pub location: String,
     pub data_range: Range<u64>,
-    pub columns_layout: Vec<u64>,
-    pub max_partition_count: usize,
+    pub destination_node: String,
+    pub max_partition: usize,
+    pub global_max_partition: usize,
+}
+
+impl SpilledPayload {
+    pub fn get_sorting_partition(&self) -> isize {
+        -(self.max_partition as isize - self.partition)
+    }
 }
 
 pub struct AggregatePayload {
-    pub bucket: isize,
+    pub partition: isize,
     pub payload: Payload,
     // use for new agg_hashtable
-    pub max_partition_count: usize,
+    pub max_partition: usize,
+    pub global_max_partition: usize,
 }
 
-pub enum AggregateMeta {
-    Serialized(SerializedPayload),
-    AggregatePayload(AggregatePayload),
-    AggregateSpilling(PartitionedPayload),
-    BucketSpilled(BucketSpilledPayload),
-    Spilled(Vec<BucketSpilledPayload>),
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct InFlightPayload {
+    pub partition: isize,
+    pub max_partition: usize,
+    pub global_max_partition: usize,
+}
 
-    Partitioned { bucket: isize, data: Vec<Self> },
+pub struct FinalPayload {
+    pub data: Arc<Vec<(AggregateMeta, DataBlock)>>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub enum AggregateMeta {
+    SpilledPayload(SpilledPayload),
+    AggregatePayload(AggregatePayload),
+    InFlightPayload(InFlightPayload),
+    FinalPartition,
 }
 
 impl AggregateMeta {
     pub fn create_agg_payload(
-        bucket: isize,
         payload: Payload,
-        max_partition_count: usize,
+        partition: isize,
+        max_partition: usize,
+        global_max_partition: usize,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::AggregatePayload(AggregatePayload {
-            bucket,
             payload,
-            max_partition_count,
+            partition,
+            max_partition,
+            global_max_partition,
         }))
     }
 
-    pub fn create_agg_spilling(payload: PartitionedPayload) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::AggregateSpilling(payload))
-    }
-
-    pub fn create_serialized(
-        bucket: isize,
-        block: DataBlock,
-        max_partition_count: usize,
+    pub fn create_in_flight_payload(
+        partition: isize,
+        max_partition: usize,
+        global_max_partition: usize,
     ) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Serialized(SerializedPayload {
-            bucket,
-            data_block: block,
-            max_partition_count,
+        Box::new(AggregateMeta::InFlightPayload(InFlightPayload {
+            partition,
+            max_partition,
+            global_max_partition,
         }))
     }
 
-    pub fn create_spilled(buckets_payload: Vec<BucketSpilledPayload>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Spilled(buckets_payload))
+    pub fn create_spilled_payload(payload: SpilledPayload) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::SpilledPayload(payload))
     }
 
-    pub fn create_bucket_spilled(payload: BucketSpilledPayload) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::BucketSpilled(payload))
+    pub fn create_final() -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::FinalPartition)
     }
 
-    pub fn create_partitioned(bucket: isize, data: Vec<Self>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Partitioned { data, bucket })
+    pub fn get_global_max_partition(&self) -> usize {
+        match self {
+            AggregateMeta::SpilledPayload(v) => v.global_max_partition,
+            AggregateMeta::AggregatePayload(v) => v.global_max_partition,
+            AggregateMeta::InFlightPayload(v) => v.global_max_partition,
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
     }
-}
 
-impl serde::Serialize for AggregateMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unreachable!("AggregateMeta does not support exchanging between multiple nodes")
+    pub fn get_partition(&self) -> isize {
+        match self {
+            AggregateMeta::SpilledPayload(v) => v.partition,
+            AggregateMeta::AggregatePayload(v) => v.partition,
+            AggregateMeta::InFlightPayload(v) => v.partition,
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
     }
-}
 
-impl<'de> serde::Deserialize<'de> for AggregateMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unreachable!("AggregateMeta does not support exchanging between multiple nodes")
+    pub fn get_sorting_partition(&self) -> isize {
+        match self {
+            AggregateMeta::AggregatePayload(v) => v.partition,
+            AggregateMeta::InFlightPayload(v) => v.partition,
+            AggregateMeta::SpilledPayload(v) => v.get_sorting_partition(),
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
+    }
+
+    pub fn get_max_partition(&self) -> usize {
+        match self {
+            AggregateMeta::SpilledPayload(v) => v.max_partition,
+            AggregateMeta::AggregatePayload(v) => v.max_partition,
+            AggregateMeta::InFlightPayload(v) => v.max_partition,
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
+    }
+
+    pub fn set_global_max_partition(&mut self, global_max_partition: usize) {
+        match self {
+            AggregateMeta::SpilledPayload(v) => {
+                v.global_max_partition = global_max_partition;
+            }
+            AggregateMeta::AggregatePayload(v) => {
+                v.global_max_partition = global_max_partition;
+            }
+            AggregateMeta::InFlightPayload(v) => {
+                v.global_max_partition = global_max_partition;
+            }
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
     }
 }
 
 impl Debug for AggregateMeta {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            AggregateMeta::Partitioned { .. } => {
-                f.debug_struct("AggregateMeta::Partitioned").finish()
+            AggregateMeta::FinalPartition => {
+                f.debug_struct("AggregateMeta::FinalPartition").finish()
             }
-            AggregateMeta::Serialized { .. } => {
-                f.debug_struct("AggregateMeta::Serialized").finish()
+            AggregateMeta::SpilledPayload(_) => {
+                f.debug_struct("Aggregate::SpilledPayload").finish()
             }
-            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
-            AggregateMeta::BucketSpilled(_) => f.debug_struct("Aggregate::BucketSpilled").finish(),
+            AggregateMeta::InFlightPayload(_) => {
+                f.debug_struct("Aggregate:InFlightPayload").finish()
+            }
             AggregateMeta::AggregatePayload(_) => {
                 f.debug_struct("AggregateMeta:AggregatePayload").finish()
-            }
-            AggregateMeta::AggregateSpilling(_) => {
-                f.debug_struct("AggregateMeta:AggregateSpilling").finish()
             }
         }
     }
 }
 
-impl BlockMetaInfo for AggregateMeta {
-    fn typetag_deserialize(&self) {
-        unimplemented!("AggregateMeta does not support exchanging between multiple nodes")
-    }
+#[typetag::serde(name = "AggregateMeta")]
+impl BlockMetaInfo for AggregateMeta {}
 
-    fn typetag_name(&self) -> &'static str {
-        unimplemented!("AggregateMeta does not support exchanging between multiple nodes")
-    }
-}
+local_block_meta_serde!(FinalPayload);
+local_block_meta_serde!(AggregatePayload);
+local_block_meta_serde!(SerializedPayload);
