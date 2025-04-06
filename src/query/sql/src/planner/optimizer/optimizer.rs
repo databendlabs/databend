@@ -266,10 +266,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
             RuleID::SplitAggregate,
         ]))
         // 8. Apply DPhyp algorithm for cost-based join reordering (conditionally)
-        .add_if(
-            opt_ctx.get_enable_dphyp() && opt_ctx.get_enable_join_reorder(),
-            DPhpy::new(opt_ctx.clone()),
-        )
+        .add(DPhpy::new(opt_ctx.clone()))
         // 9. Additional optimizers that don't affect join order
         .add(SingleToInnerOptimizer::new())
         .add(DeduplicateJoinConditionOptimizer::new())

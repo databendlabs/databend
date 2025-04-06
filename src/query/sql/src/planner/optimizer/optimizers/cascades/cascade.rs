@@ -52,15 +52,10 @@ impl CascadesOptimizer {
         let table_ctx = opt_ctx.get_table_ctx();
         let settings = table_ctx.get_settings();
 
-        // Determine rule set
-        let explore_rule_set = if !settings.get_enable_cbo()? {
-            RuleSet::create()
-        } else {
-            // Use dphyp optimization flag or join reorder setting
-            let skip_join_reorder = opt_ctx.get_flag("dphyp_optimized")
-                || unsafe { settings.get_disable_join_reorder()? };
-            get_explore_rule_set(skip_join_reorder)
-        };
+        // Create a default rule set initially
+        // This is just a placeholder - the actual rule set will be determined at runtime
+        // in the optimize_with_cascade method based on current flag values
+        let explore_rule_set = RuleSet::create();
 
         // Build cost model
         let cost_model = Box::new(
@@ -129,6 +124,25 @@ impl CascadesOptimizer {
     }
 
     fn optimize_with_cascade(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        // Update rule set based on current flags
+        // This ensures we use the most up-to-date flag values, regardless of when the optimizer was created
+        let table_ctx = self.opt_ctx.get_table_ctx();
+        let settings = table_ctx.get_settings();
+
+        // Determine the appropriate rule set at runtime
+        // This is critical for pipeline execution where optimizers are created before all flags are set
+        if settings.get_enable_cbo()? {
+            // Check if DPhyp has already performed join reordering
+            // The "dphyp_optimized" flag is set by the DPhyp optimizer when it runs
+            // In pipeline execution, this flag will be set before CascadesOptimizer runs
+            let skip_join_reorder = self.opt_ctx.get_flag("dphyp_optimized")
+                || unsafe { settings.get_disable_join_reorder()? };
+
+            // Update the rule set based on current flag values
+            // This replaces the initial placeholder rule set created in the constructor
+            self.explore_rule_set = get_explore_rule_set(skip_join_reorder);
+        }
+
         self.init(s_expr)?;
 
         debug!("Init memo:\n{}", self.memo.display()?);
