@@ -34,7 +34,7 @@ use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::FlattenInfo;
-use crate::optimizer::optimizers::operator::SubqueryRewriter;
+use crate::optimizer::optimizers::operator::SubqueryDecorrelationOptimizer;
 use crate::optimizer::OptimizerContext;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
@@ -389,7 +389,7 @@ impl Binder {
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
             let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
-            let mut decorrelator = SubqueryRewriter::new(opt_ctx, Some(self.clone()));
+            let mut decorrelator = SubqueryDecorrelationOptimizer::new(opt_ctx, Some(self.clone()));
             right_child = decorrelator.flatten_plan(
                 &left_child,
                 &right_child,

@@ -31,7 +31,7 @@ use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
 use crate::optimizer::optimizers::operator::SingleToInnerOptimizer;
-use crate::optimizer::optimizers::operator::SubqueryRewriter;
+use crate::optimizer::optimizers::operator::SubqueryDecorrelationOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveOptimizer;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
@@ -95,7 +95,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
                 let mut s_expr = s_expr;
                 if s_expr.contain_subquery() {
                     s_expr = Box::new(
-                        SubqueryRewriter::new(opt_ctx.clone(), None)
+                        SubqueryDecorrelationOptimizer::new(opt_ctx.clone(), None)
                             .optimize(&s_expr)
                             .await?,
                     );
@@ -247,7 +247,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -> Result<SExpr> {
     let mut pipeline = OptimizerPipeline::new(opt_ctx.clone())
         // 1. Eliminate correlated subqueries
-        .add(SubqueryRewriter::new(opt_ctx.clone(), None))
+        .add(SubqueryDecorrelationOptimizer::new(opt_ctx.clone(), None))
         // 2. Apply statistics aggregation to gather and propagate statistics
         .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
         // 3. Collect statistics for SExpr nodes to support cost estimation
@@ -290,7 +290,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
 
 async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -> Result<Memo> {
     let mut pipeline = OptimizerPipeline::new(opt_ctx.clone())
-        .add(SubqueryRewriter::new(opt_ctx.clone(), None))
+        .add(SubqueryDecorrelationOptimizer::new(opt_ctx.clone(), None))
         .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
         .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
         .add(RuleNormalizeAggregateOptimizer::new(opt_ctx.clone()))

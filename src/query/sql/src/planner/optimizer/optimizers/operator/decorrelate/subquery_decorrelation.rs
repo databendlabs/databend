@@ -70,15 +70,74 @@ pub struct FlattenInfo {
     pub from_count_func: bool,
 }
 
-/// Rewrite subquery into `Apply` operator
-pub struct SubqueryRewriter {
+/// Transforms nested and correlated subqueries into more efficient join operations.
+///
+/// This optimizer handles three main types of subqueries:
+/// 1. Scalar subqueries - Transformed into LeftSingle joins
+/// 2. EXISTS/NOT EXISTS subqueries - Transformed into Cross joins with COUNT aggregation or Semi/Anti joins
+/// 3. ANY subqueries - Transformed into RightMark joins with comparison conditions
+///
+/// The transformation process involves:
+/// - Identifying correlated columns between outer and inner queries
+/// - Flattening the subquery plan by replacing correlated references
+/// - Creating appropriate join conditions based on correlation predicates
+/// - Handling special cases like COUNT aggregations
+/// - Optimizing simple cases into more efficient join types
+///
+/// For example, a correlated EXISTS subquery like:
+///
+/// ```sql
+/// SELECT * FROM customers c
+/// WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)
+/// ```
+///
+/// Is transformed into a semi-join:
+///
+/// ```
+/// LeftSemi Join
+/// ├── Scan: customers
+/// └── Scan: orders
+///     └── Join condition: o.customer_id = c.id
+/// ```
+///
+/// And a scalar subquery with aggregation like:
+///
+/// ```sql
+/// SELECT c.name, (SELECT MAX(o.amount) FROM orders o WHERE o.customer_id = c.id) as max_order
+/// FROM customers c
+/// ```
+///
+/// Is transformed into a LeftSingle join:
+///
+/// ```
+/// Project: c.name, scalar_subquery_X
+/// └── LeftSingle Join
+///     ├── Scan: customers
+///     └── Aggregate: MAX(o.amount) as max_amount
+///         └── Scan: orders
+///             └── Join condition: o.customer_id = c.id
+/// ```
+///
+/// The optimizer also handles special cases like:
+/// - Constant subqueries that can be folded into simple expressions
+/// - COUNT aggregations that need special NULL handling
+/// - IN lists that can be transformed into more efficient forms
+///
+/// This optimization improves query performance by:
+/// 1. Eliminating nested loop evaluation of subqueries
+/// 2. Allowing the query optimizer to consider more efficient join strategies
+/// 3. Enabling better statistics and cost estimation
+/// 4. Reducing the number of query plan operators
+///
+/// The implementation follows the approach described in the paper "Unnesting Arbitrary Queries".
+pub struct SubqueryDecorrelationOptimizer {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) metadata: MetadataRef,
     pub(crate) derived_columns: HashMap<IndexType, IndexType>,
     pub(crate) binder: Option<Binder>,
 }
 
-impl SubqueryRewriter {
+impl SubqueryDecorrelationOptimizer {
     pub fn new(opt_ctx: Arc<OptimizerContext>, binder: Option<Binder>) -> Self {
         Self {
             ctx: opt_ctx.get_table_ctx(),
@@ -644,7 +703,7 @@ impl SubqueryRewriter {
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = *subquery.compare_op.as_ref().unwrap();
                 let (right_condition, is_non_equi_condition) =
-                    check_child_expr_in_subquery(&child_expr, &op)?;
+                    Self::check_child_expr_in_subquery(&child_expr, &op)?;
                 let (left_conditions, right_conditions, non_equi_conditions) =
                     if !is_non_equi_condition {
                         (vec![left_condition], vec![right_condition], vec![])
@@ -700,10 +759,37 @@ impl SubqueryRewriter {
             _ => unreachable!(),
         }
     }
+
+    fn check_child_expr_in_subquery(
+        child_expr: &ScalarExpr,
+        op: &ComparisonOp,
+    ) -> Result<(ScalarExpr, bool)> {
+        match child_expr {
+            ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
+            ScalarExpr::FunctionCall(func) => {
+                for arg in &func.arguments {
+                    // Call the static method directly
+                    let _ = Self::check_child_expr_in_subquery(arg, op)?;
+                }
+                Ok((child_expr.clone(), op != &ComparisonOp::Equal))
+            }
+            ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
+            ScalarExpr::CastExpr(cast) => {
+                let arg = &cast.argument;
+                // Call the static method directly
+                let (_, is_non_equi_condition) = Self::check_child_expr_in_subquery(arg, op)?;
+                Ok((child_expr.clone(), is_non_equi_condition))
+            }
+            other => Err(ErrorCode::Internal(format!(
+                "Invalid child expr in subquery: {:?}",
+                other
+            ))),
+        }
+    }
 }
 
 #[async_trait::async_trait]
-impl Optimizer for SubqueryRewriter {
+impl Optimizer for SubqueryDecorrelationOptimizer {
     /// Returns the name of this optimizer
     fn name(&self) -> &'static str {
         "SubqueryRewriter"
@@ -713,30 +799,5 @@ impl Optimizer for SubqueryRewriter {
     async fn optimize(&mut self, expr: &SExpr) -> Result<SExpr> {
         // Call the internal implementation
         self.optimize_internal(expr)
-    }
-}
-
-pub fn check_child_expr_in_subquery(
-    child_expr: &ScalarExpr,
-    op: &ComparisonOp,
-) -> Result<(ScalarExpr, bool)> {
-    match child_expr {
-        ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
-        ScalarExpr::FunctionCall(func) => {
-            for arg in &func.arguments {
-                let _ = check_child_expr_in_subquery(arg, op)?;
-            }
-            Ok((child_expr.clone(), op != &ComparisonOp::Equal))
-        }
-        ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
-        ScalarExpr::CastExpr(cast) => {
-            let arg = &cast.argument;
-            let (_, is_non_equi_condition) = check_child_expr_in_subquery(arg, op)?;
-            Ok((child_expr.clone(), is_non_equi_condition))
-        }
-        other => Err(ErrorCode::Internal(format!(
-            "Invalid child expr in subquery: {:?}",
-            other
-        ))),
     }
 }

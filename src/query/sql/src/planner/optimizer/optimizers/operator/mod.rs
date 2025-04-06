@@ -20,7 +20,7 @@ mod join;
 pub use aggregate::RuleNormalizeAggregateOptimizer;
 pub use aggregate::RuleStatsAggregateOptimizer;
 pub use decorrelate::FlattenInfo;
-pub use decorrelate::SubqueryRewriter;
+pub use decorrelate::SubqueryDecorrelationOptimizer;
 pub use decorrelate::UnnestResult;
 pub use filter::DeduplicateJoinConditionOptimizer;
 pub use filter::InferFilterOptimizer;
