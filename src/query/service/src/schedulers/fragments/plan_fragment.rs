@@ -159,7 +159,7 @@ impl PlanFragment {
 
         let data_sources = self.collect_data_sources()?;
 
-        let executors = Fragmenter::get_executors(ctx);
+        let executors = Fragmenter::get_executors_nodes(ctx);
 
         let mut executor_partitions: HashMap<String, HashMap<u32, DataSource>> = HashMap::new();
 
@@ -207,7 +207,7 @@ impl PlanFragment {
                             num_rows: block.num_rows(),
                         });
                         executor_partitions
-                            .entry(executor.clone())
+                            .entry(executor.id.clone())
                             .or_default()
                             .insert(*plan_id, source);
                     }
@@ -242,7 +242,7 @@ impl PlanFragment {
         let mutation_source = plan.try_find_mutation_source().unwrap();
 
         let partitions: &Partitions = &mutation_source.partitions;
-        let executors = Fragmenter::get_executors(ctx);
+        let executors = Fragmenter::get_executors_nodes(ctx);
 
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
@@ -330,7 +330,7 @@ impl PlanFragment {
         };
 
         let partitions: &Partitions = &compact_block.parts;
-        let executors = Fragmenter::get_executors(ctx);
+        let executors = Fragmenter::get_executors_nodes(ctx);
 
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
