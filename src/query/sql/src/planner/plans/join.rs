@@ -155,7 +155,7 @@ pub struct HashJoinBuildCacheInfo {
 pub struct JoinEquiCondition {
     pub left: ScalarExpr,
     pub right: ScalarExpr,
-    // Used for "is (not) distinct from".
+    // Used for "is (not) distinct from" and mark join
     pub is_null_equal: bool,
 }
 
@@ -668,6 +668,47 @@ impl Operator for Join {
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
+
+        // For mark join with nullable eq comparision, ensure to use broadcast for subquery side
+        if self.join_type.is_mark_join()
+            && self.equi_conditions.len() == 1
+            && self.has_null_equi_condition()
+        {
+            // subquery as left probe side
+            if matches!(self.join_type, JoinType::LeftMark) {
+                let conditions = self
+                    .equi_conditions
+                    .iter()
+                    .map(|condition| condition.right.clone())
+                    .collect();
+
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Hash(conditions),
+                    },
+                ]);
+            } else {
+                // subquery as right build side
+                let conditions = self
+                    .equi_conditions
+                    .iter()
+                    .map(|condition| condition.left.clone())
+                    .collect();
+
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: Distribution::Hash(conditions),
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                ]);
+            }
+            return Ok(children_required);
+        }
 
         let settings = ctx.get_settings();
         if self.join_type != JoinType::Cross && !settings.get_enforce_broadcast_join()? {

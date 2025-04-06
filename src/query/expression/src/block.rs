@@ -420,7 +420,7 @@ impl DataBlock {
                         .map(|f| f.name().to_string())
                         .collect();
                     ErrorCode::BadArguments(format!(
-                        "Unable to get field named \"{}\". Valid fields: {:?}",
+                        "Unable to get field named \"{}\" in resort datablock. Valid fields: {:?}",
                         dest_field.name(),
                         valid_fields
                     ))
