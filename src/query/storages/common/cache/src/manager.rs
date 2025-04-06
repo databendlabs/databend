@@ -21,7 +21,6 @@ use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_index::BloomIndexMeta;
 use log::info;
 use parking_lot::RwLock;
 
