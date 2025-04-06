@@ -145,7 +145,6 @@ impl GlobalPersistentLog {
         loop {
             // add a random sleep time to avoid always one node doing the work
             let sleep_time = self.interval as u64 * 1000 + random::<u64>() % 1000;
-
             tokio::time::sleep(Duration::from_millis(sleep_time)).await;
             if self.stopped.load(Ordering::SeqCst) {
                 return Ok(());
@@ -262,8 +261,28 @@ impl GlobalPersistentLog {
 
     async fn do_copy_into(&self) -> Result<()> {
         let stage_name = GlobalPersistentLog::instance().stage_name.clone();
-        for table in &self.tables {
-            self.execute_sql(&table.copy_into_sql(&stage_name)).await?;
+        let operator = GlobalLogger::instance().get_operator().await;
+        if let Some(op) = operator {
+            let path = format!("stage/internal/{}/", stage_name);
+            // Why we need to list the files first?
+            // Consider this case:
+            // After executing the two insert statements, a new file is created in the stage.
+            // Copy into enable the `PURGE` option, which will delete all files in the stage.
+            // the new file will be deleted and not inserted into the tables.
+            let files: Vec<String> = op
+                .list(&path)
+                .await?
+                .into_iter()
+                .filter(|f| f.name().ends_with(".parquet"))
+                .map(|f| f.name().to_string())
+                .collect();
+            if files.is_empty() {
+                return Ok(());
+            }
+            for table in &self.tables {
+                self.execute_sql(&table.copy_into_sql(&stage_name, &files))
+                    .await?;
+            }
         }
         Ok(())
     }
