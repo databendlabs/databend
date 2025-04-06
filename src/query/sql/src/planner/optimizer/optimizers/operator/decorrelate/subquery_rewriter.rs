@@ -391,7 +391,7 @@ impl SubqueryRewriter {
                     })
                 } else if subquery.typ == SubqueryType::NotExists {
                     // Not exists subquery should be rewritten to `not(is_true(column_ref))`
-                    // not null mark value will conside as:  not [null] ---> not [false] ---> true
+                    // not null mark value will consider as:  not [null] ---> not [false] ---> true
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: subquery.span,
                         func_name: "not".to_string(),
@@ -404,7 +404,7 @@ impl SubqueryRewriter {
                         })],
                     })
                 } else if subquery.typ == SubqueryType::Exists {
-                    // null value will conside as false
+                    // null value will consider as false
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: subquery.span,
                         func_name: "is_true".to_string(),

@@ -669,7 +669,7 @@ impl Operator for Join {
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
 
-        // For mark join with nullable eq comparision, ensure to use broadcast for subquery side
+        // For mark join with nullable eq comparison, ensure to use broadcast for subquery side
         if self.join_type.is_mark_join()
             && self.equi_conditions.len() == 1
             && self.has_null_equi_condition()
