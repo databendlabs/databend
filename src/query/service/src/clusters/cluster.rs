@@ -37,7 +37,6 @@ use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use databend_common_cache::MemSized;
 pub use databend_common_catalog::cluster_info::Cluster;
-use databend_common_config::CacheStorageTypeConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -65,7 +64,6 @@ use rand::thread_rng;
 use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
-use tokio::fs::File;
 use tokio::time::sleep;
 
 use crate::servers::flight::FlightClient;
