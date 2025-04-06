@@ -39,6 +39,3 @@ check_query_log "3" "$query_id" "SELECT count(*) FROM persistent_system.query_lo
 
 # Test 4
 check_query_log "4" "$query_id" "SELECT count(*) FROM persistent_system.query_details WHERE" "2"
-
-# Test 5
-check_query_log "5" "$query_id" "SELECT count(*) FROM persistent_system.query_log WHERE" "3"

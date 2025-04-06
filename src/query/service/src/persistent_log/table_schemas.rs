@@ -17,6 +17,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use itertools::Itertools;
 
 pub trait PersistentLogTable: Send + Sync + 'static {
     fn table_name(&self) -> &'static str;
@@ -38,7 +39,7 @@ pub trait PersistentLogTable: Send + Sync + 'static {
         )
     }
 
-    fn copy_into_sql(&self, stage_name: &str) -> String;
+    fn copy_into_sql(&self, stage_name: &str, files: &[String]) -> String;
 
     fn schema_equal(&self, other: TableSchemaRef) -> bool {
         self.schema().fields().len() == other.fields().len()
@@ -107,13 +108,15 @@ impl PersistentLogTable for QueryLogTable {
         vec!["timestamp".to_string(), "query_id".to_string()]
     }
 
-    fn copy_into_sql(&self, stage_name: &str) -> String {
+    fn copy_into_sql(&self, stage_name: &str, files: &[String]) -> String {
+        let file_names = files.iter().map(|f| format!("'{}'", f)).join(",");
         format!(
             "COPY INTO persistent_system.{}
-             FROM @{} PATTERN = '.*[.]parquet' file_format = (TYPE = PARQUET)
+             FROM @{} FILES=({}) file_format = (TYPE = PARQUET)
              PURGE = TRUE",
             self.table_name(),
-            stage_name
+            stage_name,
+            file_names
         )
     }
 }
@@ -380,7 +383,7 @@ impl PersistentLogTable for QueryDetailsTable {
         vec!["event_time".to_string(), "query_id".to_string()]
     }
 
-    fn copy_into_sql(&self, stage_name: &str) -> String {
+    fn copy_into_sql(&self, stage_name: &str, files: &[String]) -> String {
         let fields = self
             .schema()
             .fields()
@@ -388,11 +391,13 @@ impl PersistentLogTable for QueryDetailsTable {
             .map(|f| format!("m['{}']", f.name()))
             .collect::<Vec<_>>()
             .join(", ");
+        let file_names = files.iter().map(|f| format!("'{}'", f)).join(",");
         format!(
-            "INSERT INTO persistent_system.{} FROM (SELECT {} FROM (SELECT parse_json(message) as m FROM @{} WHERE target='databend::log::query'))",
+            "INSERT INTO persistent_system.{} FROM (SELECT {} FROM (SELECT parse_json(message) as m FROM @{} (FILES=>({})) WHERE target='databend::log::query'))",
             self.table_name(),
             fields,
-            stage_name
+            stage_name,
+            file_names
         )
     }
 }
@@ -425,7 +430,7 @@ impl PersistentLogTable for QueryProfileTable {
         vec!["query_id".to_string()]
     }
 
-    fn copy_into_sql(&self, stage_name: &str) -> String {
+    fn copy_into_sql(&self, stage_name: &str, files: &[String]) -> String {
         let fields = self
             .schema()
             .fields()
@@ -433,11 +438,13 @@ impl PersistentLogTable for QueryProfileTable {
             .map(|f| format!("m['{}']", f.name()))
             .collect::<Vec<_>>()
             .join(", ");
+        let file_names = files.iter().map(|f| format!("'{}'", f)).join(",");
         format!(
-            "INSERT INTO persistent_system.{} FROM (SELECT {} FROM (SELECT parse_json(message) as m FROM @{} WHERE target='databend::log::profile'))",
+            "INSERT INTO persistent_system.{} FROM (SELECT {} FROM (SELECT parse_json(message) as m FROM @{} (FILES=>({})) WHERE target='databend::log::profile'))",
             self.table_name(),
             fields,
-            stage_name
+            stage_name,
+            file_names
         )
     }
 }

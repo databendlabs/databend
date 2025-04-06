@@ -63,7 +63,7 @@ impl GlobalLogger {
     }
 
     // Get the operator for remote log when it is ready.
-    pub(crate) async fn get_operator(&self) -> Option<Operator> {
+    pub async fn get_operator(&self) -> Option<Operator> {
         let operator = self.remote_log_operator.read().await;
         if let Some(operator) = operator.as_ref() {
             return Some(operator.clone());
