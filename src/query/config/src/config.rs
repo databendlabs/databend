@@ -2929,8 +2929,8 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_meta_count: u64,
 
-    /// Max bytes of cached bloom index meta data on disk. Default value of is 0.
-    // Set it to 0 to disable it. It will NOT be enabled if table meta cache is disabled
+    /// Max bytes of cached bloom index metadata on disk. The Default value is 0.
+    // Set it to 0 to disable it.
     #[clap(
         long = "disk-cache-table-bloom-index-meta-size",
         value_name = "VALUE",

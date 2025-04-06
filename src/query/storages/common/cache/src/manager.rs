@@ -21,6 +21,7 @@ use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_index::BloomIndexMeta;
 use log::info;
 use parking_lot::RwLock;
 
@@ -296,15 +297,16 @@ impl CacheManager {
                 let cache = &self.inverted_index_meta_cache;
                 Self::set_items_capacity(cache, new_capacity, name);
             }
-            HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA => {
+            HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA
+            | IN_MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA => {
                 Self::set_hybrid_cache_items_capacity(
                     &self.bloom_index_meta_cache,
                     new_capacity,
                     name,
                 );
             }
-            HYBRID_CACHE_BLOOM_INDEX_FILTER => {
-                Self::set_hybrid_cache_items_capacity(
+            HYBRID_CACHE_BLOOM_INDEX_FILTER | IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER => {
+                Self::set_hybrid_cache_bytes_capacity(
                     &self.bloom_index_filter_cache,
                     new_capacity,
                     name,
@@ -332,7 +334,12 @@ impl CacheManager {
                     name
                 )));
             }
-            _ => return Err(ErrorCode::BadArguments(format!("cache {} not found", name))),
+            _ => {
+                return Err(ErrorCode::BadArguments(format!(
+                    "cache {} not found, or not allowed to be adjusted",
+                    name
+                )));
+            }
         }
         Ok(())
     }
@@ -375,9 +382,31 @@ impl CacheManager {
             // In this case, only in-memory cache will be built, on-disk cache is NOT allowed
             // to be enabled this way yet.
             let name = name.into();
-            let in_memory_cache_name = HybridCache::<T>::build_in_memory_cache_name(&name);
+            let in_memory_cache_name = HybridCache::<T>::in_memory_cache_name(&name);
             if let Some(new_cache) =
                 Self::new_items_cache(in_memory_cache_name, new_capacity as usize)
+            {
+                let hybrid_cache = HybridCache::new(name, new_cache, None);
+                cache.set(Some(hybrid_cache));
+            }
+        }
+    }
+
+    fn set_hybrid_cache_bytes_capacity<T: Into<CacheValue<T>>>(
+        cache: &CacheSlot<HybridCache<T>>,
+        new_capacity: u64,
+        name: impl Into<String>,
+    ) {
+        if let Some(v) = cache.get() {
+            v.in_memory_cache()
+                .set_bytes_capacity(new_capacity as usize);
+        } else {
+            // In this case, only in-memory cache will be built, on-disk cache is NOT allowed
+            // to be enabled this way yet.
+            let name = name.into();
+            let in_memory_cache_name = HybridCache::<T>::in_memory_cache_name(&name);
+            if let Some(new_cache) =
+                Self::new_bytes_cache(in_memory_cache_name, new_capacity as usize)
             {
                 let hybrid_cache = HybridCache::new(name, new_cache, None);
                 cache.set(Some(hybrid_cache));
@@ -503,8 +532,8 @@ impl CacheManager {
         sync_data: bool,
     ) -> Result<CacheSlot<HybridCache<V>>> {
         let name = name.into();
-        let in_mem_cache_name = HybridCache::<V>::build_in_memory_cache_name(&name);
-        let disk_cache_name = HybridCache::<V>::build_on_disk_cache_name(&name);
+        let in_mem_cache_name = HybridCache::<V>::in_memory_cache_name(&name);
+        let disk_cache_name = HybridCache::<V>::on_disk_cache_name(&name);
 
         // Note that here we allow the capacity of in-memory cache to be zero,
         // this may be handy for some performance testing scenarios
@@ -550,7 +579,10 @@ const MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA: &str =
     "memory_cache_inverted_index_file_meta_data";
 
 const HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "cache_bloom_index_file_meta_data";
+
+const IN_MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "memory_cache_bloom_index_file_meta_data";
 const HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "cache_bloom_index_filter";
+const IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_index_filter";
 const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_info";
 const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
 const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";

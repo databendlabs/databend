@@ -31,10 +31,10 @@ pub struct HybridCache<V: Into<CacheValue<V>>> {
 }
 
 impl<T: Into<CacheValue<T>>> HybridCache<T> {
-    pub fn build_in_memory_cache_name(name: &str) -> String {
+    pub fn in_memory_cache_name(name: &str) -> String {
         format!("memory_{name}")
     }
-    pub fn build_on_disk_cache_name(name: &str) -> String {
+    pub fn on_disk_cache_name(name: &str) -> String {
         format!("disk_{name}")
     }
 }
