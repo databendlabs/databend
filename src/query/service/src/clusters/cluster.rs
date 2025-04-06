@@ -30,12 +30,15 @@ use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep as tokio_async_sleep;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use databend_common_cache::MemSized;
 pub use databend_common_catalog::cluster_info::Cluster;
+use databend_common_config::CacheStorageTypeConfig;
+use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
@@ -62,6 +65,7 @@ use rand::thread_rng;
 use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::fs::File;
 use tokio::time::sleep;
 
 use crate::servers::flight::FlightClient;
@@ -525,6 +529,31 @@ impl ClusterDiscovery {
             }
         }
 
+        let mut cache_id = self.local_id.clone();
+        if let CacheStorageTypeInnerConfig::Disk = cfg.cache.data_cache_storage {
+            let path = format!("{}/cache_id", cfg.cache.disk_cache_config.path);
+            cache_id = match tokio::fs::read_to_string(path.clone()).await {
+                Ok(content) => content,
+                Err(e) if e.kind() == tokio::io::ErrorKind::NotFound => {
+                    let cache_id = GlobalUniqName::unique();
+                    if let Err(e) = tokio::fs::write(path, cache_id.clone()).await {
+                        return Err(ErrorCode::TokioError(format!(
+                            "Cannot write cache id file, cause: {:?}",
+                            e
+                        )));
+                    }
+
+                    cache_id
+                }
+                Err(e) => {
+                    return Err(ErrorCode::TokioError(format!(
+                        "Cannot read cache id file, cause: {:?}",
+                        e
+                    )));
+                }
+            }
+        }
+
         let mut node_info = NodeInfo::create(
             self.local_id.clone(),
             self.local_secret.clone(),
@@ -533,6 +562,7 @@ impl ClusterDiscovery {
             address,
             discovery_address,
             DATABEND_COMMIT_VERSION.to_string(),
+            cache_id,
         );
 
         let resources_management = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();

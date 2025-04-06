@@ -24,6 +24,7 @@ use std::sync::Arc;
 
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_meta_types::NodeInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Statistics;
 use parking_lot::RwLock;
@@ -126,9 +127,9 @@ impl Partitions {
         self.partitions.is_empty()
     }
 
-    pub fn reshuffle(&self, executors: Vec<String>) -> Result<HashMap<String, Partitions>> {
+    pub fn reshuffle(&self, executors: Vec<Arc<NodeInfo>>) -> Result<HashMap<String, Partitions>> {
         let mut executors_sorted = executors;
-        executors_sorted.sort();
+        executors_sorted.sort_by(|left, right| left.cache_id.cmp(&right.cache_id));
 
         let num_executors = executors_sorted.len();
         let partitions = match self.kind {
@@ -153,17 +154,17 @@ impl Partitions {
 
                 let mut executor_part = executors_sorted
                     .iter()
-                    .map(|e| (e.clone(), Partitions::default()))
+                    .map(|e| (e.id.clone(), Partitions::default()))
                     .collect::<HashMap<_, _>>();
 
                 let mut ring = executors_sorted
                     .iter()
                     .flat_map(|e| {
                         let mut s = DefaultHasher::new();
-                        e.hash(&mut s);
+                        e.id.hash(&mut s);
                         (0..1 << scale).map(move |i| {
                             i.hash(&mut s);
-                            (e, s.finish())
+                            (e.id.clone(), s.finish())
                         })
                     })
                     .collect::<Vec<_>>();
@@ -172,16 +173,15 @@ impl Partitions {
 
                 for p in self.partitions.iter() {
                     let k = p.hash();
-                    let idx = match ring.binary_search_by(|&(_, h)| h.cmp(&k)) {
-                        Err(i) => i,
-                        Ok(i) => i,
-                    };
+                    let idx = ring
+                        .binary_search_by(|&(_, h)| h.cmp(&k))
+                        .unwrap_or_else(|i| i);
                     let executor = if idx == ring.len() {
-                        ring[0].0
+                        ring[0].0.clone()
                     } else {
-                        ring[idx].0
+                        ring[idx].0.clone()
                     };
-                    let part = executor_part.get_mut(executor).unwrap();
+                    let part = executor_part.get_mut(&executor).unwrap();
                     part.partitions.push(p.clone());
                 }
                 return Ok(executor_part);
@@ -198,7 +198,7 @@ impl Partitions {
                     .into_iter()
                     .map(|executor| {
                         (
-                            executor,
+                            executor.id.clone(),
                             Partitions::create(PartitionsShuffleKind::Seq, self.partitions.clone()),
                         )
                     })
@@ -212,13 +212,13 @@ impl Partitions {
 
             let local_id = &GlobalConfig::instance().query.node_id;
             for executor in executors_sorted.into_iter() {
-                let parts = match &executor == local_id {
+                let parts = match &executor.id == local_id {
                     true => partitions.clone(),
                     false => vec![],
                 };
 
                 executor_part.insert(
-                    executor,
+                    executor.id.clone(),
                     Partitions::create(PartitionsShuffleKind::Seq, parts),
                 );
             }
@@ -246,7 +246,7 @@ impl Partitions {
             };
 
             executor_part.insert(
-                executor,
+                executor.id.clone(),
                 Partitions::create(PartitionsShuffleKind::Seq, parts),
             );
         }
