@@ -30,7 +30,7 @@ use super::DropDictionaryPlan;
 use super::RenameDictionaryPlan;
 use super::ShowCreateDictionaryPlan;
 use crate::binder::ExplainConfig;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AddWarehouseClusterPlan;

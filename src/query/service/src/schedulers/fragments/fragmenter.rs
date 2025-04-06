@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_meta_types::NodeInfo;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
@@ -83,10 +84,13 @@ impl Fragmenter {
     /// Get ids of executor nodes.
     /// This method is basically copied from `QueryFragmentActions::get_executors()`.
     pub fn get_executors(ctx: Arc<QueryContext>) -> Vec<String> {
-        let cluster = ctx.get_cluster();
-        let cluster_nodes = cluster.get_nodes();
+        let cluster_nodes = Self::get_executors_nodes(ctx);
 
         cluster_nodes.iter().map(|node| &node.id).cloned().collect()
+    }
+
+    pub fn get_executors_nodes(ctx: Arc<QueryContext>) -> Vec<Arc<NodeInfo>> {
+        ctx.get_cluster().get_nodes()
     }
 
     pub fn get_local_executor(ctx: Arc<QueryContext>) -> String {

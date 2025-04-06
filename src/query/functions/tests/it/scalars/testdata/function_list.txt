@@ -2923,6 +2923,10 @@ Functions overloads:
 198 multiply(Float64 NULL, Float32 NULL) :: Float64 NULL
 199 multiply(Float64, Float64) :: Float64
 200 multiply(Float64 NULL, Float64 NULL) :: Float64 NULL
+201 multiply(Int64, Interval) :: Interval
+202 multiply(Int64 NULL, Interval NULL) :: Interval NULL
+203 multiply(Interval, Int64) :: Interval
+204 multiply(Interval NULL, Int64 NULL) :: Interval NULL
 0 not(Boolean) :: Boolean
 1 not(Boolean NULL) :: Boolean NULL
 0 noteq(Variant, Variant) :: Boolean
@@ -3770,6 +3774,10 @@ Functions overloads:
 25 to_int8(Boolean NULL) :: Int8 NULL
 0 to_interval(String) :: Interval
 1 to_interval(String NULL) :: Interval NULL
+0 to_iso_year(Date) :: UInt16
+1 to_iso_year(Date NULL) :: UInt16 NULL
+2 to_iso_year(Timestamp) :: UInt16
+3 to_iso_year(Timestamp NULL) :: UInt16 NULL
 0 to_last_of_month(Date) :: Date
 1 to_last_of_month(Date NULL) :: Date NULL
 2 to_last_of_month(Timestamp) :: Date

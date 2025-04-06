@@ -28,17 +28,17 @@ use databend_common_storage::Datum;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use itertools::Itertools;
 
-use crate::optimizer::histogram_from_ndv;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::ColumnStat;
-use crate::optimizer::ColumnStatSet;
-use crate::optimizer::Distribution;
-use crate::optimizer::PhysicalProperty;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::ColumnStat;
+use crate::optimizer::ir::ColumnStatSet;
+use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::HistogramBuilder;
+use crate::optimizer::ir::PhysicalProperty;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatInfo;
+use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::IndexType;
@@ -202,7 +202,7 @@ impl Operator for ConstantTableScan {
                 (false, None) => 0,
             };
 
-            let histogram = histogram_from_ndv(
+            let histogram = HistogramBuilder::from_ndv(
                 ndv,
                 self.num_rows as u64,
                 Some((min.clone(), max.clone())),

@@ -1464,6 +1464,7 @@ fn system_managed_node(id: &str) -> NodeInfo {
         cluster_id: "".to_string(),
         warehouse_id: "".to_string(),
         runtime_node_group: None,
+        cache_id: id.to_string(),
     }
 }
 
@@ -1482,6 +1483,7 @@ fn self_managed_node(node_id: &str) -> NodeInfo {
         cluster_id: "test-cluster-id".to_string(),
         warehouse_id: "test-cluster-id".to_string(),
         runtime_node_group: None,
+        cache_id: node_id.to_string(),
     }
 }
 

@@ -442,6 +442,7 @@ fn eval_text(
 
     let raw_expr = parse_raw_expr(text, &columns);
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+    let expr = type_check::rewrite_function_to_cast(expr);
     let expr = expr.project_column_ref(|i| columns[*i].0.to_string());
 
     eval_index_expr(file, &block, &bloom_columns, schema, expr);
@@ -467,7 +468,7 @@ fn eval_index_expr(
     };
 
     let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
-    let (_, scalars) = BloomIndex::filter_index_field(expr.clone(), &fields).unwrap();
+    let (_, scalars) = BloomIndex::filter_index_field(&expr, &fields).unwrap();
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
     for (scalar, ty) in scalars.into_iter() {

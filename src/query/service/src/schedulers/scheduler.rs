@@ -17,7 +17,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_sql::planner::query_executor::QueryExecutor;
+use databend_common_sql::planner::QueryExecutor;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
 

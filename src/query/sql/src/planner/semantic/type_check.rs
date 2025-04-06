@@ -123,12 +123,12 @@ use crate::binder::Binder;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::parse_lambda_expr;
+use crate::planner::expression::UDFValidator;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::planner::semantic::lowering::TypeCheck;
-use crate::planner::udf_validator::UDFValidator;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
@@ -227,15 +227,6 @@ impl<'a> TypeChecker<'a> {
             in_window_function: false,
             forbid_udf,
         })
-    }
-
-    #[allow(dead_code)]
-    fn post_resolve(
-        &mut self,
-        scalar: &ScalarExpr,
-        data_type: &DataType,
-    ) -> Result<(ScalarExpr, DataType)> {
-        Ok((scalar.clone(), data_type.clone()))
     }
 
     #[recursive::recursive]
@@ -942,7 +933,7 @@ impl<'a> TypeChecker<'a> {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
                     for param in params {
-                        let box (scalar, _data_type) = self.resolve(param)?;
+                        let box (scalar, _) = self.resolve(param)?;
                         let expr = scalar.as_expr()?;
                         let (expr, _) =
                             ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
@@ -1061,11 +1052,41 @@ impl<'a> TypeChecker<'a> {
                 span, kind, expr, ..
             } => self.resolve_extract_expr(*span, kind, expr)?,
 
-            Expr::Interval { span, .. } => {
-                return Err(ErrorCode::SemanticError(
-                    "Unsupported interval expression yet".to_string(),
-                )
-                .set_span(*span));
+            Expr::Interval { span, expr, unit } => {
+                let ex = Expr::Cast {
+                    span: *span,
+                    expr: Box::new(expr.as_ref().clone()),
+                    target_type: TypeName::String,
+                    pg_style: false,
+                };
+                let ex = Expr::FunctionCall {
+                    span: *span,
+                    func: ASTFunctionCall {
+                        name: Identifier::from_name(None, "concat".to_string()),
+                        args: vec![ex, Expr::Literal {
+                            span: *span,
+                            value: Literal::String(format!(" {}", unit)),
+                        }],
+                        params: vec![],
+                        distinct: false,
+                        order_by: vec![],
+                        window: None,
+                        lambda: None,
+                    },
+                };
+                let ex = Expr::FunctionCall {
+                    span: *span,
+                    func: ASTFunctionCall {
+                        name: Identifier::from_name(None, "to_interval".to_string()),
+                        args: vec![ex],
+                        params: vec![],
+                        distinct: false,
+                        order_by: vec![],
+                        window: None,
+                        lambda: None,
+                    },
+                };
+                self.resolve(&ex)?
             }
             Expr::DateAdd {
                 span,
@@ -2873,6 +2894,7 @@ impl<'a> TypeChecker<'a> {
         };
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        let expr = type_check::rewrite_function_to_cast(expr);
 
         // Run constant folding for arguments of the scalar function.
         // This will be helpful to simplify some constant expressions, especially
@@ -2906,6 +2928,26 @@ impl<'a> TypeChecker<'a> {
 
         if let Some(constant) = self.try_fold_constant(&expr, true) {
             return Ok(constant);
+        }
+
+        if let EExpr::Cast {
+            span,
+            is_try,
+            dest_type,
+            ..
+        } = expr
+        {
+            assert_eq!(folded_args.len(), 1);
+            return Ok(Box::new((
+                CastExpr {
+                    span,
+                    is_try,
+                    argument: Box::new(folded_args.pop().unwrap()),
+                    target_type: Box::new(dest_type.clone()),
+                }
+                .into(),
+                dest_type,
+            )));
         }
 
         // reorder
@@ -3065,6 +3107,7 @@ impl<'a> TypeChecker<'a> {
         arg: &Expr,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match interval_kind {
+            ASTIntervalKind::ISOYear => self.resolve_function(span, "to_iso_year", vec![], &[arg]),
             ASTIntervalKind::Year => self.resolve_function(span, "to_year", vec![], &[arg]),
             ASTIntervalKind::Quarter => self.resolve_function(span, "to_quarter", vec![], &[arg]),
             ASTIntervalKind::Month => self.resolve_function(span, "to_month", vec![], &[arg]),
@@ -3121,6 +3164,13 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_function(
                     span,
                     "to_start_of_year", vec![],
+                    &[date],
+                )
+            }
+            ASTIntervalKind::ISOYear => {
+                self.resolve_function(
+                    span,
+                    "to_start_of_iso_year", vec![],
                     &[date],
                 )
             }
@@ -4055,6 +4105,7 @@ impl<'a> TypeChecker<'a> {
                 span,
                 name,
                 handler: udf_definition.handler,
+                headers: udf_definition.headers,
                 display_name,
                 udf_type: UDFType::Server(udf_definition.address.clone()),
                 arg_types: udf_definition.arg_types,
@@ -4172,6 +4223,7 @@ impl<'a> TypeChecker<'a> {
                 span,
                 name,
                 handler,
+                headers: BTreeMap::default(),
                 display_name,
                 arg_types,
                 return_type: Box::new(return_type.clone()),

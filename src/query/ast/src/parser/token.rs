@@ -856,6 +856,8 @@ pub enum TokenKind {
     NULL,
     #[token("NULLABLE", ignore(ascii_case))]
     NULLABLE,
+    #[token("NUMERIC", ignore(ascii_case))]
+    NUMERIC,
     #[token("OBJECT", ignore(ascii_case))]
     OBJECT,
     #[token("OF", ignore(ascii_case))]
@@ -990,6 +992,8 @@ pub enum TokenKind {
     ROW_TAG,
     #[token("GRANT", ignore(ascii_case))]
     GRANT,
+    #[token("REAL", ignore(ascii_case))]
+    REAL,
     #[token("REPEAT", ignore(ascii_case))]
     REPEAT,
     #[token("ROLE", ignore(ascii_case))]
@@ -1308,6 +1312,8 @@ pub enum TokenKind {
     UDF,
     #[token("HANDLER", ignore(ascii_case))]
     HANDLER,
+    #[token("HEADERS", ignore(ascii_case))]
+    HEADERS,
     #[token("LANGUAGE", ignore(ascii_case))]
     LANGUAGE,
     #[token("STATE", ignore(ascii_case))]

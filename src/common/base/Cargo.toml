@@ -31,6 +31,7 @@ ctrlc = { workspace = true }
 enquote = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
+hickory-resolver = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }

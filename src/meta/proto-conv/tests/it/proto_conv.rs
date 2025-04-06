@@ -23,6 +23,7 @@ use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_expression as ce;
+use databend_common_expression::types::DataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -293,6 +294,20 @@ fn new_virtual_data_schema() -> ce::VirtualDataSchema {
     }
 }
 
+fn new_udf_server() -> databend_common_meta_app::principal::UDFServer {
+    databend_common_meta_app::principal::UDFServer {
+        address: "http://127.0.0.1:8888".to_string(),
+        handler: "isempty".to_string(),
+        headers: BTreeMap::from([
+            ("X-Token".to_string(), "abc123".to_string()),
+            ("X-Api-Version".to_string(), "11".to_string()),
+        ]),
+        language: "python".to_string(),
+        arg_types: vec![DataType::String],
+        return_type: DataType::Boolean,
+    }
+}
+
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
@@ -500,6 +515,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("virtual data schema:{:?}", buf);
+    }
+
+    // udf server
+    {
+        let udf_server = new_udf_server();
+        let p = udf_server.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("udf server:{:?}", buf);
     }
 
     Ok(())

@@ -22,7 +22,8 @@ use databend_common_expression::types::F64;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::OptimizerContext;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -40,14 +41,14 @@ pub struct CollectStatisticsOptimizer {
 }
 
 impl CollectStatisticsOptimizer {
-    pub fn new(table_ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
+    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
         CollectStatisticsOptimizer {
-            table_ctx,
-            metadata,
+            table_ctx: opt_ctx.get_table_ctx(),
+            metadata: opt_ctx.get_metadata(),
         }
     }
 
-    pub async fn run(mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub async fn optimize(mut self, s_expr: &SExpr) -> Result<SExpr> {
         self.collect(s_expr).await
     }
 

@@ -34,10 +34,10 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use opendal::Operator;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
-use parquet::basic::Encoding;
 use parquet::basic::ZstdLevel;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
+use parquet::file::properties::WriterVersion;
 
 use super::block_batch::BlockBatch;
 use crate::append::output::DataSummary;
@@ -98,13 +98,13 @@ fn create_writer(
     }
 
     let props = WriterProperties::builder()
+        .set_writer_version(WriterVersion::PARQUET_2_0)
         .set_compression(compression)
-        .set_max_row_group_size(MAX_ROW_GROUP_SIZE)
-        .set_encoding(Encoding::PLAIN)
-        .set_dictionary_enabled(false)
-        .set_statistics_enabled(EnabledStatistics::Chunk)
-        .set_bloom_filter_enabled(false)
         .set_created_by(create_by)
+        .set_max_row_group_size(MAX_ROW_GROUP_SIZE)
+        .set_statistics_enabled(EnabledStatistics::Chunk)
+        .set_dictionary_enabled(true)
+        .set_bloom_filter_enabled(false)
         .build();
     let buf_size = match targe_file_size {
         Some(n) if n < MAX_BUFFER_SIZE => n,

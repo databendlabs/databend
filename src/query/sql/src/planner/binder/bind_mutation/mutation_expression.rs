@@ -35,8 +35,9 @@ use crate::binder::Finder;
 use crate::binder::InternalColumnBinding;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
-use crate::optimizer::SExpr;
-use crate::optimizer::SubqueryRewriter;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::operator::SubqueryRewriter;
+use crate::optimizer::OptimizerContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::Join;
@@ -309,9 +310,10 @@ impl MutationExpression {
                         Arc::new(s_expr),
                     );
 
-                    let mut rewriter =
-                        SubqueryRewriter::new(binder.ctx.clone(), binder.metadata.clone(), None);
-                    let s_expr = rewriter.rewrite(&s_expr)?;
+                    let opt_ctx =
+                        OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());
+                    let mut rewriter = SubqueryRewriter::new(opt_ctx, None);
+                    let s_expr = rewriter.optimize(&s_expr)?;
 
                     Ok(MutationExpressionBindResult {
                         input: s_expr,

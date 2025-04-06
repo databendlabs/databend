@@ -1,6 +1,6 @@
 ast            : feistel_obfuscate(a,0)
 raw expr       : feistel_obfuscate(a::Int64, 0)
-checked expr   : feistel_obfuscate<Int64, UInt64>(a, to_uint64<UInt8>(0_u8))
+checked expr   : feistel_obfuscate<Int64, UInt64>(a, CAST<UInt8>(0_u8 AS UInt64))
 optimized expr : feistel_obfuscate<Int64, UInt64>(a, 0_u64)
 evaluation:
 +--------+----------------------------------------------+----------------------------------------------+
@@ -27,7 +27,7 @@ evaluation (internal):
 
 ast            : feistel_obfuscate(a,0)
 raw expr       : feistel_obfuscate(a::UInt64, 0)
-checked expr   : feistel_obfuscate<UInt64, UInt64>(a, to_uint64<UInt8>(0_u8))
+checked expr   : feistel_obfuscate<UInt64, UInt64>(a, CAST<UInt8>(0_u8 AS UInt64))
 optimized expr : feistel_obfuscate<UInt64, UInt64>(a, 0_u64)
 evaluation:
 +--------+----------------------------+----------------------------+
@@ -52,7 +52,7 @@ evaluation (internal):
 
 ast            : feistel_obfuscate(a,0)
 raw expr       : feistel_obfuscate(a::Float32, 0)
-checked expr   : feistel_obfuscate<Float32, UInt64>(a, to_uint64<UInt8>(0_u8))
+checked expr   : feistel_obfuscate<Float32, UInt64>(a, CAST<UInt8>(0_u8 AS UInt64))
 optimized expr : feistel_obfuscate<Float32, UInt64>(a, 0_u64)
 evaluation:
 +--------+--------------------------------------------------------------------------------------+------------------------------------------+
@@ -77,7 +77,7 @@ evaluation (internal):
 
 ast            : feistel_obfuscate(a,0)
 raw expr       : feistel_obfuscate(a::Float64, 0)
-checked expr   : feistel_obfuscate<Float64, UInt64>(a, to_uint64<UInt8>(0_u8))
+checked expr   : feistel_obfuscate<Float64, UInt64>(a, CAST<UInt8>(0_u8 AS UInt64))
 optimized expr : feistel_obfuscate<Float64, UInt64>(a, 0_u64)
 evaluation:
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -102,7 +102,7 @@ evaluation (internal):
 
 ast            : feistel_obfuscate(null,0)
 raw expr       : feistel_obfuscate(NULL, 0)
-checked expr   : feistel_obfuscate<UInt64 NULL, UInt64 NULL>(CAST(NULL AS UInt64 NULL), CAST(0_u8 AS UInt64 NULL))
+checked expr   : feistel_obfuscate<UInt64 NULL, UInt64 NULL>(CAST<NULL>(NULL AS UInt64 NULL), CAST<UInt8>(0_u8 AS UInt64 NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
