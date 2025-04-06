@@ -14,6 +14,7 @@
 
 use databend_common_exception::Result;
 
+use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 
 /// Trait defining the interface for query optimizers.
@@ -25,4 +26,10 @@ pub trait Optimizer: Send + Sync {
 
     /// Returns a unique identifier for this optimizer.
     fn name(&self) -> &'static str;
+
+    /// Get the memo if this optimizer maintains one.
+    /// Default implementation returns None for optimizers that don't use a memo.
+    fn memo(&self) -> Option<&Memo> {
+        None
+    }
 }

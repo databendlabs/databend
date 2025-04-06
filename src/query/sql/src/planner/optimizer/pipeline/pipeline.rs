@@ -20,6 +20,7 @@ use log::info;
 
 use super::common::contains_local_table_scan;
 use super::common::contains_warehouse_table_scan;
+use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
@@ -30,6 +31,8 @@ pub struct OptimizerPipeline {
     opt_ctx: Arc<OptimizerContext>,
     /// The sequence of optimizers to be applied
     optimizers: Vec<Box<dyn Optimizer>>,
+    /// The memo captured during optimization (if any)
+    memo: Option<Memo>,
 }
 
 impl OptimizerPipeline {
@@ -38,6 +41,7 @@ impl OptimizerPipeline {
         Self {
             opt_ctx,
             optimizers: Vec::new(),
+            memo: None,
         }
     }
 
@@ -88,10 +92,27 @@ impl OptimizerPipeline {
             debug!("Applying optimizer: {}", optimizer_name);
 
             current_expr = optimizer.optimize(&current_expr).await?;
+            if let Some(memo) = optimizer.memo() {
+                self.memo = Some(memo.clone());
+            }
 
             debug!("Optimizer {} completed", optimizer_name);
         }
 
         Ok(current_expr)
+    }
+
+    /// Get the memo captured during optimization
+    ///
+    /// If no memo was captured during optimization, an empty memo is created and returned.
+    /// This ensures the method always returns a valid Memo.
+    pub fn memo(&self) -> Memo {
+        match &self.memo {
+            Some(memo) => memo.clone(),
+            None => {
+                // Create and return an empty memo
+                Memo::create()
+            }
+        }
     }
 }

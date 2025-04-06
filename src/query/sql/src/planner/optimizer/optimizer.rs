@@ -244,8 +244,9 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
     }
 }
 
-pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -> Result<SExpr> {
-    let mut pipeline = OptimizerPipeline::new(opt_ctx.clone())
+/// Build a standard optimization pipeline with all optimizers
+fn build_standard_pipeline(opt_ctx: Arc<OptimizerContext>) -> Result<OptimizerPipeline> {
+    Ok(OptimizerPipeline::new(opt_ctx.clone())
         // 1. Eliminate correlated subqueries
         .add(SubqueryDecorrelationOptimizer::new(opt_ctx.clone(), None))
         // 2. Apply statistics aggregation to gather and propagate statistics
@@ -265,60 +266,37 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
         .add(RecursiveOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
         ]))
-        // 8. Apply DPhyp algorithm for cost-based join reordering (conditionally)
+        // 8. Apply DPhyp algorithm for cost-based join reordering
         .add(DPhpy::new(opt_ctx.clone()))
         // 9. Additional optimizers that don't affect join order
         .add(SingleToInnerOptimizer::new())
         .add(DeduplicateJoinConditionOptimizer::new())
-        // 10. CommuteJoin optimizer
+        // 10. CommuteJoin optimizer (conditionally)
         .add_if(
             opt_ctx.get_enable_join_reorder(),
             RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice()),
         )
-        // 11. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case
-        .add(CascadesOptimizer::new(opt_ctx.clone())?)
-        // 12. Eliminate unnecessary scalar calculations to clean up the final plan
+        // 11. Eliminate unnecessary scalar calculations to clean up the final plan
         .add_if(
             !opt_ctx.get_planning_agg_index(),
             RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
-        );
-
-    s_expr = pipeline.execute(s_expr).await?;
-
-    Ok(s_expr)
+        )
+        // 12. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case
+        .add(CascadesOptimizer::new(opt_ctx.clone())?))
 }
 
-async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -> Result<Memo> {
-    let mut pipeline = OptimizerPipeline::new(opt_ctx.clone())
-        .add(SubqueryDecorrelationOptimizer::new(opt_ctx.clone(), None))
-        .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
-        .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
-        .add(RuleNormalizeAggregateOptimizer::new(opt_ctx.clone()))
-        .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
-        .add(RecursiveOptimizer::new(
-            opt_ctx.clone(),
-            &DEFAULT_REWRITE_RULES,
-        ))
-        .add(RecursiveOptimizer::new(opt_ctx.clone(), &[
-            RuleID::SplitAggregate,
-        ]))
-        .add(DPhpy::new(opt_ctx.clone()))
-        .add(SingleToInnerOptimizer::new())
-        .add(DeduplicateJoinConditionOptimizer::new())
-        .add_if(
-            opt_ctx.get_enable_join_reorder(),
-            RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice()),
-        )
-        .add_if(
-            !opt_ctx.get_planning_agg_index(),
-            RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
-        );
-    s_expr = pipeline.execute(s_expr).await?;
+pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<SExpr> {
+    let mut pipeline = build_standard_pipeline(opt_ctx)?;
+    // Execute the pipeline
+    let optimized = pipeline.execute(s_expr).await?;
+    Ok(optimized)
+}
 
-    let mut cascades = CascadesOptimizer::new(opt_ctx.clone())?;
-    cascades.optimize(&s_expr).await?;
-
-    Ok(cascades.memo)
+async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Memo> {
+    let mut pipeline = build_standard_pipeline(opt_ctx)?;
+    // Execute the pipeline
+    let _optimized = pipeline.execute(s_expr).await?;
+    Ok(pipeline.memo())
 }
 
 async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Plan> {
