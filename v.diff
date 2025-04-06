@@ -1,0 +1,1627 @@
+diff --git a/src/query/service/tests/it/sql/planner/optimizer/agg_index_query_rewrite.rs b/src/query/service/tests/it/sql/planner/optimizer/agg_index_query_rewrite.rs
+index b02a314abb..1419245c2e 100644
+--- a/src/query/service/tests/it/sql/planner/optimizer/agg_index_query_rewrite.rs
++++ b/src/query/service/tests/it/sql/planner/optimizer/agg_index_query_rewrite.rs
+@@ -31,6 +31,7 @@ use databend_common_sql::optimizer::ir::SExpr;
+ use databend_common_sql::optimizer::optimizers::recursive::RecursiveOptimizer;
+ use databend_common_sql::optimizer::optimizers::rule::RuleID;
+ use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
++use databend_common_sql::optimizer::Optimizer;
+ use databend_common_sql::optimizer::OptimizerContext;
+ use databend_common_sql::plans::AggIndexInfo;
+ use databend_common_sql::plans::CreateTablePlan;
+@@ -394,7 +395,8 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
+ 
+         let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
+         let result = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::TryApplyAggIndex])
+-            .optimize(&query)?;
++            .optimize(&query)
++            .await?;
+         let agg_index = find_push_down_index_info(&result)?;
+         assert_eq!(
+             suite.is_matched,
+@@ -449,7 +451,9 @@ async fn plan_sql(
+     {
+         let s_expr = if optimize {
+             let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
+-            RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize(&s_expr)?
++            RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES)
++                .optimize(&s_expr)
++                .await?
+         } else {
+             *s_expr
+         };
+diff --git a/src/query/sql/src/planner/binder/bind_mutation/mutation_expression.rs b/src/query/sql/src/planner/binder/bind_mutation/mutation_expression.rs
+index d87949c644..2b75469d6d 100644
+--- a/src/query/sql/src/planner/binder/bind_mutation/mutation_expression.rs
++++ b/src/query/sql/src/planner/binder/bind_mutation/mutation_expression.rs
+@@ -36,7 +36,8 @@ use crate::binder::InternalColumnBinding;
+ use crate::binder::MutationStrategy;
+ use crate::binder::MutationType;
+ use crate::optimizer::ir::SExpr;
+-use crate::optimizer::optimizers::operator::SubqueryRewriter;
++use crate::optimizer::optimizers::operator::SubqueryDecorrelationOptimizer;
++use crate::optimizer::Optimizer;
+ use crate::optimizer::OptimizerContext;
+ use crate::plans::BoundColumnRef;
+ use crate::plans::Filter;
+@@ -312,8 +313,8 @@ impl MutationExpression {
+ 
+                     let opt_ctx =
+                         OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());
+-                    let mut rewriter = SubqueryRewriter::new(opt_ctx, None);
+-                    let s_expr = rewriter.optimize(&s_expr)?;
++                    let mut rewriter = SubqueryDecorrelationOptimizer::new(opt_ctx, None);
++                    let s_expr = rewriter.optimize(&s_expr).await?;
+ 
+                     Ok(MutationExpressionBindResult {
+                         input: s_expr,
+diff --git a/src/query/sql/src/planner/binder/bind_table_reference/bind_join.rs b/src/query/sql/src/planner/binder/bind_table_reference/bind_join.rs
+index 8e8981b041..b4525bf896 100644
+--- a/src/query/sql/src/planner/binder/bind_table_reference/bind_join.rs
++++ b/src/query/sql/src/planner/binder/bind_table_reference/bind_join.rs
+@@ -34,7 +34,7 @@ use crate::optimizer::ir::ColumnSet;
+ use crate::optimizer::ir::RelExpr;
+ use crate::optimizer::ir::SExpr;
+ use crate::optimizer::optimizers::operator::FlattenInfo;
+-use crate::optimizer::optimizers::operator::SubqueryRewriter;
++use crate::optimizer::optimizers::operator::SubqueryDecorrelationOptimizer;
+ use crate::optimizer::OptimizerContext;
+ use crate::planner::binder::scalar::ScalarBinder;
+ use crate::planner::binder::Binder;
+@@ -389,7 +389,7 @@ impl Binder {
+         if !right_prop.outer_columns.is_empty() {
+             // If there are outer columns in right child, then the join is a correlated lateral join
+             let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+-            let mut decorrelator = SubqueryRewriter::new(opt_ctx, Some(self.clone()));
++            let mut decorrelator = SubqueryDecorrelationOptimizer::new(opt_ctx, Some(self.clone()));
+             right_child = decorrelator.flatten_plan(
+                 &left_child,
+                 &right_child,
+diff --git a/src/query/sql/src/planner/optimizer/cost/cost.rs b/src/query/sql/src/planner/optimizer/cost/cost.rs
+index 8b32cca979..1bd662632c 100644
+--- a/src/query/sql/src/planner/optimizer/cost/cost.rs
++++ b/src/query/sql/src/planner/optimizer/cost/cost.rs
+@@ -55,7 +55,7 @@ impl AddAssign for Cost {
+     }
+ }
+ 
+-pub trait CostModel: Send {
++pub trait CostModel: Send + Sync {
+     /// Compute cost of given `MExpr`(children are not encapsulated).
+     fn compute_cost(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost>;
+ }
+diff --git a/src/query/sql/src/planner/optimizer/mod.rs b/src/query/sql/src/planner/optimizer/mod.rs
+index 5e7e8b6d66..5e98eb4d3d 100644
+--- a/src/query/sql/src/planner/optimizer/mod.rs
++++ b/src/query/sql/src/planner/optimizer/mod.rs
+@@ -16,13 +16,14 @@ mod cost;
+ pub mod ir;
+ #[allow(clippy::module_inception)]
+ mod optimizer;
++mod optimizer_api;
+ mod optimizer_context;
+ pub mod optimizers;
++pub mod pipeline;
+ mod statistics;
+-mod util;
+ 
+ pub use optimizer::optimize;
+ pub use optimizer::optimize_query;
++pub use optimizer_api::Optimizer;
+ pub use optimizer_context::OptimizerContext;
+ pub use optimizers::rule::agg_index;
+-pub use util::contains_local_table_scan;
+diff --git a/src/query/sql/src/planner/optimizer/optimizer.rs b/src/query/sql/src/planner/optimizer/optimizer.rs
+index f0e0d03843..cad45fa322 100644
+--- a/src/query/sql/src/planner/optimizer/optimizer.rs
++++ b/src/query/sql/src/planner/optimizer/optimizer.rs
+@@ -31,15 +31,15 @@ use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
+ use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
+ use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
+ use crate::optimizer::optimizers::operator::SingleToInnerOptimizer;
+-use crate::optimizer::optimizers::operator::SubqueryRewriter;
++use crate::optimizer::optimizers::operator::SubqueryDecorrelationOptimizer;
+ use crate::optimizer::optimizers::recursive::RecursiveOptimizer;
+ use crate::optimizer::optimizers::rule::RuleID;
+ use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
+ use crate::optimizer::optimizers::CascadesOptimizer;
+ use crate::optimizer::optimizers::DPhpy;
++use crate::optimizer::pipeline::OptimizerPipeline;
+ use crate::optimizer::statistics::CollectStatisticsOptimizer;
+-use crate::optimizer::util::contains_local_table_scan;
+-use crate::optimizer::util::contains_warehouse_table_scan;
++use crate::optimizer::Optimizer;
+ use crate::optimizer::OptimizerContext;
+ use crate::plans::ConstantTableScan;
+ use crate::plans::CopyIntoLocationPlan;
+@@ -94,8 +94,11 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
+ 
+                 let mut s_expr = s_expr;
+                 if s_expr.contain_subquery() {
+-                    s_expr =
+-                        Box::new(SubqueryRewriter::new(opt_ctx.clone(), None).optimize(&s_expr)?);
++                    s_expr = Box::new(
++                        SubqueryDecorrelationOptimizer::new(opt_ctx.clone(), None)
++                            .optimize(&s_expr)
++                            .await?,
++                    );
+                 }
+                 Ok(Plan::Explain {
+                     kind,
+@@ -241,129 +244,67 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
+     }
+ }
+ 
+-pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -> Result<SExpr> {
+-    let metadata = opt_ctx.get_metadata();
+-
+-    // 1. Configure distributed optimization based on table types
+-    if contains_local_table_scan(&s_expr, &metadata) {
+-        opt_ctx.set_enable_distributed_optimization(false);
+-        info!("Disable distributed optimization due to local table scan.");
+-    } else if contains_warehouse_table_scan(&s_expr, &metadata) {
+-        let warehouse = opt_ctx.get_table_ctx().get_warehouse_cluster().await?;
+-
+-        if !warehouse.is_empty() {
+-            opt_ctx.set_enable_distributed_optimization(true);
+-            info!("Enable distributed optimization due to warehouse table scan.");
+-        }
+-    }
+-
+-    // 2. Eliminate subqueries by rewriting them into more efficient forms
+-    s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).optimize(&s_expr)?;
+-
+-    // 3. Apply statistics aggregation to gather and propagate statistics
+-    s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
+-        .optimize(&s_expr)
+-        .await?;
+-
+-    // 4. Collect statistics for SExpr nodes to support cost estimation
+-    s_expr = CollectStatisticsOptimizer::new(opt_ctx.clone())
+-        .optimize(&s_expr)
+-        .await?;
+-
+-    // 5. Normalize aggregate, it should be executed before RuleSplitAggregate.
+-    s_expr = RuleNormalizeAggregateOptimizer::new().optimize(&s_expr)?;
+-
+-    // 6. Pull up and infer filter.
+-    s_expr = PullUpFilterOptimizer::new(opt_ctx.clone()).optimize(&s_expr)?;
+-
+-    // 7. Run default rewrite rules
+-    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize(&s_expr)?;
+-
+-    // 8. Run post rewrite rules
+-    s_expr =
+-        RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate]).optimize(&s_expr)?;
+-
+-    // 9. Apply DPhyp algorithm for cost-based join reordering
+-    s_expr = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
+-
+-    // 10. After join reorder, Convert some single join to inner join.
+-    s_expr = SingleToInnerOptimizer::new().optimize(&s_expr)?;
+-
+-    // 11. Deduplicate join conditions.
+-    s_expr = DeduplicateJoinConditionOptimizer::new().optimize(&s_expr)?;
+-
+-    // 12. Apply join commutativity to further optimize join ordering
+-    if opt_ctx.get_enable_join_reorder() {
+-        s_expr = RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice())
+-            .optimize(&s_expr)?;
+-    }
+-
+-    // 13. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
+-    s_expr = CascadesOptimizer::new(opt_ctx.clone())?.optimize(s_expr)?;
+-
+-    // 14. Eliminate unnecessary scalar calculations to clean up the final plan
+-    if !opt_ctx.get_planning_agg_index() {
+-        s_expr = RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice())
+-            .optimize(&s_expr)?;
+-    }
+-
+-    Ok(s_expr)
++/// Build a standard optimization pipeline with all optimizers
++fn build_standard_pipeline(opt_ctx: Arc<OptimizerContext>) -> Result<OptimizerPipeline> {
++    Ok(OptimizerPipeline::new(opt_ctx.clone())
++        // 1. Eliminate correlated subqueries
++        .add(SubqueryDecorrelationOptimizer::new(opt_ctx.clone(), None))
++        // 2. Apply statistics aggregation to gather and propagate statistics
++        .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
++        // 3. Collect statistics for SExpr nodes to support cost estimation
++        .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
++        // 4. Normalize aggregate, it should be executed before RuleSplitAggregate
++        .add(RuleNormalizeAggregateOptimizer::new(opt_ctx.clone()))
++        // 5. Pull up and infer filter
++        .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
++        // 6. Run default rewrite rules (includes CommuteJoin)
++        .add(RecursiveOptimizer::new(
++            opt_ctx.clone(),
++            &DEFAULT_REWRITE_RULES,
++        ))
++        // 7. Run post rewrite rules
++        .add(RecursiveOptimizer::new(opt_ctx.clone(), &[
++            RuleID::SplitAggregate,
++        ]))
++        // 8. Apply DPhyp algorithm for cost-based join reordering
++        .add(DPhpy::new(opt_ctx.clone()))
++        // 9. Additional optimizers that don't affect join order
++        .add(SingleToInnerOptimizer::new())
++        .add(DeduplicateJoinConditionOptimizer::new())
++        // 10. CommuteJoin optimizer (conditionally)
++        .add_if(
++            opt_ctx.get_enable_join_reorder(),
++            RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice()),
++        )
++        // 11. Eliminate unnecessary scalar calculations to clean up the final plan
++        .add_if(
++            !opt_ctx.get_planning_agg_index(),
++            RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
++        )
++        // 12. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case
++        .add(CascadesOptimizer::new(opt_ctx.clone())?))
+ }
+ 
+-// TODO(leiysky): reuse the optimization logic with `optimize_query`
+-async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -> Result<Memo> {
+-    let metadata = opt_ctx.get_metadata();
+-    let _table_ctx = opt_ctx.get_table_ctx();
+-
+-    if contains_local_table_scan(&s_expr, &metadata) {
+-        opt_ctx.set_enable_distributed_optimization(false);
+-        info!("Disable distributed optimization due to local table scan.");
+-    } else if contains_warehouse_table_scan(&s_expr, &metadata) {
+-        let warehouse = opt_ctx.get_table_ctx().get_warehouse_cluster().await?;
+-
+-        if !warehouse.is_empty() {
+-            opt_ctx.set_enable_distributed_optimization(true);
+-            info!("Enable distributed optimization due to warehouse table scan.");
+-        }
+-    }
+-
+-    // Decorrelate subqueries, after this step, there should be no subquery in the expression.
+-    if s_expr.contain_subquery() {
+-        s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).optimize(&s_expr)?;
+-    }
+-
+-    s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
+-        .optimize(&s_expr)
+-        .await?;
+-
+-    // Collect statistics for each leaf node in SExpr.
+-    s_expr = CollectStatisticsOptimizer::new(opt_ctx.clone())
+-        .optimize(&s_expr)
+-        .await?;
+-
+-    // Pull up and infer filter.
+-    s_expr = PullUpFilterOptimizer::new(opt_ctx.clone()).optimize(&s_expr)?;
+-    // Run default rewrite rules
+-    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize(&s_expr)?;
+-    // Run post rewrite rules
+-    s_expr =
+-        RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate]).optimize(&s_expr)?;
+-
+-    // Cost based optimization
+-    if opt_ctx.get_enable_dphyp() && opt_ctx.get_enable_join_reorder() {
+-        s_expr = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
+-    }
+-    let mut cascades = CascadesOptimizer::new(opt_ctx.clone())?;
+-    cascades.optimize(s_expr)?;
++pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<SExpr> {
++    let mut pipeline = build_standard_pipeline(opt_ctx)?;
++    // Execute the pipeline
++    let optimized = pipeline.execute(s_expr).await?;
++    Ok(optimized)
++}
+ 
+-    Ok(cascades.memo)
++async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Memo> {
++    let mut pipeline = build_standard_pipeline(opt_ctx)?;
++    // Execute the pipeline
++    let _optimized = pipeline.execute(s_expr).await?;
++    Ok(pipeline.memo())
+ }
+ 
+ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Plan> {
+     // Optimize the input plan.
+     let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
+     input_s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::MergeFilterIntoMutation])
+-        .optimize(&input_s_expr)?;
++        .optimize(&input_s_expr)
++        .await?;
+ 
+     // For distributed query optimization, we need to remove the Exchange operator at the top of the plan.
+     if let &RelOperator::Exchange(_) = input_s_expr.plan() {
+diff --git a/src/query/sql/src/planner/optimizer/optimizer_api.rs b/src/query/sql/src/planner/optimizer/optimizer_api.rs
+new file mode 100644
+index 0000000000..04d1a20093
+--- /dev/null
++++ b/src/query/sql/src/planner/optimizer/optimizer_api.rs
+@@ -0,0 +1,35 @@
++// Copyright 2021 Datafuse Labs
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++use databend_common_exception::Result;
++
++use crate::optimizer::ir::Memo;
++use crate::optimizer::ir::SExpr;
++
++/// Trait defining the interface for query optimizers.
++
++#[async_trait::async_trait]
++pub trait Optimizer: Send + Sync {
++    /// Optimize the given expression and return the optimized version.
++    async fn optimize(&mut self, expr: &SExpr) -> Result<SExpr>;
++
++    /// Returns a unique identifier for this optimizer.
++    fn name(&self) -> &'static str;
++
++    /// Get the memo if this optimizer maintains one.
++    /// Default implementation returns None for optimizers that don't use a memo.
++    fn memo(&self) -> Option<&Memo> {
++        None
++    }
++}
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/cascades/cascade.rs b/src/query/sql/src/planner/optimizer/optimizers/cascades/cascade.rs
+index d7d0f48016..8d4a1baffa 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/cascades/cascade.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/cascades/cascade.rs
+@@ -34,6 +34,7 @@ use crate::optimizer::optimizers::distributed::DistributedOptimizer;
+ use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
+ use crate::optimizer::optimizers::rule::RuleSet;
+ use crate::optimizer::optimizers::rule::TransformResult;
++use crate::optimizer::Optimizer;
+ use crate::optimizer::OptimizerContext;
+ use crate::IndexType;
+ 
+@@ -51,15 +52,10 @@ impl CascadesOptimizer {
+         let table_ctx = opt_ctx.get_table_ctx();
+         let settings = table_ctx.get_settings();
+ 
+-        // Determine rule set
+-        let explore_rule_set = if !settings.get_enable_cbo()? {
+-            RuleSet::create()
+-        } else {
+-            // Use dphyp optimization flag or join reorder setting
+-            let skip_join_reorder = opt_ctx.get_flag("dphyp_optimized")
+-                || unsafe { settings.get_disable_join_reorder()? };
+-            get_explore_rule_set(skip_join_reorder)
+-        };
++        // Create a default rule set initially
++        // This is just a placeholder - the actual rule set will be determined at runtime
++        // in the optimize_with_cascade method based on current flag values
++        let explore_rule_set = RuleSet::create();
+ 
+         // Build cost model
+         let cost_model = Box::new(
+@@ -88,11 +84,11 @@ impl CascadesOptimizer {
+     }
+ 
+     #[recursive::recursive]
+-    pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
++    fn optimize_internal(&mut self, s_expr: SExpr) -> Result<SExpr> {
+         let opt_ctx = self.opt_ctx.clone();
+ 
+         // Try to optimize using the internal optimizer
+-        let result = self.optimize_internal(s_expr.clone());
++        let result = self.optimize_with_cascade(s_expr.clone());
+ 
+         // Process different cases based on the result
+         let optimized_expr = match result {
+@@ -127,7 +123,26 @@ impl CascadesOptimizer {
+         Ok(optimized_expr)
+     }
+ 
+-    fn optimize_internal(&mut self, s_expr: SExpr) -> Result<SExpr> {
++    fn optimize_with_cascade(&mut self, s_expr: SExpr) -> Result<SExpr> {
++        // Update rule set based on current flags
++        // This ensures we use the most up-to-date flag values, regardless of when the optimizer was created
++        let table_ctx = self.opt_ctx.get_table_ctx();
++        let settings = table_ctx.get_settings();
++
++        // Determine the appropriate rule set at runtime
++        // This is critical for pipeline execution where optimizers are created before all flags are set
++        if settings.get_enable_cbo()? {
++            // Check if DPhyp has already performed join reordering
++            // The "dphyp_optimized" flag is set by the DPhyp optimizer when it runs
++            // In pipeline execution, this flag will be set before CascadesOptimizer runs
++            let skip_join_reorder = self.opt_ctx.get_flag("dphyp_optimized")
++                || unsafe { settings.get_disable_join_reorder()? };
++
++            // Update the rule set based on current flag values
++            // This replaces the initial placeholder rule set created in the constructor
++            self.explore_rule_set = get_explore_rule_set(skip_join_reorder);
++        }
++
+         self.init(s_expr)?;
+ 
+         debug!("Init memo:\n{}", self.memo.display()?);
+@@ -229,3 +244,18 @@ impl CascadesOptimizer {
+         Ok(result)
+     }
+ }
++
++#[async_trait::async_trait]
++impl Optimizer for CascadesOptimizer {
++    fn name(&self) -> &'static str {
++        "CascadesOptimizer"
++    }
++
++    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++        self.optimize_internal(s_expr.clone())
++    }
++
++    fn memo(&self) -> Option<&Memo> {
++        Some(&self.memo)
++    }
++}
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/hyper_dp/dphyp.rs b/src/query/sql/src/planner/optimizer/optimizers/hyper_dp/dphyp.rs
+index 51d2891824..1eefabe3c3 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/hyper_dp/dphyp.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/hyper_dp/dphyp.rs
+@@ -31,6 +31,7 @@ use crate::optimizer::optimizers::hyper_dp::RelationSetTree;
+ use crate::optimizer::optimizers::rule::RuleFactory;
+ use crate::optimizer::optimizers::rule::RuleID;
+ use crate::optimizer::optimizers::rule::TransformResult;
++use crate::optimizer::Optimizer;
+ use crate::optimizer::OptimizerContext;
+ use crate::planner::QueryExecutor;
+ use crate::plans::Filter;
+@@ -303,7 +304,8 @@ impl DPhpy {
+     // The input plan tree has been optimized by heuristic optimizer
+     // So filters have pushed down join and cross join has been converted to inner join as possible as we can
+     // The output plan will have optimal join order theoretically
+-    pub async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++    async fn optimize_internal(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++        // Check if DPhyp is enabled
+         if !self.opt_ctx.get_enable_dphyp() || !self.opt_ctx.get_enable_join_reorder() {
+             return Ok(s_expr.clone());
+         }
+@@ -852,3 +854,14 @@ impl DPhpy {
+         Ok(s_expr.clone())
+     }
+ }
++
++#[async_trait::async_trait]
++impl Optimizer for DPhpy {
++    fn name(&self) -> &'static str {
++        "DPhyp"
++    }
++
++    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++        self.optimize_internal(s_expr).await
++    }
++}
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/hyper_dp/dynamic_sample/filter_selectivity_sample.rs b/src/query/sql/src/planner/optimizer/optimizers/hyper_dp/dynamic_sample/filter_selectivity_sample.rs
+index ec1761c317..d8e72a9dbc 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/hyper_dp/dynamic_sample/filter_selectivity_sample.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/hyper_dp/dynamic_sample/filter_selectivity_sample.rs
+@@ -31,6 +31,7 @@ use crate::optimizer::ir::SelectivityEstimator;
+ use crate::optimizer::ir::StatInfo;
+ use crate::optimizer::statistics::CollectStatisticsOptimizer;
+ use crate::optimizer::OptimizerContext;
++use crate::planner::optimizer::Optimizer;
+ use crate::planner::QueryExecutor;
+ use crate::plans::Aggregate;
+ use crate::plans::AggregateFunction;
+@@ -71,7 +72,7 @@ pub async fn filter_selectivity_sample(
+             new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
+ 
+             let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
+-            let collect_statistics_optimizer = CollectStatisticsOptimizer::new(opt_ctx);
++            let mut collect_statistics_optimizer = CollectStatisticsOptimizer::new(opt_ctx);
+             new_s_expr = collect_statistics_optimizer.optimize(&new_s_expr).await?;
+         }
+ 
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/aggregate/normalize_aggregate.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/aggregate/normalize_aggregate.rs
+index a3af955df8..582e36bb20 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/aggregate/normalize_aggregate.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/aggregate/normalize_aggregate.rs
+@@ -17,6 +17,8 @@ use std::sync::Arc;
+ use databend_common_exception::Result;
+ 
+ use crate::optimizer::ir::SExpr;
++use crate::optimizer::Optimizer;
++use crate::optimizer::OptimizerContext;
+ use crate::plans::Aggregate;
+ use crate::plans::BoundColumnRef;
+ use crate::plans::EvalScalar;
+@@ -29,15 +31,15 @@ use crate::Visibility;
+ pub struct RuleNormalizeAggregateOptimizer {}
+ 
+ impl RuleNormalizeAggregateOptimizer {
+-    pub fn new() -> Self {
++    pub fn new(_opt_ctx: Arc<OptimizerContext>) -> Self {
+         RuleNormalizeAggregateOptimizer {}
+     }
+ 
+     #[recursive::recursive]
+-    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
++    fn optimize_internal(&self, s_expr: &SExpr) -> Result<SExpr> {
+         let mut children = Vec::with_capacity(s_expr.arity());
+         for child in s_expr.children() {
+-            let child = self.optimize(child)?;
++            let child = self.optimize_internal(child)?;
+             children.push(Arc::new(child));
+         }
+         let s_expr = s_expr.replace_children(children);
+@@ -172,8 +174,13 @@ impl RuleNormalizeAggregateOptimizer {
+     }
+ }
+ 
+-impl Default for RuleNormalizeAggregateOptimizer {
+-    fn default() -> Self {
+-        Self::new()
++#[async_trait::async_trait]
++impl Optimizer for RuleNormalizeAggregateOptimizer {
++    fn name(&self) -> &'static str {
++        "RuleNormalizeAggregateOptimizer"
++    }
++
++    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++        self.optimize_internal(s_expr)
+     }
+ }
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/aggregate/stats_aggregate.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/aggregate/stats_aggregate.rs
+index 4a78dffc61..78aeddc20e 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/aggregate/stats_aggregate.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/aggregate/stats_aggregate.rs
+@@ -19,6 +19,7 @@ use databend_common_exception::Result;
+ use databend_common_expression::types::DataType;
+ 
+ use crate::optimizer::ir::SExpr;
++use crate::optimizer::Optimizer;
+ use crate::optimizer::OptimizerContext;
+ use crate::plans::Aggregate;
+ use crate::plans::AggregateFunction;
+@@ -50,10 +51,10 @@ impl RuleStatsAggregateOptimizer {
+     }
+ 
+     #[async_recursion::async_recursion(#[recursive::recursive])]
+-    pub async fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
++    async fn optimize_internal(&self, s_expr: &SExpr) -> Result<SExpr> {
+         let mut children = Vec::with_capacity(s_expr.arity());
+         for child in s_expr.children() {
+-            let child = self.optimize(child).await?;
++            let child = self.optimize_internal(child).await?;
+             children.push(Arc::new(child));
+         }
+         let s_expr = s_expr.replace_children(children);
+@@ -219,3 +220,14 @@ impl RuleStatsAggregateOptimizer {
+         )
+     }
+ }
++
++#[async_trait::async_trait]
++impl Optimizer for RuleStatsAggregateOptimizer {
++    fn name(&self) -> &'static str {
++        "RuleStatsAggregateOptimizer"
++    }
++
++    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++        self.optimize_internal(s_expr).await
++    }
++}
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/decorrelate.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/decorrelate.rs
+index acc20a6146..9b388e5c15 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/decorrelate.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/decorrelate.rs
+@@ -35,7 +35,7 @@ use crate::optimizer::ir::Matcher;
+ use crate::optimizer::ir::RelExpr;
+ use crate::optimizer::ir::SExpr;
+ use crate::optimizer::optimizers::operator::FlattenInfo;
+-use crate::optimizer::optimizers::operator::SubqueryRewriter;
++use crate::optimizer::optimizers::operator::SubqueryDecorrelationOptimizer;
+ use crate::optimizer::optimizers::operator::UnnestResult;
+ use crate::plans::BoundColumnRef;
+ use crate::plans::CastExpr;
+@@ -53,7 +53,7 @@ use crate::plans::SubqueryExpr;
+ use crate::plans::SubqueryType;
+ use crate::IndexType;
+ 
+-impl SubqueryRewriter {
++impl SubqueryDecorrelationOptimizer {
+     // Try to decorrelate a `CrossApply` into `SemiJoin` or `AntiJoin`.
+     // We only do simple decorrelation here, the scheme is:
+     // 1. If the subquery is correlated, we will try to decorrelate it into `SemiJoin`
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/flatten_plan.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/flatten_plan.rs
+index ff3773a976..25302aa9b3 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/flatten_plan.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/flatten_plan.rs
+@@ -29,7 +29,7 @@ use crate::optimizer::ir::ColumnSet;
+ use crate::optimizer::ir::RelExpr;
+ use crate::optimizer::ir::SExpr;
+ use crate::optimizer::optimizers::operator::FlattenInfo;
+-use crate::optimizer::optimizers::operator::SubqueryRewriter;
++use crate::optimizer::optimizers::operator::SubqueryDecorrelationOptimizer;
+ use crate::plans::Aggregate;
+ use crate::plans::AggregateFunction;
+ use crate::plans::AggregateMode;
+@@ -54,7 +54,7 @@ use crate::ColumnEntry;
+ use crate::IndexType;
+ use crate::Metadata;
+ 
+-impl SubqueryRewriter {
++impl SubqueryDecorrelationOptimizer {
+     #[recursive::recursive]
+     pub fn flatten_plan(
+         &mut self,
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/flatten_scalar.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/flatten_scalar.rs
+index c53f7643d1..22f95db2d4 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/flatten_scalar.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/flatten_scalar.rs
+@@ -17,7 +17,7 @@ use databend_common_exception::Result;
+ 
+ use crate::binder::ColumnBindingBuilder;
+ use crate::optimizer::ir::ColumnSet;
+-use crate::optimizer::optimizers::operator::SubqueryRewriter;
++use crate::optimizer::optimizers::operator::SubqueryDecorrelationOptimizer;
+ use crate::plans::AggregateFunction;
+ use crate::plans::AggregateFunctionScalarSortDesc;
+ use crate::plans::BoundColumnRef;
+@@ -26,7 +26,7 @@ use crate::plans::FunctionCall;
+ use crate::plans::ScalarExpr;
+ use crate::plans::UDFCall;
+ 
+-impl SubqueryRewriter {
++impl SubqueryDecorrelationOptimizer {
+     #[recursive::recursive]
+     pub(crate) fn flatten_scalar(
+         &mut self,
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/mod.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/mod.rs
+index 4b093f2f57..6a5a149974 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/mod.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/mod.rs
+@@ -16,8 +16,8 @@
+ mod decorrelate;
+ mod flatten_plan;
+ mod flatten_scalar;
+-mod subquery_rewriter;
++mod subquery_decorrelation;
+ 
+-pub use subquery_rewriter::FlattenInfo;
+-pub use subquery_rewriter::SubqueryRewriter;
+-pub use subquery_rewriter::UnnestResult;
++pub use subquery_decorrelation::FlattenInfo;
++pub use subquery_decorrelation::SubqueryDecorrelationOptimizer;
++pub use subquery_decorrelation::UnnestResult;
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/subquery_rewriter.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/subquery_decorrelation.rs
+similarity index 85%
+rename from src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/subquery_rewriter.rs
+rename to src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/subquery_decorrelation.rs
+index 247e12c6a5..1f85a7612c 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/subquery_rewriter.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/decorrelate/subquery_decorrelation.rs
+@@ -29,6 +29,7 @@ use crate::binder::wrap_cast;
+ use crate::binder::ColumnBindingBuilder;
+ use crate::binder::Visibility;
+ use crate::optimizer::ir::SExpr;
++use crate::optimizer::Optimizer;
+ use crate::optimizer::OptimizerContext;
+ use crate::plans::Aggregate;
+ use crate::plans::AggregateFunction;
+@@ -69,15 +70,74 @@ pub struct FlattenInfo {
+     pub from_count_func: bool,
+ }
+ 
+-/// Rewrite subquery into `Apply` operator
+-pub struct SubqueryRewriter {
++/// Transforms nested and correlated subqueries into more efficient join operations.
++///
++/// This optimizer handles three main types of subqueries:
++/// 1. Scalar subqueries - Transformed into LeftSingle joins
++/// 2. EXISTS/NOT EXISTS subqueries - Transformed into Cross joins with COUNT aggregation or Semi/Anti joins
++/// 3. ANY subqueries - Transformed into RightMark joins with comparison conditions
++///
++/// The transformation process involves:
++/// - Identifying correlated columns between outer and inner queries
++/// - Flattening the subquery plan by replacing correlated references
++/// - Creating appropriate join conditions based on correlation predicates
++/// - Handling special cases like COUNT aggregations
++/// - Optimizing simple cases into more efficient join types
++///
++/// For example, a correlated EXISTS subquery like:
++///
++/// ```sql
++/// SELECT * FROM customers c
++/// WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)
++/// ```
++///
++/// Is transformed into a semi-join:
++///
++/// ```
++/// LeftSemi Join
++/// ├── Scan: customers
++/// └── Scan: orders
++///     └── Join condition: o.customer_id = c.id
++/// ```
++///
++/// And a scalar subquery with aggregation like:
++///
++/// ```sql
++/// SELECT c.name, (SELECT MAX(o.amount) FROM orders o WHERE o.customer_id = c.id) as max_order
++/// FROM customers c
++/// ```
++///
++/// Is transformed into a LeftSingle join:
++///
++/// ```
++/// Project: c.name, scalar_subquery_X
++/// └── LeftSingle Join
++///     ├── Scan: customers
++///     └── Aggregate: MAX(o.amount) as max_amount
++///         └── Scan: orders
++///             └── Join condition: o.customer_id = c.id
++/// ```
++///
++/// The optimizer also handles special cases like:
++/// - Constant subqueries that can be folded into simple expressions
++/// - COUNT aggregations that need special NULL handling
++/// - IN lists that can be transformed into more efficient forms
++///
++/// This optimization improves query performance by:
++/// 1. Eliminating nested loop evaluation of subqueries
++/// 2. Allowing the query optimizer to consider more efficient join strategies
++/// 3. Enabling better statistics and cost estimation
++/// 4. Reducing the number of query plan operators
++///
++/// The implementation follows the approach described in the paper "Unnesting Arbitrary Queries".
++pub struct SubqueryDecorrelationOptimizer {
+     pub(crate) ctx: Arc<dyn TableContext>,
+     pub(crate) metadata: MetadataRef,
+     pub(crate) derived_columns: HashMap<IndexType, IndexType>,
+     pub(crate) binder: Option<Binder>,
+ }
+ 
+-impl SubqueryRewriter {
++impl SubqueryDecorrelationOptimizer {
+     pub fn new(opt_ctx: Arc<OptimizerContext>, binder: Option<Binder>) -> Self {
+         Self {
+             ctx: opt_ctx.get_table_ctx(),
+@@ -99,7 +159,7 @@ impl SubqueryRewriter {
+     ///
+     /// More information can be found in the paper: Unnesting Arbitrary Queries
+     #[recursive::recursive]
+-    pub fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++    fn optimize_internal(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+         // If there is no subquery, return directly
+         if !s_expr.contain_subquery() {
+             return Ok(s_expr.clone());
+@@ -107,7 +167,7 @@ impl SubqueryRewriter {
+ 
+         match s_expr.plan().clone() {
+             RelOperator::EvalScalar(mut plan) => {
+-                let mut input = self.optimize(s_expr.child(0)?)?;
++                let mut input = self.optimize_internal(s_expr.child(0)?)?;
+ 
+                 for item in plan.items.iter_mut() {
+                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
+@@ -118,7 +178,7 @@ impl SubqueryRewriter {
+                 Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
+             }
+             RelOperator::Filter(mut plan) => {
+-                let mut input = self.optimize(s_expr.child(0)?)?;
++                let mut input = self.optimize_internal(s_expr.child(0)?)?;
+                 for pred in plan.predicates.iter_mut() {
+                     let res = self.try_rewrite_subquery(pred, &input, true)?;
+                     input = res.1;
+@@ -128,7 +188,7 @@ impl SubqueryRewriter {
+                 Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
+             }
+             RelOperator::ProjectSet(mut plan) => {
+-                let mut input = self.optimize(s_expr.child(0)?)?;
++                let mut input = self.optimize_internal(s_expr.child(0)?)?;
+                 for item in plan.srfs.iter_mut() {
+                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
+                     input = res.1;
+@@ -138,7 +198,7 @@ impl SubqueryRewriter {
+                 Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
+             }
+             RelOperator::Aggregate(mut plan) => {
+-                let mut input = self.optimize(s_expr.child(0)?)?;
++                let mut input = self.optimize_internal(s_expr.child(0)?)?;
+ 
+                 for item in plan.group_items.iter_mut() {
+                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
+@@ -156,7 +216,7 @@ impl SubqueryRewriter {
+             }
+ 
+             RelOperator::Window(mut plan) => {
+-                let mut input = self.optimize(s_expr.child(0)?)?;
++                let mut input = self.optimize_internal(s_expr.child(0)?)?;
+ 
+                 for item in plan.partition_by.iter_mut() {
+                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
+@@ -183,7 +243,7 @@ impl SubqueryRewriter {
+             }
+ 
+             RelOperator::Sort(mut sort) => {
+-                let mut input = self.optimize(s_expr.child(0)?)?;
++                let mut input = self.optimize_internal(s_expr.child(0)?)?;
+ 
+                 if let Some(window) = &mut sort.window_partition {
+                     for item in window.partition_by.iter_mut() {
+@@ -198,14 +258,14 @@ impl SubqueryRewriter {
+ 
+             RelOperator::Join(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
+                 Arc::new(s_expr.plan().clone()),
+-                Arc::new(self.optimize(s_expr.child(0)?)?),
+-                Arc::new(self.optimize(s_expr.child(1)?)?),
++                Arc::new(self.optimize_internal(s_expr.child(0)?)?),
++                Arc::new(self.optimize_internal(s_expr.child(1)?)?),
+             )),
+ 
+             RelOperator::Limit(_) | RelOperator::Udf(_) | RelOperator::AsyncFunction(_) => {
+                 Ok(SExpr::create_unary(
+                     Arc::new(s_expr.plan().clone()),
+-                    Arc::new(self.optimize(s_expr.child(0)?)?),
++                    Arc::new(self.optimize_internal(s_expr.child(0)?)?),
+                 ))
+             }
+ 
+@@ -273,7 +333,7 @@ impl SubqueryRewriter {
+             ScalarExpr::SubqueryExpr(subquery) => {
+                 // Rewrite subquery recursively
+                 let mut subquery = subquery.clone();
+-                subquery.subquery = Box::new(self.optimize(&subquery.subquery)?);
++                subquery.subquery = Box::new(self.optimize_internal(&subquery.subquery)?);
+ 
+                 if let Some(constant_subquery) = self.try_fold_constant_subquery(&subquery)? {
+                     return Ok((constant_subquery, s_expr.clone()));
+@@ -643,7 +703,7 @@ impl SubqueryRewriter {
+                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
+                 let op = *subquery.compare_op.as_ref().unwrap();
+                 let (right_condition, is_non_equi_condition) =
+-                    check_child_expr_in_subquery(&child_expr, &op)?;
++                    Self::check_child_expr_in_subquery(&child_expr, &op)?;
+                 let (left_conditions, right_conditions, non_equi_conditions) =
+                     if !is_non_equi_condition {
+                         (vec![left_condition], vec![right_condition], vec![])
+@@ -699,29 +759,45 @@ impl SubqueryRewriter {
+             _ => unreachable!(),
+         }
+     }
+-}
+ 
+-pub fn check_child_expr_in_subquery(
+-    child_expr: &ScalarExpr,
+-    op: &ComparisonOp,
+-) -> Result<(ScalarExpr, bool)> {
+-    match child_expr {
+-        ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
+-        ScalarExpr::FunctionCall(func) => {
+-            for arg in &func.arguments {
+-                let _ = check_child_expr_in_subquery(arg, op)?;
++    fn check_child_expr_in_subquery(
++        child_expr: &ScalarExpr,
++        op: &ComparisonOp,
++    ) -> Result<(ScalarExpr, bool)> {
++        match child_expr {
++            ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
++            ScalarExpr::FunctionCall(func) => {
++                for arg in &func.arguments {
++                    // Call the static method directly
++                    let _ = Self::check_child_expr_in_subquery(arg, op)?;
++                }
++                Ok((child_expr.clone(), op != &ComparisonOp::Equal))
+             }
+-            Ok((child_expr.clone(), op != &ComparisonOp::Equal))
+-        }
+-        ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
+-        ScalarExpr::CastExpr(cast) => {
+-            let arg = &cast.argument;
+-            let (_, is_non_equi_condition) = check_child_expr_in_subquery(arg, op)?;
+-            Ok((child_expr.clone(), is_non_equi_condition))
++            ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
++            ScalarExpr::CastExpr(cast) => {
++                let arg = &cast.argument;
++                // Call the static method directly
++                let (_, is_non_equi_condition) = Self::check_child_expr_in_subquery(arg, op)?;
++                Ok((child_expr.clone(), is_non_equi_condition))
++            }
++            other => Err(ErrorCode::Internal(format!(
++                "Invalid child expr in subquery: {:?}",
++                other
++            ))),
+         }
+-        other => Err(ErrorCode::Internal(format!(
+-            "Invalid child expr in subquery: {:?}",
+-            other
+-        ))),
++    }
++}
++
++#[async_trait::async_trait]
++impl Optimizer for SubqueryDecorrelationOptimizer {
++    /// Returns the name of this optimizer
++    fn name(&self) -> &'static str {
++        "SubqueryRewriter"
++    }
++
++    /// Optimize the expression by rewriting subqueries
++    async fn optimize(&mut self, expr: &SExpr) -> Result<SExpr> {
++        // Call the internal implementation
++        self.optimize_internal(expr)
+     }
+ }
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/filter/deduplicate_join_condition.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/filter/deduplicate_join_condition.rs
+index c16c13ab69..a45d95a0f9 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/filter/deduplicate_join_condition.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/filter/deduplicate_join_condition.rs
+@@ -18,6 +18,7 @@ use std::sync::Arc;
+ use databend_common_exception::Result;
+ 
+ use crate::optimizer::ir::SExpr;
++use crate::optimizer::Optimizer;
+ use crate::plans::Join;
+ use crate::plans::JoinType;
+ use crate::plans::RelOperator;
+@@ -98,12 +99,12 @@ impl DeduplicateJoinConditionOptimizer {
+         }
+     }
+ 
+-    pub fn optimize(mut self, s_expr: &SExpr) -> Result<SExpr> {
++    fn optimize_internal(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+         self.deduplicate(s_expr)
+     }
+ 
+     #[recursive::recursive]
+-    pub fn deduplicate(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++    fn deduplicate(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+         match s_expr.plan.as_ref() {
+             // Only optimize inner joins
+             RelOperator::Join(join) if join.join_type == JoinType::Inner => {
+@@ -233,3 +234,14 @@ impl DeduplicateJoinConditionOptimizer {
+         self.column_group.insert(idx2, idx1);
+     }
+ }
++
++#[async_trait::async_trait]
++impl Optimizer for DeduplicateJoinConditionOptimizer {
++    fn name(&self) -> &'static str {
++        "DeduplicateJoinConditionOptimizer"
++    }
++
++    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++        self.optimize_internal(s_expr)
++    }
++}
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/filter/pull_up_filter.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/filter/pull_up_filter.rs
+index d63c28dc12..1ef1bb97d4 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/filter/pull_up_filter.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/filter/pull_up_filter.rs
+@@ -20,6 +20,7 @@ use crate::binder::split_conjunctions;
+ use crate::optimizer::ir::SExpr;
+ use crate::optimizer::optimizers::operator::InferFilterOptimizer;
+ use crate::optimizer::optimizers::operator::NormalizeDisjunctiveFilterOptimizer;
++use crate::optimizer::Optimizer;
+ use crate::optimizer::OptimizerContext;
+ use crate::plans::EvalScalar;
+ use crate::plans::Filter;
+@@ -50,17 +51,17 @@ impl PullUpFilterOptimizer {
+     }
+ 
+     #[recursive::recursive]
+-    pub fn optimize(mut self, s_expr: &SExpr) -> Result<SExpr> {
++    pub fn optimize_internal(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+         let mut s_expr = self.pull_up(s_expr)?;
+         s_expr = self.finish(s_expr)?;
+         Ok(s_expr)
+     }
+ 
+-    pub fn finish(self, s_expr: SExpr) -> Result<SExpr> {
++    pub fn finish(&mut self, s_expr: SExpr) -> Result<SExpr> {
+         if self.predicates.is_empty() {
+             Ok(s_expr)
+         } else {
+-            let predicates = InferFilterOptimizer::new(None).optimize(self.predicates)?;
++            let predicates = InferFilterOptimizer::new(None).optimize(self.predicates.clone())?;
+             let predicates = NormalizeDisjunctiveFilterOptimizer::new().optimize(predicates)?;
+             let filter = Filter { predicates };
+             Ok(SExpr::create_unary(
+@@ -157,7 +158,8 @@ impl PullUpFilterOptimizer {
+     pub fn pull_up_others(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+         let mut children = Vec::with_capacity(s_expr.arity());
+         for child in s_expr.children() {
+-            let child = PullUpFilterOptimizer::new(self.opt_ctx.clone()).optimize(child)?;
++            let child =
++                PullUpFilterOptimizer::new(self.opt_ctx.clone()).optimize_internal(child)?;
+             children.push(Arc::new(child));
+         }
+         Ok(s_expr.replace_children(children))
+@@ -253,3 +255,14 @@ impl PullUpFilterOptimizer {
+         Ok(())
+     }
+ }
++
++#[async_trait::async_trait]
++impl Optimizer for PullUpFilterOptimizer {
++    fn name(&self) -> &'static str {
++        "PullUpFilterOptimizer"
++    }
++
++    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++        self.optimize_internal(s_expr)
++    }
++}
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/join/single_to_inner.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/join/single_to_inner.rs
+index 33ee0ab816..2169089a55 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/join/single_to_inner.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/join/single_to_inner.rs
+@@ -17,6 +17,7 @@ use std::sync::Arc;
+ use databend_common_exception::Result;
+ 
+ use crate::optimizer::ir::SExpr;
++use crate::optimizer::Optimizer;
+ use crate::plans::JoinType;
+ use crate::plans::RelOperator;
+ 
+@@ -28,7 +29,7 @@ impl SingleToInnerOptimizer {
+         SingleToInnerOptimizer {}
+     }
+ 
+-    pub fn optimize(self, s_expr: &SExpr) -> Result<SExpr> {
++    fn optimize_internal(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+         Self::single_to_inner(s_expr)
+     }
+ 
+@@ -65,3 +66,14 @@ impl Default for SingleToInnerOptimizer {
+         Self::new()
+     }
+ }
++
++#[async_trait::async_trait]
++impl Optimizer for SingleToInnerOptimizer {
++    fn name(&self) -> &'static str {
++        "SingleToInnerOptimizer"
++    }
++
++    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++        self.optimize_internal(s_expr)
++    }
++}
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/operator/mod.rs b/src/query/sql/src/planner/optimizer/optimizers/operator/mod.rs
+index 7ec7a3fa88..548ca89a0e 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/operator/mod.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/operator/mod.rs
+@@ -20,7 +20,7 @@ mod join;
+ pub use aggregate::RuleNormalizeAggregateOptimizer;
+ pub use aggregate::RuleStatsAggregateOptimizer;
+ pub use decorrelate::FlattenInfo;
+-pub use decorrelate::SubqueryRewriter;
++pub use decorrelate::SubqueryDecorrelationOptimizer;
+ pub use decorrelate::UnnestResult;
+ pub use filter::DeduplicateJoinConditionOptimizer;
+ pub use filter::InferFilterOptimizer;
+diff --git a/src/query/sql/src/planner/optimizer/optimizers/recursive/recursive.rs b/src/query/sql/src/planner/optimizer/optimizers/recursive/recursive.rs
+index 502238855d..5034ab468b 100644
+--- a/src/query/sql/src/planner/optimizer/optimizers/recursive/recursive.rs
++++ b/src/query/sql/src/planner/optimizer/optimizers/recursive/recursive.rs
+@@ -20,6 +20,7 @@ use crate::optimizer::ir::SExpr;
+ use crate::optimizer::optimizers::rule::RuleFactory;
+ use crate::optimizer::optimizers::rule::RuleID;
+ use crate::optimizer::optimizers::rule::TransformResult;
++use crate::optimizer::Optimizer;
+ use crate::optimizer::OptimizerContext;
+ 
+ /// A recursive optimizer that will apply the given rules recursively.
+@@ -37,7 +38,7 @@ impl RecursiveOptimizer {
+ 
+     /// Run the optimizer on the given expression.
+     #[recursive::recursive]
+-    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
++    fn optimize_internal(&self, s_expr: &SExpr) -> Result<SExpr> {
+         self.optimize_expression(s_expr)
+     }
+ 
+@@ -46,7 +47,7 @@ impl RecursiveOptimizer {
+         let mut optimized_children = Vec::with_capacity(s_expr.arity());
+         let mut children_changed = false;
+         for expr in s_expr.children() {
+-            let optimized_child = self.optimize(expr)?;
++            let optimized_child = self.optimize_internal(expr)?;
+             if !optimized_child.eq(expr) {
+                 children_changed = true;
+             }
+@@ -87,3 +88,14 @@ impl RecursiveOptimizer {
+         Ok(s_expr.clone())
+     }
+ }
++
++#[async_trait::async_trait]
++impl Optimizer for RecursiveOptimizer {
++    fn name(&self) -> &'static str {
++        "RecursiveOptimizer"
++    }
++
++    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++        self.optimize_internal(s_expr)
++    }
++}
+diff --git a/src/query/sql/src/planner/optimizer/util.rs b/src/query/sql/src/planner/optimizer/pipeline/common.rs
+similarity index 100%
+rename from src/query/sql/src/planner/optimizer/util.rs
+rename to src/query/sql/src/planner/optimizer/pipeline/common.rs
+diff --git a/src/query/sql/src/planner/optimizer/pipeline/mod.rs b/src/query/sql/src/planner/optimizer/pipeline/mod.rs
+new file mode 100644
+index 0000000000..196591f414
+--- /dev/null
++++ b/src/query/sql/src/planner/optimizer/pipeline/mod.rs
+@@ -0,0 +1,19 @@
++// Copyright 2021 Datafuse Labs
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++mod common;
++#[allow(clippy::module_inception)]
++mod pipeline;
++
++pub use pipeline::OptimizerPipeline;
+diff --git a/src/query/sql/src/planner/optimizer/pipeline/pipeline.rs b/src/query/sql/src/planner/optimizer/pipeline/pipeline.rs
+new file mode 100644
+index 0000000000..997d29c8e5
+--- /dev/null
++++ b/src/query/sql/src/planner/optimizer/pipeline/pipeline.rs
+@@ -0,0 +1,118 @@
++// Copyright 2021 Datafuse Labs
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++use std::sync::Arc;
++
++use databend_common_exception::Result;
++use log::debug;
++use log::info;
++
++use super::common::contains_local_table_scan;
++use super::common::contains_warehouse_table_scan;
++use crate::optimizer::ir::Memo;
++use crate::optimizer::ir::SExpr;
++use crate::optimizer::Optimizer;
++use crate::optimizer::OptimizerContext;
++
++/// A pipeline of optimizers that are executed in sequence.
++pub struct OptimizerPipeline {
++    /// The optimizer context
++    opt_ctx: Arc<OptimizerContext>,
++    /// The sequence of optimizers to be applied
++    optimizers: Vec<Box<dyn Optimizer>>,
++    /// The memo captured during optimization (if any)
++    memo: Option<Memo>,
++}
++
++impl OptimizerPipeline {
++    /// Create a new optimizer pipeline
++    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
++        Self {
++            opt_ctx,
++            optimizers: Vec::new(),
++            memo: None,
++        }
++    }
++
++    /// Add an optimizer to the pipeline
++    #[allow(clippy::should_implement_trait)]
++    pub fn add<T: Optimizer + 'static>(mut self, optimizer: T) -> Self {
++        self.optimizers.push(Box::new(optimizer));
++        self
++    }
++
++    /// Add an optimizer to the pipeline conditionally
++    pub fn add_if<T: Optimizer + 'static>(self, condition: bool, optimizer: T) -> Self {
++        if condition {
++            self.add(optimizer)
++        } else {
++            self
++        }
++    }
++
++    /// Configure distributed optimization based on table types
++    async fn configure_distributed_optimization(&self, s_expr: &SExpr) -> Result<()> {
++        let metadata = self.opt_ctx.get_metadata();
++
++        if contains_local_table_scan(s_expr, &metadata) {
++            self.opt_ctx.set_enable_distributed_optimization(false);
++            info!("Disable distributed optimization due to local table scan.");
++        } else if contains_warehouse_table_scan(s_expr, &metadata) {
++            let warehouse = self.opt_ctx.get_table_ctx().get_warehouse_cluster().await?;
++
++            if !warehouse.is_empty() {
++                self.opt_ctx.set_enable_distributed_optimization(true);
++                info!("Enable distributed optimization due to warehouse table scan.");
++            }
++        }
++
++        Ok(())
++    }
++
++    /// Execute the pipeline on the given expression
++    pub async fn execute(&mut self, expr: SExpr) -> Result<SExpr> {
++        // Configure distributed optimization first
++        self.configure_distributed_optimization(&expr).await?;
++
++        // Then apply all optimizers in sequence
++        let mut current_expr = expr;
++        for optimizer in &mut self.optimizers {
++            let optimizer_name = optimizer.name();
++            debug!("Applying optimizer: {}", optimizer_name);
++
++            current_expr = optimizer.optimize(&current_expr).await?;
++            if let Some(memo) = optimizer.memo() {
++                self.memo = Some(memo.clone());
++            }
++
++            debug!("Optimizer {} completed", optimizer_name);
++        }
++
++        Ok(current_expr)
++    }
++
++    /// Get the memo captured during optimization
++    ///
++    /// If no memo was captured during optimization, an empty memo is created and returned.
++    /// This ensures the method always returns a valid Memo.
++    pub fn memo(&self) -> Memo {
++        match &self.memo {
++            Some(memo) => memo.clone(),
++            None => {
++                // Create and return an empty memo
++                Memo::create()
++            }
++        }
++    }
++}
+diff --git a/src/query/sql/src/planner/optimizer/statistics/collect_statistics.rs b/src/query/sql/src/planner/optimizer/statistics/collect_statistics.rs
+index a572b6e22e..f3e75942d9 100644
+--- a/src/query/sql/src/planner/optimizer/statistics/collect_statistics.rs
++++ b/src/query/sql/src/planner/optimizer/statistics/collect_statistics.rs
+@@ -23,6 +23,7 @@ use databend_common_expression::ColumnId;
+ use databend_common_expression::Scalar;
+ 
+ use crate::optimizer::ir::SExpr;
++use crate::optimizer::Optimizer;
+ use crate::optimizer::OptimizerContext;
+ use crate::plans::ConstantExpr;
+ use crate::plans::Filter;
+@@ -48,10 +49,6 @@ impl CollectStatisticsOptimizer {
+         }
+     }
+ 
+-    pub async fn optimize(mut self, s_expr: &SExpr) -> Result<SExpr> {
+-        self.collect(s_expr).await
+-    }
+-
+     #[async_recursion::async_recursion(#[recursive::recursive])]
+     pub async fn collect(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+         match s_expr.plan.as_ref() {
+@@ -152,3 +149,14 @@ impl CollectStatisticsOptimizer {
+         }
+     }
+ }
++
++#[async_trait::async_trait]
++impl Optimizer for CollectStatisticsOptimizer {
++    fn name(&self) -> &'static str {
++        "CollectStatisticsOptimizer"
++    }
++
++    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
++        self.collect(s_expr).await
++    }
++}
+diff --git a/src/query/sql/tests/optimizer/filter/deduplicate_join_condition_test.rs b/src/query/sql/tests/optimizer/filter/deduplicate_join_condition_test.rs
+index 07d683dea6..56129c4b5f 100644
+--- a/src/query/sql/tests/optimizer/filter/deduplicate_join_condition_test.rs
++++ b/src/query/sql/tests/optimizer/filter/deduplicate_join_condition_test.rs
+@@ -20,6 +20,7 @@ use databend_common_expression::types::DataType;
+ use databend_common_expression::types::NumberDataType;
+ use databend_common_sql::optimizer::ir::SExpr;
+ use databend_common_sql::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
++use databend_common_sql::optimizer::Optimizer;
+ use databend_common_sql::planner::binder::ColumnBinding;
+ use databend_common_sql::planner::binder::Visibility;
+ use databend_common_sql::planner::plans::BoundColumnRef;
+@@ -92,9 +93,9 @@ fn create_join_condition(
+ }
+ 
+ /// Runs the DeduplicateJoinConditionOptimizer on the given SExpr
+-fn run_optimizer(s_expr: SExpr) -> Result<SExpr> {
+-    let optimizer = DeduplicateJoinConditionOptimizer::new();
+-    optimizer.optimize(&s_expr)
++async fn run_optimizer(s_expr: SExpr) -> Result<SExpr> {
++    let mut optimizer = DeduplicateJoinConditionOptimizer::new();
++    optimizer.optimize(&s_expr).await
+ }
+ 
+ /// Converts an SExpr to a readable string representation using a simple indented format
+@@ -269,8 +270,9 @@ fn compare_trees(
+ //
+ // Optimization: Removes redundant join condition (t2.id = t3.id or t1.id = t3.id) since one can be
+ // inferred from the transitive relationship t1.id = t2.id AND t1.id = t3.id (or t1.id = t2.id AND t2.id = t3.id)
+-#[test]
+-fn test_basic_deduplication() -> Result<()> {
++
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_basic_deduplication() -> Result<()> {
+     // Create column references for t1.id, t2.id, and t3.id
+     let t1_id = create_column_ref1(
+         0,
+@@ -343,7 +345,7 @@ Join [t2.id = t3.id]
+     ];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join_tree.clone())?;
++    let optimized = run_optimizer(join_tree.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+@@ -355,8 +357,8 @@ Join [t2.id = t3.id]
+ // For example: SELECT * FROM t1, t2, t3 WHERE t1.id = t2.id AND t2.id = t3.id AND t1.id = t3.id
+ // where t1.id is INT32, t2.id is INT64, and t3.id is FLOAT64
+ // This tests if the optimizer correctly handles join conditions with different data types
+-#[test]
+-fn test_different_data_types() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_different_data_types() -> Result<()> {
+     // Create column references with different data types
+     let t1_id = create_column_ref1(
+         0,
+@@ -429,7 +431,7 @@ fn test_different_data_types() -> Result<()> {
+     ];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join_tree.clone())?;
++    let optimized = run_optimizer(join_tree.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+@@ -451,8 +453,8 @@ fn test_different_data_types() -> Result<()> {
+ //   t1  t2
+ //
+ // Optimization: No change since the conditions are on different columns and not redundant
+-#[test]
+-fn test_no_redundant_conditions() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_no_redundant_conditions() -> Result<()> {
+     // Create column references for different columns
+     let t1_id = create_column_ref1(
+         0,
+@@ -503,7 +505,7 @@ Join [t1.id = t2.id, t1.name = t2.name]
+     ];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join.clone())?;
++    let optimized = run_optimizer(join.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join, &optimized, &before_patterns, &after_patterns)?;
+@@ -541,8 +543,8 @@ Join [t1.id = t2.id, t1.name = t2.name]
+ //
+ // Optimization: Removes 5 redundant join conditions, keeping only the minimum spanning tree
+ // of join conditions (t1.id = t2.id, t2.id = t3.id, t3.id = t4.id)
+-#[test]
+-fn test_complex_transitive_conditions() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_complex_transitive_conditions() -> Result<()> {
+     // Create column references for multiple tables
+     let t1_id = create_column_ref1(
+         0,
+@@ -631,7 +633,7 @@ Join [t3.id = t4.id]
+     ];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join_tree.clone())?;
++    let optimized = run_optimizer(join_tree.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+@@ -661,8 +663,8 @@ Join [t3.id = t4.id]
+ //
+ // Optimization: Removes redundant IS NOT DISTINCT FROM condition (t1.id IS NOT DISTINCT FROM t3.id)
+ // since it can be inferred from the transitive relationship
+-#[test]
+-fn test_null_equal_conditions() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_null_equal_conditions() -> Result<()> {
+     // Create column references
+     let t1_id = create_column_ref1(
+         0,
+@@ -730,7 +732,7 @@ Join [t2.id IS NOT DISTINCT FROM t3.id]
+     ];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join_tree.clone())?;
++    let optimized = run_optimizer(join_tree.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+@@ -759,8 +761,8 @@ Join [t2.id IS NOT DISTINCT FROM t3.id]
+ // t1  t2
+ //
+ // Optimization: Removes redundant condition with mixed IS NOT DISTINCT FROM and equality operators
+-#[test]
+-fn test_mixed_null_equal_conditions() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_mixed_null_equal_conditions() -> Result<()> {
+     // Create column references
+     let t1_id = create_column_ref1(
+         0,
+@@ -828,7 +830,7 @@ Join [t2.id = t3.id]
+     ];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join_tree.clone())?;
++    let optimized = run_optimizer(join_tree.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+@@ -857,8 +859,8 @@ Join [t2.id = t3.id]
+ // t1  t2
+ //
+ // Optimization: No change for non-inner joins since removing conditions could change semantics
+-#[test]
+-fn test_non_inner_join_types() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_non_inner_join_types() -> Result<()> {
+     // Create column references
+     let t1_id = create_column_ref1(
+         0,
+@@ -921,7 +923,7 @@ Join [t2.id = t3.id, t1.id = t3.id]
+     ];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join_tree.clone())?;
++    let optimized = run_optimizer(join_tree.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+@@ -942,8 +944,8 @@ Join [t2.id = t3.id, t1.id = t3.id]
+ //
+ // Optimization: Removes duplicate join condition (t1.id = t2.id appears twice),
+ // but keeps the non-duplicate condition (t1.name = t2.name).
+-#[test]
+-fn test_multiple_conditions_same_tables() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_multiple_conditions_same_tables() -> Result<()> {
+     // Create column references for different columns
+     let t1_id = create_column_ref1(
+         0,
+@@ -1006,7 +1008,7 @@ fn test_multiple_conditions_same_tables() -> Result<()> {
+     "#];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join_tree.clone())?;
++    let optimized = run_optimizer(join_tree.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+@@ -1028,8 +1030,8 @@ fn test_multiple_conditions_same_tables() -> Result<()> {
+ //   t1  t2
+ //
+ // Optimization: No change since there are no conditions to deduplicate
+-#[test]
+-fn test_empty_conditions() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_empty_conditions() -> Result<()> {
+     // Create table scans
+     let t1 = create_table_scan(0, "t1");
+     let t2 = create_table_scan(1, "t2");
+@@ -1058,7 +1060,7 @@ Join []
+     ];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join.clone())?;
++    let optimized = run_optimizer(join.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join, &optimized, &before_patterns, &after_patterns)?;
+@@ -1080,8 +1082,8 @@ Join []
+ //   t1  t2
+ //
+ // Optimization: Removes duplicate identical join condition
+-#[test]
+-fn test_duplicate_identical_conditions() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_duplicate_identical_conditions() -> Result<()> {
+     // Create column references
+     let t1_id = create_column_ref1(
+         0,
+@@ -1130,7 +1132,7 @@ Join [t1.id = t2.id]
+     ];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join.clone())?;
++    let optimized = run_optimizer(join.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join, &optimized, &before_patterns, &after_patterns)?;
+@@ -1160,8 +1162,8 @@ Join [t1.id = t2.id]
+ //
+ // Optimization: Removes redundant condition (t3.id = t1.id) that creates a circular dependency
+ // since it can be inferred from the transitive relationship
+-#[test]
+-fn test_commutative_and_circular_conditions() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_commutative_and_circular_conditions() -> Result<()> {
+     // Create column references
+     let t1_id = create_column_ref1(
+         0,
+@@ -1224,7 +1226,7 @@ Join [t2.id = t3.id]
+ "#];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join_tree.clone())?;
++    let optimized = run_optimizer(join_tree.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+@@ -1269,8 +1271,8 @@ Join [t2.id = t3.id]
+ //
+ // Optimization: Removes redundant condition (t1.id = t5.id) in a deeply nested join tree
+ // since it can be inferred from the chain of transitive relationships
+-#[test]
+-fn test_deep_nested_join_tree() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_deep_nested_join_tree() -> Result<()> {
+     // Create column references for 5 tables
+     let t1_id = create_column_ref1(
+         0,
+@@ -1360,7 +1362,7 @@ Join [t4.id = t5.id]
+ "#];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join_tree.clone())?;
++    let optimized = run_optimizer(join_tree.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+@@ -1390,8 +1392,8 @@ Join [t4.id = t5.id]
+ //
+ // Optimization: No change in the LEFT JOIN conditions since removing conditions from
+ // non-inner joins could change semantics, but inner join conditions are optimized
+-#[test]
+-fn test_mixed_join_types() -> Result<()> {
++#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
++async fn test_mixed_join_types() -> Result<()> {
+     // Create column references
+     let t1_id = create_column_ref1(
+         0,
+@@ -1454,7 +1456,7 @@ Join [t2.id = t3.id, t1.id = t3.id]
+     ];
+ 
+     // Run the optimizer
+-    let optimized = run_optimizer(join_tree.clone())?;
++    let optimized = run_optimizer(join_tree.clone()).await?;
+ 
+     // Compare trees before and after optimization
+     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;

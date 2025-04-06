@@ -245,8 +245,12 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 }
 
 /// Build a standard optimization pipeline with all optimizers
-fn build_standard_pipeline(opt_ctx: Arc<OptimizerContext>) -> Result<OptimizerPipeline> {
-    Ok(OptimizerPipeline::new(opt_ctx.clone())
+async fn build_standard_pipeline(
+    opt_ctx: Arc<OptimizerContext>,
+    s_expr: SExpr,
+) -> Result<OptimizerPipeline> {
+    let pipeline = OptimizerPipeline::new(opt_ctx.clone(), s_expr).await?;
+    Ok(pipeline
         // 1. Eliminate correlated subqueries
         .add(SubqueryDecorrelationOptimizer::new(opt_ctx.clone(), None))
         // 2. Apply statistics aggregation to gather and propagate statistics
@@ -286,16 +290,15 @@ fn build_standard_pipeline(opt_ctx: Arc<OptimizerContext>) -> Result<OptimizerPi
 }
 
 pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<SExpr> {
-    let mut pipeline = build_standard_pipeline(opt_ctx)?;
-    // Execute the pipeline
-    let optimized = pipeline.execute(s_expr).await?;
+    let mut pipeline = build_standard_pipeline(opt_ctx.clone(), s_expr).await?;
+    let optimized = pipeline.execute().await?;
     Ok(optimized)
 }
 
 async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Memo> {
-    let mut pipeline = build_standard_pipeline(opt_ctx)?;
+    let mut pipeline = build_standard_pipeline(opt_ctx.clone(), s_expr).await?;
     // Execute the pipeline
-    let _optimized = pipeline.execute(s_expr).await?;
+    let _optimized = pipeline.execute().await?;
     Ok(pipeline.memo())
 }
 

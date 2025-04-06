@@ -33,16 +33,24 @@ pub struct OptimizerPipeline {
     optimizers: Vec<Box<dyn Optimizer>>,
     /// The memo captured during optimization (if any)
     memo: Option<Memo>,
+
+    s_expr: SExpr,
 }
 
 impl OptimizerPipeline {
     /// Create a new optimizer pipeline
-    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
-        Self {
+    pub async fn new(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Self> {
+        let pipeline = Self {
             opt_ctx,
             optimizers: Vec::new(),
             memo: None,
-        }
+            s_expr,
+        };
+
+        pipeline
+            .configure_distributed_optimization(&pipeline.s_expr)
+            .await?;
+        Ok(pipeline)
     }
 
     /// Add an optimizer to the pipeline
@@ -81,12 +89,9 @@ impl OptimizerPipeline {
     }
 
     /// Execute the pipeline on the given expression
-    pub async fn execute(&mut self, expr: SExpr) -> Result<SExpr> {
-        // Configure distributed optimization first
-        self.configure_distributed_optimization(&expr).await?;
-
+    pub async fn execute(&mut self) -> Result<SExpr> {
         // Then apply all optimizers in sequence
-        let mut current_expr = expr;
+        let mut current_expr = self.s_expr.clone();
         for optimizer in &mut self.optimizers {
             let optimizer_name = optimizer.name();
             debug!("Applying optimizer: {}", optimizer_name);
