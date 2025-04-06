@@ -41,6 +41,8 @@ pub struct TransformFinalAggregate {
     has_output: bool,
 
     working_partition: isize,
+    recv_final: usize,
+    init: bool,
 }
 
 impl AccumulatingTransform for TransformFinalAggregate {
@@ -63,11 +65,21 @@ impl AccumulatingTransform for TransformFinalAggregate {
 
         match aggregate_meta {
             AggregateMeta::SpilledPayload(_) => unreachable!(),
-            AggregateMeta::FinalPartition => {}
+            AggregateMeta::FinalPartition => {
+                self.recv_final += 1;
+            }
             AggregateMeta::InFlightPayload(payload) => {
+                debug_assert!(payload.partition >= self.working_partition);
                 debug_assert_eq!(payload.max_partition, payload.global_max_partition);
 
                 if self.working_partition != payload.partition {
+                    assert!(
+                        !self.init || self.recv_final > 0,
+                        "payload partition: {}, working partition: {}",
+                        payload.partition,
+                        self.working_partition
+                    );
+                    self.recv_final = 0;
                     if self.hash_table.len() != 0 {
                         flush_blocks = self.flush_result_blocks()?;
                     }
@@ -75,6 +87,7 @@ impl AccumulatingTransform for TransformFinalAggregate {
                     self.working_partition = payload.partition;
                 }
 
+                self.init = true;
                 if !data.is_empty() {
                     let payload = self.deserialize_flight(data)?;
 
@@ -83,9 +96,17 @@ impl AccumulatingTransform for TransformFinalAggregate {
                 }
             }
             AggregateMeta::AggregatePayload(payload) => {
+                debug_assert!(payload.partition >= self.working_partition);
                 debug_assert_eq!(payload.max_partition, payload.global_max_partition);
 
                 if self.working_partition != payload.partition {
+                    assert!(
+                        !self.init || self.recv_final > 0,
+                        "payload partition: {}, working partition: {}",
+                        payload.partition,
+                        self.working_partition
+                    );
+                    self.recv_final = 0;
                     if self.hash_table.len() != 0 {
                         flush_blocks = self.flush_result_blocks()?;
                     }
@@ -93,6 +114,7 @@ impl AccumulatingTransform for TransformFinalAggregate {
                     self.working_partition = payload.partition;
                 }
 
+                self.init = true;
                 if payload.payload.len() != 0 {
                     self.hash_table
                         .combine_payload(&payload.payload, &mut self.flush_state)?;
@@ -144,6 +166,8 @@ impl TransformFinalAggregate {
                 flush_state: PayloadFlushState::default(),
                 has_output: false,
                 working_partition: 0,
+                recv_final: 0,
+                init: false,
             },
         ))
     }
