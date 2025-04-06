@@ -454,10 +454,6 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
             if !self.output.can_push() {
                 return Ok(Event::NeedConsume);
             }
-
-            // if self.waiting_inputs.is_empty() {
-            //     return Ok(Event::NeedData);
-            // }
         }
 
         if !self.initialize && self.waiting_inputs.is_empty() {
@@ -491,6 +487,16 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
             let idx = self.waiting_inputs.pop_front().unwrap();
             self.output.push_data(self.inputs[idx].pull_data().unwrap());
             self.inputs_status[idx] = PortStatus::Idle;
+
+            if self.inputs[idx].is_finished() {
+                if self.inputs_status[idx] != PortStatus::Finished {
+                    self.finished_inputs += 1;
+                    self.inputs_status[idx] = PortStatus::Finished;
+                }
+
+                continue;
+            }
+
             self.inputs[idx].set_need_data();
         }
 
