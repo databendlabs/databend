@@ -2,49 +2,43 @@
 
 set -e
 
+function check_query_log() {
+  local count=$1
+  local query_id=$2
+  local check_query=$3
+  local expected_result=$4
+
+  response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
+    -H 'Content-Type: application/json' \
+    -d "{\"sql\": \"$check_query query_id = '$query_id'\"}")
+
+  result=$(echo $response | jq -r '.data[0][0]')
+  if [ "$result" != "$expected_result" ]; then
+    echo "Log table test #$count failed, Result: $result, Expected: $expected_result"
+    exit 1
+  else
+    echo "Log table test #$count passed, Result: $result, Expected: $expected_result"
+  fi
+}
+
+# Execute the initial query and get the query_id
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select 123"}')
-
 query_id=$(echo $response | jq -r '.id')
+echo "Query ID: $query_id"
+# Wait for the query to be logged
+sleep 15
 
-sleep 10
+# Test 1
+check_query_log "1" "$query_id" "SELECT count(*) FROM persistent_system.query_log WHERE target = 'databend::log::profile' and" "1"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
-  -H 'Content-Type: application/json' \
-  -d "{\"sql\": \"SELECT COUNT(*) FROM persistent_system.query_log WHERE query_id = '$query_id'\"}")
+# Test 2
+check_query_log "2" "$query_id" "SELECT count(*) FROM persistent_system.query_profile WHERE" "1"
 
-count=$(echo $response | jq -r '.data[0][0]')
+# Test 3
+check_query_log "3" "$query_id" "SELECT count(*) FROM persistent_system.query_log WHERE target = 'databend::log::query' and" "2"
 
-if [ $count != "0" ]; then
-  echo "Log table test1 passed"
-else
-  echo "Log table test1 failed"
-  exit 1
-fi
+# Test 4
+check_query_log "4" "$query_id" "SELECT count(*) FROM persistent_system.query_details WHERE" "2"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
-  -H 'Content-Type: application/json' \
-  -d "{\"sql\": \"SELECT check_json(message) FROM persistent_system.query_log WHERE target = 'databend::log::profile' and query_id = '$query_id'\"}")
-
-result=$(echo $response | jq -r '.data[0][0]')
-
-if [ result != "NULL" ]; then
-  echo "Log table test2 passed"
-else
-  echo "Log table test2 failed"
-  exit 1
-fi
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
-  -H 'Content-Type: application/json' \
-  -d "{\"sql\": \"SELECT check_json(message) FROM persistent_system.query_log WHERE target = 'databend::log::query' and query_id = '$query_id'\"}")
-
-result=$(echo $response | jq -r '.data[0][0]')
-
-if [ result != "NULL" ]; then
-  echo "Log table test3 passed"
-else
-  echo "Log table test3 failed"
-  exit 1
-fi
-
-
+# Test 5
+check_query_log "5" "$query_id" "SELECT count(*) FROM persistent_system.query_log WHERE" "3"
