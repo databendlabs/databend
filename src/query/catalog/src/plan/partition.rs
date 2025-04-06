@@ -161,7 +161,7 @@ impl Partitions {
                     .iter()
                     .flat_map(|e| {
                         let mut s = DefaultHasher::new();
-                        e.id.hash(&mut s);
+                        e.cache_id.hash(&mut s);
                         (0..1 << scale).map(move |i| {
                             i.hash(&mut s);
                             (e.id.clone(), s.finish())
