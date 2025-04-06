@@ -77,7 +77,7 @@ impl GlobalPersistentLog {
 
         let mut tables: Vec<Box<dyn PersistentLogTable>> = vec![];
 
-        if cfg.log.query.on && !cfg.log.query.dir.is_empty() {
+        if cfg.log.query.on {
             let query_details = QueryDetailsTable;
             info!(
                 "Persistent query details table is enabled, persistent_system.{}",
@@ -86,7 +86,7 @@ impl GlobalPersistentLog {
             tables.push(Box::new(query_details));
         }
 
-        if cfg.log.profile.on && !cfg.log.profile.dir.is_empty() {
+        if cfg.log.profile.on {
             let profile = QueryProfileTable;
             info!(
                 "Persistent query profile table is enabled, persistent_system.{}",
