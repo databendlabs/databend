@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Barrier;
@@ -332,11 +333,23 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
     }
 }
 
+#[derive(Clone, PartialEq)]
+enum PortStatus {
+    Idle,
+    HasData,
+    Finished,
+}
+
 pub struct MergePartitionProcessor<T: Exchange> {
     output: Arc<OutputPort>,
     inputs: Vec<Arc<InputPort>>,
     inputs_data: Vec<Option<DataBlock>>,
     exchange: Arc<T>,
+
+    initialize: bool,
+    finished_inputs: usize,
+    waiting_inputs: VecDeque<usize>,
+    inputs_status: Vec<PortStatus>,
 }
 
 impl<T: Exchange> MergePartitionProcessor<T> {
@@ -346,11 +359,18 @@ impl<T: Exchange> MergePartitionProcessor<T> {
         exchange: Arc<T>,
     ) -> ProcessorPtr {
         let inputs_data = vec![None; inputs.len()];
+        let inputs_status = vec![PortStatus::Idle; inputs.len()];
+        let waiting_inputs = VecDeque::with_capacity(inputs.len());
+
         ProcessorPtr::create(Box::new(MergePartitionProcessor::<T> {
             output,
             inputs,
             inputs_data,
             exchange,
+            inputs_status,
+            waiting_inputs,
+            initialize: false,
+            finished_inputs: 0,
         }))
     }
 }
@@ -381,8 +401,7 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
         }
 
         let mut all_inputs_finished = true;
-        let mut need_pick_block_to_push = T::MULTIWAY_SORT;
-
+        let mut need_pick_block_to_push = true;
         for (index, input) in self.inputs.iter().enumerate() {
             if input.is_finished() {
                 continue;
@@ -390,19 +409,8 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
 
             all_inputs_finished = false;
 
-            if input.has_data() {
-                match T::MULTIWAY_SORT {
-                    false => {
-                        if self.output.can_push() {
-                            self.output.push_data(Ok(input.pull_data().unwrap()?));
-                        }
-                    }
-                    true => {
-                        if self.inputs_data[index].is_none() {
-                            self.inputs_data[index] = Some(input.pull_data().unwrap()?);
-                        }
-                    }
-                }
+            if input.has_data() && self.inputs_data[index].is_none() {
+                self.inputs_data[index] = Some(input.pull_data().unwrap()?);
             }
 
             if self.inputs_data[index].is_none() {
@@ -427,5 +435,68 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
         }
 
         Ok(Event::NeedData)
+    }
+
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        if T::MULTIWAY_SORT {
+            return self.event();
+        }
+
+        if let EventCause::Output(_) = cause {
+            if self.output.is_finished() {
+                for input in &self.inputs {
+                    input.finish();
+                }
+
+                return Ok(Event::Finished);
+            }
+
+            if !self.output.can_push() {
+                return Ok(Event::NeedConsume);
+            }
+
+            // if self.waiting_inputs.is_empty() {
+            //     return Ok(Event::NeedData);
+            // }
+        }
+
+        if !self.initialize && self.waiting_inputs.is_empty() {
+            self.initialize = true;
+
+            for input in &self.inputs {
+                input.set_need_data();
+            }
+
+            return Ok(Event::NeedData);
+        }
+
+        if let EventCause::Input(idx) = cause {
+            if self.inputs[idx].is_finished() && self.inputs_status[idx] != PortStatus::Finished {
+                self.finished_inputs += 1;
+                self.inputs_status[idx] = PortStatus::Finished;
+            }
+
+            if self.inputs[idx].has_data() && self.inputs_status[idx] != PortStatus::HasData {
+                self.waiting_inputs.push_back(idx);
+                self.inputs_status[idx] = PortStatus::HasData;
+            }
+        }
+
+        if self.finished_inputs == self.inputs.len() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        while !self.waiting_inputs.is_empty() && self.output.can_push() {
+            let idx = self.waiting_inputs.pop_front().unwrap();
+            self.output.push_data(self.inputs[idx].pull_data().unwrap());
+            self.inputs_status[idx] = PortStatus::Idle;
+            self.inputs[idx].set_need_data();
+        }
+
+        match self.waiting_inputs.is_empty() {
+            true => Ok(Event::NeedData),
+            false => Ok(Event::NeedConsume),
+        }
     }
 }
