@@ -115,7 +115,7 @@ pub async fn test_persistent_log_alter_if_schema_change() -> Result<()> {
         .execute_query("show tables from persistent_system")
         .await?;
     let data_blocks: Vec<DataBlock> = res.try_collect().await?;
-    let tables = data_blocks[0].columns().get(0);
+    let tables = data_blocks[0].columns().first();
     let mut two_tables = vec![];
     for i in 0..2 {
         two_tables.push(
@@ -130,7 +130,7 @@ pub async fn test_persistent_log_alter_if_schema_change() -> Result<()> {
     }
     two_tables.sort();
     assert_eq!(two_tables[0], "query_log");
-    assert_eq!(two_tables[1].starts_with("query_log_old_"), true);
+    assert!(two_tables[1].starts_with("query_log_old_"));
 
     let res = fixture
         .execute_query(&format!(
