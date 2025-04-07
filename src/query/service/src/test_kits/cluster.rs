@@ -34,14 +34,16 @@ impl ClusterDescriptor {
 
     pub fn with_node(self, id: impl Into<String>, addr: impl Into<String>) -> ClusterDescriptor {
         let mut new_nodes = self.cluster_nodes_list.clone();
+        let id = id.into();
         new_nodes.push(Arc::new(NodeInfo::create(
-            id.into(),
+            id.clone(),
             "".to_string(),
             0,
             "".to_string(),
             addr.into(),
             "".to_string(),
             DATABEND_COMMIT_VERSION.to_string(),
+            id,
         )));
         ClusterDescriptor {
             cluster_nodes_list: new_nodes,

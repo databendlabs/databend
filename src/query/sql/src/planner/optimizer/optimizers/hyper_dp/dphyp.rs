@@ -31,6 +31,7 @@ use crate::optimizer::optimizers::hyper_dp::RelationSetTree;
 use crate::optimizer::optimizers::rule::RuleFactory;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::planner::QueryExecutor;
 use crate::plans::Filter;
@@ -91,13 +92,19 @@ impl DPhpy {
         let opt_ctx = self.opt_ctx.clone();
         let left_res = spawn(async move {
             let mut dphyp = DPhpy::new(opt_ctx.clone());
-            (dphyp.optimize(&left_expr).await, dphyp.table_index_map)
+            (
+                dphyp.optimize_async(&left_expr).await,
+                dphyp.table_index_map,
+            )
         });
         let right_expr = s_expr.children[1].clone();
         let opt_ctx = self.opt_ctx.clone();
         let right_res = spawn(async move {
             let mut dphyp = DPhpy::new(opt_ctx.clone());
-            (dphyp.optimize(&right_expr).await, dphyp.table_index_map)
+            (
+                dphyp.optimize_async(&right_expr).await,
+                dphyp.table_index_map,
+            )
         });
         let left_res = left_res
             .await
@@ -132,7 +139,7 @@ impl DPhpy {
         if is_subquery {
             // If it's a subquery, start a new dphyp
             let mut dphyp = DPhpy::new(self.opt_ctx.clone());
-            let new_s_expr = Arc::new(dphyp.optimize(s_expr).await?);
+            let new_s_expr = Arc::new(dphyp.optimize_async(s_expr).await?);
             // Merge `table_index_map` of subquery into current `table_index_map`.
             let relation_idx = self.join_relations.len() as IndexType;
             for table_index in dphyp.table_index_map.keys() {
@@ -303,7 +310,7 @@ impl DPhpy {
     // The input plan tree has been optimized by heuristic optimizer
     // So filters have pushed down join and cross join has been converted to inner join as possible as we can
     // The output plan will have optimal join order theoretically
-    pub async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub async fn optimize_async(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         if !self.opt_ctx.get_enable_dphyp() || !self.opt_ctx.get_enable_join_reorder() {
             return Ok(s_expr.clone());
         }
@@ -850,5 +857,16 @@ impl DPhpy {
             }
         }
         Ok(s_expr.clone())
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for DPhpy {
+    fn name(&self) -> &'static str {
+        "DPhpy"
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_async(s_expr).await
     }
 }

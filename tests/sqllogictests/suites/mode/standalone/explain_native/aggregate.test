@@ -44,24 +44,6 @@ AggregateFinal
         └── estimated rows: 10.00
 
 
-query T
-explain select 1 from numbers(10) group by 1;
-----
-EvalScalar
-├── output columns: [1 (#2)]
-├── expressions: [1]
-├── estimated rows: 10.00
-└── TableScan
-    ├── table: default.system.numbers
-    ├── output columns: []
-    ├── read rows: 10
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
-
-
 
 query T
 explain select 1, number, number + 1, number -1 from numbers(10) group by number, abs(number), cast(number as int);

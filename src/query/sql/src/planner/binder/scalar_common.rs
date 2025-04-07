@@ -217,6 +217,11 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             self.can_prune = false;
             Ok(())
         }
+
+        fn visit_constant(&mut self, _constant: &'a crate::plans::ConstantExpr) -> Result<()> {
+            self.can_prune = false;
+            Ok(())
+        }
     }
 
     let mut visitor = PruneVisitor::new(columns);

@@ -20,6 +20,7 @@ use std::hash::Hasher;
 use std::io::Write;
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalUniqName;
 use databend_common_catalog::plan::compute_row_id_prefix;
 use databend_common_catalog::plan::split_prefix;
 use databend_common_catalog::plan::PartInfo;
@@ -27,6 +28,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_meta_types::NodeInfo;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use goldenfile::Mint;
 
@@ -73,18 +75,34 @@ fn gen_parts(kind: PartitionsShuffleKind, size: usize) -> Partitions {
     Partitions::create(kind, parts)
 }
 
+fn create_node(cache_id: String) -> Arc<NodeInfo> {
+    Arc::new(NodeInfo::create(
+        GlobalUniqName::unique(),
+        String::new(),
+        0,
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        cache_id,
+    ))
+}
+
 #[test]
 fn test_partition_reshuffle() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("partition-reshuffle.txt").unwrap();
 
     let executors_3 = vec![
-        "node-1".to_string(),
-        "node-2".to_string(),
-        "node-3".to_string(),
+        create_node("node-1".to_string()),
+        create_node("node-2".to_string()),
+        create_node("node-3".to_string()),
     ];
 
-    let executors_2 = vec!["node-1".to_string(), "node-2".to_string()];
+    let executors_2 = vec![
+        create_node("node-1".to_string()),
+        create_node("node-2".to_string()),
+    ];
 
     // None.
     {
@@ -96,13 +114,13 @@ fn test_partition_reshuffle() {
             "PartitionsShuffleKind::Seq : 11 partitions of 3 executors"
         )
         .unwrap();
-        let e1_parts = shuffle.get(&executors_3[0]).unwrap();
+        let e1_parts = shuffle.get(&executors_3[0].id).unwrap();
         writeln!(file, "{:?}", e1_parts).unwrap();
 
-        let e2_parts = shuffle.get(&executors_3[1]).unwrap();
+        let e2_parts = shuffle.get(&executors_3[1].id).unwrap();
         writeln!(file, "{:?}", e2_parts).unwrap();
 
-        let e3_parts = shuffle.get(&executors_3[2]).unwrap();
+        let e3_parts = shuffle.get(&executors_3[2].id).unwrap();
         writeln!(file, "{:?}", e3_parts).unwrap();
     }
 
@@ -116,13 +134,13 @@ fn test_partition_reshuffle() {
             "PartitionsShuffleKind::Seq : 2 partitions of 3 executors"
         )
         .unwrap();
-        let e1_parts = shuffle.get(&executors_3[0]).unwrap();
+        let e1_parts = shuffle.get(&executors_3[0].id).unwrap();
         writeln!(file, "{:?}", e1_parts).unwrap();
 
-        let e2_parts = shuffle.get(&executors_3[1]).unwrap();
+        let e2_parts = shuffle.get(&executors_3[1].id).unwrap();
         writeln!(file, "{:?}", e2_parts).unwrap();
 
-        let e3_parts = shuffle.get(&executors_3[2]).unwrap();
+        let e3_parts = shuffle.get(&executors_3[2].id).unwrap();
         writeln!(file, "{:?}", e3_parts).unwrap();
     }
 
@@ -136,13 +154,13 @@ fn test_partition_reshuffle() {
             "PartitionsShuffleKind::Mod : 10 partitions of 3 executors"
         )
         .unwrap();
-        let e1_parts = shuffle.get(&executors_3[0]).unwrap();
+        let e1_parts = shuffle.get(&executors_3[0].id).unwrap();
         writeln!(file, "{:?}", e1_parts).unwrap();
 
-        let e2_parts = shuffle.get(&executors_3[1]).unwrap();
+        let e2_parts = shuffle.get(&executors_3[1].id).unwrap();
         writeln!(file, "{:?}", e2_parts).unwrap();
 
-        let e3_parts = shuffle.get(&executors_3[2]).unwrap();
+        let e3_parts = shuffle.get(&executors_3[2].id).unwrap();
         writeln!(file, "{:?}", e3_parts).unwrap();
     }
 
@@ -156,13 +174,13 @@ fn test_partition_reshuffle() {
             "PartitionsShuffleKind::Mod : 11 partitions of 3 executors"
         )
         .unwrap();
-        let e1_parts = shuffle.get(&executors_3[0]).unwrap();
+        let e1_parts = shuffle.get(&executors_3[0].id).unwrap();
         writeln!(file, "{:?}", e1_parts).unwrap();
 
-        let e2_parts = shuffle.get(&executors_3[1]).unwrap();
+        let e2_parts = shuffle.get(&executors_3[1].id).unwrap();
         writeln!(file, "{:?}", e2_parts).unwrap();
 
-        let e3_parts = shuffle.get(&executors_3[2]).unwrap();
+        let e3_parts = shuffle.get(&executors_3[2].id).unwrap();
         writeln!(file, "{:?}", e3_parts).unwrap();
     }
 
@@ -176,10 +194,10 @@ fn test_partition_reshuffle() {
             "PartitionsShuffleKind::Mod : 11 partitions of 2 executors"
         )
         .unwrap();
-        let e1_parts = shuffle.get(&executors_2[0]).unwrap();
+        let e1_parts = shuffle.get(&executors_2[0].id).unwrap();
         writeln!(file, "{:?}", e1_parts).unwrap();
 
-        let e2_parts = shuffle.get(&executors_2[1]).unwrap();
+        let e2_parts = shuffle.get(&executors_2[1].id).unwrap();
         writeln!(file, "{:?}", e2_parts).unwrap();
     }
 
@@ -193,10 +211,10 @@ fn test_partition_reshuffle() {
             "PartitionsShuffleKind::ConsistentHash : 11 partitions of 2 executors"
         )
         .unwrap();
-        let e1_parts = shuffle.get(&executors_2[0]).unwrap();
+        let e1_parts = shuffle.get(&executors_2[0].id).unwrap();
         writeln!(file, "{:?}", e1_parts).unwrap();
 
-        let e2_parts = shuffle.get(&executors_2[1]).unwrap();
+        let e2_parts = shuffle.get(&executors_2[1].id).unwrap();
         writeln!(file, "{:?}", e2_parts).unwrap();
     }
 
@@ -210,13 +228,13 @@ fn test_partition_reshuffle() {
             "PartitionsShuffleKind::ConsistentHash : 11 partitions of 3 executors"
         )
         .unwrap();
-        let e1_parts = shuffle.get(&executors_3[0]).unwrap();
+        let e1_parts = shuffle.get(&executors_3[0].id).unwrap();
         writeln!(file, "{:?}", e1_parts).unwrap();
 
-        let e2_parts = shuffle.get(&executors_3[1]).unwrap();
+        let e2_parts = shuffle.get(&executors_3[1].id).unwrap();
         writeln!(file, "{:?}", e2_parts).unwrap();
 
-        let e3_parts = shuffle.get(&executors_3[2]).unwrap();
+        let e3_parts = shuffle.get(&executors_3[2].id).unwrap();
         writeln!(file, "{:?}", e3_parts).unwrap();
     }
 
@@ -230,10 +248,10 @@ fn test_partition_reshuffle() {
             "PartitionsShuffleKind::Rand: 11 partitions of 2 executors"
         )
         .unwrap();
-        let e1_parts = shuffle.get(&executors_2[0]).unwrap();
+        let e1_parts = shuffle.get(&executors_2[0].id).unwrap();
         writeln!(file, "{:?}", e1_parts.len()).unwrap();
 
-        let e2_parts = shuffle.get(&executors_2[1]).unwrap();
+        let e2_parts = shuffle.get(&executors_2[1].id).unwrap();
         writeln!(file, "{:?}", e2_parts.len()).unwrap();
     }
 
@@ -247,10 +265,10 @@ fn test_partition_reshuffle() {
             "PartitionsShuffleKind::Broadcast: 3 partitions of 2 executors"
         )
         .unwrap();
-        let e1_parts = shuffle.get(&executors_2[0]).unwrap();
+        let e1_parts = shuffle.get(&executors_2[0].id).unwrap();
         writeln!(file, "{:?}", e1_parts).unwrap();
 
-        let e2_parts = shuffle.get(&executors_2[1]).unwrap();
+        let e2_parts = shuffle.get(&executors_2[1].id).unwrap();
         writeln!(file, "{:?}", e2_parts).unwrap();
     }
 }

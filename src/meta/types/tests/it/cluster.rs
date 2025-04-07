@@ -30,6 +30,7 @@ fn test_node_info_ip_port() -> anyhow::Result<()> {
         cluster_id: "".to_string(),
         warehouse_id: "".to_string(),
         runtime_node_group: None,
+        cache_id: "".to_string(),
     };
 
     let (ip, port) = n.ip_port()?;
@@ -56,6 +57,7 @@ fn test_serde_node_info() {
         cluster_id: String::new(),
         warehouse_id: String::new(),
         runtime_node_group: None,
+        cache_id: "test_id".to_string(),
     };
 
     let json_str = serde_json::to_string(&info).unwrap();
