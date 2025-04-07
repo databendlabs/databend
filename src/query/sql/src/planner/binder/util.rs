@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::Binder;

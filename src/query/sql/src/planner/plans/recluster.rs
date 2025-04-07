@@ -24,9 +24,9 @@ use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
-use crate::optimizer::SExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
@@ -86,10 +86,11 @@ pub async fn plan_hilbert_sql(
     let plan = binder.bind(&stmt).await?;
 
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata)
-        .with_enable_distributed_optimization(!ctx.get_cluster().is_empty())
-        .with_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
-        .with_enable_dphyp(settings.get_enable_dphyp()?)
-        .with_max_push_down_limit(settings.get_max_push_down_limit()?);
+        .set_enable_distributed_optimization(!ctx.get_cluster().is_empty())
+        .set_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
+        .set_enable_dphyp(settings.get_enable_dphyp()?)
+        .set_max_push_down_limit(settings.get_max_push_down_limit()?)
+        .clone();
     optimize(opt_ctx, plan).await
 }
 

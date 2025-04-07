@@ -20,11 +20,11 @@ use databend_common_exception::Result;
 use educe::Educe;
 
 use super::MutationSource;
-use crate::optimizer::PhysicalProperty;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::StatInfo;
+use crate::optimizer::ir::PhysicalProperty;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatInfo;
 use crate::plans::r_cte_scan::RecursiveCteScan;
 use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;

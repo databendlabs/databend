@@ -24,6 +24,7 @@ use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::EvalContext;
@@ -37,7 +38,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_string_to_interval(registry);
     register_interval_to_string(registry);
     // data/timestamp/interval +/- interval
-    register_interval_add_sub(registry);
+    register_interval_add_sub_mul(registry);
     register_number_to_interval(registry);
 }
 
@@ -87,7 +88,7 @@ fn register_interval_to_string(registry: &mut FunctionRegistry) {
     );
 }
 
-fn register_interval_add_sub(registry: &mut FunctionRegistry) {
+fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<IntervalType, IntervalType, IntervalType, _, _>(
         "plus",
         |_, _, _| FunctionDomain::MayThrow,
@@ -178,6 +179,30 @@ fn register_interval_add_sub(registry: &mut FunctionRegistry) {
                 },
             ),
         );
+
+    registry.register_passthrough_nullable_2_arg::<Int64Type, IntervalType, IntervalType, _, _>(
+        "multiply",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_2_arg::<Int64Type, IntervalType, IntervalType>(|a, b, _ctx| {
+            months_days_micros::new(
+                b.months() * (a as i32),
+                b.days() * (a as i32),
+                b.microseconds() * a,
+            )
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<IntervalType, Int64Type, IntervalType, _, _>(
+        "multiply",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_2_arg::<IntervalType, Int64Type, IntervalType>(|b, a, _ctx| {
+            months_days_micros::new(
+                b.months() * (a as i32),
+                b.days() * (a as i32),
+                b.microseconds() * a,
+            )
+        }),
+    );
 }
 
 fn register_number_to_interval(registry: &mut FunctionRegistry) {

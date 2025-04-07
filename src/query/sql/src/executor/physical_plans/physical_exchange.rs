@@ -21,7 +21,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::executor::physical_plans::common::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
 use crate::TypeCheck;
 

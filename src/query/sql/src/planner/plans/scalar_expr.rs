@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::Hash;
@@ -43,8 +45,8 @@ use itertools::Itertools;
 use super::WindowFuncFrame;
 use super::WindowFuncType;
 use crate::binder::ColumnBinding;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::SExpr;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -369,6 +371,35 @@ impl ScalarExpr {
                 target_type: Box::new(data_type.clone()),
             }),
         }
+    }
+
+    pub fn get_udf_names(&self) -> Result<HashSet<&String>> {
+        struct FindUdfNamesVisitor<'a> {
+            udfs: HashSet<&'a String>,
+        }
+
+        impl<'a> Visitor<'a> for FindUdfNamesVisitor<'a> {
+            fn visit_udf_call(&mut self, udf: &'a UDFCall) -> Result<()> {
+                for expr in &udf.arguments {
+                    self.visit(expr)?;
+                }
+
+                self.udfs.insert(&udf.name);
+                Ok(())
+            }
+
+            fn visit_udf_lambda_call(&mut self, udf: &'a UDFLambdaCall) -> Result<()> {
+                self.visit(&udf.scalar)?;
+                self.udfs.insert(&udf.func_name);
+                Ok(())
+            }
+        }
+
+        let mut find_udfs = FindUdfNamesVisitor {
+            udfs: HashSet::new(),
+        };
+        find_udfs.visit(self)?;
+        Ok(find_udfs.udfs)
     }
 }
 
@@ -872,6 +903,7 @@ pub struct UDFCall {
     pub name: String,
     // name in handler
     pub handler: String,
+    pub headers: BTreeMap<String, String>,
     pub display_name: String,
     pub arg_types: Vec<DataType>,
     pub return_type: Box<DataType>,

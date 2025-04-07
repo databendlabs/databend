@@ -19,11 +19,11 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchemaRef;
 
-use crate::optimizer::ColumnSet;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RelationalProperty;
-use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::StatInfo;
+use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::ScalarExpr;

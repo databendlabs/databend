@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -30,6 +31,7 @@ pub struct LambdaUDF {
 pub struct UDFServer {
     pub address: String,
     pub handler: String,
+    pub headers: BTreeMap<String, String>,
     pub language: String,
     pub arg_types: Vec<DataType>,
     pub return_type: DataType,
@@ -124,6 +126,7 @@ impl UserDefinedFunction {
         name: &str,
         address: &str,
         handler: &str,
+        headers: &BTreeMap<String, String>,
         language: &str,
         arg_types: Vec<DataType>,
         return_type: DataType,
@@ -135,6 +138,7 @@ impl UserDefinedFunction {
             definition: UDFDefinition::UDFServer(UDFServer {
                 address: address.to_string(),
                 handler: handler.to_string(),
+                headers: headers.clone(),
                 language: language.to_string(),
                 arg_types,
                 return_type,
@@ -190,6 +194,7 @@ impl Display for UDFDefinition {
                 arg_types,
                 return_type,
                 handler,
+                headers,
                 language,
             }) => {
                 for (i, item) in arg_types.iter().enumerate() {
@@ -200,8 +205,19 @@ impl Display for UDFDefinition {
                 }
                 write!(
                     f,
-                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler} ADDRESS = {address}"
+                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler}"
                 )?;
+                if !headers.is_empty() {
+                    write!(f, " HEADERS = (")?;
+                    for (i, (key, value)) in headers.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{key} = {value}")?;
+                    }
+                    write!(f, ")")?;
+                }
+                write!(f, " ADDRESS = {address}")?;
             }
             UDFDefinition::UDFScript(UDFScript {
                 code,

@@ -71,6 +71,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         );
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        let expr = type_check::rewrite_function_to_cast(expr);
 
         let input_domains = columns
             .iter()

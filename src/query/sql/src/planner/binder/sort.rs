@@ -28,7 +28,7 @@ use crate::binder::select::SelectList;
 use crate::binder::window::WindowRewriter;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -317,6 +317,7 @@ impl Binder {
                         span: udf.span,
                         name: udf.name.clone(),
                         handler: udf.handler.clone(),
+                        headers: udf.headers.clone(),
                         display_name: udf.display_name.clone(),
                         udf_type: udf.udf_type.clone(),
                         arg_types: udf.arg_types.clone(),

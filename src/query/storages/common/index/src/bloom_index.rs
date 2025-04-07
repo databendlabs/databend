@@ -35,6 +35,7 @@ use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::visit_expr;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -42,6 +43,7 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
+use databend_common_expression::ExprVisitor;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -365,7 +367,7 @@ impl BloomIndex {
 
     pub fn rewrite_expr(
         &self,
-        mut expr: Expr<String>,
+        expr: Expr<String>,
         scalar_map: &HashMap<Scalar, u64>,
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
@@ -407,7 +409,7 @@ impl BloomIndex {
             })
             .collect::<HashMap<_, _>>();
 
-        let mut visitor = RewriteVisitor {
+        let visitor = RewriteVisitor {
             new_col_id: 1,
             index: self,
             data_schema,
@@ -415,9 +417,10 @@ impl BloomIndex {
             column_stats,
             domains: &mut domains,
         };
-
-        visit_expr_column_eq_constant(&mut expr, &mut visitor)?;
-
+        let expr = match visit_expr(&expr, &mut Visitor(visitor))? {
+            Some(expr) => expr,
+            None => expr,
+        };
         Ok((expr, domains))
     }
 
@@ -492,18 +495,18 @@ impl BloomIndex {
     /// Find all columns that can be use for index in the expression.
     #[expect(clippy::type_complexity)]
     pub fn filter_index_field(
-        mut expr: Expr<String>,
+        expr: &Expr<String>,
         fields: &[TableField],
     ) -> Result<(Vec<TableField>, Vec<(Scalar, DataType)>)> {
-        let mut visitor = ShortListVisitor {
+        let mut visitor = Visitor(ShortListVisitor {
             fields: fields.to_vec(),
             founds: Vec::new(),
             scalars: Vec::new(),
-        };
-        visit_expr_column_eq_constant(&mut expr, &mut visitor)?;
-        let ShortListVisitor {
+        });
+        visit_expr(expr, &mut visitor)?;
+        let Visitor(ShortListVisitor {
             founds, scalars, ..
-        } = visitor;
+        }) = visitor;
         Ok((founds, scalars))
     }
 
@@ -574,18 +577,30 @@ impl BloomIndex {
     }
 }
 
-fn visit_expr_column_eq_constant(
-    expr: &mut Expr<String>,
-    visitor: &mut impl EqVisitor,
-) -> Result<()> {
-    match match expr {
-        Expr::FunctionCall {
+struct Visitor<T: EqVisitor>(T);
+
+impl<T> ExprVisitor<String> for Visitor<T>
+where T: EqVisitor
+{
+    type Error = ErrorCode;
+
+    fn enter_function_call(&mut self, expr: &Expr<String>) -> Result<Option<Expr<String>>> {
+        let Expr::FunctionCall {
             span,
             id,
             args,
             return_type,
             ..
-        } if id.name() == "eq" => match args.as_slice() {
+        } = expr
+        else {
+            unreachable!()
+        };
+
+        if id.name() != "eq" {
+            return Self::visit_function_call(expr, self);
+        }
+
+        match match args.as_slice() {
             // patterns like `Column = <constant>`, `<constant> = Column`
             [Expr::ColumnRef {
                 id,
@@ -609,7 +624,8 @@ fn visit_expr_column_eq_constant(
                 // debug_assert_eq!(scalar_type, column_type);
                 // If the visitor returns a new expression, then replace with the current expression.
                 if scalar_type == column_type {
-                    visitor.enter_target(*span, id, scalar, column_type, return_type)?
+                    self.0
+                        .enter_target(*span, id, scalar, column_type, return_type)?
                 } else {
                     ControlFlow::Continue(None)
                 }
@@ -627,7 +643,8 @@ fn visit_expr_column_eq_constant(
             }, Expr::FunctionCall { id, args, .. }]
                 if id.name() == "get" =>
             {
-                visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
+                self.0
+                    .enter_map_column(*span, args, scalar, scalar_type, return_type)?
             }
             // patterns like `CAST(MapColumn[<key>] as X) = <constant>`, `<constant> = CAST(MapColumn[<key>] as X)`
             [Expr::Cast {
@@ -666,7 +683,8 @@ fn visit_expr_column_eq_constant(
                 {
                     ControlFlow::Break(None)
                 } else {
-                    visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
+                    self.0
+                        .enter_map_column(*span, args, scalar, scalar_type, return_type)?
                 }
             }
             [cast @ Expr::Cast { .. }, Expr::Constant {
@@ -678,7 +696,7 @@ fn visit_expr_column_eq_constant(
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, cast @ Expr::Cast { .. }] => visitor.enter_cast(cast, scalar, scalar_type)?,
+            }, cast @ Expr::Cast { .. }] => self.0.enter_cast(cast, scalar, scalar_type)?,
 
             [func @ Expr::FunctionCall {
                 id,
@@ -700,7 +718,7 @@ fn visit_expr_column_eq_constant(
                 return_type: dest_type,
                 ..
             }] if id.name().starts_with("to_") && args.len() == 1 && func.contains_column_ref() => {
-                visitor.enter_cast(
+                self.0.enter_cast(
                     &Expr::Cast {
                         span: *span,
                         is_try: false,
@@ -712,32 +730,16 @@ fn visit_expr_column_eq_constant(
                 )?
             }
             _ => ControlFlow::Continue(None),
-        },
-        _ => ControlFlow::Continue(None),
-    } {
-        ControlFlow::Continue(new_expr) => {
-            if let Some(new_expr) = new_expr {
-                *expr = new_expr;
-            }
-            // Otherwise, rewrite sub expressions.
-            match expr {
-                Expr::Cast { expr, .. } => {
-                    visit_expr_column_eq_constant(expr, visitor)?;
-                }
-                Expr::FunctionCall { args, .. } => {
-                    for arg in args.iter_mut() {
-                        visit_expr_column_eq_constant(arg, visitor)?;
-                    }
-                }
-                _ => (),
-            }
+        } {
+            ControlFlow::Continue(Some(expr)) => visit_expr(&expr, self),
+            ControlFlow::Continue(None) => Self::visit_function_call(expr, self),
+            ControlFlow::Break(expr) => Ok(expr),
         }
-        ControlFlow::Break(Some(new_expr)) => {
-            *expr = new_expr;
-        }
-        ControlFlow::Break(None) => (),
     }
-    Ok(())
+
+    fn enter_lambda_function_call(&mut self, _: &Expr<String>) -> Result<Option<Expr<String>>> {
+        Ok(None)
+    }
 }
 
 type ResultRewrite = Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>>;

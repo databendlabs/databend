@@ -21,7 +21,7 @@ use super::display::FormatOptions;
 use super::display::IdHumanizer;
 use super::display::MetadataIdHumanizer;
 use super::display::TreeHumanizer;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::CreateTablePlan;
 use crate::plans::Plan;
 

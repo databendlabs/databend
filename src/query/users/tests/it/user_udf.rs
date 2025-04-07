@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use databend_common_base::base::tokio;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -127,6 +129,7 @@ async fn test_user_udf_server() -> Result<()> {
         isempty,
         address,
         isempty,
+        &BTreeMap::default(),
         "python",
         arg_types.clone(),
         return_type.clone(),
@@ -141,6 +144,7 @@ async fn test_user_udf_server() -> Result<()> {
         isnotempty,
         address,
         isnotempty,
+        &BTreeMap::default(),
         "python",
         arg_types.clone(),
         return_type.clone(),

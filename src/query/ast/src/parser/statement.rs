@@ -4578,6 +4578,15 @@ pub fn udaf_state_field(i: Input) -> IResult<UDAFStateField> {
     )(i)
 }
 
+pub fn udf_header(i: Input) -> IResult<(String, String)> {
+    map(
+        rule! {
+            #literal_string ~ #match_text("=") ~ ^#literal_string
+        },
+        |(k, _, v)| (k, v),
+    )(i)
+}
+
 pub fn udf_script_or_address(i: Input) -> IResult<(String, bool)> {
     let script = map(
         rule! {
@@ -4617,9 +4626,23 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
+            ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
         },
-        |(_, arg_types, _, _, return_type, _, language, _, _, handler, address_or_code)| {
+        |(
+            _,
+            arg_types,
+            _,
+            _,
+            return_type,
+            _,
+            language,
+            _,
+            _,
+            handler,
+            headers,
+            address_or_code,
+        )| {
             if address_or_code.1 {
                 UDFDefinition::UDFScript {
                     arg_types,
@@ -4638,6 +4661,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     address: address_or_code.0,
                     handler,
                     language: language.to_string(),
+                    headers: headers
+                        .map(|(_, _, _, headers, _)| BTreeMap::from_iter(headers))
+                        .unwrap_or_default(),
                 }
             }
         },
@@ -4649,9 +4675,24 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ STATE ~ "{" ~ #comma_separated_list0(udaf_state_field) ~ "}"
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
+            ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
         },
-        |(_, arg_types, _, _, _, state_types, _, _, return_type, _, language, address_or_code)| {
+        |(
+            _,
+            arg_types,
+            _,
+            _,
+            _,
+            state_types,
+            _,
+            _,
+            return_type,
+            _,
+            language,
+            headers,
+            address_or_code,
+        )| {
             if address_or_code.1 {
                 UDFDefinition::UDAFScript {
                     arg_types,
@@ -4669,6 +4710,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     state_fields: state_types,
                     return_type,
                     address: address_or_code.0,
+                    headers: headers
+                        .map(|(_, _, _, headers, _)| BTreeMap::from_iter(headers))
+                        .unwrap_or_default(),
                     language: language.to_string(),
                 }
             }

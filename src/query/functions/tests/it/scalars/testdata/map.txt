@@ -108,7 +108,7 @@ evaluation (internal):
 
 ast            : map([],[])[1]
 raw expr       : get(map(array(), array()), 1)
-checked expr   : get<T0=UInt8><Map(Nothing) NULL, T0 NULL>(CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(Nothing) NULL), CAST(1_u8 AS UInt8 NULL))
+checked expr   : get<T0=UInt8><Map(Nothing) NULL, T0 NULL>(CAST<Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(Nothing) NULL), CAST<UInt8>(1_u8 AS UInt8 NULL))
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
@@ -117,7 +117,7 @@ output         : NULL
 
 ast            : map([1,2],['a','b'])[1]
 raw expr       : get(map(array(1, 2), array('a', 'b')), 1)
-checked expr   : get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")) AS Map(UInt8, String NULL)), 1_u8)
+checked expr   : get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")) AS Map(UInt8, String NULL)), 1_u8)
 optimized expr : "a"
 output type    : String NULL
 output domain  : {"a"..="a"}
@@ -126,7 +126,7 @@ output         : 'a'
 
 ast            : map([1,2],['a','b'])[10]
 raw expr       : get(map(array(1, 2), array('a', 'b')), 10)
-checked expr   : get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")) AS Map(UInt8, String NULL)), 10_u8)
+checked expr   : get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")) AS Map(UInt8, String NULL)), 10_u8)
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -135,7 +135,7 @@ output         : NULL
 
 ast            : map(['a','b'],[1,2])['a']
 raw expr       : get(map(array('a', 'b'), array(1, 2)), 'a')
-checked expr   : get<T0=String, T1=UInt8><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)) AS Map(String, UInt8 NULL)), "a")
+checked expr   : get<T0=String, T1=UInt8><Map(T0, T1 NULL), T0>(CAST<Map(String, UInt8)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)) AS Map(String, UInt8 NULL)), "a")
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
@@ -144,7 +144,7 @@ output         : 1
 
 ast            : map(['a','b'],[1,2])['x']
 raw expr       : get(map(array('a', 'b'), array(1, 2)), 'x')
-checked expr   : get<T0=String, T1=UInt8><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)) AS Map(String, UInt8 NULL)), "x")
+checked expr   : get<T0=String, T1=UInt8><Map(T0, T1 NULL), T0>(CAST<Map(String, UInt8)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)) AS Map(String, UInt8 NULL)), "x")
 optimized expr : NULL
 output type    : UInt8 NULL
 output domain  : {NULL}
@@ -153,7 +153,7 @@ output         : NULL
 
 ast            : {}['k']
 raw expr       : get(map(array(), array()), 'k')
-checked expr   : get<T0=String><Map(Nothing) NULL, T0 NULL>(CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(Nothing) NULL), CAST("k" AS String NULL))
+checked expr   : get<T0=String><Map(Nothing) NULL, T0 NULL>(CAST<Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(Nothing) NULL), CAST<String>("k" AS String NULL))
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
@@ -162,7 +162,7 @@ output         : NULL
 
 ast            : {1:NULL}[1]
 raw expr       : get(map(array(1), array(NULL)), 1)
-checked expr   : get<T0=UInt8><Map(T0, NULL) NULL, T0 NULL>(CAST(map<T0=UInt8, T1=NULL><Array(T0), Array(T1)>(array<T0=UInt8><T0>(1_u8), array<T0=NULL><T0>(NULL)) AS Map(UInt8, NULL) NULL), CAST(1_u8 AS UInt8 NULL))
+checked expr   : get<T0=UInt8><Map(T0, NULL) NULL, T0 NULL>(CAST<Map(UInt8, NULL)>(map<T0=UInt8, T1=NULL><Array(T0), Array(T1)>(array<T0=UInt8><T0>(1_u8), array<T0=NULL><T0>(NULL)) AS Map(UInt8, NULL) NULL), CAST<UInt8>(1_u8 AS UInt8 NULL))
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
@@ -171,7 +171,7 @@ output         : NULL
 
 ast            : {'k1':'v1','k2':'v2'}['k1']
 raw expr       : get(map(array('k1', 'k2'), array('v1', 'v2')), 'k1')
-checked expr   : get<T0=String, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String NULL)), "k1")
+checked expr   : get<T0=String, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(String, String)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String NULL)), "k1")
 optimized expr : "v1"
 output type    : String NULL
 output domain  : {"v1"..="v1"}
@@ -180,7 +180,7 @@ output         : 'v1'
 
 ast            : {'k1':'v1','k2':'v2'}['k3']
 raw expr       : get(map(array('k1', 'k2'), array('v1', 'v2')), 'k3')
-checked expr   : get<T0=String, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String NULL)), "k3")
+checked expr   : get<T0=String, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(String, String)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String NULL)), "k3")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -189,8 +189,8 @@ output         : NULL
 
 ast            : map([k1,k2],[v1,v2])[1]
 raw expr       : get(map(array(k1::Int16, k2::Int16), array(v1::String, v2::String)), 1)
-checked expr   : get<T0=Int16, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=Int16, T1=String><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(k1, k2), array<T0=String><T0, T0>(v1, v2)) AS Map(Int16, String NULL)), to_int16<UInt8>(1_u8))
-optimized expr : get<T0=Int16, T1=String><Map(T0, T1 NULL), T0>(CAST(map<T0=Int16, T1=String><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(k1, k2), array<T0=String><T0, T0>(v1, v2)) AS Map(Int16, String NULL)), 1_i16)
+checked expr   : get<T0=Int16, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(Int16, String)>(map<T0=Int16, T1=String><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(k1, k2), array<T0=String><T0, T0>(v1, v2)) AS Map(Int16, String NULL)), CAST<UInt8>(1_u8 AS Int16))
+optimized expr : get<T0=Int16, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(Int16, String)>(map<T0=Int16, T1=String><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(k1, k2), array<T0=String><T0, T0>(v1, v2)) AS Map(Int16, String NULL)), 1_i16)
 evaluation:
 +--------+---------+---------+---------------+---------------+-------------+
 |        | k1      | k2      | v1            | v2            | Output      |
@@ -241,7 +241,7 @@ output         : [1, 2, 3]
 
 ast            : map_keys({'a':NULL,'b':2,'c':NULL})
 raw expr       : map_keys(map(array('a', 'b', 'c'), array(NULL, 2, NULL)))
-checked expr   : map_keys<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))))
+checked expr   : map_keys<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL))))
 optimized expr : ['a', 'b', 'c']
 output type    : Array(String)
 output domain  : [{"a"..="c"}]
@@ -313,7 +313,7 @@ output         : ['a', 'b', 'c']
 
 ast            : map_values({'a':NULL,'b':2,'c':NULL})
 raw expr       : map_values(map(array('a', 'b', 'c'), array(NULL, 2, NULL)))
-checked expr   : map_values<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))))
+checked expr   : map_values<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL))))
 optimized expr : [NULL, 2, NULL]
 output type    : Array(UInt8 NULL)
 output domain  : [{2..=2} ∪ {NULL}]
@@ -367,7 +367,7 @@ output         : 3
 
 ast            : map_size({'a':NULL,'b':2,'c':NULL})
 raw expr       : map_size(map(array('a', 'b', 'c'), array(NULL, 2, NULL)))
-checked expr   : map_size<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))))
+checked expr   : map_size<T0=String, T1=UInt8 NULL><Map(T0, T1)>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL))))
 optimized expr : 3_u64
 output type    : UInt64
 output domain  : {3..=3}
@@ -412,7 +412,7 @@ output         : {}
 
 ast            : map_cat({}, {'k1': 'v1'})
 raw expr       : map_cat(map(array(), array()), map(array('k1'), array('v1')))
-checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String)), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")))
+checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(CAST<Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String)), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")))
 optimized expr : {"k1":"v1"}
 output type    : Map(String, String)
 output domain  : {[{"k1"..="k1"}], [{"v1"..="v1"}]}
@@ -421,7 +421,7 @@ output         : {'k1':'v1'}
 
 ast            : map_cat({'k1': 'v1'}, {})
 raw expr       : map_cat(map(array('k1'), array('v1')), map(array(), array()))
-checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")), CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String)))
+checked expr   : map_cat<T0=String, T1=String><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")), CAST<Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String)))
 optimized expr : {"k1":"v1"}
 output type    : Map(String, String)
 output domain  : {[{"k1"..="k1"}], [{"v1"..="v1"}]}
@@ -511,7 +511,7 @@ output         : {'k1':'v1', 'k2':'v2', 'k3':'v3'}
 
 ast            : map_cat({'k1': 'v1', 'k2': NULL}, {'k2': 'v2', 'k3': NULL})
 raw expr       : map_cat(map(array('k1', 'k2'), array('v1', NULL)), map(array('k2', 'k3'), array('v2', NULL)))
-checked expr   : map_cat<T0=String, T1=String NULL><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String NULL><T0, T0>(CAST("v1" AS String NULL), CAST(NULL AS String NULL))), map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k2", "k3"), array<T0=String NULL><T0, T0>(CAST("v2" AS String NULL), CAST(NULL AS String NULL))))
+checked expr   : map_cat<T0=String, T1=String NULL><Map(T0, T1), Map(T0, T1)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String NULL><T0, T0>(CAST<String>("v1" AS String NULL), CAST<NULL>(NULL AS String NULL))), map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k2", "k3"), array<T0=String NULL><T0, T0>(CAST<String>("v2" AS String NULL), CAST<NULL>(NULL AS String NULL))))
 optimized expr : {"k1":"v1", "k2":"v2", "k3":NULL}
 output type    : Map(String, String NULL)
 output domain  : {[{"k1"..="k3"}], [{"v1"..="v2"} ∪ {NULL}]}
@@ -732,7 +732,7 @@ output         : false
 
 ast            : map_contains_key({'a':NULL,'b':2,'c':NULL}, 'a')
 raw expr       : map_contains_key(map(array('a', 'b', 'c'), array(NULL, 2, NULL)), 'a')
-checked expr   : map_contains_key<T0=String, T1=UInt8 NULL><Map(T0, T1), T0>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))), "a")
+checked expr   : map_contains_key<T0=String, T1=UInt8 NULL><Map(T0, T1), T0>(map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8 NULL><T0, T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL))), "a")
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -876,7 +876,7 @@ evaluation (internal):
 
 ast            : map_insert({}, 'k1', 'v1')
 raw expr       : map_insert(map(array(), array()), 'k1', 'v1')
-checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1>(CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String) NULL), "k1", "v1")
+checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1>(CAST<Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, String) NULL), "k1", "v1")
 optimized expr : {"k1":"v1"}
 output type    : Map(String, String)
 output domain  : {[{"k1"..="k1"}], [{"v1"..="v1"}]}
@@ -885,7 +885,7 @@ output         : {'k1':'v1'}
 
 ast            : map_insert({'k1': 'v1'}, 'k2', 'v2')
 raw expr       : map_insert(map(array('k1'), array('v1')), 'k2', 'v2')
-checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")) AS Map(String, String) NULL), "k2", "v2")
+checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1>(CAST<Map(String, String)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")) AS Map(String, String) NULL), "k2", "v2")
 optimized expr : {"k1":"v1", "k2":"v2"}
 output type    : Map(String, String)
 output domain  : {[{"k1"..="k2"}], [{"v1"..="v2"}]}
@@ -902,7 +902,7 @@ error:
 
 ast            : map_insert({'k1': 'v1', 'k2': 'v2'}, 'k1', 'v10', true)
 raw expr       : map_insert(map(array('k1', 'k2'), array('v1', 'v2')), 'k1', 'v10', true)
-checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1, Boolean>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String) NULL), "k1", "v10", true)
+checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1, Boolean>(CAST<Map(String, String)>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")) AS Map(String, String) NULL), "k1", "v10", true)
 optimized expr : {"k1":"v10", "k2":"v2"}
 output type    : Map(String, String)
 output domain  : {[{"k1"..="k2"}], [{"v10"..="v2"}]}
@@ -911,8 +911,8 @@ output         : {'k1':'v10', 'k2':'v2'}
 
 ast            : map_insert(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'k1', 'v10')
 raw expr       : map_insert(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)), 'k1', 'v10')
-checked expr   : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "k1", CAST("v10" AS String NULL))
-optimized expr : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "k1", "v10")
+checked expr   : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1>(CAST<Map(String, String NULL)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "k1", CAST<String>("v10" AS String NULL))
+optimized expr : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1>(CAST<Map(String, String NULL)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "k1", "v10")
 evaluation:
 +--------+-------------+-------------+-------------+---------------+------------------------+------------------------+--------------------------------------------+
 |        | a_col       | b_col       | c_col       | d_col         | e_col                  | f_col                  | Output                                     |
@@ -939,8 +939,8 @@ evaluation (internal):
 
 ast            : map_insert(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'a', 'v10', true)
 raw expr       : map_insert(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)), 'a', 'v10', true)
-checked expr   : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1, Boolean>(CAST(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "a", CAST("v10" AS String NULL), true)
-optimized expr : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1, Boolean>(CAST(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "a", "v10", true)
+checked expr   : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1, Boolean>(CAST<Map(String, String NULL)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "a", CAST<String>("v10" AS String NULL), true)
+optimized expr : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1, Boolean>(CAST<Map(String, String NULL)>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "a", "v10", true)
 evaluation:
 +--------+-------------+-------------+-------------+---------------+------------------------+------------------------+-------------------------------------------+
 |        | a_col       | b_col       | c_col       | d_col         | e_col                  | f_col                  | Output                                    |

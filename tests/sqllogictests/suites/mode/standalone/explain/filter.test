@@ -90,7 +90,7 @@ explain select * from  t2 where d < a;
 ----
 Filter
 ├── output columns: [t2.d (#0), t2.a (#1)]
-├── filters: [t2.d (#0) < to_timestamp(t2.a (#1))]
+├── filters: [t2.d (#0) < CAST(t2.a (#1) AS Timestamp)]
 ├── estimated rows: 40.00
 └── TableScan
     ├── table: default.default.t2
@@ -100,5 +100,5 @@ Filter
     ├── partitions total: 2
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <range pruning: 2 to 0>]
-    ├── push downs: [filters: [t2.d (#0) < to_timestamp(t2.a (#1))], limit: NONE]
+    ├── push downs: [filters: [t2.d (#0) < CAST(t2.a (#1) AS Timestamp)], limit: NONE]
     └── estimated rows: 200.00

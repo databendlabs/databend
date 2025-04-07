@@ -121,11 +121,13 @@ impl UDFFlightClient {
         })
     }
 
-    pub fn with_headers<'a, H: IntoIterator<Item = (&'a str, &'a str)>>(
+    pub fn with_headers<S: AsRef<str>, H: IntoIterator<Item = (S, S)>>(
         mut self,
         headers: H,
     ) -> Result<Self> {
         for (key, value) in headers.into_iter() {
+            let key = key.as_ref();
+            let value = value.as_ref();
             let key = MetadataKey::from_str(key)
                 .map_err(|err| ErrorCode::UDFDataError(format!("Parse key {key} error: {err}")))?;
             let value = MetadataValue::from_str(value).map_err(|err| {

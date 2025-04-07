@@ -46,7 +46,7 @@ use crate::binder::window::find_replaced_window_function;
 use crate::binder::window::WindowInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
