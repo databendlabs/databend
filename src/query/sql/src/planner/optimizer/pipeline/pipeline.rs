@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use log::debug;
 use log::info;
 
 use super::common::contains_local_table_scan;
@@ -93,15 +92,10 @@ impl OptimizerPipeline {
         // Then apply all optimizers in sequence
         let mut current_expr = self.s_expr.clone();
         for optimizer in &mut self.optimizers {
-            let optimizer_name = optimizer.name();
-            debug!("Applying optimizer: {}", optimizer_name);
-
             current_expr = optimizer.optimize(&current_expr).await?;
             if let Some(memo) = optimizer.memo() {
                 self.memo = Some(memo.clone());
             }
-
-            debug!("Optimizer {} completed", optimizer_name);
         }
 
         Ok(current_expr)
