@@ -40,6 +40,7 @@ use crate::optimizer::optimizers::DPhpy;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::util::contains_warehouse_table_scan;
+use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::plans::ConstantTableScan;
 use crate::plans::CopyIntoLocationPlan;
@@ -93,7 +94,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
                 };
 
                 let s_expr =
-                    Box::new(SubqueryRewriter::new(opt_ctx.clone(), None).optimize(&s_expr)?);
+                    Box::new(SubqueryRewriter::new(opt_ctx.clone(), None).optimize_sync(&s_expr)?);
                 Ok(Plan::Explain {
                     kind,
                     config,
@@ -255,7 +256,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     }
 
     // 2. Eliminate subqueries by rewriting them into more efficient forms
-    s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).optimize(&s_expr)?;
+    s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).optimize_sync(&s_expr)?;
 
     // 3. Apply statistics aggregation to gather and propagate statistics
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
@@ -268,40 +269,53 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
         .await?;
 
     // 5. Normalize aggregate, it should be executed before RuleSplitAggregate.
-    s_expr = RuleNormalizeAggregateOptimizer::new().optimize(&s_expr)?;
+    s_expr = RuleNormalizeAggregateOptimizer::new()
+        .optimize(&s_expr)
+        .await?;
 
     // 6. Pull up and infer filter.
-    s_expr = PullUpFilterOptimizer::new(opt_ctx.clone()).optimize(&s_expr)?;
+    s_expr = PullUpFilterOptimizer::new(opt_ctx.clone())
+        .optimize(&s_expr)
+        .await?;
 
     // 7. Run default rewrite rules
-    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize(&s_expr)?;
+    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES)
+        .optimize(&s_expr)
+        .await?;
 
     // 8. Run post rewrite rules
-    s_expr =
-        RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate]).optimize(&s_expr)?;
+    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate])
+        .optimize(&s_expr)
+        .await?;
 
     // 9. Apply DPhyp algorithm for cost-based join reordering
     s_expr = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
 
     // 10. After join reorder, Convert some single join to inner join.
-    s_expr = SingleToInnerOptimizer::new().optimize(&s_expr)?;
+    s_expr = SingleToInnerOptimizer::new().optimize(&s_expr).await?;
 
     // 11. Deduplicate join conditions.
-    s_expr = DeduplicateJoinConditionOptimizer::new().optimize(&s_expr)?;
+    s_expr = DeduplicateJoinConditionOptimizer::new()
+        .optimize(&s_expr)
+        .await?;
 
     // 12. Apply join commutativity to further optimize join ordering
     if opt_ctx.get_enable_join_reorder() {
         s_expr = RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice())
-            .optimize(&s_expr)?;
+            .optimize(&s_expr)
+            .await?;
     }
 
     // 13. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
-    s_expr = CascadesOptimizer::new(opt_ctx.clone())?.optimize(s_expr)?;
+    s_expr = CascadesOptimizer::new(opt_ctx.clone())?
+        .optimize(&s_expr)
+        .await?;
 
     // 14. Eliminate unnecessary scalar calculations to clean up the final plan
     if !opt_ctx.get_planning_agg_index() {
         s_expr = RecursiveOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice())
-            .optimize(&s_expr)?;
+            .optimize(&s_expr)
+            .await?;
     }
 
     Ok(s_expr)
@@ -325,31 +339,32 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
-    s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).optimize(&s_expr)?;
+    s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).optimize_sync(&s_expr)?;
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
-        .optimize(&s_expr)
+        .optimize_async(&s_expr)
         .await?;
 
     // Collect statistics for each leaf node in SExpr.
     s_expr = CollectStatisticsOptimizer::new(opt_ctx.clone())
-        .optimize(&s_expr)
+        .optimize_async(&s_expr)
         .await?;
 
     // Pull up and infer filter.
-    s_expr = PullUpFilterOptimizer::new(opt_ctx.clone()).optimize(&s_expr)?;
+    s_expr = PullUpFilterOptimizer::new(opt_ctx.clone()).optimize_sync(&s_expr)?;
     // Run default rewrite rules
-    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize(&s_expr)?;
-    // Run post rewrite rules
     s_expr =
-        RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate]).optimize(&s_expr)?;
+        RecursiveOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize_sync(&s_expr)?;
+    // Run post rewrite rules
+    s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate])
+        .optimize_sync(&s_expr)?;
 
     // Cost based optimization
     if opt_ctx.get_enable_dphyp() && opt_ctx.get_enable_join_reorder() {
-        s_expr = DPhpy::new(opt_ctx.clone()).optimize(&s_expr).await?;
+        s_expr = DPhpy::new(opt_ctx.clone()).optimize_async(&s_expr).await?;
     }
     let mut cascades = CascadesOptimizer::new(opt_ctx.clone())?;
-    cascades.optimize(s_expr)?;
+    cascades.optimize_sync(s_expr.clone())?;
 
     Ok(cascades.memo)
 }
@@ -358,7 +373,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
     // Optimize the input plan.
     let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
     input_s_expr = RecursiveOptimizer::new(opt_ctx.clone(), &[RuleID::MergeFilterIntoMutation])
-        .optimize(&input_s_expr)?;
+        .optimize_sync(&input_s_expr)?;
 
     // For distributed query optimization, we need to remove the Exchange operator at the top of the plan.
     if let &RelOperator::Exchange(_) = input_s_expr.plan() {

@@ -34,6 +34,7 @@ use crate::optimizer::optimizers::distributed::DistributedOptimizer;
 use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::optimizers::rule::RuleSet;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::IndexType;
 
@@ -88,7 +89,7 @@ impl CascadesOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<SExpr> {
         let opt_ctx = self.opt_ctx.clone();
 
         // Try to optimize using the internal optimizer
@@ -119,7 +120,7 @@ impl CascadesOptimizer {
                     distributed_optimizer.optimize(&s_expr)?
                 } else {
                     // Otherwise return the original expression
-                    s_expr
+                    s_expr.clone()
                 }
             }
         };
@@ -227,5 +228,16 @@ impl CascadesOptimizer {
         let result = SExpr::create(m_expr.plan.clone(), children, None, None, None);
 
         Ok(result)
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for CascadesOptimizer {
+    fn name(&self) -> &'static str {
+        "CascadesOptimizer"
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_sync(s_expr.clone())
     }
 }

@@ -16,6 +16,7 @@ mod cost;
 pub mod ir;
 #[allow(clippy::module_inception)]
 mod optimizer;
+mod optimizer_api;
 mod optimizer_context;
 pub mod optimizers;
 mod statistics;
@@ -23,6 +24,7 @@ mod util;
 
 pub use optimizer::optimize;
 pub use optimizer::optimize_query;
+pub use optimizer_api::Optimizer;
 pub use optimizer_context::OptimizerContext;
 pub use optimizers::rule::agg_index;
 pub use util::contains_local_table_scan;
