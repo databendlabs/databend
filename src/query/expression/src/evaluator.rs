@@ -301,24 +301,21 @@ impl<'a> Evaluator<'a> {
         let (_, eval) = function.eval.as_scalar().unwrap();
         let result = (eval)(&args, &mut ctx);
 
-        match ctx.errors {
-            None => Ok(result),
+        if options.suppress_error {
             // inject errors into options, parent will handle it
-            Some(errors) if options.suppress_error => {
-                options.errors = Some(errors);
-                Ok(result)
-            }
-            Some(errors) => EvalContext::render_error(
+            options.errors = ctx.errors.take();
+        } else {
+            EvalContext::render_error(
                 span,
-                &Some(errors),
+                &ctx.errors,
                 id.params(),
                 args.as_slice(),
                 &function.signature.name,
                 &expr_display(),
                 options.selection,
-            )
-            .map(|_| unreachable!()),
+            )?;
         }
+        Ok(result)
     }
 
     pub fn run_cast(
