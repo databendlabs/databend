@@ -254,4 +254,8 @@ impl Optimizer for CascadesOptimizer {
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr.clone())
     }
+
+    fn memo(&self) -> Option<&Memo> {
+        Some(&self.memo)
+    }
 }
