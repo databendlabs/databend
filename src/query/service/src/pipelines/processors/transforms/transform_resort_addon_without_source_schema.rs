@@ -20,9 +20,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::SourceSchemaIndex;
 use databend_common_expression::ROW_VERSION_COL_NAME;
@@ -90,21 +91,23 @@ pub fn build_expression_transform(
                     )));
                 }
                 let default_value = Scalar::default_value(f.data_type());
-                Expr::Constant {
+                Constant {
                     span: None,
                     scalar: default_value,
                     data_type: f.data_type().clone(),
                 }
+                .into()
             }
         } else {
             let field = input_schema.field_with_name(f.name()).unwrap();
             let id = input_schema.index_of(f.name()).unwrap();
-            Expr::ColumnRef {
+            ColumnRef {
                 span: None,
                 id,
                 data_type: field.data_type().clone(),
                 display_name: field.name().clone(),
             }
+            .into()
         };
         exprs.push(expr);
     }

@@ -22,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
@@ -126,7 +127,7 @@ impl LoadContext {
                             });
                         }
                     };
-                    if let Expr::Constant { scalar, .. } = expr {
+                    if let Expr::Constant(Constant { scalar, .. }) = expr {
                         column_builder.push(scalar.as_ref());
                     } else {
                         let input = DataBlock::new(vec![], 1);

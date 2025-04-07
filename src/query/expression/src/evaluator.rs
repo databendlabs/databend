@@ -50,11 +50,16 @@ use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
 use crate::BlockEntry;
+use crate::Cast;
 use crate::ColumnIndex;
+use crate::ColumnRef;
+use crate::Constant;
+use crate::FunctionCall;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
+use crate::LambdaFunctionCall;
 use crate::RemoteExpr;
 use crate::ScalarRef;
 
@@ -158,14 +163,16 @@ impl<'a> Evaluator<'a> {
         self.check_expr(expr);
 
         let result = match expr {
-            Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
-            Expr::ColumnRef { id, .. } => Ok(self.data_block.get_by_offset(*id).value.clone()),
-            Expr::Cast {
+            Expr::Constant(Constant { scalar, .. }) => Ok(Value::Scalar(scalar.clone())),
+            Expr::ColumnRef(ColumnRef { id, .. }) => {
+                Ok(self.data_block.get_by_offset(*id).value.clone())
+            }
+            Expr::Cast(Cast {
                 span,
                 is_try,
                 expr,
                 dest_type,
-            } => {
+            }) => {
                 let value = self.partial_run(expr, validity.clone(), options)?;
                 if *is_try {
                     self.run_try_cast(*span, expr.data_type(), dest_type, value)
@@ -173,27 +180,29 @@ impl<'a> Evaluator<'a> {
                     self.run_cast(*span, expr.data_type(), dest_type, value, validity, options)
                 }
             }
-            Expr::FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                 function,
                 args,
                 generics,
                 ..
-            } if function.signature.name == "if" => self.eval_if(args, generics, validity, options),
+            }) if function.signature.name == "if" => {
+                self.eval_if(args, generics, validity, options)
+            }
 
-            Expr::FunctionCall { function, args, .. }
+            Expr::FunctionCall(FunctionCall { function, args, .. })
                 if function.signature.name == "and_filters" =>
             {
                 self.eval_and_filters(args, validity, options)
             }
 
-            Expr::FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                 span,
                 id,
                 function,
                 args,
                 generics,
                 ..
-            } => {
+            }) => {
                 let child_suppress_error = function.signature.name == "is_not_error";
                 let mut child_option = options.with_suppress_error(child_suppress_error);
 
@@ -243,13 +252,13 @@ impl<'a> Evaluator<'a> {
 
                 Ok(result)
             }
-            Expr::LambdaFunctionCall {
+            Expr::LambdaFunctionCall(LambdaFunctionCall {
                 name,
                 args,
                 lambda_expr,
                 return_type,
                 ..
-            } => {
+            }) => {
                 let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
                     .iter()
@@ -1033,12 +1042,12 @@ impl<'a> Evaluator<'a> {
         validity: Option<Bitmap>,
         options: &mut EvaluateOptions,
     ) -> Result<Option<Value<AnyType>>> {
-        let expr = Expr::ColumnRef {
+        let expr = Expr::ColumnRef(ColumnRef {
             span,
             id: 0,
             data_type: src_type.clone(),
             display_name: String::new(),
-        };
+        });
 
         let params = if let DataType::Decimal(ty) = dest_type.remove_nullable() {
             vec![
@@ -1212,10 +1221,10 @@ impl<'a> Evaluator<'a> {
     /// for each input row, along with the number of rows in each set.
     pub fn run_srf(
         &self,
-        expr: &Expr,
+        call: &FunctionCall,
         max_nums_per_row: &mut [usize],
     ) -> Result<Vec<(Value<AnyType>, usize)>> {
-        if let Expr::FunctionCall {
+        let FunctionCall {
             span,
             id,
             function,
@@ -1223,37 +1232,39 @@ impl<'a> Evaluator<'a> {
             return_type,
             generics,
             ..
-        } = expr
-        {
-            if let FunctionEval::SRF { eval } = &function.eval {
-                assert!(return_type.as_tuple().is_some());
-                let args = args
-                    .iter()
-                    .map(|expr| self.run(expr))
-                    .collect::<Result<Vec<_>>>()?;
-                let mut ctx = EvalContext {
-                    generics,
-                    num_rows: self.data_block.num_rows(),
-                    validity: None,
-                    errors: None,
-                    func_ctx: self.func_ctx,
-                    suppress_error: false,
-                };
-                let result = (eval)(&args, &mut ctx, max_nums_per_row);
-                ctx.render_error(
-                    *span,
-                    id.params(),
-                    &args,
-                    &function.signature.name,
-                    &expr.sql_display(),
-                    None,
-                )?;
-                assert_eq!(result.len(), self.data_block.num_rows());
-                return Ok(result);
-            }
-        }
+        } = call;
 
-        unreachable!("expr is not a set returning function: {expr}")
+        let FunctionEval::SRF { eval } = &function.eval else {
+            unreachable!(
+                "expr is not a set returning function: {}",
+                function.signature.name
+            );
+        };
+
+        assert!(return_type.as_tuple().is_some());
+        let args = args
+            .iter()
+            .map(|expr| self.run(expr))
+            .collect::<Result<Vec<_>>>()?;
+        let mut ctx = EvalContext {
+            generics,
+            num_rows: self.data_block.num_rows(),
+            validity: None,
+            errors: None,
+            func_ctx: self.func_ctx,
+            suppress_error: false,
+        };
+        let result = (eval)(&args, &mut ctx, max_nums_per_row);
+        ctx.render_error(
+            *span,
+            id.params(),
+            &args,
+            &function.signature.name,
+            &Expr::from(call.clone()).sql_display(),
+            None,
+        )?;
+        assert_eq!(result.len(), self.data_block.num_rows());
+        Ok(result)
     }
 
     fn run_array_reduce(
@@ -1646,20 +1657,20 @@ impl<'a> Evaluator<'a> {
         self.check_expr(expr);
 
         let result = match expr {
-            Expr::Constant { scalar, .. } => Ok((
+            Expr::Constant(Constant { scalar, .. }) => Ok((
                 Value::Scalar(scalar.clone()),
                 scalar.as_ref().infer_data_type(),
             )),
-            Expr::ColumnRef { id, .. } => {
+            Expr::ColumnRef(ColumnRef { id, .. }) => {
                 let entry = self.data_block.get_by_offset(*id);
                 Ok((entry.value.clone(), entry.data_type.clone()))
             }
-            Expr::Cast {
+            Expr::Cast(Cast {
                 span,
                 is_try,
                 expr,
                 dest_type,
-            } => {
+            }) => {
                 let value = self.get_select_child(expr, options)?.0;
                 if *is_try {
                     Ok((
@@ -1673,35 +1684,35 @@ impl<'a> Evaluator<'a> {
                     ))
                 }
             }
-            Expr::FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                 function,
                 args,
                 generics,
                 ..
-            } if function.signature.name == "if" => {
+            }) if function.signature.name == "if" => {
                 let return_type =
                     self.remove_generics_data_type(generics, &function.signature.return_type);
                 Ok((self.eval_if(args, generics, None, options)?, return_type))
             }
 
-            Expr::FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                 function,
                 args,
                 generics,
                 ..
-            } if function.signature.name == "and_filters" => {
+            }) if function.signature.name == "and_filters" => {
                 let return_type =
                     self.remove_generics_data_type(generics, &function.signature.return_type);
                 Ok((self.eval_and_filters(args, None, options)?, return_type))
             }
-            Expr::FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                 span,
                 id,
                 function,
                 args,
                 generics,
                 ..
-            } => {
+            }) => {
                 let child_suppress_error = function.signature.name == "is_not_error";
                 let mut child_option = options.with_suppress_error(child_suppress_error);
                 let args = args
@@ -1752,13 +1763,13 @@ impl<'a> Evaluator<'a> {
                     self.remove_generics_data_type(generics, &function.signature.return_type);
                 Ok((result, return_type))
             }
-            Expr::LambdaFunctionCall {
+            Expr::LambdaFunctionCall(LambdaFunctionCall {
                 name,
                 args,
                 lambda_expr,
                 return_type,
                 ..
-            } => {
+            }) => {
                 let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
                     .iter()
@@ -1863,32 +1874,34 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     #[recursive::recursive]
     fn fold_once(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
         let (new_expr, domain) = match expr {
-            Expr::Constant {
+            Expr::Constant(Constant {
                 scalar, data_type, ..
-            } => (expr.clone(), Some(scalar.as_ref().domain(data_type))),
-            Expr::ColumnRef {
+            }) => (expr.clone(), Some(scalar.as_ref().domain(data_type))),
+            Expr::ColumnRef(ColumnRef {
                 span,
                 id,
                 data_type,
                 ..
-            } => {
+            }) => {
                 let domain = &self.input_domains[id];
                 let expr = domain
                     .as_singleton()
-                    .map(|scalar| Expr::Constant {
-                        span: *span,
-                        scalar,
-                        data_type: data_type.clone(),
+                    .map(|scalar| {
+                        Expr::Constant(Constant {
+                            span: *span,
+                            scalar,
+                            data_type: data_type.clone(),
+                        })
                     })
                     .unwrap_or_else(|| expr.clone());
                 (expr, Some(domain.clone()))
             }
-            Expr::Cast {
+            Expr::Cast(Cast {
                 span,
                 is_try,
                 expr,
                 dest_type,
-            } => {
+            }) => {
                 let (inner_expr, inner_domain) = self.fold_once(expr);
 
                 let new_domain = if *is_try {
@@ -1901,12 +1914,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     })
                 };
 
-                let cast_expr = Expr::Cast {
+                let cast_expr = Expr::Cast(Cast {
                     span: *span,
                     is_try: *is_try,
                     expr: Box::new(inner_expr.clone()),
                     dest_type: dest_type.clone(),
-                };
+                });
 
                 if inner_expr.as_constant().is_some() {
                     let block = DataBlock::empty_with_rows(1);
@@ -1915,11 +1928,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let cast_expr = cast_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
                         return (
-                            Expr::Constant {
+                            Expr::Constant(Constant {
                                 span: *span,
                                 scalar,
                                 data_type: dest_type.clone(),
-                            },
+                            }),
                             None,
                         );
                     }
@@ -1929,23 +1942,25 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     new_domain
                         .as_ref()
                         .and_then(Domain::as_singleton)
-                        .map(|scalar| Expr::Constant {
-                            span: *span,
-                            scalar,
-                            data_type: dest_type.clone(),
+                        .map(|scalar| {
+                            Expr::Constant(Constant {
+                                span: *span,
+                                scalar,
+                                data_type: dest_type.clone(),
+                            })
                         })
                         .unwrap_or(cast_expr),
                     new_domain,
                 )
             }
-            Expr::FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                 span,
                 id,
                 function,
                 generics,
                 args,
                 return_type,
-            } if function.signature.name == "and_filters" => {
+            }) if function.signature.name == "and_filters" => {
                 if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
                     return (expr.clone(), None);
                 }
@@ -1960,17 +1975,17 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let (expr, domain) = self.fold_once(arg);
                     // A temporary hack to make `and_filters` shortcut on false.
                     // TODO(andylokandy): make it a rule in the optimizer.
-                    if let Expr::Constant {
+                    if let Expr::Constant(Constant {
                         scalar: Scalar::Boolean(false),
                         ..
-                    } = &expr
+                    }) = &expr
                     {
                         return (
-                            Expr::Constant {
+                            Expr::Constant(Constant {
                                 span: *span,
                                 scalar: Scalar::Boolean(false),
                                 data_type: DataType::Boolean,
-                            },
+                            }),
                             None,
                         );
                     }
@@ -2004,11 +2019,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         .and_then(|domain| Domain::Boolean(*domain).as_singleton())
                     {
                         return (
-                            Expr::Constant {
+                            Expr::Constant(Constant {
                                 span: *span,
                                 scalar: Scalar::Boolean(false),
                                 data_type: DataType::Boolean,
-                            },
+                            }),
                             None,
                         );
                     }
@@ -2019,25 +2034,25 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     .and_then(|domain| Domain::Boolean(*domain).as_singleton())
                 {
                     return (
-                        Expr::Constant {
+                        Expr::Constant(Constant {
                             span: *span,
                             scalar,
                             data_type: DataType::Boolean,
-                        },
+                        }),
                         None,
                     );
                 }
 
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
 
-                let func_expr = Expr::FunctionCall {
+                let func_expr = Expr::FunctionCall(FunctionCall {
                     span: *span,
                     id: id.clone(),
                     function: function.clone(),
                     generics: generics.clone(),
                     args: args_expr,
                     return_type: return_type.clone(),
-                };
+                });
 
                 if all_args_is_scalar {
                     let block = DataBlock::empty_with_rows(1);
@@ -2046,11 +2061,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
-                            Expr::Constant {
+                            Expr::Constant(Constant {
                                 span: *span,
                                 scalar,
                                 data_type: return_type.clone(),
-                            },
+                            }),
                             None,
                         );
                     }
@@ -2058,14 +2073,14 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 (func_expr, result_domain.map(Domain::Boolean))
             }
-            Expr::FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                 span,
                 id,
                 function,
                 generics,
                 args,
                 return_type,
-            } => {
+            }) => {
                 if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
                     return (expr.clone(), None);
                 }
@@ -2094,14 +2109,14 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     })
                     .unwrap_or_default();
 
-                let func_expr = Expr::FunctionCall {
+                let func_expr = Expr::FunctionCall(FunctionCall {
                     span: *span,
                     id: id.clone(),
                     function: function.clone(),
                     generics: generics.clone(),
                     args: args_expr,
                     return_type: return_type.clone(),
-                };
+                });
 
                 let (calc_domain, eval) = match &function.eval {
                     FunctionEval::Scalar {
@@ -2182,11 +2197,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
                     return (
-                        Expr::Constant {
+                        Expr::Constant(Constant {
                             span: *span,
                             scalar,
                             data_type: return_type.clone(),
-                        },
+                        }),
                         None,
                     );
                 }
@@ -2198,11 +2213,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
-                            Expr::Constant {
+                            Expr::Constant(Constant {
                                 span: *span,
                                 scalar,
                                 data_type: return_type.clone(),
-                            },
+                            }),
                             None,
                         );
                     }
@@ -2210,14 +2225,14 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 (func_expr, func_domain)
             }
-            Expr::LambdaFunctionCall {
+            Expr::LambdaFunctionCall(LambdaFunctionCall {
                 span,
                 name,
                 args,
                 lambda_expr,
                 lambda_display,
                 return_type,
-            } => {
+            }) => {
                 if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
                     return (expr.clone(), None);
                 }
@@ -2229,14 +2244,14 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 }
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
 
-                let func_expr = Expr::LambdaFunctionCall {
+                let func_expr = Expr::LambdaFunctionCall(LambdaFunctionCall {
                     span: *span,
                     name: name.clone(),
                     args: args_expr,
                     lambda_expr: lambda_expr.clone(),
                     lambda_display: lambda_display.clone(),
                     return_type: return_type.clone(),
-                };
+                });
 
                 if all_args_is_scalar {
                     let block = DataBlock::empty_with_rows(1);
@@ -2245,11 +2260,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
-                            Expr::Constant {
+                            Expr::Constant(Constant {
                                 span: *span,
                                 scalar,
                                 data_type: return_type.clone(),
-                            },
+                            }),
                             None,
                         );
                     }
@@ -2439,12 +2454,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         domain: &Domain,
         cast_fn: &str,
     ) -> Option<Option<Domain>> {
-        let expr = Expr::ColumnRef {
+        let expr = Expr::ColumnRef(ColumnRef {
             span,
             id: 0,
             data_type: src_type.clone(),
             display_name: String::new(),
-        };
+        });
 
         let params = if let DataType::Decimal(ty) = dest_type {
             vec![

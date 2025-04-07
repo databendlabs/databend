@@ -19,6 +19,7 @@ use databend_common_ast::ast::SetValues;
 use databend_common_ast::ast::Statement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
@@ -69,7 +70,9 @@ impl Binder {
                             &BUILTIN_FUNCTIONS,
                         );
                         match new_expr {
-                            databend_common_expression::Expr::Constant { scalar, .. } => {
+                            databend_common_expression::Expr::Constant(Constant {
+                                scalar, ..
+                            }) => {
                                 results.push(scalar);
                             }
                             _ => {

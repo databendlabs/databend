@@ -25,7 +25,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::Number;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Expr;
+use databend_common_expression::Constant;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
@@ -210,14 +210,15 @@ pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result
 }
 
 pub fn extract_number_param<T: Number>(param: Scalar) -> Result<T> {
-    check_number::<_, T>(
+    check_number::<T, usize>(
         None,
         &FunctionContext::default(),
-        &Expr::<usize>::Constant {
+        &Constant {
             span: None,
             data_type: param.as_ref().infer_data_type(),
             scalar: param,
-        },
+        }
+        .into(),
         &BUILTIN_FUNCTIONS,
     )
 }

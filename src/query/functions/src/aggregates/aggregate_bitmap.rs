@@ -636,15 +636,10 @@ fn extract_params<T: ValueType>(
 fn extract_number_params<N: Number>(params: Vec<Scalar>) -> Result<Vec<N>> {
     let mut result = Vec::with_capacity(params.len());
     for param in &params {
-        let data_type = param.as_ref().infer_data_type();
-        let val: N = check_number::<_, N>(
+        let val = check_number::<N, usize>(
             None,
             &FunctionContext::default(),
-            &Expr::<usize>::Constant {
-                span: None,
-                scalar: param.clone(),
-                data_type,
-            },
+            &Expr::constant(param.clone(), None),
             &BUILTIN_FUNCTIONS,
         )?;
         result.push(val);

@@ -489,14 +489,10 @@ where State: SumState
         scale_add: u8,
     ) -> Result<AggregateFunctionRef> {
         let window_size = if params.len() == 1 {
-            let window_size = check_number::<_, u64>(
+            let window_size = check_number::<u64, usize>(
                 None,
                 &FunctionContext::default(),
-                &Expr::<usize>::Constant {
-                    span: None,
-                    scalar: params[0].clone(),
-                    data_type: params[0].as_ref().infer_data_type(),
-                },
+                &Expr::constant(params[0].clone(), None),
                 &BUILTIN_FUNCTIONS,
             )?;
             Some(window_size as usize)
@@ -683,14 +679,10 @@ where State: SumState
         return_type: DataType,
     ) -> Result<AggregateFunctionRef> {
         let window_size = if params.len() == 1 {
-            let window_size = check_number::<_, u64>(
+            let window_size = check_number::<u64, usize>(
                 None,
                 &FunctionContext::default(),
-                &Expr::<usize>::Constant {
-                    span: None,
-                    scalar: params[0].clone(),
-                    data_type: params[0].as_ref().infer_data_type(),
-                },
+                &Expr::constant(params[0].clone(), None),
                 &BUILTIN_FUNCTIONS,
             )?;
             Some(window_size as usize)

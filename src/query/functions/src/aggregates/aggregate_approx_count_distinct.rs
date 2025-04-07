@@ -85,14 +85,10 @@ pub fn try_create_aggregate_approx_count_distinct_function(
     let mut p = 14;
 
     if !params.is_empty() {
-        let error_rate = check_number::<_, F64>(
+        let error_rate = check_number::<F64, usize>(
             None,
             &FunctionContext::default(),
-            &Expr::<usize>::Constant {
-                span: None,
-                scalar: params[0].clone(),
-                data_type: params[0].as_ref().infer_data_type(),
-            },
+            &Expr::constant(params[0].clone(), None),
             &BUILTIN_FUNCTIONS,
         )?;
         p = ((1.04f64 / *error_rate).log2() * 2.0).ceil() as u64;

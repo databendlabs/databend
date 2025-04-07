@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
@@ -50,20 +52,21 @@ where Self: Transform
 
         for f in fields.iter() {
             let expr = if !input_schema.has_field(f.name()) {
-                Expr::Constant {
+                Expr::Constant(Constant {
                     span: None,
                     scalar: const_values.remove(0),
                     data_type: f.data_type().clone(),
-                }
+                })
             } else {
                 let field = input_schema.field_with_name(f.name()).unwrap();
                 let id = input_schema.index_of(f.name()).unwrap();
-                Expr::ColumnRef {
+                ColumnRef {
                     span: None,
                     id,
                     data_type: field.data_type().clone(),
                     display_name: field.name().clone(),
                 }
+                .into()
             };
             exprs.push(expr);
         }

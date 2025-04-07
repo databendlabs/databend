@@ -20,6 +20,7 @@ use borsh::BorshSerialize;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::expr::*;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::decimal::Decimal;
@@ -28,7 +29,6 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
-use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
@@ -311,11 +311,7 @@ pub(crate) fn get_levels(params: &Vec<Scalar>) -> Result<Vec<f64>> {
         let level: F64 = check_number(
             None,
             &FunctionContext::default(),
-            &Expr::<usize>::Constant {
-                span: None,
-                scalar: params[0].clone(),
-                data_type: params[0].as_ref().infer_data_type(),
-            },
+            &Expr::constant(params[0].clone(), None),
             &BUILTIN_FUNCTIONS,
         )?;
         let level = level.0;
@@ -331,19 +327,16 @@ pub(crate) fn get_levels(params: &Vec<Scalar>) -> Result<Vec<f64>> {
     } else {
         let mut levels = Vec::with_capacity(params.len());
         for param in params {
-            let level: F64 = check_number(
+            let level: F64 = check_number::<_, usize>(
                 None,
                 &FunctionContext::default(),
-                &Expr::<usize>::Cast {
+                &Cast {
                     span: None,
                     is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: param.clone(),
-                        data_type: param.as_ref().infer_data_type(),
-                    }),
+                    expr: Box::new(Expr::constant(param.clone(), None)),
                     dest_type: DataType::Number(NumberDataType::Float64),
-                },
+                }
+                .into(),
                 &BUILTIN_FUNCTIONS,
             )?;
             let level = level.0;

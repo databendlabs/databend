@@ -33,6 +33,7 @@ use databend_common_expression::types::NumberDomain;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
@@ -922,36 +923,38 @@ impl HashJoinBuildState {
         {
             return Ok(());
         }
-        if let Expr::ColumnRef { id, .. } = probe_key {
-            let mut columns = Vec::with_capacity(data_blocks.len());
-            for block in data_blocks.iter() {
-                if block.num_columns() == 0 {
-                    continue;
-                }
-                let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let column = evaluator
-                    .run(build_key)?
-                    .convert_to_full_column(build_key.data_type(), block.num_rows());
-                columns.push(column);
+        let Expr::ColumnRef(ColumnRef { id, .. }) = probe_key else {
+            return Ok(());
+        };
+
+        let mut columns = Vec::with_capacity(data_blocks.len());
+        for block in data_blocks.iter() {
+            if block.num_columns() == 0 {
+                continue;
             }
-            if columns.is_empty() {
-                return Ok(());
-            }
-            let build_key_column = Column::concat_columns(columns.into_iter())?;
-            // Generate bloom filter using build column
-            let data_type = build_key.data_type();
-            let num_rows = build_key_column.len();
-            let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
-            let mut hashes = HashSet::with_capacity(num_rows);
-            let key_columns = &[build_key_column];
-            hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;
-            let mut hashes_vec = Vec::with_capacity(num_rows);
-            hashes.into_iter().for_each(|hash| {
-                hashes_vec.push(hash);
-            });
-            let filter = BinaryFuse16::try_from(&hashes_vec)?;
-            runtime_filter.add_bloom((id.to_string(), filter));
+            let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let column = evaluator
+                .run(build_key)?
+                .convert_to_full_column(build_key.data_type(), block.num_rows());
+            columns.push(column);
         }
+        if columns.is_empty() {
+            return Ok(());
+        }
+        let build_key_column = Column::concat_columns(columns.into_iter())?;
+        // Generate bloom filter using build column
+        let data_type = build_key.data_type();
+        let num_rows = build_key_column.len();
+        let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
+        let mut hashes = HashSet::with_capacity(num_rows);
+        let key_columns = &[build_key_column];
+        hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;
+        let mut hashes_vec = Vec::with_capacity(num_rows);
+        hashes.into_iter().for_each(|hash| {
+            hashes_vec.push(hash);
+        });
+        let filter = BinaryFuse16::try_from(&hashes_vec)?;
+        runtime_filter.add_bloom((id.to_string(), filter));
         Ok(())
     }
 

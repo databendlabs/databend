@@ -19,6 +19,7 @@ use databend_common_ast::ast::Identifier;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -49,7 +50,7 @@ pub fn bind_table_args(
             let (expr, _) =
                 ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
             match expr {
-                databend_common_expression::Expr::Constant { scalar, .. } => Ok(scalar),
+                databend_common_expression::Expr::Constant(Constant { scalar, .. }) => Ok(scalar),
                 _ => Err(ErrorCode::Unimplemented(format!(
                     "Unsupported table argument type: {:?}",
                     scalar
@@ -67,7 +68,7 @@ pub fn bind_table_args(
                 let (expr, _) =
                     ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
                 match expr {
-                    databend_common_expression::Expr::Constant { scalar, .. } => {
+                    databend_common_expression::Expr::Constant(Constant { scalar, .. }) => {
                         Ok((name.name.clone(), scalar))
                     }
                     _ => Err(ErrorCode::Unimplemented(format!(

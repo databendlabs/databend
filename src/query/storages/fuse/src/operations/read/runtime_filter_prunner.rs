@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::Column;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -79,10 +80,10 @@ pub fn runtime_filter_pruner(
                     &BUILTIN_FUNCTIONS,
                 );
                 debug!("Runtime filter after constant fold is {:?}", new_expr.sql_display());
-                return matches!(new_expr, Expr::Constant {
+                return matches!(new_expr, Expr::Constant(Constant {
                     scalar: Scalar::Boolean(false),
                     ..
-                });
+                }));
             }
         }
         info!("Can't prune the partition by runtime filter, because there is no statistics for the partition");

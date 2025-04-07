@@ -39,7 +39,7 @@ use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Expr;
+use databend_common_expression::Constant;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -353,14 +353,15 @@ where
         arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         let event_size = arguments.len() - 1;
-        let window = check_number::<_, u64>(
+        let window = check_number::<u64, usize>(
             None,
             &FunctionContext::default(),
-            &Expr::<usize>::Constant {
+            &Constant {
                 span: None,
                 scalar: params[0].clone(),
                 data_type: params[0].as_ref().infer_data_type(),
-            },
+            }
+            .into(),
             &BUILTIN_FUNCTIONS,
         )?;
 

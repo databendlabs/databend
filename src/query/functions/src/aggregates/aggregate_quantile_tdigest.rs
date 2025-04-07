@@ -23,6 +23,7 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::expr::*;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::Bitmap;
@@ -407,16 +408,13 @@ where T: Number + AsPrimitive<f64>
             let level: F64 = check_number(
                 None,
                 &FunctionContext::default(),
-                &Expr::<usize>::Cast {
+                &Cast {
                     span: None,
                     is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: params[0].clone(),
-                        data_type: params[0].as_ref().infer_data_type(),
-                    }),
+                    expr: Box::new(Expr::constant(params[0].clone(), None)),
                     dest_type: DataType::Number(NumberDataType::Float64),
-                },
+                }
+                .into(),
                 &BUILTIN_FUNCTIONS,
             )?;
             let level = level.0;
@@ -435,16 +433,16 @@ where T: Number + AsPrimitive<f64>
                 let level: F64 = check_number(
                     None,
                     &FunctionContext::default(),
-                    &Expr::<usize>::Cast {
+                    &Expr::<usize>::Cast(Cast {
                         span: None,
                         is_try: false,
-                        expr: Box::new(Expr::Constant {
+                        expr: Box::new(Expr::Constant(Constant {
                             span: None,
                             scalar: param.clone(),
                             data_type: param.as_ref().infer_data_type(),
-                        }),
+                        })),
                         dest_type: DataType::Number(NumberDataType::Float64),
-                    },
+                    }),
                     &BUILTIN_FUNCTIONS,
                 )?;
                 let level = level.0;

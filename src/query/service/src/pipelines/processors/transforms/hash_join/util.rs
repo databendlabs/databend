@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -61,37 +62,38 @@ pub(crate) fn inlist_filter(
 ) -> Result<Option<Expr<String>>> {
     // Currently, only support key is a column, will support more later.
     // Such as t1.a + 1 = t2.a, or t1.a + t1.b = t2.a (left side is probe side)
-    if let Expr::ColumnRef {
+    let Expr::ColumnRef(ColumnRef {
         span,
         id,
         data_type,
         display_name,
-    } = probe_key
-    {
-        let raw_probe_key = RawExpr::ColumnRef {
-            span: *span,
-            id: id.to_string(),
-            data_type: data_type.clone(),
-            display_name: display_name.clone(),
-        };
-        let array = RawExpr::Constant {
-            span: None,
-            scalar: build_column.as_scalar().unwrap().to_owned(),
-            data_type: None,
-        };
+    }) = probe_key
+    else {
+        return Ok(None);
+    };
 
-        let args = vec![array, raw_probe_key];
-        // Make contain function
-        let contain_func = RawExpr::FunctionCall {
-            span: None,
-            name: "contains".to_string(),
-            params: vec![],
-            args,
-        };
-        let expr = type_check::check(&contain_func, &BUILTIN_FUNCTIONS)?;
-        return Ok(Some(expr));
-    }
-    Ok(None)
+    let raw_probe_key = RawExpr::ColumnRef {
+        span: *span,
+        id: id.to_string(),
+        data_type: data_type.clone(),
+        display_name: display_name.clone(),
+    };
+    let array = RawExpr::Constant {
+        span: None,
+        scalar: build_column.as_scalar().unwrap().to_owned(),
+        data_type: None,
+    };
+
+    let args = vec![array, raw_probe_key];
+    // Make contain function
+    let contain_func = RawExpr::FunctionCall {
+        span: None,
+        name: "contains".to_string(),
+        params: vec![],
+        args,
+    };
+    let expr = type_check::check(&contain_func, &BUILTIN_FUNCTIONS)?;
+    Ok(Some(expr))
 }
 
 // Deduplicate build key column
@@ -231,12 +233,12 @@ pub(crate) fn min_max_filter(
     max: Scalar,
     probe_key: &Expr<String>,
 ) -> Result<Option<Expr<String>>> {
-    if let Expr::ColumnRef {
+    if let Expr::ColumnRef(ColumnRef {
         span,
         id,
         data_type,
         display_name,
-    } = probe_key
+    }) = probe_key
     {
         let raw_probe_key = RawExpr::ColumnRef {
             span: *span,
