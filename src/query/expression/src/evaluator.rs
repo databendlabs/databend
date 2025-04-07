@@ -51,9 +51,11 @@ use crate::values::Scalar;
 use crate::values::Value;
 use crate::BlockEntry;
 use crate::ColumnIndex;
+use crate::Function;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionEval;
+use crate::FunctionID;
 use crate::FunctionRegistry;
 use crate::RemoteExpr;
 use crate::ScalarRef;
@@ -167,10 +169,9 @@ impl<'a> Evaluator<'a> {
                 dest_type,
             } => {
                 let value = self.partial_run(inner, validity.clone(), options)?;
-                let expr_display = &expr.sql_display();
                 let src_type = inner.data_type();
                 if *is_try {
-                    self.run_try_cast(*span, src_type, dest_type, value, expr_display)
+                    self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())
                 } else {
                     self.run_cast(
                         *span,
@@ -178,7 +179,7 @@ impl<'a> Evaluator<'a> {
                         dest_type,
                         value,
                         validity,
-                        expr_display,
+                        &|| expr.sql_display(),
                         options,
                     )
                 }
@@ -204,53 +205,16 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             } => {
-                let child_suppress_error = function.signature.name == "is_not_error";
-                let mut child_option = options.with_suppress_error(child_suppress_error);
-
-                let args = args
-                    .iter()
-                    .map(|expr| self.partial_run(expr, validity.clone(), &mut child_option))
-                    .collect::<Result<Vec<_>>>()?;
-
-                assert!(args
-                    .iter()
-                    .filter_map(|val| match val {
-                        Value::Column(col) => Some(col.len()),
-                        Value::Scalar(_) => None,
-                    })
-                    .all_equal());
-
-                let errors = if !child_suppress_error {
-                    None
-                } else {
-                    child_option.errors.take()
-                };
-                let mut ctx = EvalContext {
-                    generics,
-                    num_rows: self.data_block.num_rows(),
-                    validity,
-                    errors,
-                    func_ctx: self.func_ctx,
-                    suppress_error: options.suppress_error,
-                };
-
-                let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(&args, &mut ctx);
-
-                ctx.render_error(
+                let result = self.run_call(
                     *span,
-                    id.params(),
-                    &args,
-                    &function.signature.name,
-                    &expr.sql_display(),
-                    options.selection,
+                    id,
+                    function,
+                    args,
+                    generics,
+                    validity,
+                    &|| expr.sql_display(),
+                    options,
                 )?;
-
-                // inject errors into options, parent will handle it
-                if options.suppress_error {
-                    options.errors = ctx.errors.take();
-                }
-
                 Ok(result)
             }
             Expr::LambdaFunctionCall {
@@ -293,6 +257,70 @@ impl<'a> Evaluator<'a> {
         result
     }
 
+    fn run_call(
+        &self,
+        span: Span,
+        id: &FunctionID,
+        function: &Function,
+        args: &[Expr],
+        generics: &[DataType],
+        validity: Option<Bitmap>,
+        expr_display: &impl Fn() -> String,
+        options: &mut EvaluateOptions,
+    ) -> Result<Value<AnyType>> {
+        let child_suppress_error = function.signature.name == "is_not_error";
+        let mut child_option = options.with_suppress_error(child_suppress_error);
+
+        let args = args
+            .iter()
+            .map(|expr| self.partial_run(expr, validity.clone(), &mut child_option))
+            .collect::<Result<Vec<_>>>()?;
+
+        assert!(args
+            .iter()
+            .filter_map(|val| match val {
+                Value::Column(col) => Some(col.len()),
+                Value::Scalar(_) => None,
+            })
+            .all_equal());
+
+        let errors = if child_suppress_error {
+            child_option.errors.take()
+        } else {
+            None
+        };
+        let mut ctx = EvalContext {
+            generics,
+            num_rows: self.data_block.num_rows(),
+            validity,
+            errors,
+            func_ctx: self.func_ctx,
+            suppress_error: options.suppress_error,
+        };
+
+        let (_, eval) = function.eval.as_scalar().unwrap();
+        let result = (eval)(&args, &mut ctx);
+
+        match ctx.errors {
+            None => Ok(result),
+            // inject errors into options, parent will handle it
+            Some(errors) if options.suppress_error => {
+                options.errors = Some(errors);
+                Ok(result)
+            }
+            Some(errors) => EvalContext::render_error(
+                span,
+                &Some(errors),
+                id.params(),
+                args.as_slice(),
+                &function.signature.name,
+                &expr_display(),
+                options.selection,
+            )
+            .map(|_| unreachable!()),
+        }
+    }
+
     pub fn run_cast(
         &self,
         span: Span,
@@ -300,7 +328,7 @@ impl<'a> Evaluator<'a> {
         dest_type: &DataType,
         value: Value<AnyType>,
         validity: Option<Bitmap>,
-        expr_display: &str,
+        expr_display: &impl Fn() -> String,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
@@ -873,7 +901,7 @@ impl<'a> Evaluator<'a> {
         src_type: &DataType,
         dest_type: &DataType,
         value: Value<AnyType>,
-        expr_display: &str,
+        expr_display: &impl Fn() -> String,
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
             return Ok(value);
@@ -1072,9 +1100,13 @@ impl<'a> Evaluator<'a> {
         value: Value<AnyType>,
         cast_fn: &str,
         validity: Option<Bitmap>,
-        expr_display: &str,
+        expr_display: &impl Fn() -> String,
         options: &mut EvaluateOptions,
     ) -> Result<Option<Value<AnyType>>> {
+        if src_type.remove_nullable() == dest_type.remove_nullable() {
+            return Ok(None);
+        }
+
         let expr = Expr::ColumnRef {
             span,
             id: 0,
@@ -1097,9 +1129,11 @@ impl<'a> Evaluator<'a> {
         };
 
         let Expr::FunctionCall {
+            id,
             function,
             generics,
             return_type,
+            args,
             ..
         } = &func_expr
         else {
@@ -1118,33 +1152,18 @@ impl<'a> Evaluator<'a> {
                 Value::Column(col) => col.len(),
             });
 
-        let mut ctx = EvalContext {
+        let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], num_rows);
+        let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+        let result = evaluator.run_call(
+            span,
+            id,
+            function,
+            args,
             generics,
-            num_rows,
             validity,
-            errors: None,
-            func_ctx: self.func_ctx,
-            suppress_error: options.suppress_error,
-        };
-
-        let (_, eval) = function.eval.as_scalar().unwrap();
-        let args = [value];
-        let result = (eval)(&args, &mut ctx);
-
-        // inject errors into options, parent will handle it
-        if options.suppress_error {
-            options.errors = ctx.errors.take();
-        } else {
-            ctx.render_error(
-                span,
-                &params,
-                &args,
-                &function.signature.name,
-                expr_display,
-                options.selection,
-            )?;
-        }
-
+            expr_display,
+            options,
+        )?;
         Ok(Some(result))
     }
 
@@ -1317,14 +1336,17 @@ impl<'a> Evaluator<'a> {
                     suppress_error: false,
                 };
                 let result = (eval)(&args, &mut ctx, max_nums_per_row);
-                ctx.render_error(
-                    *span,
-                    id.params(),
-                    &args,
-                    &function.signature.name,
-                    &expr.sql_display(),
-                    None,
-                )?;
+                if !ctx.suppress_error {
+                    EvalContext::render_error(
+                        *span,
+                        &ctx.errors,
+                        id.params(),
+                        &args,
+                        &function.signature.name,
+                        &expr.sql_display(),
+                        None,
+                    )?;
+                }
                 assert_eq!(result.len(), self.data_block.num_rows());
                 return Ok(result);
             }
@@ -1355,7 +1377,6 @@ impl<'a> Evaluator<'a> {
             entries.push(BlockEntry::new(col_type.clone(), Value::Scalar(arg1)));
             let block = DataBlock::new(entries, 1);
             let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-            let expr_display = &expr.sql_display();
             let result = evaluator.run(expr)?;
             arg0 = self
                 .run_cast(
@@ -1364,7 +1385,7 @@ impl<'a> Evaluator<'a> {
                     &col_type,
                     result,
                     None,
-                    expr_display,
+                    &|| expr.sql_display(),
                     &mut eval_options,
                 )?
                 .into_scalar()
@@ -1739,10 +1760,9 @@ impl<'a> Evaluator<'a> {
                 dest_type,
             } => {
                 let value = self.get_select_child(expr, options)?.0;
-                let expr_display = expr.sql_display();
                 let src_type = expr.data_type();
                 let value = if *is_try {
-                    self.run_try_cast(*span, src_type, dest_type, value, &expr_display)?
+                    self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
                 } else {
                     self.run_cast(
                         *span,
@@ -1750,7 +1770,7 @@ impl<'a> Evaluator<'a> {
                         dest_type,
                         value,
                         None,
-                        &expr_display,
+                        &|| expr.sql_display(),
                         options,
                     )?
                 };
@@ -1817,18 +1837,19 @@ impl<'a> Evaluator<'a> {
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(&args, &mut ctx);
 
-                ctx.render_error(
-                    *span,
-                    id.params(),
-                    &args,
-                    &function.signature.name,
-                    &expr.sql_display(),
-                    options.selection,
-                )?;
-
                 // inject errors into options, parent will handle it
                 if options.suppress_error {
                     options.errors = ctx.errors.take();
+                } else {
+                    EvalContext::render_error(
+                        *span,
+                        &ctx.errors,
+                        id.params(),
+                        &args,
+                        &function.signature.name,
+                        &expr.sql_display(),
+                        options.selection,
+                    )?
                 }
 
                 let return_type =

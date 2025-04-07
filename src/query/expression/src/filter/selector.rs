@@ -521,14 +521,17 @@ impl<'a> Selector<'a> {
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(&args, &mut ctx);
-                ctx.render_error(
-                    *span,
-                    id.params(),
-                    &args,
-                    &function.signature.name,
-                    &expr.sql_display(),
-                    selection,
-                )?;
+                if !ctx.suppress_error {
+                    EvalContext::render_error(
+                        *span,
+                        &ctx.errors,
+                        id.params(),
+                        &args,
+                        &function.signature.name,
+                        &expr.sql_display(),
+                        selection,
+                    )?;
+                }
                 let data_type = self
                     .evaluator
                     .remove_generics_data_type(generics, &function.signature.return_type);
@@ -549,11 +552,10 @@ impl<'a> Selector<'a> {
                 );
                 let mut eval_options = EvaluateOptions::new(selection);
                 let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
-                let expr_display = &expr.sql_display();
                 let src_type = expr.data_type();
                 let result = if *is_try {
                     self.evaluator
-                        .run_try_cast(*span, src_type, dest_type, value, expr_display)?
+                        .run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
                 } else {
                     self.evaluator.run_cast(
                         *span,
@@ -561,7 +563,7 @@ impl<'a> Selector<'a> {
                         dest_type,
                         value,
                         None,
-                        expr_display,
+                        &|| expr.sql_display(),
                         &mut eval_options,
                     )?
                 };
