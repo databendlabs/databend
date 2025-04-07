@@ -317,10 +317,6 @@ impl PersistentLogTable for QueryDetailsTable {
                 "exception_text",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
-            TableField::new(
-                "stack_trace",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
             // Server.
             TableField::new(
                 "server_version",
