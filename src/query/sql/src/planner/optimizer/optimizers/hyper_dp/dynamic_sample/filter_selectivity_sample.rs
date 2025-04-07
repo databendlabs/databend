@@ -71,8 +71,10 @@ pub async fn filter_selectivity_sample(
             new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
 
             let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
-            let collect_statistics_optimizer = CollectStatisticsOptimizer::new(opt_ctx);
-            new_s_expr = collect_statistics_optimizer.optimize(&new_s_expr).await?;
+            let mut collect_statistics_optimizer = CollectStatisticsOptimizer::new(opt_ctx);
+            new_s_expr = collect_statistics_optimizer
+                .optimize_async(&new_s_expr)
+                .await?;
         }
 
         new_s_expr = SExpr::create_unary(
