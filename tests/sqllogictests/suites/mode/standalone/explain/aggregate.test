@@ -44,23 +44,36 @@ AggregateFinal
         └── estimated rows: 10.00
 
 
+## TODO optimize group by constant
 query T
-explain select 1 from numbers(10) group by 1;
+explain select 1 a from numbers(10) group by a;
 ----
 EvalScalar
-├── output columns: [1 (#2)]
-├── expressions: [1]
+├── output columns: [a (#2)]
+├── expressions: [group_item (#1)]
 ├── estimated rows: 10.00
-└── TableScan
-    ├── table: default.system.numbers
-    ├── output columns: []
-    ├── read rows: 10
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
-
+└── AggregateFinal
+    ├── output columns: [a (#1)]
+    ├── group by: [a]
+    ├── aggregate functions: []
+    ├── estimated rows: 10.00
+    └── AggregatePartial
+        ├── group by: [a]
+        ├── aggregate functions: []
+        ├── estimated rows: 10.00
+        └── EvalScalar
+            ├── output columns: [a (#1)]
+            ├── expressions: [1]
+            ├── estimated rows: 10.00
+            └── TableScan
+                ├── table: default.system.numbers
+                ├── output columns: []
+                ├── read rows: 10
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 10.00
 
 
 query T
