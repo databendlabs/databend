@@ -214,22 +214,6 @@ impl PersistentLogTable for QueryDetailsTable {
                 "current_database",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
-            TableField::new(
-                "databases",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
-            TableField::new(
-                "tables",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
-            TableField::new(
-                "columns",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
-            TableField::new(
-                "projections",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
             // Stats.
             TableField::new(
                 "written_rows",
@@ -304,14 +288,6 @@ impl PersistentLogTable for QueryDetailsTable {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
             TableField::new(
-                "cpu_usage",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt32))),
-            ),
-            TableField::new(
-                "memory_usage",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
                 "bytes_from_remote_disk",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
@@ -324,10 +300,6 @@ impl PersistentLogTable for QueryDetailsTable {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
             // Client.
-            TableField::new(
-                "client_info",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
             TableField::new(
                 "client_address",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
@@ -357,15 +329,6 @@ impl PersistentLogTable for QueryDetailsTable {
             // Session
             TableField::new(
                 "query_tag",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
-            TableField::new(
-                "session_settings",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
-            // Extra.
-            TableField::new(
-                "extra",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
             TableField::new(
