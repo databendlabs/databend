@@ -13,7 +13,7 @@ SELECT max(number) from numbers_mt(10000)
 ----
 9999
 
-query F
+query ?
 SELECT avg(number) from numbers_mt(10000)
 ----
 4999.5
@@ -23,7 +23,7 @@ SELECT count(number) from numbers_mt(10000)
 ----
 10000
 
-query F
+query ?
 SELECT sum(number)/count(number) from numbers_mt(10000)
 ----
 4999.5
@@ -78,33 +78,33 @@ select count(distinct 3) from numbers(10000)
 ----
 1
 
-query B
+query ?
 select uniq(number, number + 1 , number + 3 )  =  count(distinct number, number + 1 , number + 3 ) from ( select number % 100 as number from numbers(100000))
 ----
 1
 
-query B
+query ?
 select uniq(number::Float64)  = 100 from ( select number % 100 as number from numbers(100000))
 ----
 1
 
-query B
+query ?
 SELECT std(number) between  2886.751 and 2886.752 from numbers_mt(10000)
 ----
 1
 
-query B
+query ?
 SELECT stddev_pop(number) between  2886.751 and 2886.752 from numbers_mt(10000)
 ----
 1
 
 
-query F
+query ?
 SELECT covar_samp(number, number) from (select * from numbers_mt(5) order by number asc)
 ----
 2.5
 
-query F
+query ?
 SELECT covar_pop(number, number) from (select * from numbers_mt(5) order by number asc)
 ----
 2.0
@@ -187,7 +187,7 @@ SELECT arg_max(id, arr), arg_min(id, arr) FROM (SELECT id, arr FROM t2)
 ----
 3 1
 
-query IIFI
+query II?I
 select number % 3,   sum(number), avg(number),  count() from numbers(100) group by number % 3  order by number % 3
 ----
 0 1683 49.5 34
@@ -209,12 +209,12 @@ SELECT quantile_cont(0.6)(number) from numbers_mt(10000)
 ----
 5999.4
 
-query F
+query ?
 SELECT quantile_cont(0)(number) from numbers_mt(10000)
 ----
 0.0
 
-query F
+query ?
 SELECT quantile_cont(1)(number) from numbers_mt(10000)
 ----
 9999.0
@@ -242,7 +242,7 @@ SELECT quantile_disc(0, 0.5, 0.6, 1)(number::decimal(10,2)) from numbers_mt(1000
 ----
 [0.00,4999.00,5999.00,9999.00]
 
-query F
+query ?
 SELECT quantile_tdigest(0.6)(number) from numbers_mt(10000)
 ----
 5999.5
@@ -252,7 +252,7 @@ SELECT quantile_tdigest(0, 0.5, 0.6, 1)(number) from numbers_mt(10000)
 ----
 [0.0,4999.5,5999.5,9999.0]
 
-query F
+query ?
 SELECT quantile_tdigest_weighted(0.6)(number, 1) from numbers_mt(10000)
 ----
 5999.5
@@ -470,7 +470,7 @@ insert into aggavg values('R010', '149350', 18.66635193, 1, 246), ('R010', '1493
 statement ok
 create table aggavg1 as select t.goodsid, t.md, avg(t.avgcostvalue) avgcostvalue_1, sum(t.avgcostvalue) ss, count(t.avgcostvalue) cnt from aggavg t where t.sdate_rn = 1 group by t.goodsid, t.md
 
-query TTFFF
+query TT???
 select * from aggavg1
 ----
 149350 246 18.998175965000 37.99635193 2
@@ -492,12 +492,12 @@ insert into d values
     (5.99, 'xyz', 300, '[1,2,3]', ['z'])
 
 
-query F
+query ?
 select stddev_samp(a) from d;
 ----
 7.055988000745655
 
-query F
+query ?
 select stddev_samp(a) from d where b = 'abc';
 ----
 NULL
@@ -505,12 +505,12 @@ NULL
 query TTTTT
 select json_array_agg(a), json_array_agg(b), json_array_agg(c), json_array_agg(d), json_array_agg(e), json_array_agg('a') from d
 ----
-[20.0,10.0,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
+["20.00","10.00","4.23","5.99"] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
 
 query TTTTT
 select json_object_agg(b, a), json_object_agg(b, c), json_object_agg(b, d), json_object_agg(b, e), json_object_agg(b, 'a') from d
 ----
-{"abc":20.0,"de":10.0,"xyz":5.99} {"de":100,"xyz":300} {"abc":{"k":"v"},"de":null,"xyz":[1,2,3]} {"abc":["a","b"],"de":[],"xyz":["z"]} {"abc":"a","de":"a","xyz":"a"}
+{"abc":"20.00","de":"10.00","xyz":"5.99"} {"de":100,"xyz":300} {"abc":{"k":"v"},"de":null,"xyz":[1,2,3]} {"abc":["a","b"],"de":[],"xyz":["z"]} {"abc":"a","de":"a","xyz":"a"}
 
 query TTTTT
 select array_agg(a), array_agg(b), array_agg(c), array_agg(d), array_agg(e), array_agg('a') from d

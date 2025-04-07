@@ -29,10 +29,10 @@ insert into v values (1.1)
 query 
 select t2.$1:a, a from  @data/ndjson/ (files=>('json_sample.ndjson'), file_format=>'ndjson') as t2, v order by t2.$1:a
 ----
-false 1.1
-false 1.1
-true 1.1
-true 1.1
+false "1.1"
+false "1.1"
+true "1.1"
+true "1.1"
 
 query 
 copy into v from (select $1:b from @data/ndjson/ t2) files=('json_sample.ndjson') file_format = (type = ndjson)
@@ -43,10 +43,10 @@ query
 select $1 from v order by $1
 ----
 1
-1.1
 2
 3
 4
+"1.1"
 
 # ndjson only supports $1
 query error column position 2 doesn't exist

@@ -230,7 +230,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
             NumberScalar::Float32(n) => n.0.into(),
             NumberScalar::Float64(n) => n.0.into(),
         },
-        ScalarRef::Decimal(x) => x.to_float64().into(),
+        ScalarRef::Decimal(x) => x.to_string().into(),
         ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
         ScalarRef::Binary(s) => jsonb::Value::String(hex::encode_upper(s).into()),
         ScalarRef::String(s) => jsonb::Value::String(s.into()),

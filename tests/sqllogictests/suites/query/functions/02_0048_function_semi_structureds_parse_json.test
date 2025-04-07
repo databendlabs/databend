@@ -16,7 +16,7 @@ select to_variant(123)
 query T
 select to_variant(12.34)
 ----
-12.34
+"12.34"
 
 query T
 select parse_json('null')
@@ -106,7 +106,7 @@ select try_to_variant(123)
 query T
 select try_to_variant(12.34)
 ----
-12.34
+"12.34"
 
 query T
 select try_parse_json('null')
