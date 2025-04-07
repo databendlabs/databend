@@ -29,6 +29,7 @@ class HeadersMiddlewareFactory(flight.ServerMiddlewareFactory):
     def start_call(self, info, headers):
         return HeadersMiddleware(headers)
 
+
 class HeadersMiddleware(flight.ServerMiddleware):
     _headers: Dict[str, str]
 
@@ -40,20 +41,24 @@ class HeadersMiddleware(flight.ServerMiddleware):
         print(self._headers)
         return self._headers.get(key)
 
-class CheckHeadersServer(UDFServer):
 
+class CheckHeadersServer(UDFServer):
     def do_exchange(self, context, descriptor, reader, writer):
         headers = context.get_middleware("headers")
 
-        if descriptor.path == [b'check_headers']:
+        if descriptor.path == [b"check_headers"]:
             required_header = "x-authorization"
             expect_token = ["123"]
             token = headers.get_token(required_header)
 
             if token is None:
-                raise flight.FlightUnauthenticatedError(f"Missing required header: {required_header.upper()}")
+                raise flight.FlightUnauthenticatedError(
+                    f"Missing required header: {required_header.upper()}"
+                )
             if token != expect_token:
-                raise flight.FlightUnauthenticatedError(f"Wrong token(expect: {expect_token}): {token}")
+                raise flight.FlightUnauthenticatedError(
+                    f"Wrong token(expect: {expect_token}): {token}"
+                )
 
         return super().do_exchange(context, descriptor, reader, writer)
 
@@ -411,9 +416,9 @@ def check_headers() -> str:
 
 
 if __name__ == "__main__":
-    udf_server = CheckHeadersServer(location="0.0.0.0:8815", middleware={
-        "headers": HeadersMiddlewareFactory()
-    })
+    udf_server = CheckHeadersServer(
+        location="0.0.0.0:8815", middleware={"headers": HeadersMiddlewareFactory()}
+    )
     udf_server.add_function(add_signed)
     udf_server.add_function(add_unsigned)
     udf_server.add_function(add_float)

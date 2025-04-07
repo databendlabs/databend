@@ -17,7 +17,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
-use databend_common_sql::optimizer::operator::NormalizeDisjunctiveFilterOptimizer;
+use databend_common_sql::optimizer::optimizers::operator::NormalizeDisjunctiveFilterOptimizer;
 use databend_common_sql::planner::binder::ColumnBinding;
 use databend_common_sql::planner::binder::Visibility;
 use databend_common_sql::planner::plans::BoundColumnRef;
@@ -102,7 +102,7 @@ fn create_constant_bool(value: bool) -> ScalarExpr {
 /// Runs the NormalizeDisjunctiveFilterOptimizer on the given predicates
 fn run_optimizer(predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
     let optimizer = NormalizeDisjunctiveFilterOptimizer::new();
-    optimizer.run(predicates)
+    optimizer.optimize(predicates)
 }
 
 /// Converts a ScalarExpr to a readable string representation

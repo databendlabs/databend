@@ -17,9 +17,9 @@ use educe::Educe;
 
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::optimizer::optimizers::cascades::SharedCounter;
-use crate::optimizer::rule::TransformResult;
-use crate::optimizer::RuleFactory;
-use crate::optimizer::RuleID;
+use crate::optimizer::optimizers::rule::RuleFactory;
+use crate::optimizer::optimizers::rule::RuleID;
+use crate::optimizer::optimizers::rule::TransformResult;
 use crate::IndexType;
 
 #[derive(Educe)]

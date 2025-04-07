@@ -1,6 +1,6 @@
 ast            : length(to_binary('latin'))
 raw expr       : length(to_binary('latin'))
-checked expr   : length<Binary>(to_binary<String>("latin"))
+checked expr   : length<Binary>(CAST<String>("latin" AS Binary))
 optimized expr : 5_u64
 output type    : UInt64
 output domain  : {5..=5}
@@ -9,7 +9,7 @@ output         : 5
 
 ast            : length(to_binary(NULL))
 raw expr       : length(to_binary(NULL))
-checked expr   : length<Binary NULL>(to_binary<Variant NULL>(CAST(NULL AS Variant NULL)))
+checked expr   : length<Binary NULL>(CAST<Variant NULL>(CAST<NULL>(NULL AS Variant NULL) AS Binary NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -40,7 +40,7 @@ evaluation (internal):
 
 ast            : to_base64('Abc')
 raw expr       : to_base64('Abc')
-checked expr   : to_base64<Binary>(to_binary<String>("Abc"))
+checked expr   : to_base64<Binary>(CAST<String>("Abc" AS Binary))
 optimized expr : "QWJj"
 output type    : String
 output domain  : {"QWJj"..="QWJj"}
@@ -49,7 +49,7 @@ output         : 'QWJj'
 
 ast            : to_base64('123')
 raw expr       : to_base64('123')
-checked expr   : to_base64<Binary>(to_binary<String>("123"))
+checked expr   : to_base64<Binary>(CAST<String>("123" AS Binary))
 optimized expr : "MTIz"
 output type    : String
 output domain  : {"MTIz"..="MTIz"}
@@ -58,7 +58,7 @@ output         : 'MTIz'
 
 ast            : to_base64(Null)
 raw expr       : to_base64(NULL)
-checked expr   : to_base64<Binary NULL>(CAST(NULL AS Binary NULL))
+checked expr   : to_base64<Binary NULL>(CAST<NULL>(NULL AS Binary NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -67,7 +67,7 @@ output         : NULL
 
 ast            : to_base64(a)
 raw expr       : to_base64(a::String)
-checked expr   : to_base64<Binary>(to_binary<String>(a))
+checked expr   : to_base64<Binary>(CAST<String>(a AS Binary))
 evaluation:
 +--------+-----------------+--------+
 |        | a               | Output |
@@ -88,7 +88,7 @@ evaluation (internal):
 
 ast            : to_hex(to_binary('abc'))
 raw expr       : to_hex(to_binary('abc'))
-checked expr   : to_hex<Binary>(to_binary<String>("abc"))
+checked expr   : to_hex<Binary>(CAST<String>("abc" AS Binary))
 optimized expr : "616263"
 output type    : String
 output domain  : {"616263"..="616263"}
@@ -97,7 +97,7 @@ output         : '616263'
 
 ast            : to_hex(to_binary(a))
 raw expr       : to_hex(to_binary(a::String))
-checked expr   : to_hex<Binary>(to_binary<String>(a))
+checked expr   : to_hex<Binary>(CAST<String>(a AS Binary))
 evaluation:
 +--------+-----------------+--------------------+
 |        | a               | Output             |
@@ -119,7 +119,7 @@ evaluation (internal):
 
 ast            : from_base64('QWJj')::String
 raw expr       : CAST(from_base64('QWJj') AS String)
-checked expr   : to_string<Binary>(from_base64<String>("QWJj"))
+checked expr   : CAST<Binary>(from_base64<String>("QWJj") AS String)
 optimized expr : "Abc"
 output type    : String
 output domain  : {"Abc"..="Abc"}
@@ -128,7 +128,7 @@ output         : 'Abc'
 
 ast            : from_base64('MTIz')::String
 raw expr       : CAST(from_base64('MTIz') AS String)
-checked expr   : to_string<Binary>(from_base64<String>("MTIz"))
+checked expr   : CAST<Binary>(from_base64<String>("MTIz") AS String)
 optimized expr : "123"
 output type    : String
 output domain  : {"123"..="123"}
@@ -137,7 +137,7 @@ output         : '123'
 
 ast            : from_base64(a)::String
 raw expr       : CAST(from_base64(a::String) AS String)
-checked expr   : to_string<Binary>(from_base64<String>(a))
+checked expr   : CAST<Binary>(from_base64<String>(a) AS String)
 evaluation:
 +--------+-------------------+---------+
 |        | a                 | Output  |
@@ -166,7 +166,7 @@ error:
 
 ast            : from_hex('6461746162656e64')::String
 raw expr       : CAST(from_hex('6461746162656e64') AS String)
-checked expr   : to_string<Binary>(from_hex<String>("6461746162656e64"))
+checked expr   : CAST<Binary>(from_hex<String>("6461746162656e64") AS String)
 optimized expr : "databend"
 output type    : String
 output domain  : {"databend"..="databend"}
@@ -183,7 +183,7 @@ error:
 
 ast            : from_hex(s)::String
 raw expr       : CAST(from_hex(s::String) AS String)
-checked expr   : to_string<Binary>(from_hex<String>(s))
+checked expr   : CAST<Binary>(from_hex<String>(s) AS String)
 evaluation:
 +--------+-----------------------+------------+
 |        | s                     | Output     |
@@ -205,7 +205,7 @@ evaluation (internal):
 
 ast            : to_binary(parse_json('{"k1":"val","k2":100}'))
 raw expr       : to_binary(parse_json('{"k1":"val","k2":100}'))
-checked expr   : to_binary<Variant>(parse_json<String>("{\"k1\":\"val\",\"k2\":100}"))
+checked expr   : CAST<Variant>(CAST<String>("{\"k1\":\"val\",\"k2\":100}" AS Variant) AS Binary)
 optimized expr : 40000002100000021000000210000003200000026B316B3276616C5064
 output type    : Binary
 output domain  : Undefined
@@ -214,7 +214,7 @@ output         : 40000002100000021000000210000003200000026B316B3276616C5064
 
 ast            : to_binary(parse_json('10'))
 raw expr       : to_binary(parse_json('10'))
-checked expr   : to_binary<Variant>(parse_json<String>("10"))
+checked expr   : CAST<Variant>(CAST<String>("10" AS Variant) AS Binary)
 optimized expr : 2000000020000002500A
 output type    : Binary
 output domain  : Undefined
@@ -223,7 +223,7 @@ output         : 2000000020000002500A
 
 ast            : to_binary(parse_json('123456'))
 raw expr       : to_binary(parse_json('123456'))
-checked expr   : to_binary<Variant>(parse_json<String>("123456"))
+checked expr   : CAST<Variant>(CAST<String>("123456" AS Variant) AS Binary)
 optimized expr : 2000000020000005500001E240
 output type    : Binary
 output domain  : Undefined
@@ -232,7 +232,7 @@ output         : 2000000020000005500001E240
 
 ast            : to_binary(parse_json('"abcd"'))
 raw expr       : to_binary(parse_json('"abcd"'))
-checked expr   : to_binary<Variant>(parse_json<String>("\"abcd\""))
+checked expr   : CAST<Variant>(CAST<String>("\"abcd\"" AS Variant) AS Binary)
 optimized expr : 200000001000000461626364
 output type    : Binary
 output domain  : Undefined
@@ -241,7 +241,7 @@ output         : 200000001000000461626364
 
 ast            : to_binary(to_bitmap('1,2,3'))
 raw expr       : to_binary(to_bitmap('1,2,3'))
-checked expr   : to_binary<Bitmap>(to_bitmap<String>("1,2,3"))
+checked expr   : CAST<Bitmap>(CAST<String>("1,2,3" AS Bitmap) AS Binary)
 optimized expr : 0100000000000000000000003A300000010000000000020010000000010002000300
 output type    : Binary
 output domain  : Undefined
@@ -250,7 +250,7 @@ output         : 0100000000000000000000003A3000000100000000000200100000000100020
 
 ast            : to_binary(to_bitmap('100,25,50,700'))
 raw expr       : to_binary(to_bitmap('100,25,50,700'))
-checked expr   : to_binary<Bitmap>(to_bitmap<String>("100,25,50,700"))
+checked expr   : CAST<Bitmap>(CAST<String>("100,25,50,700" AS Bitmap) AS Binary)
 optimized expr : 0100000000000000000000003A300000010000000000030010000000190032006400BC02
 output type    : Binary
 output domain  : Undefined
@@ -259,7 +259,7 @@ output         : 0100000000000000000000003A3000000100000000000300100000001900320
 
 ast            : to_binary(st_geometryfromwkt('SRID=4326;POINT(1.0 2.0)'))
 raw expr       : to_binary(st_geometryfromwkt('SRID=4326;POINT(1.0 2.0)'))
-checked expr   : to_binary<Geometry>(st_geometryfromwkt<String>("SRID=4326;POINT(1.0 2.0)"))
+checked expr   : CAST<Geometry>(st_geometryfromwkt<String>("SRID=4326;POINT(1.0 2.0)") AS Binary)
 optimized expr : 0101000020E6100000000000000000F03F0000000000000040
 output type    : Binary
 output domain  : Undefined
@@ -268,7 +268,7 @@ output         : 0101000020E6100000000000000000F03F0000000000000040
 
 ast            : to_binary(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))
 raw expr       : to_binary(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))
-checked expr   : to_binary<Geometry>(st_geometryfromwkb<Binary>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641")))
+checked expr   : CAST<Geometry>(st_geometryfromwkb<Binary>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641")) AS Binary)
 optimized expr : 0101000020797F000066666666A9CB17411F85EBC19E325641
 output type    : Binary
 output domain  : Undefined
@@ -277,7 +277,7 @@ output         : 0101000020797F000066666666A9CB17411F85EBC19E325641
 
 ast            : to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
 raw expr       : to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
-checked expr   : to_binary<Geography>(st_geographyfromewkt<String>("SRID=4326;POINT(-122.35 37.55)"))
+checked expr   : CAST<Geography>(st_geographyfromewkt<String>("SRID=4326;POINT(-122.35 37.55)") AS Binary)
 optimized expr : 0101000020E61000006666666666965EC06666666666C64240
 output type    : Binary
 output domain  : Undefined
@@ -286,7 +286,7 @@ output         : 0101000020E61000006666666666965EC06666666666C64240
 
 ast            : TRY_from_base64('QWJj')::String
 raw expr       : CAST(TRY_from_base64('QWJj') AS String)
-checked expr   : CAST(try_from_base64<String>("QWJj") AS String)
+checked expr   : CAST<Binary NULL>(try_from_base64<String>("QWJj") AS String)
 optimized expr : "Abc"
 output type    : String
 output domain  : {"Abc"..="Abc"}
@@ -295,7 +295,7 @@ output         : 'Abc'
 
 ast            : TRY_from_base64('MTIz')::String
 raw expr       : CAST(TRY_from_base64('MTIz') AS String)
-checked expr   : CAST(try_from_base64<String>("MTIz") AS String)
+checked expr   : CAST<Binary NULL>(try_from_base64<String>("MTIz") AS String)
 optimized expr : "123"
 output type    : String
 output domain  : {"123"..="123"}
@@ -304,7 +304,7 @@ output         : '123'
 
 ast            : TRY_from_base64(a)::String
 raw expr       : CAST(TRY_from_base64(a::String) AS String)
-checked expr   : CAST(try_from_base64<String>(a) AS String)
+checked expr   : CAST<Binary NULL>(try_from_base64<String>(a) AS String)
 evaluation:
 +--------+-------------------+---------+
 |        | a                 | Output  |
@@ -334,7 +334,7 @@ output         : NULL
 
 ast            : TRY_from_hex('6461746162656e64')::String
 raw expr       : CAST(TRY_from_hex('6461746162656e64') AS String)
-checked expr   : CAST(try_from_hex<String>("6461746162656e64") AS String)
+checked expr   : CAST<Binary NULL>(try_from_hex<String>("6461746162656e64") AS String)
 optimized expr : "databend"
 output type    : String
 output domain  : {"databend"..="databend"}
@@ -352,7 +352,7 @@ output         : NULL
 
 ast            : TRY_from_hex(s)::String
 raw expr       : CAST(TRY_from_hex(s::String) AS String)
-checked expr   : CAST(try_from_hex<String>(s) AS String)
+checked expr   : CAST<Binary NULL>(try_from_hex<String>(s) AS String)
 evaluation:
 +--------+-----------------------+------------+
 |        | s                     | Output     |
@@ -374,7 +374,7 @@ evaluation (internal):
 
 ast            : TRY_to_binary(parse_json('{"k1":"val","k2":100}'))
 raw expr       : TRY_to_binary(parse_json('{"k1":"val","k2":100}'))
-checked expr   : try_to_binary<Variant>(parse_json<String>("{\"k1\":\"val\",\"k2\":100}"))
+checked expr   : TRY_CAST<Variant>(CAST<String>("{\"k1\":\"val\",\"k2\":100}" AS Variant) AS Binary NULL)
 optimized expr : 40000002100000021000000210000003200000026B316B3276616C5064
 output type    : Binary NULL
 output domain  : Undefined
@@ -383,7 +383,7 @@ output         : 40000002100000021000000210000003200000026B316B3276616C5064
 
 ast            : TRY_to_binary(parse_json('10'))
 raw expr       : TRY_to_binary(parse_json('10'))
-checked expr   : try_to_binary<Variant>(parse_json<String>("10"))
+checked expr   : TRY_CAST<Variant>(CAST<String>("10" AS Variant) AS Binary NULL)
 optimized expr : 2000000020000002500A
 output type    : Binary NULL
 output domain  : Undefined
@@ -392,7 +392,7 @@ output         : 2000000020000002500A
 
 ast            : TRY_to_binary(parse_json('123456'))
 raw expr       : TRY_to_binary(parse_json('123456'))
-checked expr   : try_to_binary<Variant>(parse_json<String>("123456"))
+checked expr   : TRY_CAST<Variant>(CAST<String>("123456" AS Variant) AS Binary NULL)
 optimized expr : 2000000020000005500001E240
 output type    : Binary NULL
 output domain  : Undefined
@@ -401,7 +401,7 @@ output         : 2000000020000005500001E240
 
 ast            : TRY_to_binary(parse_json('"abcd"'))
 raw expr       : TRY_to_binary(parse_json('"abcd"'))
-checked expr   : try_to_binary<Variant>(parse_json<String>("\"abcd\""))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"abcd\"" AS Variant) AS Binary NULL)
 optimized expr : 200000001000000461626364
 output type    : Binary NULL
 output domain  : Undefined
@@ -410,7 +410,7 @@ output         : 200000001000000461626364
 
 ast            : TRY_to_binary(to_bitmap('1,2,3'))
 raw expr       : TRY_to_binary(to_bitmap('1,2,3'))
-checked expr   : try_to_binary<Bitmap>(to_bitmap<String>("1,2,3"))
+checked expr   : TRY_CAST<Bitmap>(CAST<String>("1,2,3" AS Bitmap) AS Binary NULL)
 optimized expr : 0100000000000000000000003A300000010000000000020010000000010002000300
 output type    : Binary NULL
 output domain  : Undefined
@@ -419,7 +419,7 @@ output         : 0100000000000000000000003A3000000100000000000200100000000100020
 
 ast            : TRY_to_binary(to_bitmap('100,25,50,700'))
 raw expr       : TRY_to_binary(to_bitmap('100,25,50,700'))
-checked expr   : try_to_binary<Bitmap>(to_bitmap<String>("100,25,50,700"))
+checked expr   : TRY_CAST<Bitmap>(CAST<String>("100,25,50,700" AS Bitmap) AS Binary NULL)
 optimized expr : 0100000000000000000000003A300000010000000000030010000000190032006400BC02
 output type    : Binary NULL
 output domain  : Undefined
@@ -428,7 +428,7 @@ output         : 0100000000000000000000003A3000000100000000000300100000001900320
 
 ast            : TRY_to_binary(st_geometryfromwkt('SRID=4326;POINT(1.0 2.0)'))
 raw expr       : TRY_to_binary(st_geometryfromwkt('SRID=4326;POINT(1.0 2.0)'))
-checked expr   : try_to_binary<Geometry>(st_geometryfromwkt<String>("SRID=4326;POINT(1.0 2.0)"))
+checked expr   : TRY_CAST<Geometry>(st_geometryfromwkt<String>("SRID=4326;POINT(1.0 2.0)") AS Binary NULL)
 optimized expr : 0101000020E6100000000000000000F03F0000000000000040
 output type    : Binary NULL
 output domain  : Undefined
@@ -437,7 +437,7 @@ output         : 0101000020E6100000000000000000F03F0000000000000040
 
 ast            : TRY_to_binary(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))
 raw expr       : TRY_to_binary(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))
-checked expr   : try_to_binary<Geometry>(st_geometryfromwkb<Binary>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641")))
+checked expr   : TRY_CAST<Geometry>(st_geometryfromwkb<Binary>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641")) AS Binary NULL)
 optimized expr : 0101000020797F000066666666A9CB17411F85EBC19E325641
 output type    : Binary NULL
 output domain  : Undefined
@@ -446,7 +446,7 @@ output         : 0101000020797F000066666666A9CB17411F85EBC19E325641
 
 ast            : TRY_to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
 raw expr       : TRY_to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
-checked expr   : try_to_binary<Geography>(st_geographyfromewkt<String>("SRID=4326;POINT(-122.35 37.55)"))
+checked expr   : TRY_CAST<Geography>(st_geographyfromewkt<String>("SRID=4326;POINT(-122.35 37.55)") AS Binary NULL)
 optimized expr : 0101000020E61000006666666666965EC06666666666C64240
 output type    : Binary NULL
 output domain  : Undefined

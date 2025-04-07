@@ -36,7 +36,7 @@ use crate::binder::InternalColumnBinding;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::operator::SubqueryRewriter;
+use crate::optimizer::optimizers::operator::SubqueryRewriter;
 use crate::optimizer::OptimizerContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
@@ -313,7 +313,7 @@ impl MutationExpression {
                     let opt_ctx =
                         OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());
                     let mut rewriter = SubqueryRewriter::new(opt_ctx, None);
-                    let s_expr = rewriter.rewrite(&s_expr)?;
+                    let s_expr = rewriter.optimize(&s_expr)?;
 
                     Ok(MutationExpressionBindResult {
                         input: s_expr,

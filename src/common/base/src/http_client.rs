@@ -17,11 +17,29 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Duration;
 
+use hickory_resolver::config::LookupIpStrategy;
 use reqwest_hickory_resolver::HickoryResolver;
+use reqwest_hickory_resolver::ResolverOpts;
 
 /// Global shared hickory resolver.
-static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> =
-    LazyLock::new(|| Arc::new(HickoryResolver::default()));
+static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> = LazyLock::new(|| {
+    let mut opts = ResolverOpts::default();
+    // Only query for the ipv4 address.
+    opts.ip_strategy = LookupIpStrategy::Ipv4Only;
+    // Use larger cache size for better performance.
+    opts.cache_size = 1024;
+    // Positive TTL is set to 5 minutes.
+    opts.positive_min_ttl = Some(Duration::from_secs(300));
+    // Negative TTL is set to 1 minute.
+    opts.negative_min_ttl = Some(Duration::from_secs(60));
+
+    Arc::new(
+        HickoryResolver::default()
+            // Always shuffle the DNS results for better performance.
+            .with_shuffle(true)
+            .with_options(opts),
+    )
+});
 
 /// Global shared http client.
 ///

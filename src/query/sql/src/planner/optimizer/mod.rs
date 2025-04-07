@@ -13,25 +13,16 @@
 // limitations under the License.
 
 mod cost;
-mod distributed;
 pub mod ir;
-pub mod operator;
 #[allow(clippy::module_inception)]
 mod optimizer;
 mod optimizer_context;
 pub mod optimizers;
-pub mod rule;
 mod statistics;
 mod util;
-
-mod dynamic_sample;
 
 pub use optimizer::optimize;
 pub use optimizer::optimize_query;
 pub use optimizer_context::OptimizerContext;
-pub use rule::agg_index;
-pub use rule::RuleFactory;
-pub use rule::RuleID;
-pub use rule::RuleSet;
-pub use rule::DEFAULT_REWRITE_RULES;
+pub use optimizers::rule::agg_index;
 pub use util::contains_local_table_scan;

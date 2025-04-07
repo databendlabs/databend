@@ -13,10 +13,12 @@
 // limitations under the License.
 
 mod cascades;
+pub mod distributed;
 mod hyper_dp;
-mod recursive;
+pub mod operator;
+pub mod recursive;
+pub mod rule;
 
 pub use cascades::CascadesOptimizer;
 pub use cascades::Scheduler;
 pub use hyper_dp::DPhpy;
-pub use recursive::RecursiveOptimizer;

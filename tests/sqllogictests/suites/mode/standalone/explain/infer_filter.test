@@ -738,28 +738,15 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 0.00
 
-
-statement ok
-drop table if exists t1;
-
-statement ok
-drop table if exists t2;
-
 statement ok
 drop table if exists t3;
 
 # merge predicates with different data types.
 statement ok
-drop table if exists t1;
+create or replace table t1(id BIGINT NOT NULL);
 
 statement ok
-drop table if exists t2;
-
-statement ok
-create table t1(id BIGINT NOT NULL);
-
-statement ok
-create table t2(id BIGINT UNSIGNED NULL);
+create or replace table t2(id BIGINT UNSIGNED NULL);
 
 statement ok
 insert into t1 values(869550529);

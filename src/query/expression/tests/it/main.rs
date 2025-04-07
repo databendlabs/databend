@@ -29,6 +29,7 @@ mod block;
 mod block_thresholds;
 mod common;
 mod decimal;
+mod display;
 mod fill_field_default_value;
 mod group_by;
 mod hilbert;

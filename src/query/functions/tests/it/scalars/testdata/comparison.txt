@@ -9,7 +9,7 @@ output         : false
 
 ast            : null=null
 raw expr       : eq(NULL, NULL)
-checked expr   : eq<Variant NULL, Variant NULL>(CAST(NULL AS Variant NULL), CAST(NULL AS Variant NULL))
+checked expr   : eq<Variant NULL, Variant NULL>(CAST<NULL>(NULL AS Variant NULL), CAST<NULL>(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -27,7 +27,7 @@ output         : false
 
 ast            : 1.0=1
 raw expr       : eq(1.0, 1)
-checked expr   : eq<Decimal(2, 1), Decimal(3, 0)>(1.0_d128(2,1), to_decimal<UInt8>(3, 0)(1_u8))
+checked expr   : eq<Decimal(2, 1), Decimal(3, 0)>(1.0_d128(2,1), CAST<UInt8>(1_u8 AS Decimal(3, 0)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -45,7 +45,7 @@ output         : true
 
 ast            : true=null
 raw expr       : eq(true, NULL)
-checked expr   : eq<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
+checked expr   : eq<Boolean NULL, Boolean NULL>(CAST<Boolean>(true AS Boolean NULL), CAST<NULL>(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -99,7 +99,7 @@ output         : true
 
 ast            : [true]=[]
 raw expr       : eq(array(true), array())
-checked expr   : eq<T0=Boolean><Array(T0), Array(T0)>(array<T0=Boolean><T0>(true), CAST(array<>() AS Array(Boolean)))
+checked expr   : eq<T0=Boolean><Array(T0), Array(T0)>(array<T0=Boolean><T0>(true), CAST<Array(Nothing)>(array<>() AS Array(Boolean)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -140,7 +140,7 @@ output         : false
 
 ast            : today()='2020-01-01'
 raw expr       : eq(today(), '2020-01-01')
-checked expr   : eq<Date, Date>(today<>(), to_date<String>("2020-01-01"))
+checked expr   : eq<Date, Date>(today<>(), CAST<String>("2020-01-01" AS Date))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -149,7 +149,7 @@ output         : false
 
 ast            : to_interval('1 hour')=to_interval('3600 seconds')
 raw expr       : eq(to_interval('1 hour'), to_interval('3600 seconds'))
-checked expr   : eq<Interval, Interval>(to_interval<String>("1 hour"), to_interval<String>("3600 seconds"))
+checked expr   : eq<Interval, Interval>(CAST<String>("1 hour" AS Interval), CAST<String>("3600 seconds" AS Interval))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -158,7 +158,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)=to_timestamp(-100)
 raw expr       : eq(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : eq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+checked expr   : eq<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -167,7 +167,7 @@ output         : false
 
 ast            : lhs = rhs
 raw expr       : eq(lhs::UInt8, rhs::Int64)
-checked expr   : eq<Int64, Int64>(to_int64<UInt8>(lhs), rhs)
+checked expr   : eq<Int64, Int64>(CAST<UInt8>(lhs AS Int64), rhs)
 evaluation:
 +--------+----------+-----------+---------------+
 |        | lhs      | rhs       | Output        |
@@ -207,7 +207,7 @@ output         : true
 
 ast            : parse_json('[1,2,3,["a","b","c"]]') = parse_json('[1,2,3,["a","b","c"]]')
 raw expr       : eq(parse_json('[1,2,3,["a","b","c"]]'), parse_json('[1,2,3,["a","b","c"]]'))
-checked expr   : eq<Variant, Variant>(parse_json<String>("[1,2,3,[\"a\",\"b\",\"c\"]]"), parse_json<String>("[1,2,3,[\"a\",\"b\",\"c\"]]"))
+checked expr   : eq<Variant, Variant>(CAST<String>("[1,2,3,[\"a\",\"b\",\"c\"]]" AS Variant), CAST<String>("[1,2,3,[\"a\",\"b\",\"c\"]]" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -216,7 +216,7 @@ output         : true
 
 ast            : parse_json(lhs) = parse_json(rhs)
 raw expr       : eq(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : eq<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : eq<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+------------------------------------------+------------------------------------------+---------+
 |        | lhs                                      | rhs                                      | Output  |
@@ -306,7 +306,7 @@ output         : false
 
 ast            : true != null
 raw expr       : noteq(true, NULL)
-checked expr   : noteq<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
+checked expr   : noteq<Boolean NULL, Boolean NULL>(CAST<Boolean>(true AS Boolean NULL), CAST<NULL>(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -383,7 +383,7 @@ output         : true
 
 ast            : to_interval('1 hour')!=to_interval('3600 seconds')
 raw expr       : noteq(to_interval('1 hour'), to_interval('3600 seconds'))
-checked expr   : noteq<Interval, Interval>(to_interval<String>("1 hour"), to_interval<String>("3600 seconds"))
+checked expr   : noteq<Interval, Interval>(CAST<String>("1 hour" AS Interval), CAST<String>("3600 seconds" AS Interval))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -392,7 +392,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)!=to_timestamp(-100)
 raw expr       : noteq(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : noteq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+checked expr   : noteq<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -401,7 +401,7 @@ output         : true
 
 ast            : parse_json('"databend"') != parse_json('"databend"')
 raw expr       : noteq(parse_json('"databend"'), parse_json('"databend"'))
-checked expr   : noteq<Variant, Variant>(parse_json<String>("\"databend\""), parse_json<String>("\"databend\""))
+checked expr   : noteq<Variant, Variant>(CAST<String>("\"databend\"" AS Variant), CAST<String>("\"databend\"" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -410,7 +410,7 @@ output         : false
 
 ast            : parse_json(lhs) != parse_json(rhs)
 raw expr       : noteq(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : noteq<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : noteq<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+----------------------------------+----------------------------------+---------+
 |        | lhs                              | rhs                              | Output  |
@@ -494,7 +494,7 @@ output         : false
 
 ast            : true < null
 raw expr       : lt(true, NULL)
-checked expr   : lt<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
+checked expr   : lt<Boolean NULL, Boolean NULL>(CAST<Boolean>(true AS Boolean NULL), CAST<NULL>(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -557,7 +557,7 @@ output         : true
 
 ast            : to_interval('29 days')<to_interval('1 month')
 raw expr       : lt(to_interval('29 days'), to_interval('1 month'))
-checked expr   : lt<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
+checked expr   : lt<Interval, Interval>(CAST<String>("29 days" AS Interval), CAST<String>("1 month" AS Interval))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -566,7 +566,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)<to_timestamp(-100)
 raw expr       : lt(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : lt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+checked expr   : lt<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -575,7 +575,7 @@ output         : true
 
 ast            : parse_json('"true"') < parse_json('"false"')
 raw expr       : lt(parse_json('"true"'), parse_json('"false"'))
-checked expr   : lt<Variant, Variant>(parse_json<String>("\"true\""), parse_json<String>("\"false\""))
+checked expr   : lt<Variant, Variant>(CAST<String>("\"true\"" AS Variant), CAST<String>("\"false\"" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -584,7 +584,7 @@ output         : false
 
 ast            : parse_json(lhs) >= parse_json(rhs)
 raw expr       : gte(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : gte<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : gte<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+-------------------------+-------------------------+---------+
 |        | lhs                     | rhs                     | Output  |
@@ -674,7 +674,7 @@ output         : true
 
 ast            : true <= null
 raw expr       : lte(true, NULL)
-checked expr   : lte<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
+checked expr   : lte<Boolean NULL, Boolean NULL>(CAST<Boolean>(true AS Boolean NULL), CAST<NULL>(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -737,7 +737,7 @@ output         : true
 
 ast            : parse_json('null') <= parse_json('null')
 raw expr       : lte(parse_json('null'), parse_json('null'))
-checked expr   : lte<Variant, Variant>(parse_json<String>("null"), parse_json<String>("null"))
+checked expr   : lte<Variant, Variant>(CAST<String>("null" AS Variant), CAST<String>("null" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -746,7 +746,7 @@ output         : true
 
 ast            : to_interval('29 days')<=to_interval('1 month')
 raw expr       : lte(to_interval('29 days'), to_interval('1 month'))
-checked expr   : lte<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
+checked expr   : lte<Interval, Interval>(CAST<String>("29 days" AS Interval), CAST<String>("1 month" AS Interval))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -755,7 +755,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-100)
 raw expr       : lte(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+checked expr   : lte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -764,7 +764,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-315360000000000)
 raw expr       : lte(to_timestamp(minus(315360000000000)), to_timestamp(minus(315360000000000)))
-checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+checked expr   : lte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -773,7 +773,7 @@ output         : true
 
 ast            : parse_json(lhs) <= parse_json(rhs)
 raw expr       : lte(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : lte<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : lte<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+------------------------------------------------+------------------------------------------------+---------+
 |        | lhs                                            | rhs                                            | Output  |
@@ -855,7 +855,7 @@ output         : false
 
 ast            : true > null
 raw expr       : gt(true, NULL)
-checked expr   : gt<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
+checked expr   : gt<Boolean NULL, Boolean NULL>(CAST<Boolean>(true AS Boolean NULL), CAST<NULL>(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -918,7 +918,7 @@ output         : false
 
 ast            : to_interval('29 days')>to_interval('1 month')
 raw expr       : gt(to_interval('29 days'), to_interval('1 month'))
-checked expr   : gt<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
+checked expr   : gt<Interval, Interval>(CAST<String>("29 days" AS Interval), CAST<String>("1 month" AS Interval))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -927,7 +927,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)>to_timestamp(-100)
 raw expr       : gt(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+checked expr   : gt<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -936,7 +936,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)>to_timestamp(-315360000000000)
 raw expr       : gt(to_timestamp(minus(315360000000000)), to_timestamp(minus(315360000000000)))
-checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+checked expr   : gt<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -945,7 +945,7 @@ output         : false
 
 ast            : parse_json('{"k":"v","a":"b"}') > parse_json('{"k":"v","a":"d"}')
 raw expr       : gt(parse_json('{"k":"v","a":"b"}'), parse_json('{"k":"v","a":"d"}'))
-checked expr   : gt<Variant, Variant>(parse_json<String>("{\"k\":\"v\",\"a\":\"b\"}"), parse_json<String>("{\"k\":\"v\",\"a\":\"d\"}"))
+checked expr   : gt<Variant, Variant>(CAST<String>("{\"k\":\"v\",\"a\":\"b\"}" AS Variant), CAST<String>("{\"k\":\"v\",\"a\":\"d\"}" AS Variant))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -954,7 +954,7 @@ output         : false
 
 ast            : parse_json(lhs) > parse_json(rhs)
 raw expr       : gt(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : gt<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : gt<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+-----------------------+-----------------------+---------+
 |        | lhs                   | rhs                   | Output  |
@@ -1062,7 +1062,7 @@ output         : true
 
 ast            : true >= null
 raw expr       : gte(true, NULL)
-checked expr   : gte<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
+checked expr   : gte<Boolean NULL, Boolean NULL>(CAST<Boolean>(true AS Boolean NULL), CAST<NULL>(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -1125,7 +1125,7 @@ output         : false
 
 ast            : to_interval('29 days')>=to_interval('1 month')
 raw expr       : gte(to_interval('29 days'), to_interval('1 month'))
-checked expr   : gte<Interval, Interval>(to_interval<String>("29 days"), to_interval<String>("1 month"))
+checked expr   : gte<Interval, Interval>(CAST<String>("29 days" AS Interval), CAST<String>("1 month" AS Interval))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1134,7 +1134,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-100)
 raw expr       : gte(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+checked expr   : gte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1143,7 +1143,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-315360000000000)
 raw expr       : gte(to_timestamp(minus(315360000000000)), to_timestamp(minus(315360000000000)))
-checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+checked expr   : gte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1152,7 +1152,7 @@ output         : true
 
 ast            : parse_json('1.912e2') >= parse_json('1.912e2')
 raw expr       : gte(parse_json('1.912e2'), parse_json('1.912e2'))
-checked expr   : gte<Variant, Variant>(parse_json<String>("1.912e2"), parse_json<String>("1.912e2"))
+checked expr   : gte<Variant, Variant>(CAST<String>("1.912e2" AS Variant), CAST<String>("1.912e2" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1161,7 +1161,7 @@ output         : true
 
 ast            : parse_json(lhs) >= parse_json(rhs)
 raw expr       : gte(parse_json(lhs::String), parse_json(rhs::String))
-checked expr   : gte<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
+checked expr   : gte<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
 evaluation:
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------+
 |        | lhs                                                       | rhs                                                       | Output  |
@@ -1382,7 +1382,7 @@ evaluation (internal):
 
 ast            : parse_json('"hello"') like 'h%'
 raw expr       : like(parse_json('"hello"'), 'h%')
-checked expr   : like<Variant, String>(parse_json<String>("\"hello\""), "h%")
+checked expr   : like<Variant, String>(CAST<String>("\"hello\"" AS Variant), "h%")
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1391,7 +1391,7 @@ output         : true
 
 ast            : parse_json('{"abc":1,"def":22}') like '%e%'
 raw expr       : like(parse_json('{"abc":1,"def":22}'), '%e%')
-checked expr   : like<Variant, String>(parse_json<String>("{\"abc\":1,\"def\":22}"), "%e%")
+checked expr   : like<Variant, String>(CAST<String>("{\"abc\":1,\"def\":22}" AS Variant), "%e%")
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1400,7 +1400,7 @@ output         : true
 
 ast            : parse_json('{"k1":"abc","k2":"def"}') like '%e%'
 raw expr       : like(parse_json('{"k1":"abc","k2":"def"}'), '%e%')
-checked expr   : like<Variant, String>(parse_json<String>("{\"k1\":\"abc\",\"k2\":\"def\"}"), "%e%")
+checked expr   : like<Variant, String>(CAST<String>("{\"k1\":\"abc\",\"k2\":\"def\"}" AS Variant), "%e%")
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1409,7 +1409,7 @@ output         : true
 
 ast            : parse_json(lhs) like 'a%'
 raw expr       : like(parse_json(lhs::String), 'a%')
-checked expr   : like<Variant, String>(parse_json<String>(lhs), "a%")
+checked expr   : like<Variant, String>(CAST<String>(lhs AS Variant), "a%")
 evaluation:
 +--------+------------------------------+---------+
 |        | lhs                          | Output  |
@@ -1431,7 +1431,7 @@ evaluation (internal):
 
 ast            : parse_json(lhs) like '%ab%'
 raw expr       : like(parse_json(lhs::String), '%ab%')
-checked expr   : like<Variant, String>(parse_json<String>(lhs), "%ab%")
+checked expr   : like<Variant, String>(CAST<String>(lhs AS Variant), "%ab%")
 evaluation:
 +--------+------------------------------+---------+
 |        | lhs                          | Output  |

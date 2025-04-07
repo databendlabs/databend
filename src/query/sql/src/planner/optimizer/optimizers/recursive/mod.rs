@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod optimizer;
+#[allow(clippy::module_inception)]
+mod recursive;
 
-pub use optimizer::RecursiveOptimizer;
+pub use recursive::RecursiveOptimizer;

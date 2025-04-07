@@ -20,9 +20,9 @@ use databend_common_exception::Result;
 use crate::optimizer::ir::expr::PatternExtractor;
 use crate::optimizer::ir::group::Group;
 use crate::optimizer::ir::Memo;
-use crate::optimizer::rule::AppliedRules;
-use crate::optimizer::rule::RulePtr;
-use crate::optimizer::rule::TransformResult;
+use crate::optimizer::optimizers::rule::AppliedRules;
+use crate::optimizer::optimizers::rule::RulePtr;
+use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::RelOperator;
 use crate::IndexType;
 
