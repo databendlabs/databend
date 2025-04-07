@@ -29,6 +29,7 @@ use log::debug;
 
 use crate::read::load_context::LoadContext;
 
+#[derive(Default)]
 pub struct BlockBuilderState {
     pub column_builders: Vec<ColumnBuilder>,
     pub internal_column_builders: Vec<ColumnBuilder>,
