@@ -92,11 +92,8 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
                     ));
                 };
 
-                let mut s_expr = s_expr;
-                if s_expr.contain_subquery() {
-                    s_expr =
-                        Box::new(SubqueryRewriter::new(opt_ctx.clone(), None).optimize(&s_expr)?);
-                }
+                let s_expr =
+                    Box::new(SubqueryRewriter::new(opt_ctx.clone(), None).optimize(&s_expr)?);
                 Ok(Plan::Explain {
                     kind,
                     config,
@@ -328,9 +325,7 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, mut s_expr: SExpr) -
     }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
-    if s_expr.contain_subquery() {
-        s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).optimize(&s_expr)?;
-    }
+    s_expr = SubqueryRewriter::new(opt_ctx.clone(), None).optimize(&s_expr)?;
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
         .optimize(&s_expr)
