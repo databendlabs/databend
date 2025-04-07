@@ -185,7 +185,7 @@ impl CacheManager {
                     Unit::Bytes,
                     &bloom_filter_on_disk_cache_path,
                     on_disk_cache_queue_size,
-                    config.disk_cache_table_bloom_index_filter_size as usize,
+                    config.disk_cache_table_bloom_index_data_size as usize,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
                 )?
