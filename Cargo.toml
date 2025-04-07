@@ -589,7 +589,7 @@ debug = 1
 lto = "thin"
 overflow-checks = false
 opt-level = "s"         # defaults to be 3
-incremental = true
+#incremental = true
 
 [profile.ci]
 inherits = "release"
