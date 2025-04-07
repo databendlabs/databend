@@ -2981,7 +2981,7 @@ dependencies = [
  "logos",
  "nom",
  "nom-rule",
- "ordered-float 4.5.0",
+ "ordered-float 5.0.0",
  "percent-encoding",
  "pratt",
  "pretty_assertions",
@@ -9185,14 +9185,14 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.4.4"
-source = "git+https://github.com/b41sh/jsonb?rev=52e46f0f50225011d7aba38a53b1f046411e3a13#52e46f0f50225011d7aba38a53b1f046411e3a13"
+source = "git+https://github.com/b41sh/jsonb?rev=1e9f58bc50246fcba782e1cd90de9233cffae6e3#1e9f58bc50246fcba782e1cd90de9233cffae6e3"
 dependencies = [
  "byteorder",
  "fast-float2",
  "itoa",
  "nom",
  "num-traits",
- "ordered-float 4.5.0",
+ "ordered-float 5.0.0",
  "rand 0.8.5",
  "ryu",
  "serde",
@@ -10850,6 +10850,15 @@ dependencies = [
  "num-traits",
  "rand 0.8.5",
  "serde",
+]
+
+[[package]]
+name = "ordered-float"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2c1f9f56e534ac6a9b8a4600bdf0f530fb393b5f393e7b4d03489c3cf0c3f01"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]

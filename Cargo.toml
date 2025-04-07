@@ -405,7 +405,7 @@ openraft = { version = "0.10.0", features = [
 ] }
 opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", rev = "a1fb4da", features = ["tls"] }
 orc-rust = "0.5.0"
-ordered-float = { version = "4.5.0", default-features = false }
+ordered-float = { version = "5.0.0", default-features = false }
 ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
@@ -639,7 +639,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
-jsonb = { git = "https://github.com/b41sh/jsonb", rev = "52e46f0f50225011d7aba38a53b1f046411e3a13" }
+jsonb = { git = "https://github.com/b41sh/jsonb", rev = "1e9f58bc50246fcba782e1cd90de9233cffae6e3" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.3" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
