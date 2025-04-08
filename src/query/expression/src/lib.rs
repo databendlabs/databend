@@ -43,6 +43,7 @@
 #![feature(alloc_layout_extra)]
 #![feature(debug_closure_helpers)]
 #![feature(never_type)]
+extern crate core;
 
 #[allow(dead_code)]
 mod block;

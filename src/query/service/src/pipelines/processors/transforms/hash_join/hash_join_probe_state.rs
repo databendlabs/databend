@@ -541,6 +541,7 @@ impl HashJoinProbeState {
             } else {
                 None
             };
+
             result_blocks.push(self.merge_eq_block(
                 probe_block,
                 build_block,

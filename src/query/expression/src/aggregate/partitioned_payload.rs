@@ -130,9 +130,9 @@ impl PartitionedPayload {
         if self.payloads.len() == 1 {
             self.payloads[0].reserve_append_rows(
                 &state.empty_vector,
-                &state.group_hashes,
-                &mut state.addresses,
-                &mut state.page_index,
+                state.group_hashes.as_slice(),
+                state.addresses.as_mut_slice(),
+                state.page_index.as_mut_slice(),
                 new_group_rows,
                 group_columns,
             );
@@ -157,9 +157,9 @@ impl PartitionedPayload {
 
                     self.payloads[partition_index].reserve_append_rows(
                         sel,
-                        &state.group_hashes,
-                        &mut state.addresses,
-                        &mut state.page_index,
+                        state.group_hashes.as_slice(),
+                        state.addresses.as_mut_slice(),
+                        state.page_index.as_mut_slice(),
                         count,
                         group_columns,
                     );

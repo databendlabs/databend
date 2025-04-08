@@ -177,7 +177,7 @@ impl AggregateHashTable {
         row_count: usize,
     ) -> Result<usize> {
         state.row_count = row_count;
-        group_hash_columns(group_columns, &mut state.group_hashes);
+        group_hash_columns(group_columns, state.group_hashes.as_mut_slice());
 
         let new_group_count = if self.direct_append {
             for idx in 0..row_count {
@@ -337,7 +337,7 @@ impl AggregateHashTable {
                 unsafe {
                     row_match_columns(
                         group_columns,
-                        &state.addresses,
+                        state.addresses.as_slice(),
                         &mut state.group_compare_vector,
                         &mut state.temp_vector,
                         need_compare_count,
