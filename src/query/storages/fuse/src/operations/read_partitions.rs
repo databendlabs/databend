@@ -101,7 +101,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        dry_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
@@ -148,7 +148,7 @@ impl FuseTable {
                 }
 
                 if self.is_column_oriented()
-                    || (!dry_run && segment_len > nodes_num && distributed_pruning)
+                    || (segment_len > nodes_num && distributed_pruning)
                 {
                     let mut segments = Vec::with_capacity(segment_locs.len());
                     for (idx, segment_location) in segment_locs.into_iter().enumerate() {
@@ -185,7 +185,7 @@ impl FuseTable {
         }
     }
 
-    pub(crate) fn do_build_prune_pipeline(
+    pub fn do_build_prune_pipeline(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
@@ -230,7 +230,8 @@ impl FuseTable {
                 });
 
         if ctx.get_settings().get_enable_prune_cache()? {
-            if let Some((_stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
+            if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
+                ctx.set_pruned_partitions_stats(stat);
                 let sender = part_info_tx.clone();
                 info!("prune pipeline: get prune result from cache");
                 source_pipeline.set_on_init(move || {
@@ -493,16 +494,18 @@ impl FuseTable {
             )
         })?;
 
-        if enable_prune_cache {
-            info!("prune pipeline: enable prune cache");
-            prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
-                if let Ok(()) = info.res {
-                    // only populating cache when the pipeline is finished successfully
+        prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+            if let Ok(()) = info.res {
+                // only populating cache when the pipeline is finished successfully
+                let pruned_part_stats = send_part_state.get_pruned_stats();
+                ctx.set_pruned_partitions_stats(pruned_part_stats);
+                if enable_prune_cache {
+                    info!("prune pipeline: enable prune cache");
                     send_part_state.populating_cache();
                 }
-                Ok(())
-            });
-        }
+            }
+            Ok(())
+        });
 
         Ok(())
     }

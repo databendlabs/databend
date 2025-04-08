@@ -47,6 +47,7 @@ use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
@@ -1825,6 +1826,14 @@ impl TableContext for QueryContext {
 
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         self.shared.get_warehouse_clusters().await
+    }
+
+    fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+        self.shared.get_pruned_partitions_stats()
+    }
+
+    fn set_pruned_partitions_stats(&self, partitions: PartStatistics) {
+        self.shared.set_pruned_partitions_stats(partitions);
     }
 }
 

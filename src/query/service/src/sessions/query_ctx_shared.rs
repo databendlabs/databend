@@ -33,6 +33,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
@@ -167,6 +168,8 @@ pub struct QueryContextShared {
 
     // Used by hilbert clustering when do recluster.
     pub(in crate::sessions) selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
+
+    pub(in crate::sessions) pruned_partitions_stats: Arc<RwLock<Option<PartStatistics>>>,
 }
 
 impl QueryContextShared {
@@ -232,6 +235,7 @@ impl QueryContextShared {
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             selected_segment_locs: Default::default(),
+            pruned_partitions_stats: Arc::new(RwLock::new(None)),
         }))
     }
 
@@ -764,6 +768,15 @@ impl QueryContextShared {
 
     pub fn get_table_meta_timestamps(&self) -> Arc<Mutex<HashMap<u64, TableMetaTimestamps>>> {
         self.table_meta_timestamps.clone()
+    }
+
+    pub fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+        self.pruned_partitions_stats.read().clone()
+    }
+
+    pub fn set_pruned_partitions_stats(&self, stats: PartStatistics) {
+        let mut guard = self.pruned_partitions_stats.write();
+        *guard = Some(stats);
     }
 }
 

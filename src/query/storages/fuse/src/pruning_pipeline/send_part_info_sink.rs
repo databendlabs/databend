@@ -79,11 +79,16 @@ impl SendPartState {
         }
     }
 
-    pub fn populating_cache(&self) {
-        type CacheItem = (PartStatistics, Partitions);
+    pub fn get_pruned_stats(&self) -> PartStatistics {
         let mut send_part_cache = self.cache.lock();
         let pruning_stats = send_part_cache.fuse_pruner.pruning_stats();
         send_part_cache.statistics.pruning_stats = pruning_stats;
+        send_part_cache.statistics.clone()
+    }
+
+    pub fn populating_cache(&self) {
+        type CacheItem = (PartStatistics, Partitions);
+        let send_part_cache = self.cache.lock();
         if let Some(cache_key) = &send_part_cache.derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
                 cache.insert(
