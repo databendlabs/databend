@@ -1543,7 +1543,7 @@ fn hash_join_to_format_tree(
         context
             .scan_id_to_runtime_filters
             .entry(rf.scan_id)
-            .or_insert(vec![])
+            .or_default()
             .push(rf.clone());
     }
     let build_keys = plan
