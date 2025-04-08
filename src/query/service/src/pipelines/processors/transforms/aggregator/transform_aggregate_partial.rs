@@ -77,7 +77,7 @@ pub struct TransformPartialAggregate {
     settings: MemorySettings,
     configure_peer_nodes: Vec<String>,
     spilling_state: Option<HashtableSpillingState>,
-    spiller: Arc<Spiller>,
+    spiller: Spiller,
     output_blocks: Vec<DataBlock>,
 }
 
@@ -126,6 +126,7 @@ impl TransformPartialAggregate {
             output,
             TransformPartialAggregate {
                 params,
+                spiller,
                 hash_table,
                 probe_state: ProbeState::default(),
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
@@ -135,7 +136,6 @@ impl TransformPartialAggregate {
                 processed_rows: 0,
                 configure_peer_nodes: vec![GlobalConfig::instance().query.node_id.clone()],
                 spilling_state: None,
-                spiller: Arc::new(spiller),
                 output_blocks: vec![],
             },
         ))
