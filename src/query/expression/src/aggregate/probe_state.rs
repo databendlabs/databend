@@ -80,8 +80,9 @@ impl ProbeState {
 
     pub fn reset_partitions(&mut self, partition_count: usize) {
         if self.partition_entries.len() < partition_count {
-            self.partition_entries.resize(partition_count, new_sel());
             self.partition_count.resize(partition_count, 0);
+            self.partition_entries
+                .resize_with(partition_count, || new_sel());
         }
 
         for i in 0..partition_count {
