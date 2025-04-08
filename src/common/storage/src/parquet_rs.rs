@@ -22,13 +22,11 @@ use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::FieldIndex;
 use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
+use parquet::errors::ParquetError;
 // FIXME(xuanwo): refactor code here.
-#[allow(deprecated)]
-use parquet::file::footer::decode_footer;
-#[allow(deprecated)]
-use parquet::file::footer::decode_metadata;
 use parquet::file::metadata::FileMetaData;
 use parquet::file::metadata::ParquetMetaData;
+use parquet::file::metadata::ParquetMetaDataReader;
 
 const FOOTER_SIZE: u64 = 8;
 /// The number of bytes read at the end of the parquet file on first read
@@ -106,7 +104,7 @@ pub async fn read_metadata_async(
         Some(n) => n,
     };
 
-    check_footer_size(file_size)?;
+    check_footer_size(file_size, path)?;
 
     // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
     let default_end_len = DEFAULT_FOOTER_READ_SIZE.min(file_size);
@@ -116,20 +114,22 @@ pub async fn read_metadata_async(
         .await?
         .to_vec();
     let buffer_len = buffer.len();
-    #[allow(deprecated)]
-    let metadata_len = decode_footer(
+
+    let map_err =
+        |e: ParquetError| ErrorCode::BadBytes(format!("Invalid Parquet File {path}: {e}",));
+    let metadata_len = ParquetMetaDataReader::decode_footer(
         &buffer[(buffer_len - FOOTER_SIZE as usize)..]
             .try_into()
             .unwrap(),
-    )? as u64;
-    check_meta_size(file_size, metadata_len)?;
+    )
+    .map_err(map_err)? as u64;
+    check_meta_size(file_size, metadata_len, path)?;
 
     let footer_len = FOOTER_SIZE + metadata_len;
     if (footer_len as usize) <= buffer_len {
         // The whole metadata is in the bytes we already read
         let offset = buffer_len - footer_len as usize;
-        #[allow(deprecated)]
-        Ok(decode_metadata(&buffer[offset..])?)
+        Ok(ParquetMetaDataReader::decode_metadata(&buffer[offset..]).map_err(map_err)?)
     } else {
         // The end of file read by default is not long enough, read again including the metadata.
         // TBD: which one is better?
@@ -141,8 +141,7 @@ pub async fn read_metadata_async(
             .await?
             .to_vec();
         metadata.extend(buffer);
-        #[allow(deprecated)]
-        Ok(decode_metadata(&metadata)?)
+        Ok(ParquetMetaDataReader::decode_metadata(&metadata).map_err(map_err)?)
     }
 }
 
@@ -157,8 +156,10 @@ pub fn read_metadata_sync(
         Some(n) => n,
     };
 
-    check_footer_size(file_size)?;
+    check_footer_size(file_size, path)?;
 
+    let map_err =
+        |e: ParquetError| ErrorCode::BadBytes(format!("Invalid Parquet File {path}: {e}",));
     // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
     let default_end_len = DEFAULT_FOOTER_READ_SIZE.min(file_size);
     let buffer = blocking
@@ -167,20 +168,19 @@ pub fn read_metadata_sync(
         .call()?
         .to_vec();
     let buffer_len = buffer.len();
-    #[allow(deprecated)]
-    let metadata_len = decode_footer(
+    let metadata_len = ParquetMetaDataReader::decode_footer(
         &buffer[(buffer_len - FOOTER_SIZE as usize)..]
             .try_into()
             .unwrap(),
-    )? as u64;
-    check_meta_size(file_size, metadata_len)?;
+    )
+    .map_err(map_err)? as u64;
+    check_meta_size(file_size, metadata_len, path)?;
 
     let footer_len = FOOTER_SIZE + metadata_len;
     if (footer_len as usize) <= buffer_len {
         // The whole metadata is in the bytes we already read
         let offset = buffer_len - footer_len as usize;
-        #[allow(deprecated)]
-        Ok(decode_metadata(&buffer[offset..])?)
+        Ok(ParquetMetaDataReader::decode_metadata(&buffer[offset..]).map_err(map_err)?)
     } else {
         let mut metadata = blocking
             .read_with(path)
@@ -188,27 +188,26 @@ pub fn read_metadata_sync(
             .call()?
             .to_vec();
         metadata.extend(buffer);
-        #[allow(deprecated)]
-        Ok(decode_metadata(&metadata)?)
+        Ok(ParquetMetaDataReader::decode_metadata(&metadata).map_err(map_err)?)
     }
 }
 
 /// check file is large enough to hold footer
-fn check_footer_size(file_size: u64) -> Result<()> {
+fn check_footer_size(file_size: u64, path: &str) -> Result<()> {
     if file_size < FOOTER_SIZE {
-        Err(ErrorCode::BadBytes(
-            "Invalid Parquet file. Size is smaller than footer.",
-        ))
+        Err(ErrorCode::BadBytes(format!(
+            "Invalid Parquet file {path}. Size is smaller than footer."
+        )))
     } else {
         Ok(())
     }
 }
 
 /// check file is large enough to hold metadata
-fn check_meta_size(file_size: u64, metadata_len: u64) -> Result<()> {
+fn check_meta_size(file_size: u64, metadata_len: u64, path: &str) -> Result<()> {
     if metadata_len + FOOTER_SIZE > file_size {
         Err(ErrorCode::BadBytes(format!(
-            "Invalid Parquet file. Reported metadata length of {} + {} byte footer, but file is only {} bytes",
+            "Invalid Parquet file {path}. Reported metadata length of {} + {} byte footer, but file is only {} bytes",
             metadata_len, FOOTER_SIZE, file_size
         )))
     } else {
