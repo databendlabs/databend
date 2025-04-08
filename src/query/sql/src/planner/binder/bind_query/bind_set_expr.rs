@@ -16,7 +16,7 @@ use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::SetExpr;
 use databend_common_exception::Result;
 
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 

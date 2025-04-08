@@ -14,3 +14,4 @@
 
 mod filter;
 mod histogram;
+mod rule;

@@ -42,6 +42,7 @@ use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
@@ -61,7 +62,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::DummyTableScan;
@@ -503,11 +504,11 @@ impl Binder {
                 );
 
                 match new_expr {
-                    databend_common_expression::Expr::Constant {
+                    databend_common_expression::Expr::Constant(Constant {
                         scalar,
                         data_type: DataType::Timestamp,
                         ..
-                    } => {
+                    }) => {
                         let value = scalar.as_timestamp().unwrap();
                         Ok(NavigationPoint::TimePoint(
                             Utc.timestamp_nanos(*value * 1000),
@@ -540,7 +541,7 @@ impl Binder {
                     &BUILTIN_FUNCTIONS,
                 );
 
-                let v = check_number::<_, i64>(
+                let v: i64 = check_number(
                     None,
                     &FunctionContext::default(),
                     &new_expr,

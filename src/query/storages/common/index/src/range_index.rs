@@ -32,6 +32,7 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnId;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
@@ -71,10 +72,13 @@ impl RangeIndex {
 
     pub fn try_apply_const(&self) -> Result<bool> {
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(self.expr, Expr::Constant {
-            scalar: Scalar::Boolean(false),
-            ..
-        }))
+        Ok(!matches!(
+            self.expr,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
     }
 
     pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
@@ -129,10 +133,13 @@ impl RangeIndex {
         );
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(new_expr, Expr::Constant {
-            scalar: Scalar::Boolean(false),
-            ..
-        }))
+        Ok(!matches!(
+            new_expr,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
     }
 
     #[fastrace::trace]

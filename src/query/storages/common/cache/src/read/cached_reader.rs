@@ -21,19 +21,21 @@ use databend_common_metrics::cache::*;
 use super::loader::LoadParams;
 use crate::caches::CacheValue;
 use crate::CacheAccessor;
-use crate::InMemoryLruCache;
 use crate::Loader;
 
+// TODO rename this
 /// A cache-aware reader
 pub struct CachedReader<L, C> {
     cache: Option<C>,
     loader: L,
 }
-
-impl<V: Into<CacheValue<V>>, L> CachedReader<L, InMemoryLruCache<V>>
-where L: Loader<V> + Sync
+// InMemoryLruCache<V>
+impl<V: Into<CacheValue<V>>, L, C> CachedReader<L, C>
+where
+    L: Loader<V> + Sync,
+    C: CacheAccessor<V = V>,
 {
-    pub fn new(cache: Option<InMemoryLruCache<V>>, loader: L) -> Self {
+    pub fn new(cache: Option<C>, loader: L) -> Self {
         Self { cache, loader }
     }
 
@@ -70,6 +72,7 @@ where L: Loader<V> + Sync
     }
 
     pub fn name(&self) -> &str {
+        // TODO fix this
         self.cache.as_ref().map(|c| c.name()).unwrap_or("")
     }
 }

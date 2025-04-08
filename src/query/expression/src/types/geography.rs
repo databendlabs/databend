@@ -63,8 +63,16 @@ impl Geography {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GeographyRef<'a>(pub &'a [u8]);
+
+impl Debug for GeographyRef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Geography")
+            .field_with(|f| write!(f, "0x{}", hex::encode(self.0)))
+            .finish()
+    }
+}
 
 impl GeographyRef<'_> {
     pub fn to_owned(&self) -> Geography {
@@ -251,8 +259,22 @@ impl ArgType for GeographyType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct GeographyColumn(pub BinaryColumn);
+
+impl Debug for GeographyColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("GeographyColumn")
+            .field_with(|f| {
+                let mut f = f.debug_list();
+                for x in self.iter() {
+                    f.entry_with(|f| write!(f, "0x{}", hex::encode(x.0)));
+                }
+                f.finish()
+            })
+            .finish()
+    }
+}
 
 impl GeographyColumn {
     pub fn len(&self) -> usize {

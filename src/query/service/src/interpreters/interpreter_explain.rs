@@ -34,7 +34,7 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::executor::format_partial_tree;
 use databend_common_sql::executor::MutationBuildInfo;
-use databend_common_sql::optimizer::ColumnSet;
+use databend_common_sql::optimizer::ir::ColumnSet;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
 use databend_common_sql::FormatOptions;
@@ -61,7 +61,7 @@ use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
-use crate::sql::optimizer::SExpr;
+use crate::sql::optimizer::ir::SExpr;
 use crate::sql::plans::Plan;
 
 pub struct ExplainInterpreter {

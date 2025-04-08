@@ -33,6 +33,11 @@ impl WatchRequest {
         self.filter_type = filter_type as _;
         self
     }
+
+    pub fn with_initial_flush(mut self, initial_flush: bool) -> Self {
+        self.initial_flush = initial_flush;
+        self
+    }
 }
 
 impl WatchResponse {
@@ -55,5 +60,14 @@ impl WatchResponse {
         };
 
         Some(WatchResponse { event: Some(ev) })
+    }
+
+    pub fn unpack(self) -> Option<(String, Option<SeqV>, Option<SeqV>)> {
+        let ev = self.event?;
+        let key = ev.key;
+        let prev = ev.prev.map(SeqV::from);
+        let current = ev.current.map(SeqV::from);
+
+        Some((key, prev, current))
     }
 }

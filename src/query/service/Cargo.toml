@@ -120,6 +120,7 @@ fastrace = { workspace = true }
 flatbuffers = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
+geozero = { workspace = true }
 headers = { workspace = true }
 hex = { workspace = true }
 highway = { workspace = true }
@@ -168,7 +169,7 @@ sysinfo = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true, features = ["net"] }
-toml = { workspace = true, default-features = false }
+toml = { workspace = true, features = ["parse"] }
 tonic = { workspace = true }
 typetag = { workspace = true }
 url = { workspace = true }

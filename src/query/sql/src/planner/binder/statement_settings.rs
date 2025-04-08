@@ -23,6 +23,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::cast_scalar;
 use databend_common_expression::types::DataType;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -78,7 +79,7 @@ impl Binder {
                                     &BUILTIN_FUNCTIONS,
                                 );
                                 match new_expr {
-                                    Expr::Constant { scalar, .. } => {
+                                    Expr::Constant(Constant { scalar, .. }) => {
                                         let scalar = cast_scalar(
                                             None,
                                             scalar.clone(),

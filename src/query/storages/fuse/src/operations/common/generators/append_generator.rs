@@ -24,7 +24,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
-use databend_common_sql::field_default_value;
+use databend_common_sql::DefaultExprBinder;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -104,7 +104,8 @@ impl SnapshotGenerator for AppendGenerator {
             if !self.overwrite && self.check_fill_default(&snapshot.summary)? {
                 let mut default_values = Vec::with_capacity(schema.num_fields());
                 for field in schema.fields() {
-                    default_values.push(field_default_value(self.ctx.clone(), field)?);
+                    default_values
+                        .push(DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(field)?);
                 }
                 self.leaf_default_values = schema.field_leaf_default_values(&default_values);
             }

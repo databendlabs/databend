@@ -20,10 +20,12 @@ use databend_common_expression::type_check;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -35,7 +37,7 @@ use crate::executor::physical_plans::common::AggregateFunctionSignature;
 use crate::executor::physical_plans::common::SortDesc;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
@@ -227,9 +229,9 @@ impl PhysicalPlanBuilder {
                 let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-                if let databend_common_expression::Expr::Constant {
+                if let Expr::Constant(Constant {
                     scalar: new_scalar, ..
-                } = expr
+                }) = expr
                 {
                     if new_scalar.is_positive() {
                         **scalar = new_scalar;

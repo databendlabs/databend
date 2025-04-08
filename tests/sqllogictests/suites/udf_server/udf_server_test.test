@@ -75,6 +75,12 @@ statement ok
 DROP FUNCTION IF EXISTS split_and_join;
 
 statement ok
+CREATE OR REPLACE FUNCTION success_check_headers () RETURNS VARCHAR LANGUAGE python HANDLER = 'check_headers' HEADERS = ('X-Authorization' = '123') ADDRESS = 'http://0.0.0.0:8815';
+
+statement ok
+CREATE OR REPLACE FUNCTION fail_check_headers () RETURNS VARCHAR LANGUAGE python HANDLER = 'check_headers' HEADERS = ('X-Authorization' = '321') ADDRESS = 'http://0.0.0.0:8815';
+
+statement ok
 CREATE OR REPLACE FUNCTION add_signed (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815'
 
 statement ok
@@ -436,6 +442,14 @@ select wait_concurrent(col) from test_wait;
 7
 8
 9
+
+query T
+select success_check_headers();
+----
+success
+
+statement error
+select fail_check_headers();
 
 statement ok
 DROP TABLE test_wait;

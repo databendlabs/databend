@@ -20,6 +20,7 @@ use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::expr::*;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
@@ -29,7 +30,6 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -59,8 +59,8 @@ use crate::executor::physical_plans::MutationOrganize;
 use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::RowFetch;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
@@ -543,18 +543,21 @@ pub fn build_block_id_shuffle_exchange(
                 None,
                 "bit_shift_right",
                 &[],
-                &[row_id_expr, Expr::Constant {
-                    span: None,
-                    scalar: Scalar::Number(((64 - NUM_ROW_ID_PREFIX_BITS) as u64).into()),
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                }],
+                &[
+                    row_id_expr,
+                    Expr::Constant(Constant {
+                        span: None,
+                        scalar: Scalar::Number(((64 - NUM_ROW_ID_PREFIX_BITS) as u64).into()),
+                        data_type: DataType::Number(NumberDataType::UInt64),
+                    }),
+                ],
                 &BUILTIN_FUNCTIONS,
             )?,
-            Expr::Constant {
+            Expr::Constant(Constant {
                 span: None,
                 scalar: Scalar::Number((((1 << NUM_BLOCK_ID_BITS) - 1) as u64).into()),
                 data_type: DataType::Number(NumberDataType::UInt64),
-            },
+            }),
         ],
         &BUILTIN_FUNCTIONS,
     )?;

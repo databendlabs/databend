@@ -36,6 +36,7 @@ databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
+display-more = { workspace = true }
 fastrace = { workspace = true }
 feature-set = { workspace = true }
 futures = { workspace = true }
@@ -60,6 +61,7 @@ tonic-reflection = { workspace = true }
 watcher = { workspace = true }
 
 [dev-dependencies]
+databend-common-meta-semaphore = { workspace = true }
 env_logger = { workspace = true }
 maplit = { workspace = true }
 pretty_assertions = { workspace = true }

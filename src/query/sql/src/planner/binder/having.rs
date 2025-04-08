@@ -23,7 +23,7 @@ use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::split_conjunctions;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;

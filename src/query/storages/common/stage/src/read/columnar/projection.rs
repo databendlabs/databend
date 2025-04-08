@@ -17,8 +17,10 @@ use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Constant;
 use databend_common_expression::Expr;
-use databend_common_expression::RemoteExpr;
+use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -37,7 +39,7 @@ pub fn project_columnar(
     input_schema: &TableSchemaRef,
     output_schema: &TableSchemaRef,
     missing_as: &NullAs,
-    default_values: &Option<Vec<RemoteExpr>>,
+    default_exprs: &Option<Vec<RemoteDefaultExpr>>,
     location: &str,
     case_sensitive: bool,
     fmt: StageFileFormatType,
@@ -66,12 +68,12 @@ pub fn project_columnar(
                 let pos = positions[0];
                 pushdown_columns.push(pos);
                 let from_field = input_schema.field(pos);
-                let expr = Expr::ColumnRef {
+                let expr = Expr::ColumnRef(ColumnRef {
                     span: None,
                     id: pos,
                     data_type: from_field.data_type().into(),
                     display_name: to_field.name().clone(),
-                };
+                });
 
                 if from_field.data_type == to_field.data_type {
                     expr
@@ -118,12 +120,12 @@ pub fn project_columnar(
                                 .map(|v| v.to_string())
                                 .collect::<Vec<_>>()
                                 .join(",");
-                            Expr::ColumnRef {
+                            Expr::ColumnRef(ColumnRef {
                                 span: None,
                                 id: pos,
                                 data_type: from_field.data_type().into(),
                                 display_name: format!("#!{name}",),
-                            }
+                            })
                         }
                         (
                             TableDataType::Tuple {
@@ -174,11 +176,11 @@ pub fn project_columnar(
                     }
                     NullAs::Null => {
                         if to_field.is_nullable() {
-                            Expr::Constant {
+                            Expr::Constant(Constant {
                                 span: None,
                                 data_type: to_field.data_type().into(),
                                 scalar: Scalar::Null,
-                            }
+                            })
                         } else {
                             return Err(ErrorCode::BadDataValueType(format!(
                                 "{} missing column `{}`",
@@ -187,10 +189,15 @@ pub fn project_columnar(
                         }
                     }
                     NullAs::FieldDefault => {
-                        let default_values = &default_values.as_deref().expect(
+                        let default_exprs = &default_exprs.as_deref().expect(
                             "default_values should not be none when miss_field_as=FIELD_DEFAULT",
                         );
-                        default_values[i].as_expr(&BUILTIN_FUNCTIONS)
+                        match &default_exprs[i] {
+                            RemoteDefaultExpr::RemoteExpr(expr) => expr.as_expr(&BUILTIN_FUNCTIONS),
+                            RemoteDefaultExpr::Sequence(_) => {
+                                return Err(ErrorCode::BadDataValueType("not supported yet: fill missing column with sequence as default"));
+                            }
+                        }
                     }
                 }
             }
@@ -250,11 +257,11 @@ fn project_tuple(
                 // if inner field not exists, fill default value.
                 let data_type: DataType = to_field_type.into();
                 let scalar = Scalar::default_value(&data_type);
-                Expr::Constant {
+                Expr::Constant(Constant {
                     span: None,
                     scalar,
                     data_type,
-                }
+                })
             }
         };
         inner_columns.push(inner_column);
@@ -276,11 +283,11 @@ fn project_tuple(
             &[expr.clone()],
             &BUILTIN_FUNCTIONS,
         )?;
-        let null_scalar = Expr::Constant {
+        let null_scalar = Expr::Constant(Constant {
             span: None,
             scalar: Scalar::Null,
             data_type: DataType::Null,
-        };
+        });
         check_function(
             None,
             "if",

@@ -12,22 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bloom_index;
 mod format;
 mod metadata;
 #[allow(clippy::module_inception)]
 mod planner;
-pub mod query_executor;
 mod semantic;
 
 pub mod binder;
 pub mod dataframe;
-mod expression_parser;
+mod execution;
+mod expression;
 pub mod optimizer;
 mod planner_cache;
 pub mod plans;
-mod stream_column;
-mod udf_validator;
 
 pub use binder::execute_commit_statement;
 pub use binder::parse_result_scan_args;
@@ -35,11 +32,12 @@ pub use binder::BindContext;
 pub use binder::Binder;
 pub use binder::ColumnBinding;
 pub use binder::ColumnBindingBuilder;
+pub use binder::DefaultExprBinder;
 pub use binder::ScalarBinder;
 pub use binder::SelectBuilder;
 pub use binder::Visibility;
-pub use bloom_index::BloomIndexColumns;
-pub use expression_parser::*;
+pub use execution::*;
+pub use expression::*;
 pub use format::*;
 pub use metadata::*;
 pub use optimizer::optimize;
@@ -52,4 +50,3 @@ pub use plans::DELETE_NAME;
 pub use plans::INSERT_NAME;
 pub use plans::UPDATE_NAME;
 pub use semantic::*;
-pub use stream_column::*;

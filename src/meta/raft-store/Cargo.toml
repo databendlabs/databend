@@ -25,6 +25,7 @@ databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
+display-more = { workspace = true }
 fastrace = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }

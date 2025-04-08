@@ -139,6 +139,17 @@ impl VirtualColumnContext {
             virtual_columns: Vec::new(),
         }
     }
+
+    pub(crate) fn merge(&mut self, other: &VirtualColumnContext) {
+        self.allow_pushdown = self.allow_pushdown || other.allow_pushdown;
+        self.table_indices.extend(other.table_indices.clone());
+        self.virtual_column_indices
+            .extend(other.virtual_column_indices.clone());
+        self.virtual_column_names
+            .extend(other.virtual_column_names.clone());
+        self.next_column_ids.extend(other.next_column_ids.clone());
+        self.virtual_columns.extend(other.virtual_columns.clone());
+    }
 }
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.

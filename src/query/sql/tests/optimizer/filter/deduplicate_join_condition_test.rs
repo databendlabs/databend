@@ -18,8 +18,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_sql::optimizer::DeduplicateJoinConditionOptimizer;
-use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
 use databend_common_sql::planner::binder::ColumnBinding;
 use databend_common_sql::planner::binder::Visibility;
 use databend_common_sql::planner::plans::BoundColumnRef;
@@ -93,8 +93,8 @@ fn create_join_condition(
 
 /// Runs the DeduplicateJoinConditionOptimizer on the given SExpr
 fn run_optimizer(s_expr: SExpr) -> Result<SExpr> {
-    let optimizer = DeduplicateJoinConditionOptimizer::new();
-    optimizer.run(&s_expr)
+    let mut optimizer = DeduplicateJoinConditionOptimizer::new();
+    optimizer.optimize_sync(&s_expr)
 }
 
 /// Converts an SExpr to a readable string representation using a simple indented format

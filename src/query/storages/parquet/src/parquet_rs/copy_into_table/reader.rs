@@ -19,8 +19,8 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::Expr;
-use databend_common_expression::RemoteExpr;
+use databend_common_expression::expr::*;
+use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -74,7 +74,7 @@ impl RowGroupReaderForCopy {
         op: Operator,
         file_metadata: &FileMetaData,
         output_schema: TableSchemaRef,
-        default_values: Option<Vec<RemoteExpr>>,
+        default_exprs: Option<Vec<RemoteDefaultExpr>>,
         missing_as: &NullAs,
         case_sensitive: bool,
     ) -> Result<RowGroupReaderForCopy> {
@@ -86,7 +86,7 @@ impl RowGroupReaderForCopy {
             &parquet_table_schema,
             &output_schema,
             missing_as,
-            &default_values,
+            &default_exprs,
             location,
             case_sensitive,
             StageFileFormatType::Parquet,
@@ -100,11 +100,11 @@ impl RowGroupReaderForCopy {
             .collect::<HashMap<_, _>>();
         for expr in output_projection.iter_mut() {
             match expr {
-                Expr::ColumnRef { id, .. } => *id = mapping[id],
-                Expr::Cast {
-                    expr: box Expr::ColumnRef { id, .. },
+                Expr::ColumnRef(ColumnRef { id, .. }) => *id = mapping[id],
+                Expr::Cast(Cast {
+                    expr: box Expr::ColumnRef(ColumnRef { id, .. }),
                     ..
-                } => *id = mapping[id],
+                }) => *id = mapping[id],
                 _ => {}
             }
         }

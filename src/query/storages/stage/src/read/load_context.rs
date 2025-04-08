@@ -22,27 +22,20 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
-use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_common_formats::FileFormatOptionsExt;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::FileParseError;
 
+use crate::read::default_expr_evaluator::DefaultExprEvaluator;
 use crate::read::error_handler::ErrorHandler;
 
 pub struct LoadContext {
     pub table_context: Arc<dyn TableContext>,
-    pub func_ctx: FunctionContext,
     pub internal_columns: Vec<InternalColumn>,
 
     pub schema: TableSchemaRef,
-    pub default_values: Option<Vec<RemoteExpr>>,
+    pub default_exprs: Option<Arc<DefaultExprEvaluator>>,
     pub pos_projection: Option<Vec<usize>>,
     pub is_copy: bool,
     pub stage_root: String,
@@ -50,7 +43,7 @@ pub struct LoadContext {
     pub file_format_options_ext: FileFormatOptionsExt,
     pub block_compact_thresholds: BlockThresholds,
 
-    pub error_handler: ErrorHandler,
+    pub error_handler: Arc<ErrorHandler>,
 }
 
 impl LoadContext {
@@ -62,7 +55,6 @@ impl LoadContext {
         internal_columns: Vec<InternalColumn>,
     ) -> Result<Self> {
         let settings = ctx.get_settings();
-        let func_ctx = ctx.get_function_context()?;
         let is_select = stage_table_info.is_select;
         let mut file_format_options_ext =
             FileFormatOptionsExt::create_from_settings(&settings, is_select)?;
@@ -78,23 +70,32 @@ impl LoadContext {
             .cloned()
             .collect::<Vec<_>>();
         let schema = TableSchemaRefExt::create(fields);
-        let default_values = stage_table_info.default_values.clone();
+        let default_exprs = stage_table_info.default_exprs.clone();
+        let default_exprs = if let Some(default_exprs) = default_exprs {
+            let func_ctx = ctx.get_function_context()?;
+            Some(Arc::new(DefaultExprEvaluator::new(
+                default_exprs,
+                func_ctx,
+                schema.clone(),
+            )))
+        } else {
+            None
+        };
         let is_copy = ctx.get_query_kind() == QueryKind::CopyIntoTable;
         Ok(Self {
             table_context: ctx,
             internal_columns,
-            func_ctx,
             block_compact_thresholds,
             schema,
-            default_values,
+            default_exprs,
             pos_projection,
             is_copy,
             stage_root: stage_table_info.stage_root.clone(),
             file_format_options_ext,
-            error_handler: ErrorHandler {
+            error_handler: Arc::new(ErrorHandler {
                 on_error_mode,
                 on_error_count: AtomicU64::new(0),
-            },
+            }),
         })
     }
 
@@ -104,41 +105,15 @@ impl LoadContext {
         column_index: usize,
         required: bool,
     ) -> std::result::Result<(), FileParseError> {
-        match &self.default_values {
+        match &self.default_exprs {
             None => {
-                if required {
-                } else {
+                // not copy or not FieldDefault
+                if !required {
                     column_builder.push_default()
                 }
             }
             Some(values) => {
-                if let Some(remote_expr) = &values.get(column_index) {
-                    let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
-                    if let Expr::Constant { scalar, .. } = expr {
-                        column_builder.push(scalar.as_ref());
-                    } else {
-                        let input = DataBlock::new(vec![], 1);
-                        let evaluator = Evaluator::new(&input, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                        let value =
-                            evaluator
-                                .run(&expr)
-                                .map_err(|e| FileParseError::Unexpected {
-                                    message: format!(
-                                        "get error when eval default value: {}",
-                                        e.message()
-                                    ),
-                                })?;
-                        match value {
-                            Value::Scalar(s) => {
-                                column_builder.push(s.as_ref());
-                            }
-                            Value::Column(c) => {
-                                let v = unsafe { c.index_unchecked(0) };
-                                column_builder.push(v);
-                            }
-                        };
-                    }
-                }
+                values.push_default_value(column_builder, column_index)?;
             }
         }
         Ok(())

@@ -91,8 +91,7 @@ impl BloomPrunerCreator {
         let bloom_columns_map =
             bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
         let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
-        let (index_fields, scalars) =
-            BloomIndex::filter_index_field(expr.clone(), &bloom_column_fields)?;
+        let (index_fields, scalars) = BloomIndex::filter_index_field(expr, &bloom_column_fields)?;
 
         if index_fields.is_empty() {
             return Ok(None);

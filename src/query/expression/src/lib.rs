@@ -41,6 +41,8 @@
 #![feature(let_chains)]
 #![feature(trait_upcasting)]
 #![feature(alloc_layout_extra)]
+#![feature(debug_closure_helpers)]
+#![feature(never_type)]
 
 #[allow(dead_code)]
 mod block;
@@ -87,3 +89,12 @@ pub use crate::schema::*;
 pub use crate::utils::block_thresholds::BlockThresholds;
 pub use crate::utils::*;
 pub use crate::values::*;
+
+pub mod expr {
+    pub use super::expression::Cast;
+    pub use super::expression::ColumnRef;
+    pub use super::expression::Constant;
+    pub use super::expression::Expr;
+    pub use super::expression::FunctionCall;
+    pub use super::expression::LambdaFunctionCall;
+}

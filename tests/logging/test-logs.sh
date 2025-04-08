@@ -28,6 +28,8 @@ python3 scripts/ci/wait_tcp.py --timeout 10 --port 4317
 NOW=$(date +%s)
 echo "SELECT ${NOW}" | bendsql
 
+./tests/logging/check_logs_table.sh
+
 sleep 1
 echo "Exiting..."
 killall databend-query || true

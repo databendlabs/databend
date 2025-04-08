@@ -1809,6 +1809,8 @@ Functions overloads:
 1 get_string(Variant NULL, String NULL) :: String NULL
 2 get_string(Variant, Int64) :: String NULL
 3 get_string(Variant NULL, Int64 NULL) :: String NULL
+0 glob(String, String) :: Boolean
+1 glob(String NULL, String NULL) :: Boolean NULL
 0 great_circle_angle(Float64, Float64, Float64, Float64) :: Float32
 1 great_circle_angle(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 great_circle_distance(Float64, Float64, Float64, Float64) :: Float32
@@ -2921,6 +2923,10 @@ Functions overloads:
 198 multiply(Float64 NULL, Float32 NULL) :: Float64 NULL
 199 multiply(Float64, Float64) :: Float64
 200 multiply(Float64 NULL, Float64 NULL) :: Float64 NULL
+201 multiply(Int64, Interval) :: Interval
+202 multiply(Int64 NULL, Interval NULL) :: Interval NULL
+203 multiply(Interval, Int64) :: Interval
+204 multiply(Interval NULL, Int64 NULL) :: Interval NULL
 0 not(Boolean) :: Boolean
 1 not(Boolean NULL) :: Boolean NULL
 0 noteq(Variant, Variant) :: Boolean
@@ -3207,6 +3213,16 @@ Functions overloads:
 1 range_partition_id(T0 NULL, Array(T0) NULL) :: UInt64
 0 regexp(String, String) :: Boolean
 1 regexp(String NULL, String NULL) :: Boolean NULL
+0 regexp_extract(String, String) :: String
+1 regexp_extract(String NULL, String NULL) :: String NULL
+2 regexp_extract(String, String, UInt32) :: String
+3 regexp_extract(String NULL, String NULL, UInt32 NULL) :: String NULL
+4 regexp_extract(String, String, Array(String)) :: Map(String, String)
+5 regexp_extract(String NULL, String NULL, Array(String) NULL) :: Map(String, String) NULL
+0 regexp_extract_all(String, String) :: Array(String)
+1 regexp_extract_all(String NULL, String NULL) :: Array(String) NULL
+2 regexp_extract_all(String, String, UInt32) :: Array(String)
+3 regexp_extract_all(String NULL, String NULL, UInt32 NULL) :: Array(String) NULL
 0 regexp_instr FACTORY
 0 regexp_like FACTORY
 0 regexp_replace FACTORY
@@ -3758,6 +3774,10 @@ Functions overloads:
 25 to_int8(Boolean NULL) :: Int8 NULL
 0 to_interval(String) :: Interval
 1 to_interval(String NULL) :: Interval NULL
+0 to_iso_year(Date) :: UInt16
+1 to_iso_year(Date NULL) :: UInt16 NULL
+2 to_iso_year(Timestamp) :: UInt16
+3 to_iso_year(Timestamp NULL) :: UInt16 NULL
 0 to_last_of_month(Date) :: Date
 1 to_last_of_month(Date NULL) :: Date NULL
 2 to_last_of_month(Timestamp) :: Date

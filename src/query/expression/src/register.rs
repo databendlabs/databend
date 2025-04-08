@@ -912,7 +912,19 @@ fn erase_function_generic_1_arg<I1: ArgType, O: ArgType>(
     func: impl for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<O>,
 ) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| {
-        let arg1 = args[0].try_downcast().unwrap();
+        let arg1 = match args[0].try_downcast() {
+            Some(arg1) => arg1,
+            None => match &args[0] {
+                Value::Scalar(scalar) => {
+                    unreachable!("can't downcast from {scalar:?} to {}", I1::data_type())
+                }
+                Value::Column(column) => unreachable!(
+                    "can't downcast from {} to {}",
+                    column.data_type(),
+                    I1::data_type()
+                ),
+            },
+        };
         Value::upcast(func(arg1, ctx))
     }
 }

@@ -72,5 +72,8 @@ tokio = { workspace = true }
 unicase = { workspace = true }
 url = { workspace = true }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
 [lints]
 workspace = true

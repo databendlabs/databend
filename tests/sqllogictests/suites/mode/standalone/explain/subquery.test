@@ -404,7 +404,7 @@ HashJoin
 │   ├── estimated rows: 0.20
 │   ├── Filter(Build)
 │   │   ├── output columns: [numbers.number (#2)]
-│   │   ├── filters: [is_true(try_to_boolean(if(true, TRY_CAST(COUNT(*) (#3) = 1 AS UInt64 NULL), 0)))]
+│   │   ├── filters: [is_true(TRY_CAST(if(true, TRY_CAST(COUNT(*) (#3) = 1 AS UInt64 NULL), 0) AS Boolean NULL))]
 │   │   ├── estimated rows: 0.20
 │   │   └── AggregateFinal
 │   │       ├── output columns: [COUNT(*) (#3), numbers.number (#2)]

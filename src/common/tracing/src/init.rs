@@ -14,9 +14,11 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
 use fastrace::prelude::*;
@@ -25,11 +27,13 @@ use logforth::filter::env::EnvFilterBuilder;
 use logforth::filter::EnvFilter;
 use logforth::Dispatch;
 use logforth::Logger;
+use opendal::Operator;
 use opentelemetry_otlp::WithExportConfig;
 
 use crate::config::OTLPProtocol;
 use crate::loggers::get_layout;
 use crate::loggers::new_rolling_file_appender;
+use crate::remote_log::RemoteLog;
 use crate::structlog::StructLogReporter;
 use crate::Config;
 
@@ -37,12 +41,40 @@ const HEADER_TRACE_PARENT: &str = "traceparent";
 
 pub struct GlobalLogger {
     _drop_guards: Vec<Box<dyn Send + Sync + 'static>>,
+    pub remote_log_operator: RwLock<Option<Operator>>,
 }
 
 impl GlobalLogger {
     pub fn init(name: &str, cfg: &Config, labels: BTreeMap<String, String>) {
         let _drop_guards = init_logging(name, cfg, labels);
-        GlobalInstance::set(Self { _drop_guards });
+
+        // GlobalLogger is initialized before DataOperator, so set the operator to None first
+        let remote_log_operator = RwLock::new(None);
+
+        let instance = Arc::new(Self {
+            _drop_guards,
+            remote_log_operator,
+        });
+        GlobalInstance::set(instance);
+    }
+
+    pub fn instance() -> Arc<GlobalLogger> {
+        GlobalInstance::get()
+    }
+
+    // Get the operator for remote log when it is ready.
+    pub(crate) async fn get_operator(&self) -> Option<Operator> {
+        let operator = self.remote_log_operator.read().await;
+        if let Some(operator) = operator.as_ref() {
+            return Some(operator.clone());
+        }
+        None
+    }
+
+    // Set the operator for remote log, this should be only called once
+    pub async fn set_operator(&self, operator: Operator) {
+        let mut remote_log_operator = self.remote_log_operator.write().await;
+        *remote_log_operator = Some(operator);
     }
 }
 
@@ -100,7 +132,6 @@ pub fn init_logging(
             }
         ),
     };
-
     // initialize tracing a reporter
     if cfg.tracing.on {
         let endpoint = cfg.tracing.otlp.endpoint.clone();
@@ -343,6 +374,36 @@ pub fn init_logging(
             ))
             .append(structlog_log_file);
         logger = logger.dispatch(dispatch);
+    }
+
+    if cfg.persistentlog.on {
+        let (remote_log, flush_guard) =
+            RemoteLog::new(&labels, cfg).expect("initialize remote logger");
+
+        let mut filter_builder =
+            EnvFilterBuilder::new().filter(Some("databend::log::structlog"), LevelFilter::Off);
+
+        if cfg.profile.on && !cfg.profile.dir.is_empty() {
+            filter_builder =
+                filter_builder.filter(Some("databend::log::profile"), LevelFilter::Trace);
+        } else {
+            filter_builder =
+                filter_builder.filter(Some("databend::log::profile"), LevelFilter::Off);
+        }
+        if cfg.query.on && !cfg.query.dir.is_empty() {
+            filter_builder =
+                filter_builder.filter(Some("databend::log::query"), LevelFilter::Trace);
+        } else {
+            filter_builder = filter_builder.filter(Some("databend::log::query"), LevelFilter::Off);
+        }
+        let dispatch = Dispatch::new()
+            .filter(EnvFilter::new(
+                filter_builder.parse(&cfg.persistentlog.level),
+            ))
+            .append(remote_log);
+
+        logger = logger.dispatch(dispatch);
+        _drop_guards.push(flush_guard);
     }
 
     // set global logger

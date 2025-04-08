@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::types::DataType;
@@ -51,6 +53,7 @@ fn test_decode_v57_udf() -> anyhow::Result<()> {
         definition: UDFDefinition::UDFServer(UDFServer {
             address: "http://localhost:8888".to_string(),
             handler: "plus_int_py".to_string(),
+            headers: BTreeMap::default(),
             language: "python".to_string(),
             arg_types: vec![
                 DataType::Number(NumberDataType::Int32),

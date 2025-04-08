@@ -94,6 +94,7 @@ impl AggregateFunction for AggregateStringAggFunction {
                 &DataType::String,
                 Value::Column(columns[0].clone()),
                 None,
+                &|| "(string_aggr)".to_string(),
                 &mut EvaluateOptions::default(),
             )?;
             StringType::try_downcast_column(value.as_column().unwrap()).unwrap()

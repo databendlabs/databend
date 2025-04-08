@@ -13,6 +13,7 @@ echo "select * from t;" |  $BENDSQL_CLIENT_CONNECT
 echo "select base64(1);" |  $BENDSQL_CLIENT_CONNECT
 echo "select to_base64(1);" | $BENDSQL_CLIENT_CONNECT
 echo "select 1 + 'a';" | $BENDSQL_CLIENT_CONNECT
+echo "select cast((1::int null,'a') as tuple(string,int not null)).1 +3;" | $BENDSQL_CLIENT_CONNECT
 
 echo "create table t1 (a tuple(b int, c int) not null)" | $BENDSQL_CLIENT_CONNECT
 echo "select t1.a:z from t" | $BENDSQL_CLIENT_CONNECT

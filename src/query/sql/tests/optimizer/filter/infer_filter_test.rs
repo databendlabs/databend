@@ -18,7 +18,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::Scalar;
-use databend_common_sql::optimizer::InferFilterOptimizer;
+use databend_common_sql::optimizer::optimizers::operator::InferFilterOptimizer;
 use databend_common_sql::planner::binder::ColumnBinding;
 use databend_common_sql::planner::binder::Visibility;
 use databend_common_sql::planner::plans::BoundColumnRef;
@@ -205,8 +205,8 @@ fn count_predicates(
 
 /// Runs the optimizer with the given predicates and returns the result
 fn run_optimizer(predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
-    let optimizer = InferFilterOptimizer::new(None);
-    optimizer.run(predicates)
+    let mut optimizer = InferFilterOptimizer::new(None);
+    optimizer.optimize(predicates)
 }
 
 // ===== Test Cases for Equal Operator =====

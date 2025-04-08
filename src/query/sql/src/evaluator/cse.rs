@@ -14,12 +14,14 @@
 
 use std::collections::HashMap;
 
+use databend_common_expression::expr;
+use databend_common_expression::Cast;
 use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use log::debug;
 
 use super::BlockOperator;
-use crate::optimizer::ColumnSet;
+use crate::optimizer::ir::ColumnSet;
 
 /// Eliminate common expression in `Map` operator
 pub fn apply_cse(
@@ -54,12 +56,13 @@ pub fn apply_cse(
                     let candidates_nums = cse_candidates.len();
                     for cse_candidate in cse_candidates.iter() {
                         let temp_var = format!("__temp_cse_{}", temp_var_counter);
-                        let temp_expr = Expr::ColumnRef {
+                        let temp_expr: Expr<_> = expr::ColumnRef {
                             span: None,
                             id: temp_var_counter,
                             data_type: cse_candidate.data_type().clone(),
                             display_name: temp_var.clone(),
-                        };
+                        }
+                        .into();
 
                         let mut expr_cloned = (*cse_candidate).clone();
                         perform_cse_replacement(&mut expr_cloned, &cse_replacements);
@@ -122,9 +125,12 @@ fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
         return;
     }
     match expr {
-        Expr::FunctionCall { function, .. } if function.signature.name == "if" => {}
-        Expr::FunctionCall { function, .. } if function.signature.name == "is_not_error" => {}
-        Expr::FunctionCall { args, .. } | Expr::LambdaFunctionCall { args, .. } => {
+        Expr::FunctionCall(expr::FunctionCall { function, .. })
+            if function.signature.name == "if" => {}
+        Expr::FunctionCall(expr::FunctionCall { function, .. })
+            if function.signature.name == "is_not_error" => {}
+        Expr::FunctionCall(expr::FunctionCall { args, .. })
+        | Expr::LambdaFunctionCall(expr::LambdaFunctionCall { args, .. }) => {
             let entry = counter.entry(expr.clone()).or_insert(0);
             *entry += 1;
 
@@ -132,16 +138,16 @@ fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
                 count_expressions(arg, counter);
             }
         }
-        Expr::Cast {
+        Expr::Cast(Cast {
             expr: inner_expr, ..
-        } => {
+        }) => {
             let entry = counter.entry(expr.clone()).or_insert(0);
             *entry += 1;
 
             count_expressions(inner_expr, counter);
         }
         // ignore constant and column ref
-        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
+        Expr::Constant(_) | Expr::ColumnRef(_) => {}
     }
 }
 
@@ -155,17 +161,18 @@ fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<String, E
     }
 
     match expr {
-        Expr::Cast {
+        Expr::Cast(expr::Cast {
             expr: inner_expr, ..
-        } => {
+        }) => {
             perform_cse_replacement(inner_expr.as_mut(), cse_replacements);
         }
-        Expr::FunctionCall { args, .. } | Expr::LambdaFunctionCall { args, .. } => {
+        Expr::FunctionCall(expr::FunctionCall { args, .. })
+        | Expr::LambdaFunctionCall(expr::LambdaFunctionCall { args, .. }) => {
             for arg in args.iter_mut() {
                 perform_cse_replacement(arg, cse_replacements);
             }
         }
         // ignore constant and column ref
-        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
+        Expr::Constant(_) | Expr::ColumnRef(_) => {}
     }
 }

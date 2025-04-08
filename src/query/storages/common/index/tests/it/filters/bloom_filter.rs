@@ -27,6 +27,8 @@ use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::*;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -442,6 +444,7 @@ fn eval_text(
 
     let raw_expr = parse_raw_expr(text, &columns);
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+    let expr = type_check::rewrite_function_to_cast(expr);
     let expr = expr.project_column_ref(|i| columns[*i].0.to_string());
 
     eval_index_expr(file, &block, &bloom_columns, schema, expr);
@@ -467,7 +470,7 @@ fn eval_index_expr(
     };
 
     let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
-    let (_, scalars) = BloomIndex::filter_index_field(expr.clone(), &fields).unwrap();
+    let (_, scalars) = BloomIndex::filter_index_field(&expr, &fields).unwrap();
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
     for (scalar, ty) in scalars.into_iter() {
@@ -511,10 +514,10 @@ fn eval_index_expr(
         .unwrap();
     let result =
         match ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0 {
-            Expr::Constant {
+            Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
-            } => FilterEvalResult::MustFalse,
+            }) => FilterEvalResult::MustFalse,
             _ => FilterEvalResult::Uncertain,
         };
     let domains = BTreeMap::from_iter(domains);
@@ -539,17 +542,17 @@ fn eval_index(
         "eq",
         &[],
         &[
-            Expr::ColumnRef {
+            Expr::ColumnRef(ColumnRef {
                 span: None,
                 id: col_name.to_string(),
                 data_type: ty.clone(),
                 display_name: col_name.to_string(),
-            },
-            Expr::Constant {
+            }),
+            Expr::Constant(Constant {
                 span: None,
                 scalar: val,
                 data_type: ty,
-            },
+            }),
         ],
         &BUILTIN_FUNCTIONS,
     )
@@ -578,27 +581,27 @@ fn eval_map_index(
         "get",
         &[],
         &[
-            Expr::ColumnRef {
+            Expr::ColumnRef(ColumnRef {
                 span: None,
                 id: col_name.to_string(),
                 data_type: map_ty,
                 display_name: col_name.to_string(),
-            },
-            Expr::Constant {
+            }),
+            Expr::Constant(Constant {
                 span: None,
                 scalar: key,
                 data_type: key_ty,
-            },
+            }),
         ],
         &BUILTIN_FUNCTIONS,
     )
     .unwrap();
 
-    let const_expr = Expr::Constant {
+    let const_expr = Expr::Constant(Constant {
         span: None,
         scalar: val,
         data_type: ty,
-    };
+    });
 
     let eq_expr =
         check_function(None, "eq", &[], &[get_expr, const_expr], &BUILTIN_FUNCTIONS).unwrap();

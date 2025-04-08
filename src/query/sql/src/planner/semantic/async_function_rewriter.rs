@@ -19,7 +19,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::AsyncFunction;
 use crate::plans::AsyncFunctionCall;

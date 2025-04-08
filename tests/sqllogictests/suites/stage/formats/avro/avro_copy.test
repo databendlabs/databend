@@ -39,7 +39,7 @@ tall
 NULL
 
 statement ok
-create or replace table t(id int, level int not null, info tuple(name string, age int, contact tuple(address string, email string, phone string)))
+create or replace table t(id int64, level int not null default 1, info tuple(name string, age int, contact tuple(address string, email string, phone string)))
 
 query error missing
 copy into t from @data/avro/nested_record.avro file_format = (type=avro)
@@ -52,8 +52,8 @@ avro/nested_record.avro 2 0 NULL NULL
 query 
 select * from t
 ----
-0 0 ('yang',NULL,(NULL,'yang@m','911'))
-1 0 ('wang',NULL,(NULL,'wang@m',NULL))
+0 1 ('yang',NULL,(NULL,'yang@m','911'))
+1 1 ('wang',NULL,(NULL,'wang@m',NULL))
 
 statement ok
 create or replace table t(info variant)

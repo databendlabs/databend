@@ -31,19 +31,19 @@ use databend_storages_common_table_meta::table::ChangeType;
 use itertools::Itertools;
 
 use super::ScalarItem;
-use crate::optimizer::histogram_from_ndv;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::ColumnStat;
-use crate::optimizer::ColumnStatSet;
-use crate::optimizer::Distribution;
-use crate::optimizer::PhysicalProperty;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::SelectivityEstimator;
-use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics as OpStatistics;
-use crate::optimizer::MAX_SELECTIVITY;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::ColumnStat;
+use crate::optimizer::ir::ColumnStatSet;
+use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::HistogramBuilder;
+use crate::optimizer::ir::PhysicalProperty;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::SelectivityEstimator;
+use crate::optimizer::ir::StatInfo;
+use crate::optimizer::ir::Statistics as OpStatistics;
+use crate::optimizer::ir::MAX_SELECTIVITY;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -270,7 +270,7 @@ impl Operator for Scan {
                     let num_rows = num_rows.saturating_sub(col_stat.null_count);
                     let ndv = std::cmp::min(num_rows, ndv);
                     if num_rows != 0 {
-                        histogram_from_ndv(
+                        HistogramBuilder::from_ndv(
                             ndv,
                             num_rows,
                             Some((min.clone(), max.clone())),

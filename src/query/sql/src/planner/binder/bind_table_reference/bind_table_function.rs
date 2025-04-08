@@ -43,7 +43,7 @@ use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;

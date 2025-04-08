@@ -231,14 +231,10 @@ struct RangeSource<const INCLUSIVE: bool> {
 }
 
 fn get_i64_number(scalar: &Scalar) -> Result<i64> {
-    check_number::<_, i64>(
+    check_number::<i64, usize>(
         None,
         &FunctionContext::default(),
-        &Expr::<usize>::Constant {
-            span: None,
-            scalar: scalar.clone(),
-            data_type: scalar.clone().as_ref().infer_data_type(),
-        },
+        &Expr::constant(scalar.clone(), None),
         &BUILTIN_FUNCTIONS,
     )
 }

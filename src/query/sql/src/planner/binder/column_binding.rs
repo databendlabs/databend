@@ -85,7 +85,11 @@ impl ColumnBinding {
     }
 }
 
-impl ColumnIndex for ColumnBinding {}
+impl ColumnIndex for ColumnBinding {
+    fn unique_name<W: std::fmt::Write>(&self, f: &mut W) -> std::fmt::Result {
+        write!(f, "{}", self.index)
+    }
+}
 
 pub struct ColumnBindingBuilder {
     /// Database name of this `ColumnBinding` in current context

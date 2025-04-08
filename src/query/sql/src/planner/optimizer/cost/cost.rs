@@ -18,10 +18,10 @@ use std::ops::AddAssign;
 
 use databend_common_exception::Result;
 
-use crate::optimizer::MExpr;
-use crate::optimizer::Memo;
-use crate::optimizer::PhysicalProperty;
-use crate::optimizer::RequiredProperty;
+use crate::optimizer::ir::MExpr;
+use crate::optimizer::ir::Memo;
+use crate::optimizer::ir::PhysicalProperty;
+use crate::optimizer::ir::RequiredProperty;
 use crate::IndexType;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -55,7 +55,7 @@ impl AddAssign for Cost {
     }
 }
 
-pub trait CostModel: Send {
+pub trait CostModel: Send + Sync {
     /// Compute cost of given `MExpr`(children are not encapsulated).
     fn compute_cost(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost>;
 }

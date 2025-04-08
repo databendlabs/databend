@@ -134,9 +134,6 @@ TableScan
 └── estimated rows: 0.00
 
 statement ok
-drop table t1
-
-statement ok
 drop table if exists t2
 
 statement ok
@@ -255,6 +252,218 @@ Filter
     ├── push downs: [filters: [is_true(TRY_CAST(v['a'][0] (#3) AS UInt8 NULL) = 2)], limit: NONE]
     ├── virtual columns: [v['a'][0], v['b']]
     └── estimated rows: 1.00
+
+query T
+explain select t1.a, t1.v['b'] from t1 left outer join t2 on t1.v['b'] = t2.a
+----
+HashJoin
+├── output columns: [t1.a (#0), t1.v['b'] (#4)]
+├── join type: LEFT OUTER
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [TRY_CAST(v['b'] (#4) AS Int32 NULL) = t2.a (#2)]
+├── estimated rows: 1.00
+├── TableScan(Build)
+│   ├── table: default.test_virtual_db.t2
+│   ├── output columns: [a (#2)]
+│   ├── read rows: 1
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 1.00
+└── TableScan(Probe)
+    ├── table: default.test_virtual_db.t1
+    ├── output columns: [a (#0), v['b'] (#4)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── virtual columns: [v['b']]
+    └── estimated rows: 1.00
+
+query T
+explain select t1.a, t1.v['b'] from t1 left outer join t2 on t1.v['b'] = t2.a where t1.v['a'][0] = 1;
+----
+HashJoin
+├── output columns: [t1.a (#0), t1.v['b'] (#4)]
+├── join type: RIGHT OUTER
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [TRY_CAST(v['b'] (#4) AS Int32 NULL) = t2.a (#2)]
+├── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.test_virtual_db.t1
+│   ├── output columns: [a (#0), v['b'] (#4)]
+│   ├── read rows: 1
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [is_true(TRY_CAST(v['a'][0] (#5) AS UInt8 NULL) = 1)], limit: NONE]
+│   ├── virtual columns: [v['a'][0], v['b']]
+│   └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.test_virtual_db.t2
+    ├── output columns: [a (#2)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
+
+
+query T
+explain select * from t1 join t2 on t1.v['b'] = t2.a;
+----
+HashJoin
+├── output columns: [t1.a (#0), t1.v (#1), t2.a (#2), t2.v (#3)]
+├── join type: INNER
+├── build keys: [t2.a (#2)]
+├── probe keys: [CAST(v['b'] (#4) AS Int32 NULL)]
+├── keys is null equal: [false]
+├── filters: []
+├── estimated rows: 1.00
+├── TableScan(Build)
+│   ├── table: default.test_virtual_db.t2
+│   ├── output columns: [a (#2), v (#3)]
+│   ├── read rows: 1
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 1.00
+└── TableScan(Probe)
+    ├── table: default.test_virtual_db.t1
+    ├── output columns: [a (#0), v (#1), v['b'] (#4)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── virtual columns: [v['b']]
+    └── estimated rows: 1.00
+
+query T
+explain select * from t1 join t2 on t1.v['b'] = t2.v['b'];
+----
+HashJoin
+├── output columns: [t1.a (#0), t1.v (#1), t2.a (#2), t2.v (#3)]
+├── join type: INNER
+├── build keys: [v['b'] (#5)]
+├── probe keys: [v['b'] (#4)]
+├── keys is null equal: [false]
+├── filters: []
+├── estimated rows: 1.00
+├── TableScan(Build)
+│   ├── table: default.test_virtual_db.t2
+│   ├── output columns: [a (#2), v (#3), v['b'] (#5)]
+│   ├── read rows: 1
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   ├── virtual columns: [v['b']]
+│   └── estimated rows: 1.00
+└── TableScan(Probe)
+    ├── table: default.test_virtual_db.t1
+    ├── output columns: [a (#0), v (#1), v['b'] (#4)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── virtual columns: [v['b']]
+    └── estimated rows: 1.00
+
+query T
+explain select * from t1 join t2 on t1.v['b'] > t2.a;
+----
+HashJoin
+├── output columns: [t1.a (#0), t1.v (#1), t2.a (#2), t2.v (#3)]
+├── join type: INNER
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [TRY_CAST(v['b'] (#4) AS Int32 NULL) > t2.a (#2)]
+├── estimated rows: 1.00
+├── TableScan(Build)
+│   ├── table: default.test_virtual_db.t2
+│   ├── output columns: [a (#2), v (#3)]
+│   ├── read rows: 1
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 1.00
+└── TableScan(Probe)
+    ├── table: default.test_virtual_db.t1
+    ├── output columns: [a (#0), v (#1), v['b'] (#4)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── virtual columns: [v['b']]
+    └── estimated rows: 1.00
+
+query T
+explain select t1.v['b'], sum(t2.a) from t1 join t2 on t1.v['b'] = t2.a group by t1.v['b'];
+----
+AggregateFinal
+├── output columns: [sum(t2.a) (#5), t1.v['b'] (#4)]
+├── group by: [v['b']]
+├── aggregate functions: [sum(a)]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: [v['b']]
+    ├── aggregate functions: [sum(a)]
+    ├── estimated rows: 1.00
+    └── HashJoin
+        ├── output columns: [t1.v['b'] (#4), t2.a (#2)]
+        ├── join type: INNER
+        ├── build keys: [t2.a (#2)]
+        ├── probe keys: [CAST(v['b'] (#4) AS Int32 NULL)]
+        ├── keys is null equal: [false]
+        ├── filters: []
+        ├── estimated rows: 1.00
+        ├── TableScan(Build)
+        │   ├── table: default.test_virtual_db.t2
+        │   ├── output columns: [a (#2)]
+        │   ├── read rows: 1
+        │   ├── read size: < 1 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 1.00
+        └── TableScan(Probe)
+            ├── table: default.test_virtual_db.t1
+            ├── output columns: [v['b'] (#4)]
+            ├── read rows: 1
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── push downs: [filters: [], limit: NONE]
+            ├── virtual columns: [v['b']]
+            └── estimated rows: 1.00
+
+statement ok
+drop table t1
 
 statement ok
 drop table t2

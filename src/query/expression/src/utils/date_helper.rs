@@ -355,6 +355,7 @@ pub struct ToYYYYMMDD;
 pub struct ToYYYYMMDDHH;
 pub struct ToYYYYMMDDHHMMSS;
 pub struct ToYear;
+pub struct ToISOYear;
 pub struct ToQuarter;
 pub struct ToMonth;
 pub struct ToDayOfYear;
@@ -408,6 +409,12 @@ impl ToNumber<u64> for ToYYYYMMDDHHMMSS {
 impl ToNumber<u16> for ToYear {
     fn to_number(dt: &Zoned) -> u16 {
         dt.year() as u16
+    }
+}
+
+impl ToNumber<u16> for ToISOYear {
+    fn to_number(dt: &Zoned) -> u16 {
+        dt.date().iso_week_date().year() as _
     }
 }
 
@@ -582,10 +589,11 @@ pub struct ToStartOfMonth;
 pub struct ToStartOfQuarter;
 pub struct ToStartOfYear;
 pub struct ToStartOfISOYear;
+
+pub struct ToLastOfYear;
 pub struct ToLastOfWeek;
 pub struct ToLastOfMonth;
 pub struct ToLastOfQuarter;
-pub struct ToLastOfYear;
 pub struct ToPreviousMonday;
 pub struct ToPreviousTuesday;
 pub struct ToPreviousWednesday;

@@ -39,7 +39,7 @@ use log::debug;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::DropVirtualColumnPlan;

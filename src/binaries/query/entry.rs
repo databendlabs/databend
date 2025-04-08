@@ -33,6 +33,7 @@ use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::local;
+use databend_query::persistent_log::GlobalPersistentLog;
 use databend_query::servers::admin::AdminService;
 use databend_query::servers::flight::FlightService;
 use databend_query::servers::metrics::MetricService;
@@ -280,6 +281,10 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     }
     if conf.log.structlog.on {
         println!("    structlog: {}", conf.log.structlog);
+    }
+    if conf.log.persistentlog.on {
+        GlobalPersistentLog::instance().initialized();
+        println!("    persistentlog: {}", conf.log.persistentlog);
     }
 
     println!();

@@ -36,6 +36,7 @@ message UDFServer {
   string language = 3;
   repeated DataType arg_types = 4;
   DataType return_type = 5;
+  map<string, string> headers = 6;
 }
 
 message UDFScript {
