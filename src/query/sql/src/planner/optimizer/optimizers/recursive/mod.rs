@@ -15,4 +15,4 @@
 #[allow(clippy::module_inception)]
 mod recursive;
 
-pub use recursive::RecursiveOptimizer;
+pub use recursive::RecursiveRuleOptimizer;

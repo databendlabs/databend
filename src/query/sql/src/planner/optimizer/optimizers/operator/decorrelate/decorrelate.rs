@@ -35,7 +35,7 @@ use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::FlattenInfo;
-use crate::optimizer::optimizers::operator::SubqueryRewriter;
+use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::optimizer::optimizers::operator::UnnestResult;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -53,7 +53,7 @@ use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::IndexType;
 
-impl SubqueryRewriter {
+impl SubqueryDecorrelatorOptimizer {
     // Try to decorrelate a `CrossApply` into `SemiJoin` or `AntiJoin`.
     // We only do simple decorrelation here, the scheme is:
     // 1. If the subquery is correlated, we will try to decorrelate it into `SemiJoin`

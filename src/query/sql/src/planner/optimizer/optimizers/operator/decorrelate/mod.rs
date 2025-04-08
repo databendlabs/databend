@@ -16,8 +16,8 @@
 mod decorrelate;
 mod flatten_plan;
 mod flatten_scalar;
-mod subquery_rewriter;
+mod subquery_decorrelator;
 
-pub use subquery_rewriter::FlattenInfo;
-pub use subquery_rewriter::SubqueryRewriter;
-pub use subquery_rewriter::UnnestResult;
+pub use subquery_decorrelator::FlattenInfo;
+pub use subquery_decorrelator::SubqueryDecorrelatorOptimizer;
+pub use subquery_decorrelator::UnnestResult;

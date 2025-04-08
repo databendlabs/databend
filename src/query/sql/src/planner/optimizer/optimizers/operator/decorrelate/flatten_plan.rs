@@ -29,7 +29,7 @@ use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::FlattenInfo;
-use crate::optimizer::optimizers::operator::SubqueryRewriter;
+use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -54,7 +54,7 @@ use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
 
-impl SubqueryRewriter {
+impl SubqueryDecorrelatorOptimizer {
     #[recursive::recursive]
     pub fn flatten_plan(
         &mut self,
