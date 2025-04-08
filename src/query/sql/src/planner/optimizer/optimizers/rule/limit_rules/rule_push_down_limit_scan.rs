@@ -82,3 +82,9 @@ impl Rule for RulePushDownLimitScan {
         &self.matchers
     }
 }
+
+impl Default for RulePushDownLimitScan {
+    fn default() -> Self {
+        Self::new()
+    }
+}

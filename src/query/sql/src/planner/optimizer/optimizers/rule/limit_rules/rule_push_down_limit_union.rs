@@ -104,3 +104,9 @@ impl Rule for RulePushDownLimitUnion {
         &self.matchers
     }
 }
+
+impl Default for RulePushDownLimitUnion {
+    fn default() -> Self {
+        Self::new()
+    }
+}
