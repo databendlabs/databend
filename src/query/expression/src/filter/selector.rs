@@ -347,20 +347,27 @@ impl<'a> Selector<'a> {
         debug_assert!(
             matches!(data_type, DataType::String | DataType::Nullable(box DataType::String))
         );
-        // It's safe to unwrap because the expr is a column ref.
-        let column = value.into_column().unwrap();
-        self.select_like(
-            column,
-            &data_type,
-            like_pattern,
-            not,
-            true_selection,
-            false_selection,
-            mutable_true_idx,
-            mutable_false_idx,
-            select_strategy,
-            count,
-        )
+        match value {
+            Value::Scalar(Scalar::Null) => Ok(0),
+            _ => match value.into_column() {
+                Ok(column) => self.select_like(
+                    column,
+                    &data_type,
+                    like_pattern,
+                    not,
+                    true_selection,
+                    false_selection,
+                    mutable_true_idx,
+                    mutable_false_idx,
+                    select_strategy,
+                    count,
+                ),
+                Err(e) => Err(ErrorCode::Internal(format!(
+                    "Can not convert to column with error: {}",
+                    e
+                ))),
+            },
+        }
     }
 
     // Process SelectExpr::Others.
