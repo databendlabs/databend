@@ -66,11 +66,14 @@ impl SendPartState {
         limit: Option<usize>,
         fuse_pruner: Arc<FusePruner>,
         data_metrics: Arc<StorageMetrics>,
+        partitions_total: usize,
     ) -> Self {
+        let mut statistics = PartStatistics::default_exact();
+        statistics.partitions_total = partitions_total;
         SendPartState {
             cache: Mutex::new(SendPartCache {
                 partitions: Partitions::default(),
-                statistics: PartStatistics::default_exact(),
+                statistics,
                 derterministic_cache_key,
                 fuse_pruner,
             }),

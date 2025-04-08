@@ -270,16 +270,15 @@ impl FuseTable {
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
         match segment_format {
-            FuseSegmentFormat::Row => {
-                self.prune_segments_with_pipeline(
-                    pruner.clone(),
-                    &mut prune_pipeline,
-                    ctx.clone(),
-                    segment_rx,
-                    part_info_tx,
-                    derterministic_cache_key.clone(),
-                )?;
-            }
+            FuseSegmentFormat::Row => {self.prune_segments_with_pipeline(
+            pruner.clone(),
+            &mut prune_pipeline,
+            ctx.clone(),
+            segment_rx,
+            part_info_tx,
+            derterministic_cache_key.clone(),
+            lazy_init_segments.len(),
+        )?;}
             FuseSegmentFormat::Column => {
                 self.prune_column_oriented_segments_with_pipeline(
                     pruner.clone(),
@@ -397,6 +396,7 @@ impl FuseTable {
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
+        partitions_total: usize,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
@@ -481,6 +481,7 @@ impl FuseTable {
             limit,
             pruner.clone(),
             self.data_metrics.clone(),
+            partitions_total,
         ));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(

@@ -158,7 +158,8 @@ impl Interpreter for ExplainInterpreter {
                         schema.clone(),
                         metadata.clone(),
                     )?;
-                    let plan = interpreter.build_physical_plan(&mutation, true).await?;
+                    let mut plan = interpreter.build_physical_plan(&mutation, true).await?;
+                    self.inject_pruned_partitions_stats(&mut plan, metadata)?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
                 }
                 _ => self.explain_plan(&self.plan)?,
@@ -548,13 +549,7 @@ impl ExplainInterpreter {
         // It's because we need to get the same partitions as the original selecting plan.
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
         let mut plan = builder.build(s_expr, bind_context.column_set()).await?;
-        let mut sources = vec![];
-        plan.get_all_data_source(&mut sources);
-        for (id, source) in sources {
-            if let Some(stat) = self.prune_lazy_parts(metadata, &source)? {
-                plan.set_pruning_stats(id, stat);
-            }
-        }
+        self.inject_pruned_partitions_stats(&mut plan, metadata)?;
         self.explain_physical_plan(&plan, metadata, formatted_ast)
             .await
     }
@@ -584,6 +579,21 @@ impl ExplainInterpreter {
         let line_split_result = display_string.lines().collect::<Vec<_>>();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+    }
+
+    fn inject_pruned_partitions_stats(
+        &self,
+        plan: &mut PhysicalPlan,
+        metadata: &MetadataRef,
+    ) -> Result<()> {
+        let mut sources = vec![];
+        plan.get_all_data_source(&mut sources);
+        for (id, source) in sources {
+            if let Some(stat) = self.prune_lazy_parts(metadata, &source)? {
+                plan.set_pruning_stats(id, stat);
+            }
+        }
+        Ok(())
     }
 
     fn prune_lazy_parts(
