@@ -15,6 +15,7 @@
 mod async_block_prune_transform;
 mod block_metas_meta;
 mod block_prune_result_meta;
+mod column_oriented_block_prune;
 mod extract_segment_transform;
 mod lazy_segment_meta;
 mod lazy_segment_receiver_source;
@@ -26,9 +27,13 @@ mod sync_block_prune_transform;
 mod topn_prune_transform;
 
 pub use async_block_prune_transform::AsyncBlockPruneTransform;
+pub use column_oriented_block_prune::ColumnOrientedBlockPruneSink;
 pub use extract_segment_transform::ExtractSegmentTransform;
 pub use lazy_segment_meta::LazySegmentMeta;
 pub use lazy_segment_receiver_source::LazySegmentReceiverSource;
+pub use pruned_segment_meta::PrunedColumnOrientedSegmentMeta;
+pub use pruned_segment_meta::PrunedCompactSegmentMeta;
+pub use pruned_segment_meta::PrunedSegmentMeta;
 pub use sample_block_metas_transform::SampleBlockMetasTransform;
 pub use segment_prune_transform::SegmentPruneTransform;
 pub use send_part_info_sink::SendPartInfoSink;

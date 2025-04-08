@@ -574,7 +574,7 @@ async fn write_segment(
     set_hilbert_level: bool,
     table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<(String, Statistics)> {
-    let location = location_gen.gen_segment_info_location(table_meta_timestamps);
+    let location = location_gen.gen_segment_info_location(table_meta_timestamps, false);
     let mut new_summary = reduce_block_metas(&blocks, thresholds, default_cluster_key);
     if all_perfect {
         // To fix issue #13217.

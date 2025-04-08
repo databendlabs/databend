@@ -29,6 +29,7 @@ use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
+use crate::caches::ColumnOrientedSegmentInfoCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
@@ -73,6 +74,7 @@ pub struct CacheManager {
     table_snapshot_cache: CacheSlot<TableSnapshotCache>,
     table_statistic_cache: CacheSlot<TableSnapshotStatisticCache>,
     compact_segment_info_cache: CacheSlot<CompactSegmentInfoCache>,
+    column_oriented_segment_info_cache: CacheSlot<ColumnOrientedSegmentInfoCache>,
     bloom_index_filter_cache: CacheSlot<BloomIndexFilterCache>,
     bloom_index_meta_cache: CacheSlot<BloomIndexMetaCache>,
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
@@ -152,6 +154,7 @@ impl CacheManager {
                 compact_segment_info_cache: CacheSlot::new(None),
                 bloom_index_filter_cache: CacheSlot::new(None),
                 bloom_index_meta_cache: CacheSlot::new(None),
+                column_oriented_segment_info_cache: CacheSlot::new(None),
                 inverted_index_meta_cache: CacheSlot::new(None),
                 inverted_index_file_cache: CacheSlot::new(None),
                 prune_partitions_cache: CacheSlot::new(None),
@@ -173,6 +176,10 @@ impl CacheManager {
             );
             let compact_segment_info_cache = Self::new_bytes_cache_slot(
                 MEMORY_CACHE_COMPACT_SEGMENT_INFO,
+                config.table_meta_segment_bytes as usize,
+            );
+            let column_oriented_segment_info_cache = Self::new_bytes_cache_slot(
+                MEMORY_CACHE_COLUMN_ORIENTED_SEGMENT_INFO,
                 config.table_meta_segment_bytes as usize,
             );
             let bloom_index_filter_cache = {
@@ -249,6 +256,7 @@ impl CacheManager {
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 compact_segment_info_cache,
+                column_oriented_segment_info_cache,
                 bloom_index_filter_cache,
                 bloom_index_meta_cache,
                 inverted_index_meta_cache,
@@ -461,6 +469,10 @@ impl CacheManager {
         self.in_memory_table_data_cache.get()
     }
 
+    pub fn get_column_oriented_segment_info_cache(&self) -> Option<ColumnOrientedSegmentInfoCache> {
+        self.column_oriented_segment_info_cache.get()
+    }
+
     fn new_items_cache_slot<V: Into<CacheValue<V>>>(
         name: impl Into<String>,
         capacity: usize,
@@ -583,6 +595,7 @@ const IN_MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "memory_cache_bloom_ind
 const HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "cache_bloom_index_filter";
 const IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_index_filter";
 const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_info";
+const MEMORY_CACHE_COLUMN_ORIENTED_SEGMENT_INFO: &str = "memory_cache_column_oriented_segment_info";
 const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
 const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
 const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas";
