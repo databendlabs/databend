@@ -21,11 +21,11 @@ use log::info;
 
 use super::explore_rules::get_explore_rule_set;
 use crate::optimizer::cost::CostModel;
-use crate::optimizer::cost::DefaultCostModel;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::cascades::DefaultCostModel;
 use crate::optimizer::optimizers::cascades::OptimizeGroupTask;
 use crate::optimizer::optimizers::cascades::Scheduler;
 use crate::optimizer::optimizers::cascades::Task;
