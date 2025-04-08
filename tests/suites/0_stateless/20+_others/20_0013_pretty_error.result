@@ -30,7 +30,8 @@ candidate functions:
   to_base64(Binary NULL) :: String NULL  : unable to unify `UInt8` with `Binary`
 
 
-Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64()`, during run expr: `1 + CAST('a' AS UInt64)`
+Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`, during run expr: `1 + CAST('a' AS UInt64)`
+Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST((1, 'a') AS Tuple(String, Int32))`, during run expr: `CAST(get(1)(CAST((1, 'a') AS Tuple(String, Int32))) AS UInt64) + 3`
 Error: APIError: QueryFailed: [1025]error: 
   --> SQL:1:20
   |
