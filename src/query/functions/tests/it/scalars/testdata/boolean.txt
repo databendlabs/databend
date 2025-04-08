@@ -65,7 +65,7 @@ error:
   --> SQL:1:1
   |
 1 | 'a' and 1
-  | ^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('a')` in expr `to_boolean()`, during run expr: `(CAST('a' AS Boolean) AND CAST(1 AS Boolean))`
+  | ^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('a')` in expr `CAST('a' AS Boolean)`, during run expr: `(CAST('a' AS Boolean) AND CAST(1 AS Boolean))`
 
 
 
@@ -73,7 +73,7 @@ error:
   --> SQL:1:9
   |
 1 | NOT NOT 'a'
-  |         ^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('a')` in expr `to_boolean()`, during run expr: `NOT NOT CAST('a' AS Boolean)`
+  |         ^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('a')` in expr `CAST('a' AS Boolean)`, during run expr: `NOT NOT CAST('a' AS Boolean)`
 
 
 

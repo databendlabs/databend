@@ -2147,7 +2147,7 @@ error:
   --> SQL:1:5
   |
 1 | bin(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64()`, during run expr: `bin(CAST(e AS Int64))`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `CAST(e AS Int64)`, during run expr: `bin(CAST(e AS Int64))`
 
 
 
@@ -2255,7 +2255,7 @@ error:
   --> SQL:1:5
   |
 1 | oct(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64()`, during run expr: `oct(CAST(e AS Int64))`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `CAST(e AS Int64)`, during run expr: `oct(CAST(e AS Int64))`
 
 
 
@@ -2449,7 +2449,7 @@ error:
   --> SQL:1:12
   |
 1 | lpad('hi', -1, '?')
-  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `to_uint64()`, during run expr: `lpad('hi', CAST(- 1 AS UInt64), '?')`
+  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(- 1 AS UInt64)`, during run expr: `lpad('hi', CAST(- 1 AS UInt64), '?')`
 
 
 
@@ -2559,7 +2559,7 @@ error:
   --> SQL:1:12
   |
 1 | rpad('hi', -1, '?')
-  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `to_uint64()`, during run expr: `rpad('hi', CAST(- 1 AS UInt64), '?')`
+  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(- 1 AS UInt64)`, during run expr: `rpad('hi', CAST(- 1 AS UInt64), '?')`
 
 
 

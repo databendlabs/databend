@@ -70,7 +70,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(1024 AS UINT8)
-  | ^^^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint8(1024)` in expr `to_uint8()`, during run expr: `CAST(1024 AS UInt8)`
+  | ^^^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint8(1024)` in expr `CAST(1024 AS UInt8)`
 
 
 
@@ -78,7 +78,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS UINT8)
-  | ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint8(512)` in expr `to_uint8()`, during run expr: `CAST(a AS UInt8)`
+  | ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint8(512)` in expr `CAST(a AS UInt8)`
 
 
 
@@ -86,7 +86,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS UINT16)
-  | ^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint16(-4)` in expr `to_uint16()`, during run expr: `CAST(a AS UInt16)`
+  | ^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint16(-4)` in expr `CAST(a AS UInt16)`
 
 
 
@@ -118,7 +118,7 @@ error:
   --> SQL:1:22
   |
 1 | (CAST(a AS FLOAT32), CAST(a AS INT32), CAST(b AS FLOAT32), CAST(b AS INT32))
-  |                      ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int32(4294967295)` in expr `to_int32()`, during run expr: `tuple(CAST(a AS Float32), CAST(a AS Int32), CAST(b AS Float32), CAST(b AS Int32))`
+  |                      ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int32(4294967295)` in expr `CAST(a AS Int32)`, during run expr: `tuple(CAST(a AS Float32), CAST(a AS Int32), CAST(b AS Float32), CAST(b AS Int32))`
 
 
 
@@ -134,7 +134,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int8(256)` in expr `to_int8()`, during run expr: `CAST(tuple(a, b, NULL) AS Tuple(Int8, UInt8, Boolean NULL))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int8(256)` in expr `CAST(tuple(a, b, NULL) AS Tuple(Int8, UInt8, Boolean NULL))`
 
 
 
@@ -190,7 +190,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS UINT16)
-  | ^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint16(-4)` in expr `to_uint16()`, during run expr: `CAST(a AS UInt16)`
+  | ^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint16(-4)` in expr `CAST(a AS UInt16)`
 
 
 
@@ -198,7 +198,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(c AS INT16)
-  | ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int16(11111111111)` in expr `to_int16()`, during run expr: `CAST(c AS Int16)`
+  | ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int16(11111111111)` in expr `CAST(c AS Int16)`
 
 
 
@@ -241,7 +241,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('🍦 が美味しい' AS VARIANT)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected value, pos 1 while evaluating function `parse_json('🍦 が美味しい')` in expr `parse_json()`, during run expr: `CAST('🍦 が美味しい' AS Variant)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected value, pos 1 while evaluating function `parse_json('🍦 が美味しい')` in expr `CAST('🍦 が美味しい' AS Variant)`
 
 
 
@@ -767,7 +767,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('foo' AS UINT64)
-  | ^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('foo')` in expr `to_uint64()`, during run expr: `CAST('foo' AS UInt64)`
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('foo')` in expr `CAST('foo' AS UInt64)`
 
 
 
@@ -775,7 +775,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('1foo' AS INT32)
-  | ^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('1foo')` in expr `to_int32()`, during run expr: `CAST('1foo' AS Int32)`
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('1foo')` in expr `CAST('1foo' AS Int32)`
 
 
 
@@ -783,7 +783,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('-1' AS UINT64)
-  | ^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('-1')` in expr `to_uint64()`, during run expr: `CAST('-1' AS UInt64)`
+  | ^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('-1')` in expr `CAST('-1' AS UInt64)`
 
 
 
@@ -791,7 +791,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('256' AS UINT8)
-  | ^^^^^^^^^^^^^^^^^^^^ number too large to fit in target type while evaluating function `to_uint8('256')` in expr `to_uint8()`, during run expr: `CAST('256' AS UInt8)`
+  | ^^^^^^^^^^^^^^^^^^^^ number too large to fit in target type while evaluating function `to_uint8('256')` in expr `CAST('256' AS UInt8)`
 
 
 
@@ -886,7 +886,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('t' AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('t')` in expr `to_boolean()`, during run expr: `CAST('t' AS Boolean)`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('t')` in expr `CAST('t' AS Boolean)`
 
 
 
@@ -894,7 +894,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('f' AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('f')` in expr `to_boolean()`, during run expr: `CAST('f' AS Boolean)`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('f')` in expr `CAST('f' AS Boolean)`
 
 
 
@@ -902,7 +902,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('0' AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('0')` in expr `to_boolean()`, during run expr: `CAST('0' AS Boolean)`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('0')` in expr `CAST('0' AS Boolean)`
 
 
 
@@ -910,7 +910,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('1' AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('1')` in expr `to_boolean()`, during run expr: `CAST('1' AS Boolean)`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('1')` in expr `CAST('1' AS Boolean)`
 
 
 
@@ -984,7 +984,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('010.010' AS DECIMAL(5,4))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(5, 4)('010.010')` in expr `to_decimal(5, 4)()`, during run expr: `CAST('010.010' AS Decimal(5, 4))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(5, 4)('010.010')` in expr `CAST('010.010' AS Decimal(5, 4))`
 
 
 
@@ -1001,7 +1001,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('010.010' AS DECIMAL(4,3))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(4, 3)('010.010')` in expr `to_decimal(4, 3)()`, during run expr: `CAST('010.010' AS Decimal(4, 3))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(4, 3)('010.010')` in expr `CAST('010.010' AS Decimal(4, 3))`
 
 
 
@@ -1392,7 +1392,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022')
-  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('2022')` in expr `to_timestamp()`, during run expr: `CAST('2022' AS Timestamp)`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('2022')` in expr `CAST('2022' AS Timestamp)`
 
 
 
@@ -1400,7 +1400,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022-01')
-  | ^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('2022-01')` in expr `to_timestamp()`, during run expr: `CAST('2022-01' AS Timestamp)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('2022-01')` in expr `CAST('2022-01' AS Timestamp)`
 
 
 
@@ -1417,7 +1417,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('A NON-TIMESTAMP STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-TIME' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-TIME": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_timestamp('A NON-TIMESTAMP STR')` in expr `to_timestamp()`, during run expr: `CAST('A NON-TIMESTAMP STR' AS Timestamp)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-TIME' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-TIME": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_timestamp('A NON-TIMESTAMP STR')` in expr `CAST('A NON-TIMESTAMP STR' AS Timestamp)`
 
 
 
@@ -1592,7 +1592,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022')
-  | ^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('2022')` in expr `to_date()`, during run expr: `CAST('2022' AS Date)`
+  | ^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('2022')` in expr `CAST('2022' AS Date)`
 
 
 
@@ -1600,7 +1600,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022-01')
-  | ^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('2022-01')` in expr `to_date()`, during run expr: `CAST('2022-01' AS Date)`
+  | ^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('2022-01')` in expr `CAST('2022-01' AS Date)`
 
 
 
@@ -1617,7 +1617,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('A NON-DATE STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-DATE' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-DATE": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_date('A NON-DATE STR')` in expr `to_date()`, during run expr: `CAST('A NON-DATE STR' AS Date)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-DATE' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-DATE": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_date('A NON-DATE STR')` in expr `CAST('A NON-DATE STR' AS Date)`
 
 
 
@@ -1781,7 +1781,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(('a',) AS Tuple(INT))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: `CAST(tuple('a') AS Tuple(Int32,))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(tuple('a') AS Tuple(Int32,))`
 
 
 
@@ -1807,7 +1807,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT NULL), INT))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: `CAST(tuple(tuple(1, 'a'), 1) AS Tuple(Tuple(Int32, Int32 NULL), Int32))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(tuple(tuple(1, 'a'), 1) AS Tuple(Tuple(Int32, Int32 NULL), Int32))`
 
 
 
@@ -1815,7 +1815,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT), INT) NULL)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: `CAST(tuple(tuple(1, 'a'), 1) AS Tuple(Tuple(Int32, Int32), Int32) NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(tuple(tuple(1, 'a'), 1) AS Tuple(Tuple(Int32, Int32), Int32) NULL)`
 
 
 
@@ -1832,7 +1832,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT)) NULL)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: `CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int32, Int32)) NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int32, Int32)) NULL)`
 
 
 
@@ -1840,7 +1840,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT NULL)))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: `CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int32, Int32 NULL)))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int32, Int32 NULL)))`
 
 
 
@@ -1857,7 +1857,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([['a'], ['b', 'c']] AS Array(Array(INT) NULL))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: `CAST(array(array('a'), array('b', 'c')) AS Array(Array(Int32) NULL))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST(array(array('a'), array('b', 'c')) AS Array(Array(Int32) NULL))`
 
 
 
