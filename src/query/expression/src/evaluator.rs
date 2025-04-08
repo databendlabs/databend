@@ -26,6 +26,7 @@ use itertools::Itertools;
 use log::error;
 
 use crate::block::DataBlock;
+use crate::expr::*;
 use crate::expression::Expr;
 use crate::function::EvalContext;
 use crate::property::Domain;
@@ -52,12 +53,11 @@ use crate::values::Value;
 use crate::BlockEntry;
 use crate::Cast;
 use crate::ColumnIndex;
-use crate::ColumnRef;
-use crate::Constant;
-use crate::FunctionCall;
+use crate::Function;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionEval;
+use crate::FunctionID;
 use crate::FunctionRegistry;
 use crate::LambdaFunctionCall;
 use crate::RemoteExpr;
@@ -170,14 +170,23 @@ impl<'a> Evaluator<'a> {
             Expr::Cast(Cast {
                 span,
                 is_try,
-                expr,
+                expr: inner,
                 dest_type,
             }) => {
-                let value = self.partial_run(expr, validity.clone(), options)?;
+                let value = self.partial_run(inner, validity.clone(), options)?;
+                let src_type = inner.data_type();
                 if *is_try {
-                    self.run_try_cast(*span, expr.data_type(), dest_type, value)
+                    self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())
                 } else {
-                    self.run_cast(*span, expr.data_type(), dest_type, value, validity, options)
+                    self.run_cast(
+                        *span,
+                        src_type,
+                        dest_type,
+                        value,
+                        validity,
+                        &|| expr.sql_display(),
+                        options,
+                    )
                 }
             }
             Expr::FunctionCall(FunctionCall {
@@ -203,53 +212,16 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             }) => {
-                let child_suppress_error = function.signature.name == "is_not_error";
-                let mut child_option = options.with_suppress_error(child_suppress_error);
-
-                let args = args
-                    .iter()
-                    .map(|expr| self.partial_run(expr, validity.clone(), &mut child_option))
-                    .collect::<Result<Vec<_>>>()?;
-
-                assert!(args
-                    .iter()
-                    .filter_map(|val| match val {
-                        Value::Column(col) => Some(col.len()),
-                        Value::Scalar(_) => None,
-                    })
-                    .all_equal());
-
-                let errors = if !child_suppress_error {
-                    None
-                } else {
-                    child_option.errors.take()
-                };
-                let mut ctx = EvalContext {
-                    generics,
-                    num_rows: self.data_block.num_rows(),
-                    validity,
-                    errors,
-                    func_ctx: self.func_ctx,
-                    suppress_error: options.suppress_error,
-                };
-
-                let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(&args, &mut ctx);
-
-                ctx.render_error(
+                let result = self.run_call(
                     *span,
-                    id.params(),
-                    &args,
-                    &function.signature.name,
-                    &expr.sql_display(),
-                    options.selection,
+                    id,
+                    function,
+                    args,
+                    generics,
+                    validity,
+                    &|| expr.sql_display(),
+                    options,
                 )?;
-
-                // inject errors into options, parent will handle it
-                if options.suppress_error {
-                    options.errors = ctx.errors.take();
-                }
-
                 Ok(result)
             }
             Expr::LambdaFunctionCall(LambdaFunctionCall {
@@ -292,6 +264,67 @@ impl<'a> Evaluator<'a> {
         result
     }
 
+    fn run_call(
+        &self,
+        span: Span,
+        id: &FunctionID,
+        function: &Function,
+        args: &[Expr],
+        generics: &[DataType],
+        validity: Option<Bitmap>,
+        expr_display: &impl Fn() -> String,
+        options: &mut EvaluateOptions,
+    ) -> Result<Value<AnyType>> {
+        let child_suppress_error = function.signature.name == "is_not_error";
+        let mut child_option = options.with_suppress_error(child_suppress_error);
+
+        let args = args
+            .iter()
+            .map(|expr| self.partial_run(expr, validity.clone(), &mut child_option))
+            .collect::<Result<Vec<_>>>()?;
+
+        assert!(args
+            .iter()
+            .filter_map(|val| match val {
+                Value::Column(col) => Some(col.len()),
+                Value::Scalar(_) => None,
+            })
+            .all_equal());
+
+        let errors = if child_suppress_error {
+            child_option.errors.take()
+        } else {
+            None
+        };
+        let mut ctx = EvalContext {
+            generics,
+            num_rows: self.data_block.num_rows(),
+            validity,
+            errors,
+            func_ctx: self.func_ctx,
+            suppress_error: options.suppress_error,
+        };
+
+        let (_, eval) = function.eval.as_scalar().unwrap();
+        let result = (eval)(&args, &mut ctx);
+
+        if options.suppress_error {
+            // inject errors into options, parent will handle it
+            options.errors = ctx.errors.take();
+        } else {
+            EvalContext::render_error(
+                span,
+                &ctx.errors,
+                id.params(),
+                args.as_slice(),
+                &function.signature.name,
+                &expr_display(),
+                options.selection,
+            )?;
+        }
+        Ok(result)
+    }
+
     pub fn run_cast(
         &self,
         span: Span,
@@ -299,6 +332,7 @@ impl<'a> Evaluator<'a> {
         dest_type: &DataType,
         value: Value<AnyType>,
         validity: Option<Bitmap>,
+        expr_display: &impl Fn() -> String,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
@@ -313,6 +347,7 @@ impl<'a> Evaluator<'a> {
                 value.clone(),
                 &cast_fn,
                 validity.clone(),
+                expr_display,
                 options,
             )? {
                 return Ok(new_value);
@@ -349,6 +384,7 @@ impl<'a> Evaluator<'a> {
                     value.clone(),
                     &cast_fn,
                     validity.clone(),
+                    expr_display,
                     options,
                 )? {
                     Ok(new_value)
@@ -376,6 +412,7 @@ impl<'a> Evaluator<'a> {
                     value.clone(),
                     &cast_fn,
                     validity.clone(),
+                    expr_display,
                     options,
                 )? {
                     let (new_value, has_null) = new_value.remove_nullable();
@@ -395,9 +432,15 @@ impl<'a> Evaluator<'a> {
             }
             (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
-                Value::Scalar(_) => {
-                    self.run_cast(span, inner_src_ty, inner_dest_ty, value, validity, options)
-                }
+                Value::Scalar(_) => self.run_cast(
+                    span,
+                    inner_src_ty,
+                    inner_dest_ty,
+                    value,
+                    validity,
+                    expr_display,
+                    options,
+                ),
                 Value::Column(Column::Nullable(col)) => {
                     let validity = validity
                         .map(|validity| (&validity) & (&col.validity))
@@ -409,6 +452,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(col.column),
                             Some(validity.clone()),
+                            expr_display,
                             options,
                         )?
                         .into_column()
@@ -431,9 +475,15 @@ impl<'a> Evaluator<'a> {
                         Ok(Value::Scalar(Scalar::default_value(dest_type)))
                     }
                 }
-                Value::Scalar(_) => {
-                    self.run_cast(span, inner_src_ty, dest_type, value, validity, options)
-                }
+                Value::Scalar(_) => self.run_cast(
+                    span,
+                    inner_src_ty,
+                    dest_type,
+                    value,
+                    validity,
+                    expr_display,
+                    options,
+                ),
                 Value::Column(Column::Nullable(col)) => {
                     let has_valid_nulls = validity
                         .as_ref()
@@ -454,6 +504,7 @@ impl<'a> Evaluator<'a> {
                             dest_type,
                             Value::Column(col.column),
                             validity,
+                            expr_display,
                             options,
                         )?
                         .into_column()
@@ -469,6 +520,7 @@ impl<'a> Evaluator<'a> {
                     inner_dest_ty,
                     Value::Scalar(scalar),
                     validity,
+                    expr_display,
                     options,
                 ),
                 Value::Column(col) => {
@@ -479,6 +531,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(col),
                             validity,
+                            expr_display,
                             options,
                         )?
                         .into_column()
@@ -515,6 +568,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(array),
                             validity,
+                            expr_display,
                             options,
                         )?
                         .into_column()
@@ -539,6 +593,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(col.underlying_column()),
                             validity,
+                            expr_display,
                             options,
                         )?
                         .into_column()
@@ -576,6 +631,7 @@ impl<'a> Evaluator<'a> {
                                 inner_dest_ty,
                                 Value::Column(column),
                                 validity,
+                                expr_display,
                                 options,
                             )?
                             .into_column()
@@ -613,6 +669,7 @@ impl<'a> Evaluator<'a> {
                                 inner_dest_ty,
                                 Value::Column(value_col),
                                 None,
+                                expr_display,
                                 options,
                             )?
                             .into_column()
@@ -663,6 +720,7 @@ impl<'a> Evaluator<'a> {
                                 &fields_dest_ty[1],
                                 Value::Column(value_column),
                                 validity,
+                                expr_display,
                                 options,
                             )?
                             .into_column()
@@ -708,6 +766,7 @@ impl<'a> Evaluator<'a> {
                                 &fields_dest_ty[1],
                                 Value::Column(value_col),
                                 None,
+                                expr_display,
                                 options,
                             )?
                             .into_column()
@@ -748,6 +807,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(array),
                             validity,
+                            expr_display,
                             options,
                         )?
                         .into_column()
@@ -772,6 +832,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(col.underlying_column()),
                             validity,
+                            expr_display,
                             options,
                         )?
                         .into_column()
@@ -799,6 +860,7 @@ impl<'a> Evaluator<'a> {
                                     dest_ty,
                                     Value::Scalar(field),
                                     validity.clone(),
+                                    expr_display,
                                     options,
                                 )
                                 .map(|val| val.into_scalar().unwrap())
@@ -818,6 +880,7 @@ impl<'a> Evaluator<'a> {
                                     dest_ty,
                                     Value::Column(field),
                                     validity.clone(),
+                                    expr_display,
                                     options,
                                 )
                                 .map(|val| val.into_column().unwrap())
@@ -842,6 +905,7 @@ impl<'a> Evaluator<'a> {
         src_type: &DataType,
         dest_type: &DataType,
         value: Value<AnyType>,
+        expr_display: &impl Fn() -> String,
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
             return Ok(value);
@@ -859,6 +923,7 @@ impl<'a> Evaluator<'a> {
                 value.clone(),
                 &cast_fn,
                 None,
+                expr_display,
                 &mut EvaluateOptions::default(),
             ) {
                 return Ok(new_value);
@@ -879,10 +944,13 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Nullable(inner_src_ty), _) => match value {
                 Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
-                Value::Scalar(_) => self.run_try_cast(span, inner_src_ty, inner_dest_type, value),
+                Value::Scalar(_) => {
+                    self.run_try_cast(span, inner_src_ty, inner_dest_type, value, expr_display)
+                }
                 Value::Column(Column::Nullable(col)) => {
+                    let value = Value::Column(col.column);
                     let new_col = *self
-                        .run_try_cast(span, inner_src_ty, dest_type, Value::Column(col.column))?
+                        .run_try_cast(span, inner_src_ty, dest_type, value, expr_display)?
                         .into_column()
                         .unwrap()
                         .into_nullable()
@@ -919,20 +987,17 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
+                    let value = Value::Column(array);
                     let new_array = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, value, expr_display)?
                         .into_column()
                         .unwrap();
                     Ok(Value::Scalar(Scalar::Array(new_array)))
                 }
                 Value::Column(Column::Array(col)) => {
+                    let value = Value::Column(col.underlying_column());
                     let new_values = self
-                        .run_try_cast(
-                            span,
-                            inner_src_ty,
-                            inner_dest_ty,
-                            Value::Column(col.underlying_column()),
-                        )?
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, value, expr_display)?
                         .into_column()
                         .unwrap();
                     let new_col = Column::Array(Box::new(ArrayColumn::new(
@@ -961,20 +1026,17 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
+                    let value = Value::Column(array);
                     let new_array = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, value, expr_display)?
                         .into_column()
                         .unwrap();
                     Ok(Value::Scalar(Scalar::Map(new_array)))
                 }
                 Value::Column(Column::Map(col)) => {
+                    let value = Value::Column(col.underlying_column());
                     let new_values = self
-                        .run_try_cast(
-                            span,
-                            inner_src_ty,
-                            inner_dest_ty,
-                            Value::Column(col.underlying_column()),
-                        )?
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, value, expr_display)?
                         .into_column()
                         .unwrap();
                     let new_col = Column::Map(Box::new(ArrayColumn::new(
@@ -997,8 +1059,9 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
+                                let value = Value::Scalar(field);
                                 Ok(self
-                                    .run_try_cast(span, src_ty, dest_ty, Value::Scalar(field))?
+                                    .run_try_cast(span, src_ty, dest_ty, value, expr_display)?
                                     .into_scalar()
                                     .unwrap())
                             })
@@ -1011,8 +1074,9 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
+                                let value = Value::Column(field);
                                 Ok(self
-                                    .run_try_cast(span, src_ty, dest_ty, Value::Column(field))?
+                                    .run_try_cast(span, src_ty, dest_ty, value, expr_display)?
                                     .into_column()
                                     .unwrap())
                             })
@@ -1040,8 +1104,13 @@ impl<'a> Evaluator<'a> {
         value: Value<AnyType>,
         cast_fn: &str,
         validity: Option<Bitmap>,
+        expr_display: &impl Fn() -> String,
         options: &mut EvaluateOptions,
     ) -> Result<Option<Value<AnyType>>> {
+        if src_type.remove_nullable() == dest_type.remove_nullable() {
+            return Ok(None);
+        }
+
         let expr = Expr::ColumnRef(ColumnRef {
             span,
             id: 0,
@@ -1058,12 +1127,24 @@ impl<'a> Evaluator<'a> {
             vec![]
         };
 
-        let cast_expr = match check_function(span, cast_fn, &params, &[expr], self.fn_registry) {
-            Ok(cast_expr) => cast_expr,
-            Err(_) => return Ok(None),
+        let Ok(func_expr) = check_function(span, cast_fn, &params, &[expr], self.fn_registry)
+        else {
+            return Ok(None);
         };
 
-        if cast_expr.data_type() != dest_type {
+        let Expr::FunctionCall(FunctionCall {
+            id,
+            function,
+            generics,
+            return_type,
+            args,
+            ..
+        }) = &func_expr
+        else {
+            unreachable!()
+        };
+
+        if return_type != dest_type {
             return Ok(None);
         }
 
@@ -1077,7 +1158,17 @@ impl<'a> Evaluator<'a> {
 
         let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        Ok(Some(evaluator.partial_run(&cast_expr, validity, options)?))
+        let result = evaluator.run_call(
+            span,
+            id,
+            function,
+            args,
+            generics,
+            validity,
+            expr_display,
+            options,
+        )?;
+        Ok(Some(result))
     }
 
     // `if` is a special builtin function that could partially evaluate its arguments
@@ -1255,14 +1346,17 @@ impl<'a> Evaluator<'a> {
             suppress_error: false,
         };
         let result = (eval)(&args, &mut ctx, max_nums_per_row);
-        ctx.render_error(
-            *span,
-            id.params(),
-            &args,
-            &function.signature.name,
-            &Expr::from(call.clone()).sql_display(),
-            None,
-        )?;
+        if !ctx.suppress_error {
+            EvalContext::render_error(
+                *span,
+                &ctx.errors,
+                id.params(),
+                &args,
+                &function.signature.name,
+                &Expr::from(call.clone()).sql_display(),
+                None,
+            )?;
+        }
         assert_eq!(result.len(), self.data_block.num_rows());
         Ok(result)
     }
@@ -1297,11 +1391,11 @@ impl<'a> Evaluator<'a> {
                     &col_type,
                     result,
                     None,
+                    &|| expr.sql_display(),
                     &mut eval_options,
                 )?
-                .as_scalar()
-                .unwrap()
-                .clone();
+                .into_scalar()
+                .unwrap();
         }
         Ok(arg0)
     }
@@ -1672,17 +1766,21 @@ impl<'a> Evaluator<'a> {
                 dest_type,
             }) => {
                 let value = self.get_select_child(expr, options)?.0;
-                if *is_try {
-                    Ok((
-                        self.run_try_cast(*span, expr.data_type(), dest_type, value)?,
-                        dest_type.clone(),
-                    ))
+                let src_type = expr.data_type();
+                let value = if *is_try {
+                    self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
                 } else {
-                    Ok((
-                        self.run_cast(*span, expr.data_type(), dest_type, value, None, options)?,
-                        dest_type.clone(),
-                    ))
-                }
+                    self.run_cast(
+                        *span,
+                        src_type,
+                        dest_type,
+                        value,
+                        None,
+                        &|| expr.sql_display(),
+                        options,
+                    )?
+                };
+                Ok((value, dest_type.clone()))
             }
             Expr::FunctionCall(FunctionCall {
                 function,
@@ -1745,18 +1843,19 @@ impl<'a> Evaluator<'a> {
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(&args, &mut ctx);
 
-                ctx.render_error(
-                    *span,
-                    id.params(),
-                    &args,
-                    &function.signature.name,
-                    &expr.sql_display(),
-                    options.selection,
-                )?;
-
                 // inject errors into options, parent will handle it
                 if options.suppress_error {
                     options.errors = ctx.errors.take();
+                } else {
+                    EvalContext::render_error(
+                        *span,
+                        &ctx.errors,
+                        id.params(),
+                        &args,
+                        &function.signature.name,
+                        &expr.sql_display(),
+                        options.selection,
+                    )?
                 }
 
                 let return_type =

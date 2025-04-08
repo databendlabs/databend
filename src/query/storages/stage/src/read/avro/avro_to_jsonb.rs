@@ -26,6 +26,7 @@ pub(super) fn to_jsonb(value: &Value) -> Result<jsonb::Value, String> {
         Value::Double(v) => jsonb::Value::from(*v),
         Value::String(v) => jsonb::Value::from(v.as_str()),
         Value::Enum(_, v) => jsonb::Value::from(v.as_str()),
+        Value::Uuid(v) => jsonb::Value::from(v.to_string()),
         Value::Union(_, v) => to_jsonb(v)?,
         Value::Array(v) => {
             let mut array = Vec::with_capacity(v.len());
@@ -62,7 +63,6 @@ pub(super) fn to_jsonb(value: &Value) -> Result<jsonb::Value, String> {
         // Value::LocalTimestampMicros(_) => {}
         // Value::LocalTimestampNanos(_) => {}
         // Value::Duration(_) => {}
-        // Value::Uuid(_) => {}
     };
     Ok(jvalue)
 }

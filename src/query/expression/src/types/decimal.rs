@@ -399,6 +399,7 @@ pub trait Decimal:
 
     fn from_float(value: f64) -> Self;
     fn from_i128<U: Into<i128>>(value: U) -> Self;
+    fn from_i256(value: i256) -> Self;
     fn from_bigint(value: BigInt) -> Option<Self>;
 
     fn de_binary(bytes: &mut &[u8]) -> Self;
@@ -576,6 +577,10 @@ impl Decimal for i128 {
 
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         value.into()
+    }
+
+    fn from_i256(value: i256) -> Self {
+        value.as_i128()
     }
 
     fn from_bigint(value: BigInt) -> Option<Self> {
@@ -809,6 +814,10 @@ impl Decimal for i256 {
 
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         i256::from(value.into())
+    }
+
+    fn from_i256(value: i256) -> Self {
+        value
     }
 
     fn from_bigint(value: BigInt) -> Option<Self> {
