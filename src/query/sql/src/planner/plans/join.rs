@@ -610,7 +610,6 @@ impl Operator for Join {
         // Try to use broadcast join
         if !matches!(
             self.join_type,
-            JoinType::Right
                 | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi
@@ -727,7 +726,6 @@ impl Operator for Join {
 
         if !matches!(
             self.join_type,
-            JoinType::Right
                 | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi
