@@ -12,9 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod push_down_filter_join;
 mod rule_commute_join_base_table;
 mod rule_left_exchange_join;
+mod rule_semi_to_inner_join;
 mod util;
 
+pub use push_down_filter_join::*;
 pub use rule_commute_join_base_table::RuleCommuteJoinBaseTable;
 pub use rule_left_exchange_join::RuleLeftExchangeJoin;
+pub use rule_semi_to_inner_join::RuleSemiToInnerJoin;
+pub use util::get_join_predicates;

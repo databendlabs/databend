@@ -15,18 +15,19 @@
 mod agg_rules;
 mod factory;
 mod filter_rules;
+mod join_rules;
 mod limit_rules;
 mod rewrite;
 #[allow(clippy::module_inception)]
 mod rule;
 mod rule_set;
-mod transform;
 mod transform_result;
 mod utils;
 
 pub use agg_rules::*;
 pub use factory::RuleFactory;
 pub use filter_rules::*;
+pub use join_rules::*;
 pub use limit_rules::*;
 pub use rule::Rule;
 pub use rule::RuleID;

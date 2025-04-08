@@ -242,3 +242,9 @@ impl Rule for RuleLeftExchangeJoin {
         false
     }
 }
+
+impl Default for RuleLeftExchangeJoin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
