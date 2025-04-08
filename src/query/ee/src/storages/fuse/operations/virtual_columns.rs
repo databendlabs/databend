@@ -21,7 +21,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::Cast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
@@ -52,9 +51,9 @@ use opendal::Operator;
 //                             ┌────> │ VirtualColumnTransform1 │ ────┐
 //                             │      └─────────────────────────┘     │
 //                             │                  ...                 │
-// ┌─────────────────────┐     │      ┌─────────────────────────┐     │      ┌───────────────────┐
-// │ VirtualColumnSource │ ────┼────> │ VirtualColumnTransformN │ ────┼────> │ VirtualColumnSink │
-// └─────────────────────┘     │      └─────────────────────────┘     │      └───────────────────┘
+// ┌─────────────────────┐     │      ┌─────────────────────────┐     │      ┌───────────────────────────┐       ┌─────────────────────────┐       ┌────────────┐
+// │ VirtualColumnSource │ ────┼────> │ VirtualColumnTransformN │ ────┼────> │ TransformSerializeSegment │ ────> │ TableMutationAggregator │ ────> │ CommitSink │
+// └─────────────────────┘     │      └─────────────────────────┘     │      └───────────────────────────┘       └─────────────────────────┘       └────────────┘
 //                             │                  ...                 │
 //                             │      ┌─────────────────────────┐     │
 //                             └────> │ VirtualColumnTransformZ │ ────┘
@@ -147,37 +146,8 @@ pub async fn do_refresh_virtual_column(
         1,
     )?;
 
-<<<<<<< HEAD
-    let mut virtual_fields = Vec::with_capacity(virtual_columns.len());
-    let mut virtual_exprs = Vec::with_capacity(virtual_columns.len());
-    for virtual_column_field in virtual_columns {
-        let mut virtual_expr = parse_computed_expr(
-            ctx.clone(),
-            source_schema.clone(),
-            &virtual_column_field.expr,
-        )?;
-
-        if virtual_column_field.data_type.remove_nullable() != TableDataType::Variant {
-            virtual_expr = Cast {
-                span: None,
-                is_try: true,
-                expr: Box::new(virtual_expr),
-                dest_type: (&virtual_column_field.data_type).into(),
-            }
-            .into();
-        }
-        let virtual_field = TableField::new(
-            &virtual_column_field.expr,
-            infer_schema_type(virtual_expr.data_type())?,
-        );
-        virtual_exprs.push(virtual_expr);
-        virtual_fields.push(virtual_field);
-    }
-    let virtual_schema = TableSchemaRefExt::create(virtual_fields);
-=======
     let table_meta = &fuse_table.get_table_info().meta;
-    let virtual_column_builder = VirtualColumnBuilder::try_create(table_meta).unwrap();
->>>>>>> 31bba40384 (refactor(query): auto generate virtual columns for variant column)
+    let virtual_column_builder = VirtualColumnBuilder::try_create(ctx.clone(), table_meta).unwrap();
 
     let block_nums = block_metas.len();
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -294,37 +264,46 @@ impl AsyncTransform for VirtualColumnTransform {
             .and_then(BlockMeta::downcast_ref_from)
             .unwrap();
 
-        let start = Instant::now();
         let virtual_column_state = self.virtual_column_builder.add_block(
             &data_block,
             &self.write_settings,
             &block_meta.location,
         )?;
 
-        let virtual_column_size = virtual_column_state.size;
-        let draft_virtual_block_meta = virtual_column_state.draft_virtual_block_meta.clone();
-
-        write_data(
-            virtual_column_state.data,
-            &self.operator,
-            &virtual_column_state.location.0,
-        )
-        .await?;
-
-        // Perf.
+        if virtual_column_state
+            .draft_virtual_block_meta
+            .virtual_col_size
+            > 0
         {
-            metrics_inc_block_virtual_column_write_nums(1);
-            metrics_inc_block_virtual_column_write_bytes(virtual_column_size);
-            metrics_inc_block_virtual_column_write_milliseconds(start.elapsed().as_millis() as u64);
+            let start = Instant::now();
+
+            let virtual_column_size = virtual_column_state
+                .draft_virtual_block_meta
+                .virtual_col_size;
+            let location = &virtual_column_state
+                .draft_virtual_block_meta
+                .virtual_location
+                .0;
+
+            write_data(virtual_column_state.data, &self.operator, location).await?;
+
+            // Perf.
+            {
+                metrics_inc_block_virtual_column_write_nums(1);
+                metrics_inc_block_virtual_column_write_bytes(virtual_column_size);
+                metrics_inc_block_virtual_column_write_milliseconds(
+                    start.elapsed().as_millis() as u64
+                );
+            }
         }
 
-        let block_meta_with_virtual = ExtendedBlockMeta {
+        let extened_block_meta = ExtendedBlockMeta {
             block_meta: block_meta.clone(),
-            draft_virtual_block_meta: Some(draft_virtual_block_meta),
+            draft_virtual_block_meta: Some(virtual_column_state.draft_virtual_block_meta),
         };
 
         let new_block = DataBlock::new(vec![], 0);
-        let new_block = new_block.add_meta(Some(block_meta_with_virtual.boxed()))?;
+        let new_block = new_block.add_meta(Some(extened_block_meta.boxed()))?;
         Ok(new_block)
     }
 }

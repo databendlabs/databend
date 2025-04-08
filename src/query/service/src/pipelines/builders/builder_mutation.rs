@@ -62,6 +62,7 @@ impl PipelineBuilder {
             Arc::new(Semaphore::new(self.settings.get_max_threads()? as usize));
 
         let serialize_segment_transform = new_serialize_segment_pipe_item(
+            self.ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             table,

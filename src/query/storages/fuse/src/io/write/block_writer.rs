@@ -464,7 +464,7 @@ impl BlockWriter {
     ) -> Result<ExtendedBlockMeta> {
         let block_meta = serialized.block_meta;
 
-        let block_meta_with_virtual =
+        let extended_block_meta =
             if let Some(virtual_column_state) = &serialized.virtual_column_state {
                 ExtendedBlockMeta {
                     block_meta: block_meta.clone(),
@@ -484,7 +484,7 @@ impl BlockWriter {
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
 
-        Ok(block_meta_with_virtual)
+        Ok(extended_block_meta)
     }
 
     pub async fn write_down_data_block(
@@ -543,10 +543,22 @@ impl BlockWriter {
         virtual_column_state: Option<VirtualColumnState>,
     ) -> Result<()> {
         if let Some(virtual_column_state) = virtual_column_state {
+            if virtual_column_state
+                .draft_virtual_block_meta
+                .virtual_col_size
+                == 0
+            {
+                return Ok(());
+            }
             let start = Instant::now();
 
-            let location = &virtual_column_state.location.0;
-            let index_size = virtual_column_state.size;
+            let index_size = virtual_column_state
+                .draft_virtual_block_meta
+                .virtual_col_size;
+            let location = &virtual_column_state
+                .draft_virtual_block_meta
+                .virtual_location
+                .0;
             write_data(virtual_column_state.data, dal, location).await?;
             metrics_inc_block_virtual_column_write_nums(1);
             metrics_inc_block_virtual_column_write_bytes(index_size);

@@ -83,6 +83,8 @@ pub struct VirtualColumnMeta {
     // 75 => array(float64)
     // 76 => array(string)
     pub data_type: u8,
+    // virtual column statistics.
+    pub column_stat: Option<ColumnStatistics>,
 }
 
 impl VirtualColumnMeta {
@@ -109,10 +111,8 @@ pub struct VirtualBlockMeta {
 pub struct DraftVirtualColumnMeta {
     pub source_column_id: ColumnId,
     pub name: String,
-    pub column_id: Option<ColumnId>,
     pub data_type: VariantDataType,
     pub column_meta: VirtualColumnMeta,
-    // pub column_stat: ColumnStatistics,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -122,23 +122,6 @@ pub struct DraftVirtualBlockMeta {
     pub virtual_col_size: u64,
     /// The file location of virtual columns.
     pub virtual_location: Location,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ExtendedBlockMeta {
-    pub block_meta: BlockMeta,
-    pub draft_virtual_block_meta: Option<DraftVirtualBlockMeta>,
-}
-
-#[typetag::serde(name = "extended_block_meta")]
-impl BlockMetaInfo for ExtendedBlockMeta {
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        ExtendedBlockMeta::downcast_ref_from(info).is_some_and(|other| self == other)
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
-    }
 }
 
 /// Meta information of a block
@@ -219,6 +202,23 @@ impl BlockMeta {
         } else {
             self.row_count
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ExtendedBlockMeta {
+    pub block_meta: BlockMeta,
+    pub draft_virtual_block_meta: Option<DraftVirtualBlockMeta>,
+}
+
+#[typetag::serde(name = "extended_block_meta")]
+impl BlockMetaInfo for ExtendedBlockMeta {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        ExtendedBlockMeta::downcast_ref_from(info).is_some_and(|other| self == other)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 }
 

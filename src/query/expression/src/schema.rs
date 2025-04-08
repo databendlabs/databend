@@ -49,8 +49,8 @@ pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
 pub const SEARCH_MATCHED_COLUMN_ID: u32 = u32::MAX - 7;
 pub const SEARCH_SCORE_COLUMN_ID: u32 = u32::MAX - 8;
 
-pub const VIRTUAL_COLUMN_ID_START: u32 = 3_000_000_001;
-pub const VIRTUAL_COLUMNS_ID_UPPER: u32 = 4_294_967_295;
+pub const VIRTUAL_COLUMN_ID_START: u32 = 3_000_000_000;
+pub const VIRTUAL_COLUMNS_ID_UPPER: u32 = 3_000_001_000;
 pub const VIRTUAL_COLUMNS_LIMIT: usize = 1000;
 
 // internal column name.
@@ -145,12 +145,80 @@ pub struct DataSchema {
     pub(crate) metadata: BTreeMap<String, String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum VariantDataType {
+    Jsonb,
+    Boolean,
+    UInt64,
+    Int64,
+    Float64,
+    String,
+    Array(Box<VariantDataType>),
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct VirtualDataField {
+    pub name: String,
+    pub data_types: Vec<VariantDataType>,
+    pub source_column_id: u32,
+    pub column_id: u32,
+}
+
+fn uninit_virtual_column_id() -> ColumnId {
+    VIRTUAL_COLUMN_ID_START
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct VirtualDataSchema {
     pub fields: Vec<VirtualDataField>,
     pub metadata: BTreeMap<String, String>,
+    // next column id that assign to VirtualDataField.column_id
+    #[serde(default = "uninit_virtual_column_id")]
     pub next_column_id: u32,
     pub number_of_blocks: u64,
+}
+
+impl VirtualDataSchema {
+    pub fn empty() -> Self {
+        Self {
+            fields: vec![],
+            metadata: BTreeMap::new(),
+            next_column_id: VIRTUAL_COLUMN_ID_START,
+            number_of_blocks: 0,
+        }
+    }
+
+    #[inline]
+    pub const fn fields(&self) -> &Vec<VirtualDataField> {
+        &self.fields
+    }
+
+    #[inline]
+    pub fn num_fields(&self) -> usize {
+        self.fields.len()
+    }
+
+    pub fn field(&self, i: FieldIndex) -> &VirtualDataField {
+        &self.fields[i]
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.fields.len() == VIRTUAL_COLUMNS_LIMIT
+    }
+
+    pub fn add_field(&mut self, mut field: VirtualDataField) -> Result<ColumnId> {
+        if self.is_full() {
+            return Err(ErrorCode::VirtualColumnTooMany(format!(
+                "virtual columns are too many, cant add {}",
+                field.name,
+            )));
+        }
+        let column_id = self.next_column_id;
+        field.column_id = column_id;
+        self.next_column_id += 1;
+        self.fields.push(field);
+        Ok(column_id)
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -175,25 +243,6 @@ pub struct DataField {
     default_expr: Option<String>,
     data_type: DataType,
     computed_expr: Option<ComputedExpr>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum VariantDataType {
-    Jsonb,
-    Boolean,
-    UInt64,
-    Int64,
-    Float64,
-    String,
-    Array(Box<VariantDataType>),
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub struct VirtualDataField {
-    pub name: String,
-    pub data_types: Vec<VariantDataType>,
-    pub source_column_id: u32,
-    pub column_id: u32,
 }
 
 fn uninit_column_id() -> ColumnId {

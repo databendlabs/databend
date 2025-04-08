@@ -437,16 +437,16 @@ impl AggregationContext {
 
         let serialized = GlobalIORuntime::instance()
             .spawn(async move {
-                            block_builder.build(res_block, |block, generator| {
-                                let cluster_stats =
-                                    generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                                info!(
-                                    "serialize block after get cluster_stats:\n {:?}",
-                                    cluster_stats
-                                );
-                                Ok((cluster_stats, block))
-                            })
-                        })
+                block_builder.build(res_block, |block, generator| {
+                    let cluster_stats =
+                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
+                        info!(
+                            "serialize block after get cluster_stats:\n {:?}",
+                            cluster_stats
+                        );
+                        Ok((cluster_stats, block))
+                    })
+                })
             .await
             .map_err(|e| {
                 ErrorCode::Internal(
@@ -457,18 +457,17 @@ impl AggregationContext {
 
         // persistent data
 
-        let new_block_meta = BlockWriter::write_down(&self.data_accessor, serialized).await?;
+        let extended_block_meta = BlockWriter::write_down(&self.data_accessor, serialized).await?;
 
         metrics_inc_merge_into_replace_blocks_counter(1);
         metrics_inc_merge_into_replace_blocks_rows_counter(origin_num_rows as u32);
         // generate log
-        // todo
         let mutation = MutationLogEntry::ReplacedBlock {
             index: BlockMetaIndex {
                 segment_idx,
                 block_idx,
             },
-            block_meta: Arc::new(new_block_meta.block_meta),
+            block_meta: Arc::new(extended_block_meta),
         };
 
         Ok(Some(mutation))

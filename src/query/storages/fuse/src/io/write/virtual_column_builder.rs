@@ -15,7 +15,9 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
+use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
@@ -34,15 +36,19 @@ use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
-use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_common_expression::VariantDataType;
+use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableMeta;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use jsonb::from_slice;
 use jsonb::Number as JsonbNumber;
@@ -51,46 +57,41 @@ use parquet::format::FileMetaData;
 
 use crate::io::write::WriteSettings;
 use crate::io::TableMetaLocationGenerator;
+use crate::statistics::gen_columns_statistics;
 
 #[derive(Debug, Clone)]
 pub struct VirtualColumnState {
     pub data: Vec<u8>,
-    pub size: u64,
-    pub location: Location,
     pub draft_virtual_block_meta: DraftVirtualBlockMeta,
 }
 
 #[derive(Clone)]
 pub struct VirtualColumnBuilder {
-    // key is source ColumnId and virtual column name,
-    // value is virtual column ColumnId
-    virtual_column_id_map: BTreeMap<(ColumnId, String), ColumnId>,
     // variant field offset and ColumnId
-    variant_column_offsets: Vec<(usize, ColumnId)>,
+    variant_fields: Vec<(usize, TableField)>,
 }
 
 impl VirtualColumnBuilder {
-    pub fn try_create(table_meta: &TableMeta) -> Option<VirtualColumnBuilder> {
-        let mut variant_column_offsets = Vec::new();
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        table_meta: &TableMeta,
+    ) -> Option<VirtualColumnBuilder> {
+        if LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
+            .is_err()
+        {
+            return None;
+        }
+
+        let mut variant_fields = Vec::new();
         for (i, field) in table_meta.schema.fields.iter().enumerate() {
             if field.data_type().remove_nullable() == TableDataType::Variant {
-                variant_column_offsets.push((i, field.column_id));
+                variant_fields.push((i, field.clone()));
             }
         }
 
-        if !variant_column_offsets.is_empty() {
-            let mut virtual_column_id_map = BTreeMap::new();
-            if let Some(virtual_schema) = &table_meta.virtual_schema {
-                for virtual_field in &virtual_schema.fields {
-                    let key = (virtual_field.source_column_id, virtual_field.name.clone());
-                    virtual_column_id_map.insert(key, virtual_field.column_id);
-                }
-            }
-
-            Some(VirtualColumnBuilder {
-                virtual_column_id_map,
-                variant_column_offsets,
-            })
+        if !variant_fields.is_empty() {
+            Some(VirtualColumnBuilder { variant_fields })
         } else {
             None
         }
@@ -106,8 +107,11 @@ impl VirtualColumnBuilder {
         let mut virtual_column_names = Vec::new();
         let mut virtual_fields = Vec::new();
         let mut virtual_columns = Vec::new();
+        // use a tmp column id to generate statistics for virtual columns.
+        let mut tmp_column_id = 0;
         let mut paths = VecDeque::new();
-        for (offset, source_column_id) in &self.variant_column_offsets {
+        for (offset, source_field) in &self.variant_fields {
+            let source_column_id = source_field.column_id;
             let column = block.get_by_offset(*offset);
 
             let mut virtual_values = BTreeMap::new();
@@ -121,6 +125,15 @@ impl VirtualColumnBuilder {
             }
             if virtual_values.is_empty() {
                 continue;
+            }
+
+            // Discard redundant virtual values to avoid generating too much virtual fields.
+            if virtual_fields.len() + virtual_values.len() > VIRTUAL_COLUMNS_LIMIT {
+                let redundant_num =
+                    virtual_fields.len() + virtual_values.len() - VIRTUAL_COLUMNS_LIMIT;
+                for _ in 0..redundant_num {
+                    let _ = virtual_values.pop_last();
+                }
             }
 
             // TODO: Ignore columns that are mostly NULL value and JSON scalar value.
@@ -182,30 +195,58 @@ impl VirtualColumnBuilder {
                     ),
                     _ => todo!(),
                 };
-
-                virtual_column_names.push((*source_column_id, key.clone(), val_type));
-
                 let virtual_table_type = infer_schema_type(&virtual_type).unwrap();
-                let virtual_field = TableField::new(&key, virtual_table_type);
-                virtual_fields.push(virtual_field);
-
                 virtual_columns.push(BlockEntry::new(virtual_type, Value::Column(column)));
+
+                let virtual_name = format!("{}{}", source_field.name, key);
+                let virtual_field = TableField::new_from_column_id(
+                    &virtual_name,
+                    virtual_table_type,
+                    tmp_column_id,
+                );
+                virtual_fields.push(virtual_field);
+                tmp_column_id += 1;
+
+                virtual_column_names.push((source_column_id, key, val_type));
+            }
+            if virtual_fields.len() >= VIRTUAL_COLUMNS_LIMIT {
+                break;
             }
         }
 
-        let block_schema = TableSchema::new(virtual_fields);
+        // There are no suitable virtual columns, returning empty data.
+        if virtual_fields.is_empty() {
+            let draft_virtual_block_meta = DraftVirtualBlockMeta {
+                virtual_col_metas: vec![],
+                virtual_col_size: 0,
+                virtual_location: ("".to_string(), 0),
+            };
+
+            return Ok(VirtualColumnState {
+                data: vec![],
+                draft_virtual_block_meta,
+            });
+        }
+
+        let virtual_block_schema = TableSchemaRefExt::create(virtual_fields);
         let virtual_block = DataBlock::new(virtual_columns, block.num_rows());
+
+        let columns_statistics =
+            gen_columns_statistics(&virtual_block, None, &virtual_block_schema)?;
 
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
         let file_meta = blocks_to_parquet(
-            &block_schema,
+            virtual_block_schema.as_ref(),
             vec![virtual_block],
             &mut data,
             write_settings.table_compression,
         )?;
 
-        let draft_virtual_column_metas =
-            self.file_meta_to_virtual_column_metas(file_meta, virtual_column_names)?;
+        let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(
+            file_meta,
+            virtual_column_names,
+            columns_statistics,
+        )?;
 
         let data_size = data.len() as u64;
         let virtual_column_location =
@@ -214,13 +255,11 @@ impl VirtualColumnBuilder {
         let draft_virtual_block_meta = DraftVirtualBlockMeta {
             virtual_col_metas: draft_virtual_column_metas,
             virtual_col_size: data_size,
-            virtual_location: (virtual_column_location.clone(), 0),
+            virtual_location: (virtual_column_location, 0),
         };
 
         Ok(VirtualColumnState {
             data,
-            size: data_size,
-            location: (virtual_column_location, 0),
             draft_virtual_block_meta,
         })
     }
@@ -327,6 +366,7 @@ impl VirtualColumnBuilder {
         &self,
         file_meta: FileMetaData,
         virtual_column_names: Vec<(ColumnId, String, VariantDataType)>,
+        mut columns_statistics: StatisticsOfColumns,
     ) -> Result<Vec<DraftVirtualColumnMeta>> {
         let num_row_groups = file_meta.row_groups.len();
         if num_row_groups != 1 {
@@ -338,10 +378,12 @@ impl VirtualColumnBuilder {
         let row_group = &file_meta.row_groups[0];
 
         let mut draft_virtual_column_metas = Vec::with_capacity(virtual_column_names.len());
-        for ((source_column_id, name, virtual_type), col_chunk) in virtual_column_names
+        for ((i, (source_column_id, name, virtual_type)), col_chunk) in virtual_column_names
             .into_iter()
+            .enumerate()
             .zip(row_group.columns.iter())
         {
+            let tmp_column_id = i as u32;
             match &col_chunk.meta_data {
                 Some(chunk_meta) => {
                     let col_start =
@@ -367,23 +409,18 @@ impl VirtualColumnBuilder {
                         _ => todo!(),
                     };
 
+                    let column_stat = columns_statistics.remove(&tmp_column_id);
                     let virtual_column_meta = VirtualColumnMeta {
                         offset: col_start as u64,
                         len: col_len as u64,
                         num_values,
                         data_type: virtual_type_num,
+                        column_stat,
                     };
-
-                    // If virtual_column_id is None, it means this virtual column is not exist in TableMeta.
-                    // Need generate a new virtual_column_id for it in next processor.
-                    let virtual_column_id = self
-                        .virtual_column_id_map
-                        .get(&(source_column_id, name.clone()));
 
                     let draft_virtual_column_meta = DraftVirtualColumnMeta {
                         source_column_id,
                         name,
-                        column_id: virtual_column_id.copied(),
                         data_type: virtual_type,
                         column_meta: virtual_column_meta,
                     };
