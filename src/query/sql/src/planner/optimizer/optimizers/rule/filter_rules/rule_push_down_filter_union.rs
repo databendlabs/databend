@@ -155,3 +155,9 @@ fn replace_column_binding(
 
     Ok(scalar)
 }
+
+impl Default for RulePushDownFilterUnion {
+    fn default() -> Self {
+        Self::new()
+    }
+}

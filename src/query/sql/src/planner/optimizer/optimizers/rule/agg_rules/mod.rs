@@ -12,7 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod recursive;
+mod agg_index;
+mod rule_eager_aggregation;
+mod rule_fold_count_aggregate;
+mod rule_push_down_filter_aggregate;
+mod rule_push_down_limit_aggregate;
+mod rule_split_aggregate;
+mod rule_try_apply_agg_index;
 
-pub use recursive::RecursiveRuleOptimizer;
+pub use rule_eager_aggregation::RuleEagerAggregation;
+pub use rule_fold_count_aggregate::RuleFoldCountAggregate;
+pub use rule_push_down_filter_aggregate::RulePushDownFilterAggregate;
+pub use rule_push_down_limit_aggregate::RulePushDownRankLimitAggregate;
+pub use rule_split_aggregate::RuleSplitAggregate;
+pub use rule_try_apply_agg_index::RuleTryApplyAggIndex;

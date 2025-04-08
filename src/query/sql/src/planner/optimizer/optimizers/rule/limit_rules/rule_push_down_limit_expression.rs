@@ -87,3 +87,9 @@ impl Rule for RulePushDownLimitEvalScalar {
         &self.matchers
     }
 }
+
+impl Default for RulePushDownLimitEvalScalar {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -133,3 +133,9 @@ impl Rule for RulePushDownFilterWindow {
         &self.matchers
     }
 }
+
+impl Default for RulePushDownFilterWindow {
+    fn default() -> Self {
+        Self::new()
+    }
+}

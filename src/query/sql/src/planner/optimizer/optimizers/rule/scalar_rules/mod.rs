@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod recursive;
+mod rule_eliminate_eval_scalar;
+mod rule_merge_eval_scalar;
+mod rule_normalize_scalar;
 
-pub use recursive::RecursiveRuleOptimizer;
+pub use rule_eliminate_eval_scalar::RuleEliminateEvalScalar;
+pub use rule_merge_eval_scalar::RuleMergeEvalScalar;
+pub use rule_normalize_scalar::RuleNormalizeScalarFilter;

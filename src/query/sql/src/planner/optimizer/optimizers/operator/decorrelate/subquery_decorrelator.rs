@@ -70,15 +70,84 @@ pub struct FlattenInfo {
     pub from_count_func: bool,
 }
 
-/// Rewrite subquery into `Apply` operator
-pub struct SubqueryRewriter {
+/// Transforms SQL subqueries into join operations for more efficient execution.
+/// This optimizer handles several types of subqueries and converts them into
+/// appropriate join operations based on their characteristics.
+///
+/// ## Transformation Examples Implemented in This File
+///
+/// ### 1. Uncorrelated Scalar Subquery
+///
+/// SQL Example:
+/// ```sql
+/// SELECT o.id, o.total / (SELECT AVG(total) FROM orders) as ratio
+/// FROM orders o
+/// ```
+///
+/// Plan Tree Transformation:
+///
+/// Before:
+/// Project: o.id, o.total / (SELECT AVG(total) FROM orders)
+/// └── TableScan: orders AS o
+///
+/// After:
+/// Project: o.id, o.total / scalar_subquery_column
+/// └── LeftSingleJoin
+///     ├── TableScan: orders AS o
+///     └── Aggregate: AVG(total) AS scalar_subquery_column
+///         └── TableScan: orders
+///
+/// ### 2. Uncorrelated EXISTS Subquery
+///
+/// SQL Example:
+/// ```sql
+/// SELECT c.id, c.name
+/// FROM customers c
+/// WHERE EXISTS (SELECT 1 FROM orders)
+/// ```
+///
+/// Plan Tree Transformation:
+///
+/// Before:
+/// Filter: EXISTS (SELECT 1 FROM orders)
+/// └── TableScan: customers AS c
+///
+/// After:
+/// Filter: is_true(exists_scalar)
+/// └── CrossJoin
+///     ├── TableScan: customers AS c
+///     └── Limit: 1
+///         └── Aggregate: COUNT(*) = 1
+///             └── TableScan: orders
+///
+/// ### 3. Uncorrelated ANY/IN Subquery
+///
+/// SQL Example:
+/// ```sql
+/// SELECT e.id, e.name
+/// FROM employees e
+/// WHERE e.department_id = ANY (SELECT d.id FROM departments d)
+/// ```
+///
+/// Plan Tree Transformation:
+///
+/// Before:
+/// Filter: e.department_id = ANY (SELECT d.id FROM departments d)
+/// └── TableScan: employees AS e
+///
+/// After:
+/// Filter: is_true(marker_column)
+/// └── RightMarkJoin: (d.id = e.department_id)
+///     ├── TableScan: employees AS e
+///     └── TableScan: departments AS d
+pub struct SubqueryDecorrelatorOptimizer {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) metadata: MetadataRef,
     pub(crate) derived_columns: HashMap<IndexType, IndexType>,
     pub(crate) binder: Option<Binder>,
 }
 
-impl SubqueryRewriter {
+impl SubqueryDecorrelatorOptimizer {
     pub fn new(opt_ctx: Arc<OptimizerContext>, binder: Option<Binder>) -> Self {
         Self {
             ctx: opt_ctx.get_table_ctx(),
@@ -743,7 +812,7 @@ pub fn check_child_expr_in_subquery(
 }
 
 #[async_trait::async_trait]
-impl Optimizer for SubqueryRewriter {
+impl Optimizer for SubqueryDecorrelatorOptimizer {
     /// Returns the name of this optimizer
     fn name(&self) -> &'static str {
         "SubqueryRewriter"

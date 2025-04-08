@@ -122,3 +122,9 @@ impl Rule for RulePushDownLimitOuterJoin {
         &self.matchers
     }
 }
+
+impl Default for RulePushDownLimitOuterJoin {
+    fn default() -> Self {
+        Self::new()
+    }
+}

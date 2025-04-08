@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -21,58 +22,57 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::plans::Filter;
+use crate::plans::Limit;
 use crate::plans::RelOp;
-use crate::plans::Sort;
+use crate::plans::RelOperator;
+use crate::plans::Scan;
 
-/// Input:  Filter
+/// Input:  Limit
 ///           \
-///          Sort
-///             \
-///              *
+///          Scan
 ///
-/// Output: Sort
+/// Output:
+///         Limit
 ///           \
-///          Filter
-///             \
-///              *
-pub struct RulePushDownFilterSort {
+///           Scan(padding limit)
+pub struct RulePushDownLimitScan {
     id: RuleID,
     matchers: Vec<Matcher>,
 }
 
-impl RulePushDownFilterSort {
+impl RulePushDownLimitScan {
     pub fn new() -> Self {
         Self {
-            id: RuleID::PushDownFilterSort,
+            id: RuleID::PushDownLimitScan,
             matchers: vec![Matcher::MatchOp {
-                op_type: RelOp::Filter,
+                op_type: RelOp::Limit,
                 children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::Leaf],
+                    op_type: RelOp::Scan,
+                    children: vec![],
                 }],
             }],
         }
     }
 }
 
-impl Rule for RulePushDownFilterSort {
+impl Rule for RulePushDownLimitScan {
     fn id(&self) -> RuleID {
         self.id
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
-        let sort: Sort = s_expr.child(0)?.plan().clone().try_into()?;
-        let sort_expr = s_expr.child(0)?;
+        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let Some(mut count) = limit.limit else {
+            return Ok(());
+        };
+        count += limit.offset;
 
-        let mut result = SExpr::create_unary(
-            Arc::new(sort.into()),
-            Arc::new(SExpr::create_unary(
-                Arc::new(filter.into()),
-                Arc::new(sort_expr.child(0)?.clone()),
-            )),
-        );
+        let child = s_expr.child(0)?;
+        let mut get: Scan = child.plan().clone().try_into()?;
+        get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
+        let get = SExpr::create_leaf(Arc::new(RelOperator::Scan(get)));
+
+        let mut result = s_expr.replace_children(vec![Arc::new(get)]);
         result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())
@@ -80,5 +80,11 @@ impl Rule for RulePushDownFilterSort {
 
     fn matchers(&self) -> &[Matcher] {
         &self.matchers
+    }
+}
+
+impl Default for RulePushDownLimitScan {
+    fn default() -> Self {
+        Self::new()
     }
 }

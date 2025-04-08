@@ -94,3 +94,9 @@ impl Rule for RuleMergeEvalScalar {
         &self.matchers
     }
 }
+
+impl Default for RuleMergeEvalScalar {
+    fn default() -> Self {
+        Self::new()
+    }
+}

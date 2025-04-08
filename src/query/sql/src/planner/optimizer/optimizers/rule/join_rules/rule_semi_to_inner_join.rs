@@ -168,3 +168,9 @@ fn add_column_idx(condition: &ScalarExpr, condition_cols: &mut HashSet<IndexType
         _ => {}
     }
 }
+
+impl Default for RuleSemiToInnerJoin {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -137,3 +137,9 @@ impl Rule for RulePushDownFilterAggregate {
         &self.matchers
     }
 }
+
+impl Default for RulePushDownFilterAggregate {
+    fn default() -> Self {
+        Self::new()
+    }
+}

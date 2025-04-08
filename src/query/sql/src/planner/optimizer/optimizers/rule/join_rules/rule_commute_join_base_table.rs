@@ -107,3 +107,9 @@ impl Rule for RuleCommuteJoinBaseTable {
         false
     }
 }
+
+impl Default for RuleCommuteJoinBaseTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}

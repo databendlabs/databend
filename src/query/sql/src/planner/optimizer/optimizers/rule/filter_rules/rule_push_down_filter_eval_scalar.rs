@@ -135,3 +135,9 @@ impl Rule for RulePushDownFilterEvalScalar {
         &self.matchers
     }
 }
+
+impl Default for RulePushDownFilterEvalScalar {
+    fn default() -> Self {
+        Self::new()
+    }
+}

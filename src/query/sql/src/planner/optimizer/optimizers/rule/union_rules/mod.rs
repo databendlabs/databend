@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod recursive;
+mod rule_eliminate_union;
 
-pub use recursive::RecursiveRuleOptimizer;
+pub use rule_eliminate_union::RuleEliminateUnion;

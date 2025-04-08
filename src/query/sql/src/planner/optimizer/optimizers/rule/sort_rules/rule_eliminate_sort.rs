@@ -83,3 +83,9 @@ impl Rule for RuleEliminateSort {
         &self.matchers
     }
 }
+
+impl Default for RuleEliminateSort {
+    fn default() -> Self {
+        Self::new()
+    }
+}
