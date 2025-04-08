@@ -82,3 +82,9 @@ impl Rule for RulePushDownFilterSort {
         &self.matchers
     }
 }
+
+impl Default for RulePushDownFilterSort {
+    fn default() -> Self {
+        Self::new()
+    }
+}

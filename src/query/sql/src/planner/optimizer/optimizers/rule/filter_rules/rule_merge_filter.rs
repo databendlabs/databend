@@ -78,3 +78,9 @@ impl Rule for RuleMergeFilter {
         &self.matchers
     }
 }
+
+impl Default for RuleMergeFilter {
+    fn default() -> Self {
+        Self::new()
+    }
+}

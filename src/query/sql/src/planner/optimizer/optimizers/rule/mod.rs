@@ -14,6 +14,7 @@
 
 mod agg_rules;
 mod factory;
+mod filter_rules;
 mod rewrite;
 #[allow(clippy::module_inception)]
 mod rule;
@@ -24,7 +25,7 @@ mod utils;
 
 pub use agg_rules::*;
 pub use factory::RuleFactory;
-pub use rewrite::RulePushDownFilterJoin;
+pub use filter_rules::*;
 pub use rule::Rule;
 pub use rule::RuleID;
 pub use rule::RulePtr;

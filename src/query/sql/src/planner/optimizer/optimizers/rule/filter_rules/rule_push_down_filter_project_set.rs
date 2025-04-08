@@ -125,3 +125,9 @@ impl Rule for RulePushDownFilterProjectSet {
         &self.matchers
     }
 }
+
+impl Default for RulePushDownFilterProjectSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
