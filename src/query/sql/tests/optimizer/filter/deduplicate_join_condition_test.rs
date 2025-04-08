@@ -93,8 +93,8 @@ fn create_join_condition(
 
 /// Runs the DeduplicateJoinConditionOptimizer on the given SExpr
 fn run_optimizer(s_expr: SExpr) -> Result<SExpr> {
-    let optimizer = DeduplicateJoinConditionOptimizer::new();
-    optimizer.optimize(&s_expr)
+    let mut optimizer = DeduplicateJoinConditionOptimizer::new();
+    optimizer.optimize_sync(&s_expr)
 }
 
 /// Converts an SExpr to a readable string representation using a simple indented format

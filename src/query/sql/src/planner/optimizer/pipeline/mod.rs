@@ -12,18 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cost;
-pub mod ir;
+mod common;
 #[allow(clippy::module_inception)]
-mod optimizer;
-mod optimizer_api;
-mod optimizer_context;
-pub mod optimizers;
-pub mod pipeline;
-mod statistics;
+mod pipeline;
 
-pub use optimizer::optimize;
-pub use optimizer::optimize_query;
-pub use optimizer_api::Optimizer;
-pub use optimizer_context::OptimizerContext;
-pub use optimizers::rule::agg_index;
+pub use pipeline::OptimizerPipeline;
