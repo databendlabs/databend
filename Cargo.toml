@@ -585,11 +585,13 @@ result_large_err = "allow"
 # codegen-units = 1
 
 [profile.release]
-debug = 1
-lto = "thin"
+debug = true
+strip = "none"
+lto = false
 overflow-checks = false
-opt-level = "s"         # defaults to be 3
-#incremental = true
+opt-level = 0         # defaults to be 3
+codegen-units = 256
+incremental = false
 
 [profile.ci]
 inherits = "release"
