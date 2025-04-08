@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Default allocator is jemalloc, you can change it to std:
-#[cfg(feature = "jemalloc")]
-pub type DefaultAllocator = crate::mem_allocator::JEAllocator;
-#[cfg(not(feature = "jemalloc"))]
+// #[cfg(feature = "jemalloc")]
+// pub type DefaultAllocator = crate::mem_allocator::JEAllocator;
+// #[cfg(not(feature = "jemalloc"))]
 pub type DefaultAllocator = crate::mem_allocator::StdAllocator;
