@@ -616,12 +616,6 @@ impl ExplainInterpreter {
                 source,
                 &mut dummy_pipeline,
             )?;
-            // check if we can get pruned partitions stats from cache
-            let cached_stats = self.ctx.get_pruned_partitions_stats();
-            if cached_stats.is_some() {
-                return Ok(cached_stats);
-            }
-
             if let Some(mut pipeline) = prune_pipeline {
                 pipeline.set_max_threads(max_threads as usize);
                 let settings = ExecutorSettings::try_create(self.ctx.clone())?;
