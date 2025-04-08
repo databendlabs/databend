@@ -152,3 +152,14 @@ select * from b01 where deal_type  like '地铁%';
 
 statement ok
 drop table b01;
+
+statement ok
+create or replace table t10(a int, b string);
+
+statement ok
+insert into t10 values(1, null),(2, null);
+
+query T
+select * from t10 where a = 1 or b like '%aa%';
+----
+1 NULL
