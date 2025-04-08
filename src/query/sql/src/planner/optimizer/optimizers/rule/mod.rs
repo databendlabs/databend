@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod agg_rules;
+mod constant;
 mod factory;
 mod filter_rules;
 mod join_rules;
@@ -24,9 +25,9 @@ mod scalar_rules;
 mod sort_rules;
 mod transform_result;
 mod union_rules;
-mod utils;
 
 pub use agg_rules::*;
+pub use constant::*;
 pub use factory::RuleFactory;
 pub use filter_rules::*;
 pub use join_rules::*;
@@ -41,4 +42,3 @@ pub use scalar_rules::*;
 pub use sort_rules::*;
 pub use transform_result::TransformResult;
 pub use union_rules::*;
-pub use utils::constant;
