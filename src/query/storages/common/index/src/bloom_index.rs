@@ -60,6 +60,8 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
 use jsonb::RawJsonb;
 use parquet::format::FileMetaData;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::filters::BlockBloomFilterIndexVersion;
 use crate::filters::BlockFilter;
@@ -70,9 +72,34 @@ use crate::filters::Xor8Builder;
 use crate::filters::Xor8Filter;
 use crate::Index;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BloomIndexMeta {
     pub columns: Vec<(String, SingleColumnMeta)>,
+}
+
+impl TryFrom<&BloomIndexMeta> for Vec<u8> {
+    type Error = ErrorCode;
+    fn try_from(value: &BloomIndexMeta) -> std::result::Result<Self, Self::Error> {
+        bincode::serde::encode_to_vec(value, bincode::config::standard()).map_err(|e| {
+            ErrorCode::StorageOther(format!("failed to encode bloom index meta {:?}", e))
+        })
+    }
+}
+
+impl TryFrom<&[u8]> for BloomIndexMeta {
+    type Error = ErrorCode;
+
+    fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
+        bincode::serde::decode_from_slice(value, bincode::config::standard())
+            .map(|(v, len)| {
+                // TODO return error?
+                assert_eq!(len, value.len());
+                v
+            })
+            .map_err(|e| {
+                ErrorCode::StorageOther(format!("failed to decode bloom index meta {:?}", e))
+            })
+    }
 }
 
 impl TryFrom<FileMetaData> for BloomIndexMeta {

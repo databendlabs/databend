@@ -37,9 +37,11 @@ use crate::caches::PrunePartitionsCache;
 use crate::caches::SegmentBlockMetasCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::providers::HybridCache;
+use crate::DiskCacheBuilder;
 use crate::InMemoryLruCache;
 use crate::TableDataCache;
-use crate::TableDataCacheBuilder;
+use crate::Unit;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
 
@@ -90,37 +92,41 @@ impl CacheManager {
         max_server_memory_usage: &u64,
         tenant_id: impl Into<String>,
     ) -> Result<()> {
+        let tenant_id = tenant_id.into();
+        let on_disk_cache_sync_data = config.disk_cache_config.sync_data;
+        let on_disk_cache_need_sync_data = config.disk_cache_config.sync_data;
+
+        let on_disk_cache_queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
+            config.table_data_cache_population_queue_size
+        } else {
+            std::cmp::max(
+                1,
+                std::thread::available_parallelism()
+                    .expect("Cannot get thread count")
+                    .get() as u32,
+            ) * 5
+        };
+
         // setup table data cache
         let table_data_cache = {
             match config.data_cache_storage {
                 CacheStorageTypeInnerConfig::None => CacheSlot::new(None),
                 CacheStorageTypeInnerConfig::Disk => {
                     let real_disk_cache_root = PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.into())
+                        .join(tenant_id.clone())
                         .join("v1");
-
-                    let queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
-                        config.table_data_cache_population_queue_size
-                    } else {
-                        std::cmp::max(
-                            1,
-                            std::thread::available_parallelism()
-                                .expect("Cannot get thread count")
-                                .get() as u32,
-                        ) * 5
-                    };
 
                     info!(
                         "disk cache enabled, cache population queue size {}",
-                        queue_size
+                        on_disk_cache_queue_size
                     );
 
                     Self::new_block_data_cache(
                         &real_disk_cache_root,
-                        queue_size,
+                        on_disk_cache_queue_size,
                         config.disk_cache_config.max_bytes as usize,
                         config.data_cache_key_reload_policy.clone(),
-                        config.disk_cache_config.sync_data,
+                        on_disk_cache_need_sync_data,
                     )?
                 }
             }
@@ -169,14 +175,39 @@ impl CacheManager {
                 MEMORY_CACHE_COMPACT_SEGMENT_INFO,
                 config.table_meta_segment_bytes as usize,
             );
-            let bloom_index_filter_cache = Self::new_bytes_cache_slot(
-                MEMORY_CACHE_BLOOM_INDEX_FILTER,
-                config.table_bloom_index_filter_size as usize,
-            );
-            let bloom_index_meta_cache = Self::new_items_cache_slot(
-                MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA,
-                config.table_bloom_index_meta_count as usize,
-            );
+            let bloom_index_filter_cache = {
+                let bloom_filter_on_disk_cache_path = PathBuf::from(&config.disk_cache_config.path)
+                    .join(tenant_id.clone())
+                    .join("bloom_filter_v1");
+                Self::new_hybrid_cache_slot(
+                    HYBRID_CACHE_BLOOM_INDEX_FILTER,
+                    config.table_bloom_index_filter_size as usize,
+                    Unit::Bytes,
+                    &bloom_filter_on_disk_cache_path,
+                    on_disk_cache_queue_size,
+                    config.disk_cache_table_bloom_index_data_size as usize,
+                    DiskCacheKeyReloadPolicy::Fuzzy,
+                    on_disk_cache_sync_data,
+                )?
+            };
+
+            let bloom_index_meta_cache = {
+                let bloom_filter_meta_on_disk_cache_path =
+                    PathBuf::from(&config.disk_cache_config.path)
+                        .join(tenant_id)
+                        .join("bloom_meta_v1");
+                Self::new_hybrid_cache_slot(
+                    HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA,
+                    config.table_bloom_index_meta_count as usize,
+                    Unit::Count,
+                    &bloom_filter_meta_on_disk_cache_path,
+                    on_disk_cache_queue_size,
+                    config.disk_cache_table_bloom_index_meta_size as usize,
+                    DiskCacheKeyReloadPolicy::Fuzzy,
+                    on_disk_cache_sync_data,
+                )?
+            };
+
             let inverted_index_meta_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA,
                 config.inverted_index_meta_count as usize,
@@ -265,11 +296,20 @@ impl CacheManager {
                 let cache = &self.inverted_index_meta_cache;
                 Self::set_items_capacity(cache, new_capacity, name);
             }
-            MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA => {
-                Self::set_items_capacity(&self.bloom_index_meta_cache, new_capacity, name);
+            HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA
+            | IN_MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA => {
+                Self::set_hybrid_cache_items_capacity(
+                    &self.bloom_index_meta_cache,
+                    new_capacity,
+                    name,
+                );
             }
-            MEMORY_CACHE_BLOOM_INDEX_FILTER => {
-                Self::set_bytes_capacity(&self.bloom_index_filter_cache, new_capacity, name);
+            HYBRID_CACHE_BLOOM_INDEX_FILTER | IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER => {
+                Self::set_hybrid_cache_bytes_capacity(
+                    &self.bloom_index_filter_cache,
+                    new_capacity,
+                    name,
+                );
             }
             MEMORY_CACHE_COMPACT_SEGMENT_INFO => {
                 Self::set_bytes_capacity(&self.compact_segment_info_cache, new_capacity, name);
@@ -287,13 +327,18 @@ impl CacheManager {
                 Self::set_items_capacity(&self.block_meta_cache, new_capacity, name);
             }
 
-            crate::DISK_TABLE_DATA_CACHE_NAME => {
+            DISK_TABLE_DATA_CACHE_NAME => {
                 return Err(ErrorCode::BadArguments(format!(
                     "set capacity of cache {} is not allowed",
                     name
                 )));
             }
-            _ => return Err(ErrorCode::BadArguments(format!("cache {} not found", name))),
+            _ => {
+                return Err(ErrorCode::BadArguments(format!(
+                    "cache {} not found, or not allowed to be adjusted",
+                    name
+                )));
+            }
         }
         Ok(())
     }
@@ -321,6 +366,50 @@ impl CacheManager {
         } else {
             let new_cache = Self::new_items_cache(name, new_capacity as usize);
             cache.set(new_cache)
+        }
+    }
+
+    fn set_hybrid_cache_items_capacity<T: Into<CacheValue<T>>>(
+        cache: &CacheSlot<HybridCache<T>>,
+        new_capacity: u64,
+        name: impl Into<String>,
+    ) {
+        if let Some(v) = cache.get() {
+            v.in_memory_cache()
+                .set_items_capacity(new_capacity as usize);
+        } else {
+            // In this case, only in-memory cache will be built, on-disk cache is NOT allowed
+            // to be enabled this way yet.
+            let name = name.into();
+            let in_memory_cache_name = HybridCache::<T>::in_memory_cache_name(&name);
+            if let Some(new_cache) =
+                Self::new_items_cache(in_memory_cache_name, new_capacity as usize)
+            {
+                let hybrid_cache = HybridCache::new(name, new_cache, None);
+                cache.set(Some(hybrid_cache));
+            }
+        }
+    }
+
+    fn set_hybrid_cache_bytes_capacity<T: Into<CacheValue<T>>>(
+        cache: &CacheSlot<HybridCache<T>>,
+        new_capacity: u64,
+        name: impl Into<String>,
+    ) {
+        if let Some(v) = cache.get() {
+            v.in_memory_cache()
+                .set_bytes_capacity(new_capacity as usize);
+        } else {
+            // In this case, only in-memory cache will be built, on-disk cache is NOT allowed
+            // to be enabled this way yet.
+            let name = name.into();
+            let in_memory_cache_name = HybridCache::<T>::in_memory_cache_name(&name);
+            if let Some(new_cache) =
+                Self::new_bytes_cache(in_memory_cache_name, new_capacity as usize)
+            {
+                let hybrid_cache = HybridCache::new(name, new_cache, None);
+                cache.set(Some(hybrid_cache));
+            }
         }
     }
 
@@ -417,7 +506,8 @@ impl CacheManager {
         sync_data: bool,
     ) -> Result<CacheSlot<TableDataCache>> {
         if disk_cache_bytes_size > 0 {
-            let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
+            let cache_holder = DiskCacheBuilder::try_build_disk_cache(
+                DISK_TABLE_DATA_CACHE_NAME.to_owned(),
                 path,
                 population_queue_size,
                 disk_cache_bytes_size,
@@ -429,6 +519,55 @@ impl CacheManager {
             Ok(CacheSlot::new(None))
         }
     }
+
+    fn new_hybrid_cache_slot<V: Into<CacheValue<V>>>(
+        name: impl Into<String>,
+        in_memory_cache_capacity: usize,
+        unit: Unit,
+        disk_cache_path: &PathBuf,
+        disk_cache_population_queue_size: u32,
+        disk_cache_bytes_size: usize,
+        disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
+        sync_data: bool,
+    ) -> Result<CacheSlot<HybridCache<V>>> {
+        let name = name.into();
+        let in_mem_cache_name = HybridCache::<V>::in_memory_cache_name(&name);
+        let disk_cache_name = HybridCache::<V>::on_disk_cache_name(&name);
+
+        // Note that here we allow the capacity of in-memory cache to be zero,
+        // this may be handy for some performance testing scenarios
+        let in_memory_cache = match unit {
+            Unit::Bytes => {
+                InMemoryLruCache::with_bytes_capacity(in_mem_cache_name, in_memory_cache_capacity)
+            }
+            Unit::Count => {
+                InMemoryLruCache::with_items_capacity(in_mem_cache_name, in_memory_cache_capacity)
+            }
+        };
+
+        if disk_cache_bytes_size > 0 {
+            let on_disk_cache = DiskCacheBuilder::try_build_disk_cache(
+                disk_cache_name,
+                disk_cache_path,
+                disk_cache_population_queue_size,
+                disk_cache_bytes_size,
+                disk_cache_key_reload_policy,
+                sync_data,
+            )?;
+            Ok(CacheSlot::new(Some(HybridCache::new(
+                name,
+                in_memory_cache,
+                Some(on_disk_cache),
+            ))))
+        } else {
+            // disk cache is disabled
+            Ok(CacheSlot::new(Some(HybridCache::new(
+                name,
+                in_memory_cache,
+                None,
+            ))))
+        }
+    }
 }
 
 const MEMORY_CACHE_TABLE_DATA: &str = "memory_cache_table_data";
@@ -438,11 +577,16 @@ const MEMORY_CACHE_INVERTED_INDEX_FILE: &str = "memory_cache_inverted_index_file
 const MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA: &str =
     "memory_cache_inverted_index_file_meta_data";
 
-const MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "memory_cache_bloom_index_file_meta_data";
-const MEMORY_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_index_filter";
+const HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "cache_bloom_index_file_meta_data";
+
+const IN_MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "memory_cache_bloom_index_file_meta_data";
+const HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "cache_bloom_index_filter";
+const IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_index_filter";
 const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_info";
 const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
 const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
 const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas";
 
 const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
+
+const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";

@@ -30,6 +30,7 @@ use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use parquet::file::metadata::ParquetMetaData;
 
 use crate::manager::CacheManager;
+use crate::providers::HybridCache;
 use crate::CacheAccessor;
 use crate::InMemoryLruCache;
 
@@ -52,9 +53,9 @@ pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
 pub type TableSnapshotStatisticCache = InMemoryLruCache<TableSnapshotStatistics>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
-pub type BloomIndexFilterCache = InMemoryLruCache<Xor8Filter>;
+pub type BloomIndexFilterCache = HybridCache<Xor8Filter>;
 /// In memory object cache of parquet FileMetaData of bloom index data
-pub type BloomIndexMetaCache = InMemoryLruCache<BloomIndexMeta>;
+pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 
 pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
 pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;

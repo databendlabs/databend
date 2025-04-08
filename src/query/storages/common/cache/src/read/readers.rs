@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::providers::HybridCache;
 use crate::read::cached_reader::CachedReader;
 use crate::InMemoryLruCache;
 
+pub type HybridCacheReader<T, L> = CachedReader<L, HybridCache<T>>;
 pub type InMemoryItemCacheReader<T, L> = CachedReader<L, InMemoryLruCache<T>>;
 pub type InMemoryCacheReader<T, L> = CachedReader<L, InMemoryLruCache<T>>;
