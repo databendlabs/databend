@@ -78,10 +78,6 @@ pub struct HashJoin {
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 
-    // probe keys for runtime filter, and record the index of table that used in probe keys.
-    pub probe_keys_rt: Vec<Option<(RemoteExpr<String>, IndexType)>>,
-    // If enable bloom runtime filter
-    pub enable_bloom_runtime_filter: bool,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
     // When left/right single join converted to inner join, record the original join type
@@ -91,6 +87,24 @@ pub struct HashJoin {
     // Hash join build side cache information for ExpressionScan, which includes the cache index and
     // a HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
     pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
+
+    pub runtime_filter: PhysicalRuntimeFilters,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Default)]
+pub struct PhysicalRuntimeFilters {
+    pub filters: Vec<PhysicalRuntimeFilter>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct PhysicalRuntimeFilter {
+    pub id: usize,
+    pub build_key: RemoteExpr,
+    pub probe_key: RemoteExpr<String>,
+    pub scan_id: usize,
+    pub enable_bloom_runtime_filter: bool,
+    pub enable_inlist_runtime_filter: bool,
+    pub enable_min_max_runtime_filter: bool,
 }
 
 impl HashJoin {
@@ -213,8 +227,6 @@ impl PhysicalPlanBuilder {
         let mut is_null_equal = Vec::new();
         let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
-        let mut table_index = None;
-        let mut scan_id = None;
         for condition in join.equi_conditions.iter() {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
@@ -235,27 +247,24 @@ impl PhysicalPlanBuilder {
             }) {
                 if let Some(column_idx) = left_condition.used_columns().iter().next() {
                     // Safe to unwrap because we have checked the column is a base table column.
-                    if table_index.is_none() {
-                        table_index = Some(
-                            self.metadata
-                                .read()
-                                .column(*column_idx)
-                                .table_index()
-                                .unwrap(),
-                        );
-                        scan_id = Some(
-                            self.metadata
-                                .read()
-                                .base_column_scan_id(*column_idx)
-                                .unwrap(),
-                        );
-                    }
+                    let table_index = self
+                        .metadata
+                        .read()
+                        .column(*column_idx)
+                        .table_index()
+                        .unwrap();
+                    let scan_id = self
+                        .metadata
+                        .read()
+                        .base_column_scan_id(*column_idx)
+                        .unwrap();
                     Some((
                         left_condition
                             .as_raw_expr()
                             .type_check(&*self.metadata.read())?
                             .project_column_ref(|col| col.column_name.clone()),
-                        scan_id.unwrap(),
+                        scan_id,
+                        table_index,
                     ))
                 } else {
                     None
@@ -321,9 +330,9 @@ impl PhysicalPlanBuilder {
             )?;
 
             let left_expr_for_runtime_filter = left_expr_for_runtime_filter
-                .map(|(expr, idx)| {
+                .map(|(expr, scan_id, table_index)| {
                     check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS)
-                        .map(|casted_expr| (casted_expr, idx))
+                        .map(|casted_expr| (casted_expr, scan_id, table_index))
                 })
                 .transpose()?;
 
@@ -332,18 +341,23 @@ impl PhysicalPlanBuilder {
             let (right_expr, _) =
                 ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(|(expr, idx)| {
-                (
-                    ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
-                    idx,
-                )
-            });
+            let left_expr_for_runtime_filter =
+                left_expr_for_runtime_filter.map(|(expr, scan_id, table_index)| {
+                    (
+                        ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
+                        scan_id,
+                        table_index,
+                    )
+                });
 
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
             is_null_equal.push(condition.is_null_equal);
-            left_join_conditions_rt
-                .push(left_expr_for_runtime_filter.map(|(expr, idx)| (expr.as_remote_expr(), idx)));
+            left_join_conditions_rt.push(
+                left_expr_for_runtime_filter.map(|(expr, scan_id, table_index)| {
+                    (expr.as_remote_expr(), scan_id, table_index)
+                }),
+            );
         }
 
         let mut cache_column_map = HashMap::new();
@@ -503,6 +517,16 @@ impl PhysicalPlanBuilder {
             }
         }
         let output_schema = DataSchemaRefExt::create(output_fields);
+
+        let runtime_filter = self
+            .build_runtime_filter(
+                join,
+                s_expr,
+                is_broadcast,
+                &right_join_conditions,
+                left_join_conditions_rt,
+            )
+            .await?;
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: 0,
             projections,
@@ -514,7 +538,6 @@ impl PhysicalPlanBuilder {
             build_keys: right_join_conditions,
             probe_keys: left_join_conditions,
             is_null_equal,
-            probe_keys_rt: left_join_conditions_rt,
             non_equi_conditions: join
                 .non_equi_conditions
                 .iter()
@@ -536,16 +559,82 @@ impl PhysicalPlanBuilder {
             stat_info: Some(stat_info),
             broadcast: is_broadcast,
             single_to_inner: join.single_to_inner.clone(),
-            enable_bloom_runtime_filter: adjust_bloom_runtime_filter(
-                self.ctx.clone(),
-                &self.metadata,
-                table_index,
-                s_expr,
-            )
-            .await?,
             build_side_cache_info,
+            runtime_filter,
         }))
     }
+
+    async fn build_runtime_filter(
+        &self,
+        join: &Join,
+        s_expr: &SExpr,
+        is_broadcast: bool,
+        build_keys: &[RemoteExpr],
+        probe_keys: Vec<Option<(RemoteExpr<String>, usize, usize)>>,
+    ) -> Result<PhysicalRuntimeFilters> {
+        if !supported_join_type_for_runtime_filter(&join.join_type) {
+            return Ok(Default::default());
+        }
+
+        let is_cluster = !self.ctx.get_cluster().is_empty();
+        if is_cluster && !is_broadcast {
+            // For cluster, only support runtime filter for broadcast join.
+            return Ok(Default::default());
+        }
+
+        let mut filters = Vec::new();
+        for (build_key, probe_key, scan_id, table_index) in build_keys
+            .iter()
+            .zip(probe_keys.into_iter())
+            .filter_map(|(b, p)| p.map(|(p, scan_id, table_index)| (b, p, scan_id, table_index)))
+        {
+            if probe_key.as_column_ref().is_none() {
+                continue;
+            }
+
+            let data_type = build_key
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .data_type()
+                .remove_nullable();
+            let id = self.metadata.write().next_runtime_filter_id();
+
+            let enable_bloom_runtime_filter = {
+                let is_supported_type = data_type.is_number() || data_type.is_string();
+                let enable_bloom_runtime_filter_based_on_stats = adjust_bloom_runtime_filter(
+                    self.ctx.clone(),
+                    &self.metadata,
+                    Some(table_index),
+                    s_expr,
+                )
+                .await?;
+                is_supported_type && enable_bloom_runtime_filter_based_on_stats
+            };
+            let enable_min_max_runtime_filter =
+                data_type.is_number() || data_type.is_date() || data_type.is_string();
+            let runtime_filter = PhysicalRuntimeFilter {
+                id,
+                build_key: build_key.clone(),
+                probe_key,
+                scan_id,
+                enable_bloom_runtime_filter,
+                enable_inlist_runtime_filter: true,
+                enable_min_max_runtime_filter,
+            };
+            filters.push(runtime_filter);
+        }
+        Ok(PhysicalRuntimeFilters { filters })
+    }
+}
+
+pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
+    matches!(
+        join_type,
+        JoinType::Inner
+            | JoinType::Right
+            | JoinType::RightSemi
+            | JoinType::RightAnti
+            | JoinType::LeftMark
+    )
 }
 
 // Check if enable bloom runtime filter

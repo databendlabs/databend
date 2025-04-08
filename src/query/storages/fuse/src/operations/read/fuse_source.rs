@@ -83,7 +83,7 @@ pub fn build_fuse_native_source_pipeline(
             }
             pipeline.add_transform(|input, output| {
                 ReadNativeDataTransform::<true>::create(
-                    plan.table_index,
+                    plan.scan_id,
                     ctx.clone(),
                     table_schema.clone(),
                     block_reader.clone(),
@@ -120,7 +120,7 @@ pub fn build_fuse_native_source_pipeline(
 
             pipeline.add_transform(|input, output| {
                 ReadNativeDataTransform::<false>::create(
-                    plan.table_index,
+                    plan.scan_id,
                     ctx.clone(),
                     table_schema.clone(),
                     block_reader.clone(),

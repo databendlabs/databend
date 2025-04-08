@@ -19,7 +19,8 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::IndexType;
+use databend_common_sql::executor::PhysicalRuntimeFilter;
+use databend_common_sql::executor::PhysicalRuntimeFilters;
 use parking_lot::RwLock;
 
 use crate::sql::plans::JoinType;
@@ -46,11 +47,45 @@ pub struct HashJoinDesc {
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
-    pub(crate) probe_keys_rt: Vec<Option<(Expr<String>, IndexType)>>,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
-    // If enable bloom runtime filter
+    pub(crate) runtime_filter: RuntimeFiltersDesc,
+}
+
+pub struct RuntimeFilterDesc {
+    pub _id: usize,
+    pub build_key: Expr,
+    pub probe_key: Expr<String>,
+    pub scan_id: usize,
     pub enable_bloom_runtime_filter: bool,
+    pub enable_inlist_runtime_filter: bool,
+    pub enable_min_max_runtime_filter: bool,
+}
+
+pub struct RuntimeFiltersDesc {
+    pub filters: Vec<RuntimeFilterDesc>,
+}
+
+impl From<&PhysicalRuntimeFilters> for RuntimeFiltersDesc {
+    fn from(runtime_filter: &PhysicalRuntimeFilters) -> Self {
+        Self {
+            filters: runtime_filter.filters.iter().map(|rf| rf.into()).collect(),
+        }
+    }
+}
+
+impl From<&PhysicalRuntimeFilter> for RuntimeFilterDesc {
+    fn from(runtime_filter: &PhysicalRuntimeFilter) -> Self {
+        Self {
+            _id: runtime_filter.id,
+            build_key: runtime_filter.build_key.as_expr(&BUILTIN_FUNCTIONS),
+            probe_key: runtime_filter.probe_key.as_expr(&BUILTIN_FUNCTIONS),
+            scan_id: runtime_filter.scan_id,
+            enable_bloom_runtime_filter: runtime_filter.enable_bloom_runtime_filter,
+            enable_inlist_runtime_filter: runtime_filter.enable_inlist_runtime_filter,
+            enable_min_max_runtime_filter: runtime_filter.enable_min_max_runtime_filter,
+        }
+    }
 }
 
 impl HashJoinDesc {
@@ -68,16 +103,6 @@ impl HashJoinDesc {
             .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
             .collect();
 
-        let probe_keys_rt: Vec<Option<(Expr<String>, IndexType)>> = join
-            .probe_keys_rt
-            .iter()
-            .map(|probe_key_rt| {
-                probe_key_rt
-                    .as_ref()
-                    .map(|(expr, idx)| (expr.as_expr(&BUILTIN_FUNCTIONS), *idx))
-            })
-            .collect();
-
         Ok(HashJoinDesc {
             join_type: join.join_type.clone(),
             build_keys,
@@ -89,10 +114,9 @@ impl HashJoinDesc {
                 // marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
-            probe_keys_rt,
             broadcast: join.broadcast,
             single_to_inner: join.single_to_inner.clone(),
-            enable_bloom_runtime_filter: join.enable_bloom_runtime_filter,
+            runtime_filter: (&join.runtime_filter).into(),
         })
     }
 
