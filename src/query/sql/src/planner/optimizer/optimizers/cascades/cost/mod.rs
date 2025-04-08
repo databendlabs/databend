@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod cost;
+mod model;
 
-pub use cost::Cost;
-pub use cost::CostContext;
-pub use cost::CostModel;
+pub use model::DefaultCostModel;

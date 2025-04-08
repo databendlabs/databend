@@ -22,9 +22,9 @@ use educe::Educe;
 use super::explore_expr::ExploreExprTask;
 use super::Task;
 use crate::optimizer::ir::GroupState;
+use crate::optimizer::optimizers::cascades::tasks::Scheduler;
+use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
-use crate::optimizer::optimizers::cascades::Scheduler;
-use crate::optimizer::optimizers::cascades::SharedCounter;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
