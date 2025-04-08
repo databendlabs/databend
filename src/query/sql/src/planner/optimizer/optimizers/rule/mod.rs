@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod agg_rules;
 mod factory;
 mod rewrite;
 #[allow(clippy::module_inception)]
@@ -21,8 +22,8 @@ mod transform;
 mod transform_result;
 mod utils;
 
+pub use agg_rules::*;
 pub use factory::RuleFactory;
-pub use rewrite::agg_index;
 pub use rewrite::RulePushDownFilterJoin;
 pub use rule::Rule;
 pub use rule::RuleID;

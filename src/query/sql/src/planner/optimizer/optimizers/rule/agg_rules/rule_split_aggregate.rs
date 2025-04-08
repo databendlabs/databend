@@ -75,3 +75,9 @@ impl Rule for RuleSplitAggregate {
         &self.matchers
     }
 }
+
+impl Default for RuleSplitAggregate {
+    fn default() -> Self {
+        Self::new()
+    }
+}

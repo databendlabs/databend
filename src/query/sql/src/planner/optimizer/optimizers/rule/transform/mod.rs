@@ -13,10 +13,8 @@
 // limitations under the License.
 
 mod rule_commute_join_base_table;
-mod rule_eager_aggregation;
 mod rule_left_exchange_join;
 mod util;
 
 pub use rule_commute_join_base_table::RuleCommuteJoinBaseTable;
-pub use rule_eager_aggregation::RuleEagerAggregation;
 pub use rule_left_exchange_join::RuleLeftExchangeJoin;
