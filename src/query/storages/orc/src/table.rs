@@ -44,6 +44,7 @@ use orc_rust::ArrowReaderBuilder;
 
 use crate::chunk_reader_impl::OrcChunkReader;
 use crate::read_partition::read_partitions_simple;
+use crate::utils::map_orc_error;
 
 pub struct OrcTable {
     pub(super) stage_table_info: StageTableInfo,
@@ -107,11 +108,11 @@ impl OrcTable {
         let file = OrcChunkReader {
             operator,
             size: file_info.size,
-            path: file_info.path,
+            path: file_info.path.clone(),
         };
         let builder = ArrowReaderBuilder::try_new_async(file)
             .await
-            .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
+            .map_err(|e| map_orc_error(e, &file_info.path))?;
         let arrow_schema = builder.build_async().schema();
         Ok(arrow_schema)
     }
