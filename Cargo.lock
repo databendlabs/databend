@@ -5815,8 +5815,8 @@ dependencies = [
 
 [[package]]
 name = "display-more"
-version = "0.1.1"
-source = "git+https://github.com/databendlabs/display-more?tag=v0.1.1#41a61e3b731cf740831662d8e158b0a088c9adb8"
+version = "0.1.2"
+source = "git+https://github.com/databendlabs/display-more?tag=v0.1.2#723acc184363f9509364ca9d652adac92e4fcfc1"
 dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
