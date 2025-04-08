@@ -19,17 +19,17 @@ use databend_common_exception::Result;
 use log::debug;
 use log::info;
 
-use super::explore_rules::get_explore_rule_set;
 use crate::optimizer::cost::CostModel;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::optimizers::cascades::DefaultCostModel;
-use crate::optimizer::optimizers::cascades::OptimizeGroupTask;
-use crate::optimizer::optimizers::cascades::Scheduler;
-use crate::optimizer::optimizers::cascades::Task;
-use crate::optimizer::optimizers::cascades::DEFAULT_TASK_LIMIT;
+use crate::optimizer::optimizers::cascades::cost::DefaultCostModel;
+use crate::optimizer::optimizers::cascades::rule::StrategyFactory;
+use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupTask;
+use crate::optimizer::optimizers::cascades::tasks::Scheduler;
+use crate::optimizer::optimizers::cascades::tasks::Task;
+use crate::optimizer::optimizers::cascades::tasks::DEFAULT_TASK_LIMIT;
 use crate::optimizer::optimizers::distributed::DistributedOptimizer;
 use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::optimizers::rule::RuleSet;
@@ -135,12 +135,11 @@ impl CascadesOptimizer {
             // Check if DPhyp has already performed join reordering
             // The "dphyp_optimized" flag is set by the DPhyp optimizer when it runs
             // In pipeline execution, this flag will be set before CascadesOptimizer runs
-            let skip_join_reorder = self.opt_ctx.get_flag("dphyp_optimized")
+            let use_optimized_join_order = self.opt_ctx.get_flag("dphyp_optimized")
                 || unsafe { settings.get_disable_join_reorder()? };
 
-            // Update the rule set based on current flag values
-            // This replaces the initial placeholder rule set created in the constructor
-            self.explore_rule_set = get_explore_rule_set(skip_join_reorder);
+            let rule_strategy = StrategyFactory::create_strategy(use_optimized_join_order);
+            self.explore_rule_set = rule_strategy.create_rule_set();
         }
 
         self.init(s_expr)?;
