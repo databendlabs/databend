@@ -49,9 +49,9 @@ pub fn bind_table_args(
             let expr = scalar.as_expr()?;
             let (expr, _) =
                 ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
-            match expr {
-                databend_common_expression::Expr::Constant(Constant { scalar, .. }) => Ok(scalar),
-                _ => Err(ErrorCode::Unimplemented(format!(
+            match expr.into_constant() {
+                Ok(Constant { scalar, .. }) => Ok(scalar),
+                Err(_) => Err(ErrorCode::Unimplemented(format!(
                     "Unsupported table argument type: {:?}",
                     scalar
                 ))),
@@ -67,11 +67,9 @@ pub fn bind_table_args(
                 let expr = scalar.as_expr()?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
-                match expr {
-                    databend_common_expression::Expr::Constant(Constant { scalar, .. }) => {
-                        Ok((name.name.clone(), scalar))
-                    }
-                    _ => Err(ErrorCode::Unimplemented(format!(
+                match expr.into_constant() {
+                    Ok(Constant { scalar, .. }) => Ok((name.name.clone(), scalar)),
+                    Err(_) => Err(ErrorCode::Unimplemented(format!(
                         "Unsupported table argument type: {:?}",
                         scalar
                     ))),

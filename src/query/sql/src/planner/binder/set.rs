@@ -69,18 +69,10 @@ impl Binder {
                             &self.ctx.get_function_context()?,
                             &BUILTIN_FUNCTIONS,
                         );
-                        match new_expr {
-                            databend_common_expression::Expr::Constant(Constant {
-                                scalar, ..
-                            }) => {
-                                results.push(scalar);
-                            }
-                            _ => {
-                                return Err(ErrorCode::SemanticError(
-                                    "value must be constant value",
-                                ))
-                            }
-                        }
+                        let Constant { scalar, .. } = new_expr.into_constant().map_err(|_| {
+                            ErrorCode::SemanticError("value must be constant value")
+                        })?;
+                        results.push(scalar);
                     }
                     SetScalarsOrQuery::VarValue(results)
                 }

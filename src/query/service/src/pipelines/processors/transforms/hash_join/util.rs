@@ -233,51 +233,52 @@ pub(crate) fn min_max_filter(
     max: Scalar,
     probe_key: &Expr<String>,
 ) -> Result<Option<Expr<String>>> {
-    if let Expr::ColumnRef(ColumnRef {
+    let Some(ColumnRef {
         span,
         id,
         data_type,
         display_name,
-    }) = probe_key
-    {
-        let raw_probe_key = RawExpr::ColumnRef {
-            span: *span,
-            id: id.to_string(),
-            data_type: data_type.clone(),
-            display_name: display_name.clone(),
-        };
-        let min = RawExpr::Constant {
-            span: None,
-            scalar: min,
-            data_type: None,
-        };
-        let max = RawExpr::Constant {
-            span: None,
-            scalar: max,
-            data_type: None,
-        };
-        // Make gte and lte function
-        let gte_func = RawExpr::FunctionCall {
-            span: None,
-            name: "gte".to_string(),
-            params: vec![],
-            args: vec![raw_probe_key.clone(), min],
-        };
-        let lte_func = RawExpr::FunctionCall {
-            span: None,
-            name: "lte".to_string(),
-            params: vec![],
-            args: vec![raw_probe_key, max],
-        };
-        // Make and_filters function
-        let and_filters_func = RawExpr::FunctionCall {
-            span: None,
-            name: "and_filters".to_string(),
-            params: vec![],
-            args: vec![gte_func, lte_func],
-        };
-        let expr = type_check::check(&and_filters_func, &BUILTIN_FUNCTIONS)?;
-        return Ok(Some(expr));
-    }
-    Ok(None)
+    }) = probe_key.as_column_ref()
+    else {
+        return Ok(None);
+    };
+
+    let raw_probe_key = RawExpr::ColumnRef {
+        span: *span,
+        id: id.to_string(),
+        data_type: data_type.clone(),
+        display_name: display_name.clone(),
+    };
+    let min = RawExpr::Constant {
+        span: None,
+        scalar: min,
+        data_type: None,
+    };
+    let max = RawExpr::Constant {
+        span: None,
+        scalar: max,
+        data_type: None,
+    };
+    // Make gte and lte function
+    let gte_func = RawExpr::FunctionCall {
+        span: None,
+        name: "gte".to_string(),
+        params: vec![],
+        args: vec![raw_probe_key.clone(), min],
+    };
+    let lte_func = RawExpr::FunctionCall {
+        span: None,
+        name: "lte".to_string(),
+        params: vec![],
+        args: vec![raw_probe_key, max],
+    };
+    // Make and_filters function
+    let and_filters_func = RawExpr::FunctionCall {
+        span: None,
+        name: "and_filters".to_string(),
+        params: vec![],
+        args: vec![gte_func, lte_func],
+    };
+    let expr = type_check::check(&and_filters_func, &BUILTIN_FUNCTIONS)?;
+    Ok(Some(expr))
 }

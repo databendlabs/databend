@@ -56,9 +56,8 @@ where Self: Transform
                     id: index,
                     data_type: from.data_type().clone(),
                     display_name: from.name().clone(),
-                }
-                .into();
-                check_cast(None, false, expr, to.data_type(), &BUILTIN_FUNCTIONS)
+                };
+                check_cast(None, false, expr.into(), to.data_type(), &BUILTIN_FUNCTIONS)
             })
             .collect::<Result<Vec<_>>>()?;
 

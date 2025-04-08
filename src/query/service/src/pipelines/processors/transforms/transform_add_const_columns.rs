@@ -20,7 +20,6 @@ use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Expr;
 use databend_common_expression::Scalar as DataScalar;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::evaluator::BlockOperator;
@@ -47,29 +46,30 @@ where Self: Transform
         output_schema: DataSchemaRef,
         mut const_values: Vec<DataScalar>,
     ) -> Result<Self> {
-        let fields = output_schema.fields();
-        let mut exprs = Vec::with_capacity(fields.len());
-
-        for f in fields.iter() {
-            let expr = if !input_schema.has_field(f.name()) {
-                Expr::Constant(Constant {
-                    span: None,
-                    scalar: const_values.remove(0),
-                    data_type: f.data_type().clone(),
-                })
-            } else {
-                let field = input_schema.field_with_name(f.name()).unwrap();
-                let id = input_schema.index_of(f.name()).unwrap();
-                ColumnRef {
-                    span: None,
-                    id,
-                    data_type: field.data_type().clone(),
-                    display_name: field.name().clone(),
+        let exprs = output_schema
+            .fields()
+            .iter()
+            .map(|f| {
+                if !input_schema.has_field(f.name()) {
+                    Constant {
+                        span: None,
+                        scalar: const_values.remove(0),
+                        data_type: f.data_type().clone(),
+                    }
+                    .into()
+                } else {
+                    let field = input_schema.field_with_name(f.name()).unwrap();
+                    let id = input_schema.index_of(f.name()).unwrap();
+                    ColumnRef {
+                        span: None,
+                        id,
+                        data_type: field.data_type().clone(),
+                        display_name: field.name().clone(),
+                    }
+                    .into()
                 }
-                .into()
-            };
-            exprs.push(expr);
-        }
+            })
+            .collect();
 
         let func_ctx = ctx.get_function_context()?;
         let expression_transform = CompoundBlockOperator {

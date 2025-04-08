@@ -846,7 +846,7 @@ impl HashJoinBuildState {
             {
                 continue;
             }
-            if let Expr::ColumnRef { .. } = probe_key {
+            if let Expr::ColumnRef(_) = probe_key {
                 wait_runtime_filter_table_indexes.insert(*table_index);
             }
         }
@@ -986,7 +986,7 @@ impl HashJoinBuildState {
         if !build_key.runtime_filter_supported_types() {
             return Ok(());
         }
-        if let Expr::ColumnRef { .. } = probe_key {
+        if let Expr::ColumnRef(_) = probe_key {
             let mut columns = Vec::with_capacity(data_blocks.len());
             for block in data_blocks.iter() {
                 if block.num_columns() == 0 {

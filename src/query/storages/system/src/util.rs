@@ -18,7 +18,7 @@ use databend_common_expression::Scalar;
 
 pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar) -> Result<()>) {
     match expr {
-        Expr::Constant(_) | Expr::ColumnRef { .. } => {}
+        Expr::Constant(_) | Expr::ColumnRef(_) => {}
         Expr::Cast(Cast { expr, .. }) => find_eq_filter(expr, visitor),
         Expr::FunctionCall(FunctionCall { function, args, .. }) => {
             // Like: select * from (select * from system.tables where database='default') where name='t'
@@ -52,7 +52,7 @@ pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
 
 pub fn find_gt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
     match expr {
-        Expr::Constant(_) | Expr::ColumnRef { .. } => {}
+        Expr::Constant(_) | Expr::ColumnRef(_) => {}
         Expr::Cast(Cast { expr, .. }) => find_gt_filter(expr, visitor),
         Expr::FunctionCall(FunctionCall { function, args, .. }) => {
             if function.signature.name == "gt" || function.signature.name == "gte" {
@@ -83,7 +83,7 @@ pub fn find_gt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
 
 pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
     match expr {
-        Expr::Constant(_) | Expr::ColumnRef { .. } => {}
+        Expr::Constant(_) | Expr::ColumnRef(_) => {}
         Expr::Cast(Cast { expr, .. }) => find_lt_filter(expr, visitor),
         Expr::FunctionCall(FunctionCall { function, args, .. }) => {
             if function.signature.name == "lt" || function.signature.name == "lte" {

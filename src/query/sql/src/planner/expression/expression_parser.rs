@@ -402,16 +402,18 @@ pub fn parse_cluster_keys(
                 &[],
                 &[
                     expr,
-                    Expr::Constant(Constant {
+                    Constant {
                         span: None,
                         scalar: Scalar::Number(1i64.into()),
                         data_type: DataType::Number(NumberDataType::Int64),
-                    }),
-                    Expr::Constant(Constant {
+                    }
+                    .into(),
+                    Constant {
                         span: None,
                         scalar: Scalar::Number(8u64.into()),
                         data_type: DataType::Number(NumberDataType::UInt64),
-                    }),
+                    }
+                    .into(),
                 ],
                 &BUILTIN_FUNCTIONS,
             )?

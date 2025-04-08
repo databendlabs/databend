@@ -152,35 +152,34 @@ where Self: Transform
     ) -> Result<Expr<Index>> {
         let src_type = expr.data_type();
         let column = StringType::from_data(null_str_list.to_vec());
-        let args1 = Constant {
-            span,
-            scalar: Scalar::Array(column),
-            data_type: DataType::Array(Box::new(DataType::String)),
+        if !Self::column_need_transform(src_type, dest_type) {
+            return Ok(expr);
         }
-        .into();
-        if Self::column_need_transform(src_type, dest_type) {
-            let in_expr =
-                check_function(span, "contains", &[], &[args1, expr.clone()], fn_registry)?;
-            let if_expr = check_function(
+        let args = [
+            Constant {
                 span,
-                "if",
-                &[],
-                &[
-                    in_expr,
-                    Constant {
-                        span,
-                        scalar: Scalar::Null,
-                        data_type: DataType::Nullable(Box::new(DataType::String)),
-                    }
-                    .into(),
-                    expr,
-                ],
-                fn_registry,
-            )?;
-            Ok(if_expr)
-        } else {
-            Ok(expr)
-        }
+                scalar: Scalar::Array(column),
+                data_type: DataType::Array(Box::new(DataType::String)),
+            }
+            .into(),
+            expr.clone(),
+        ];
+        check_function(
+            span,
+            "if",
+            &[],
+            &[
+                check_function(span, "contains", &[], &args, fn_registry)?,
+                Constant {
+                    span,
+                    scalar: Scalar::Null,
+                    data_type: DataType::String.wrap_nullable(),
+                }
+                .into(),
+                expr,
+            ],
+            fn_registry,
+        )
     }
 }
 

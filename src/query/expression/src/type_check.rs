@@ -51,25 +51,27 @@ pub fn check<Index: ColumnIndex>(
             span,
             scalar,
             data_type,
-        } => Ok(Expr::Constant(Constant {
+        } => Ok(Constant {
             span: *span,
             scalar: scalar.clone(),
             data_type: data_type
                 .as_ref()
                 .cloned()
                 .unwrap_or_else(|| scalar.as_ref().infer_data_type()),
-        })),
+        }
+        .into()),
         RawExpr::ColumnRef {
             span,
             id,
             data_type,
             display_name,
-        } => Ok(Expr::ColumnRef(ColumnRef {
+        } => Ok(ColumnRef {
             span: *span,
             id: id.clone(),
             data_type: data_type.clone(),
             display_name: display_name.clone(),
-        })),
+        }
+        .into()),
         RawExpr::Cast {
             span,
             is_try,
@@ -136,14 +138,15 @@ pub fn check<Index: ColumnIndex>(
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
 
-            Ok(Expr::LambdaFunctionCall(LambdaFunctionCall {
+            Ok(LambdaFunctionCall {
                 span: *span,
                 name: name.clone(),
                 args,
                 lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
-            }))
+            }
+            .into())
         }
     }
 }

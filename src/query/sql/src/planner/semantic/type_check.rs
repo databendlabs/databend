@@ -1362,13 +1362,12 @@ impl<'a> TypeChecker<'a> {
                 let box (expr, _) = self.resolve(expr)?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                if let EExpr::Constant(expr::Constant { scalar, .. }) = expr {
-                    Ok(Some(scalar))
-                } else {
-                    Err(ErrorCode::SemanticError(
+                match expr.into_constant() {
+                    Ok(expr::Constant { scalar, .. }) => Ok(Some(scalar)),
+                    Err(expr) => Err(ErrorCode::SemanticError(
                         "Only constant is allowed in RANGE offset".to_string(),
                     )
-                    .set_span(expr.span()))
+                    .set_span(expr.span())),
                 }
             }
             _ => Ok(None),
@@ -3650,11 +3649,11 @@ impl<'a> TypeChecker<'a> {
                         let box (scalar, _) = self.resolve(args[0])?;
 
                         let expr = scalar.as_expr()?;
-                        match expr {
-                            EExpr::Constant(_) => {
+                        match expr.as_constant() {
+                            Some(_) => {
                                 check_number(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
                             }
-                            _ => {
+                            None => {
                                 return Some(Err(ErrorCode::BadArguments(
                                     "last_query_id argument only support constant",
                                 )
