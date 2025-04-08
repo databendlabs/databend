@@ -1489,6 +1489,27 @@ fn hash_join_to_format_tree(
     build_child.payload = format!("{}(Build)", build_child.payload);
     probe_child.payload = format!("{}(Probe)", probe_child.payload);
 
+    let mut build_runtime_filters = vec![];
+    for rf in plan.runtime_filter.filters.iter() {
+        let mut s = format!(
+            "rf_id:{}, build_key:{}, probe_key:{}, rf_type:",
+            rf.id,
+            rf.build_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+            rf.probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+        );
+        if rf.enable_bloom_runtime_filter {
+            s += "bloom,";
+        }
+        if rf.enable_inlist_runtime_filter {
+            s += "inlist,";
+        }
+        if rf.enable_min_max_runtime_filter {
+            s += "min_max,";
+        }
+        s = s.trim_end_matches(',').to_string();
+        build_runtime_filters.push(FormatTreeNode::new(s));
+    }
+
     let mut children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
@@ -1499,6 +1520,7 @@ fn hash_join_to_format_tree(
         FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
         FormatTreeNode::new(format!("keys is null equal: [{is_null_equal}]")),
         FormatTreeNode::new(format!("filters: [{filters}]")),
+        FormatTreeNode::with_children(format!("build runtime filters:"), build_runtime_filters),
     ];
 
     if let Some((cache_index, column_map)) = &plan.build_side_cache_info {
