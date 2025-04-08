@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
@@ -48,7 +49,7 @@ impl DefaultExprEvaluator {
             match e {
                 RemoteDefaultExpr::RemoteExpr(remote_expr) => {
                     let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
-                    if let Expr::Constant { scalar, .. } = expr {
+                    if let Expr::Constant(Constant { scalar, .. }) = expr {
                         default_exprs.push(DefaultExpr::Constant(scalar.clone()));
                     } else {
                         default_exprs.push(DefaultExpr::Expr(expr));

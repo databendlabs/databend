@@ -23,6 +23,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::converts::datavalues::scalar_to_datavalue;
 use databend_common_expression::eval_function;
+use databend_common_expression::expr::*;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AnyType;
@@ -357,10 +358,10 @@ impl BloomIndex {
         match ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS)
             .0
         {
-            Expr::Constant {
+            Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
-            } => Ok(FilterEvalResult::MustFalse),
+            }) => Ok(FilterEvalResult::MustFalse),
             _ => Ok(FilterEvalResult::Uncertain),
         }
     }
@@ -584,17 +585,14 @@ where T: EqVisitor
 {
     type Error = ErrorCode;
 
-    fn enter_function_call(&mut self, expr: &Expr<String>) -> Result<Option<Expr<String>>> {
-        let Expr::FunctionCall {
+    fn enter_function_call(&mut self, expr: &FunctionCall<String>) -> Result<Option<Expr<String>>> {
+        let FunctionCall {
             span,
             id,
             args,
             return_type,
             ..
-        } = expr
-        else {
-            unreachable!()
-        };
+        } = expr;
 
         if id.name() != "eq" {
             return Self::visit_function_call(expr, self);
@@ -602,24 +600,24 @@ where T: EqVisitor
 
         match match args.as_slice() {
             // patterns like `Column = <constant>`, `<constant> = Column`
-            [Expr::ColumnRef {
+            [Expr::ColumnRef(ColumnRef {
                 id,
                 data_type: column_type,
                 ..
-            }, Expr::Constant {
+            }), Expr::Constant(Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
-            }]
-            | [Expr::Constant {
+            })]
+            | [Expr::Constant(Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, Expr::ColumnRef {
+            }), Expr::ColumnRef(ColumnRef {
                 id,
                 data_type: column_type,
                 ..
-            }] => {
+            })] => {
                 // decimal don't respect datatype equal
                 // debug_assert_eq!(scalar_type, column_type);
                 // If the visitor returns a new expression, then replace with the current expression.
@@ -631,52 +629,52 @@ where T: EqVisitor
                 }
             }
             // patterns like `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
-            [Expr::FunctionCall { id, args, .. }, Expr::Constant {
+            [Expr::FunctionCall(FunctionCall { id, args, .. }), Expr::Constant(Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
-            }]
-            | [Expr::Constant {
+            })]
+            | [Expr::Constant(Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, Expr::FunctionCall { id, args, .. }]
+            }), Expr::FunctionCall(FunctionCall { id, args, .. })]
                 if id.name() == "get" =>
             {
                 self.0
                     .enter_map_column(*span, args, scalar, scalar_type, return_type)?
             }
             // patterns like `CAST(MapColumn[<key>] as X) = <constant>`, `<constant> = CAST(MapColumn[<key>] as X)`
-            [Expr::Cast {
+            [Expr::Cast(Cast {
                 expr:
-                    box Expr::FunctionCall {
+                    box Expr::FunctionCall(FunctionCall {
                         id,
                         args,
                         return_type,
                         ..
-                    },
+                    }),
                 dest_type,
                 ..
-            }, Expr::Constant {
+            }), Expr::Constant(Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
-            }]
-            | [Expr::Constant {
+            })]
+            | [Expr::Constant(Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, Expr::Cast {
+            }), Expr::Cast(Cast {
                 expr:
-                    box Expr::FunctionCall {
+                    box Expr::FunctionCall(FunctionCall {
                         id,
                         args,
                         return_type,
                         ..
-                    },
+                    }),
                 dest_type,
                 ..
-            }] if id.name() == "get" => {
+            })] if id.name() == "get" => {
                 // Only support cast variant value in map to string value
                 if return_type.remove_nullable() != DataType::Variant
                     || dest_type.remove_nullable() != DataType::String
@@ -687,44 +685,47 @@ where T: EqVisitor
                         .enter_map_column(*span, args, scalar, scalar_type, return_type)?
                 }
             }
-            [cast @ Expr::Cast { .. }, Expr::Constant {
+            [cast @ Expr::Cast(_), Expr::Constant(Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
-            }]
-            | [Expr::Constant {
+            })]
+            | [Expr::Constant(Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, cast @ Expr::Cast { .. }] => self.0.enter_cast(cast, scalar, scalar_type)?,
+            }), cast @ Expr::Cast(_)] => self.0.enter_cast(cast, scalar, scalar_type)?,
 
-            [func @ Expr::FunctionCall {
+            [func @ Expr::FunctionCall(FunctionCall {
                 id,
                 args,
                 return_type: dest_type,
                 ..
-            }, Expr::Constant {
+            }), Expr::Constant(Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
-            }]
-            | [Expr::Constant {
+            })]
+            | [Expr::Constant(Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, func @ Expr::FunctionCall {
+            }), func @ Expr::FunctionCall(FunctionCall {
                 id,
                 args,
                 return_type: dest_type,
                 ..
-            }] if id.name().starts_with("to_") && args.len() == 1 && func.contains_column_ref() => {
+            })] if id.name().starts_with("to_")
+                && args.len() == 1
+                && func.contains_column_ref() =>
+            {
                 self.0.enter_cast(
-                    &Expr::Cast {
+                    &Expr::Cast(Cast {
                         span: *span,
                         is_try: false,
                         expr: Box::new(args[0].clone()),
                         dest_type: dest_type.clone(),
-                    },
+                    }),
                     scalar,
                     scalar_type,
                 )?
@@ -737,7 +738,10 @@ where T: EqVisitor
         }
     }
 
-    fn enter_lambda_function_call(&mut self, _: &Expr<String>) -> Result<Option<Expr<String>>> {
+    fn enter_lambda_function_call(
+        &mut self,
+        _: &LambdaFunctionCall<String>,
+    ) -> Result<Option<Expr<String>>> {
         Ok(None)
     }
 }
@@ -763,11 +767,11 @@ trait EqVisitor {
         return_type: &DataType,
     ) -> ResultRewrite {
         match &args[0] {
-            Expr::ColumnRef { id, data_type, .. }
-            | Expr::Cast {
-                expr: box Expr::ColumnRef { id, data_type, .. },
+            Expr::ColumnRef(ColumnRef { id, data_type, .. })
+            | Expr::Cast(Cast {
+                expr: box Expr::ColumnRef(ColumnRef { id, data_type, .. }),
                 ..
-            } => {
+            }) => {
                 if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
                     let val_type = match inner_ty {
                         DataType::Tuple(kv_tys) => kv_tys[1].clone(),
@@ -874,12 +878,15 @@ impl EqVisitor for RewriteVisitor<'_> {
         };
         self.domains.insert(new_col_name.clone(), new_domain);
 
-        Ok(ControlFlow::Break(Some(Expr::ColumnRef {
-            span,
-            id: new_col_name.clone(),
-            data_type: return_type.clone(),
-            display_name: new_col_name,
-        })))
+        Ok(ControlFlow::Break(Some(
+            ColumnRef {
+                span,
+                id: new_col_name.clone(),
+                data_type: return_type.clone(),
+                display_name: new_col_name,
+            }
+            .into(),
+        )))
     }
 
     fn enter_cast(
@@ -888,18 +895,18 @@ impl EqVisitor for RewriteVisitor<'_> {
         scalar: &Scalar,
         scalar_type: &DataType,
     ) -> ResultRewrite {
-        let Expr::Cast {
+        let Expr::Cast(Cast {
             span,
             is_try: false,
             expr:
-                box Expr::ColumnRef {
+                box Expr::ColumnRef(ColumnRef {
                     id,
                     data_type: src_type,
                     ..
-                },
+                }),
             dest_type,
             ..
-        } = cast
+        }) = cast
         else {
             return Ok(ControlFlow::Continue(None));
         };
@@ -980,17 +987,17 @@ impl EqVisitor for ShortListVisitor {
         scalar: &Scalar,
         scalar_type: &DataType,
     ) -> ResultRewrite {
-        let Expr::Cast {
+        let Expr::Cast(Cast {
             is_try: false,
             expr:
-                box Expr::ColumnRef {
+                box Expr::ColumnRef(ColumnRef {
                     id,
                     data_type: src_type,
                     ..
-                },
+                }),
             dest_type,
             ..
-        } = cast
+        }) = cast
         else {
             return Ok(ControlFlow::Continue(None));
         };
@@ -1049,16 +1056,16 @@ fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
 
 fn cast_const(dest_type: DataType, src_type: DataType, scalar: &Scalar) -> Option<Scalar> {
     let (_, Some(domain)) = ConstantFolder::<String>::fold(
-        &Expr::Cast {
+        &Expr::Cast(Cast {
             span: None,
             is_try: false,
-            expr: Box::new(Expr::Constant {
+            expr: Box::new(Expr::Constant(Constant {
                 span: None,
                 scalar: scalar.to_owned(),
                 data_type: src_type,
-            }),
+            })),
             dest_type,
-        },
+        }),
         &FunctionContext::default(),
         &BUILTIN_FUNCTIONS,
     ) else {

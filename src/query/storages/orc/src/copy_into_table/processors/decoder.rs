@@ -29,6 +29,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
@@ -102,9 +103,9 @@ impl StripeDecoderForCopy {
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let mut columns = Vec::with_capacity(projection.len());
         for (field, expr) in self.output_schema.fields().iter().zip(projection.iter()) {
-            if let Expr::ColumnRef {
+            if let Expr::ColumnRef(ColumnRef {
                 display_name, id, ..
-            } = expr
+            }) = expr
             {
                 if let Some(display_name) = display_name.strip_prefix("#!") {
                     let types = match field.data_type() {

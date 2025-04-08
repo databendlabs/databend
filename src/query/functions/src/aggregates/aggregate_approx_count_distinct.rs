@@ -16,7 +16,6 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -28,19 +27,17 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use simple_hll::HyperLogLog;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::extract_number_param;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
-use crate::BUILTIN_FUNCTIONS;
 
 /// Use Hyperloglog to estimate distinct of values
 type AggregateApproxCountDistinctState<const HLL_P: usize> = HyperLogLog<HLL_P>;
@@ -85,17 +82,8 @@ pub fn try_create_aggregate_approx_count_distinct_function(
     let mut p = 14;
 
     if !params.is_empty() {
-        let error_rate = check_number::<_, F64>(
-            None,
-            &FunctionContext::default(),
-            &Expr::<usize>::Constant {
-                span: None,
-                scalar: params[0].clone(),
-                data_type: params[0].as_ref().infer_data_type(),
-            },
-            &BUILTIN_FUNCTIONS,
-        )?;
-        p = ((1.04f64 / *error_rate).log2() * 2.0).ceil() as u64;
+        let error_rate = extract_number_param::<F64>(params[0].clone())?.0;
+        p = ((1.04f64 / error_rate).log2() * 2.0).ceil() as u64;
         p = p.clamp(4, 14);
     }
 

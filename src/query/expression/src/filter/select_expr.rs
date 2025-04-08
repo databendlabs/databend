@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
+use crate::expr::*;
 use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectOp;
 use crate::generate_like_pattern;
@@ -63,13 +64,13 @@ impl SelectExprBuilder {
     // Build `SelectExpr` from `Expr`, return the `SelectExpr` and whether the `SelectExpr` contains `Or` operation.
     pub fn build_select_expr(&mut self, expr: &Expr, not: bool) -> SelectExprBuildResult {
         match expr {
-            Expr::FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                 id,
                 function,
                 args,
                 generics,
                 ..
-            } => {
+            }) => {
                 let func_name = function.signature.name.as_str();
                 if !not && matches!(func_name, "and" | "and_filters")
                     || not && matches!(func_name, "or")
@@ -148,14 +149,14 @@ impl SelectExprBuilder {
                         "like" => {
                             let (column, column_data_type, scalar) = match (&args[0], &args[1]) {
                                 (
-                                    Expr::ColumnRef { data_type, .. },
-                                    Expr::Constant { scalar, .. },
+                                    Expr::ColumnRef(ColumnRef { data_type, .. }),
+                                    Expr::Constant(Constant { scalar, .. }),
                                 ) if matches!(data_type, DataType::String | DataType::Nullable(box DataType::String)) => {
                                     (&args[0], data_type, scalar)
                                 }
                                 (
-                                    Expr::Constant { scalar, .. },
-                                    Expr::ColumnRef { data_type, .. },
+                                    Expr::Constant(Constant { scalar, .. }),
+                                    Expr::ColumnRef(ColumnRef { data_type, .. }),
                                 ) if matches!(data_type, DataType::String | DataType::Nullable(box DataType::String)) => {
                                     (&args[1], data_type, scalar)
                                 }
@@ -193,13 +194,13 @@ impl SelectExprBuilder {
                     }
                 }
             }
-            Expr::ColumnRef { id, data_type, .. } if matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean)) => {
+            Expr::ColumnRef(ColumnRef { id, data_type, .. }) if matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean)) => {
                 SelectExprBuildResult::new(SelectExpr::BooleanColumn((*id, data_type.clone())))
                     .can_push_down_not(false)
             }
-            Expr::Constant {
+            Expr::Constant(Constant {
                 scalar, data_type, ..
-            } if matches!(data_type, &DataType::Boolean | &DataType::Nullable(box DataType::Boolean)) =>
+            }) if matches!(data_type, &DataType::Boolean | &DataType::Nullable(box DataType::Boolean)) =>
             {
                 let scalar = if not {
                     match scalar {
@@ -212,7 +213,7 @@ impl SelectExprBuilder {
                 };
                 SelectExprBuildResult::new(SelectExpr::BooleanScalar((scalar, data_type.clone())))
             }
-            Expr::Cast { is_try, .. } if *is_try => self.other_select_expr(expr, not),
+            Expr::Cast(Cast { is_try, .. }) if *is_try => self.other_select_expr(expr, not),
             _ => self.other_select_expr(expr, not).can_reorder(false),
         }
     }
@@ -222,7 +223,7 @@ impl SelectExprBuilder {
     // there will be a divide by zero error.
     pub fn can_reorder(expr: &Expr) -> bool {
         match expr {
-            Expr::FunctionCall { function, args, .. } => {
+            Expr::FunctionCall(FunctionCall { function, args, .. }) => {
                 let func_name = function.signature.name.as_str();
                 // There may be other functions that can be used for filter short-circuiting.
                 let mut can_reorder = !matches!(func_name, "cast" | "div" | "divide" | "modulo")
@@ -234,8 +235,8 @@ impl SelectExprBuilder {
                 }
                 can_reorder
             }
-            Expr::ColumnRef { .. } | Expr::Constant { .. } => true,
-            Expr::Cast { is_try, .. } if *is_try => true,
+            Expr::ColumnRef(_) | Expr::Constant(_) => true,
+            Expr::Cast(Cast { is_try, .. }) if *is_try => true,
             _ => false,
         }
     }
@@ -253,7 +254,7 @@ impl SelectExprBuilder {
 
     fn wrap_not(&self, expr: &Expr) -> Expr {
         let (id, function) = self.not_function.as_ref().unwrap();
-        Expr::FunctionCall {
+        FunctionCall {
             span: None,
             id: Box::new(id.clone()),
             function: function.clone(),
@@ -261,6 +262,7 @@ impl SelectExprBuilder {
             args: vec![expr.clone()],
             return_type: expr.data_type().clone(),
         }
+        .into()
     }
 }
 

@@ -22,6 +22,7 @@ use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -281,10 +282,10 @@ impl<'a> SelectivityEstimator<'a> {
                 let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-                if let Expr::Constant {
+                if let Expr::Constant(Constant {
                     scalar: Scalar::Boolean(v),
                     ..
-                } = expr
+                }) = expr
                 {
                     return if v { Ok(1.0) } else { Ok(0.0) };
                 }

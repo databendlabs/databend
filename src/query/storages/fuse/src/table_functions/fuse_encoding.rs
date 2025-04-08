@@ -21,6 +21,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::expr::*;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::BooleanType;
@@ -359,11 +360,11 @@ pub fn as_expr(
             span,
             scalar,
             data_type,
-        } => Expr::Constant {
+        } => Expr::Constant(Constant {
             span: *span,
             scalar: scalar.clone(),
             data_type: data_type.clone(),
-        },
+        }),
         RemoteExpr::ColumnRef {
             span,
             id,
@@ -371,24 +372,26 @@ pub fn as_expr(
             display_name,
         } => {
             let id = schema.index_of(id).unwrap();
-            Expr::ColumnRef {
+            ColumnRef {
                 span: *span,
                 id,
                 data_type: data_type.clone(),
                 display_name: display_name.clone(),
             }
+            .into()
         }
         RemoteExpr::Cast {
             span,
             is_try,
             expr,
             dest_type,
-        } => Expr::Cast {
+        } => Cast {
             span: *span,
             is_try: *is_try,
             expr: Box::new(as_expr(expr, fn_registry, schema)),
             dest_type: dest_type.clone(),
-        },
+        }
+        .into(),
         RemoteExpr::FunctionCall {
             span,
             id,
@@ -397,7 +400,7 @@ pub fn as_expr(
             return_type,
         } => {
             let function = fn_registry.get(id).expect("function id not found");
-            Expr::FunctionCall {
+            FunctionCall {
                 span: *span,
                 id: id.clone(),
                 function,
@@ -408,6 +411,7 @@ pub fn as_expr(
                     .collect(),
                 return_type: return_type.clone(),
             }
+            .into()
         }
         RemoteExpr::LambdaFunctionCall {
             span,
@@ -421,7 +425,7 @@ pub fn as_expr(
                 .iter()
                 .map(|arg| as_expr(arg, fn_registry, schema))
                 .collect();
-            Expr::LambdaFunctionCall {
+            LambdaFunctionCall {
                 span: *span,
                 name: name.clone(),
                 args,
@@ -429,6 +433,7 @@ pub fn as_expr(
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             }
+            .into()
         }
     }
 }

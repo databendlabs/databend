@@ -31,8 +31,8 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::utils::FromData;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -363,14 +363,15 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                 }
                             }
                         } else if col_name == "table_id" {
-                            match check_number::<_, u64>(
+                            match check_number::<u64, usize>(
                                 None,
                                 &FunctionContext::default(),
-                                &Expr::<usize>::Constant {
+                                &Constant {
                                     span: None,
                                     scalar: scalar.clone(),
                                     data_type: scalar.as_ref().infer_data_type(),
-                                },
+                                }
+                                .into(),
                                 &BUILTIN_FUNCTIONS,
                             ) {
                                 Ok(id) => tables_ids.push(id),
