@@ -391,6 +391,8 @@ impl SubqueryRewriter {
                         ),
                     })
                 } else if subquery.typ == SubqueryType::NotExists {
+                    // Not exists subquery should be rewritten to `not(is_true(column_ref))`
+                    // not null mark value will consider as:  not [null] ---> not [false] ---> true
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: subquery.span,
                         func_name: "not".to_string(),
@@ -403,6 +405,7 @@ impl SubqueryRewriter {
                         })],
                     })
                 } else if subquery.typ == SubqueryType::Exists {
+                    // null value will consider as false
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: subquery.span,
                         func_name: "is_true".to_string(),
@@ -671,6 +674,18 @@ impl SubqueryRewriter {
                         None,
                     )
                 };
+
+                let mut is_null_equal = Vec::new();
+                for (i, (l, r)) in left_conditions
+                    .iter()
+                    .zip(right_conditions.iter())
+                    .enumerate()
+                {
+                    if l.data_type()?.is_nullable() || r.data_type()?.is_nullable() {
+                        is_null_equal.push(i);
+                    }
+                }
+
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
                 // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
                 // Note that subquery is the right table, and it'll be the build side.
@@ -678,7 +693,7 @@ impl SubqueryRewriter {
                     equi_conditions: JoinEquiCondition::new_conditions(
                         right_conditions,
                         left_conditions,
-                        vec![],
+                        is_null_equal,
                     ),
                     non_equi_conditions,
                     join_type: JoinType::RightMark,
