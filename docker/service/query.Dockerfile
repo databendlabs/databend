@@ -9,11 +9,14 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*
 ENV JAVA_HOME=/usr/lib/jvm/default-java
-ENV LD_LIBRARY_PATH=/usr/lib/jvm/default-java/lib/server
+ENV HADOOP_HOME=/opt/hadoop
+ENV LD_LIBRARY_PATH=${JAVA_HOME}/lib/server:${HADOOP_HOME}/lib/native
+ENV CLASSPATH=${HADOOP_HOME}/etc/hadoop:${HADOOP_HOME}/share/hadoop/common/lib/*:${HADOOP_HOME}/share/hadoop/common/*:${HADOOP_HOME}/share/hadoop/hdfs:${HADOOP_HOME}/share/hadoop/hdfs/lib/*:${HADOOP_HOME}/share/hadoop/hdfs/*:${HADOOP_HOME}/share/hadoop/mapreduce/*:${HADOOP_HOME}/share/hadoop/yarn:${HADOOP_HOME}/share/hadoop/yarn/lib/*:${HADOOP_HOME}/share/hadoop/yarn/*
 COPY ./distro/$TARGETPLATFORM/databend-query /databend-query
 RUN useradd --uid 1000 --shell /sbin/nologin \
     --home-dir /var/lib/databend --user-group \
     --comment "Databend cloud data analytics" databend && \
     mkdir -p /var/lib/databend && \
     chown -R databend:databend /var/lib/databend
+VOLUME ["/var/lib/databend", "/opt/hadoop"]
 ENTRYPOINT ["/databend-query"]
