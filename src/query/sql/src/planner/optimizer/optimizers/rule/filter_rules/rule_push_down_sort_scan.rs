@@ -109,3 +109,9 @@ impl Rule for RulePushDownSortScan {
         &self.matchers
     }
 }
+
+impl Default for RulePushDownSortScan {
+    fn default() -> Self {
+        Self::new()
+    }
+}

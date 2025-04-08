@@ -106,3 +106,9 @@ impl Rule for RuleNormalizeScalarFilter {
         &self.matchers
     }
 }
+
+impl Default for RuleNormalizeScalarFilter {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -17,11 +17,13 @@ mod factory;
 mod filter_rules;
 mod join_rules;
 mod limit_rules;
-mod rewrite;
 #[allow(clippy::module_inception)]
 mod rule;
 mod rule_set;
+mod scalar_rules;
+mod sort_rules;
 mod transform_result;
+mod union_rules;
 mod utils;
 
 pub use agg_rules::*;
@@ -35,5 +37,8 @@ pub use rule::RulePtr;
 pub use rule::DEFAULT_REWRITE_RULES;
 pub use rule_set::AppliedRules;
 pub use rule_set::RuleSet;
+pub use scalar_rules::*;
+pub use sort_rules::*;
 pub use transform_result::TransformResult;
+pub use union_rules::*;
 pub use utils::constant;
