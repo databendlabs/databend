@@ -610,7 +610,11 @@ impl Operator for Join {
         // Try to use broadcast join
         if !matches!(
             self.join_type,
-            JoinType::Full | JoinType::RightAnti | JoinType::RightSemi | JoinType::LeftMark
+            JoinType::Right
+                | JoinType::Full
+                | JoinType::RightAnti
+                | JoinType::RightSemi
+                | JoinType::LeftMark
         ) {
             let settings = ctx.get_settings();
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
@@ -682,7 +686,8 @@ impl Operator for Join {
 
         if !matches!(
             self.join_type,
-            JoinType::Full
+            JoinType::Right
+                | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi
                 | JoinType::LeftMark
