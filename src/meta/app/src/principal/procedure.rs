@@ -19,8 +19,8 @@ use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_expression::types::DataType;
+use display_more::DisplaySliceExt;
 
 use crate::principal::procedure_id_ident::ProcedureIdIdent;
 use crate::principal::procedure_name_ident::ProcedureNameIdent;

@@ -16,7 +16,6 @@ use std::future::ready;
 use std::io;
 use std::time::Duration;
 
-use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
@@ -51,6 +50,7 @@ use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
+use display_more::DisplayUnixTimeStampExt;
 use futures::stream::TryStreamExt;
 use futures_util::future::BoxFuture;
 use futures_util::StreamExt;

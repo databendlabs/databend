@@ -17,7 +17,6 @@ use std::ops::Bound;
 use std::ops::RangeBounds;
 
 use databend_common_base::base::tokio::sync::oneshot;
-use databend_common_base::display::display_option::DisplayOptionExt;
 use databend_common_meta_raft_store::raft_log_v004;
 use databend_common_meta_raft_store::raft_log_v004::codec_wrapper::Cw;
 use databend_common_meta_raft_store::raft_log_v004::io_desc::IODesc;
@@ -36,6 +35,7 @@ use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::raft_types::TypeConfig;
 use databend_common_meta_types::raft_types::Vote;
 use deepsize::DeepSizeOf;
+use display_more::DisplayOptionExt;
 use itertools::Itertools;
 use log::debug;
 use log::info;
