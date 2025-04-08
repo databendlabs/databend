@@ -21,6 +21,7 @@ databend-common-meta-app-types = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
 derive_more = { workspace = true }
+display-more = { workspace = true }
 enumflags2 = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }

@@ -3025,7 +3025,6 @@ dependencies = [
  "bytemuck",
  "bytes",
  "bytesize",
- "chrono",
  "crc32fast",
  "ctrlc",
  "databend-common-building",
@@ -3503,6 +3502,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-exception",
+ "display-more",
  "jwt-simple",
  "serde",
  "serde_json",
@@ -3552,6 +3552,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
+ "display-more",
  "fastrace",
  "futures",
  "itertools 0.13.0",
@@ -3583,6 +3584,7 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
  "derive_more",
+ "display-more",
  "enumflags2",
  "hex",
  "itertools 0.13.0",
@@ -3686,9 +3688,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "databend-common-base",
  "databend-common-meta-app-types",
  "databend-common-meta-types",
+ "display-more",
  "fastrace",
  "futures-util",
  "log",
@@ -3735,6 +3737,7 @@ dependencies = [
  "databend-common-meta-types",
  "deepsize",
  "derive_more",
+ "display-more",
  "fastrace",
  "fs_extra",
  "futures",
@@ -3771,6 +3774,7 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
+ "display-more",
  "futures",
  "log",
  "pretty_assertions",
@@ -3828,13 +3832,13 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "databend-common-base",
  "databend-common-building",
  "databend-common-exception",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
  "deepsize",
  "derive_more",
+ "display-more",
  "futures-util",
  "log",
  "map-api",
@@ -5011,6 +5015,7 @@ dependencies = [
  "databend-common-tracing",
  "deepsize",
  "derive_more",
+ "display-more",
  "env_logger 0.11.5",
  "fastrace",
  "feature-set",
@@ -5805,6 +5810,15 @@ dependencies = [
  "libc",
  "redox_users",
  "winapi",
+]
+
+[[package]]
+name = "display-more"
+version = "0.1.1"
+source = "git+https://github.com/databendlabs/display-more?tag=v0.1.1#41a61e3b731cf740831662d8e158b0a088c9adb8"
+dependencies = [
+ "chrono",
+ "chrono-tz 0.8.6",
 ]
 
 [[package]]
