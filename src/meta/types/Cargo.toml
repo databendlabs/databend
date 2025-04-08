@@ -8,12 +8,12 @@ edition = { workspace = true }
 
 [dependencies]
 anyerror = { workspace = true }
-databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-tracing = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
+display-more = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 map-api = { workspace = true }

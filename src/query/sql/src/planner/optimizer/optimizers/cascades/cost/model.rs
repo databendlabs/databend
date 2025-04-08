@@ -18,8 +18,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::Cost;
-use super::CostModel;
+use crate::optimizer::cost::Cost;
+use crate::optimizer::cost::CostModel;
 use crate::optimizer::ir::MExpr;
 use crate::optimizer::ir::Memo;
 use crate::plans::ConstantTableScan;

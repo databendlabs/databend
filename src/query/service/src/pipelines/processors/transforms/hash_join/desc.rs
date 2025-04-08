@@ -14,6 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
+use databend_common_expression::Constant;
 use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -130,7 +131,7 @@ impl HashJoinDesc {
         // For RIGHT MARK join, we can't use is_true to cast filter into non_null boolean
         match expr {
             Ok(Some(expr)) => match expr {
-                Expr::Constant { ref scalar, .. } if !scalar.is_null() => {
+                Expr::Constant(Constant { ref scalar, .. }) if !scalar.is_null() => {
                     Ok(Some(cast_expr_to_non_null_boolean(expr)?))
                 }
                 _ => Ok(Some(expr)),

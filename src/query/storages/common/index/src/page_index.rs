@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -79,10 +80,13 @@ impl PageIndex {
         }
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(self.expr, Expr::Constant {
-            scalar: Scalar::Boolean(false),
-            ..
-        }))
+        Ok(!matches!(
+            self.expr,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
     }
 
     #[fastrace::trace]
@@ -192,9 +196,12 @@ impl PageIndex {
         );
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(new_expr, Expr::Constant {
-            scalar: Scalar::Boolean(false),
-            ..
-        }))
+        Ok(!matches!(
+            new_expr,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
     }
 }

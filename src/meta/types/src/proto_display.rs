@@ -16,9 +16,9 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
-use databend_common_base::display::display_option::DisplayOptionExt;
-use databend_common_base::display::display_slice::DisplaySliceExt;
-use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
+use display_more::DisplayOptionExt;
+use display_more::DisplaySliceExt;
+use display_more::DisplayUnixTimeStampExt;
 use num_traits::FromPrimitive;
 
 use crate::protobuf::boolean_expression::CombiningOperator;

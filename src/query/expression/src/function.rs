@@ -589,59 +589,52 @@ impl EvalContext<'_> {
     }
 
     pub fn render_error(
-        &self,
         span: Span,
+        errors: &Option<(MutableBitmap, String)>,
         params: &[Scalar],
         args: &[Value<AnyType>],
         func_name: &str,
         expr_name: &str,
         selection: Option<&[u32]>,
     ) -> Result<()> {
-        if self.suppress_error {
+        let Some((valids, error)) = errors else {
             return Ok(());
-        }
-        match &self.errors {
-            Some((valids, error)) => {
-                let first_error_row = match selection {
-                    None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
-                    Some(selection) if valids.len() == 1 => {
-                        if valids.get(0) || selection.is_empty() {
-                            return Ok(());
-                        }
+        };
 
-                        selection.first().map(|x| *x as usize).unwrap()
-                    }
-                    Some(selection) => {
-                        let Some(first_invalid) =
-                            selection.iter().find(|idx| !valids.get(**idx as usize))
-                        else {
-                            return Ok(());
-                        };
+        let first_error_row = match selection {
+            None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
+            Some(selection) if valids.len() == 1 => {
+                if valids.get(0) || selection.is_empty() {
+                    return Ok(());
+                }
 
-                        *first_invalid as usize
-                    }
-                };
-
-                let args = args
-                    .iter()
-                    .map(|arg| arg.index(first_error_row).unwrap().to_string())
-                    .join(", ");
-
-                let err_msg = if params.is_empty() {
-                    format!(
-                        "{error} while evaluating function `{func_name}({args})` in expr `{expr_name}`"
-                    )
-                } else {
-                    format!(
-                        "{error} while evaluating function `{func_name}({params})({args})` in expr `{expr_name}`",
-                        params = params.iter().join(", ")
-                    )
-                };
-
-                Err(ErrorCode::BadArguments(err_msg).set_span(span))
+                selection.first().map(|x| *x as usize).unwrap()
             }
-            None => Ok(()),
-        }
+            Some(selection) => {
+                let Some(first_invalid) = selection.iter().find(|idx| !valids.get(**idx as usize))
+                else {
+                    return Ok(());
+                };
+
+                *first_invalid as usize
+            }
+        };
+
+        let args = args
+            .iter()
+            .map(|arg| arg.index(first_error_row).unwrap().to_string())
+            .join(", ");
+
+        let err_msg = if params.is_empty() {
+            format!("{error} while evaluating function `{func_name}({args})` in expr `{expr_name}`")
+        } else {
+            format!(
+                    "{error} while evaluating function `{func_name}({params})({args})` in expr `{expr_name}`",
+                    params = params.iter().join(", ")
+                )
+        };
+
+        Err(ErrorCode::BadArguments(err_msg).set_span(span))
     }
 }
 

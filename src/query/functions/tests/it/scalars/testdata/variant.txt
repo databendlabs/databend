@@ -11,7 +11,7 @@ error:
   --> SQL:1:1
   |
 1 | parse_json('nuLL')
-  | ^^^^^^^^^^^^^^^^^^ expected ident, pos 3 while evaluating function `parse_json('nuLL')` in expr `parse_json()`, during run expr: `CAST('nuLL' AS Variant)`
+  | ^^^^^^^^^^^^^^^^^^ expected ident, pos 3 while evaluating function `parse_json('nuLL')` in expr `CAST('nuLL' AS Variant)`
 
 
 
@@ -28,7 +28,7 @@ error:
   --> SQL:1:1
   |
 1 | parse_json('  ')
-  | ^^^^^^^^^^^^^^^^ EOF while parsing a value, pos 2 while evaluating function `parse_json('  ')` in expr `parse_json()`, during run expr: `CAST('  ' AS Variant)`
+  | ^^^^^^^^^^^^^^^^ EOF while parsing a value, pos 2 while evaluating function `parse_json('  ')` in expr `CAST('  ' AS Variant)`
 
 
 
@@ -1550,7 +1550,7 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')` in expr `to_boolean()`, during run expr: `CAST(CAST('123' AS Variant) AS Boolean NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')` in expr `CAST(CAST('123' AS Variant) AS Boolean NULL)`
 
 
 
@@ -1558,7 +1558,7 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')` in expr `to_boolean()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS Boolean NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')` in expr `CAST(CAST('"abc"' AS Variant) AS Boolean NULL)`
 
 
 
@@ -1584,7 +1584,7 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('-123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')` in expr `to_uint64()`, during run expr: `CAST(CAST('-123' AS Variant) AS UInt64 NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')` in expr `CAST(CAST('-123' AS Variant) AS UInt64 NULL)`
 
 
 
@@ -1592,7 +1592,7 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')` in expr `to_uint64()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS UInt64 NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')` in expr `CAST(CAST('"abc"' AS Variant) AS UInt64 NULL)`
 
 
 
@@ -1618,7 +1618,7 @@ error:
   --> SQL:1:1
   |
 1 | to_int64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')` in expr `to_int64()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS Int64 NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')` in expr `CAST(CAST('"abc"' AS Variant) AS Int64 NULL)`
 
 
 
@@ -1635,7 +1635,7 @@ error:
   --> SQL:1:1
   |
 1 | to_float64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')` in expr `to_float64()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS Float64 NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')` in expr `CAST(CAST('"abc"' AS Variant) AS Float64 NULL)`
 
 
 
@@ -1661,7 +1661,7 @@ error:
   --> SQL:1:1
   |
 1 | to_date(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS Date NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` unexpected argument. while evaluating function `to_date('"abc"')` in expr `CAST(CAST('"abc"' AS Variant) AS Date NULL)`
 
 
 
@@ -1687,7 +1687,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp()`, during run expr: `CAST(CAST('"abc"' AS Variant) AS Timestamp NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `CAST(CAST('"abc"' AS Variant) AS Timestamp NULL)`
 
 
 

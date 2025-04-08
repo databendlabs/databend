@@ -61,6 +61,7 @@ use databend_common_compress::DecompressDecoder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::display::display_tuple_field_name;
+use databend_common_expression::expr;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
@@ -871,7 +872,7 @@ impl<'a> TypeChecker<'a> {
                                 ))
                                     .set_span(*span)
                             })?
-                            .1;
+                            .scalar;
                         new_params.push(constant);
                     }
                     let in_window = self.in_window_function;
@@ -945,7 +946,7 @@ impl<'a> TypeChecker<'a> {
                                 ))
                                 .set_span(*span)
                             })?
-                            .1;
+                            .scalar;
                         new_params.push(constant);
                     }
                     self.resolve_function(*span, func_name, new_params, &args)?
@@ -1361,13 +1362,12 @@ impl<'a> TypeChecker<'a> {
                 let box (expr, _) = self.resolve(expr)?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                if let EExpr::Constant { scalar, .. } = expr {
-                    Ok(Some(scalar))
-                } else {
-                    Err(ErrorCode::SemanticError(
+                match expr.into_constant() {
+                    Ok(expr::Constant { scalar, .. }) => Ok(Some(scalar)),
+                    Err(expr) => Err(ErrorCode::SemanticError(
                         "Only constant is allowed in RANGE offset".to_string(),
                     )
-                    .set_span(expr.span()))
+                    .set_span(expr.span())),
                 }
             }
             _ => Ok(None),
@@ -1566,7 +1566,7 @@ impl<'a> TypeChecker<'a> {
         let offset = if args.len() >= 2 {
             let off = args[1].as_expr()?;
             match off {
-                EExpr::Constant { .. } => Some(check_number::<_, i64>(
+                EExpr::Constant(_) => Some(check_number::<i64, _>(
                     off.span(),
                     &self.func_ctx,
                     &off,
@@ -1665,7 +1665,7 @@ impl<'a> TypeChecker<'a> {
                 let return_type = arg_types[0].wrap_nullable();
                 let n_expr = args[1].as_expr()?;
                 let n = match n_expr {
-                    EExpr::Constant { .. } => check_number::<_, u64>(
+                    EExpr::Constant(_) => check_number::<u64, _>(
                         n_expr.span(),
                         &self.func_ctx,
                         &n_expr,
@@ -1702,8 +1702,8 @@ impl<'a> TypeChecker<'a> {
         let n_expr = args[0].as_expr()?;
         let return_type = DataType::Number(NumberDataType::UInt64);
         let n = match n_expr {
-            EExpr::Constant { .. } => {
-                check_number::<_, u64>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?
+            EExpr::Constant(_) => {
+                check_number::<u64, _>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?
             }
             _ => {
                 return Err(ErrorCode::InvalidArgument(
@@ -2873,7 +2873,7 @@ impl<'a> TypeChecker<'a> {
                 let scalar_expr = &arguments[1];
                 let expr = type_check::check(scalar_expr, &BUILTIN_FUNCTIONS)?;
 
-                let scale = check_number::<_, i64>(
+                let scale: i64 = check_number(
                     expr.span(),
                     &FunctionContext::default(),
                     &expr,
@@ -2903,9 +2903,9 @@ impl<'a> TypeChecker<'a> {
         // Note: check function may reorder the args
 
         let mut folded_args = match &expr {
-            EExpr::FunctionCall {
+            expr::Expr::FunctionCall(expr::FunctionCall {
                 args: checked_args, ..
-            } => {
+            }) => {
                 let mut folded_args = Vec::with_capacity(args.len());
                 for (checked_arg, arg) in checked_args.iter().zip(args.iter()) {
                     match self.try_fold_constant(checked_arg, true) {
@@ -2930,12 +2930,12 @@ impl<'a> TypeChecker<'a> {
             return Ok(constant);
         }
 
-        if let EExpr::Cast {
+        if let expr::Expr::Cast(expr::Cast {
             span,
             is_try,
             dest_type,
             ..
-        } = expr
+        }) = expr
         {
             assert_eq!(folded_args.len(), 1);
             return Ok(Box::new((
@@ -3649,14 +3649,11 @@ impl<'a> TypeChecker<'a> {
                         let box (scalar, _) = self.resolve(args[0])?;
 
                         let expr = scalar.as_expr()?;
-                        match expr {
-                            EExpr::Constant { .. } => check_number::<_, i64>(
-                                span,
-                                &self.func_ctx,
-                                &expr,
-                                &BUILTIN_FUNCTIONS,
-                            )?,
-                            _ => {
+                        match expr.as_constant() {
+                            Some(_) => {
+                                check_number(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
+                            }
+                            None => {
                                 return Some(Err(ErrorCode::BadArguments(
                                     "last_query_id argument only support constant",
                                 )
@@ -5444,7 +5441,7 @@ impl<'a> TypeChecker<'a> {
         enable_shrink: bool,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if expr.is_deterministic(&BUILTIN_FUNCTIONS) && enable_shrink {
-            if let (EExpr::Constant { scalar, .. }, _) =
+            if let (EExpr::Constant(expr::Constant { scalar, .. }), _) =
                 ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
             {
                 let scalar = if enable_shrink {

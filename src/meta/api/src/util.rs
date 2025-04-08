@@ -16,7 +16,6 @@ use std::any::type_name;
 use std::fmt::Display;
 use std::time::Duration;
 
-use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
@@ -41,6 +40,7 @@ use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_proto_conv::FromToProto;
+use display_more::DisplaySliceExt;
 use log::debug;
 
 use crate::kv_app_error::KVAppError;

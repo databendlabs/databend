@@ -180,7 +180,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                         &FunctionContext::default(),
                         &BUILTIN_FUNCTIONS,
                     );
-                    expr.into_constant().unwrap().1
+                    expr.into_constant().unwrap().scalar
                 })
                 .collect(),
         },
