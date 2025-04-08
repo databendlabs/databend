@@ -26,6 +26,7 @@ use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::Cast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
@@ -217,12 +218,13 @@ pub async fn do_refresh_virtual_column(
         )?;
 
         if virtual_column_field.data_type.remove_nullable() != TableDataType::Variant {
-            virtual_expr = Expr::Cast {
+            virtual_expr = Cast {
                 span: None,
                 is_try: true,
                 expr: Box::new(virtual_expr),
                 dest_type: (&virtual_column_field.data_type).into(),
             }
+            .into();
         }
         let virtual_field = TableField::new(
             &virtual_column_field.expr,

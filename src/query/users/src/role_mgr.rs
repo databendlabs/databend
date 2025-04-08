@@ -84,13 +84,13 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_ownerships(
+    pub async fn list_ownerships(
         &self,
         tenant: &Tenant,
     ) -> Result<HashMap<OwnershipObject, String>> {
         let seq_owns = self
             .role_api(tenant)
-            .get_ownerships()
+            .list_ownerships()
             .await
             .map_err(|e| e.add_message_back("(while get ownerships)."))?;
 
@@ -172,7 +172,7 @@ impl UserApiProvider {
         if let Some(owner) = ownership {
             // if object has ownership, but the owner role is not exists, set owner role to ACCOUNT_ADMIN,
             // only account_admin can access this object.
-            // Note: get_ownerships no need to do this check.
+            // Note: list_ownerships no need to do this check.
             // Because this can cause system.table queries to slow down
             // The intention is that the account admin can grant ownership.
             // So system.tables will display dropped role. It's by design.

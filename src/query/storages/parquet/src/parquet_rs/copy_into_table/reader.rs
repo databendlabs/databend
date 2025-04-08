@@ -19,7 +19,7 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::Expr;
+use databend_common_expression::expr::*;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::NullAs;
@@ -100,11 +100,11 @@ impl RowGroupReaderForCopy {
             .collect::<HashMap<_, _>>();
         for expr in output_projection.iter_mut() {
             match expr {
-                Expr::ColumnRef { id, .. } => *id = mapping[id],
-                Expr::Cast {
-                    expr: box Expr::ColumnRef { id, .. },
+                Expr::ColumnRef(ColumnRef { id, .. }) => *id = mapping[id],
+                Expr::Cast(Cast {
+                    expr: box Expr::ColumnRef(ColumnRef { id, .. }),
                     ..
-                } => *id = mapping[id],
+                }) => *id = mapping[id],
                 _ => {}
             }
         }

@@ -381,6 +381,18 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
+
+                let mut is_null_equal = Vec::new();
+                for (i, (l, r)) in left_conditions
+                    .iter()
+                    .zip(right_conditions.iter())
+                    .enumerate()
+                {
+                    if l.data_type()?.is_nullable() || r.data_type()?.is_nullable() {
+                        is_null_equal.push(i);
+                    }
+                }
+
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
                 let right_condition = ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -403,6 +415,7 @@ impl SubqueryRewriter {
                     params: vec![],
                     arguments: vec![child_expr, right_condition],
                 })];
+
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
@@ -412,11 +425,12 @@ impl SubqueryRewriter {
                         None,
                     )
                 };
+
                 let mark_join = Join {
                     equi_conditions: JoinEquiCondition::new_conditions(
                         right_conditions,
                         left_conditions,
-                        vec![],
+                        is_null_equal,
                     ),
                     non_equi_conditions,
                     join_type: JoinType::RightMark,

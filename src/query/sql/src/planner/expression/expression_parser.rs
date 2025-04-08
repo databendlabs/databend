@@ -27,8 +27,10 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Constant;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionCall;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
@@ -385,7 +387,7 @@ pub fn parse_cluster_keys(
         let inner_type = expr.data_type().remove_nullable();
         let mut should_wrapper = false;
         if inner_type == DataType::String {
-            if let Expr::FunctionCall { function, .. } = &expr {
+            if let Expr::FunctionCall(FunctionCall { function, .. }) = &expr {
                 should_wrapper = function.signature.name != "substr";
             } else {
                 should_wrapper = true;
@@ -400,16 +402,18 @@ pub fn parse_cluster_keys(
                 &[],
                 &[
                     expr,
-                    Expr::Constant {
+                    Constant {
                         span: None,
                         scalar: Scalar::Number(1i64.into()),
                         data_type: DataType::Number(NumberDataType::Int64),
-                    },
-                    Expr::Constant {
+                    }
+                    .into(),
+                    Constant {
                         span: None,
                         scalar: Scalar::Number(8u64.into()),
                         data_type: DataType::Number(NumberDataType::UInt64),
-                    },
+                    }
+                    .into(),
                 ],
                 &BUILTIN_FUNCTIONS,
             )?

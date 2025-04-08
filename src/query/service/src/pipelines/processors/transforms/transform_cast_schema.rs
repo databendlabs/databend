@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
@@ -50,13 +51,13 @@ where Self: Transform
             .iter()
             .zip(insert_schema.fields().iter().enumerate())
             .map(|(from, (index, to))| {
-                let expr = Expr::ColumnRef {
+                let expr = ColumnRef {
                     span: None,
                     id: index,
                     data_type: from.data_type().clone(),
                     display_name: from.name().clone(),
                 };
-                check_cast(None, false, expr, to.data_type(), &BUILTIN_FUNCTIONS)
+                check_cast(None, false, expr.into(), to.data_type(), &BUILTIN_FUNCTIONS)
             })
             .collect::<Result<Vec<_>>>()?;
 

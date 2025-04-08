@@ -13,14 +13,8 @@
 // limitations under the License.
 
 mod cascade;
-mod explore_rules;
-mod scheduler;
-mod tasks;
+pub mod cost;
+pub mod rule;
+pub mod tasks;
 
 pub use cascade::CascadesOptimizer;
-pub use scheduler::Scheduler;
-pub use scheduler::DEFAULT_TASK_LIMIT;
-pub use tasks::ExploreGroupTask;
-pub use tasks::OptimizeGroupTask;
-pub use tasks::SharedCounter;
-pub use tasks::Task;

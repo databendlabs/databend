@@ -39,6 +39,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -1149,11 +1150,11 @@ impl Processor for NativeDeserializeDataTransform {
 ///
 /// This method may be used by `update_topk_heap` and `read_and_check_bloom_runtime_filter`.
 fn new_dummy_filter_executor(func_ctx: FunctionContext) -> FilterExecutor {
-    let dummy_expr = Expr::Constant {
+    let dummy_expr = Expr::Constant(Constant {
         span: None,
         scalar: Scalar::Boolean(true),
         data_type: DataType::Boolean,
-    };
+    });
     // TODO: specify the capacity (max_block_size) of the selection.
     FilterExecutor::new(
         dummy_expr,

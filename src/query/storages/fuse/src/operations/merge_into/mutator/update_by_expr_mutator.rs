@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
@@ -63,11 +64,11 @@ impl UpdateByExprMutator {
     }
 
     pub fn update_by_expr(&self, data_block: DataBlock) -> Result<DataBlock> {
-        let const_expr = Expr::Constant {
+        let const_expr = Expr::Constant(Constant {
             span: None,
             scalar: databend_common_expression::Scalar::Boolean(true),
             data_type: DataType::Boolean,
-        };
+        });
         let mut expr = if self.expr.is_none() {
             const_expr
         } else {

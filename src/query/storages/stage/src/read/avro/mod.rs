@@ -16,5 +16,6 @@ mod avro_to_jsonb;
 mod block_builder_processor;
 mod decoder;
 mod pipeline;
+mod schema_match;
 
 pub use pipeline::AvroReadPipelineBuilder;

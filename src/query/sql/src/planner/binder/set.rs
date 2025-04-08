@@ -19,6 +19,7 @@ use databend_common_ast::ast::SetValues;
 use databend_common_ast::ast::Statement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
@@ -68,16 +69,10 @@ impl Binder {
                             &self.ctx.get_function_context()?,
                             &BUILTIN_FUNCTIONS,
                         );
-                        match new_expr {
-                            databend_common_expression::Expr::Constant { scalar, .. } => {
-                                results.push(scalar);
-                            }
-                            _ => {
-                                return Err(ErrorCode::SemanticError(
-                                    "value must be constant value",
-                                ))
-                            }
-                        }
+                        let Constant { scalar, .. } = new_expr.into_constant().map_err(|_| {
+                            ErrorCode::SemanticError("value must be constant value")
+                        })?;
+                        results.push(scalar);
                     }
                     SetScalarsOrQuery::VarValue(results)
                 }

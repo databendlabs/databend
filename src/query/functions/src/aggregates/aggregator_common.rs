@@ -23,9 +23,10 @@ use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Number;
+use databend_common_expression::types::F64;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Expr;
+use databend_common_expression::Constant;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
@@ -210,14 +211,46 @@ pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result
 }
 
 pub fn extract_number_param<T: Number>(param: Scalar) -> Result<T> {
-    check_number::<_, T>(
+    check_number::<T, usize>(
         None,
         &FunctionContext::default(),
-        &Expr::<usize>::Constant {
+        &Constant {
             span: None,
             data_type: param.as_ref().infer_data_type(),
             scalar: param,
-        },
+        }
+        .into(),
         &BUILTIN_FUNCTIONS,
     )
+}
+
+pub(crate) fn get_levels(params: &[Scalar]) -> Result<Vec<f64>> {
+    let levels = match params {
+        [] => vec![0.5f64],
+        [param] => {
+            let level = extract_number_param::<F64>(param.clone())?.0;
+            if !(0.0..=1.0).contains(&level) {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "level range between [0, 1], got: {:?}",
+                    level
+                )));
+            }
+            vec![level]
+        }
+        params => {
+            let mut levels = Vec::with_capacity(params.len());
+            for param in params {
+                let level = extract_number_param::<F64>(param.clone())?.0;
+                if !(0.0..=1.0).contains(&level) {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "level range between [0, 1], got: {:?} in levels",
+                        level
+                    )));
+                }
+                levels.push(level);
+            }
+            levels
+        }
+    };
+    Ok(levels)
 }

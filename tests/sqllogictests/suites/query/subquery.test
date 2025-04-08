@@ -1,6 +1,41 @@
 statement ok
-use default
+create or replace database d_subquery;
 
+statement ok
+use d_subquery;
+
+
+statement ok
+CREATE OR REPLACE TABLE t1 (a int);
+
+statement ok
+CREATE OR REPLACE TABLE t2 (a int);
+
+statement ok
+INSERT INTO t1 VALUES (1), (2), (NULL);
+
+statement ok
+INSERT INTO t2 VALUES (2), (NULL);
+
+
+query III rowsort
+SELECT t1.a, EXISTS(SELECT 1 FROM t2 WHERE t2.a = t1.a), not EXISTS(SELECT 1 FROM t2 WHERE t2.a = t1.a)  AS has_match
+FROM t1;
+----
+1 0 1
+2 1 0
+NULL 0 1
+
+query III rowsort
+SELECT
+      t1.a,
+      t1.a IN (SELECT a FROM t2) AS in_match,
+      t1.a NOT IN (SELECT a FROM t2) AS not_in_match
+FROM t1;
+----
+1 NULL NULL
+2 1 0
+NULL 1 0
 
 query III
 SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
@@ -623,12 +658,8 @@ order by o_id;
 2 80 4 1
 1 90 6 1
 
-statement ok
-drop table o
 
 
-statement ok
-drop table c
 
 query I
 select * from (SELECT number AS a FROM numbers(10)) x where exists (select 1::UInt64 b) ORDER BY a
@@ -760,11 +791,9 @@ FROM t3 WHERE a + 2 > b ORDER BY count, a;
 7 20 11
 
 # https://github.com/datafuselabs/databend/issues/16099
-statement ok
-drop table if exists t4
 
 statement ok
-create table t4(id int, name string, payload json);
+create or replace table t4(id int, name string, payload json);
 
 statement ok
 insert into t4 values(1, 'test', '{"test":11,"test2":22}'),(2, 'test', '{"test":31,"test2":42}');
@@ -780,17 +809,9 @@ SELECT * FROM t4 WHERE payload:test IN (SELECT payload:test2 FROM t4 where name 
 ----
 
 
-statement ok
-drop table t1
 
-statement ok
-drop table t2
 
-statement ok
-drop table t3
 
-statement ok
-drop table t4
 
 # https://github.com/datafuselabs/databend/pull/14353
 statement ok
@@ -833,20 +854,10 @@ FROM
   transaction_history th
 ----
 
-statement ok
-drop table property_records;
+
 
 statement ok
-drop table mortgage_records;
-
-statement ok
-drop table transaction_history;
-
-statement ok
-drop table if exists t1;
-
-statement ok
-create table t1(a int);
+create or replace table t1(a int);
 
 statement ok
 insert into t1 values(1), (2), (3);
@@ -854,8 +865,6 @@ insert into t1 values(1), (2), (3);
 query error 1001.*Scalar subquery can't return more than one row
 select (select sum(a) from t1 where t1.a >= t2.a group by t1.a) from t1 as t2;
 
-statement ok
-drop table t1;
 
 
 statement ok
@@ -872,14 +881,8 @@ select i, exists(select * from t where i > 10) from t;
 3 0
 NULL 0
 
-statement ok
-drop table if exists t;
 
-statement ok
-drop table if exists push_log;
 
-statement ok
-drop table if exists merge_log;
 
 statement ok
 create or replace TABLE `push_log` (
@@ -913,11 +916,7 @@ FROM (
 ) s;
 ----
 
-statement ok
-drop table push_log;
 
-statement ok
-drop table merge_log;
 
 # The test indicates that we need to eliminate the duplicated rows in outer table when flattening the subquery.
 # Or there'll result in a wrong result due to more datas generated.
@@ -942,8 +941,6 @@ group by input_date order by input_date;
 2024-01-01 300.00 300.00
 2024-01-02 1200.00 1500.00
 
-statement ok
-drop table test_group;
 
 # https://github.com/databendlabs/databend/issues/17476
 statement ok
@@ -1034,14 +1031,8 @@ ORDER BY employee_id;
 ----
 1 1
 
-statement ok
-drop table employees;
 
-statement ok
-drop table departments;
 
-statement ok
-drop table salaries;
 
 statement ok
 create or replace table tab1 as select * from (values (1), (2), (3)) tab(n);
@@ -1145,10 +1136,4 @@ where t.total_m = any (
 1 30
 
 statement ok
-drop table tab1;
-
-statement ok
-drop table tab2;
-
-statement ok
-drop table tab3;
+drop database d_subquery;

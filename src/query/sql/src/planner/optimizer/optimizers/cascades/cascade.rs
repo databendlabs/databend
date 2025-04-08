@@ -19,21 +19,22 @@ use databend_common_exception::Result;
 use log::debug;
 use log::info;
 
-use super::explore_rules::get_explore_rule_set;
 use crate::optimizer::cost::CostModel;
-use crate::optimizer::cost::DefaultCostModel;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::optimizers::cascades::OptimizeGroupTask;
-use crate::optimizer::optimizers::cascades::Scheduler;
-use crate::optimizer::optimizers::cascades::Task;
-use crate::optimizer::optimizers::cascades::DEFAULT_TASK_LIMIT;
+use crate::optimizer::optimizers::cascades::cost::DefaultCostModel;
+use crate::optimizer::optimizers::cascades::rule::StrategyFactory;
+use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupTask;
+use crate::optimizer::optimizers::cascades::tasks::Scheduler;
+use crate::optimizer::optimizers::cascades::tasks::Task;
+use crate::optimizer::optimizers::cascades::tasks::DEFAULT_TASK_LIMIT;
 use crate::optimizer::optimizers::distributed::DistributedOptimizer;
 use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::optimizers::rule::RuleSet;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::IndexType;
 
@@ -51,15 +52,10 @@ impl CascadesOptimizer {
         let table_ctx = opt_ctx.get_table_ctx();
         let settings = table_ctx.get_settings();
 
-        // Determine rule set
-        let explore_rule_set = if !settings.get_enable_cbo()? {
-            RuleSet::create()
-        } else {
-            // Use dphyp optimization flag or join reorder setting
-            let skip_join_reorder = opt_ctx.get_flag("dphyp_optimized")
-                || unsafe { settings.get_disable_join_reorder()? };
-            get_explore_rule_set(skip_join_reorder)
-        };
+        // Create a default rule set initially
+        // This is just a placeholder - the actual rule set will be determined at runtime
+        // in the optimize_with_cascade method based on current flag values
+        let explore_rule_set = RuleSet::create();
 
         // Build cost model
         let cost_model = Box::new(
@@ -88,7 +84,7 @@ impl CascadesOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<SExpr> {
         let opt_ctx = self.opt_ctx.clone();
 
         // Try to optimize using the internal optimizer
@@ -119,7 +115,7 @@ impl CascadesOptimizer {
                     distributed_optimizer.optimize(&s_expr)?
                 } else {
                     // Otherwise return the original expression
-                    s_expr
+                    s_expr.clone()
                 }
             }
         };
@@ -128,6 +124,24 @@ impl CascadesOptimizer {
     }
 
     fn optimize_internal(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        // Update rule set based on current flags
+        // This ensures we use the most up-to-date flag values, regardless of when the optimizer was created
+        let table_ctx = self.opt_ctx.get_table_ctx();
+        let settings = table_ctx.get_settings();
+
+        // Determine the appropriate rule set at runtime
+        // This is critical for pipeline execution where optimizers are created before all flags are set
+        if settings.get_enable_cbo()? {
+            // Check if DPhyp has already performed join reordering
+            // The "dphyp_optimized" flag is set by the DPhyp optimizer when it runs
+            // In pipeline execution, this flag will be set before CascadesOptimizer runs
+            let use_optimized_join_order = self.opt_ctx.get_flag("dphyp_optimized")
+                || unsafe { settings.get_disable_join_reorder()? };
+
+            let rule_strategy = StrategyFactory::create_strategy(use_optimized_join_order);
+            self.explore_rule_set = rule_strategy.create_rule_set();
+        }
+
         self.init(s_expr)?;
 
         debug!("Init memo:\n{}", self.memo.display()?);
@@ -227,5 +241,20 @@ impl CascadesOptimizer {
         let result = SExpr::create(m_expr.plan.clone(), children, None, None, None);
 
         Ok(result)
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for CascadesOptimizer {
+    fn name(&self) -> &'static str {
+        "CascadesOptimizer"
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_sync(s_expr.clone())
+    }
+
+    fn memo(&self) -> Option<&Memo> {
+        Some(&self.memo)
     }
 }

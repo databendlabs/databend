@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
+use crate::expr::*;
 use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectExpr;
 use crate::filter::SelectOp;
@@ -466,12 +467,12 @@ impl<'a> Selector<'a> {
             &select_strategy,
         );
         let (result, data_type) = match expr {
-            Expr::FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                 function,
                 args,
                 generics,
                 ..
-            } if function.signature.name == "if" => {
+            }) if function.signature.name == "if" => {
                 let mut eval_options = EvaluateOptions::new(selection);
 
                 let result = self
@@ -482,7 +483,7 @@ impl<'a> Selector<'a> {
                     .remove_generics_data_type(generics, &function.signature.return_type);
                 (result, data_type)
             }
-            Expr::FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                 span,
                 id,
                 function,
@@ -490,7 +491,7 @@ impl<'a> Selector<'a> {
                 args,
                 return_type,
                 ..
-            } => {
+            }) => {
                 debug_assert!(
                     matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean)),
                     "{} return {} not boolean",
@@ -521,25 +522,28 @@ impl<'a> Selector<'a> {
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(&args, &mut ctx);
-                ctx.render_error(
-                    *span,
-                    id.params(),
-                    &args,
-                    &function.signature.name,
-                    &expr.sql_display(),
-                    selection,
-                )?;
+                if !ctx.suppress_error {
+                    EvalContext::render_error(
+                        *span,
+                        &ctx.errors,
+                        id.params(),
+                        &args,
+                        &function.signature.name,
+                        &expr.sql_display(),
+                        selection,
+                    )?;
+                }
                 let data_type = self
                     .evaluator
                     .remove_generics_data_type(generics, &function.signature.return_type);
                 (result, data_type)
             }
-            Expr::Cast {
+            Expr::Cast(Cast {
                 span,
                 is_try,
                 expr,
                 dest_type,
-            } => {
+            }) => {
                 let selection = self.selection(
                     true_selection,
                     false_selection.0,
@@ -549,28 +553,30 @@ impl<'a> Selector<'a> {
                 );
                 let mut eval_options = EvaluateOptions::new(selection);
                 let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
+                let src_type = expr.data_type();
                 let result = if *is_try {
                     self.evaluator
-                        .run_try_cast(*span, expr.data_type(), dest_type, value)?
+                        .run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
                 } else {
                     self.evaluator.run_cast(
                         *span,
-                        expr.data_type(),
+                        src_type,
                         dest_type,
                         value,
                         None,
+                        &|| expr.sql_display(),
                         &mut eval_options,
                     )?
                 };
                 (result, dest_type.clone())
             }
-            Expr::LambdaFunctionCall {
+            Expr::LambdaFunctionCall(LambdaFunctionCall {
                 name,
                 args,
                 lambda_expr,
                 return_type,
                 ..
-            } => {
+            }) => {
                 let selection = self.selection(
                     true_selection,
                     false_selection.0,

@@ -27,6 +27,8 @@ use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::*;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -512,10 +514,10 @@ fn eval_index_expr(
         .unwrap();
     let result =
         match ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0 {
-            Expr::Constant {
+            Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
-            } => FilterEvalResult::MustFalse,
+            }) => FilterEvalResult::MustFalse,
             _ => FilterEvalResult::Uncertain,
         };
     let domains = BTreeMap::from_iter(domains);
@@ -540,17 +542,17 @@ fn eval_index(
         "eq",
         &[],
         &[
-            Expr::ColumnRef {
+            Expr::ColumnRef(ColumnRef {
                 span: None,
                 id: col_name.to_string(),
                 data_type: ty.clone(),
                 display_name: col_name.to_string(),
-            },
-            Expr::Constant {
+            }),
+            Expr::Constant(Constant {
                 span: None,
                 scalar: val,
                 data_type: ty,
-            },
+            }),
         ],
         &BUILTIN_FUNCTIONS,
     )
@@ -579,27 +581,27 @@ fn eval_map_index(
         "get",
         &[],
         &[
-            Expr::ColumnRef {
+            Expr::ColumnRef(ColumnRef {
                 span: None,
                 id: col_name.to_string(),
                 data_type: map_ty,
                 display_name: col_name.to_string(),
-            },
-            Expr::Constant {
+            }),
+            Expr::Constant(Constant {
                 span: None,
                 scalar: key,
                 data_type: key_ty,
-            },
+            }),
         ],
         &BUILTIN_FUNCTIONS,
     )
     .unwrap();
 
-    let const_expr = Expr::Constant {
+    let const_expr = Expr::Constant(Constant {
         span: None,
         scalar: val,
         data_type: ty,
-    };
+    });
 
     let eq_expr =
         check_function(None, "eq", &[], &[get_expr, const_expr], &BUILTIN_FUNCTIONS).unwrap();

@@ -230,7 +230,7 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
             }
         }
         let join_prop = JoinProperty::new(&left_prop.output_columns, &right_prop.output_columns);
-        let infer_filter = InferFilterOptimizer::new(Some(join_prop));
+        let mut infer_filter = InferFilterOptimizer::new(Some(join_prop));
         push_down_predicates = infer_filter.optimize(push_down_predicates)?;
     }
 

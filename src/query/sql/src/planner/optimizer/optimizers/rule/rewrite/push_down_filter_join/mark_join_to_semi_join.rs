@@ -25,9 +25,11 @@ use crate::ScalarExpr;
 pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
     let mut filter: Filter = s_expr.plan().clone().try_into()?;
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
+
     let has_disjunction = filter.predicates.iter().any(
         |predicate| matches!(predicate, ScalarExpr::FunctionCall(func) if func.func_name == "or"),
     );
+
     if !join.join_type.is_mark_join() || has_disjunction {
         return Ok((s_expr.clone(), false));
     }
@@ -62,6 +64,11 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
         JoinType::RightMark => JoinType::LeftSemi,
         _ => unreachable!(),
     };
+
+    // clear is null equal sign
+    join.equi_conditions.iter_mut().for_each(|c| {
+        c.is_null_equal = false;
+    });
 
     let s_join_expr = s_expr.child(0)?;
     let mut result = SExpr::create_binary(
