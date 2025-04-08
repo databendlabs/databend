@@ -20,10 +20,10 @@ use crate::BATCH_SIZE;
 /// ProbeState is the state to probe HT
 /// It could be reuse during multiple probe process
 pub struct ProbeState {
-    pub group_hashes: Box<[u64; BATCH_SIZE]>,
-    pub addresses: Box<[*const u8; BATCH_SIZE]>,
-    pub page_index: Box<[usize; BATCH_SIZE]>,
-    pub state_places: Box<[StateAddr; BATCH_SIZE]>,
+    pub group_hashes: Vec<u64>,
+    pub addresses: Vec<*const u8>,
+    pub page_index: Vec<usize>,
+    pub state_places: Vec<StateAddr>,
     pub group_compare_vector: SelectVector,
     pub no_match_vector: SelectVector,
     pub empty_vector: SelectVector,
@@ -34,29 +34,13 @@ pub struct ProbeState {
     pub partition_count: Vec<usize>,
 }
 
-// https://github.com/rust-lang/rust/issues/53827#issuecomment-576450631
-macro_rules! box_array {
-    ($val:expr ; $len:expr) => {{
-        // Use a generic function so that the pointer cast remains type-safe
-        fn vec_to_boxed_array<T>(vec: Vec<T>) -> Box<[T; $len]> {
-            let boxed_slice = vec.into_boxed_slice();
-
-            let ptr = ::std::boxed::Box::into_raw(boxed_slice) as *mut [T; $len];
-
-            unsafe { Box::from_raw(ptr) }
-        }
-
-        vec_to_boxed_array(vec![$val; $len])
-    }};
-}
-
 impl Default for ProbeState {
     fn default() -> Self {
         Self {
-            group_hashes: box_array!(0_u64; BATCH_SIZE),
-            addresses: box_array!(std::ptr::null::<u8>(); BATCH_SIZE),
-            page_index: box_array!(0; BATCH_SIZE),
-            state_places: box_array!(StateAddr::new(0); BATCH_SIZE),
+            group_hashes: vec![0_u64; BATCH_SIZE],
+            addresses: vec![std::ptr::null::<u8>(); BATCH_SIZE],
+            page_index: vec![0; BATCH_SIZE],
+            state_places: vec![StateAddr::new(0); BATCH_SIZE],
             group_compare_vector: new_sel(),
             no_match_vector: new_sel(),
             empty_vector: new_sel(),

@@ -38,11 +38,10 @@ pub use payload::*;
 pub use payload_flush::*;
 pub use probe_state::*;
 
-pub type SelectVector = Box<[usize; BATCH_SIZE]>;
+pub type SelectVector = Vec<usize>;
 
 pub fn new_sel() -> SelectVector {
-    let ptr = Box::into_raw(vec![0; BATCH_SIZE].into_boxed_slice());
-    unsafe { Box::from_raw(ptr as *mut [usize; BATCH_SIZE]) }
+    vec![0; BATCH_SIZE]
 }
 
 // A batch size to probe, flush, repartition, etc.
