@@ -24,7 +24,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::decimal::DecimalType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::MutableBitmap;
@@ -33,8 +32,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::BinaryWrite;
@@ -43,6 +40,7 @@ use roaring::RoaringTreemap;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::extract_number_param;
 use super::StateAddr;
 use super::StateAddrs;
 use crate::aggregates::assert_arguments;
@@ -52,7 +50,6 @@ use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::with_simple_no_number_mapped_type;
-use crate::BUILTIN_FUNCTIONS;
 
 #[derive(Clone)]
 struct AggregateBitmapFunction<OP, AGG> {
@@ -636,12 +633,7 @@ fn extract_params<T: ValueType>(
 fn extract_number_params<N: Number>(params: Vec<Scalar>) -> Result<Vec<N>> {
     let mut result = Vec::with_capacity(params.len());
     for param in &params {
-        let val = check_number::<N, usize>(
-            None,
-            &FunctionContext::default(),
-            &Expr::constant(param.clone(), None),
-            &BUILTIN_FUNCTIONS,
-        )?;
+        let val = extract_number_param::<N>(param.clone())?;
         result.push(val);
     }
     Ok(result)

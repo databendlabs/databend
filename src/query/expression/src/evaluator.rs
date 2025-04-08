@@ -51,15 +51,11 @@ use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
 use crate::BlockEntry;
-use crate::Cast;
 use crate::ColumnIndex;
-use crate::Function;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionEval;
-use crate::FunctionID;
 use crate::FunctionRegistry;
-use crate::LambdaFunctionCall;
 use crate::RemoteExpr;
 use crate::ScalarRef;
 
@@ -163,9 +159,9 @@ impl<'a> Evaluator<'a> {
         self.check_expr(expr);
 
         let result = match expr {
-            Expr::Constant(Constant { scalar, .. }) => Ok(Value::Scalar(scalar.clone())),
+            Expr::Constant(Constant { scalar, .. }) => Value::Scalar(scalar.clone()),
             Expr::ColumnRef(ColumnRef { id, .. }) => {
-                Ok(self.data_block.get_by_offset(*id).value.clone())
+                self.data_block.get_by_offset(*id).value.clone()
             }
             Expr::Cast(Cast {
                 span,
@@ -176,7 +172,7 @@ impl<'a> Evaluator<'a> {
                 let value = self.partial_run(inner, validity.clone(), options)?;
                 let src_type = inner.data_type();
                 if *is_try {
-                    self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())
+                    self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
                 } else {
                     self.run_cast(
                         *span,
@@ -186,7 +182,7 @@ impl<'a> Evaluator<'a> {
                         validity,
                         &|| expr.sql_display(),
                         options,
-                    )
+                    )?
                 }
             }
             Expr::FunctionCall(FunctionCall {
@@ -195,34 +191,17 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             }) if function.signature.name == "if" => {
-                self.eval_if(args, generics, validity, options)
+                self.eval_if(args, generics, validity, options)?
             }
 
             Expr::FunctionCall(FunctionCall { function, args, .. })
                 if function.signature.name == "and_filters" =>
             {
-                self.eval_and_filters(args, validity, options)
+                self.eval_and_filters(args, validity, options)?
             }
 
-            Expr::FunctionCall(FunctionCall {
-                span,
-                id,
-                function,
-                args,
-                generics,
-                ..
-            }) => {
-                let result = self.run_call(
-                    *span,
-                    id,
-                    function,
-                    args,
-                    generics,
-                    validity,
-                    &|| expr.sql_display(),
-                    options,
-                )?;
-                Ok(result)
+            Expr::FunctionCall(call) => {
+                self.eval_common_call(call, validity, &|| expr.sql_display(), options)?
             }
             Expr::LambdaFunctionCall(LambdaFunctionCall {
                 name,
@@ -244,12 +223,12 @@ impl<'a> Evaluator<'a> {
                     })
                     .all_equal());
 
-                self.run_lambda(name, args, data_types, lambda_expr, return_type)
+                self.run_lambda(name, args, data_types, lambda_expr, return_type)?
             }
         };
 
         match &result {
-            Ok(Value::Scalar(result)) => {
+            Value::Scalar(result) => {
                 assert!(
                     result.as_ref().is_value_of_type(expr.data_type()),
                     "{} is not of type {}",
@@ -257,24 +236,27 @@ impl<'a> Evaluator<'a> {
                     expr.data_type()
                 )
             }
-            Ok(Value::Column(result)) => assert_eq!(&result.data_type(), expr.data_type()),
-            Err(_) => {}
+            Value::Column(result) => assert_eq!(&result.data_type(), expr.data_type()),
         }
 
-        result
+        Ok(result)
     }
 
-    fn run_call(
+    fn eval_common_call(
         &self,
-        span: Span,
-        id: &FunctionID,
-        function: &Function,
-        args: &[Expr],
-        generics: &[DataType],
+        call: &FunctionCall,
         validity: Option<Bitmap>,
         expr_display: &impl Fn() -> String,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
+        let FunctionCall {
+            span,
+            id,
+            function,
+            generics,
+            args,
+            ..
+        } = call;
         let child_suppress_error = function.signature.name == "is_not_error";
         let mut child_option = options.with_suppress_error(child_suppress_error);
 
@@ -313,7 +295,7 @@ impl<'a> Evaluator<'a> {
             options.errors = ctx.errors.take();
         } else {
             EvalContext::render_error(
-                span,
+                *span,
                 &ctx.errors,
                 id.params(),
                 args.as_slice(),
@@ -1111,12 +1093,12 @@ impl<'a> Evaluator<'a> {
             return Ok(None);
         }
 
-        let expr = Expr::ColumnRef(ColumnRef {
+        let expr = ColumnRef {
             span,
             id: 0,
             data_type: src_type.clone(),
             display_name: String::new(),
-        });
+        };
 
         let params = if let DataType::Decimal(ty) = dest_type.remove_nullable() {
             vec![
@@ -1127,24 +1109,14 @@ impl<'a> Evaluator<'a> {
             vec![]
         };
 
-        let Ok(func_expr) = check_function(span, cast_fn, &params, &[expr], self.fn_registry)
+        let Ok(func_expr) =
+            check_function(span, cast_fn, &params, &[expr.into()], self.fn_registry)
         else {
             return Ok(None);
         };
 
-        let Expr::FunctionCall(FunctionCall {
-            id,
-            function,
-            generics,
-            return_type,
-            args,
-            ..
-        }) = &func_expr
-        else {
-            unreachable!()
-        };
-
-        if return_type != dest_type {
+        let call = func_expr.into_function_call().unwrap();
+        if call.return_type != *dest_type {
             return Ok(None);
         }
 
@@ -1158,16 +1130,7 @@ impl<'a> Evaluator<'a> {
 
         let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        let result = evaluator.run_call(
-            span,
-            id,
-            function,
-            args,
-            generics,
-            validity,
-            expr_display,
-            options,
-        )?;
+        let result = evaluator.eval_common_call(&call, validity, expr_display, options)?;
         Ok(Some(result))
     }
 

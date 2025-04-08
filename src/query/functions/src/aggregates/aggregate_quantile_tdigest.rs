@@ -23,8 +23,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::expr::*;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
@@ -32,8 +30,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
@@ -42,6 +38,7 @@ use num_traits::AsPrimitive;
 
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
+use super::get_levels;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::assert_params;
@@ -51,7 +48,6 @@ use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
-use crate::BUILTIN_FUNCTIONS;
 
 pub(crate) const MEDIAN: u8 = 0;
 pub(crate) const QUANTILE: u8 = 1;
@@ -404,58 +400,7 @@ where T: Number + AsPrimitive<f64>
         params: Vec<Scalar>,
         arguments: Vec<DataType>,
     ) -> Result<Arc<dyn AggregateFunction>> {
-        let levels = if params.len() == 1 {
-            let level: F64 = check_number(
-                None,
-                &FunctionContext::default(),
-                &Cast {
-                    span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::constant(params[0].clone(), None)),
-                    dest_type: DataType::Number(NumberDataType::Float64),
-                }
-                .into(),
-                &BUILTIN_FUNCTIONS,
-            )?;
-            let level = level.0;
-            if !(0.0..=1.0).contains(&level) {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "level range between [0, 1], got: {:?}",
-                    level
-                )));
-            }
-            vec![level]
-        } else if params.is_empty() {
-            vec![0.5f64]
-        } else {
-            let mut levels = Vec::with_capacity(params.len());
-            for param in params {
-                let level: F64 = check_number(
-                    None,
-                    &FunctionContext::default(),
-                    &Expr::<usize>::Cast(Cast {
-                        span: None,
-                        is_try: false,
-                        expr: Box::new(Expr::Constant(Constant {
-                            span: None,
-                            scalar: param.clone(),
-                            data_type: param.as_ref().infer_data_type(),
-                        })),
-                        dest_type: DataType::Number(NumberDataType::Float64),
-                    }),
-                    &BUILTIN_FUNCTIONS,
-                )?;
-                let level = level.0;
-                if !(0.0..=1.0).contains(&level) {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "level range between [0, 1], got: {:?} in levels",
-                        level
-                    )));
-                }
-                levels.push(level);
-            }
-            levels
-        };
+        let levels = get_levels(&params)?;
         let func = AggregateQuantileTDigestFunction::<T> {
             display_name: display_name.to_string(),
             return_type,

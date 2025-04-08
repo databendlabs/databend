@@ -20,8 +20,6 @@ use borsh::BorshSerialize;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::expr::*;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalType;
@@ -29,7 +27,6 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use ethnum::i256;
@@ -42,8 +39,8 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::assert_params;
 use crate::aggregates::assert_unary_arguments;
+use crate::aggregates::get_levels;
 use crate::aggregates::AggregateFunctionRef;
-use crate::BUILTIN_FUNCTIONS;
 
 const MEDIAN: u8 = 0;
 const QUANTILE_CONT: u8 = 1;
@@ -304,53 +301,6 @@ where
 
         Ok(())
     }
-}
-
-pub(crate) fn get_levels(params: &Vec<Scalar>) -> Result<Vec<f64>> {
-    let levels = if params.len() == 1 {
-        let level: F64 = check_number(
-            None,
-            &FunctionContext::default(),
-            &Expr::constant(params[0].clone(), None),
-            &BUILTIN_FUNCTIONS,
-        )?;
-        let level = level.0;
-        if !(0.0..=1.0).contains(&level) {
-            return Err(ErrorCode::BadDataValueType(format!(
-                "level range between [0, 1], got: {:?}",
-                level
-            )));
-        }
-        vec![level]
-    } else if params.is_empty() {
-        vec![0.5f64]
-    } else {
-        let mut levels = Vec::with_capacity(params.len());
-        for param in params {
-            let level: F64 = check_number::<_, usize>(
-                None,
-                &FunctionContext::default(),
-                &Cast {
-                    span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::constant(param.clone(), None)),
-                    dest_type: DataType::Number(NumberDataType::Float64),
-                }
-                .into(),
-                &BUILTIN_FUNCTIONS,
-            )?;
-            let level = level.0;
-            if !(0.0..=1.0).contains(&level) {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "level range between [0, 1], got: {:?} in levels",
-                    level
-                )));
-            }
-            levels.push(level);
-        }
-        levels
-    };
-    Ok(levels)
 }
 
 pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(

@@ -21,7 +21,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::ArgType;
@@ -41,8 +40,6 @@ use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
@@ -55,13 +52,13 @@ use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
+use super::extract_number_param;
 use super::StateAddr;
 use crate::aggregates::aggregate_sum::SumState;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::assert_variadic_params;
 use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
-use crate::BUILTIN_FUNCTIONS;
 
 #[derive(Default, Debug, BorshDeserialize, BorshSerialize)]
 pub struct NumberArrayMovingSumState<T, TSum> {
@@ -489,12 +486,7 @@ where State: SumState
         scale_add: u8,
     ) -> Result<AggregateFunctionRef> {
         let window_size = if params.len() == 1 {
-            let window_size = check_number::<u64, usize>(
-                None,
-                &FunctionContext::default(),
-                &Expr::constant(params[0].clone(), None),
-                &BUILTIN_FUNCTIONS,
-            )?;
+            let window_size: u64 = extract_number_param(params[0].clone())?;
             Some(window_size as usize)
         } else {
             None
@@ -679,12 +671,7 @@ where State: SumState
         return_type: DataType,
     ) -> Result<AggregateFunctionRef> {
         let window_size = if params.len() == 1 {
-            let window_size = check_number::<u64, usize>(
-                None,
-                &FunctionContext::default(),
-                &Expr::constant(params[0].clone(), None),
-                &BUILTIN_FUNCTIONS,
-            )?;
+            let window_size: u64 = extract_number_param(params[0].clone())?;
             Some(window_size as usize)
         } else {
             None

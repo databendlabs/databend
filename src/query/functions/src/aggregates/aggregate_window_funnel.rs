@@ -23,7 +23,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::ArgType;
@@ -39,14 +38,13 @@ use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Constant;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
+use super::extract_number_param;
 use super::AggregateFunctionRef;
 use super::AggregateNullVariadicAdaptor;
 use super::StateAddr;
@@ -57,7 +55,6 @@ use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
-use crate::BUILTIN_FUNCTIONS;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 struct AggregateWindowFunnelState<T> {
@@ -353,18 +350,7 @@ where
         arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         let event_size = arguments.len() - 1;
-        let window = check_number::<u64, usize>(
-            None,
-            &FunctionContext::default(),
-            &Constant {
-                span: None,
-                scalar: params[0].clone(),
-                data_type: params[0].as_ref().infer_data_type(),
-            }
-            .into(),
-            &BUILTIN_FUNCTIONS,
-        )?;
-
+        let window = extract_number_param(params[0].clone())?;
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
             _arguments: arguments,
