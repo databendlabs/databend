@@ -16171,8 +16171,8 @@ dependencies = [
 
 [[package]]
 name = "watcher"
-version = "0.1.0"
-source = "git+https://github.com/databendlabs/watcher?tag=v0.1.0#bb04329f099b10e2f29f4faca0a0980d51f1c1b7"
+version = "0.1.1"
+source = "git+https://github.com/databendlabs/watcher?tag=v0.1.1#de30194284b8382f4a2727ebdb7fbd4dd53e39b1"
 dependencies = [
  "futures",
  "log",
