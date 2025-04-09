@@ -41,7 +41,9 @@ anyerror = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
+display-more = { workspace = true }
 fastrace = { workspace = true }
+futures = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
