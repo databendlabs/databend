@@ -615,6 +615,7 @@ impl ExplainInterpreter {
                 self.ctx.clone(),
                 source,
                 &mut dummy_pipeline,
+                true,
             )?;
             if let Some(mut pipeline) = prune_pipeline {
                 pipeline.set_max_threads(max_threads as usize);

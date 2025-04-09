@@ -769,7 +769,7 @@ impl Table for FuseTable {
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
     ) -> Result<Option<Pipeline>> {
-        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline)
+        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, false)
     }
 
     fn commit_insertion(

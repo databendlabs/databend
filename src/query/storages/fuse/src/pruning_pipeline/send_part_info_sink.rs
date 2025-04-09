@@ -134,6 +134,7 @@ pub struct SendPartInfoSink {
     statistics: PartStatistics,
     send_part_state: Arc<SendPartState>,
     enable_cache: bool,
+    dry_run: bool,
 }
 
 impl SendPartInfoSink {
@@ -145,6 +146,7 @@ impl SendPartInfoSink {
         schema: TableSchemaRef,
         send_part_state: Arc<SendPartState>,
         enable_cache: bool,
+        dry_run: bool,
     ) -> Result<ProcessorPtr> {
         let partitions = Partitions::default();
         let statistics = PartStatistics::default();
@@ -159,6 +161,7 @@ impl SendPartInfoSink {
                 statistics,
                 send_part_state,
                 enable_cache,
+                dry_run,
             },
         )))
     }
@@ -199,6 +202,9 @@ impl AsyncSink for SendPartInfoSink {
                     self.partitions.partitions.extend(info_ptr.clone());
                 }
 
+                if self.dry_run {
+                    return Ok(false);
+                }
                 for info in info_ptr {
                     if let Some(sender) = &self.sender {
                         if let Err(_e) = sender.send(Ok(info)).await {
