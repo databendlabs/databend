@@ -163,8 +163,8 @@ HashJoin
 ├── probe keys: [SUM(a) (#2), b (#1)]
 ├── keys is null equal: [false, false]
 ├── filters: []
-├── build runtime filters:
-│   └── rf_id:0, build_key:b (#4), probe_key:b (#1), rf_type:bloom,inlist,min_max
+├── build join filters:
+│   └── filter id:0, build key:b (#4), probe key:b (#1), filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── AggregateFinal(Build)
 │   ├── output columns: [SUM(a) (#5), t.b (#4)]
@@ -207,7 +207,7 @@ HashJoin
             ├── partitions total: 0
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
-            ├── apply runtime filters: [#0]
+            ├── apply join filters: [#0]
             └── estimated rows: 0.00
 
 # Disable aggregating index scan
