@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
@@ -31,9 +32,13 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
-use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractBlockMeta;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::io::read::ColumnOrientedSegmentReader;
+use crate::io::read::RowOrientedSegmentReader;
+use crate::io::read::SegmentReader;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
 use crate::table_functions::function_template::TableMetaFunc;
@@ -73,6 +78,24 @@ impl TableMetaFunc for FuseColumn {
         snapshot: Arc<TableSnapshot>,
         limit: Option<usize>,
     ) -> Result<DataBlock> {
+        match tbl.is_column_oriented() {
+            true => {
+                Self::apply_generic::<ColumnOrientedSegmentReader>(ctx, tbl, snapshot, limit).await
+            }
+            false => {
+                Self::apply_generic::<RowOrientedSegmentReader>(ctx, tbl, snapshot, limit).await
+            }
+        }
+    }
+}
+
+impl FuseColumn {
+    async fn apply_generic<R: SegmentReader>(
+        ctx: &Arc<dyn TableContext>,
+        tbl: &FuseTable,
+        snapshot: Arc<TableSnapshot>,
+        limit: Option<usize>,
+    ) -> Result<DataBlock> {
         let limit = limit.unwrap_or(usize::MAX);
         let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
 
@@ -97,21 +120,21 @@ impl TableMetaFunc for FuseColumn {
 
         let schema = tbl.schema();
         let leaf_fields = schema.leaf_fields();
+        let col_ids = schema.to_leaf_column_id_set();
+        let projection = HashSet::new();
 
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .generic_read_compact_segments::<R>(chunk, true, &projection)
                 .await?;
             for segment in segments {
                 let segment = segment?;
-                for block in segment.blocks.iter() {
-                    let block = block.as_ref();
-
-                    for (id, column) in block.col_metas.iter() {
+                for block in segment.block_metas()? {
+                    for (id, column) in block.col_metas(&col_ids).iter() {
                         if let Some(f) = leaf_fields.iter().find(|f| f.column_id == *id) {
-                            block_location.put_and_commit(&block.location.0);
-                            block_size.push(block.block_size);
-                            file_size.push(block.file_size);
+                            block_location.put_and_commit(block.location_path());
+                            block_size.push(block.block_size());
+                            file_size.push(block.file_size());
                             row_count.push(column.total_rows() as u64);
 
                             column_name.put_and_commit(&f.name);

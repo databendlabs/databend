@@ -36,7 +36,7 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
@@ -56,14 +56,14 @@ use log::info;
 use opendal::Operator;
 
 use super::decorate_snapshot;
+use super::new_serialize_segment_processor;
+use super::TableMutationAggregator;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
-use crate::operations::common::TableMutationAggregator;
-use crate::operations::common::TransformSerializeSegment;
 use crate::operations::set_backoff;
 use crate::operations::SnapshotHintWriter;
 use crate::statistics::merge_statistics;
@@ -87,14 +87,13 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(
+            new_serialize_segment_processor(
                 input,
                 output,
                 self,
                 block_thresholds,
                 table_meta_timestamps,
-            );
-            proc.into_processor()
+            )
         })?;
 
         pipeline.add_async_accumulating_transformer(|| {

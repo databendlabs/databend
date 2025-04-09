@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod exec;
+mod expr;
 mod planner;

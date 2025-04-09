@@ -26,7 +26,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
 use crate::pruning_pipeline::block_metas_meta::BlockMetasMeta;
-use crate::pruning_pipeline::pruned_segment_meta::PrunedSegmentMeta;
+use crate::pruning_pipeline::pruned_segment_meta::PrunedCompactSegmentMeta;
 
 pub struct ExtractSegmentTransform {
     populate_cache: bool,
@@ -46,12 +46,12 @@ impl ExtractSegmentTransform {
     }
 }
 
-impl BlockMetaAccumulatingTransform<PrunedSegmentMeta> for ExtractSegmentTransform {
+impl BlockMetaAccumulatingTransform<PrunedCompactSegmentMeta> for ExtractSegmentTransform {
     const NAME: &'static str = "ExtractSegmentTransform";
 
     fn transform(
         &mut self,
-        data: PrunedSegmentMeta,
+        data: PrunedCompactSegmentMeta,
     ) -> databend_common_exception::Result<Option<DataBlock>> {
         let (segment_location, info) = data.segments;
 

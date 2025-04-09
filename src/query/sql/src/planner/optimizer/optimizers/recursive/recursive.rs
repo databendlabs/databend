@@ -26,12 +26,12 @@ use crate::optimizer::OptimizerContext;
 /// A recursive optimizer that will apply the given rules recursively.
 /// It will keep applying the rules on the substituted expression
 /// until no more rules can be applied.
-pub struct RecursiveOptimizer {
+pub struct RecursiveRuleOptimizer {
     ctx: Arc<OptimizerContext>,
     rules: &'static [RuleID],
 }
 
-impl RecursiveOptimizer {
+impl RecursiveRuleOptimizer {
     pub fn new(ctx: Arc<OptimizerContext>, rules: &'static [RuleID]) -> Self {
         Self { ctx, rules }
     }
@@ -90,7 +90,7 @@ impl RecursiveOptimizer {
 }
 
 #[async_trait::async_trait]
-impl Optimizer for RecursiveOptimizer {
+impl Optimizer for RecursiveRuleOptimizer {
     fn name(&self) -> &'static str {
         "RecursiveOptimizer"
     }

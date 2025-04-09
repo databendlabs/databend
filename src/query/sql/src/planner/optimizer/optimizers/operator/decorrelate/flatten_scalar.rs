@@ -17,7 +17,7 @@ use databend_common_exception::Result;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::ColumnSet;
-use crate::optimizer::optimizers::operator::SubqueryRewriter;
+use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::BoundColumnRef;
@@ -26,7 +26,7 @@ use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::UDFCall;
 
-impl SubqueryRewriter {
+impl SubqueryDecorrelatorOptimizer {
     #[recursive::recursive]
     pub(crate) fn flatten_scalar(
         &mut self,
