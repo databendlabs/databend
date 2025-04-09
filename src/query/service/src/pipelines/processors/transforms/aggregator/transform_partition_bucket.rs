@@ -24,6 +24,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::TransformPipeBuilder;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::Transform;
 use databend_common_pipeline_transforms::Transformer;
@@ -95,9 +96,20 @@ pub fn build_final_aggregate(
     let pipe_size = pipeline.output_len();
     pipeline.exchange(pipe_size, ExchangePartition::create(params.clone()));
 
-    pipeline.add_transform(|input, output| {
-        CheckPartition::create(input, output, String::from("after exchange"))
-    })?;
+    let mut transform_builder = TransformPipeBuilder::create();
+    for _index in 0..pipeline.output_len() {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+
+        let processor = CheckPartition::create(
+            input.clone(),
+            output.clone(),
+            format!("after exchange {}", _index),
+        )?;
+        transform_builder.add_transform(input, output, processor);
+    }
+
+    pipeline.add_pipe(transform_builder.finalize());
 
     // 6. final aggregate
     pipeline.add_transform(|input, output| {

@@ -251,7 +251,7 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
                 }
             }
 
-            if self.partitioned_data[index].is_some() {
+            if !output.can_push() || self.partitioned_data[index].is_some() {
                 all_data_pushed_output = false;
             }
         }
@@ -349,6 +349,7 @@ pub struct MergePartitionProcessor<T: Exchange> {
     initialize: bool,
     finished_inputs: usize,
     waiting_inputs: VecDeque<usize>,
+    wakeup_inputs: VecDeque<usize>,
     inputs_status: Vec<PortStatus>,
 }
 
@@ -361,6 +362,7 @@ impl<T: Exchange> MergePartitionProcessor<T> {
         let inputs_data = vec![None; inputs.len()];
         let inputs_status = vec![PortStatus::Idle; inputs.len()];
         let waiting_inputs = VecDeque::with_capacity(inputs.len());
+        let wakeup_inputs = VecDeque::with_capacity(inputs.len());
 
         ProcessorPtr::create(Box::new(MergePartitionProcessor::<T> {
             output,
@@ -371,6 +373,7 @@ impl<T: Exchange> MergePartitionProcessor<T> {
             waiting_inputs,
             initialize: false,
             finished_inputs: 0,
+            wakeup_inputs,
         }))
     }
 }
@@ -454,6 +457,10 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
             if !self.output.can_push() {
                 return Ok(Event::NeedConsume);
             }
+
+            while let Some(idx) = self.wakeup_inputs.pop_front() {
+                self.inputs[idx].set_need_data();
+            }
         }
 
         if !self.initialize && self.waiting_inputs.is_empty() {
@@ -497,7 +504,7 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
                 continue;
             }
 
-            self.inputs[idx].set_need_data();
+            self.wakeup_inputs.push_back(idx);
         }
 
         match self.waiting_inputs.is_empty() {
