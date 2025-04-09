@@ -478,7 +478,7 @@ mod tests {
             value: "does not matter".to_string(),
         });
 
-        // Since the on-disk cache is populated asynchronously, but items queued in the populate-queue
+        // Although the on-disk cache is populated asynchronously, items queued in the populate-queue
         // are processed one by one. To ensure that key "test_key" has been processed, we could wait
         // until the populate-queue is empty. At that time, at least the first key `test_key`
         // should have been written into the on-disk cache.
