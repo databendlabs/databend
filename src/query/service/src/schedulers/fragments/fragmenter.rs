@@ -238,11 +238,10 @@ impl PhysicalPlanReplacer for Fragmenter {
             output_schema: plan.output_schema.clone(),
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
-            probe_keys_rt: plan.probe_keys_rt.clone(),
-            enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
             build_side_cache_info: plan.build_side_cache_info.clone(),
+            runtime_filter: plan.runtime_filter.clone(),
         }))
     }
 

@@ -18,6 +18,8 @@ HashJoin
 ├── probe keys: [b1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: [d.b (#1) < d.b (#3)]
+├── build join filters:
+│   └── filter id:0, build key:b2.a (#2), probe key:b1.a (#0), filter type:inlist,min_max
 ├── estimated rows: 400.00
 ├── TableScan(Build)
 │   ├── table: default.default.a
@@ -36,4 +38,5 @@ HashJoin
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 20.00

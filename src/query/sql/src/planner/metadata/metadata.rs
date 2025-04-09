@@ -79,6 +79,7 @@ pub struct Metadata {
     next_scan_id: usize,
     /// Mappings from base column index to scan id.
     base_column_scan_id: HashMap<IndexType, usize>,
+    next_runtime_filter_id: usize,
 }
 
 impl Metadata {
@@ -480,6 +481,12 @@ impl Metadata {
         let next_scan_id = self.next_scan_id;
         self.next_scan_id += 1;
         next_scan_id
+    }
+
+    pub fn next_runtime_filter_id(&mut self) -> usize {
+        let next_runtime_filter_id = self.next_runtime_filter_id;
+        self.next_runtime_filter_id += 1;
+        next_runtime_filter_id
     }
 
     pub fn add_base_column_scan_id(&mut self, base_column_scan_id: HashMap<usize, usize>) {
