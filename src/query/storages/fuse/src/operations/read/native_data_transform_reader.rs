@@ -49,13 +49,13 @@ pub struct ReadNativeDataTransform<const BLOCKING_IO: bool> {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     table_schema: Arc<TableSchema>,
-    table_index: IndexType,
+    scan_id: IndexType,
     context: Arc<dyn TableContext>,
 }
 
 impl ReadNativeDataTransform<true> {
     pub fn create(
-        table_index: IndexType,
+        scan_id: IndexType,
         ctx: Arc<dyn TableContext>,
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
@@ -74,7 +74,7 @@ impl ReadNativeDataTransform<true> {
                 index_reader,
                 virtual_reader,
                 table_schema,
-                table_index,
+                scan_id,
                 context: ctx,
             },
         )))
@@ -83,7 +83,7 @@ impl ReadNativeDataTransform<true> {
 
 impl ReadNativeDataTransform<false> {
     pub fn create(
-        table_index: IndexType,
+        scan_id: IndexType,
         ctx: Arc<dyn TableContext>,
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
@@ -102,7 +102,7 @@ impl ReadNativeDataTransform<false> {
                 index_reader,
                 virtual_reader,
                 table_schema,
-                table_index,
+                scan_id,
                 context: ctx,
             },
         )))
@@ -118,12 +118,10 @@ impl Transform for ReadNativeDataTransform<true> {
                 let mut partitions = block_part_meta.part_ptr.clone();
                 debug_assert!(partitions.len() == 1);
                 let part = partitions.pop().unwrap();
-                let mut filters = self
-                    .context
-                    .get_inlist_runtime_filter_with_id(self.table_index);
+                let mut filters = self.context.get_inlist_runtime_filter_with_id(self.scan_id);
                 filters.extend(
                     self.context
-                        .get_min_max_runtime_filter_with_id(self.table_index),
+                        .get_min_max_runtime_filter_with_id(self.scan_id),
                 );
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
@@ -197,12 +195,10 @@ impl AsyncTransform for ReadNativeDataTransform<false> {
                 let parts = block_part_meta.part_ptr.clone();
                 if !parts.is_empty() {
                     let mut chunks = Vec::with_capacity(parts.len());
-                    let mut filters = self
-                        .context
-                        .get_inlist_runtime_filter_with_id(self.table_index);
+                    let mut filters = self.context.get_inlist_runtime_filter_with_id(self.scan_id);
                     filters.extend(
                         self.context
-                            .get_min_max_runtime_filter_with_id(self.table_index),
+                            .get_min_max_runtime_filter_with_id(self.scan_id),
                     );
                     let mut native_part_infos = Vec::with_capacity(parts.len());
                     for part in parts.into_iter() {

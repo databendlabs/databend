@@ -406,6 +406,9 @@ impl MetaService for MetaServiceImpl {
 
         let dispatcher_handle = mn.dispatcher_handle.clone();
         let on_drop = move || {
+            let Some(sender) = sender.upgrade() else {
+                return;
+            };
             dispatcher_handle.request(move |dispatcher| {
                 dispatcher.remove_watcher(sender);
             })

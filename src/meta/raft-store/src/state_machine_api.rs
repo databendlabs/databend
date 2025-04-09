@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::KVMeta;
@@ -28,6 +29,18 @@ pub trait SMEventSender: Debug + Sync + Send {
 
     /// Send a future to the worker to let it run it in serialized order.
     fn send_future(&self, fut: BoxFuture<'static, ()>);
+}
+
+impl<T> SMEventSender for Arc<T>
+where T: SMEventSender
+{
+    fn send(&self, change: (String, Option<SeqV>, Option<SeqV>)) {
+        self.as_ref().send(change);
+    }
+
+    fn send_future(&self, fut: BoxFuture<'static, ()>) {
+        self.as_ref().send_future(fut);
+    }
 }
 
 /// The API a state machine implements.
