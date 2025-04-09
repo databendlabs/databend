@@ -16,21 +16,13 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_core::TransformPipeBuilder;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
-use databend_common_pipeline_transforms::Transform;
-use databend_common_pipeline_transforms::Transformer;
 use databend_common_storage::DataOperator;
 
-use super::AggregateMeta;
 use super::TransformFinalAggregate;
 use super::TransformPartitionRestore;
 use crate::pipelines::processors::transforms::aggregator::transform_partition_align::TransformPartitionAlign;

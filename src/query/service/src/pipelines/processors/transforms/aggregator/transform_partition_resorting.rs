@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering as AtomicOrdering;
 
+use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Exchange;
@@ -42,11 +43,7 @@ impl Exchange for ResortingPartition {
     const NAME: &'static str = "PartitionResorting";
     const MULTIWAY_SORT: bool = true;
 
-    fn partition(
-        &self,
-        mut data_block: DataBlock,
-        n: usize,
-    ) -> databend_common_exception::Result<Vec<DataBlock>> {
+    fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         debug_assert_eq!(n, 1);
 
         let Some(meta) = data_block.take_meta() else {
