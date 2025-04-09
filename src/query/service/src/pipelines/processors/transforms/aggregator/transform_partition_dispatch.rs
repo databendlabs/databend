@@ -118,7 +118,6 @@ impl Processor for TransformPartitionDispatch {
 
     #[allow(clippy::collapsible_if)]
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
-        // eprintln!("TransformPartitionDispatch cause: {:?}, sync_final_partition:{:?}, sent_final_partition: {:?}, synchronized_final_partition: {:?}, waiting_outputs: {:?}, waiting_outputs_2: {:?}", cause, self.sync_final_partition, self.sent_final_partition, self.synchronized_final_partition, self.waiting_outputs, self.waiting_outputs_2);
         if let EventCause::Output(output_index) = &cause {
             let output = &mut self.outputs[*output_index];
 

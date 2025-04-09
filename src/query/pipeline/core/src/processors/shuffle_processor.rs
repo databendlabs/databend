@@ -333,6 +333,106 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
     }
 }
 
+pub struct OnePartitionProcessor<T: Exchange> {
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+
+    exchange: Arc<T>,
+    input_data: Option<DataBlock>,
+
+    index: usize,
+    initialized: bool,
+    barrier: Arc<Barrier>,
+}
+
+impl<T: Exchange> OnePartitionProcessor<T> {
+    pub fn create(
+        input: Arc<InputPort>,
+        outputs: Arc<OutputPort>,
+        exchange: Arc<T>,
+        index: usize,
+        barrier: Arc<Barrier>,
+    ) -> ProcessorPtr {
+        ProcessorPtr::create(Box::new(OnePartitionProcessor {
+            input,
+            output: outputs,
+            exchange,
+            input_data: None,
+            initialized: !T::MULTIWAY_SORT,
+            index,
+            barrier,
+        }))
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: Exchange> Processor for OnePartitionProcessor<T> {
+    fn name(&self) -> String {
+        format!("ShuffleOnePartition({})", T::NAME)
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.output.is_finished() {
+            self.input.finish();
+
+            return match self.initialized {
+                true => Ok(Event::Finished),
+                false => Ok(Event::Async),
+            };
+        }
+
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input_data.is_some() {
+            if !self.initialized {
+                return Ok(Event::Async);
+            }
+
+            self.output.push_data(Ok(self.input_data.take().unwrap()));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.has_data() {
+            if !self.initialized {
+                self.input_data = Some(self.input.pull_data().unwrap()?);
+                return Ok(Event::Async);
+            }
+
+            self.output.push_data(self.input.pull_data().unwrap());
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.is_finished() {
+            self.output.finish();
+
+            return match self.initialized {
+                true => Ok(Event::Finished),
+                false => Ok(Event::Async),
+            };
+        }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
+    }
+
+    async fn async_process(&mut self) -> Result<()> {
+        self.initialized = true;
+        if let Some(data_block) = self.input_data.as_ref() {
+            self.exchange.init_way(self.index, data_block)?;
+        }
+
+        self.barrier.wait().await;
+        Ok(())
+    }
+}
+
 #[derive(Clone, PartialEq)]
 enum PortStatus {
     Idle,

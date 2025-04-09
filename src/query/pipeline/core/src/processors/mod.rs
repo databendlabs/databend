@@ -40,5 +40,6 @@ pub use resize_processor::ResizeProcessor;
 pub use shuffle_processor::Exchange;
 pub use shuffle_processor::MergePartitionProcessor;
 pub use shuffle_processor::MultiwayStrategy;
+pub use shuffle_processor::OnePartitionProcessor;
 pub use shuffle_processor::PartitionProcessor;
 pub use shuffle_processor::ShuffleProcessor;
