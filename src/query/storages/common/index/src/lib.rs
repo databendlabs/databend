@@ -27,6 +27,7 @@ mod range_index;
 pub use bloom_index::BloomIndex;
 pub use bloom_index::BloomIndexMeta;
 pub use bloom_index::FilterEvalResult;
+pub use eliminate_cast::eliminate_cast;
 pub use index::Index;
 pub use inverted_index::extract_component_fields;
 pub use inverted_index::extract_fsts;

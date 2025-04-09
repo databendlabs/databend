@@ -16,5 +16,7 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod bloom_pruner;
+mod eliminate_cast;
 mod page_pruner;
+mod range_pruner;
 mod xor8;

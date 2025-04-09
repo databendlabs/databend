@@ -18,6 +18,7 @@ use databend_common_ast::Span;
 use databend_common_expression::expr::*;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
+use databend_common_expression::visit_expr;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Domain;
 use databend_common_expression::ExprVisitor;
@@ -116,7 +117,7 @@ impl RewriteVisitor<'_> {
                     span,
                     "eq",
                     &[],
-                    &[(&**expr).clone(), constant.into()],
+                    &[(**expr).clone(), constant.into()],
                     self.fn_registry,
                 ) else {
                     return Ok(None);
@@ -126,7 +127,7 @@ impl RewriteVisitor<'_> {
                     ConstantFolder::fold_with_domain(
                         &func_expr,
                         &self.input_domains,
-                        &self.func_ctx,
+                        self.func_ctx,
                         self.fn_registry,
                     )
                     .0,
@@ -144,7 +145,7 @@ impl RewriteVisitor<'_> {
         ConstantFolder::<String>::fold_with_domain(
             &cast.clone().into(),
             &self.input_domains,
-            &self.func_ctx,
+            self.func_ctx,
             &BUILTIN_FUNCTIONS,
         )
         .1
@@ -172,4 +173,17 @@ pub(super) fn cast_const(
     };
 
     domain.as_singleton()
+}
+
+pub fn eliminate_cast(
+    expr: &Expr<String>,
+    input_domains: HashMap<String, Domain>,
+) -> Option<Expr<String>> {
+    let mut visitor = RewriteVisitor {
+        input_domains,
+        func_ctx: &FunctionContext::default(),
+        fn_registry: &BUILTIN_FUNCTIONS,
+    };
+
+    visit_expr(expr, &mut visitor).unwrap()
 }

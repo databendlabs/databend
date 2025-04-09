@@ -24,76 +24,81 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_storages_common_index::PageIndex;
-use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use goldenfile::Mint;
 
 use super::eliminate_cast::parse_expr;
 
 #[test]
-fn test_page_index() -> Result<()> {
+fn test_range_index() -> Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("test_page_indexs.txt").unwrap();
+    let file = &mut mint.new_goldenfile("test_range_indexs.txt").unwrap();
 
     fn n(n: i32) -> Scalar {
         Scalar::Number(n.into())
     }
 
-    let stats = ClusterStatistics {
-        cluster_key_id: 0,
-        min: vec![n(-2), n(30)],
-        max: vec![n(10), n(2)],
-        level: 0,
-        pages: Some(vec![
-            Scalar::Tuple(vec![n(-2), n(30)]), // 0
-            Scalar::Tuple(vec![n(0), n(40)]),  // 1
-            Scalar::Tuple(vec![n(2), n(40)]),  // 2
-            Scalar::Tuple(vec![n(2), n(70)]),  // 3
-            Scalar::Tuple(vec![n(3), n(17)]),  // 4
-            Scalar::Tuple(vec![n(4), n(5)]),   // 5
-        ]),
-    };
+    let domains = &[("a", n(-2), n(3)), ("b", n(-2), n(3))];
 
-    let stats = &Some(stats);
-    run_text(file, "a = 2", stats);
-    run_text(file, "a = 2 and b = 41", stats);
-    run_text(file, "a = 3", stats);
-    run_text(file, "a = 3 and b < 7", stats);
-    run_text(file, "to_string(a) = '3'", stats);
-    run_text(file, "to_int8(a) = 2", stats);
-    run_text(file, "to_uint8(a) = 2::int64", stats);
-    run_text(file, "to_int16(a::int8) = 1+2", stats);
+    run_text(file, "a = 2 and b = 41", domains);
+    run_text(file, "a = 2 and b < 7", domains);
+    run_text(file, "to_string(a) = '4'", domains);
+    run_text(file, "to_string(a) = 'a'", domains);
+    run_text(file, "to_int8(a) = 3", domains);
+    run_text(file, "to_int8(a) = 4", domains);
+    run_text(file, "to_uint8(a) = 3::int64", domains);
+    run_text(file, "to_uint8(a) = 4::int64", domains);
+    run_text(file, "to_int16(a::int8) = 3", domains);
+    run_text(file, "to_int16(a::int8) = 4", domains);
 
     Ok(())
 }
 
-fn run_text(file: &mut impl Write, text: &str, stats: &Option<ClusterStatistics>) {
+fn create_stats(domains: &[(&str, Scalar, Scalar)], schema: &TableSchema) -> StatisticsOfColumns {
+    domains
+        .iter()
+        .map(|(name, min, max)| {
+            (
+                schema.leaf_columns_of(&name.to_string())[0],
+                ColumnStatistics {
+                    min: min.clone(),
+                    max: max.clone(),
+                    null_count: 0,
+                    in_memory_size: 1000,
+                    distinct_of_values: None,
+                },
+            )
+        })
+        .collect()
+}
+
+fn run_text(file: &mut impl Write, text: &str, domains: &[(&str, Scalar, Scalar)]) {
     let func_ctx = FunctionContext::default();
-    let cluster_key_id = 0;
-    let cluster_keys = vec!["a".to_string(), "b".to_string()];
 
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
         TableField::new("b", TableDataType::Number(NumberDataType::Int32)),
     ]));
 
+    let stats = create_stats(domains, &schema);
+
     let columns = [("a", Int32Type::data_type()), ("b", Int32Type::data_type())];
     let expr = parse_expr(text, &columns);
 
-    let index =
-        PageIndex::try_create(func_ctx, cluster_key_id, cluster_keys, &expr, schema).unwrap();
+    let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
 
     writeln!(file, "text      : {text}").unwrap();
     writeln!(file, "expr      : {expr}").unwrap();
 
-    match index.apply(stats) {
+    match index.apply(&stats, |_| false) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }
 
-        Ok((keep, range)) => {
+        Ok(keep) => {
             writeln!(file, "keep      : {keep}").unwrap();
-            writeln!(file, "range     : {range:?}").unwrap();
         }
     };
     writeln!(file).unwrap();
