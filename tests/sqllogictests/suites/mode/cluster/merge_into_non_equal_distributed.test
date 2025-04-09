@@ -74,7 +74,7 @@ CommitSink
                 ├── probe keys: []
                 ├── keys is null equal: []
                 ├── filters: []
-                ├── build runtime filters:
+                ├── build join filters:
                 ├── estimated rows: 1.00
                 ├── Exchange(Build)
                 │   ├── output columns: [t1._row_id (#2)]
@@ -115,7 +115,7 @@ CommitSink
         ├── probe keys: []
         ├── keys is null equal: []
         ├── filters: [t1.a (#1) > t.a (#0)]
-        ├── build runtime filters:
+        ├── build join filters:
         ├── estimated rows: 15.00
         ├── TableScan(Build)
         │   ├── table: default.default.t2
@@ -154,7 +154,7 @@ CommitSink
         ├── probe keys: []
         ├── keys is null equal: []
         ├── filters: [t1.a (#1) < t2.a (#0)]
-        ├── build runtime filters:
+        ├── build join filters:
         ├── estimated rows: 15.00
         ├── TableScan(Build)
         │   ├── table: default.default.t2
@@ -253,7 +253,7 @@ CommitSink
                 ├── probe keys: [CAST(t1.a (#1) AS Int64 NULL)]
                 ├── keys is null equal: [false]
                 ├── filters: []
-                ├── build runtime filters:
+                ├── build join filters:
                 ├── estimated rows: 0.00
                 ├── Exchange(Build)
                 │   ├── output columns: [stage._$1 (#0)]
@@ -261,10 +261,10 @@ CommitSink
                 │   └── TableScan
                 │       ├── table: default.system.stage
                 │       ├── output columns: [_$1 (#0)]
-                │       ├── read rows: 12
+                │       ├── read rows: 18
                 │       ├── read size: < 1 KiB
-                │       ├── partitions total: 2
-                │       ├── partitions scanned: 2
+                │       ├── partitions total: 3
+                │       ├── partitions scanned: 3
                 │       ├── push downs: [filters: [], limit: NONE]
                 │       └── estimated rows: 0.00
                 └── Exchange(Probe)
@@ -284,21 +284,27 @@ CommitSink
 query TT
 merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
 ----
-12 0
+18 0
 
 query T
 select * from t1 order by a;
 ----
 1
 1
+1
+2
 2
 2
 3
 3
+3
+4
 4
 4
 5
 5
+5
+6
 6
 6
 9

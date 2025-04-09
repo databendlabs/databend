@@ -37,7 +37,7 @@ Sort
             ├── probe keys: [t1.number (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build runtime filters:
+            ├── build join filters:
             ├── estimated rows: 0.01
             ├── Filter(Build)
             │   ├── output columns: [t2.number (#1)]

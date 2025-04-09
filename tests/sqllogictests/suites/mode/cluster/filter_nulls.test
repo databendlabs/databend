@@ -45,8 +45,8 @@ Exchange
     ├── probe keys: [table1.value (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build runtime filters:
-    │   └── rf_id:0, build_key:table2.value (#1), probe_key:table1.value (#0), rf_type:inlist,min_max
+    ├── build join filters:
+    │   └── filter id:0, build key:table2.value (#1), probe key:table1.value (#0), filter type:inlist,min_max
     ├── estimated rows: 250.00
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
@@ -78,7 +78,7 @@ Exchange
             ├── partitions scanned: 3
             ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
             ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
-            ├── apply runtime filters: [#0]
+            ├── apply join filters: [#0]
             └── estimated rows: 4000.00
 
 query T
@@ -94,8 +94,8 @@ Exchange
     ├── probe keys: [table1.value (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build runtime filters:
-    │   └── rf_id:1, build_key:table3.value (#2), probe_key:table1.value (#0), rf_type:inlist,min_max
+    ├── build join filters:
+    │   └── filter id:1, build key:table3.value (#2), probe key:table1.value (#0), filter type:inlist,min_max
     ├── estimated rows: 200.00
     ├── Exchange(Build)
     │   ├── output columns: [table3.value (#2), table2.value (#1)]
@@ -107,8 +107,8 @@ Exchange
     │       ├── probe keys: [table3.value (#2)]
     │       ├── keys is null equal: [false]
     │       ├── filters: []
-    │       ├── build runtime filters:
-    │       │   └── rf_id:0, build_key:table2.value (#1), probe_key:table3.value (#2), rf_type:inlist,min_max
+    │       ├── build join filters:
+    │       │   └── filter id:0, build key:table2.value (#1), probe key:table3.value (#2), filter type:inlist,min_max
     │       ├── estimated rows: 250.00
     │       ├── Exchange(Build)
     │       │   ├── output columns: [table2.value (#1)]
@@ -140,7 +140,7 @@ Exchange
     │               ├── partitions scanned: 3
     │               ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
     │               ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
-    │               ├── apply runtime filters: [#0]
+    │               ├── apply join filters: [#0]
     │               └── estimated rows: 4000.00
     └── Filter(Probe)
         ├── output columns: [table1.value (#0)]
@@ -155,7 +155,7 @@ Exchange
             ├── partitions scanned: 3
             ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
             ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
-            ├── apply runtime filters: [#1]
+            ├── apply join filters: [#1]
             └── estimated rows: 4000.00
 
 
@@ -172,7 +172,7 @@ Exchange
     ├── probe keys: [table1.value (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build runtime filters:
+    ├── build join filters:
     ├── estimated rows: 250.00
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
@@ -219,7 +219,7 @@ Exchange
     ├── probe keys: [table1.value (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build runtime filters:
+    ├── build join filters:
     ├── estimated rows: 250.00
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]

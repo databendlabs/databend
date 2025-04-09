@@ -98,8 +98,8 @@ Exchange
                 ├── probe keys: [e.department_id (#2)]
                 ├── keys is null equal: [false]
                 ├── filters: []
-                ├── build runtime filters:
-                │   └── rf_id:0, build_key:d.department_id (#4), probe_key:e.department_id (#2), rf_type:inlist,min_max
+                ├── build join filters:
+                │   └── filter id:0, build key:d.department_id (#4), probe key:e.department_id (#2), filter type:inlist,min_max
                 ├── estimated rows: 8.00
                 ├── Exchange(Build)
                 │   ├── output columns: [d.department_id (#4), d.department_name (#5)]
@@ -123,7 +123,7 @@ Exchange
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
                     ├── push downs: [filters: [], limit: NONE]
-                    ├── apply runtime filters: [#0]
+                    ├── apply join filters: [#0]
                     └── estimated rows: 10.00
 
 query 
