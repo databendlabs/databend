@@ -62,10 +62,6 @@ pub fn build_final_aggregate(
         )))
     })?;
 
-    pipeline.add_transform(|input, output| {
-        CheckPartition::create(input, output, String::from("after align"))
-    })?;
-
     // 3. dispatch partition
     let processor = TransformPartitionDispatch::create(pipe_size);
     let inputs_port = processor.get_inputs();
@@ -78,38 +74,15 @@ pub fn build_final_aggregate(
         ),
     ]));
 
-    pipeline.add_transform(|input, output| {
-        CheckPartition::create(input, output, String::from("after dispatch"))
-    })?;
-
     // 4. restore partition
     let operator = DataOperator::instance().spill_operator();
     pipeline.add_transform(|input, output| {
         TransformPartitionRestore::create(input, output, operator.clone(), params.clone())
     })?;
 
-    pipeline.add_transform(|input, output| {
-        CheckPartition::create(input, output, String::from("after restore"))
-    })?;
-
     // 5. exchange local
     let pipe_size = pipeline.output_len();
     pipeline.exchange(pipe_size, ExchangePartition::create(params.clone()));
-
-    let mut transform_builder = TransformPipeBuilder::create();
-    for _index in 0..pipeline.output_len() {
-        let input = InputPort::create();
-        let output = OutputPort::create();
-
-        let processor = CheckPartition::create(
-            input.clone(),
-            output.clone(),
-            format!("after exchange {}", _index),
-        )?;
-        transform_builder.add_transform(input, output, processor);
-    }
-
-    pipeline.add_pipe(transform_builder.finalize());
 
     // 6. final aggregate
     pipeline.add_transform(|input, output| {
@@ -119,56 +92,4 @@ pub fn build_final_aggregate(
             params.clone(),
         )?))
     })
-}
-
-pub struct CheckPartition {
-    name: String,
-    cur_partition: Option<isize>,
-}
-
-impl CheckPartition {
-    pub fn create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        name: String,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Transformer::create(
-            input,
-            output,
-            CheckPartition {
-                name,
-                cur_partition: None,
-            },
-        )))
-    }
-}
-
-impl Transform for CheckPartition {
-    const NAME: &'static str = "CheckPartition";
-
-    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        let Some(meta) = data.get_meta() else {
-            unreachable!();
-        };
-
-        let Some(meta) = AggregateMeta::downcast_ref_from(meta) else {
-            unreachable!();
-        };
-
-        if let AggregateMeta::FinalPartition = meta {
-            self.cur_partition = None;
-            return Ok(data);
-        }
-
-        let partition = meta.get_partition();
-        assert!(
-            self.cur_partition.is_none() || matches!(self.cur_partition, Some(v) if v == partition),
-            "{:?} assert failure partition({}) != current_partition({:?})",
-            self.name,
-            partition,
-            self.cur_partition
-        );
-        self.cur_partition = Some(partition);
-        Ok(data)
-    }
 }
