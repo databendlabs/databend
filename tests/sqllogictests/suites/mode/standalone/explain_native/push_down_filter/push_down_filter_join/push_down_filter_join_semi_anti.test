@@ -28,6 +28,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -61,6 +62,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2

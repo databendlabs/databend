@@ -28,6 +28,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -61,6 +62,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -81,6 +84,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
+    ├── apply runtime filters: [#0]
     └── estimated rows: 4.00
 
 # convert full outer join to left outer join, can not propagate t1.b > 0
@@ -94,6 +98,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -127,6 +132,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -147,6 +154,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply runtime filters: [#0]
     └── estimated rows: 4.00
 
 # convert full outer join to inner join, can propagate t1.a > 0
@@ -160,6 +168,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -180,6 +190,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
+    ├── apply runtime filters: [#0]
     └── estimated rows: 4.00
 
 # convert full outer join to inner join, can propagate t2.a > 0
@@ -193,6 +204,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -213,6 +226,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [and_filters(t1.a (#0) > 0, t1.b (#1) > 0)], limit: NONE]
+    ├── apply runtime filters: [#0]
     └── estimated rows: 4.00
 
 # full outer join, can not push down
@@ -226,6 +240,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: [t2.a (#2) > 0]
+├── build runtime filters:
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
