@@ -917,7 +917,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let date_part = map(
         rule! {
-            DATE_PART ~ "(" ~ ^#interval_kind ~ "," ~ ^#subexpr(0) ~ ^")"
+            (DATE_PART | DATEPART) ~ "(" ~ ^#interval_kind ~ "," ~ ^#subexpr(0) ~ ^")"
         },
         |(_, _, field, _, expr, _)| ExprElement::DatePart {
             field,
@@ -1243,7 +1243,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let date_diff = map(
         rule! {
-            DATE_DIFF ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+            (DATE_DIFF | DATEDIFF) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
         |(_, _, unit, _, date_start, _, date_end, _)| ExprElement::DateDiff {
             unit,
@@ -1254,7 +1254,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let date_sub = map(
         rule! {
-            DATE_SUB ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+            (DATE_SUB | DATESUB) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
         |(_, _, unit, _, interval, _, date, _)| ExprElement::DateSub {
             unit,
