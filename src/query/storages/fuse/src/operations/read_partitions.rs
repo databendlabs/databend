@@ -147,9 +147,7 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if self.is_column_oriented()
-                    || (segment_len > nodes_num && distributed_pruning)
-                {
+                if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
                     let mut segments = Vec::with_capacity(segment_locs.len());
                     for (idx, segment_location) in segment_locs.into_iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
@@ -270,15 +268,17 @@ impl FuseTable {
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
         match segment_format {
-            FuseSegmentFormat::Row => {self.prune_segments_with_pipeline(
-            pruner.clone(),
-            &mut prune_pipeline,
-            ctx.clone(),
-            segment_rx,
-            part_info_tx,
-            derterministic_cache_key.clone(),
-            lazy_init_segments.len(),
-        )?;}
+            FuseSegmentFormat::Row => {
+                self.prune_segments_with_pipeline(
+                    pruner.clone(),
+                    &mut prune_pipeline,
+                    ctx.clone(),
+                    segment_rx,
+                    part_info_tx,
+                    derterministic_cache_key.clone(),
+                    lazy_init_segments.len(),
+                )?;
+            }
             FuseSegmentFormat::Column => {
                 self.prune_column_oriented_segments_with_pipeline(
                     pruner.clone(),

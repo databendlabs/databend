@@ -149,7 +149,7 @@ pub struct FuseTable {
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
 
-    pub(crate) pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
+    pub pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
 
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
