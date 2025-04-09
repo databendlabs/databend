@@ -15,7 +15,7 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
@@ -403,10 +403,11 @@ impl ClientSessionManager {
         tenant: Tenant,
         client_session_id: &str,
         user_name: &str,
-        last_access_time: u64,
+        last_access_time: &SystemTime,
     ) -> Result<()> {
-        let last_access_time = Duration::from_secs(last_access_time);
-        let elapsed = unix_ts() - last_access_time;
+        let Ok(elapsed) = last_access_time.elapsed() else {
+            return Ok(());
+        };
         if elapsed > STATE_REFRESH_INTERVAL_MEMORY {
             self.refresh_in_memory_states(client_session_id, user_name);
         }
