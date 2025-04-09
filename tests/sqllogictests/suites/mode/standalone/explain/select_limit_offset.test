@@ -138,6 +138,8 @@ Limit
     ├── probe keys: [t1.a (#1)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
+    │   └── rf_id:0, build_key:t.a (#0), probe_key:t1.a (#1), rf_type:inlist,min_max
     ├── estimated rows: 2.00
     ├── Limit(Build)
     │   ├── output columns: [t.a (#0)]
@@ -163,6 +165,7 @@ Limit
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [], limit: NONE]
+        ├── apply runtime filters: [#0]
         └── estimated rows: 2.00
 
 query T
@@ -180,6 +183,8 @@ Limit
     ├── probe keys: [t1.a (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
+    │   └── rf_id:0, build_key:t.a (#1), probe_key:t1.a (#0), rf_type:inlist,min_max
     ├── estimated rows: 2.00
     ├── Limit(Build)
     │   ├── output columns: [t.a (#1)]
@@ -205,6 +210,7 @@ Limit
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [], limit: NONE]
+        ├── apply runtime filters: [#0]
         └── estimated rows: 2.00
 
 query II

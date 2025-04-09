@@ -106,6 +106,7 @@ Limit
                     ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
                     ├── keys is null equal: [false]
                     ├── filters: []
+                    ├── build runtime filters:
                     ├── estimated rows: 1.00
                     ├── AggregateFinal(Build)
                     │   ├── output columns: [COUNT(*) (#4), t2.number (#2)]
@@ -123,6 +124,7 @@ Limit
                     │           ├── probe keys: []
                     │           ├── keys is null equal: []
                     │           ├── filters: []
+                    │           ├── build runtime filters:
                     │           ├── estimated rows: 1.00
                     │           ├── TableScan(Build)
                     │           │   ├── table: default.system.numbers
@@ -149,6 +151,7 @@ Limit
                         ├── probe keys: []
                         ├── keys is null equal: []
                         ├── filters: []
+                        ├── build runtime filters:
                         ├── estimated rows: 1.00
                         ├── TableScan(Build)
                         │   ├── table: default.system.numbers
@@ -188,6 +191,7 @@ Limit
         ├── probe keys: [t4.c (#4)]
         ├── keys is null equal: [false]
         ├── filters: []
+        ├── build runtime filters:
         ├── estimated rows: 2.00
         ├── AggregateFinal(Build)
         │   ├── output columns: [count(t1.number) (#1), t1.number (#0)]

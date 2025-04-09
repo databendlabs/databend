@@ -8,6 +8,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:0, build_key:t2.b (#1), probe_key:t1.a (#0), rf_type:inlist,min_max
 ├── estimated rows: 100.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
@@ -26,6 +28,7 @@ HashJoin
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply runtime filters: [#0]
     └── estimated rows: 10.00
 
 query T
@@ -38,6 +41,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:0, build_key:t2.b (#1), probe_key:t1.a (#0), rf_type:inlist,min_max
 ├── estimated rows: 100.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -56,4 +61,5 @@ HashJoin
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply runtime filters: [#0]
     └── estimated rows: 10.00

@@ -520,6 +520,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -546,6 +548,7 @@ HashJoin
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [t1.a (#0) > 10], limit: NONE]
+        ├── apply runtime filters: [#0]
         └── estimated rows: 0.00
 
 # t1.a > 5 and t1.a < 10, t2.a > 5 and t2.a < 10, t3.a > 5 and t3.a < 10
@@ -559,6 +562,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:1, build_key:t3.a (#4), probe_key:t1.a (#0), rf_type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t3.b (#5), t3.a (#4)]
@@ -567,6 +572,8 @@ HashJoin
 │   ├── probe keys: [t2.a (#2)]
 │   ├── keys is null equal: [false]
 │   ├── filters: []
+│   ├── build runtime filters:
+│   │   └── rf_id:0, build_key:t3.a (#4), probe_key:t2.a (#2), rf_type:bloom,inlist,min_max
 │   ├── estimated rows: 0.00
 │   ├── Filter(Build)
 │   │   ├── output columns: [t3.a (#4), t3.b (#5)]
@@ -593,6 +600,7 @@ HashJoin
 │           ├── partitions total: 0
 │           ├── partitions scanned: 0
 │           ├── push downs: [filters: [and_filters(t2.a (#2) > 5, t2.a (#2) < 10)], limit: NONE]
+│           ├── apply runtime filters: [#0]
 │           └── estimated rows: 0.00
 └── Filter(Probe)
     ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -606,6 +614,7 @@ HashJoin
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [and_filters(t1.a (#0) > 5, t1.a (#0) < 10)], limit: NONE]
+        ├── apply runtime filters: [#1]
         └── estimated rows: 0.00
 
 # t1.a > 5 and t2.a > 10
@@ -701,6 +710,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:1, build_key:t3.a (#4), probe_key:t1.a (#0), rf_type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t3.b (#5), t3.a (#4)]
@@ -709,6 +720,8 @@ HashJoin
 │   ├── probe keys: [t2.a (#2)]
 │   ├── keys is null equal: [false]
 │   ├── filters: []
+│   ├── build runtime filters:
+│   │   └── rf_id:0, build_key:t3.a (#4), probe_key:t2.a (#2), rf_type:bloom,inlist,min_max
 │   ├── estimated rows: 0.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t3
@@ -727,6 +740,7 @@ HashJoin
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
 │       ├── push downs: [filters: [], limit: NONE]
+│       ├── apply runtime filters: [#0]
 │       └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
@@ -736,6 +750,7 @@ HashJoin
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply runtime filters: [#1]
     └── estimated rows: 0.00
 
 statement ok
@@ -764,6 +779,7 @@ HashJoin
 ├── probe keys: [CAST(t1.id (#0) AS Int64 NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
 ├── estimated rows: 1.00
 ├── Filter(Build)
 │   ├── output columns: [t2.id (#1)]

@@ -28,6 +28,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
 ├── estimated rows: 4.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -69,6 +70,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: [t1.a (#0) > 0]
+├── build runtime filters:
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -102,6 +104,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -139,6 +142,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
 ├── estimated rows: 4.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -167,6 +172,7 @@ HashJoin
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
+        ├── apply runtime filters: [#0]
         └── estimated rows: 4.00
 
 # convert left outer join to inner join, can not propagate t2.b > 0
@@ -180,6 +186,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
 ├── estimated rows: 4.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -204,6 +212,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply runtime filters: [#0]
     └── estimated rows: 4.00
 
 statement ok
@@ -235,6 +244,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
+├── build runtime filters:
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.j1
@@ -288,6 +298,8 @@ HashJoin
 ├── probe keys: [t1.a (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build runtime filters:
+│   └── rf_id:0, build_key:t2.a (#0), probe_key:t1.a (#2), rf_type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── EvalScalar(Build)
 │   ├── output columns: [t.a (#0), action (#1)]
@@ -319,6 +331,7 @@ HashJoin
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [is_true(t1.a (#2) > 1)], limit: NONE]
+        ├── apply runtime filters: [#0]
         └── estimated rows: 5.00
 
 statement ok
