@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod optimizer;
 
 use std::collections::BTreeMap;
 
@@ -79,9 +78,9 @@ async fn test_parse_uri_location() -> Result<()> {
                     ("access_key_id", "dzin"),
                     ("access_key_secret", "p=ear1"),
                 ]
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect::<BTreeMap<String, String>>(),
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<BTreeMap<String, String>>(),
             ),
             (
                 StorageParams::Oss(StorageOssConfig {
@@ -165,9 +164,9 @@ async fn test_parse_uri_location() -> Result<()> {
                     ("session_token", "session_token"),
                     ("region", "us-east-2"),
                 ]
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect::<BTreeMap<String, String>>(),
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<BTreeMap<String, String>>(),
             ),
             (
                 StorageParams::S3(StorageS3Config {
@@ -199,9 +198,9 @@ async fn test_parse_uri_location() -> Result<()> {
                     ("session_token", "security_token"),
                     ("region", "us-east-2"),
                 ]
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect::<BTreeMap<String, String>>(),
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<BTreeMap<String, String>>(),
             ),
             (
                 StorageParams::S3(StorageS3Config {
@@ -233,9 +232,9 @@ async fn test_parse_uri_location() -> Result<()> {
                     ("aws_token", "security_token"),
                     ("region", "us-east-2"),
                 ]
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect::<BTreeMap<String, String>>(),
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<BTreeMap<String, String>>(),
             ),
             (
                 StorageParams::S3(StorageS3Config {
@@ -373,9 +372,9 @@ async fn test_parse_uri_location() -> Result<()> {
                         "/tmp-14.csv",
                         "/tmp-15.csv",
                     ]
-                    .iter()
-                    .map(|v| v.to_string())
-                    .collect(),
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect(),
                 }),
                 "/".to_string(),
             ),
@@ -392,9 +391,9 @@ async fn test_parse_uri_location() -> Result<()> {
                     ("disable_list_batch", "true"),
                     ("user_name", "test"),
                 ]
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect::<BTreeMap<_, _>>(),
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<BTreeMap<_, _>>(),
             ),
             (
                 StorageParams::Webhdfs(StorageWebhdfsConfig {

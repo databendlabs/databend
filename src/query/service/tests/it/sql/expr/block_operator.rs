@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 use databend_common_expression::type_check::check;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;

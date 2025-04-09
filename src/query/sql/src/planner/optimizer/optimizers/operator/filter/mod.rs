@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod common;
 mod deduplicate_join_condition;
 mod infer_filter;
 mod normalize_disjunctive_filter;
 mod pull_up_filter;
 
+pub use common::*;
 pub use deduplicate_join_condition::DeduplicateJoinConditionOptimizer;
 pub use infer_filter::InferFilterOptimizer;
 pub use infer_filter::JoinProperty;

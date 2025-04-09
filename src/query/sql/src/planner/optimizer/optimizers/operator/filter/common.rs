@@ -23,34 +23,6 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::ScalarExpr;
 
-pub fn is_true(predicate: &ScalarExpr) -> bool {
-    matches!(
-        predicate,
-        ScalarExpr::ConstantExpr(ConstantExpr {
-            value: Scalar::Boolean(true),
-            ..
-        })
-    )
-}
-
-pub fn is_falsy(predicate: &ScalarExpr) -> bool {
-    matches!(
-        predicate,
-        ScalarExpr::ConstantExpr(ConstantExpr {
-            value,
-            ..
-        }) if value == &Scalar::Boolean(false) || value == &Scalar::Null
-    )
-}
-
-pub fn false_constant() -> ScalarExpr {
-    ConstantExpr {
-        span: None,
-        value: Scalar::Boolean(false),
-    }
-    .into()
-}
-
 pub fn check_uint_range(max: u64, value: &Scalar) -> (bool, u64) {
     let value = match *value {
         Scalar::Number(NumberScalar::UInt8(value)) => value as u64,

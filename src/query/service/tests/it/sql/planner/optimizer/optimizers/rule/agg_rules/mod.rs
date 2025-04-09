@@ -12,6 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod exec;
-mod expr;
-mod planner;
+mod agg_index_query_rewrite;
