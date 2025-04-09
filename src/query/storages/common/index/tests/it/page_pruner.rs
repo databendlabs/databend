@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -30,43 +31,75 @@ use databend_common_functions::test_utils::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::PageIndex;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use goldenfile::Mint;
 
 #[test]
 fn test_page_index() -> Result<()> {
-    let columns = [("a", Int32Type::data_type())];
-    let expr = parse_expr(" to_string(a) = '3'", &columns);
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("test_page_indexs.txt").unwrap();
 
-    let func_ctx = FunctionContext::default();
-    let cluster_key_id = 0;
-    let cluster_keys = vec!["a".to_string()];
-
-    let schema = Arc::new(TableSchema::new(vec![TableField::new(
-        "a",
-        TableDataType::Number(NumberDataType::Int32),
-    )]));
-
-    let index = PageIndex::try_create(func_ctx, cluster_key_id, cluster_keys, &expr, schema)?;
+    fn n(n: i32) -> Scalar {
+        Scalar::Number(n.into())
+    }
 
     let stats = ClusterStatistics {
-        cluster_key_id,
-        min: vec![Scalar::Number(0_i32.into())],
-        max: vec![Scalar::Number(10_i32.into())],
+        cluster_key_id: 0,
+        min: vec![n(-2), n(30)],
+        max: vec![n(10), n(2)],
         level: 0,
         pages: Some(vec![
-            Scalar::Tuple(vec![Scalar::Number(0_i32.into())]),
-            Scalar::Tuple(vec![Scalar::Number(1_i32.into())]),
-            Scalar::Tuple(vec![Scalar::Number(2_i32.into())]),
+            Scalar::Tuple(vec![n(-2), n(30)]), // 0
+            Scalar::Tuple(vec![n(0), n(40)]),  // 1
+            Scalar::Tuple(vec![n(2), n(40)]),  // 2
+            Scalar::Tuple(vec![n(2), n(70)]),  // 3
+            Scalar::Tuple(vec![n(3), n(17)]),  // 4
+            Scalar::Tuple(vec![n(4), n(5)]),   // 5
         ]),
     };
 
-    let got = index.apply(&Some(stats))?;
-    // assert_eq!((true, Some(0..1)), got);
-
-    // pruner
-
-    println!("{:?}", got);
+    let stats = &Some(stats);
+    run_text(file, "a = 2", stats);
+    run_text(file, "a = 2 and b = 41", stats);
+    run_text(file, "a = 3", stats);
+    run_text(file, "a = 3 and b < 7", stats);
+    run_text(file, "to_string(a) = '3'", stats);
+    run_text(file, "to_int8(a) = 2", stats);
+    run_text(file, "to_uint8(a) = 2::int64", stats);
+    run_text(file, "to_int16(a::int8) = 1+2", stats);
 
     Ok(())
+}
+
+fn run_text(file: &mut impl Write, text: &str, stats: &Option<ClusterStatistics>) {
+    let func_ctx = FunctionContext::default();
+    let cluster_key_id = 0;
+    let cluster_keys = vec!["a".to_string(), "b".to_string()];
+
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("b", TableDataType::Number(NumberDataType::Int32)),
+    ]));
+
+    let columns = [("a", Int32Type::data_type()), ("b", Int32Type::data_type())];
+    let expr = parse_expr(text, &columns);
+
+    let index =
+        PageIndex::try_create(func_ctx, cluster_key_id, cluster_keys, &expr, schema).unwrap();
+
+    writeln!(file, "text      : {text}").unwrap();
+    writeln!(file, "expr      : {expr}").unwrap();
+
+    match index.apply(stats) {
+        Err(err) => {
+            writeln!(file, "err       : {err}").unwrap();
+        }
+
+        Ok((keep, range)) => {
+            writeln!(file, "keep      : {keep}").unwrap();
+            writeln!(file, "range     : {range:?}").unwrap();
+        }
+    };
+    write!(file, "\n").unwrap();
 }
 
 fn parse_expr(text: &str, columns: &[(&str, DataType)]) -> Expr<String> {

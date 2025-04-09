@@ -63,6 +63,8 @@ use parquet::format::FileMetaData;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::eliminate_cast::is_injective_cast;
+use crate::eliminate_cast::cast_const;
 use crate::filters::BlockBloomFilterIndexVersion;
 use crate::filters::BlockFilter;
 use crate::filters::Filter;
@@ -705,32 +707,18 @@ where T: EqVisitor
                         .enter_map_column(*span, args, scalar, scalar_type, return_type)?
                 }
             }
-            [cast @ Expr::Cast(_), Expr::Constant(Constant {
-                scalar,
-                data_type: scalar_type,
-                ..
-            })]
-            | [Expr::Constant(Constant {
-                scalar,
-                data_type: scalar_type,
-                ..
-            }), cast @ Expr::Cast(_)] => self.0.enter_cast(cast, scalar, scalar_type)?,
+            [cast @ Expr::Cast(_), Expr::Constant(constant)]
+            | [Expr::Constant(constant), cast @ Expr::Cast(_)] => {
+                self.0.enter_cast(cast, constant)?
+            }
 
             [func @ Expr::FunctionCall(FunctionCall {
                 id,
                 args,
                 return_type: dest_type,
                 ..
-            }), Expr::Constant(Constant {
-                scalar,
-                data_type: scalar_type,
-                ..
-            })]
-            | [Expr::Constant(Constant {
-                scalar,
-                data_type: scalar_type,
-                ..
-            }), func @ Expr::FunctionCall(FunctionCall {
+            }), Expr::Constant(constant)]
+            | [Expr::Constant(constant), func @ Expr::FunctionCall(FunctionCall {
                 id,
                 args,
                 return_type: dest_type,
@@ -746,8 +734,7 @@ where T: EqVisitor
                         expr: Box::new(args[0].clone()),
                         dest_type: dest_type.clone(),
                     }),
-                    scalar,
-                    scalar_type,
+                    constant,
                 )?
             }
             _ => ControlFlow::Continue(None),
@@ -831,12 +818,7 @@ trait EqVisitor {
         Ok(ControlFlow::Continue(None))
     }
 
-    fn enter_cast(
-        &mut self,
-        _cast: &Expr<String>,
-        _scalar: &Scalar,
-        _scalar_type: &DataType,
-    ) -> ResultRewrite {
+    fn enter_cast(&mut self, _cast: &Expr<String>, _constant: &Constant) -> ResultRewrite {
         Ok(ControlFlow::Continue(None))
     }
 }
@@ -909,12 +891,7 @@ impl EqVisitor for RewriteVisitor<'_> {
         )))
     }
 
-    fn enter_cast(
-        &mut self,
-        cast: &Expr<String>,
-        scalar: &Scalar,
-        scalar_type: &DataType,
-    ) -> ResultRewrite {
+    fn enter_cast(&mut self, cast: &Expr<String>, constant: &Constant) -> ResultRewrite {
         let Expr::Cast(Cast {
             span,
             is_try: false,
@@ -950,7 +927,11 @@ impl EqVisitor for RewriteVisitor<'_> {
             return Ok(ControlFlow::Break(None));
         }
 
-        let Some(s) = cast_const(src_type.to_owned(), scalar_type.to_owned(), scalar) else {
+        let Some(s) = cast_const(
+            &FunctionContext::default(),
+            src_type.to_owned(),
+            constant.clone(),
+        ) else {
             return Ok(ControlFlow::Break(None));
         };
         if s.is_null() {
@@ -1001,12 +982,7 @@ impl EqVisitor for ShortListVisitor {
         Ok(ControlFlow::Break(None))
     }
 
-    fn enter_cast(
-        &mut self,
-        cast: &Expr<String>,
-        scalar: &Scalar,
-        scalar_type: &DataType,
-    ) -> ResultRewrite {
+    fn enter_cast(&mut self, cast: &Expr<String>, constant: &Constant) -> ResultRewrite {
         let Expr::Cast(Cast {
             is_try: false,
             expr:
@@ -1029,7 +1005,11 @@ impl EqVisitor for ShortListVisitor {
             return Ok(ControlFlow::Break(None));
         }
 
-        let Some(s) = cast_const(src_type.to_owned(), scalar_type.to_owned(), scalar) else {
+        let Some(s) = cast_const(
+            &FunctionContext::default(),
+            src_type.to_owned(),
+            constant.clone(),
+        ) else {
             return Ok(ControlFlow::Break(None));
         };
 
@@ -1040,57 +1020,4 @@ impl EqVisitor for ShortListVisitor {
 
         Ok(ControlFlow::Break(None))
     }
-}
-
-fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
-    if src == dest {
-        return true;
-    }
-
-    match (src, dest) {
-        (DataType::Boolean, DataType::String | DataType::Number(_) | DataType::Decimal(_)) => true,
-
-        (DataType::Number(src), DataType::Number(dest))
-            if src.is_integer() && dest.is_integer() =>
-        {
-            true
-        }
-        (DataType::Number(src), DataType::Decimal(_)) if src.is_integer() => true,
-        (DataType::Number(_), DataType::String) => true,
-        (DataType::Decimal(_), DataType::String) => true,
-
-        (DataType::Date, DataType::Timestamp) => true,
-
-        // (_, DataType::Boolean) => false,
-        // (DataType::String, _) => false,
-        // (DataType::Decimal(_), DataType::Number(_)) => false,
-        // (DataType::Number(src), DataType::Number(dest))
-        //     if src.is_float() && dest.is_integer() =>
-        // {
-        //     false
-        // }
-        (DataType::Nullable(src), DataType::Nullable(dest)) => is_injective_cast(src, dest),
-        _ => false,
-    }
-}
-
-fn cast_const(dest_type: DataType, src_type: DataType, scalar: &Scalar) -> Option<Scalar> {
-    let (_, Some(domain)) = ConstantFolder::<String>::fold(
-        &Expr::Cast(Cast {
-            span: None,
-            is_try: false,
-            expr: Box::new(Expr::Constant(Constant {
-                span: None,
-                scalar: scalar.to_owned(),
-                data_type: src_type,
-            })),
-            dest_type,
-        }),
-        &FunctionContext::default(),
-        &BUILTIN_FUNCTIONS,
-    ) else {
-        return None;
-    };
-
-    domain.as_singleton()
 }

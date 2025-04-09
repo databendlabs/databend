@@ -17,6 +17,7 @@
 #![feature(never_type)]
 
 mod bloom_index;
+mod eliminate_cast;
 pub mod filters;
 mod index;
 mod inverted_index;
