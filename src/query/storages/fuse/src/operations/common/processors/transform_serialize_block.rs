@@ -339,11 +339,18 @@ impl Processor for TransformSerializeBlock {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized { serialized, index } => {
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
-                println!("\n\n------1111111000000=={:?}", extended_block_meta);
-                // need add virtual column size
+
+                let bytes = if let Some(draft_virtual_block_meta) =
+                    &extended_block_meta.draft_virtual_block_meta
+                {
+                    (extended_block_meta.block_meta.block_size
+                        + draft_virtual_block_meta.virtual_col_size) as usize
+                } else {
+                    extended_block_meta.block_meta.block_size as usize
+                };
                 let progress_values = ProgressValues {
                     rows: extended_block_meta.block_meta.row_count as usize,
-                    bytes: extended_block_meta.block_meta.block_size as usize,
+                    bytes,
                 };
                 self.block_builder
                     .ctx
@@ -351,14 +358,12 @@ impl Processor for TransformSerializeBlock {
                     .incr(&progress_values);
 
                 let mutation_log_data_block = if let Some(index) = index {
-                    println!("\n-----case aaa");
                     // we are replacing the block represented by the `index`
                     Self::mutation_logs(MutationLogEntry::ReplacedBlock {
                         index,
                         block_meta: Arc::new(extended_block_meta),
                     })
                 } else {
-                    println!("\n-----case bbb");
                     // appending new data block
                     if matches!(self.kind, MutationKind::Insert) {
                         if let Some(tid) = self.table_id {
@@ -376,12 +381,10 @@ impl Processor for TransformSerializeBlock {
                     }
 
                     if matches!(self.kind, MutationKind::Recluster) {
-                        println!("\n-----case cccc");
                         Self::mutation_logs(MutationLogEntry::ReclusterAppendBlock {
                             block_meta: Arc::new(extended_block_meta),
                         })
                     } else {
-                        println!("\n-----case dddd");
                         DataBlock::empty_with_meta(Box::new(extended_block_meta))
                     }
                 };

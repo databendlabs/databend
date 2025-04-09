@@ -132,6 +132,12 @@ pub async fn do_refresh_virtual_column(
         return Ok(());
     }
 
+    let table_meta = &fuse_table.get_table_info().meta;
+    let Some(virtual_column_builder) = VirtualColumnBuilder::try_create(ctx.clone(), table_meta)
+    else {
+        return Ok(());
+    };
+
     let settings = ReadSettings::from_ctx(&ctx)?;
     pipeline.add_source(
         |output| {
@@ -145,9 +151,6 @@ pub async fn do_refresh_virtual_column(
         },
         1,
     )?;
-
-    let table_meta = &fuse_table.get_table_info().meta;
-    let virtual_column_builder = VirtualColumnBuilder::try_create(ctx.clone(), table_meta).unwrap();
 
     let block_nums = block_metas.len();
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
