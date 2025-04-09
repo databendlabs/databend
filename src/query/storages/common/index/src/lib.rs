@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
+#![feature(never_type)]
 
 mod bloom_index;
 pub mod filters;

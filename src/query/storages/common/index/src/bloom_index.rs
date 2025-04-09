@@ -70,6 +70,7 @@ use crate::filters::FilterBuilder;
 use crate::filters::V2BloomBlock;
 use crate::filters::Xor8Builder;
 use crate::filters::Xor8Filter;
+use crate::statistics_to_domain;
 use crate::Index;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -420,17 +421,9 @@ impl BloomIndex {
                     .column_id_of(&id)
                     .ok()
                     .and_then(|col_id| {
-                        column_stats.get(&col_id).map(|stat| {
-                            match Domain::from_min_max(stat.min.clone(), stat.max.clone(), &ty) {
-                                Domain::Nullable(NullableDomain { value, .. }) => {
-                                    Domain::Nullable(NullableDomain {
-                                        has_null: stat.null_count > 0,
-                                        value,
-                                    })
-                                }
-                                domain => domain,
-                            }
-                        })
+                        column_stats
+                            .get(&col_id)
+                            .map(|stat| statistics_to_domain(vec![stat], &ty))
                     })
                     .unwrap_or_else(|| Domain::full(&ty));
                 (id, domain)

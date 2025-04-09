@@ -15,4 +15,6 @@
 #![feature(box_patterns)]
 #![allow(clippy::uninlined_format_args)]
 
-mod filters;
+mod bloom_pruner;
+mod page_pruner;
+mod xor8;

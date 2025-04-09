@@ -12,20 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::expr::*;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
+use databend_common_expression::visit_expr;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Domain;
-use databend_common_expression::Expr;
+use databend_common_expression::ExprVisitor;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -91,9 +97,8 @@ impl PageIndex {
 
     #[fastrace::trace]
     pub fn apply(&self, stats: &Option<ClusterStatistics>) -> Result<(bool, Option<Range<usize>>)> {
-        let stats = match stats {
-            Some(stats) => stats,
-            None => return Ok((true, None)),
+        let Some(stats) = stats else {
+            return Ok((true, None));
         };
         let min_values: Vec<Scalar> = match stats.pages {
             Some(ref pages) => pages.clone(),
@@ -160,12 +165,8 @@ impl PageIndex {
 
         let mut input_domains = HashMap::with_capacity(self.cluster_key_fields.len());
         for (idx, (min, max)) in min_value.iter().zip(max_value.iter()).enumerate() {
-            if self
-                .column_refs
-                .contains_key(self.cluster_key_fields[idx].name())
-            {
-                let f = &self.cluster_key_fields[idx];
-
+            let f = &self.cluster_key_fields[idx];
+            if self.column_refs.contains_key(f.name()) {
                 let stat = ColumnStatistics::new(min.clone(), max.clone(), 1, 0, None);
                 let domain = statistics_to_domain(vec![&stat], f.data_type());
                 input_domains.insert(f.name().clone(), domain);
@@ -188,9 +189,20 @@ impl PageIndex {
             }
         }
 
+        let mut visitor = RewriteVisitor {
+            input_domains,
+            func_ctx: &self.func_ctx,
+            fn_registry: &BUILTIN_FUNCTIONS,
+        };
+
+        let expr = match visit_expr(&self.expr, &mut visitor).unwrap() {
+            Some(expr) => Cow::Owned(expr),
+            None => Cow::Borrowed(&self.expr),
+        };
+
         let (new_expr, _) = ConstantFolder::fold_with_domain(
-            &self.expr,
-            &input_domains,
+            &expr,
+            &visitor.input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
@@ -204,4 +216,152 @@ impl PageIndex {
             })
         ))
     }
+}
+
+struct RewriteVisitor<'a> {
+    input_domains: HashMap<String, Domain>,
+    func_ctx: &'a FunctionContext,
+    fn_registry: &'a FunctionRegistry,
+}
+
+type RewriteResult = std::result::Result<Option<Expr<String>>, !>;
+
+impl ExprVisitor<String> for RewriteVisitor<'_> {
+    fn enter_function_call(&mut self, call: &FunctionCall<String>) -> RewriteResult {
+        if call.id.name() == "eq" {
+            let result = match call.args.as_slice() {
+                [Expr::Cast(cast), Expr::Constant(constant)]
+                | [Expr::Constant(constant), Expr::Cast(cast)]
+                    if self.check_no_throw(cast) =>
+                {
+                    self.try_rewrite(call.span, cast, constant)?
+                }
+                _ => None,
+            };
+            if result.is_some() {
+                return Ok(result);
+            }
+        }
+        Self::visit_function_call(call, self)
+    }
+}
+
+impl RewriteVisitor<'_> {
+    fn try_rewrite(&self, span: Span, cast: &Cast<String>, constant: &Constant) -> RewriteResult {
+        if cast.is_try {
+            return Ok(None);
+        }
+
+        let Cast {
+            expr, dest_type, ..
+        } = cast;
+        let src_type = expr.data_type();
+        if !is_injective_cast(src_type, dest_type) {
+            return Ok(None);
+        }
+
+        let Some(scalar) = self.cast_const(src_type.to_owned(), constant) else {
+            return Ok(None);
+        };
+        let constant = Constant {
+            span: None,
+            scalar,
+            data_type: src_type.clone(),
+        };
+
+        match expr.as_cast() {
+            Some(cast) => self.try_rewrite(span, cast, &constant),
+            None => {
+                let Ok(func_expr) = check_function(
+                    span,
+                    "eq",
+                    &[],
+                    &[(&**expr).clone(), constant.into()],
+                    self.fn_registry,
+                ) else {
+                    return Ok(None);
+                };
+
+                Ok(Some(
+                    ConstantFolder::fold_with_domain(
+                        &func_expr,
+                        &self.input_domains,
+                        &self.func_ctx,
+                        self.fn_registry,
+                    )
+                    .0,
+                ))
+            }
+        }
+    }
+
+    fn check_no_throw(&self, cast: &Cast<String>) -> bool {
+        if cast.is_try {
+            return false;
+        }
+
+        // check domain for possible overflow
+        ConstantFolder::<String>::fold_with_domain(
+            &cast.clone().into(),
+            &self.input_domains,
+            &self.func_ctx,
+            &BUILTIN_FUNCTIONS,
+        )
+        .1
+        .is_some()
+    }
+
+    fn cast_const(&self, dest_type: DataType, constant: &Constant) -> Option<Scalar> {
+        let (_, Some(domain)) = ConstantFolder::<String>::fold(
+            &Expr::Cast(Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(Expr::Constant(constant.to_owned())),
+                dest_type,
+            }),
+            &self.func_ctx,
+            &BUILTIN_FUNCTIONS,
+        ) else {
+            return None;
+        };
+
+        domain.as_singleton()
+    }
+}
+
+fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
+    if src == dest {
+        return true;
+    }
+
+    match (src, dest) {
+        (DataType::Boolean, DataType::String | DataType::Number(_) | DataType::Decimal(_)) => true,
+
+        (DataType::Number(src), DataType::Number(dest))
+            if src.is_integer() && dest.is_integer() =>
+        {
+            true
+        }
+        (DataType::Number(src), DataType::Decimal(_)) if src.is_integer() => true,
+        (DataType::Number(_), DataType::String) => true,
+        (DataType::Decimal(_), DataType::String) => true,
+
+        (DataType::Date, DataType::Timestamp) => true,
+
+        // (_, DataType::Boolean) => false,
+        // (DataType::String, _) => false,
+        // (DataType::Decimal(_), DataType::Number(_)) => false,
+        // (DataType::Number(src), DataType::Number(dest))
+        //     if src.is_float() && dest.is_integer() =>
+        // {
+        //     false
+        // }
+        (DataType::Nullable(src), DataType::Nullable(dest)) => is_injective_cast(src, dest),
+        _ => false,
+    }
+}
+
+#[test]
+fn test_aaaa() {
+    println!("xx")
 }
