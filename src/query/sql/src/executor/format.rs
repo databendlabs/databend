@@ -867,9 +867,7 @@ fn table_scan_to_format_tree(
     let rf = context.scan_id_to_runtime_filters.get(&plan.scan_id);
     if let Some(rf) = rf {
         let rf = rf.iter().map(|rf| format!("#{:?}", rf.id)).join(", ");
-        children.push(FormatTreeNode::new(format!(
-            "apply runtime filters: [{rf}]"
-        )));
+        children.push(FormatTreeNode::new(format!("apply join filters: [{rf}]")));
     }
 
     // Virtual columns.
@@ -1575,7 +1573,7 @@ fn hash_join_to_format_tree(
     let mut build_runtime_filters = vec![];
     for rf in plan.runtime_filter.filters.iter() {
         let mut s = format!(
-            "rf_id:{}, build_key:{}, probe_key:{}, rf_type:",
+            "filter id:{}, build key:{}, probe key:{}, filter type:",
             rf.id,
             rf.build_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
             rf.probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
@@ -1603,7 +1601,7 @@ fn hash_join_to_format_tree(
         FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
         FormatTreeNode::new(format!("keys is null equal: [{is_null_equal}]")),
         FormatTreeNode::new(format!("filters: [{filters}]")),
-        FormatTreeNode::with_children(format!("build runtime filters:"), build_runtime_filters),
+        FormatTreeNode::with_children(format!("build join filters:"), build_runtime_filters),
     ];
 
     if let Some((cache_index, column_map)) = &plan.build_side_cache_info {
