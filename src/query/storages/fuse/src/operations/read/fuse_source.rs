@@ -186,7 +186,7 @@ pub fn build_fuse_parquet_source_pipeline(
             }
             pipeline.add_transform(|input, output| {
                 ReadParquetDataTransform::<true>::create(
-                    plan.table_index,
+                    plan.scan_id,
                     ctx.clone(),
                     table_schema.clone(),
                     block_reader.clone(),
