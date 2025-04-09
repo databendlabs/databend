@@ -395,8 +395,14 @@ impl<T: Exchange> Processor for OnePartitionProcessor<T> {
                 return Ok(Event::Async);
             }
 
-            self.output.push_data(Ok(self.input_data.take().unwrap()));
-            return Ok(Event::NeedConsume);
+            let block = self.input_data.take().unwrap();
+            let mut partitioned_data = self.exchange.partition(block, 1)?;
+
+            if let Some(block) = partitioned_data.pop() {
+                debug_assert!(partitioned_data.is_empty());
+                self.output.push_data(Ok(block));
+                return Ok(Event::NeedConsume);
+            }
         }
 
         if self.input.has_data() {
@@ -405,8 +411,14 @@ impl<T: Exchange> Processor for OnePartitionProcessor<T> {
                 return Ok(Event::Async);
             }
 
-            self.output.push_data(self.input.pull_data().unwrap());
-            return Ok(Event::NeedConsume);
+            let data_block = self.input.pull_data().unwrap()?;
+            let mut partitioned_data = self.exchange.partition(data_block, 1)?;
+
+            if let Some(block) = partitioned_data.pop() {
+                debug_assert!(partitioned_data.is_empty());
+                self.output.push_data(Ok(block));
+                return Ok(Event::NeedConsume);
+            }
         }
 
         if self.input.is_finished() {
