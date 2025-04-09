@@ -33,7 +33,7 @@ CommitSink
             ├── probe keys: [t1.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build runtime filters:
+            ├── build join filters:
             ├── estimated rows: 2.00
             ├── TableScan(Build)
             │   ├── table: default.default.t2
@@ -100,7 +100,7 @@ CommitSink
         ├── probe keys: [t1.a (#0)]
         ├── keys is null equal: [false]
         ├── filters: []
-        ├── build runtime filters:
+        ├── build join filters:
         ├── estimated rows: 2.00
         ├── TableScan(Build)
         │   ├── table: default.default.t2
@@ -203,10 +203,10 @@ CommitSink
             ├── probe keys: [c.c_code (#1), c.id (#0), c.me_id (#2)]
             ├── keys is null equal: [false, false, false]
             ├── filters: []
-            ├── build runtime filters:
-            │   ├── rf_id:0, build_key:p.c_code (#9), probe_key:c.c_code (#1), rf_type:inlist,min_max
-            │   ├── rf_id:1, build_key:p.id (#8), probe_key:c.id (#0), rf_type:inlist,min_max
-            │   └── rf_id:2, build_key:p.me_id (#10), probe_key:c.me_id (#2), rf_type:inlist,min_max
+            ├── build join filters:
+            │   ├── filter id:0, build key:p.c_code (#9), probe key:c.c_code (#1), filter type:inlist,min_max
+            │   ├── filter id:1, build key:p.id (#8), probe key:c.id (#0), filter type:inlist,min_max
+            │   └── filter id:2, build key:p.me_id (#10), probe key:c.me_id (#2), filter type:inlist,min_max
             ├── estimated rows: 3.20
             ├── TableScan(Build)
             │   ├── table: default.default.t2
@@ -227,7 +227,7 @@ CommitSink
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
                 ├── push downs: [filters: [], limit: NONE]
-                ├── apply runtime filters: [#0, #1, #2]
+                ├── apply join filters: [#0, #1, #2]
                 └── estimated rows: 4.00
 
 statement ok

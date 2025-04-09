@@ -40,7 +40,7 @@ CommitSink
         ├── probe keys: []
         ├── keys is null equal: []
         ├── filters: []
-        ├── build runtime filters:
+        ├── build join filters:
         ├── estimated rows: 4.00
         ├── EmptyResultScan(Build)
         └── TableScan(Probe)
@@ -78,7 +78,7 @@ CommitSink
             ├── probe keys: [employees2.employee_id (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build runtime filters:
+            ├── build join filters:
             ├── estimated rows: 4.00
             ├── TableScan(Build)
             │   ├── table: default.default.salaries2
@@ -123,8 +123,8 @@ CommitSink
             ├── probe keys: [salaries2.employee_id (#3)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build runtime filters:
-            │   └── rf_id:0, build_key:employees2.employee_id (#0), probe_key:salaries2.employee_id (#3), rf_type:inlist,min_max
+            ├── build join filters:
+            │   └── filter id:0, build key:employees2.employee_id (#0), probe key:salaries2.employee_id (#3), filter type:inlist,min_max
             ├── estimated rows: 4.00
             ├── TableScan(Build)
             │   ├── table: default.default.employees2
@@ -145,7 +145,7 @@ CommitSink
                 ├── partitions scanned: 2
                 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
                 ├── push downs: [filters: [], limit: NONE]
-                ├── apply runtime filters: [#0]
+                ├── apply join filters: [#0]
                 └── estimated rows: 6.00
 
 query T
@@ -167,8 +167,8 @@ CommitSink
             ├── probe keys: [salaries2.employee_id (#3)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build runtime filters:
-            │   └── rf_id:0, build_key:employees2.employee_id (#0), probe_key:salaries2.employee_id (#3), rf_type:inlist,min_max
+            ├── build join filters:
+            │   └── filter id:0, build key:employees2.employee_id (#0), probe key:salaries2.employee_id (#3), filter type:inlist,min_max
             ├── estimated rows: 4.00
             ├── TableScan(Build)
             │   ├── table: default.default.employees2
@@ -189,7 +189,7 @@ CommitSink
                 ├── partitions scanned: 2
                 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
                 ├── push downs: [filters: [], limit: NONE]
-                ├── apply runtime filters: [#0]
+                ├── apply join filters: [#0]
                 └── estimated rows: 6.00
 
 ## test update column only optimization
@@ -227,7 +227,7 @@ CommitSink
             ├── probe keys: [t2.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build runtime filters:
+            ├── build join filters:
             ├── estimated rows: 0.00
             ├── TableScan(Build)
             │   ├── table: default.default.column_only_optimization_target
@@ -267,7 +267,7 @@ CommitSink
             ├── probe keys: [t2.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build runtime filters:
+            ├── build join filters:
             ├── estimated rows: 0.00
             ├── TableScan(Build)
             │   ├── table: default.default.column_only_optimization_target
@@ -310,7 +310,7 @@ CommitSink
             ├── probe keys: [t2.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build runtime filters:
+            ├── build join filters:
             ├── estimated rows: 0.00
             ├── TableScan(Build)
             │   ├── table: default.default.column_only_optimization_target
@@ -350,7 +350,7 @@ CommitSink
             ├── probe keys: [t2.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build runtime filters:
+            ├── build join filters:
             ├── estimated rows: 0.00
             ├── TableScan(Build)
             │   ├── table: default.default.column_only_optimization_target

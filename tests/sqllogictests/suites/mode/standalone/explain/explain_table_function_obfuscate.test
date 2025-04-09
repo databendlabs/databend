@@ -15,7 +15,7 @@ EvalScalar
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
-    ├── build runtime filters:
+    ├── build join filters:
     ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t1

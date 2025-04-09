@@ -12,7 +12,7 @@ Filter
     ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build runtime filters:
+    ├── build join filters:
     ├── estimated rows: 1.00
     ├── AggregateFinal(Build)
     │   ├── output columns: [COUNT(*) (#4), t2.number (#2)]
@@ -30,7 +30,7 @@ Filter
     │           ├── probe keys: []
     │           ├── keys is null equal: []
     │           ├── filters: []
-    │           ├── build runtime filters:
+    │           ├── build join filters:
     │           ├── estimated rows: 1.00
     │           ├── TableScan(Build)
     │           │   ├── table: default.system.numbers
@@ -57,7 +57,7 @@ Filter
         ├── probe keys: []
         ├── keys is null equal: []
         ├── filters: []
-        ├── build runtime filters:
+        ├── build join filters:
         ├── estimated rows: 1.00
         ├── TableScan(Build)
         │   ├── table: default.system.numbers
@@ -92,7 +92,7 @@ Filter
     ├── probe keys: [number (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build runtime filters:
+    ├── build join filters:
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
@@ -123,7 +123,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── build runtime filters:
+├── build join filters:
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: []
@@ -176,8 +176,8 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
-│   └── rf_id:0, build_key:scalar_subquery_1 (#1), probe_key:t.number (#0), rf_type:inlist,min_max
+├── build join filters:
+│   └── filter id:0, build key:scalar_subquery_1 (#1), probe key:t.number (#0), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
@@ -200,7 +200,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply runtime filters: [#0]
+    ├── apply join filters: [#0]
     └── estimated rows: 2.00
 
 query T
@@ -213,7 +213,7 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
+├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -244,7 +244,7 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
+├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -275,7 +275,7 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
+├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -306,7 +306,7 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
+├── build join filters:
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
@@ -345,7 +345,7 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: [t.number (#0) < numbers.number (#1)]
-├── build runtime filters:
+├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -376,7 +376,7 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
+├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -407,8 +407,8 @@ HashJoin
 ├── probe keys: [number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
-│   └── rf_id:1, build_key:number (#2), probe_key:number (#0), rf_type:inlist,min_max
+├── build join filters:
+│   └── filter id:1, build key:number (#2), probe key:number (#0), filter type:inlist,min_max
 ├── estimated rows: 0.20
 ├── HashJoin(Build)
 │   ├── output columns: [numbers.number (#2)]
@@ -417,8 +417,8 @@ HashJoin
 │   ├── probe keys: [t1.number (#1)]
 │   ├── keys is null equal: [false]
 │   ├── filters: []
-│   ├── build runtime filters:
-│   │   └── rf_id:0, build_key:number (#2), probe_key:t1.number (#1), rf_type:inlist,min_max
+│   ├── build join filters:
+│   │   └── filter id:0, build key:number (#2), probe key:t1.number (#1), filter type:inlist,min_max
 │   ├── estimated rows: 0.20
 │   ├── Filter(Build)
 │   │   ├── output columns: [numbers.number (#2)]
@@ -450,7 +450,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── push downs: [filters: [], limit: NONE]
-│       ├── apply runtime filters: [#0]
+│       ├── apply join filters: [#0]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
@@ -460,7 +460,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply runtime filters: [#1]
+    ├── apply join filters: [#1]
     └── estimated rows: 1.00
 
 query T
@@ -473,7 +473,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t.number (#0) < t1.number (#2)]
-├── build runtime filters:
+├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -491,7 +491,7 @@ HashJoin
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: [t.number (#0) > t1.number (#1)]
-    ├── build runtime filters:
+    ├── build join filters:
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
@@ -552,7 +552,7 @@ EvalScalar
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
-    ├── build runtime filters:
+    ├── build join filters:
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)
     │   ├── output columns: [_exists_scalar_subquery (#4)]

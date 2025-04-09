@@ -26,8 +26,8 @@ HashJoin
 ├── probe keys: [t2.a (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
-│   └── rf_id:1, build_key:t.a (#0), probe_key:t2.a (#2), rf_type:inlist,min_max
+├── build join filters:
+│   └── filter id:1, build key:t.a (#0), probe key:t2.a (#2), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t1.a (#1), t.a (#0)]
@@ -36,8 +36,8 @@ HashJoin
 │   ├── probe keys: [t1.a (#1)]
 │   ├── keys is null equal: [false]
 │   ├── filters: []
-│   ├── build runtime filters:
-│   │   └── rf_id:0, build_key:t.a (#0), probe_key:t1.a (#1), rf_type:inlist,min_max
+│   ├── build join filters:
+│   │   └── filter id:0, build key:t.a (#0), probe key:t1.a (#1), filter type:inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
@@ -58,7 +58,7 @@ HashJoin
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       ├── apply runtime filters: [#0]
+│       ├── apply join filters: [#0]
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
@@ -69,7 +69,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply runtime filters: [#1]
+    ├── apply join filters: [#1]
     └── estimated rows: 100.00
 
 query T
@@ -82,8 +82,8 @@ HashJoin
 ├── probe keys: [t1.a (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
-│   └── rf_id:1, build_key:t.a (#0), probe_key:t1.a (#2), rf_type:inlist,min_max
+├── build join filters:
+│   └── filter id:1, build key:t.a (#0), probe key:t1.a (#2), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#1), t.a (#0)]
@@ -92,8 +92,8 @@ HashJoin
 │   ├── probe keys: [t2.a (#1)]
 │   ├── keys is null equal: [false]
 │   ├── filters: []
-│   ├── build runtime filters:
-│   │   └── rf_id:0, build_key:t.a (#0), probe_key:t2.a (#1), rf_type:inlist,min_max
+│   ├── build join filters:
+│   │   └── filter id:0, build key:t.a (#0), probe key:t2.a (#1), filter type:inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
@@ -114,7 +114,7 @@ HashJoin
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       ├── apply runtime filters: [#0]
+│       ├── apply join filters: [#0]
 │       └── estimated rows: 100.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
@@ -125,7 +125,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply runtime filters: [#1]
+    ├── apply join filters: [#1]
     └── estimated rows: 10.00
 
 query T
@@ -138,8 +138,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
-│   └── rf_id:1, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
+├── build join filters:
+│   └── filter id:1, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t.a (#1)]
@@ -148,8 +148,8 @@ HashJoin
 │   ├── probe keys: [t2.a (#2)]
 │   ├── keys is null equal: [false]
 │   ├── filters: []
-│   ├── build runtime filters:
-│   │   └── rf_id:0, build_key:t.a (#1), probe_key:t2.a (#2), rf_type:inlist,min_max
+│   ├── build join filters:
+│   │   └── filter id:0, build key:t.a (#1), probe key:t2.a (#2), filter type:inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
@@ -170,7 +170,7 @@ HashJoin
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       ├── apply runtime filters: [#0]
+│       ├── apply join filters: [#0]
 │       └── estimated rows: 100.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
@@ -181,7 +181,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply runtime filters: [#1]
+    ├── apply join filters: [#1]
     └── estimated rows: 10.00
 
 query T
@@ -194,8 +194,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
-│   └── rf_id:1, build_key:t.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
+├── build join filters:
+│   └── filter id:1, build key:t.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#1), t.a (#2)]
@@ -204,8 +204,8 @@ HashJoin
 │   ├── probe keys: [t2.a (#1)]
 │   ├── keys is null equal: [false]
 │   ├── filters: []
-│   ├── build runtime filters:
-│   │   └── rf_id:0, build_key:t.a (#2), probe_key:t2.a (#1), rf_type:inlist,min_max
+│   ├── build join filters:
+│   │   └── filter id:0, build key:t.a (#2), probe key:t2.a (#1), filter type:inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
@@ -226,7 +226,7 @@ HashJoin
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       ├── apply runtime filters: [#0]
+│       ├── apply join filters: [#0]
 │       └── estimated rows: 100.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
@@ -237,7 +237,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply runtime filters: [#1]
+    ├── apply join filters: [#1]
     └── estimated rows: 10.00
 
 query T
@@ -250,8 +250,8 @@ HashJoin
 ├── probe keys: [t2.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
-│   └── rf_id:1, build_key:t.a (#2), probe_key:t2.a (#0), rf_type:inlist,min_max
+├── build join filters:
+│   └── filter id:1, build key:t.a (#2), probe key:t2.a (#0), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t1.a (#1), t.a (#2)]
@@ -260,8 +260,8 @@ HashJoin
 │   ├── probe keys: [t1.a (#1)]
 │   ├── keys is null equal: [false]
 │   ├── filters: []
-│   ├── build runtime filters:
-│   │   └── rf_id:0, build_key:t.a (#2), probe_key:t1.a (#1), rf_type:inlist,min_max
+│   ├── build join filters:
+│   │   └── filter id:0, build key:t.a (#2), probe key:t1.a (#1), filter type:inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
@@ -282,7 +282,7 @@ HashJoin
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       ├── apply runtime filters: [#0]
+│       ├── apply join filters: [#0]
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
@@ -293,7 +293,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply runtime filters: [#1]
+    ├── apply join filters: [#1]
     └── estimated rows: 100.00
 
 query T
@@ -306,8 +306,8 @@ HashJoin
 ├── probe keys: [t2.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build runtime filters:
-│   └── rf_id:1, build_key:t1.a (#2), probe_key:t2.a (#0), rf_type:inlist,min_max
+├── build join filters:
+│   └── filter id:1, build key:t1.a (#2), probe key:t2.a (#0), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t1.a (#2), t.a (#1)]
@@ -316,8 +316,8 @@ HashJoin
 │   ├── probe keys: [t1.a (#2)]
 │   ├── keys is null equal: [false]
 │   ├── filters: []
-│   ├── build runtime filters:
-│   │   └── rf_id:0, build_key:t.a (#1), probe_key:t1.a (#2), rf_type:inlist,min_max
+│   ├── build join filters:
+│   │   └── filter id:0, build key:t.a (#1), probe key:t1.a (#2), filter type:inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
@@ -338,7 +338,7 @@ HashJoin
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       ├── apply runtime filters: [#0]
+│       ├── apply join filters: [#0]
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
@@ -349,7 +349,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply runtime filters: [#1]
+    ├── apply join filters: [#1]
     └── estimated rows: 100.00
 
 statement ok
