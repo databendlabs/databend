@@ -20,7 +20,6 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_storage::DataOperator;
 
 use super::TransformFinalAggregate;
@@ -47,10 +46,8 @@ pub fn build_final_aggregate(
 
     // 2. align partitions
     pipeline.add_transform(|input, output| {
-        Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-            input,
-            output,
-            TransformPartitionAlign::create(ctx.clone(), params.clone())?,
+        Ok(ProcessorPtr::create(Box::new(
+            TransformPartitionAlign::create(ctx.clone(), params.clone(), input, output)?,
         )))
     })?;
 

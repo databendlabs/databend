@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -27,7 +29,10 @@ use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
-use databend_common_pipeline_transforms::AccumulatingTransform;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::MemorySettings;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
@@ -38,50 +43,66 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::sessions::QueryContext;
 
 pub struct TransformPartitionAlign {
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+
+    #[allow(dead_code)]
     settings: MemorySettings,
     params: Arc<AggregatorParams>,
 
     max_partition: usize,
     working_partition: isize,
     partitions: Partitions,
+
+    output_data: VecDeque<DataBlock>,
+    input_data: Option<(AggregateMeta, DataBlock)>,
 }
 
 impl TransformPartitionAlign {
-    pub fn create(ctx: Arc<QueryContext>, params: Arc<AggregatorParams>) -> Result<Self> {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        params: Arc<AggregatorParams>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> Result<Self> {
         let settings = MemorySettings::from_aggregate_settings(&ctx)?;
         Ok(TransformPartitionAlign {
+            input,
+            output,
             params,
             settings,
             max_partition: 0,
             working_partition: 0,
             partitions: Partitions::create(),
+            input_data: None,
+            output_data: Default::default(),
         })
     }
 
     fn ready_partition(&mut self) -> Option<isize> {
         let storage_min_partition = self.partitions.min_partition()?;
 
-        if storage_min_partition > self.working_partition {
+        if storage_min_partition >= self.working_partition {
             return None;
         }
 
         Some(storage_min_partition)
     }
 
-    fn fetch_ready_partition(&mut self) -> Result<Vec<DataBlock>> {
+    fn fetch_ready_partition(&mut self) -> Result<()> {
         if let Some(ready_partition_id) = self.ready_partition() {
             let ready_partition = self.partitions.take_partition(ready_partition_id);
 
-            let mut ready_data = Vec::with_capacity(ready_partition.len());
             for (meta, data_block) in ready_partition {
-                ready_data.push(data_block.add_meta(Some(Box::new(meta)))?);
+                self.output_data
+                    .push_back(data_block.add_meta(Some(Box::new(meta)))?);
             }
 
-            ready_data.push(DataBlock::empty_with_meta(AggregateMeta::create_final()));
-            return Ok(ready_data);
+            self.output_data
+                .push_back(DataBlock::empty_with_meta(AggregateMeta::create_final()));
         }
 
-        Ok(vec![])
+        Ok(())
     }
 
     fn unpark_block(&self, mut data_block: DataBlock) -> Result<(AggregateMeta, DataBlock)> {
@@ -204,68 +225,144 @@ impl TransformPartitionAlign {
     }
 }
 
-#[async_trait::async_trait]
-impl AccumulatingTransform for TransformPartitionAlign {
-    const NAME: &'static str = "TransformPartitionAlign";
-
-    fn transform(&mut self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
-        let (meta, data_block) = self.unpark_block(data_block)?;
-        self.max_partition = meta.get_global_max_partition();
-
-        // need repartition
-        if meta.get_max_partition() != meta.get_global_max_partition() {
-            self.repartition(meta, data_block)?;
-            return Ok(vec![]);
-        }
-
-        let partition = meta.get_sorting_partition();
-        self.partitions.add_data(meta, data_block);
-
-        if partition > SINGLE_LEVEL_BUCKET_NUM && partition != self.working_partition {
-            let ready_partition = self.fetch_ready_partition()?;
-            self.working_partition = partition;
-            return Ok(ready_partition);
-        }
-
-        Ok(vec![])
+impl Processor for TransformPartitionAlign {
+    fn name(&self) -> String {
+        String::from("TransformPartitionAlign")
     }
 
-    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
-        let remain_size = self
-            .partitions
-            .data
-            .values()
-            .map(|x| x.len())
-            .sum::<usize>();
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
 
-        let mut remain_partitions = Vec::with_capacity(remain_size + self.partitions.data.len());
-        self.working_partition = self.max_partition as isize;
+    fn event(&mut self) -> Result<Event> {
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
 
-        loop {
-            let ready_partition = self.fetch_ready_partition()?;
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
 
-            if !ready_partition.is_empty() {
-                remain_partitions.extend(ready_partition);
-                continue;
+        if let Some(data_block) = self.output_data.pop_front() {
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.has_data() {
+            let data_block = self.input.pull_data().unwrap()?;
+
+            let (meta, data_block) = self.unpark_block(data_block)?;
+            self.max_partition = meta.get_global_max_partition();
+
+            // need repartition
+            if meta.get_max_partition() != meta.get_global_max_partition() {
+                self.input_data = Some((meta, data_block));
+                return Ok(Event::Sync);
             }
 
-            return Ok(remain_partitions);
+            let partition = meta.get_sorting_partition();
+            self.partitions.add_data(meta, data_block);
+
+            if partition > SINGLE_LEVEL_BUCKET_NUM && partition != self.working_partition {
+                self.working_partition = partition;
+            }
         }
+
+        if self.input.is_finished() && self.working_partition as usize != self.max_partition {
+            self.working_partition = self.max_partition as isize;
+        }
+
+        if self.output_data.is_empty() {
+            self.fetch_ready_partition()?;
+        }
+
+        if let Some(data_block) = self.output_data.pop_front() {
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
     }
 
-    fn need_spill(&self) -> bool {
-        self.settings.check_spill()
-    }
+    fn process(&mut self) -> Result<()> {
+        if let Some((meta, data_block)) = self.input_data.take() {
+            self.repartition(meta, data_block)?;
+        }
 
-    fn prepare_spill_payload(&mut self) -> Result<bool> {
-        // self.partitions.data.f
-        Ok(false)
-    }
-
-    async fn flush_spill_payload(&mut self) -> Result<bool> {
-        Ok(false)
+        Ok(())
     }
 }
+
+// #[async_trait::async_trait]
+// impl AccumulatingTransform for TransformPartitionAlign {
+//     const NAME: &'static str = "TransformPartitionAlign";
+//
+//     fn transform(&mut self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
+//         let (meta, data_block) = self.unpark_block(data_block)?;
+//         self.max_partition = meta.get_global_max_partition();
+//
+//         // need repartition
+//         if meta.get_max_partition() != meta.get_global_max_partition() {
+//             self.repartition(meta, data_block)?;
+//             return Ok(vec![]);
+//         }
+//
+//         let partition = meta.get_sorting_partition();
+//         self.partitions.add_data(meta, data_block);
+//
+//         if partition > SINGLE_LEVEL_BUCKET_NUM && partition != self.working_partition {
+//             self.fetch_ready_partition()?;
+//             self.working_partition = partition;
+//             // return Ok(ready_partition);
+//         }
+//
+//         Ok(vec![])
+//     }
+//
+//     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
+//         let remain_size = self
+//             .partitions
+//             .data
+//             .values()
+//             .map(|x| x.len())
+//             .sum::<usize>();
+//
+//         let mut remain_partitions = Vec::with_capacity(remain_size + self.partitions.data.len());
+//         self.working_partition = self.max_partition as isize;
+//
+//         loop {
+//             let ready_partition = self.fetch_ready_partition()?;
+//
+//             if !ready_partition.is_empty() {
+//                 remain_partitions.extend(ready_partition);
+//                 continue;
+//             }
+//
+//             return Ok(remain_partitions);
+//         }
+//     }
+//
+//     fn need_spill(&self) -> bool {
+//         self.settings.check_spill()
+//     }
+//
+//     fn prepare_spill_payload(&mut self) -> Result<bool> {
+//         // self.partitions.data.f
+//         Ok(false)
+//     }
+//
+//     async fn flush_spill_payload(&mut self) -> Result<bool> {
+//         Ok(false)
+//     }
+// }
 
 #[derive(Debug)]
 struct Partitions {
