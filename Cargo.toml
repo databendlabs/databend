@@ -294,6 +294,7 @@ defer = "0.2"
 deltalake = "0.25"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = { version = "1.0.0", features = ["full"] }
+display-more = { version = "0.1.0" }
 dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "30e28ca" }
 dyn-clone = "1.0.9"
 educe = { version = "1.0.0", features = ["default", "full"], package = "databend_educe" }
@@ -316,6 +317,7 @@ geo = { version = "0.28.0", features = ["use-serde"] }
 geohash = "0.13.0"
 geozero = { version = "0.14.0", features = ["with-geo", "with-geojson", "with-wkb", "with-wkt"] }
 gimli = "0.31.0"
+glob = "0.3.0"
 globiter = "0.1"
 goldenfile = "1.4"
 h3o = "0.4.0"
@@ -324,7 +326,7 @@ hashbrown_v0_14 = { package = "hashbrown", version = "0.14.0", default-features 
 hashlink = "0.8"
 headers = "0.4.0"
 hex = "0.4.3"
-hickory-resolver = "0.24"
+hickory-resolver = "0.25"
 highway = "1.1"
 hive_metastore = "0.1.0"
 hostname = "0.3.1"
@@ -442,7 +444,7 @@ reqwest = { version = "0.12", default-features = false, features = [
     "native-tls-vendored",
     "native-tls-alpn",
 ] }
-reqwest-hickory-resolver = "0.1"
+reqwest-hickory-resolver = "0.2"
 ringbuffer = "0.14.2"
 rmp-serde = "1.1.1"
 roaring = { version = "0.10.1", features = ["serde"] }
@@ -637,6 +639,7 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
+display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.1.2" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "1a53512" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.3" }

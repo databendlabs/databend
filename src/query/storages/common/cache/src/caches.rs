@@ -22,6 +22,7 @@ use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -30,14 +31,16 @@ use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use parquet::file::metadata::ParquetMetaData;
 
 use crate::manager::CacheManager;
+use crate::providers::HybridCache;
 use crate::CacheAccessor;
 use crate::InMemoryLruCache;
 
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
 
-/// In-memory cache for all the block metadata of individual segments.
-///
+/// In memory object cache of ColumnOrientedSegmentInfo
+pub type ColumnOrientedSegmentInfoCache = InMemoryLruCache<ColumnOrientedSegment>;
+
 /// Note that this cache may be memory-intensive, as each item of this cache
 /// contains ALL the BlockMeta of a segment, for well-compacted segment, the
 /// number of BlockMeta might be 1000 ~ 2000.
@@ -52,9 +55,9 @@ pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
 pub type TableSnapshotStatisticCache = InMemoryLruCache<TableSnapshotStatistics>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
-pub type BloomIndexFilterCache = InMemoryLruCache<Xor8Filter>;
+pub type BloomIndexFilterCache = HybridCache<Xor8Filter>;
 /// In memory object cache of parquet FileMetaData of bloom index data
-pub type BloomIndexMetaCache = InMemoryLruCache<BloomIndexMeta>;
+pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 
 pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
 pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;
@@ -177,6 +180,15 @@ impl From<CompactSegmentInfo> for CacheValue<CompactSegmentInfo> {
     }
 }
 
+impl From<ColumnOrientedSegment> for CacheValue<ColumnOrientedSegment> {
+    fn from(value: ColumnOrientedSegment) -> Self {
+        CacheValue {
+            mem_bytes: value.block_metas.memory_size()
+                + std::mem::size_of::<ColumnOrientedSegment>(),
+            inner: Arc::new(value),
+        }
+    }
+}
 impl From<Vec<Arc<BlockMeta>>> for CacheValue<Vec<Arc<BlockMeta>>> {
     fn from(value: Vec<Arc<BlockMeta>>) -> Self {
         CacheValue {

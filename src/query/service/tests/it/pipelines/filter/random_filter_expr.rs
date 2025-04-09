@@ -192,15 +192,16 @@ fn replace_const_to_const_and_column_ref(
     data_type: &DataType,
     num_columns: usize,
 ) -> Expr {
+    use databend_common_expression::expr;
     match expr {
-        Expr::FunctionCall {
+        Expr::FunctionCall(expr::FunctionCall {
             span,
             id,
             function,
             args,
             generics,
             return_type,
-        } => {
+        }) => {
             let mut new_args = Vec::with_capacity(args.len());
             for arg in args {
                 new_args.push(replace_const_to_const_and_column_ref(
@@ -209,53 +210,55 @@ fn replace_const_to_const_and_column_ref(
                     num_columns,
                 ));
             }
-            Expr::FunctionCall {
+            Expr::FunctionCall(expr::FunctionCall {
                 span,
                 id,
                 function,
                 args: new_args,
                 generics,
                 return_type,
-            }
+            })
         }
-        Expr::ColumnRef { .. } => {
+        Expr::ColumnRef(_) => {
             let mut rng = rand::thread_rng();
             if rng.gen_bool(0.5) {
                 // Replace the child to `ColumnRef`
                 let mut rng = rand::thread_rng();
                 let index = rng.gen_range(0..num_columns);
-                Expr::ColumnRef {
+                expr::ColumnRef {
                     span: None,
                     id: index,
                     data_type: data_type.clone(),
                     display_name: "".to_string(),
                 }
+                .into()
             } else {
                 // Replace the child to `Constant`
                 let scalar = Column::random(data_type, 1, None)
                     .index(0)
                     .unwrap()
                     .to_owned();
-                Expr::Constant {
+                expr::Constant {
                     span: None,
                     scalar,
                     data_type: data_type.clone(),
                 }
+                .into()
             }
         }
-        Expr::Cast {
+        Expr::Cast(expr::Cast {
             span,
             is_try,
             expr,
             dest_type,
-        } => {
+        }) => {
             let expr = replace_const_to_const_and_column_ref(*expr, data_type, num_columns);
-            Expr::Cast {
+            Expr::Cast(expr::Cast {
                 span,
                 is_try,
                 expr: Box::new(expr),
                 dest_type,
-            }
+            })
         }
         _ => unreachable!("expr = {:?}", expr),
     }

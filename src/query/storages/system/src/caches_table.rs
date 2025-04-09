@@ -35,9 +35,10 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CacheValue;
+use databend_storages_common_cache::HybridCache;
 use databend_storages_common_cache::InMemoryLruCache;
+use databend_storages_common_cache::TableDataCache;
 use databend_storages_common_cache::Unit;
-use databend_storages_common_cache::DISK_TABLE_DATA_CACHE_NAME;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -75,6 +76,8 @@ impl SyncSystemTable for CachesTable {
         let table_snapshot_cache = cache_manager.get_table_snapshot_cache();
         let table_snapshot_statistic_cache = cache_manager.get_table_snapshot_statistics_cache();
         let segment_info_cache = cache_manager.get_table_segment_cache();
+        let column_oriented_segment_info_cache =
+            cache_manager.get_column_oriented_segment_info_cache();
         let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache();
         let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache();
         let segment_block_metas_cache = cache_manager.get_segment_block_metas_cache();
@@ -99,12 +102,20 @@ impl SyncSystemTable for CachesTable {
             Self::append_row(&segment_info_cache, &local_node, &mut columns);
         }
 
+        if let Some(column_oriented_segment_info_cache) = column_oriented_segment_info_cache {
+            Self::append_row(
+                &column_oriented_segment_info_cache,
+                &local_node,
+                &mut columns,
+            );
+        }
+
         if let Some(bloom_index_filter_cache) = bloom_index_filter_cache {
-            Self::append_row(&bloom_index_filter_cache, &local_node, &mut columns);
+            Self::append_rows_of_hybrid_cache(&bloom_index_filter_cache, &local_node, &mut columns);
         }
 
         if let Some(bloom_index_meta_cache) = bloom_index_meta_cache {
-            Self::append_row(&bloom_index_meta_cache, &local_node, &mut columns);
+            Self::append_rows_of_hybrid_cache(&bloom_index_meta_cache, &local_node, &mut columns);
         }
 
         if let Some(segment_block_metas_cache) = segment_block_metas_cache {
@@ -131,21 +142,7 @@ impl SyncSystemTable for CachesTable {
             Self::append_row(&parquet_meta_data_cache, &local_node, &mut columns);
         }
 
-        if let Some(cache) = table_data_cache {
-            // table data cache is not a named cache yet
-            columns.nodes.push(local_node.clone());
-            columns.names.push(DISK_TABLE_DATA_CACHE_NAME.to_string());
-            columns.num_items.push(cache.len() as u64);
-            columns.size.push(cache.bytes_size());
-            columns.capacity.push(cache.bytes_capacity());
-            columns.unit.push(Unit::Bytes.to_string());
-            let access = get_cache_access_count(DISK_TABLE_DATA_CACHE_NAME);
-            let hit = get_cache_hit_count(DISK_TABLE_DATA_CACHE_NAME);
-            let miss = get_cache_miss_count(DISK_TABLE_DATA_CACHE_NAME);
-            columns.access.push(access);
-            columns.hit.push(hit);
-            columns.miss.push(miss);
-        }
+        Self::append_on_disk_cache_row(&table_data_cache, &local_node, &mut columns);
 
         if let Some(table_column_array_cache) = table_column_array_cache {
             Self::append_row(&table_column_array_cache, &local_node, &mut columns);
@@ -222,5 +219,38 @@ impl CachesTable {
         columns.access.push(access);
         columns.hit.push(hit);
         columns.miss.push(miss);
+    }
+
+    fn append_on_disk_cache_row(
+        cache: &Option<TableDataCache>,
+        local_node: &str,
+        columns: &mut CachesTableColumns,
+    ) {
+        if let Some(cache) = cache {
+            let name = cache.name();
+            columns.nodes.push(local_node.to_owned());
+            columns.names.push(name.to_string());
+            columns.num_items.push(cache.len() as u64);
+            columns.size.push(cache.bytes_size());
+            columns.capacity.push(cache.bytes_capacity());
+            columns.unit.push(Unit::Bytes.to_string());
+            let access = get_cache_access_count(name);
+            let hit = get_cache_hit_count(name);
+            let miss = get_cache_miss_count(name);
+            columns.access.push(access);
+            columns.hit.push(hit);
+            columns.miss.push(miss);
+        }
+    }
+
+    fn append_rows_of_hybrid_cache<V: Into<CacheValue<V>>>(
+        cache: &HybridCache<V>,
+        local_node: &str,
+        columns: &mut CachesTableColumns,
+    ) {
+        let in_memory_cache = cache.in_memory_cache();
+        Self::append_row(in_memory_cache, local_node, columns);
+        let on_disk_cache = cache.on_disk_cache();
+        Self::append_on_disk_cache_row(on_disk_cache, local_node, columns);
     }
 }

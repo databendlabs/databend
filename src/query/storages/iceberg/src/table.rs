@@ -29,9 +29,12 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::DistributionLevel;
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -61,6 +64,8 @@ pub struct IcebergTable {
     info: TableInfo,
 
     pub table: iceberg::table::Table,
+    // None means current_snapshot_id
+    pub snapshot_id: Option<i64>,
     statistics: IcebergStatistics,
 }
 
@@ -71,6 +76,7 @@ impl IcebergTable {
         Ok(Box::new(Self {
             info,
             table,
+            snapshot_id: None,
             statistics,
         }))
     }
@@ -246,6 +252,7 @@ impl IcebergTable {
         Ok(Self {
             info,
             table,
+            snapshot_id: None,
             statistics,
         })
     }
@@ -276,7 +283,13 @@ impl IcebergTable {
         _: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let mut scan = self.table.scan();
+        // Some means navigate is valid
+        let mut scan = if let Some(snapshot_id) = self.snapshot_id {
+            let scan = self.table.scan();
+            scan.snapshot_id(snapshot_id)
+        } else {
+            self.table.scan()
+        };
 
         if let Some(push_downs) = &push_downs {
             if let Some(projection) = &push_downs.projection {
@@ -404,5 +417,62 @@ impl Table for IcebergTable {
 
     fn has_exact_total_row_count(&self) -> bool {
         true
+    }
+
+    #[async_backtrace::framed]
+    async fn navigate_to(
+        &self,
+        navigation: &TimeNavigation,
+        _abort_checker: AbortChecker,
+    ) -> Result<Arc<dyn Table>> {
+        let snapshot_id = match navigation {
+            TimeNavigation::TimeTravel(np) => match np {
+                NavigationPoint::SnapshotID(sid) => {
+                    let sid = sid.parse::<i64>()?;
+                    if self.table.metadata().snapshot_by_id(sid).is_some() {
+                        Some(sid)
+                    } else {
+                        None
+                    }
+                }
+                NavigationPoint::TimePoint(dt) => {
+                    let ts = dt.timestamp_millis();
+                    self.table
+                        .metadata()
+                        .history()
+                        .iter()
+                        .filter(|log| log.timestamp_ms < ts)
+                        .max_by_key(|log| log.timestamp_ms)
+                        .map(|s| s.snapshot_id)
+                }
+                _ => {
+                    return Err(ErrorCode::Unimplemented(format!(
+                            "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
+                            self.name(),
+                            self.get_table_info().engine(),
+                        )));
+                }
+            },
+            _ => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
+                    self.name(),
+                    self.get_table_info().engine(),
+                )));
+            }
+        };
+
+        if snapshot_id.is_none() {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "No historical data found at given point",
+            ));
+        }
+        let (table, statistics) = Self::parse_engine_options(&self.info.meta.engine_options)?;
+        Ok(Arc::new(IcebergTable {
+            info: self.info.clone(),
+            table,
+            snapshot_id,
+            statistics,
+        }))
     }
 }

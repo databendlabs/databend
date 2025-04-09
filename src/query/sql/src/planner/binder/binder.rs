@@ -31,6 +31,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
@@ -59,8 +60,8 @@ use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
-use crate::planner::query_executor::QueryExecutor;
+use crate::optimizer::ir::SExpr;
+use crate::planner::QueryExecutor;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::DescConnectionPlan;
@@ -835,7 +836,7 @@ impl<'a> Binder {
             let (new_expr, _) =
                 ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             match new_expr {
-                Expr::Constant { scalar, .. } => {
+                Expr::Constant(Constant { scalar, .. }) => {
                     let value = scalar.into_string().unwrap();
                     if variable.to_lowercase().as_str() == "timezone" {
                         let tz = value.trim_matches(|c| c == '\'' || c == '\"');

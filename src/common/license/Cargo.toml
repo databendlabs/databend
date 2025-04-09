@@ -9,6 +9,7 @@ edition = { workspace = true }
 [dependencies]
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
+display-more = { workspace = true }
 jwt-simple = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

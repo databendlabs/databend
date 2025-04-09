@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
-use crate::optimizer::RelationalProperty;
+use crate::optimizer::ir::RelationalProperty;
 use crate::plans::walk_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -214,6 +214,11 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
         }
 
         fn visit_subquery(&mut self, _: &'a crate::plans::SubqueryExpr) -> Result<()> {
+            self.can_prune = false;
+            Ok(())
+        }
+
+        fn visit_constant(&mut self, _constant: &'a crate::plans::ConstantExpr) -> Result<()> {
             self.can_prune = false;
             Ok(())
         }

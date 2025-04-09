@@ -23,7 +23,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::ColumnEntry;
 use crate::ColumnSet;
 

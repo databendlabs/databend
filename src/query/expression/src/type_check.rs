@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Write;
 
@@ -21,6 +22,7 @@ use databend_common_exception::Result;
 use itertools::Itertools;
 
 use crate::cast_scalar;
+use crate::expr::*;
 use crate::expression::Expr;
 use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
@@ -31,10 +33,11 @@ use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::Number;
-use crate::types::NumberScalar;
+use crate::visit_expr;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
 use crate::ConstantFolder;
+use crate::ExprVisitor;
 use crate::FunctionContext;
 use crate::Scalar;
 
@@ -48,25 +51,27 @@ pub fn check<Index: ColumnIndex>(
             span,
             scalar,
             data_type,
-        } => Ok(Expr::Constant {
+        } => Ok(Constant {
             span: *span,
             scalar: scalar.clone(),
             data_type: data_type
                 .as_ref()
                 .cloned()
                 .unwrap_or_else(|| scalar.as_ref().infer_data_type()),
-        }),
+        }
+        .into()),
         RawExpr::ColumnRef {
             span,
             id,
             data_type,
             display_name,
-        } => Ok(Expr::ColumnRef {
+        } => Ok(ColumnRef {
             span: *span,
             id: id.clone(),
             data_type: data_type.clone(),
             display_name: display_name.clone(),
-        }),
+        }
+        .into()),
         RawExpr::Cast {
             span,
             is_try,
@@ -92,16 +97,16 @@ pub fn check<Index: ColumnIndex>(
             // This may hurt the bloom filter, we should try cast to literal as the datatype of column
             if name == "eq" && args_expr.len() == 2 {
                 match args_expr.as_mut_slice() {
-                    [e, Expr::Constant {
+                    [e, Expr::Constant(Constant {
                         span,
                         scalar,
                         data_type,
-                    }]
-                    | [Expr::Constant {
+                    })]
+                    | [Expr::Constant(Constant {
                         span,
                         scalar,
                         data_type,
-                    }, e] => {
+                    }), e] => {
                         let src_ty = data_type.remove_nullable();
                         let dest_ty = e.data_type().remove_nullable();
 
@@ -133,14 +138,15 @@ pub fn check<Index: ColumnIndex>(
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
 
-            Ok(Expr::LambdaFunctionCall {
+            Ok(LambdaFunctionCall {
                 span: *span,
                 name: name.clone(),
                 args,
                 lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
-            })
+            }
+            .into())
         }
     }
 }
@@ -150,7 +156,7 @@ pub fn check_cast<Index: ColumnIndex>(
     is_try: bool,
     expr: Expr<Index>,
     dest_type: &DataType,
-    fn_registry: &FunctionRegistry,
+    _: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
     let wrapped_dest_type = if is_try {
         wrap_nullable_for_try_cast(span, dest_type)?
@@ -161,33 +167,13 @@ pub fn check_cast<Index: ColumnIndex>(
     if expr.data_type() == &wrapped_dest_type {
         Ok(expr)
     } else if expr.data_type().wrap_nullable() == wrapped_dest_type {
-        Ok(Expr::Cast {
+        Ok(Expr::Cast(Cast {
             span,
             is_try,
             expr: Box::new(expr),
             dest_type: wrapped_dest_type,
-        })
+        }))
     } else {
-        // fast path to eval function for cast
-        if let Some(cast_fn) = get_simple_cast_function(is_try, expr.data_type(), dest_type) {
-            let params = if let DataType::Decimal(ty) = dest_type {
-                vec![
-                    Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
-                    Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
-                ]
-            } else {
-                vec![]
-            };
-
-            if let Ok(cast_expr) =
-                check_function(span, &cast_fn, &params, &[expr.clone()], fn_registry)
-            {
-                if cast_expr.data_type() == &wrapped_dest_type {
-                    return Ok(cast_expr);
-                }
-            }
-        }
-
         if !can_cast_to(expr.data_type(), dest_type) {
             return Err(ErrorCode::BadArguments(format!(
                 "unable to cast type `{}` to type `{}`",
@@ -197,12 +183,12 @@ pub fn check_cast<Index: ColumnIndex>(
             .set_span(span));
         }
 
-        Ok(Expr::Cast {
+        Ok(Expr::Cast(Cast {
             span,
             is_try,
             expr: Box::new(expr),
             dest_type: wrapped_dest_type,
-        })
+        }))
     }
 }
 
@@ -227,7 +213,7 @@ pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType>
     }
 }
 
-pub fn check_number<Index: ColumnIndex, T: Number>(
+pub fn check_number<T: Number, Index: ColumnIndex>(
     span: Span,
     func_ctx: &FunctionContext,
     expr: &Expr<Index>,
@@ -236,12 +222,12 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
     let origin_ty = expr.data_type();
     let (expr, _) = if origin_ty != &DataType::Number(T::data_type()) {
         ConstantFolder::fold(
-            &Expr::Cast {
+            &Expr::Cast(Cast {
                 span,
                 is_try: false,
                 expr: Box::new(expr.clone()),
                 dest_type: DataType::Number(T::data_type()),
-            },
+            }),
             func_ctx,
             fn_registry,
         )
@@ -250,10 +236,10 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
     };
 
     match expr {
-        Expr::Constant {
+        Expr::Constant(Constant {
             scalar: Scalar::Number(num),
             ..
-        } => T::try_downcast_scalar(&num).ok_or_else(|| {
+        }) => T::try_downcast_scalar(&num).ok_or_else(|| {
             ErrorCode::InvalidArgument(format!("Expect {}, but got {}", T::data_type(), origin_ty))
                 .set_span(span)
         }),
@@ -299,33 +285,63 @@ pub fn check_function<Index: ColumnIndex>(
         debug_assert!(candidates.len() == 1);
         let (id, function) = candidates.into_iter().next().unwrap();
         let return_type = function.signature.return_type.clone();
-        return Ok(Expr::FunctionCall {
+        return Ok(Expr::FunctionCall(FunctionCall {
             span,
-            id,
+            id: Box::new(id),
             function,
             generics: vec![],
             args: args.to_vec(),
             return_type,
-        });
+        }));
     }
 
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
 
     let mut fail_reasons = Vec::with_capacity(candidates.len());
-    for (id, func) in &candidates {
+    let mut checked_candidates = vec![];
+    let args_not_const = args
+        .iter()
+        .map(Expr::contains_column_ref)
+        .collect::<Vec<_>>();
+    let need_sort = candidates.len() > 1 && args_not_const.iter().any(|contain| !*contain);
+    for (seq, (id, func)) in candidates.iter().enumerate() {
         match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
-            Ok((checked_args, return_type, generics)) => {
-                return Ok(Expr::FunctionCall {
+            Ok((args, return_type, generics)) => {
+                let score = if need_sort {
+                    args.iter()
+                        .zip(args_not_const.iter().copied())
+                        .map(|(expr, not_const)| {
+                            // smaller score win
+                            if not_const && expr.is_cast() {
+                                1
+                            } else {
+                                0
+                            }
+                        })
+                        .sum::<usize>()
+                } else {
+                    0
+                };
+                let expr = Expr::FunctionCall(FunctionCall {
                     span,
-                    id: id.clone(),
+                    id: Box::new(id.clone()),
                     function: func.clone(),
                     generics,
-                    args: checked_args,
+                    args,
                     return_type,
                 });
+                if !need_sort {
+                    return Ok(expr);
+                }
+                checked_candidates.push((expr, score, seq));
             }
             Err(err) => fail_reasons.push(err),
         }
+    }
+
+    if !checked_candidates.is_empty() {
+        checked_candidates.sort_by_key(|(_, score, seq)| std::cmp::Reverse((*score, *seq)));
+        return Ok(checked_candidates.pop().unwrap().0);
     }
 
     let mut msg = if params.is_empty() {
@@ -783,6 +799,75 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "parse_json",
 ];
 
-pub fn is_simple_cast_function(name: &str) -> bool {
+fn is_simple_cast_function(name: &str) -> bool {
     ALL_SIMPLE_CAST_FUNCTIONS.contains(&name)
+}
+
+pub fn rewrite_function_to_cast<Index: ColumnIndex>(expr: Expr<Index>) -> Expr<Index> {
+    match visit_expr(&expr, &mut RewriteCast).unwrap() {
+        None => expr,
+        Some(expr) => expr,
+    }
+}
+
+struct RewriteCast;
+
+impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast {
+    type Error = !;
+
+    fn enter_function_call(
+        &mut self,
+        call: &FunctionCall<Index>,
+    ) -> std::result::Result<Option<Expr<Index>>, Self::Error> {
+        let expr = match Self::visit_function_call(call, self)? {
+            Some(expr) => Cow::Owned(expr.into_function_call().unwrap()),
+            None => Cow::Borrowed(call),
+        };
+        let FunctionCall {
+            span,
+            function,
+            generics,
+            args,
+            return_type,
+            ..
+        } = expr.as_ref();
+        if !generics.is_empty() || args.len() != 1 {
+            return match expr {
+                Cow::Borrowed(_) => Ok(None),
+                Cow::Owned(call) => Ok(Some(call.into())),
+            };
+        }
+        if function.signature.name == "parse_json" {
+            return Ok(Some(Expr::Cast(Cast {
+                span: *span,
+                is_try: false,
+                expr: Box::new(args.first().unwrap().clone()),
+                dest_type: return_type.clone(),
+            })));
+        }
+        let func_name = format!(
+            "to_{}",
+            return_type.remove_nullable().to_string().to_lowercase()
+        );
+        if function.signature.name == func_name {
+            return Ok(Some(Expr::Cast(Cast {
+                span: *span,
+                is_try: false,
+                expr: Box::new(args.first().unwrap().clone()),
+                dest_type: return_type.clone(),
+            })));
+        };
+        if function.signature.name == format!("try_{func_name}") {
+            return Ok(Some(Expr::Cast(Cast {
+                span: *span,
+                is_try: true,
+                expr: Box::new(args.first().unwrap().clone()),
+                dest_type: return_type.clone(),
+            })));
+        }
+        match expr {
+            Cow::Borrowed(_) => Ok(None),
+            Cow::Owned(call) => Ok(Some(call.into())),
+        }
+    }
 }

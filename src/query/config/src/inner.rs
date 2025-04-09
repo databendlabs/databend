@@ -571,6 +571,9 @@ pub struct CacheConfig {
     /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
     pub table_bloom_index_meta_count: u64,
 
+    /// Max bytes of cached bloom index meta data on disk. Set it to 0 to disable it.
+    pub disk_cache_table_bloom_index_meta_size: u64,
+
     /// Max number of cached prune partitions objects. Set it to 0 to disable it.
     pub table_prune_partitions_count: u64,
 
@@ -584,6 +587,9 @@ pub struct CacheConfig {
     /// Max bytes of cached bloom index filters used. Set it to 0 to disable it.
     // One bloom index filter per column of data block being indexed will be generated if necessary.
     pub table_bloom_index_filter_size: u64,
+
+    /// Max bytes of cached bloom index filters on disk. Set it to 0 to disable it.
+    pub disk_cache_table_bloom_index_data_size: u64,
 
     /// Max number of cached inverted index meta objects. Set it to 0 to disable it.
     pub inverted_index_meta_count: u64,
@@ -715,6 +721,8 @@ impl Default for CacheConfig {
             table_bloom_index_meta_count: 3000,
             table_bloom_index_filter_count: 0,
             table_bloom_index_filter_size: 2147483648,
+            disk_cache_table_bloom_index_data_size: 0,
+            disk_cache_table_bloom_index_meta_size: 0,
             inverted_index_meta_count: 3000,
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,

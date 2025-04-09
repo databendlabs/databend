@@ -18,12 +18,12 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
-use crate::optimizer::ColumnSet;
-use crate::optimizer::Distribution;
-use crate::optimizer::PhysicalProperty;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::PhysicalProperty;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::RequiredProperty;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 

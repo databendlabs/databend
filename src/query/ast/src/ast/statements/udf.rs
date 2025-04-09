@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -35,6 +36,7 @@ pub enum UDFDefinition {
         return_type: TypeName,
         address: String,
         handler: String,
+        headers: BTreeMap<String, String>,
         language: String,
     },
     UDFScript {
@@ -50,6 +52,7 @@ pub enum UDFDefinition {
         state_fields: Vec<UDAFStateField>,
         return_type: TypeName,
         address: String,
+        headers: BTreeMap<String, String>,
         language: String,
     },
     UDAFScript {
@@ -78,14 +81,26 @@ impl Display for UDFDefinition {
                 return_type,
                 address,
                 handler,
+                headers,
                 language,
             } => {
                 write!(f, "( ")?;
                 write_comma_separated_list(f, arg_types)?;
                 write!(
                     f,
-                    " ) RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' ADDRESS = '{address}'"
+                    " ) RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}'"
                 )?;
+                if !headers.is_empty() {
+                    write!(f, " HEADERS = (")?;
+                    for (i, (key, value)) in headers.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "'{key}' = '{value}'")?;
+                    }
+                    write!(f, ")")?;
+                }
+                write!(f, " ADDRESS = '{address}'")?;
             }
             UDFDefinition::UDFScript {
                 arg_types,
@@ -107,16 +122,25 @@ impl Display for UDFDefinition {
                 state_fields: state_types,
                 return_type,
                 address,
+                headers,
                 language,
             } => {
                 write!(f, "( ")?;
                 write_comma_separated_list(f, arg_types)?;
                 write!(f, " ) STATE {{ ")?;
                 write_comma_separated_list(f, state_types)?;
-                write!(
-                    f,
-                    " }} RETURNS {return_type} LANGUAGE {language} ADDRESS = '{address}'"
-                )?;
+                write!(f, " }} RETURNS {return_type} LANGUAGE {language}")?;
+                if !headers.is_empty() {
+                    write!(f, " HEADERS = (")?;
+                    for (i, (key, value)) in headers.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "'{key}' = '{value}'")?;
+                    }
+                    write!(f, ")")?;
+                }
+                write!(f, " ADDRESS = '{address}'")?;
             }
             UDFDefinition::UDAFScript {
                 arg_types,

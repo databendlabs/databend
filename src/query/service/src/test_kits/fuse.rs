@@ -26,7 +26,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SendableDataBlockStream;
-use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Mutation;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::MetaWriter;
@@ -146,7 +146,7 @@ pub async fn generate_segments(
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfo::new(block_metas, summary);
         let location = if is_greater_than_v5 {
-            location_generator.gen_segment_info_location(table_meta_timestamps)
+            location_generator.gen_segment_info_location(table_meta_timestamps, false)
         } else {
             let location_generator = old_version_generator::TableMetaLocationGenerator::with_prefix(
                 location_generator.prefix().to_string(),

@@ -1811,6 +1811,162 @@ DatePart {
 
 
 ---------- Input ----------
+datepart(year, d)
+---------- Output ---------
+DATE_PART(YEAR, d)
+---------- AST ------------
+DatePart {
+    span: Some(
+        0..17,
+    ),
+    kind: Year,
+    expr: ColumnRef {
+        span: Some(
+            15..16,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        15..16,
+                    ),
+                    name: "d",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+}
+
+
+---------- Input ----------
+DATEDIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+---------- Output ---------
+DATE_DIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+---------- AST ------------
+DateDiff {
+    span: Some(
+        0..104,
+    ),
+    unit: Second,
+    date_start: FunctionCall {
+        span: Some(
+            17..59,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    17..29,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        30..58,
+                    ),
+                    value: String(
+                        "2024-01-01 21:01:35.423179",
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+    date_end: FunctionCall {
+        span: Some(
+            61..103,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    61..73,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        74..102,
+                    ),
+                    value: String(
+                        "2023-12-31 09:38:18.165575",
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+datesub(QUARTER, 1, to_date('2018-01-02'))
+---------- Output ---------
+DATE_SUB(QUARTER, 1, to_date('2018-01-02'))
+---------- AST ------------
+DateSub {
+    span: Some(
+        0..42,
+    ),
+    unit: Quarter,
+    interval: Literal {
+        span: Some(
+            17..18,
+        ),
+        value: UInt64(
+            1,
+        ),
+    },
+    date: FunctionCall {
+        span: Some(
+            20..41,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    20..27,
+                ),
+                name: "to_date",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        28..40,
+                    ),
+                    value: String(
+                        "2018-01-02",
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
 position('a' in str)
 ---------- Output ---------
 POSITION('a' IN str)

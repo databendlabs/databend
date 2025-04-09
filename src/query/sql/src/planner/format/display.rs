@@ -16,10 +16,10 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
-use crate::optimizer::RelExpr;
-use crate::optimizer::RelationalProperty;
-use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatInfo;
 use crate::plans::RelOperator;
 use crate::ColumnEntry;
 use crate::IndexType;

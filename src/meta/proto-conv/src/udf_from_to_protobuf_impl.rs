@@ -73,6 +73,7 @@ impl FromToProto for mt::UDFServer {
             arg_types,
             return_type,
             handler: p.handler,
+            headers: p.headers,
             language: p.language,
         })
     }
@@ -104,6 +105,7 @@ impl FromToProto for mt::UDFServer {
             min_reader_ver: MIN_READER_VER,
             address: self.address.clone(),
             handler: self.handler.clone(),
+            headers: self.headers.clone(),
             language: self.language.clone(),
             arg_types,
             return_type: Some(return_type),

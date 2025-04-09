@@ -113,11 +113,10 @@ impl OneHashKeyFlightScatter {
                     &[hash_key.as_expr(&BUILTIN_FUNCTIONS)],
                     &BUILTIN_FUNCTIONS,
                 )?,
-                Expr::Constant {
-                    span: None,
-                    scalar: Scalar::Number(NumberScalar::UInt64(scatter_size as u64)),
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                },
+                Expr::constant(
+                    Scalar::Number(NumberScalar::UInt64(scatter_size as u64)),
+                    Some(DataType::Number(NumberDataType::UInt64)),
+                ),
             ],
             &BUILTIN_FUNCTIONS,
         )?;
@@ -203,14 +202,14 @@ impl HashFlightScatter {
 
 fn shuffle_by_block_id_in_merge_into(expr: &RemoteExpr) -> bool {
     if let RemoteExpr::FunctionCall {
-        id: FunctionID::Builtin { name, .. },
+        id: box FunctionID::Builtin { name, .. },
         args,
         ..
     } = expr
     {
         if name == "bit_and" {
             if let RemoteExpr::FunctionCall {
-                id: FunctionID::Builtin { name, .. },
+                id: box FunctionID::Builtin { name, .. },
                 ..
             } = &args[0]
             {

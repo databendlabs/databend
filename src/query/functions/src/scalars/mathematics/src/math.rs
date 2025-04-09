@@ -204,6 +204,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     }
 
     registry.register_aliases("ceil", &["ceiling"]);
+    registry.register_aliases("truncate", &["trunc"]);
 
     registry.register_1_arg::<StringType, NumberType<u32>, _, _>(
         "crc32",

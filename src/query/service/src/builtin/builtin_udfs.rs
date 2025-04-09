@@ -48,6 +48,7 @@ impl BuiltinUDFs {
                     return_type,
                     address,
                     handler,
+                    headers,
                     language,
                 } => {
                     let mut arg_datatypes = Vec::with_capacity(arg_types.len());
@@ -59,6 +60,7 @@ impl BuiltinUDFs {
                         name,
                         &address,
                         &handler,
+                        &headers,
                         &language,
                         arg_datatypes,
                         return_type,

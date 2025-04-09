@@ -35,7 +35,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
-use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::planner::MetadataRef;
 use databend_common_sql::plans;
 use databend_common_sql::plans::Mutation;
@@ -280,8 +280,10 @@ async fn mutation_source_partitions(
 
     let (is_lazy, is_delete) = if mutation.mutation_type == MutationType::Delete {
         let cluster = ctx.get_cluster();
-        let is_lazy =
-            !dry_run && !cluster.is_empty() && table_snapshot.segments.len() >= cluster.nodes.len();
+        let is_lazy = fuse_table.is_column_oriented()
+            || (!dry_run
+                && !cluster.is_empty()
+                && table_snapshot.segments.len() >= cluster.nodes.len());
         (is_lazy, true)
     } else {
         (false, false)

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -23,7 +25,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::UDFType;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -61,6 +63,7 @@ pub struct UdfFunctionDesc {
     pub arg_indices: Vec<IndexType>,
     pub arg_exprs: Vec<String>,
     pub data_type: Box<DataType>,
+    pub headers: BTreeMap<String, String>,
 
     pub udf_type: UDFType,
 }
@@ -133,6 +136,7 @@ impl PhysicalPlanBuilder {
                         arg_indices,
                         arg_exprs,
                         data_type: func.return_type.clone(),
+                        headers: func.headers.clone(),
                         udf_type: func.udf_type.clone(),
                     };
                     Ok(udf_func)

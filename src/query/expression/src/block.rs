@@ -56,10 +56,15 @@ impl BlockEntry {
     pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
         #[cfg(debug_assertions)]
         {
-            if let crate::Value::Column(c) = &value {
-                c.check_valid().unwrap();
+            use crate::Value;
+            match &value {
+                Value::Column(c) => {
+                    c.check_valid().unwrap();
+                }
+                Value::Scalar(_) => {
+                    check_type(&data_type, &value);
+                }
             }
-            check_type(&data_type, &value);
         }
 
         Self { data_type, value }

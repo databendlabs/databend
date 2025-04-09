@@ -26,18 +26,18 @@ use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
-use crate::optimizer::histogram_from_ndv;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::ColumnStat;
-use crate::optimizer::Distribution;
-use crate::optimizer::NewStatistic;
-use crate::optimizer::PhysicalProperty;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
-use crate::optimizer::UniformSampleSet;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::ColumnStat;
+use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::HistogramBuilder;
+use crate::optimizer::ir::NewStatistic;
+use crate::optimizer::ir::PhysicalProperty;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatInfo;
+use crate::optimizer::ir::Statistics;
+use crate::optimizer::ir::UniformSampleSet;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -155,7 +155,7 @@ pub struct HashJoinBuildCacheInfo {
 pub struct JoinEquiCondition {
     pub left: ScalarExpr,
     pub right: ScalarExpr,
-    // Used for "is (not) distinct from".
+    // Used for "is (not) distinct from" and mark join
     pub is_null_equal: bool,
 }
 
@@ -364,7 +364,7 @@ impl Join {
                                 left.min = Datum::Float(F64::from(left.min.to_double()?));
                                 left.max = Datum::Float(F64::from(left.max.to_double()?));
                             }
-                            Some(histogram_from_ndv(
+                            Some(HistogramBuilder::from_ndv(
                                 left.ndv as u64,
                                 max(join_card as u64, left.ndv as u64),
                                 Some((left.min.clone(), left.max.clone())),
@@ -389,7 +389,7 @@ impl Join {
                                 right.min = Datum::Float(F64::from(right.min.to_double()?));
                                 right.max = Datum::Float(F64::from(right.max.to_double()?));
                             }
-                            Some(histogram_from_ndv(
+                            Some(HistogramBuilder::from_ndv(
                                 right.ndv as u64,
                                 max(join_card as u64, right.ndv as u64),
                                 Some((right.min.clone(), right.max.clone())),
@@ -668,6 +668,47 @@ impl Operator for Join {
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
+
+        // For mark join with nullable eq comparison, ensure to use broadcast for subquery side
+        if self.join_type.is_mark_join()
+            && self.equi_conditions.len() == 1
+            && self.has_null_equi_condition()
+        {
+            // subquery as left probe side
+            if matches!(self.join_type, JoinType::LeftMark) {
+                let conditions = self
+                    .equi_conditions
+                    .iter()
+                    .map(|condition| condition.right.clone())
+                    .collect();
+
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Hash(conditions),
+                    },
+                ]);
+            } else {
+                // subquery as right build side
+                let conditions = self
+                    .equi_conditions
+                    .iter()
+                    .map(|condition| condition.left.clone())
+                    .collect();
+
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: Distribution::Hash(conditions),
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                ]);
+            }
+            return Ok(children_required);
+        }
 
         let settings = ctx.get_settings();
         if self.join_type != JoinType::Cross && !settings.get_enforce_broadcast_join()? {

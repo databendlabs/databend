@@ -499,10 +499,16 @@ pub enum TokenKind {
     DATE_ADD,
     #[token("DATE_DIFF", ignore(ascii_case))]
     DATE_DIFF,
+    #[token("DATEDIFF", ignore(ascii_case))]
+    DATEDIFF,
     #[token("DATE_PART", ignore(ascii_case))]
     DATE_PART,
+    #[token("DATEPART", ignore(ascii_case))]
+    DATEPART,
     #[token("DATE_SUB", ignore(ascii_case))]
     DATE_SUB,
+    #[token("DATESUB", ignore(ascii_case))]
+    DATESUB,
     #[token("DATE_TRUNC", ignore(ascii_case))]
     DATE_TRUNC,
     #[token("DATETIME", ignore(ascii_case))]
@@ -856,6 +862,8 @@ pub enum TokenKind {
     NULL,
     #[token("NULLABLE", ignore(ascii_case))]
     NULLABLE,
+    #[token("NUMERIC", ignore(ascii_case))]
+    NUMERIC,
     #[token("OBJECT", ignore(ascii_case))]
     OBJECT,
     #[token("OF", ignore(ascii_case))]
@@ -990,6 +998,8 @@ pub enum TokenKind {
     ROW_TAG,
     #[token("GRANT", ignore(ascii_case))]
     GRANT,
+    #[token("REAL", ignore(ascii_case))]
+    REAL,
     #[token("REPEAT", ignore(ascii_case))]
     REPEAT,
     #[token("ROLE", ignore(ascii_case))]
@@ -1308,6 +1318,8 @@ pub enum TokenKind {
     UDF,
     #[token("HANDLER", ignore(ascii_case))]
     HANDLER,
+    #[token("HEADERS", ignore(ascii_case))]
+    HEADERS,
     #[token("LANGUAGE", ignore(ascii_case))]
     LANGUAGE,
     #[token("STATE", ignore(ascii_case))]
@@ -1528,6 +1540,9 @@ impl TokenKind {
             | TokenKind::EXISTS
             | TokenKind::EXTRACT
             | TokenKind::DATE_PART
+            | TokenKind::DATEPART
+            | TokenKind::DATEDIFF
+            | TokenKind::DATESUB
             | TokenKind::FALSE
             | TokenKind::FLOAT
             // | TokenKind::FOREIGN

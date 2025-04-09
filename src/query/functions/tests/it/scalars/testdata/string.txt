@@ -27,7 +27,7 @@ output         : 'SS😀山'
 
 ast            : upper(NULL)
 raw expr       : upper(NULL)
-checked expr   : upper<String NULL>(CAST(NULL AS String NULL))
+checked expr   : upper<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -85,7 +85,7 @@ output         : 'i̇😀山'
 
 ast            : lower(NULL)
 raw expr       : lower(NULL)
-checked expr   : lower<String NULL>(CAST(NULL AS String NULL))
+checked expr   : lower<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -161,7 +161,7 @@ output         : 216
 
 ast            : bit_length(NULL)
 raw expr       : bit_length(NULL)
-checked expr   : bit_length<String NULL>(CAST(NULL AS String NULL))
+checked expr   : bit_length<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -237,7 +237,7 @@ output         : 27
 
 ast            : octet_length(NULL)
 raw expr       : octet_length(NULL)
-checked expr   : octet_length<String NULL>(CAST(NULL AS String NULL))
+checked expr   : octet_length<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -313,7 +313,7 @@ output         : 14
 
 ast            : char_length(NULL)
 raw expr       : char_length(NULL)
-checked expr   : length<Variant NULL>(CAST(NULL AS Variant NULL))
+checked expr   : length<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : UInt32 NULL
 output domain  : {NULL}
@@ -444,7 +444,7 @@ output         : 'Dobrý den'
 
 ast            : quote(Null)
 raw expr       : quote(NULL)
-checked expr   : quote<String NULL>(CAST(NULL AS String NULL))
+checked expr   : quote<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -529,7 +529,7 @@ output         : 'ned ýrboD'
 
 ast            : reverse(Null)
 raw expr       : reverse(NULL)
-checked expr   : reverse<String NULL>(CAST(NULL AS String NULL))
+checked expr   : reverse<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -614,7 +614,7 @@ output         : 240
 
 ast            : ascii(Null)
 raw expr       : ascii(NULL)
-checked expr   : ascii<String NULL>(CAST(NULL AS String NULL))
+checked expr   : ascii<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : UInt8 NULL
 output domain  : {NULL}
@@ -712,7 +712,7 @@ output         : 'あなたのことが好きです   '
 
 ast            : ltrim(NULL)
 raw expr       : ltrim(NULL)
-checked expr   : ltrim<String NULL>(CAST(NULL AS String NULL))
+checked expr   : ltrim<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -816,7 +816,7 @@ output         : '   あなたのことが好きです'
 
 ast            : rtrim(NULL)
 raw expr       : rtrim(NULL)
-checked expr   : rtrim<String NULL>(CAST(NULL AS String NULL))
+checked expr   : rtrim<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -911,7 +911,7 @@ output         : 'aaabbaaa'
 
 ast            : trim_leading(NULL, 'a')
 raw expr       : trim_leading(NULL, 'a')
-checked expr   : trim_leading<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
+checked expr   : trim_leading<String NULL, String NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("a" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -920,7 +920,7 @@ output         : NULL
 
 ast            : trim_leading('aaaaaaaa', NULL)
 raw expr       : trim_leading('aaaaaaaa', NULL)
-checked expr   : trim_leading<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
+checked expr   : trim_leading<String NULL, String NULL>(CAST<String>("aaaaaaaa" AS String NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1062,7 +1062,7 @@ output         : 'aaabbaaa'
 
 ast            : trim_trailing(NULL, 'a')
 raw expr       : trim_trailing(NULL, 'a')
-checked expr   : trim_trailing<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
+checked expr   : trim_trailing<String NULL, String NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("a" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1071,7 +1071,7 @@ output         : NULL
 
 ast            : trim_trailing('aaaaaaaa', NULL)
 raw expr       : trim_trailing('aaaaaaaa', NULL)
-checked expr   : trim_trailing<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
+checked expr   : trim_trailing<String NULL, String NULL>(CAST<String>("aaaaaaaa" AS String NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1213,7 +1213,7 @@ output         : 'aaabbaaa'
 
 ast            : trim_both(NULL, 'a')
 raw expr       : trim_both(NULL, 'a')
-checked expr   : trim_both<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
+checked expr   : trim_both<String NULL, String NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("a" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1222,7 +1222,7 @@ output         : NULL
 
 ast            : trim_both('aaaaaaaa', NULL)
 raw expr       : trim_both('aaaaaaaa', NULL)
-checked expr   : trim_both<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
+checked expr   : trim_both<String NULL, String NULL>(CAST<String>("aaaaaaaa" AS String NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1382,7 +1382,7 @@ output         : 'あなたのことが好きです'
 
 ast            : trim(NULL)
 raw expr       : trim(NULL)
-checked expr   : trim<String NULL>(CAST(NULL AS String NULL))
+checked expr   : trim<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1468,7 +1468,7 @@ output         : 'aaabbaaa'
 
 ast            : trim(both 'a' from NULL)
 raw expr       : trim_both(NULL, 'a')
-checked expr   : trim_both<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
+checked expr   : trim_both<String NULL, String NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("a" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1477,7 +1477,7 @@ output         : NULL
 
 ast            : trim(both NULL from 'aaaaaaaa')
 raw expr       : trim_both('aaaaaaaa', NULL)
-checked expr   : trim_both<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
+checked expr   : trim_both<String NULL, String NULL>(CAST<String>("aaaaaaaa" AS String NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1611,7 +1611,7 @@ output         : 'aaabbaaa'
 
 ast            : trim(leading 'a' from NULL)
 raw expr       : trim_leading(NULL, 'a')
-checked expr   : trim_leading<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
+checked expr   : trim_leading<String NULL, String NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("a" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1620,7 +1620,7 @@ output         : NULL
 
 ast            : trim(leading NULL from 'aaaaaaaa')
 raw expr       : trim_leading('aaaaaaaa', NULL)
-checked expr   : trim_leading<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
+checked expr   : trim_leading<String NULL, String NULL>(CAST<String>("aaaaaaaa" AS String NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1754,7 +1754,7 @@ output         : 'aaabbaaa'
 
 ast            : trim(trailing 'a' from NULL)
 raw expr       : trim_trailing(NULL, 'a')
-checked expr   : trim_trailing<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
+checked expr   : trim_trailing<String NULL, String NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("a" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1763,7 +1763,7 @@ output         : NULL
 
 ast            : trim(trailing NULL from 'aaaaaaaa')
 raw expr       : trim_trailing('aaaaaaaa', NULL)
-checked expr   : trim_trailing<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
+checked expr   : trim_trailing<String NULL, String NULL>(CAST<String>("aaaaaaaa" AS String NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1870,7 +1870,7 @@ output         : '534'
 
 ast            : concat(NULL, '3', '4')
 raw expr       : concat(NULL, '3', '4')
-checked expr   : concat<String NULL, String NULL, String NULL>(CAST(NULL AS String NULL), CAST("3" AS String NULL), CAST("4" AS String NULL))
+checked expr   : concat<String NULL, String NULL, String NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("3" AS String NULL), CAST<String>("4" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1911,7 +1911,7 @@ evaluation (internal):
 
 ast            : concat(a, '3')
 raw expr       : concat(a::String NULL, '3')
-checked expr   : concat<String NULL, String NULL>(a, CAST("3" AS String NULL))
+checked expr   : concat<String NULL, String NULL>(a, CAST<String>("3" AS String NULL))
 optimized expr : concat<String NULL, String NULL>(a, "3")
 evaluation:
 +--------+----------------------+------------------+
@@ -1935,7 +1935,7 @@ evaluation (internal):
 
 ast            : concat_ws('-', '3', null, '4', null, '5')
 raw expr       : concat_ws('-', '3', NULL, '4', NULL, '5')
-checked expr   : concat_ws<String NULL, String NULL, String NULL, String NULL, String NULL, String NULL>(CAST("-" AS String NULL), CAST("3" AS String NULL), CAST(NULL AS String NULL), CAST("4" AS String NULL), CAST(NULL AS String NULL), CAST("5" AS String NULL))
+checked expr   : concat_ws<String NULL, String NULL, String NULL, String NULL, String NULL, String NULL>(CAST<String>("-" AS String NULL), CAST<String>("3" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("4" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("5" AS String NULL))
 optimized expr : "3-4-5"
 output type    : String NULL
 output domain  : {"3-4-5"..="3-4-5"}
@@ -1944,7 +1944,7 @@ output         : '3-4-5'
 
 ast            : concat_ws(NULL, '3', '4')
 raw expr       : concat_ws(NULL, '3', '4')
-checked expr   : concat_ws<String NULL, String NULL, String NULL>(CAST(NULL AS String NULL), CAST("3" AS String NULL), CAST("4" AS String NULL))
+checked expr   : concat_ws<String NULL, String NULL, String NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("3" AS String NULL), CAST<String>("4" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -1985,7 +1985,7 @@ evaluation (internal):
 
 ast            : concat_ws(a, '3')
 raw expr       : concat_ws(a::String NULL, '3')
-checked expr   : concat_ws<String NULL, String NULL>(a, CAST("3" AS String NULL))
+checked expr   : concat_ws<String NULL, String NULL>(a, CAST<String>("3" AS String NULL))
 optimized expr : concat_ws<String NULL, String NULL>(a, "3")
 evaluation:
 +--------+----------------------+-----------------+
@@ -2009,7 +2009,7 @@ evaluation (internal):
 
 ast            : concat_ws(a, '3', '4')
 raw expr       : concat_ws(a::String NULL, '3', '4')
-checked expr   : concat_ws<String NULL, String NULL, String NULL>(a, CAST("3" AS String NULL), CAST("4" AS String NULL))
+checked expr   : concat_ws<String NULL, String NULL, String NULL>(a, CAST<String>("3" AS String NULL), CAST<String>("4" AS String NULL))
 optimized expr : concat_ws<String NULL, String NULL, String NULL>(a, "3", "4")
 evaluation:
 +--------+----------------------+-----------------+
@@ -2045,7 +2045,7 @@ candidate functions:
 
 ast            : bin(a)
 raw expr       : bin(a::Int8)
-checked expr   : bin<Int64>(to_int64<Int8>(a))
+checked expr   : bin<Int64>(CAST<Int8>(a AS Int64))
 evaluation:
 +--------+----------+--------------------------------------------------------------------+
 |        | a        | Output                                                             |
@@ -2067,7 +2067,7 @@ evaluation (internal):
 
 ast            : bin(a2)
 raw expr       : bin(a2::UInt8 NULL)
-checked expr   : bin<Int64 NULL>(CAST(a2 AS Int64 NULL))
+checked expr   : bin<Int64 NULL>(CAST<UInt8 NULL>(a2 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
@@ -2089,7 +2089,7 @@ evaluation (internal):
 
 ast            : bin(b)
 raw expr       : bin(b::Int16)
-checked expr   : bin<Int64>(to_int64<Int16>(b))
+checked expr   : bin<Int64>(CAST<Int16>(b AS Int64))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -2111,7 +2111,7 @@ evaluation (internal):
 
 ast            : bin(c)
 raw expr       : bin(c::UInt32)
-checked expr   : bin<Int64>(to_int64<UInt32>(c))
+checked expr   : bin<Int64>(CAST<UInt32>(c AS Int64))
 evaluation:
 +--------+-----------+---------+
 |        | c         | Output  |
@@ -2147,13 +2147,13 @@ error:
   --> SQL:1:5
   |
 1 | bin(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64(e)`, during run expr: `bin(to_int64(e))`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `CAST(e AS Int64)`, during run expr: `bin(CAST(e AS Int64))`
 
 
 
 ast            : oct(a)
 raw expr       : oct(a::Int8)
-checked expr   : oct<Int64>(to_int64<Int8>(a))
+checked expr   : oct<Int64>(CAST<Int8>(a AS Int64))
 evaluation:
 +--------+----------+--------------------------+
 |        | a        | Output                   |
@@ -2175,7 +2175,7 @@ evaluation (internal):
 
 ast            : oct(a2)
 raw expr       : oct(a2::UInt8 NULL)
-checked expr   : oct<Int64 NULL>(CAST(a2 AS Int64 NULL))
+checked expr   : oct<Int64 NULL>(CAST<UInt8 NULL>(a2 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
@@ -2197,7 +2197,7 @@ evaluation (internal):
 
 ast            : oct(b)
 raw expr       : oct(b::Int16)
-checked expr   : oct<Int64>(to_int64<Int16>(b))
+checked expr   : oct<Int64>(CAST<Int16>(b AS Int64))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -2219,7 +2219,7 @@ evaluation (internal):
 
 ast            : oct(c)
 raw expr       : oct(c::UInt32)
-checked expr   : oct<Int64>(to_int64<UInt32>(c))
+checked expr   : oct<Int64>(CAST<UInt32>(c AS Int64))
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
@@ -2255,13 +2255,13 @@ error:
   --> SQL:1:5
   |
 1 | oct(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64(e)`, during run expr: `oct(to_int64(e))`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `CAST(e AS Int64)`, during run expr: `oct(CAST(e AS Int64))`
 
 
 
 ast            : hex(a)
 raw expr       : hex(a::Int8)
-checked expr   : to_hex<Int64>(to_int64<Int8>(a))
+checked expr   : to_hex<Int64>(CAST<Int8>(a AS Int64))
 evaluation:
 +--------+----------+--------------------+
 |        | a        | Output             |
@@ -2283,7 +2283,7 @@ evaluation (internal):
 
 ast            : hex(a2)
 raw expr       : hex(a2::UInt8 NULL)
-checked expr   : to_hex<Int64 NULL>(CAST(a2 AS Int64 NULL))
+checked expr   : to_hex<Int64 NULL>(CAST<UInt8 NULL>(a2 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
@@ -2305,7 +2305,7 @@ evaluation (internal):
 
 ast            : hex(b)
 raw expr       : hex(b::Int16)
-checked expr   : to_hex<Int64>(to_int64<Int16>(b))
+checked expr   : to_hex<Int64>(CAST<Int16>(b AS Int64))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -2327,7 +2327,7 @@ evaluation (internal):
 
 ast            : hex(c)
 raw expr       : hex(c::UInt32)
-checked expr   : to_hex<Int64>(to_int64<UInt32>(c))
+checked expr   : to_hex<Int64>(CAST<UInt32>(c AS Int64))
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
@@ -2385,7 +2385,7 @@ evaluation (internal):
 
 ast            : lpad('hi', 2, '?')
 raw expr       : lpad('hi', 2, '?')
-checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(2_u8), "?")
+checked expr   : lpad<String, UInt64, String>("hi", CAST<UInt8>(2_u8 AS UInt64), "?")
 optimized expr : "hi"
 output type    : String
 output domain  : {"hi"..="hi"}
@@ -2394,7 +2394,7 @@ output         : 'hi'
 
 ast            : lpad('hi', 4, '?')
 raw expr       : lpad('hi', 4, '?')
-checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(4_u8), "?")
+checked expr   : lpad<String, UInt64, String>("hi", CAST<UInt8>(4_u8 AS UInt64), "?")
 optimized expr : "??hi"
 output type    : String
 output domain  : {"??hi"..="??hi"}
@@ -2403,7 +2403,7 @@ output         : '??hi'
 
 ast            : lpad('hi', 0, '?')
 raw expr       : lpad('hi', 0, '?')
-checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(0_u8), "?")
+checked expr   : lpad<String, UInt64, String>("hi", CAST<UInt8>(0_u8 AS UInt64), "?")
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -2412,7 +2412,7 @@ output         : ''
 
 ast            : lpad('hi', 1, '?')
 raw expr       : lpad('hi', 1, '?')
-checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "?")
+checked expr   : lpad<String, UInt64, String>("hi", CAST<UInt8>(1_u8 AS UInt64), "?")
 optimized expr : "h"
 output type    : String
 output domain  : {"h"..="h"}
@@ -2423,13 +2423,13 @@ error:
   --> SQL:1:1
   |
 1 | lpad('', 1, '')
-  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `lpad('', 1, '')` in expr `lpad('', to_uint64(1), '')`
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `lpad('', 1, '')` in expr `lpad('', CAST(1 AS UInt64), '')`
 
 
 
 ast            : lpad('hi', 1, '')
 raw expr       : lpad('hi', 1, '')
-checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "")
+checked expr   : lpad<String, UInt64, String>("hi", CAST<UInt8>(1_u8 AS UInt64), "")
 optimized expr : "h"
 output type    : String
 output domain  : {"h"..="h"}
@@ -2438,7 +2438,7 @@ output         : 'h'
 
 ast            : lpad('', 1, '?')
 raw expr       : lpad('', 1, '?')
-checked expr   : lpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "?")
+checked expr   : lpad<String, UInt64, String>("", CAST<UInt8>(1_u8 AS UInt64), "?")
 optimized expr : "?"
 output type    : String
 output domain  : {"?"..="?"}
@@ -2449,7 +2449,7 @@ error:
   --> SQL:1:12
   |
 1 | lpad('hi', -1, '?')
-  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `to_uint64(- 1)`, during run expr: `lpad('hi', to_uint64(- 1), '?')`
+  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(- 1 AS UInt64)`, during run expr: `lpad('hi', CAST(- 1 AS UInt64), '?')`
 
 
 
@@ -2457,13 +2457,13 @@ error:
   --> SQL:1:1
   |
 1 | lpad('hi', 2000000, '?')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `lpad('hi', 2000000, '?')` in expr `lpad('hi', to_uint64(2000000), '?')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `lpad('hi', 2000000, '?')` in expr `lpad('hi', CAST(2000000 AS UInt64), '?')`
 
 
 
 ast            : lpad(a, b, c)
 raw expr       : lpad(a::String, b::UInt8, c::String)
-checked expr   : lpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
+checked expr   : lpad<String, UInt64, String>(a, CAST<UInt8>(b AS UInt64), c)
 evaluation:
 +--------+-----------------+---------+-------------+---------+
 |        | a               | b       | c           | Output  |
@@ -2489,13 +2489,13 @@ error:
   --> SQL:1:1
   |
 1 | lpad(a, b, c)
-  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `lpad('hi', 5, '')` in expr `lpad(a, to_uint64(b), c)`
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `lpad('hi', 5, '')` in expr `lpad(a, CAST(b AS UInt64), c)`
 
 
 
 ast            : rpad('hi', 2, '?')
 raw expr       : rpad('hi', 2, '?')
-checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(2_u8), "?")
+checked expr   : rpad<String, UInt64, String>("hi", CAST<UInt8>(2_u8 AS UInt64), "?")
 optimized expr : "hi"
 output type    : String
 output domain  : {"hi"..="hi"}
@@ -2504,7 +2504,7 @@ output         : 'hi'
 
 ast            : rpad('hi', 4, '?')
 raw expr       : rpad('hi', 4, '?')
-checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(4_u8), "?")
+checked expr   : rpad<String, UInt64, String>("hi", CAST<UInt8>(4_u8 AS UInt64), "?")
 optimized expr : "hi??"
 output type    : String
 output domain  : {"hi??"..="hi??"}
@@ -2513,7 +2513,7 @@ output         : 'hi??'
 
 ast            : rpad('hi', 0, '?')
 raw expr       : rpad('hi', 0, '?')
-checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(0_u8), "?")
+checked expr   : rpad<String, UInt64, String>("hi", CAST<UInt8>(0_u8 AS UInt64), "?")
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -2522,7 +2522,7 @@ output         : ''
 
 ast            : rpad('hi', 1, '?')
 raw expr       : rpad('hi', 1, '?')
-checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "?")
+checked expr   : rpad<String, UInt64, String>("hi", CAST<UInt8>(1_u8 AS UInt64), "?")
 optimized expr : "h"
 output type    : String
 output domain  : {"h"..="h"}
@@ -2533,13 +2533,13 @@ error:
   --> SQL:1:1
   |
 1 | rpad('', 1, '')
-  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `rpad('', 1, '')` in expr `rpad('', to_uint64(1), '')`
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `rpad('', 1, '')` in expr `rpad('', CAST(1 AS UInt64), '')`
 
 
 
 ast            : rpad('hi', 1, '')
 raw expr       : rpad('hi', 1, '')
-checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "")
+checked expr   : rpad<String, UInt64, String>("hi", CAST<UInt8>(1_u8 AS UInt64), "")
 optimized expr : "h"
 output type    : String
 output domain  : {"h"..="h"}
@@ -2548,7 +2548,7 @@ output         : 'h'
 
 ast            : rpad('', 1, '?')
 raw expr       : rpad('', 1, '?')
-checked expr   : rpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "?")
+checked expr   : rpad<String, UInt64, String>("", CAST<UInt8>(1_u8 AS UInt64), "?")
 optimized expr : "?"
 output type    : String
 output domain  : {"?"..="?"}
@@ -2559,7 +2559,7 @@ error:
   --> SQL:1:12
   |
 1 | rpad('hi', -1, '?')
-  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `to_uint64(- 1)`, during run expr: `rpad('hi', to_uint64(- 1), '?')`
+  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(- 1 AS UInt64)`, during run expr: `rpad('hi', CAST(- 1 AS UInt64), '?')`
 
 
 
@@ -2567,13 +2567,13 @@ error:
   --> SQL:1:1
   |
 1 | rpad('hi', 2000000, '?')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `rpad('hi', 2000000, '?')` in expr `rpad('hi', to_uint64(2000000), '?')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `rpad('hi', 2000000, '?')` in expr `rpad('hi', CAST(2000000 AS UInt64), '?')`
 
 
 
 ast            : rpad(a, b, c)
 raw expr       : rpad(a::String, b::UInt8, c::String)
-checked expr   : rpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
+checked expr   : rpad<String, UInt64, String>(a, CAST<UInt8>(b AS UInt64), c)
 evaluation:
 +--------+-----------------+---------+-------------+---------+
 |        | a               | b       | c           | Output  |
@@ -2599,7 +2599,7 @@ error:
   --> SQL:1:1
   |
 1 | rpad(a, b, c)
-  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `rpad('hi', 5, '')` in expr `rpad(a, to_uint64(b), c)`
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `rpad('hi', 5, '')` in expr `rpad(a, CAST(b AS UInt64), c)`
 
 
 
@@ -2878,7 +2878,7 @@ output         : 0
 
 ast            : locate('bar', 'foobarbar', 5)
 raw expr       : locate('bar', 'foobarbar', 5)
-checked expr   : locate<String, String, UInt64>("bar", "foobarbar", to_uint64<UInt8>(5_u8))
+checked expr   : locate<String, String, UInt64>("bar", "foobarbar", CAST<UInt8>(5_u8 AS UInt64))
 optimized expr : 7_u64
 output type    : UInt64
 output domain  : {7..=7}
@@ -2887,7 +2887,7 @@ output         : 7
 
 ast            : locate('好世', '你好世界', 1)
 raw expr       : locate('好世', '你好世界', 1)
-checked expr   : locate<String, String, UInt64>("好世", "你好世界", to_uint64<UInt8>(1_u8))
+checked expr   : locate<String, String, UInt64>("好世", "你好世界", CAST<UInt8>(1_u8 AS UInt64))
 optimized expr : 2_u64
 output type    : UInt64
 output domain  : {2..=2}
@@ -2896,7 +2896,7 @@ output         : 2
 
 ast            : locate(a, b, c)
 raw expr       : locate(a::String, b::String, c::UInt8)
-checked expr   : locate<String, String, UInt64>(a, b, to_uint64<UInt8>(c))
+checked expr   : locate<String, String, UInt64>(a, b, CAST<UInt8>(c AS UInt64))
 evaluation:
 +--------+---------------+---------------+---------+----------------------------+
 |        | a             | b             | c       | Output                     |
@@ -2930,7 +2930,7 @@ output         : 414243
 
 ast            : char(65, null)
 raw expr       : char(65, NULL)
-checked expr   : char<UInt8 NULL, UInt8 NULL>(CAST(65_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+checked expr   : char<UInt8 NULL, UInt8 NULL>(CAST<UInt8>(65_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL))
 optimized expr : NULL
 output type    : Binary NULL
 output domain  : {NULL}
@@ -2950,19 +2950,19 @@ evaluation:
 | Row 1  | 67        | 99        | 69        | 426244    |
 +--------+-----------+-----------+-----------+-----------+
 evaluation (internal):
-+--------+-----------------------------------------------------------+
-| Column | Data                                                      |
-+--------+-----------------------------------------------------------+
-| a      | UInt8([66, 67])                                           |
-| b      | UInt8([98, 99])                                           |
-| c      | UInt8([68, 69])                                           |
-| Output | BinaryColumn { data: 0x426244426244, offsets: [0, 3, 6] } |
-+--------+-----------------------------------------------------------+
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| a      | UInt8([66, 67])              |
+| b      | UInt8([98, 99])              |
+| c      | UInt8([68, 69])              |
+| Output | Binary([0x426244, 0x426244]) |
++--------+------------------------------+
 
 
 ast            : char(a2, b, c)
 raw expr       : char(a2::UInt8 NULL, b::UInt8, c::UInt8)
-checked expr   : char<UInt8 NULL, UInt8 NULL, UInt8 NULL>(a2, CAST(b AS UInt8 NULL), CAST(c AS UInt8 NULL))
+checked expr   : char<UInt8 NULL, UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(b AS UInt8 NULL), CAST<UInt8>(c AS UInt8 NULL))
 evaluation:
 +--------+-----------+-----------+--------------------+--------------------+
 |        | b         | c         | a2                 | Output             |
@@ -2973,14 +2973,14 @@ evaluation:
 | Row 1  | 99        | 69        | NULL               | NULL               |
 +--------+-----------+-----------+--------------------+--------------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                         |
-+--------+--------------------------------------------------------------------------------------------------------------+
-| b      | UInt8([98, 99])                                                                                              |
-| c      | UInt8([68, 69])                                                                                              |
-| a2     | NullableColumn { column: UInt8([66, 67]), validity: [0b______01] }                                           |
-| Output | NullableColumn { column: BinaryColumn { data: 0x426244426244, offsets: [0, 3, 6] }, validity: [0b______01] } |
-+--------+--------------------------------------------------------------------------------------------------------------+
++--------+---------------------------------------------------------------------------------+
+| Column | Data                                                                            |
++--------+---------------------------------------------------------------------------------+
+| b      | UInt8([98, 99])                                                                 |
+| c      | UInt8([68, 69])                                                                 |
+| a2     | NullableColumn { column: UInt8([66, 67]), validity: [0b______01] }              |
+| Output | NullableColumn { column: Binary([0x426244, 0x426244]), validity: [0b______01] } |
++--------+---------------------------------------------------------------------------------+
 
 
 error: 
@@ -3056,7 +3056,7 @@ evaluation (internal):
 
 ast            : ord(NULL)
 raw expr       : ord(NULL)
-checked expr   : ord<String NULL>(CAST(NULL AS String NULL))
+checked expr   : ord<String NULL>(CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -3092,7 +3092,7 @@ output         : 4036989590
 
 ast            : repeat('3', NULL)
 raw expr       : repeat('3', NULL)
-checked expr   : repeat<String NULL, UInt64 NULL>(CAST("3" AS String NULL), CAST(NULL AS UInt64 NULL))
+checked expr   : repeat<String NULL, UInt64 NULL>(CAST<String>("3" AS String NULL), CAST<NULL>(NULL AS UInt64 NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3101,7 +3101,7 @@ output         : NULL
 
 ast            : repeat('3', 5)
 raw expr       : repeat('3', 5)
-checked expr   : repeat<String, UInt64>("3", to_uint64<UInt8>(5_u8))
+checked expr   : repeat<String, UInt64>("3", CAST<UInt8>(5_u8 AS UInt64))
 optimized expr : "33333"
 output type    : String
 output domain  : {"33333"..="33333"}
@@ -3110,7 +3110,7 @@ output         : '33333'
 
 ast            : repeat('你好世界', 3)
 raw expr       : repeat('你好世界', 3)
-checked expr   : repeat<String, UInt64>("你好世界", to_uint64<UInt8>(3_u8))
+checked expr   : repeat<String, UInt64>("你好世界", CAST<UInt8>(3_u8 AS UInt64))
 optimized expr : "你好世界你好世界你好世界"
 output type    : String
 output domain  : {"你好世界你好世界你好世界"..="你好世界你好世界你好世界"}
@@ -3119,7 +3119,7 @@ output         : '你好世界你好世界你好世界'
 
 ast            : repeat('こんにちは', 2)
 raw expr       : repeat('こんにちは', 2)
-checked expr   : repeat<String, UInt64>("こんにちは", to_uint64<UInt8>(2_u8))
+checked expr   : repeat<String, UInt64>("こんにちは", CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : "こんにちはこんにちは"
 output type    : String
 output domain  : {"こんにちはこんにちは"..="こんにちはこんにちは"}
@@ -3130,13 +3130,13 @@ error:
   --> SQL:1:1
   |
 1 | repeat('3', 1000001)
-  | ^^^^^^^^^^^^^^^^^^^^ Too many times to repeat: (1000001), maximum is: 1000000 while evaluating function `repeat('3', 1000001)` in expr `repeat('3', to_uint64(1000001))`
+  | ^^^^^^^^^^^^^^^^^^^^ Too many times to repeat: (1000001), maximum is: 1000000 while evaluating function `repeat('3', 1000001)` in expr `repeat('3', CAST(1000001 AS UInt64))`
 
 
 
 ast            : repeat(a, 3)
 raw expr       : repeat(a::String, 3)
-checked expr   : repeat<String, UInt64>(a, to_uint64<UInt8>(3_u8))
+checked expr   : repeat<String, UInt64>(a, CAST<UInt8>(3_u8 AS UInt64))
 optimized expr : repeat<String, UInt64>(a, 3_u64)
 evaluation:
 +--------+-------------+---------+
@@ -3175,7 +3175,7 @@ error:
 
 ast            : insert('Quadratic', 3, 4, a)
 raw expr       : insert('Quadratic', 3, 4, a::String)
-checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(4_u8), a)
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST<UInt8>(3_u8 AS Int64), CAST<UInt8>(4_u8 AS Int64), a)
 optimized expr : insert<String, Int64, Int64, String>("Quadratic", 3_i64, 4_i64, a)
 evaluation:
 +--------+-------------------+-------------+
@@ -3198,7 +3198,7 @@ evaluation (internal):
 
 ast            : insert('Quadratic', 3, 4, 'What')
 raw expr       : insert('Quadratic', 3, 4, 'What')
-checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(4_u8), "What")
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST<UInt8>(3_u8 AS Int64), CAST<UInt8>(4_u8 AS Int64), "What")
 optimized expr : "QuWhattic"
 output type    : String
 output domain  : {"QuWhattic"..="QuWhattic"}
@@ -3207,7 +3207,7 @@ output         : 'QuWhattic'
 
 ast            : insert('Quadratic', -1, 4, 'What')
 raw expr       : insert('Quadratic', minus(1), 4, 'What')
-checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<Int16>(minus<UInt8>(1_u8)), to_int64<UInt8>(4_u8), "What")
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST<Int16>(minus<UInt8>(1_u8) AS Int64), CAST<UInt8>(4_u8 AS Int64), "What")
 optimized expr : "Quadratic"
 output type    : String
 output domain  : {"Quadratic"..="Quadratic"}
@@ -3216,7 +3216,7 @@ output         : 'Quadratic'
 
 ast            : insert('Quadratic', 3, 100, 'What')
 raw expr       : insert('Quadratic', 3, 100, 'What')
-checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(100_u8), "What")
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST<UInt8>(3_u8 AS Int64), CAST<UInt8>(100_u8 AS Int64), "What")
 optimized expr : "QuWhat"
 output type    : String
 output domain  : {"QuWhat"..="QuWhat"}
@@ -3225,7 +3225,7 @@ output         : 'QuWhat'
 
 ast            : insert('Quadratic', 3, 100, NULL)
 raw expr       : insert('Quadratic', 3, 100, NULL)
-checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(3_u8 AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST(NULL AS String NULL))
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST<String>("Quadratic" AS String NULL), CAST<UInt8>(3_u8 AS Int64 NULL), CAST<UInt8>(100_u8 AS Int64 NULL), CAST<NULL>(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3234,7 +3234,7 @@ output         : NULL
 
 ast            : insert('Quadratic', 3, NULL, 'NULL')
 raw expr       : insert('Quadratic', 3, NULL, 'NULL')
-checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(3_u8 AS Int64 NULL), CAST(NULL AS Int64 NULL), CAST("NULL" AS String NULL))
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST<String>("Quadratic" AS String NULL), CAST<UInt8>(3_u8 AS Int64 NULL), CAST<NULL>(NULL AS Int64 NULL), CAST<String>("NULL" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3243,7 +3243,7 @@ output         : NULL
 
 ast            : insert('Quadratic', NULL, 100, 'NULL')
 raw expr       : insert('Quadratic', NULL, 100, 'NULL')
-checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(NULL AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST("NULL" AS String NULL))
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST<String>("Quadratic" AS String NULL), CAST<NULL>(NULL AS Int64 NULL), CAST<UInt8>(100_u8 AS Int64 NULL), CAST<String>("NULL" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3252,7 +3252,7 @@ output         : NULL
 
 ast            : insert('你好世界', 1, 2, 'こんにちは')
 raw expr       : insert('你好世界', 1, 2, 'こんにちは')
-checked expr   : insert<String, Int64, Int64, String>("你好世界", to_int64<UInt8>(1_u8), to_int64<UInt8>(2_u8), "こんにちは")
+checked expr   : insert<String, Int64, Int64, String>("你好世界", CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(2_u8 AS Int64), "こんにちは")
 optimized expr : "こんにちは世界"
 output type    : String
 output domain  : {"こんにちは世界"..="こんにちは世界"}
@@ -3261,7 +3261,7 @@ output         : 'こんにちは世界'
 
 ast            : insert(NULL, 2, 100, 'NULL')
 raw expr       : insert(NULL, 2, 100, 'NULL')
-checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST(NULL AS String NULL), CAST(2_u8 AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST("NULL" AS String NULL))
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST<NULL>(NULL AS String NULL), CAST<UInt8>(2_u8 AS Int64 NULL), CAST<UInt8>(100_u8 AS Int64 NULL), CAST<String>("NULL" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
@@ -3270,7 +3270,7 @@ output         : NULL
 
 ast            : insert(a, b, c, d)
 raw expr       : insert(a::String, b::UInt8, c::UInt8, d::String)
-checked expr   : insert<String, Int64, Int64, String>(a, to_int64<UInt8>(b), to_int64<UInt8>(c), d)
+checked expr   : insert<String, Int64, Int64, String>(a, CAST<UInt8>(b AS Int64), CAST<UInt8>(c AS Int64), d)
 evaluation:
 +--------+-----------------+---------+---------+---------------+---------+
 |        | a               | b       | c       | d             | Output  |
@@ -3296,7 +3296,7 @@ evaluation (internal):
 
 ast            : insert(x, y, z, u)
 raw expr       : insert(x::String NULL, y::UInt8 NULL, z::UInt8 NULL, u::String NULL)
-checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(x, CAST(y AS Int64 NULL), CAST(z AS Int64 NULL), u)
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(x, CAST<UInt8 NULL>(y AS Int64 NULL), CAST<UInt8 NULL>(z AS Int64 NULL), u)
 evaluation:
 +--------+--------------------------+------------------+------------------+------------------------+-----------------+
 |        | x                        | y                | z                | u                      | Output          |
@@ -3322,7 +3322,7 @@ evaluation (internal):
 
 ast            : space(0)
 raw expr       : space(0)
-checked expr   : space<UInt64>(to_uint64<UInt8>(0_u8))
+checked expr   : space<UInt64>(CAST<UInt8>(0_u8 AS UInt64))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -3331,7 +3331,7 @@ output         : ''
 
 ast            : space(5)
 raw expr       : space(5)
-checked expr   : space<UInt64>(to_uint64<UInt8>(5_u8))
+checked expr   : space<UInt64>(CAST<UInt8>(5_u8 AS UInt64))
 optimized expr : "     "
 output type    : String
 output domain  : {"     "..="     "}
@@ -3342,13 +3342,13 @@ error:
   --> SQL:1:1
   |
 1 | space(2000000)
-  | ^^^^^^^^^^^^^^ space length is too big, max is: 1000000 while evaluating function `space(2000000)` in expr `space(to_uint64(2000000))`
+  | ^^^^^^^^^^^^^^ space length is too big, max is: 1000000 while evaluating function `space(2000000)` in expr `space(CAST(2000000 AS UInt64))`
 
 
 
 ast            : space(a)
 raw expr       : space(a::UInt8)
-checked expr   : space<UInt64>(to_uint64<UInt8>(a))
+checked expr   : space<UInt64>(CAST<UInt8>(a AS UInt64))
 evaluation:
 +--------+---------+-------------+
 |        | a       | Output      |
@@ -3377,7 +3377,7 @@ evaluation (internal):
 
 ast            : left('', 0)
 raw expr       : left('', 0)
-checked expr   : left<String, UInt64>("", to_uint64<UInt8>(0_u8))
+checked expr   : left<String, UInt64>("", CAST<UInt8>(0_u8 AS UInt64))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -3386,7 +3386,7 @@ output         : ''
 
 ast            : left('', 1)
 raw expr       : left('', 1)
-checked expr   : left<String, UInt64>("", to_uint64<UInt8>(1_u8))
+checked expr   : left<String, UInt64>("", CAST<UInt8>(1_u8 AS UInt64))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -3395,7 +3395,7 @@ output         : ''
 
 ast            : left('123456789', a)
 raw expr       : left('123456789', a::UInt8)
-checked expr   : left<String, UInt64>("123456789", to_uint64<UInt8>(a))
+checked expr   : left<String, UInt64>("123456789", CAST<UInt8>(a AS UInt64))
 evaluation:
 +--------+----------+--------------------+
 |        | a        | Output             |
@@ -3425,7 +3425,7 @@ evaluation (internal):
 
 ast            : right('', 0)
 raw expr       : right('', 0)
-checked expr   : right<String, UInt64>("", to_uint64<UInt8>(0_u8))
+checked expr   : right<String, UInt64>("", CAST<UInt8>(0_u8 AS UInt64))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -3434,7 +3434,7 @@ output         : ''
 
 ast            : right('', 1)
 raw expr       : right('', 1)
-checked expr   : right<String, UInt64>("", to_uint64<UInt8>(1_u8))
+checked expr   : right<String, UInt64>("", CAST<UInt8>(1_u8 AS UInt64))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -3443,7 +3443,7 @@ output         : ''
 
 ast            : right('123456789', a)
 raw expr       : right('123456789', a::UInt8)
-checked expr   : right<String, UInt64>("123456789", to_uint64<UInt8>(a))
+checked expr   : right<String, UInt64>("123456789", CAST<UInt8>(a AS UInt64))
 evaluation:
 +--------+----------+-------------+
 |        | a        | Output      |
@@ -3473,7 +3473,7 @@ evaluation (internal):
 
 ast            : mid('1234567890', -3, 3)
 raw expr       : mid('1234567890', minus(3), 3)
-checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)), to_uint64<UInt8>(3_u8))
+checked expr   : substr<String, Int64, UInt64>("1234567890", CAST<Int16>(minus<UInt8>(3_u8) AS Int64), CAST<UInt8>(3_u8 AS UInt64))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
@@ -3482,7 +3482,7 @@ output         : '890'
 
 ast            : mid('1234567890', -3, 4 - 1)
 raw expr       : mid('1234567890', minus(3), minus(4, 1))
-checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)), to_uint64<Int16>(minus<UInt8, UInt8>(4_u8, 1_u8)))
+checked expr   : substr<String, Int64, UInt64>("1234567890", CAST<Int16>(minus<UInt8>(3_u8) AS Int64), CAST<Int16>(minus<UInt8, UInt8>(4_u8, 1_u8) AS UInt64))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
@@ -3491,7 +3491,7 @@ output         : '890'
 
 ast            : mid('1234567890', -3)
 raw expr       : mid('1234567890', minus(3))
-checked expr   : substr<String, Int64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)))
+checked expr   : substr<String, Int64>("1234567890", CAST<Int16>(minus<UInt8>(3_u8) AS Int64))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
@@ -3500,7 +3500,7 @@ output         : '890'
 
 ast            : substring('', 0, 1)
 raw expr       : substr('', 0, 1)
-checked expr   : substr<String, Int64, UInt64>("", to_int64<UInt8>(0_u8), to_uint64<UInt8>(1_u8))
+checked expr   : substr<String, Int64, UInt64>("", CAST<UInt8>(0_u8 AS Int64), CAST<UInt8>(1_u8 AS UInt64))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -3509,7 +3509,7 @@ output         : ''
 
 ast            : substr('Sakila' from -4 for 2)
 raw expr       : substr('Sakila', minus(4), 2)
-checked expr   : substr<String, Int64, UInt64>("Sakila", to_int64<Int16>(minus<UInt8>(4_u8)), to_uint64<UInt8>(2_u8))
+checked expr   : substr<String, Int64, UInt64>("Sakila", CAST<Int16>(minus<UInt8>(4_u8) AS Int64), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : "ki"
 output type    : String
 output domain  : {"ki"..="ki"}
@@ -3518,7 +3518,7 @@ output         : 'ki'
 
 ast            : substr('sakila' FROM -4)
 raw expr       : substr('sakila', minus(4))
-checked expr   : substr<String, Int64>("sakila", to_int64<Int16>(minus<UInt8>(4_u8)))
+checked expr   : substr<String, Int64>("sakila", CAST<Int16>(minus<UInt8>(4_u8) AS Int64))
 optimized expr : "kila"
 output type    : String
 output domain  : {"kila"..="kila"}
@@ -3527,7 +3527,7 @@ output         : 'kila'
 
 ast            : substr('abc',2)
 raw expr       : substr('abc', 2)
-checked expr   : substr<String, Int64>("abc", to_int64<UInt8>(2_u8))
+checked expr   : substr<String, Int64>("abc", CAST<UInt8>(2_u8 AS Int64))
 optimized expr : "bc"
 output type    : String
 output domain  : {"bc"..="bc"}
@@ -3536,7 +3536,7 @@ output         : 'bc'
 
 ast            : substr('你好世界', 3)
 raw expr       : substr('你好世界', 3)
-checked expr   : substr<String, Int64>("你好世界", to_int64<UInt8>(3_u8))
+checked expr   : substr<String, Int64>("你好世界", CAST<UInt8>(3_u8 AS Int64))
 optimized expr : "世界"
 output type    : String
 output domain  : {"世界"..="世界"}
@@ -3545,7 +3545,7 @@ output         : '世界'
 
 ast            : substr('こんにちは', 2)
 raw expr       : substr('こんにちは', 2)
-checked expr   : substr<String, Int64>("こんにちは", to_int64<UInt8>(2_u8))
+checked expr   : substr<String, Int64>("こんにちは", CAST<UInt8>(2_u8 AS Int64))
 optimized expr : "んにちは"
 output type    : String
 output domain  : {"んにちは"..="んにちは"}
@@ -3554,7 +3554,7 @@ output         : 'んにちは'
 
 ast            : substr('abc', pos, len)
 raw expr       : substr('abc', pos::Int8, len::UInt8)
-checked expr   : substr<String, Int64, UInt64>("abc", to_int64<Int8>(pos), to_uint64<UInt8>(len))
+checked expr   : substr<String, Int64, UInt64>("abc", CAST<Int8>(pos AS Int64), CAST<UInt8>(len AS UInt64))
 evaluation:
 +--------+----------+---------+--------+
 |        | pos      | len     | Output |

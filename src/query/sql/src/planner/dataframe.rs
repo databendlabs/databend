@@ -35,7 +35,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use parking_lot::RwLock;
 
-use crate::planner::optimizer::s_expr::SExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Limit;
 use crate::BindContext;
 use crate::Binder;

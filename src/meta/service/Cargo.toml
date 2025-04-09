@@ -36,6 +36,7 @@ databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
+display-more = { workspace = true }
 fastrace = { workspace = true }
 feature-set = { workspace = true }
 futures = { workspace = true }

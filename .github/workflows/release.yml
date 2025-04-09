@@ -88,14 +88,15 @@ jobs:
           repository: databendlabs/databend-docs
           ref: main
       - name: Get date
+        id: date
         shell: bash
-        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
       - name: Generate Release Note
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p docs/release-stable
-          df="docs/release-stable/${{ env.DATE }}_${{ needs.create_release.outputs.version }}.md"
+          df="docs/release-stable/${{ steps.date.outputs.DATE }}_${{ needs.create_release.outputs.version }}.md"
           echo "---" > $df
           gh release view --repo databendlabs/databend ${{ needs.create_release.outputs.version }} >> $df
           sed -i -E 's/^--$/---/g' $df
@@ -106,9 +107,9 @@ jobs:
       - uses: peter-evans/create-pull-request@v4
         with:
           token: ${{ secrets.DATABEND_BOT_TOKEN }}
-          title: "chore(docs): Update Release Notes - ${{ env.DATE }}"
+          title: "chore(docs): Update Release Notes - ${{ steps.date.outputs.DATE }}"
           base: main
-          commit-message: "chore(docs): Update Release Notes - ${{ env.DATE }}"
+          commit-message: "chore(docs): Update Release Notes - ${{ steps.date.outputs.DATE }}"
           branch-suffix: random
           delete-branch: true
 
@@ -145,7 +146,7 @@ jobs:
           cp ./target/${{ matrix.target }}/${{ env.BUILD_PROFILE }}/databend-* ./target/${{ env.BUILD_PROFILE }}/
           bash ./scripts/ci/ci-run-sqllogic-tests.sh base
 
-  build_udf:
+  build_full:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c32g, aws]
     needs: create_release
     strategy:
@@ -169,8 +170,8 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           artifacts: sqllogictests,sqlsmith,metactl,meta,query,bendsave
-          features: python-udf
-          category: udf
+          features: python-udf,storage-hdfs
+          category: full
 
   publish:
     runs-on: [self-hosted, X64, Linux, 2c8g, aws]
@@ -328,7 +329,7 @@ jobs:
 
   docker_service:
     runs-on: [self-hosted, X64, Linux, 2c8g, aws]
-    needs: [create_release, build_udf]
+    needs: [create_release, build_full]
     strategy:
       fail-fast: false
       matrix:
@@ -345,7 +346,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
-          category: udf
+          category: full
           artifacts: ${{ matrix.service }},metactl
           path: distro/linux/amd64
       - name: Download artifacts for aarch64
@@ -353,7 +354,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: aarch64-unknown-linux-gnu
-          category: udf
+          category: full
           artifacts: ${{ matrix.service }},metactl
           path: distro/linux/arm64
       - name: Set up QEMU
@@ -429,7 +430,7 @@ jobs:
     needs:
       - create_release
       - build_default
-      - build_udf
+      - build_full
       - publish
       - docker_all_in_one
       - docker_service
@@ -532,34 +533,6 @@ jobs:
           script: |
             const script = require('./.github/scripts/notify_failure.js')
             await script({context, core})
-
-  # sharing:
-  #   runs-on: [self-hosted, X64, Linux, 2c8g, aws]
-  #   needs: [create_release, notify]
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         ref: ${{ needs.create_release.outputs.sha }}
-  #     - name: checkout share endpoint
-  #       uses: actions/checkout@v4
-  #       with:
-  #         repository: databendlabs/share-endpoint
-  #         token: ${{ secrets.DATABEND_BOT_TOKEN }}
-  #         path: share-endpoint
-  #     - name: Download artifacts
-  #       uses: ./.github/actions/artifact_download
-  #       with:
-  #         sha: ${{ github.sha }}
-  #         target: x86_64-unknown-linux-gnu
-  #         category: default
-  #         artifacts: metactl,meta,query
-  #     - uses: ./.github/actions/test_share_integration
-  #       timeout-minutes: 10
-  #     - name: Upload failure
-  #       if: failure()
-  #       uses: ./.github/actions/artifact_failure
-  #       with:
-  #         name: test-integration-sharing
 
   benchmark:
     needs: [create_release, docker_service, notify]

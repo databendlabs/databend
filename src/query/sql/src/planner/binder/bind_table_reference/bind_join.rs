@@ -30,11 +30,12 @@ use crate::binder::Finder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::FlattenInfo;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
-use crate::optimizer::SubqueryRewriter;
+use crate::optimizer::ir::ColumnSet;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::operator::FlattenInfo;
+use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
+use crate::optimizer::OptimizerContext;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
@@ -98,6 +99,12 @@ impl Binder {
         let mut right_column_bindings = right_context.columns.clone();
 
         let mut bind_context = bind_context.replace();
+        bind_context
+            .virtual_column_context
+            .merge(&left_context.virtual_column_context);
+        bind_context
+            .virtual_column_context
+            .merge(&right_context.virtual_column_context);
 
         self.check_table_name_and_condition(
             &left_column_bindings,
@@ -381,8 +388,8 @@ impl Binder {
         let mut is_lateral = false;
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
-            let mut decorrelator =
-                SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone(), Some(self.clone()));
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+            let mut decorrelator = SubqueryDecorrelatorOptimizer::new(opt_ctx, Some(self.clone()));
             right_child = decorrelator.flatten_plan(
                 &left_child,
                 &right_child,
@@ -762,7 +769,7 @@ impl<'a> JoinConditionResolver<'a> {
     }
 
     fn resolve_predicate(
-        &self,
+        &mut self,
         predicate: &Expr,
         left_join_conditions: &mut Vec<ScalarExpr>,
         right_join_conditions: &mut Vec<ScalarExpr>,
@@ -810,6 +817,9 @@ impl<'a> JoinConditionResolver<'a> {
                 non_equi_conditions.push(predicate);
             }
         }
+        self.join_context
+            .virtual_column_context
+            .merge(&join_context.virtual_column_context);
         Ok(())
     }
 

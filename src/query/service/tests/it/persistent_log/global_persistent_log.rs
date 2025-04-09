@@ -67,6 +67,7 @@ pub async fn test_persistent_log_write() -> Result<()> {
         write_remote_log(&config.log.persistentlog.stage_name).await?;
         tokio::time::sleep(std::time::Duration::from_secs(random_sleep)).await;
     }
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     let res = fixture
         .execute_query("select count(*) from persistent_system.query_log")

@@ -14,9 +14,7 @@
 
 #[allow(clippy::module_inception)]
 mod cost;
-mod cost_model;
 
 pub use cost::Cost;
 pub use cost::CostContext;
 pub use cost::CostModel;
-pub use cost_model::DefaultCostModel;

@@ -48,6 +48,8 @@ pub struct NodeInfo {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime_node_group: Option<String>,
+
+    pub cache_id: String,
 }
 
 impl NodeInfo {
@@ -59,6 +61,7 @@ impl NodeInfo {
         flight_address: String,
         discovery_address: String,
         binary_version: String,
+        cache_id: String,
     ) -> NodeInfo {
         NodeInfo {
             id,
@@ -69,6 +72,7 @@ impl NodeInfo {
             flight_address,
             discovery_address,
             binary_version,
+            cache_id,
             cluster_id: "".to_string(),
             warehouse_id: "".to_string(),
             node_type: NodeType::SystemManaged,
@@ -102,6 +106,7 @@ impl NodeInfo {
             binary_version: self.binary_version.clone(),
             node_type: self.node_type.clone(),
             node_group: self.node_group.clone(),
+            cache_id: self.cache_id.clone(),
             cluster_id: String::new(),
             warehouse_id: String::new(),
             runtime_node_group: self.runtime_node_group.clone(),
@@ -120,6 +125,7 @@ impl NodeInfo {
             binary_version: self.binary_version.clone(),
             node_type: self.node_type.clone(),
             node_group: self.node_group.clone(),
+            cache_id: self.cache_id.clone(),
             cluster_id: String::new(),
             warehouse_id: String::new(),
             runtime_node_group: None,

@@ -574,7 +574,7 @@ Limit
                     ├── push downs: [filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)], limit: NONE]
                     └── estimated rows: 5.00
 
-query 
+query
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
 ----
 HashJoin
@@ -610,7 +610,7 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 5.00
 
-query 
+query
 explain select count(distinct a) from t1;
 ----
 AggregateFinal
@@ -642,7 +642,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query 
+query
 explain select count_distinct(a) from t1;
 ----
 AggregateFinal
@@ -674,7 +674,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query 
+query
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan
@@ -688,22 +688,22 @@ drop table t1
 statement ok
 drop table t2
 
-query 
+query
 explain syntax select * from read_parquet('p1', 'p2', 'p3');
 ----
 SELECT * FROM read_parquet('p1', 'p2', 'p3')
 
-query 
+query
 explain syntax select * from read_parquet(prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT * FROM read_parquet(prune_page=>TRUE,refresh_meta_cache=>TRUE)
 
-query 
+query
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT * FROM read_parquet('p1', 'p2', 'p3',prune_page=>TRUE,refresh_meta_cache=>TRUE)
 
-query 
+query
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT * FROM read_parquet('p1', 'p2', 'p3',prune_page=>TRUE,refresh_meta_cache=>TRUE)
@@ -714,7 +714,7 @@ drop table if exists t4
 statement ok
 create OR REPLACE table t4(a int, b string);
 
-query 
+query
 explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
 ----
 Filter
@@ -737,7 +737,7 @@ drop view if exists v4
 statement ok
 create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
 
-query 
+query
 explain select * from v4 where b = 'xx';
 ----
 EvalScalar
@@ -873,7 +873,7 @@ Sort
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
     │   ├── output columns: [numbers.number (#2), register_at (#3)]
-    │   ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#2))))]
+    │   ├── expressions: [to_yyyymmdd(CAST(numbers.number (#2) AS Timestamp))]
     │   ├── estimated rows: 0.00
     │   └── Filter
     │       ├── output columns: [numbers.number (#2)]
@@ -890,7 +890,7 @@ Sort
     │           └── estimated rows: 10.00
     └── EvalScalar(Probe)
         ├── output columns: [numbers.number (#0), pt (#1)]
-        ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#0))))]
+        ├── expressions: [to_yyyymmdd(CAST(numbers.number (#0) AS Timestamp))]
         ├── estimated rows: 0.00
         └── Filter
             ├── output columns: [numbers.number (#0)]
@@ -905,13 +905,6 @@ Sort
                 ├── partitions scanned: 1
                 ├── push downs: [filters: [numbers.number (#0) > 5], limit: NONE]
                 └── estimated rows: 10.00
-
-
-statement ok
-drop table if exists a
-
-statement ok
-drop table if exists b
 
 statement ok
 create OR REPLACE table a(id int, c1 INT NULL)
@@ -1020,7 +1013,7 @@ Filter
     ├── join type: LEFT MARK
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
-    ├── keys is null equal: [false]
+    ├── keys is null equal: [true]
     ├── filters: []
     ├── estimated rows: 3.00
     ├── TableScan(Build)

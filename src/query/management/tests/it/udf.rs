@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
@@ -212,6 +213,7 @@ fn create_test_udf_server() -> UserDefinedFunction {
         "strlen",
         "http://localhost:8888",
         "strlen_py",
+        &BTreeMap::default(),
         "python",
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),

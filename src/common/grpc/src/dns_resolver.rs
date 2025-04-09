@@ -28,7 +28,7 @@ use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use hickory_resolver::TokioAsyncResolver;
+use hickory_resolver::TokioResolver;
 use hyper::Uri;
 use hyper_util::client::legacy::connect::dns::Name;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -43,16 +43,18 @@ use tonic::transport::Endpoint;
 use crate::RpcClientTlsConfig;
 
 pub struct DNSResolver {
-    inner: TokioAsyncResolver,
+    inner: TokioResolver,
 }
 
 static INSTANCE: LazyLock<Result<Arc<DNSResolver>>> =
-    LazyLock::new(|| match TokioAsyncResolver::tokio_from_system_conf() {
+    LazyLock::new(|| match TokioResolver::builder_tokio() {
         Err(error) => Result::Err(ErrorCode::DnsParseError(format!(
             "DNS resolver create error: {}",
             error
         ))),
-        Ok(resolver) => Ok(Arc::new(DNSResolver { inner: resolver })),
+        Ok(resolver) => Ok(Arc::new(DNSResolver {
+            inner: resolver.build(),
+        })),
     });
 
 impl DNSResolver {

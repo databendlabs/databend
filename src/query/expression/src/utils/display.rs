@@ -15,11 +15,13 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fmt::Write;
 
 use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
+use databend_common_column::binary::BinaryColumn;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
@@ -34,6 +36,7 @@ use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
 use crate::block::DataBlock;
+use crate::expr::*;
 use crate::expression::Expr;
 use crate::expression::RawExpr;
 use crate::function::Function;
@@ -63,9 +66,11 @@ use crate::types::ValueType;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::values::Value;
+use crate::visit_expr;
 use crate::with_integer_mapped_type;
 use crate::Column;
 use crate::ColumnIndex;
+use crate::ExprVisitor;
 use crate::FunctionEval;
 use crate::TableDataType;
 
@@ -91,7 +96,7 @@ impl Debug for DataBlock {
 }
 
 impl Display for DataBlock {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
 
@@ -188,6 +193,17 @@ impl Debug for ScalarRef<'_> {
 
 impl Debug for Column {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        struct FmtBinary<'a>(&'a [u8]);
+        impl Debug for FmtBinary<'_> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                write!(f, "0x{}", hex::encode(self.0))
+            }
+        }
+        fn fmt_binary(f: &mut Formatter<'_>, name: &str, col: &BinaryColumn) -> std::fmt::Result {
+            f.debug_tuple(name)
+                .field_with(|f| f.debug_list().entries(col.iter().map(FmtBinary)).finish())
+                .finish()
+        }
         match self {
             Column::Null { len } => f.debug_struct("Null").field("len", len).finish(),
             Column::EmptyArray { len } => f.debug_struct("EmptyArray").field("len", len).finish(),
@@ -197,16 +213,16 @@ impl Debug for Column {
             Column::Boolean(col) => f.debug_tuple("Boolean").field(col).finish(),
             Column::Binary(col) => write!(f, "{col:?}"),
             Column::String(col) => write!(f, "{col:?}"),
-            Column::Timestamp(col) => write!(f, "{col:?}"),
-            Column::Date(col) => write!(f, "{col:?}"),
+            Column::Timestamp(col) => f.debug_tuple("Timestamp").field(col).finish(),
+            Column::Date(col) => f.debug_tuple("Date").field(col).finish(),
             Column::Interval(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
-            Column::Bitmap(col) => write!(f, "{col:?}"),
+            Column::Bitmap(col) => fmt_binary(f, "Bitmap", col),
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
-            Column::Variant(col) => write!(f, "{col:?}"),
-            Column::Geometry(col) => write!(f, "{col:?}"),
+            Column::Variant(col) => fmt_binary(f, "Variant", col),
+            Column::Geometry(col) => fmt_binary(f, "Geometry", col),
             Column::Geography(col) => write!(f, "{col:?}"),
         }
     }
@@ -416,7 +432,7 @@ impl Debug for DecimalColumn {
 }
 
 impl<Index: ColumnIndex> Display for RawExpr<Index> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             RawExpr::Constant { scalar, .. } => write!(f, "{scalar}"),
             RawExpr::ColumnRef {
@@ -484,7 +500,7 @@ impl<Index: ColumnIndex> Display for RawExpr<Index> {
 }
 
 impl Display for DataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match &self {
             DataType::Boolean => write!(f, "Boolean"),
             DataType::Binary => write!(f, "Binary"),
@@ -528,7 +544,7 @@ impl Display for DataType {
 }
 
 impl Display for TableDataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
             TableDataType::Boolean => write!(f, "Boolean"),
             TableDataType::Binary => write!(f, "Binary"),
@@ -577,7 +593,7 @@ impl Display for TableDataType {
 }
 
 impl Display for NumberDataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
             NumberDataType::UInt8 => write!(f, "UInt8"),
             NumberDataType::UInt16 => write!(f, "UInt16"),
@@ -594,7 +610,7 @@ impl Display for NumberDataType {
 }
 
 impl Display for DecimalDataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
             DecimalDataType::Decimal128(size) => {
                 write!(f, "Decimal({}, {})", size.precision, size.scale)
@@ -607,7 +623,7 @@ impl Display for DecimalDataType {
 }
 
 impl Display for NumberClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
             NumberClass::UInt8 => write!(f, "UInt8"),
             NumberClass::UInt16 => write!(f, "UInt16"),
@@ -626,89 +642,170 @@ impl Display for NumberClass {
 }
 
 impl<Index: ColumnIndex> Display for Expr<Index> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Expr::Constant { scalar, .. } => write!(f, "{:?}", scalar.as_ref()),
-            Expr::ColumnRef { display_name, .. } => write!(f, "{display_name}"),
-            Expr::Cast {
-                is_try,
-                expr,
-                dest_type,
-                ..
-            } => {
-                if *is_try {
-                    write!(f, "TRY_CAST({expr} AS {dest_type})")
-                } else {
-                    write!(f, "CAST({expr} AS {dest_type})")
-                }
-            }
-            Expr::FunctionCall {
-                function,
-                args,
-                generics,
-                id,
-                ..
-            } => {
-                write!(f, "{}", function.signature.name)?;
-                if !generics.is_empty() {
-                    write!(f, "<")?;
-                    for (i, ty) in generics.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "T{i}={ty}")?;
-                    }
-                    write!(f, ">")?;
-                }
-                write!(f, "<")?;
-                for (i, ty) in function.signature.args_type.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{ty}")?;
-                }
-                write!(f, ">")?;
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let mut visitor = ExprFormatter { f, with_id: false };
+        visit_expr(self, &mut visitor)?;
+        Ok(())
+    }
+}
 
-                let params = id.params();
-                if !params.is_empty() {
-                    write!(f, "(")?;
-                    for (i, ty) in params.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{ty}")?;
-                    }
-                    write!(f, ")")?;
-                }
+pub struct FmtExpr<'a, I: ColumnIndex> {
+    expr: &'a Expr<I>,
+    with_id: bool,
+}
 
-                write!(f, "(")?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{arg}")?;
-                }
-                write!(f, ")")
-            }
-            Expr::LambdaFunctionCall {
-                name,
-                args,
-                lambda_display,
-                ..
-            } => {
-                write!(f, "{name}")?;
-                write!(f, "(")?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{arg}")?;
-                }
-                write!(f, ", ")?;
-                write!(f, "{lambda_display}")?;
-                write!(f, ")")
-            }
+impl<I: ColumnIndex> Display for FmtExpr<'_, I> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut visitor = ExprFormatter {
+            f,
+            with_id: self.with_id,
+        };
+        visit_expr(self.expr, &mut visitor)?;
+        Ok(())
+    }
+}
+
+impl<I: ColumnIndex> Expr<I> {
+    pub fn fmt_with_options(&self, with_id: bool) -> FmtExpr<'_, I> {
+        FmtExpr {
+            expr: self,
+            with_id,
         }
+    }
+}
+
+struct ExprFormatter<'a, 'b> {
+    f: &'a mut std::fmt::Formatter<'b>,
+    with_id: bool,
+}
+
+impl std::fmt::Write for ExprFormatter<'_, '_> {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.f.write_str(s)
+    }
+
+    fn write_char(&mut self, c: char) -> std::fmt::Result {
+        self.f.write_char(c)
+    }
+
+    fn write_fmt(&mut self, args: std::fmt::Arguments<'_>) -> std::fmt::Result {
+        self.f.write_fmt(args)
+    }
+}
+
+impl<I: ColumnIndex> ExprVisitor<I> for ExprFormatter<'_, '_> {
+    type Error = std::fmt::Error;
+
+    fn enter_constant(&mut self, expr: &Constant) -> Result<Option<Expr<I>>, Self::Error> {
+        write!(self, "{:?}", expr.scalar.as_ref())?;
+        Ok(None)
+    }
+
+    fn enter_column_ref(&mut self, expr: &ColumnRef<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        let ColumnRef {
+            display_name, id, ..
+        } = expr;
+        self.write_str(display_name)?;
+        if self.with_id {
+            self.write_str(" (#")?;
+            id.unique_name(self)?;
+            self.write_char(')')?;
+        }
+        Ok(None)
+    }
+
+    fn enter_cast(&mut self, expr: &Cast<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        let Cast {
+            is_try,
+            expr,
+            dest_type,
+            ..
+        } = expr;
+        if *is_try {
+            self.write_str("TRY_")?;
+        }
+        write!(self, "CAST<{}>(", expr.data_type())?;
+        visit_expr(expr, self)?;
+        write!(self, " AS {dest_type})")?;
+        Ok(None)
+    }
+
+    fn enter_function_call(
+        &mut self,
+        expr: &FunctionCall<I>,
+    ) -> Result<Option<Expr<I>>, Self::Error> {
+        let FunctionCall {
+            function,
+            args,
+            generics,
+            id,
+            ..
+        } = expr;
+        self.write_str(&function.signature.name)?;
+        if !generics.is_empty() {
+            self.write_char('<')?;
+            for (i, ty) in generics.iter().enumerate() {
+                if i > 0 {
+                    self.write_str(", ")?;
+                }
+                write!(self, "T{i}={ty}")?;
+            }
+            self.write_char('>')?;
+        }
+        self.write_char('<')?;
+        for (i, ty) in function.signature.args_type.iter().enumerate() {
+            if i > 0 {
+                self.write_str(", ")?;
+            }
+            write!(self, "{ty}")?;
+        }
+        self.write_char('>')?;
+
+        let params = id.params();
+        if !params.is_empty() {
+            self.write_char('(')?;
+            for (i, ty) in params.iter().enumerate() {
+                if i > 0 {
+                    self.write_str(", ")?;
+                }
+                write!(self, "{ty}")?;
+            }
+            self.write_char(')')?;
+        }
+
+        self.write_char('(')?;
+        for (i, arg) in args.iter().enumerate() {
+            if i > 0 {
+                self.write_str(", ")?;
+            }
+            visit_expr(arg, self)?;
+        }
+        self.write_char(')')?;
+        Ok(None)
+    }
+
+    fn enter_lambda_function_call(
+        &mut self,
+        expr: &LambdaFunctionCall<I>,
+    ) -> Result<Option<Expr<I>>, Self::Error> {
+        let LambdaFunctionCall {
+            name,
+            args,
+            lambda_display,
+            ..
+        } = expr;
+        self.write_str(name)?;
+        self.write_char('(')?;
+        for (i, arg) in args.iter().enumerate() {
+            if i > 0 {
+                self.write_str(", ")?;
+            }
+            visit_expr(arg, self)?;
+        }
+        self.write_str(", ")?;
+        self.write_str(lambda_display)?;
+        self.write_char(')')?;
+        Ok(None)
     }
 }
 
@@ -752,7 +849,7 @@ impl<Index: ColumnIndex> Expr<Index> {
         #[recursive::recursive]
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
-                Expr::Constant { scalar, .. } => match scalar {
+                Expr::Constant(Constant { scalar, .. }) => match scalar {
                     s @ Scalar::Binary(_) => format!("from_hex('{s}')::string"),
                     Scalar::Number(NumberScalar::Float32(f)) if f.is_nan() => {
                         "'nan'::Float32".to_string()
@@ -776,22 +873,22 @@ impl<Index: ColumnIndex> Expr<Index> {
                     }
                     other => other.as_ref().to_string(),
                 },
-                Expr::ColumnRef { display_name, .. } => display_name.clone(),
-                Expr::Cast {
+                Expr::ColumnRef(ColumnRef { display_name, .. }) => display_name.clone(),
+                Expr::Cast(Cast {
                     is_try,
                     expr,
                     dest_type,
                     ..
-                } => {
+                }) => {
                     if *is_try {
                         format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
                     } else {
                         format!("CAST({} AS {dest_type})", expr.sql_display())
                     }
                 }
-                Expr::FunctionCall {
+                Expr::FunctionCall(FunctionCall {
                     function, args, id, ..
-                } => match (function.signature.name.as_str(), args.as_slice()) {
+                }) => match (function.signature.name.as_str(), args.as_slice()) {
                     ("and", [ref lhs, ref rhs]) => {
                         write_binary_op("AND", lhs, rhs, 10, min_precedence)
                     }
@@ -864,12 +961,12 @@ impl<Index: ColumnIndex> Expr<Index> {
                         s
                     }
                 },
-                Expr::LambdaFunctionCall {
+                Expr::LambdaFunctionCall(LambdaFunctionCall {
                     name,
                     args,
                     lambda_display,
                     ..
-                } => {
+                }) => {
                     let mut s = String::new();
                     s += name;
                     s += "(";
@@ -901,13 +998,13 @@ impl<T: ValueType> Display for Value<T> {
 }
 
 impl Debug for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.signature)
     }
 }
 
 impl Debug for FunctionEval {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             FunctionEval::Scalar { .. } => write!(f, "FunctionEval::Scalar"),
             FunctionEval::SRF { .. } => write!(f, "FunctionEval::SRF"),
@@ -916,7 +1013,7 @@ impl Debug for FunctionEval {
 }
 
 impl Display for FunctionSignature {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "{}({}) :: {}",
@@ -928,7 +1025,7 @@ impl Display for FunctionSignature {
 }
 
 impl Display for FunctionProperty {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut properties = Vec::new();
         if self.non_deterministic {
             properties.push("non_deterministic");
@@ -941,7 +1038,7 @@ impl Display for FunctionProperty {
 }
 
 impl Display for NullableDomain<AnyType> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(value) = &self.value {
             if self.has_null {
                 write!(f, "{} ∪ {{NULL}}", value)
@@ -956,7 +1053,7 @@ impl Display for NullableDomain<AnyType> {
 }
 
 impl Display for BooleanDomain {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.has_false && self.has_true {
             write!(f, "{{FALSE, TRUE}}")
         } else if self.has_false {
@@ -968,7 +1065,7 @@ impl Display for BooleanDomain {
 }
 
 impl Display for StringDomain {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(max) = &self.max {
             write!(f, "{{{:?}..={:?}}}", &self.min, max)
         } else {
@@ -978,7 +1075,7 @@ impl Display for StringDomain {
 }
 
 impl Display for NumberDomain {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         with_integer_mapped_type!(|TYPE| match self {
             NumberDomain::TYPE(domain) => write!(f, "{domain}"),
             NumberDomain::Float32(SimpleDomain { min, max }) => write!(f, "{}", SimpleDomain {
@@ -994,7 +1091,7 @@ impl Display for NumberDomain {
 }
 
 impl Display for DecimalDomain {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             DecimalDomain::Decimal128(SimpleDomain { min, max }, size) => {
                 write!(f, "{}", SimpleDomain {
@@ -1013,13 +1110,13 @@ impl Display for DecimalDomain {
 }
 
 impl<T: Display> Display for SimpleDomain<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{{{}..={}}}", self.min, self.max)
     }
 }
 
 impl Display for Domain {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Domain::Number(domain) => write!(f, "{domain}"),
             Domain::Decimal(domain) => write!(f, "{domain}"),

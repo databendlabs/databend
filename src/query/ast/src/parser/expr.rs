@@ -917,7 +917,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let date_part = map(
         rule! {
-            DATE_PART ~ "(" ~ ^#interval_kind ~ "," ~ ^#subexpr(0) ~ ^")"
+            (DATE_PART | DATEPART) ~ "(" ~ ^#interval_kind ~ "," ~ ^#subexpr(0) ~ ^")"
         },
         |(_, _, field, _, expr, _)| ExprElement::DatePart {
             field,
@@ -1243,7 +1243,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let date_diff = map(
         rule! {
-            DATE_DIFF ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+            (DATE_DIFF | DATEDIFF) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
         |(_, _, unit, _, date_start, _, date_end, _)| ExprElement::DateDiff {
             unit,
@@ -1254,7 +1254,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let date_sub = map(
         rule! {
-            DATE_SUB ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+            (DATE_SUB | DATESUB) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
         |(_, _, unit, _, interval, _, date, _)| ExprElement::DateSub {
             unit,
@@ -1670,7 +1670,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         TypeName::Int64,
         rule! { ( INT64 | SIGNED | BIGINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
-    let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT });
+    let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT | REAL });
     let ty_float64 = value(
         TypeName::Float64,
         rule! { (FLOAT64 | DOUBLE)  ~ PRECISION? },
@@ -1692,6 +1692,14 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             })
         },
     );
+    let ty_numeric = value(
+        TypeName::Decimal {
+            precision: 18,
+            scale: 3,
+        },
+        rule! { NUMERIC },
+    );
+
     let ty_array = map(
         rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
         |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
@@ -1769,6 +1777,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             ( #ty_date
             | #ty_datetime
             | #ty_interval
+            | #ty_numeric
             | #ty_binary
             | #ty_string
             | #ty_variant
@@ -1834,6 +1843,7 @@ pub fn weekday(i: Input) -> IResult<Weekday> {
 }
 
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
+    let iso_year = value(IntervalKind::ISOYear, rule! { ISOYEAR });
     let year = value(IntervalKind::Year, rule! { YEAR });
     let quarter = value(IntervalKind::Quarter, rule! { QUARTER });
     let month = value(IntervalKind::Month, rule! { MONTH });
@@ -1846,6 +1856,11 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     let week = value(IntervalKind::Week, rule! { WEEK });
     let epoch = value(IntervalKind::Epoch, rule! { EPOCH });
     let microsecond = value(IntervalKind::MicroSecond, rule! { MICROSECOND });
+
+    let iso_year_str = value(
+        IntervalKind::ISOYear,
+        rule! { #literal_string_eq_ignore_case("ISOYEAR")  },
+    );
     let year_str = value(
         IntervalKind::Year,
         rule! { #literal_string_eq_ignore_case("YEAR")  },
@@ -1897,6 +1912,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     alt((
         rule!(
             #year
+            | #iso_year
             | #quarter
             | #month
             | #day
@@ -1911,6 +1927,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
         ),
         rule!(
             #year_str
+            | #iso_year_str
             | #quarter_str
             | #month_str
             | #day_str
