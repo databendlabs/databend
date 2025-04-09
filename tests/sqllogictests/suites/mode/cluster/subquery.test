@@ -35,6 +35,7 @@ Exchange
         ├── probe keys: [a (#0)]
         ├── keys is null equal: [true]
         ├── filters: []
+        ├── build runtime filters:
         ├── estimated rows: 3.00
         ├── Exchange(Build)
         │   ├── output columns: [t2.a (#3)]
@@ -63,6 +64,7 @@ Exchange
                 ├── probe keys: [a (#0)]
                 ├── keys is null equal: [true]
                 ├── filters: []
+                ├── build runtime filters:
                 ├── estimated rows: 3.00
                 ├── Exchange(Build)
                 │   ├── output columns: [t2.a (#1)]
@@ -116,6 +118,7 @@ Exchange
         ├── probe keys: [t1.a (#0)]
         ├── keys is null equal: [true]
         ├── filters: []
+        ├── build runtime filters:
         ├── estimated rows: 3.00
         ├── Exchange(Build)
         │   ├── output columns: [t2.a (#2)]
@@ -140,6 +143,7 @@ Exchange
                 ├── probe keys: [t1.a (#0)]
                 ├── keys is null equal: [true]
                 ├── filters: []
+                ├── build runtime filters:
                 ├── estimated rows: 3.00
                 ├── Exchange(Build)
                 │   ├── output columns: [t2.a (#1)]

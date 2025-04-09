@@ -11,6 +11,8 @@ Exchange
     ├── probe keys: [t1.number (#1)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
+    │   └── rf_id:0, build_key:t.number (#0), probe_key:t1.number (#1), rf_type:inlist,min_max
     ├── estimated rows: 2.00
     ├── Exchange(Build)
     │   ├── output columns: [t.number (#0)]
@@ -32,6 +34,7 @@ Exchange
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
+        ├── apply runtime filters: [#0]
         └── estimated rows: 2.00
 
 query T
@@ -47,6 +50,8 @@ Exchange
     ├── probe keys: [t2.number (#2)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
+    │   └── rf_id:1, build_key:t.number (#0), probe_key:t2.number (#2), rf_type:inlist,min_max
     ├── estimated rows: 6.00
     ├── Exchange(Build)
     │   ├── output columns: [t1.number (#1), t.number (#0)]
@@ -58,6 +63,8 @@ Exchange
     │       ├── probe keys: [t1.number (#1)]
     │       ├── keys is null equal: [false]
     │       ├── filters: []
+    │       ├── build runtime filters:
+    │       │   └── rf_id:0, build_key:t.number (#0), probe_key:t1.number (#1), rf_type:inlist,min_max
     │       ├── estimated rows: 2.00
     │       ├── Exchange(Build)
     │       │   ├── output columns: [t.number (#0)]
@@ -79,6 +86,7 @@ Exchange
     │           ├── partitions total: 1
     │           ├── partitions scanned: 1
     │           ├── push downs: [filters: [], limit: NONE]
+    │           ├── apply runtime filters: [#0]
     │           └── estimated rows: 2.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
@@ -88,6 +96,7 @@ Exchange
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
+        ├── apply runtime filters: [#1]
         └── estimated rows: 3.00
 
 query T
@@ -103,6 +112,8 @@ Exchange
     ├── probe keys: [t2.number (#3)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
+    │   └── rf_id:1, build_key:t.b (#1), probe_key:t2.number (#3), rf_type:inlist,min_max
     ├── estimated rows: 6.00
     ├── Exchange(Build)
     │   ├── output columns: [t1.number (#2), b (#1), numbers.number (#0)]
@@ -114,6 +125,8 @@ Exchange
     │       ├── probe keys: [t1.number (#2)]
     │       ├── keys is null equal: [false]
     │       ├── filters: []
+    │       ├── build runtime filters:
+    │       │   └── rf_id:0, build_key:t.a (#0), probe_key:t1.number (#2), rf_type:inlist,min_max
     │       ├── estimated rows: 2.00
     │       ├── Exchange(Build)
     │       │   ├── output columns: [numbers.number (#0), b (#1)]
@@ -139,6 +152,7 @@ Exchange
     │           ├── partitions total: 1
     │           ├── partitions scanned: 1
     │           ├── push downs: [filters: [], limit: NONE]
+    │           ├── apply runtime filters: [#0]
     │           └── estimated rows: 2.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
@@ -148,6 +162,7 @@ Exchange
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
+        ├── apply runtime filters: [#1]
         └── estimated rows: 3.00
 
 query T
@@ -163,6 +178,7 @@ Exchange
     ├── probe keys: [CAST(t1.number (#2) AS UInt64 NULL)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
     ├── estimated rows: 2.00
     ├── Exchange(Build)
     │   ├── output columns: [sum(number) (#1), numbers.number (#0)]
@@ -248,6 +264,7 @@ Fragment 2:
         ├── probe keys: [CAST(t1.number (#2) AS UInt64 NULL)]
         ├── keys is null equal: [false]
         ├── filters: []
+        ├── build runtime filters:
         ├── estimated rows: 2.00
         ├── ExchangeSource(Build)
         │   ├── output columns: [sum(number) (#1), numbers.number (#0)]
@@ -303,6 +320,8 @@ AggregateFinal
             │   ├── probe keys: [t2.a (#1)]
             │   ├── keys is null equal: [false]
             │   ├── filters: []
+            │   ├── build runtime filters:
+            │   │   └── rf_id:0, build_key:t1.a (#0), probe_key:t2.a (#1), rf_type:inlist,min_max
             │   ├── estimated rows: 10000.00
             │   ├── Exchange(Build)
             │   │   ├── output columns: [numbers.number (#0)]
@@ -324,6 +343,7 @@ AggregateFinal
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
             │       ├── push downs: [filters: [], limit: NONE]
+            │       ├── apply runtime filters: [#0]
             │       └── estimated rows: 1000.00
             └── HashJoin
                 ├── output columns: [numbers.number (#2)]
@@ -332,6 +352,8 @@ AggregateFinal
                 ├── probe keys: [t1.a (#2)]
                 ├── keys is null equal: [false]
                 ├── filters: []
+                ├── build runtime filters:
+                │   └── rf_id:1, build_key:t3.a (#3), probe_key:t1.a (#2), rf_type:inlist,min_max
                 ├── estimated rows: 100.00
                 ├── Exchange(Build)
                 │   ├── output columns: [numbers.number (#3)]
@@ -353,6 +375,7 @@ AggregateFinal
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── push downs: [filters: [], limit: NONE]
+                    ├── apply runtime filters: [#1]
                     └── estimated rows: 10.00
 
 
@@ -390,6 +413,8 @@ AggregateFinal
         │       ├── probe keys: [t2.a (#1)]
         │       ├── keys is null equal: [false]
         │       ├── filters: []
+        │       ├── build runtime filters:
+        │       │   └── rf_id:0, build_key:t1.a (#0), probe_key:t2.a (#1), rf_type:inlist,min_max
         │       ├── estimated rows: 10000.00
         │       ├── Exchange(Build)
         │       │   ├── output columns: [numbers.number (#0)]
@@ -411,6 +436,7 @@ AggregateFinal
         │           ├── partitions total: 1
         │           ├── partitions scanned: 1
         │           ├── push downs: [filters: [], limit: NONE]
+        │           ├── apply runtime filters: [#0]
         │           └── estimated rows: 1000.00
         └── AggregateFinal
             ├── output columns: [sum(t1.a) (#4)]
@@ -431,6 +457,8 @@ AggregateFinal
                         ├── probe keys: [t1.a (#2)]
                         ├── keys is null equal: [false]
                         ├── filters: []
+                        ├── build runtime filters:
+                        │   └── rf_id:1, build_key:t3.a (#3), probe_key:t1.a (#2), rf_type:inlist,min_max
                         ├── estimated rows: 100.00
                         ├── Exchange(Build)
                         │   ├── output columns: [numbers.number (#3)]
@@ -452,6 +480,7 @@ AggregateFinal
                             ├── partitions total: 1
                             ├── partitions scanned: 1
                             ├── push downs: [filters: [], limit: NONE]
+                            ├── apply runtime filters: [#1]
                             └── estimated rows: 10.00
 
 query T
@@ -488,6 +517,8 @@ AggregateFinal
             │   ├── probe keys: [t2.a (#1)]
             │   ├── keys is null equal: [false]
             │   ├── filters: []
+            │   ├── build runtime filters:
+            │   │   └── rf_id:0, build_key:t1.a (#0), probe_key:t2.a (#1), rf_type:inlist,min_max
             │   ├── estimated rows: 10000.00
             │   ├── Exchange(Build)
             │   │   ├── output columns: [numbers.number (#0)]
@@ -509,6 +540,7 @@ AggregateFinal
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
             │       ├── push downs: [filters: [], limit: NONE]
+            │       ├── apply runtime filters: [#0]
             │       └── estimated rows: 1000.00
             └── TableScan
                 ├── table: default.system.numbers
@@ -538,6 +570,7 @@ Exchange
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
+    ├── build runtime filters:
     ├── estimated rows: 100000.00
     ├── Exchange(Build)
     │   ├── output columns: [numbers.number (#2)]
@@ -558,6 +591,7 @@ Exchange
         ├── probe keys: []
         ├── keys is null equal: []
         ├── filters: []
+        ├── build runtime filters:
         ├── estimated rows: 10000.00
         ├── Exchange(Build)
         │   ├── output columns: [numbers.number (#0)]
@@ -597,6 +631,7 @@ Exchange
     ├── probe keys: [t1.number (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
     ├── estimated rows: 200.00
     ├── Exchange(Build)
     │   ├── output columns: [t2.number (#1)]

@@ -51,6 +51,8 @@ Exchange
         ├── probe keys: [t1.a (#0)]
         ├── keys is null equal: [false]
         ├── filters: []
+        ├── build runtime filters:
+        │   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
         ├── estimated rows: 99.92
         ├── Exchange(Build)
         │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -82,6 +84,7 @@ Exchange
                 ├── partitions scanned: 3
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                 ├── push downs: [filters: [(t1.a (#0) > 3 OR t1.a (#0) > 1)], limit: NONE]
+                ├── apply runtime filters: [#0]
                 └── estimated rows: 100.00
 
 query T
@@ -97,6 +100,8 @@ Exchange
     ├── probe keys: [t1.a (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
+    │   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
     ├── estimated rows: 100.00
     ├── Exchange(Build)
     │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -120,6 +125,7 @@ Exchange
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [], limit: NONE]
+        ├── apply runtime filters: [#0]
         └── estimated rows: 100.00
 
 query T
@@ -222,6 +228,8 @@ Limit
                     ├── probe keys: [t1.a (#0)]
                     ├── keys is null equal: [false]
                     ├── filters: []
+                    ├── build runtime filters:
+                    │   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
                     ├── estimated rows: 100.00
                     ├── Exchange(Build)
                     │   ├── output columns: [t2.a (#2)]
@@ -245,6 +253,7 @@ Limit
                         ├── partitions scanned: 3
                         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                         ├── push downs: [filters: [], limit: NONE]
+                        ├── apply runtime filters: [#0]
                         └── estimated rows: 100.00
 
 statement ok
@@ -263,6 +272,8 @@ Exchange
     ├── probe keys: [t1.a (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
+    │   └── rf_id:0, build_key:t2.a (#2), probe_key:t1.a (#0), rf_type:inlist,min_max
     ├── estimated rows: 100.00
     ├── Exchange(Build)
     │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -286,6 +297,7 @@ Exchange
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
         ├── push downs: [filters: [], limit: NONE]
+        ├── apply runtime filters: [#0]
         └── estimated rows: 100.00
 
 statement ok
@@ -342,6 +354,7 @@ AggregateFinal
             ├── probe keys: [x.a (#2)]
             ├── keys is null equal: [false]
             ├── filters: []
+            ├── build runtime filters:
             ├── estimated rows: 50.00
             ├── Exchange(Build)
             │   ├── output columns: [numbers.number (#1)]
@@ -400,6 +413,8 @@ Exchange
     ├── probe keys: [t1.a (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
+    │   └── rf_id:0, build_key:CAST(CAST(subquery_2 (#2) AS UInt8 NULL) AS Int32 NULL), probe_key:t1.a (#0), rf_type:inlist,min_max
     ├── estimated rows: 2.00
     ├── Exchange(Build)
     │   ├── output columns: [col0 (#2)]
@@ -428,6 +443,7 @@ Exchange
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [], limit: NONE]
+        ├── apply runtime filters: [#0]
         └── estimated rows: 3.00
 
 query T
@@ -443,6 +459,7 @@ Exchange
     ├── probe keys: [CAST(a.cluster_node (#0) AS String NULL)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build runtime filters:
     ├── estimated rows: 0.00
     ├── Exchange(Build)
     │   ├── output columns: [query_node (#64)]
