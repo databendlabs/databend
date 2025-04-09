@@ -220,7 +220,9 @@ impl UserPrivilegeSet {
     /// Currently the privileges available to a database and a table are the same, it might becomes
     /// some differences in the future.
     pub fn available_privileges_on_database(available_ownership: bool) -> Self {
-        UserPrivilegeSet::available_privileges_on_table(available_ownership)
+        (UserPrivilegeSet::available_privileges_on_table(available_ownership).privileges
+            | make_bitflags!(UserPrivilegeType::{  Usage }))
+        .into()
     }
 
     /// The all privileges global which available to the table object
