@@ -988,6 +988,8 @@ impl MetaGrpcClient {
 
         let mut client = self.get_established_client().await?;
 
+        // Since 1.2.677, initial_flush is added to WatchRequest.
+        // If the server is not upto date to support this feature, return an error.
         if watch_request.initial_flush {
             let server_version = client.server_protocol_version();
             let least_server_version = 1002677;
