@@ -111,6 +111,9 @@ pub type MetaRaft = Raft<TypeConfig>;
 /// MetaNode is the container of metadata related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     pub raft_store: RaftStore,
+    /// MetaNode hold a strong reference to the dispatcher handle.
+    ///
+    /// Other components should keep a weak one.
     pub dispatcher_handle: Arc<DispatcherHandle>,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,

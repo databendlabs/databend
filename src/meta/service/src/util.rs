@@ -12,19 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(try_blocks)]
-#![feature(coroutines)]
-#![allow(clippy::uninlined_format_args)]
+use log::debug;
 
-pub mod api;
-pub mod configs;
-pub mod message;
-pub mod meta_service;
-pub mod metrics;
-pub mod network;
-pub mod raft_client;
-pub(crate) mod request_handling;
-pub mod store;
-pub mod version;
+/// A struct that implements the Drop trait to log a message when it is dropped.
+///
+/// It can be used to track the lifetime. For example, use it a struct field of as a local variable of a closure.
+pub struct DropDebug {
+    message: String,
+}
 
-pub mod util;
+impl Drop for DropDebug {
+    fn drop(&mut self) {
+        debug!("DropDebug: {}", self.message);
+    }
+}
+
+impl DropDebug {
+    pub fn new(m: impl ToString) -> Self {
+        Self {
+            message: m.to_string(),
+        }
+    }
+}
