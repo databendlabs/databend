@@ -66,6 +66,7 @@ subtract -> minus
 to_datetime -> to_timestamp
 to_text -> to_string
 to_varchar -> to_string
+trunc -> truncate
 try_ipv4_num_to_string -> try_inet_ntoa
 try_ipv4_string_to_num -> try_inet_aton
 try_to_datetime -> try_to_timestamp
