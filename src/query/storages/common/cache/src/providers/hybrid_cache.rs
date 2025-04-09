@@ -472,6 +472,26 @@ mod tests {
         let key = "test_key".to_string();
         cache.insert(key.clone(), test_data);
 
+        // A padding item, it will be pushed into the populate-queue after "test_key"
+        cache.insert("padding".to_string(), TestData {
+            id: 2,
+            value: "does not matter".to_string(),
+        });
+
+        // Since the on-disk cache is populated asynchronously, but items queued in the populate-queue
+        // are processed one by one. To ensure that key "test_key" has been processed, we could wait
+        // until the populate-queue is empty. At that time, at least the first key `test_key`
+        // should have been written into the on-disk cache.
+        cache
+            .on_disk_cache()
+            .as_ref()
+            .unwrap()
+            .till_no_pending_items_in_queue();
+
+        // Now the on-disk cache item of "test_key" is stabilized: no item of it being processed
+        // asynchronously, e.g., there should be no DISK cache of key "test_key" being created
+        // while the HYBRID cache has evicted it.
+
         // Verify data exists
         assert!(cache.contains_key(&key));
 
