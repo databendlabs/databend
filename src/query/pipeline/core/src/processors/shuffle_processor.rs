@@ -368,7 +368,7 @@ impl<T: Exchange> OnePartitionProcessor<T> {
 #[async_trait::async_trait]
 impl<T: Exchange> Processor for OnePartitionProcessor<T> {
     fn name(&self) -> String {
-        format!("ShuffleOnePartition({})", T::NAME)
+        format!("ShufflePartition({})", T::NAME)
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
