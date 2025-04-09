@@ -17,21 +17,21 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::io::WriteSettings;
 use crate::FuseTable;
 
 #[derive(Default, Clone)]
@@ -42,27 +42,31 @@ pub struct ClusterStatisticsBuilder {
     extra_key_num: usize,
     operators: Vec<BlockOperator>,
     func_ctx: FunctionContext,
-    block_thresholds: BlockThresholds,
+
+    min_compressed_per_block: u64,
+    max_uncompressed_per_block: u64,
 }
 
 impl ClusterStatisticsBuilder {
-    pub fn try_create(table: &FuseTable, ctx: Arc<dyn TableContext>) -> Result<Arc<Self>> {
+    pub fn try_create(
+        table: &FuseTable,
+        ctx: Arc<dyn TableContext>,
+        source_schema: &TableSchemaRef,
+        write_settings: WriteSettings,
+    ) -> Result<Arc<Self>> {
         let cluster_type = table.cluster_type();
         if cluster_type.is_none_or(|v| v == ClusterType::Hilbert) {
             return Ok(Default::default());
         }
 
-        let block_thresholds = table.get_block_thresholds();
-
-        let input_schema: Arc<DataSchema> = DataSchema::from(table.schema_with_stream()).into();
-        let mut merged = input_schema.fields().clone();
+        let input_schema: Arc<DataSchema> = DataSchema::from(source_schema).into();
+        let input_filed_len = input_schema.fields.len();
 
         let cluster_keys = table.linear_cluster_keys(ctx.clone());
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
 
         let mut exprs = Vec::with_capacity(cluster_keys.len());
-
         for remote_expr in &cluster_keys {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
@@ -70,11 +74,8 @@ impl ClusterStatisticsBuilder {
             let index = match &expr {
                 Expr::ColumnRef(ColumnRef { id, .. }) => *id,
                 _ => {
-                    let cname = format!("{}", expr);
-                    merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
                     exprs.push(expr);
-
-                    let offset = merged.len() - 1;
+                    let offset = input_filed_len + extra_key_num;
                     extra_key_num += 1;
                     offset
                 }
@@ -96,7 +97,8 @@ impl ClusterStatisticsBuilder {
             extra_key_num,
             func_ctx: ctx.get_function_context()?,
             operators,
-            block_thresholds,
+            min_compressed_per_block: write_settings.min_compressed_per_block as u64,
+            max_uncompressed_per_block: write_settings.max_uncompressed_per_block as u64,
         }))
     }
 }
@@ -117,10 +119,6 @@ impl ClusterStatisticsState {
             maxs: vec![],
             builder,
         }
-    }
-
-    pub fn set_level(&mut self, level: i32) {
-        self.level = level;
     }
 
     pub fn add_block(&mut self, input: DataBlock) -> Result<DataBlock> {
@@ -151,7 +149,7 @@ impl ClusterStatisticsState {
         Ok(block)
     }
 
-    pub fn finalize(self) -> Result<Option<ClusterStatistics>> {
+    pub fn finalize(self, file_size: u64, block_size: u64) -> Result<Option<ClusterStatistics>> {
         if self.builder.cluster_key_index.is_empty() {
             return Ok(None);
         }
@@ -172,10 +170,20 @@ impl ClusterStatisticsState {
             .as_tuple()
             .unwrap()
             .clone();
+
+        let level = if min == max
+            && (block_size >= self.builder.max_uncompressed_per_block
+                || file_size >= self.builder.min_compressed_per_block)
+        {
+            -1
+        } else {
+            self.level
+        };
+
         Ok(Some(ClusterStatistics {
             max,
             min,
-            level: self.level,
+            level,
             cluster_key_id: self.builder.cluster_key_id,
             pages: None,
         }))

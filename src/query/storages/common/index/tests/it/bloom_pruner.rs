@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2022 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
 
-use databend_common_column::buffer::Buffer;
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::map::KvColumn;
 use databend_common_expression::types::map::KvPair;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayColumn;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Int16Type;
@@ -51,9 +51,9 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_common_functions::test_utils::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_storages_fuse::io::BloomIndexBuilder;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -61,7 +61,7 @@ use goldenfile::Mint;
 
 #[test]
 fn test_bloom_filter() {
-    let mut mint = Mint::new("tests/it/storages/testdata");
+    let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("test_bloom_filter.txt").unwrap();
 
     test_base(file);

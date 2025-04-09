@@ -18,4 +18,3 @@ mod column_statistics;
 
 pub(crate) use block_builder::StreamBlockBuilder;
 pub(crate) use block_builder::StreamBlockProperties;
-pub(crate) use cluster_statistics::ClusterStatisticsBuilder;

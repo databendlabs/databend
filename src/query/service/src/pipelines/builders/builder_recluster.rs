@@ -161,7 +161,8 @@ impl PipelineBuilder {
                     SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))?
                         .with_block_size_hit(sort_block_size)
                         .remove_order_col_at_last();
-                sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;
+                // Todo(zhyass): Recluster will no longer perform sort in the near future.
+                sort_pipeline_builder.build_full_sort_pipeline(&mut self.main_pipeline)?;
 
                 // Compact after merge sort.
                 let max_threads = self.ctx.get_settings().get_max_threads()? as usize;

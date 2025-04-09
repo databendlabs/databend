@@ -69,9 +69,6 @@ impl ColumnStatisticsState {
         let rows = data_block.num_rows();
         let leaves = traverse_values_dfs(data_block.columns(), schema.fields())?;
         for (column_id, col, data_type) in leaves {
-            if !self.col_stats.contains_key(&column_id) {
-                continue;
-            }
             match col {
                 Value::Scalar(s) => {
                     let unset_bits = if s == Scalar::Null { rows } else { 0 };
@@ -126,17 +123,15 @@ impl ColumnStatisticsState {
                         (false, Some(bitmap)) => bitmap.null_count(),
                         (false, None) => 0,
                     };
+                    let in_memory_size = col.memory_size() as u64;
+                    let col_stats =
+                        ColumnStatistics::new(min, max, unset_bits as u64, in_memory_size, None);
+                    self.col_stats.get_mut(&column_id).unwrap().push(col_stats);
 
                     // use distinct count calculated by the xor hash function to avoid repetitive operation.
                     if let Some(hll) = self.distinct_columns.get_mut(&column_id) {
                         column_update_hll_cardinality(&col, &data_type, hll);
                     }
-
-                    let in_memory_size = col.memory_size() as u64;
-                    let col_stats =
-                        ColumnStatistics::new(min, max, unset_bits as u64, in_memory_size, None);
-
-                    self.col_stats.get_mut(&column_id).unwrap().push(col_stats);
                 }
             }
         }
@@ -162,6 +157,17 @@ impl ColumnStatisticsState {
 }
 
 fn column_update_hll_cardinality(col: &Column, ty: &DataType, hll: &mut ColumnDistinctHLL) {
+    if let DataType::Nullable(inner) = ty {
+        let col = col.as_nullable().unwrap();
+        for (i, v) in col.validity.iter().enumerate() {
+            if v {
+                let scalar = col.column.index(i).unwrap();
+                scalar_update_hll_cardinality(&scalar, inner, hll);
+            }
+        }
+        return;
+    }
+
     with_number_mapped_type!(|NUM_TYPE| match ty {
         DataType::Number(NumberDataType::NUM_TYPE) => {
             let col = NumberType::<NUM_TYPE>::try_downcast_column(col).unwrap();
@@ -204,6 +210,12 @@ fn column_update_hll_cardinality(col: &Column, ty: &DataType, hll: &mut ColumnDi
 }
 
 fn scalar_update_hll_cardinality(scalar: &ScalarRef, ty: &DataType, hll: &mut ColumnDistinctHLL) {
+    if matches!(scalar, ScalarRef::Null) {
+        return;
+    }
+
+    let ty = ty.remove_nullable();
+
     with_number_mapped_type!(|NUM_TYPE| match ty {
         DataType::Number(NumberDataType::NUM_TYPE) => {
             let val = NumberType::<NUM_TYPE>::try_downcast_scalar(scalar).unwrap();
