@@ -14,8 +14,10 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
+#![feature(never_type)]
 
 mod bloom_index;
+mod eliminate_cast;
 pub mod filters;
 mod index;
 mod inverted_index;
@@ -25,6 +27,7 @@ mod range_index;
 pub use bloom_index::BloomIndex;
 pub use bloom_index::BloomIndexMeta;
 pub use bloom_index::FilterEvalResult;
+pub use eliminate_cast::eliminate_cast;
 pub use index::Index;
 pub use inverted_index::extract_component_fields;
 pub use inverted_index::extract_fsts;
