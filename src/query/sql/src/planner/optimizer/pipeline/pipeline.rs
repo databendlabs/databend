@@ -22,7 +22,8 @@ use super::common::contains_local_table_scan;
 use super::common::contains_warehouse_table_scan;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::pipeline::OptimizerTrace;
+use crate::optimizer::pipeline::trace::OptimizerExecution;
+use crate::optimizer::pipeline::trace::OptimizerTraceCollector;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 
@@ -35,6 +36,9 @@ pub struct OptimizerPipeline {
     /// The memo captured during optimization (if any)
     memo: Option<Memo>,
 
+    /// The trace collector for generating reports
+    trace_collector: OptimizerTraceCollector,
+
     s_expr: SExpr,
 }
 
@@ -45,6 +49,7 @@ impl OptimizerPipeline {
             opt_ctx,
             optimizers: Vec::new(),
             memo: None,
+            trace_collector: OptimizerTraceCollector::new(),
             s_expr,
         };
 
@@ -95,6 +100,9 @@ impl OptimizerPipeline {
         let mut current_expr = self.s_expr.clone();
         let total_optimizers = self.optimizers.len();
 
+        // Update trace status from context
+        self.trace_collector
+            .set_enable_trace(self.opt_ctx.get_enable_trace());
         for (idx, optimizer) in self.optimizers.iter_mut().enumerate() {
             let before_expr = current_expr.clone();
 
@@ -107,14 +115,25 @@ impl OptimizerPipeline {
                 self.memo = Some(memo.clone());
             }
 
-            // Trace
-            if self.opt_ctx.get_enable_trace() {
-                let trace = OptimizerTrace::new(optimizer.name(), idx, total_optimizers, duration);
-
+            // Create execution info and trace optimizer
+            {
                 let metadata_ref = self.opt_ctx.get_metadata();
-                trace.log(&before_expr, &current_expr, &metadata_ref.read())?;
+                let execution = OptimizerExecution {
+                    name: optimizer.name(),
+                    index: idx,
+                    total: total_optimizers,
+                    time: duration,
+                    before: &before_expr,
+                    after: &current_expr,
+                };
+
+                self.trace_collector
+                    .trace_optimizer(execution, &metadata_ref.read())?;
             }
         }
+
+        // Generate and log the report
+        self.trace_collector.log_report();
 
         Ok(current_expr)
     }

@@ -16,4 +16,6 @@ mod expr_diff;
 #[allow(clippy::module_inception)]
 mod trace;
 
+pub use trace::OptimizerExecution;
 pub use trace::OptimizerTrace;
+pub use trace::OptimizerTraceCollector;
