@@ -113,6 +113,7 @@ impl SimpleArgFunc for FuseTimeTravelSize {
         let mut latest_snapshot_sizes = Vec::new();
         let mut data_retention_period_in_hours = Vec::new();
         let mut errors = Vec::new();
+        let mut tasks = Vec::new();
         let catalog = ctx.get_default_catalog()?;
         let dbs = match &args.database_name {
             Some(db_name) => {
@@ -160,7 +161,13 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                 if FuseTable::is_table_attached(&tbl.get_table_info().meta.options) {
                     continue;
                 }
-                let (time_travel_size, latest_snapshot_size) = calc_tbl_size(fuse_table).await?;
+                let table_clone = tbl.clone();
+                tasks.push(async move {
+                    let fuse_table = FuseTable::try_from_table(table_clone.as_ref()).unwrap();
+                    let (time_travel_size, latest_snapshot_size) =
+                        calc_tbl_size(fuse_table).await?;
+                    Ok::<_, ErrorCode>((time_travel_size, latest_snapshot_size))
+                });
                 let data_retention_period_in_hour = fuse_table
                     .table_info
                     .meta
@@ -172,17 +179,23 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                 database_names.push(db.name().to_string());
                 table_names.push(tbl.name().to_string());
                 is_droppeds.push(is_dropped);
-                sizes.push(time_travel_size);
                 data_retention_period_in_hours.push(data_retention_period_in_hour);
-                match latest_snapshot_size {
-                    Ok(size) => {
-                        latest_snapshot_sizes.push(Some(size));
-                        errors.push(None);
-                    }
-                    Err(e) => {
-                        latest_snapshot_sizes.push(None);
-                        errors.push(Some(e.to_string()));
-                    }
+            }
+        }
+
+        // if use execute_futures_in_parallel(), will get error: `implementation of `std::ops::FnOnce` is not general enough`
+        let results = futures::future::try_join_all(tasks).await?;
+        for result in results {
+            let (time_travel_size, latest_snapshot_size) = result;
+            sizes.push(time_travel_size);
+            match latest_snapshot_size {
+                Ok(size) => {
+                    latest_snapshot_sizes.push(Some(size));
+                    errors.push(None);
+                }
+                Err(e) => {
+                    latest_snapshot_sizes.push(None);
+                    errors.push(Some(e.to_string()));
                 }
             }
         }
