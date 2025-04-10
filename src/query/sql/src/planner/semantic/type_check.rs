@@ -4979,6 +4979,7 @@ impl<'a> TypeChecker<'a> {
             .get(&base_column.table_index)
         {
             let mut name = String::new();
+            name.push_str(base_column.column_name.as_str());
             for path in &keypaths.paths {
                 name.push('[');
                 match path {

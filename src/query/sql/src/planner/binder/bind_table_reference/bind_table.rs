@@ -345,6 +345,7 @@ impl Binder {
             return Ok(());
         }
 
+        let source_schema = table.schema();
         let table_meta = &table.get_table_info().meta;
         let Some(ref virtual_schema) = table_meta.virtual_schema else {
             return Ok(());
@@ -361,7 +362,11 @@ impl Binder {
                 .insert(table_index);
             let mut virtual_column_name_map = HashMap::with_capacity(virtual_schema.fields.len());
             for virtual_field in virtual_schema.fields.iter() {
-                let name = virtual_field.name.clone();
+                let Ok(source_field) = source_schema.field_of_column_id(virtual_field.source_column_id)
+                else {
+                    continue;
+                };
+                let name = format!("{}{}", source_field.name, virtual_field.name);
                 let column_id = virtual_field.column_id;
 
                 // TODO check the numbers of blocks have virtual schema.
