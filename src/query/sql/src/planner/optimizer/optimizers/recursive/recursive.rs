@@ -91,8 +91,18 @@ impl RecursiveRuleOptimizer {
 
 #[async_trait::async_trait]
 impl Optimizer for RecursiveRuleOptimizer {
-    fn name(&self) -> &'static str {
-        "RecursiveOptimizer"
+    fn name(&self) -> String {
+        let total = self.rules.len();
+        let preview = if total <= 3 {
+            self.rules
+                .iter()
+                .map(|rule_id| format!("{:?}", rule_id))
+                .collect::<Vec<_>>()
+                .join(",")
+        } else {
+            format!("{:?},{:?},...({})", self.rules[0], self.rules[1], total - 2)
+        };
+        format!("RecursiveOptimizer[{}]", preview)
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {

@@ -25,7 +25,7 @@ pub trait Optimizer: Send + Sync {
     async fn optimize(&mut self, expr: &SExpr) -> Result<SExpr>;
 
     /// Returns a unique identifier for this optimizer.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> String;
 
     /// Get the memo if this optimizer maintains one.
     /// Default implementation returns None for optimizers that don't use a memo.

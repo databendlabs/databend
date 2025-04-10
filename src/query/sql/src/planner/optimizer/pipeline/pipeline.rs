@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_exception::Result;
 use log::info;
@@ -21,6 +22,7 @@ use super::common::contains_local_table_scan;
 use super::common::contains_warehouse_table_scan;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::pipeline::OptimizerTrace;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 
@@ -91,10 +93,26 @@ impl OptimizerPipeline {
     pub async fn execute(&mut self) -> Result<SExpr> {
         // Then apply all optimizers in sequence
         let mut current_expr = self.s_expr.clone();
-        for optimizer in &mut self.optimizers {
+        let total_optimizers = self.optimizers.len();
+
+        for (idx, optimizer) in self.optimizers.iter_mut().enumerate() {
+            let before_expr = current_expr.clone();
+
+            // Measure optimizer execution time
+            let start_time = Instant::now();
             current_expr = optimizer.optimize(&current_expr).await?;
+            let duration = start_time.elapsed();
+
             if let Some(memo) = optimizer.memo() {
                 self.memo = Some(memo.clone());
+            }
+
+            // Trace
+            if self.opt_ctx.get_enable_trace() {
+                let trace = OptimizerTrace::new(optimizer.name(), idx, total_optimizers, duration);
+
+                let metadata_ref = self.opt_ctx.get_metadata();
+                trace.log(&before_expr, &current_expr, &metadata_ref.read())?;
             }
         }
 
