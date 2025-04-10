@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -50,11 +49,12 @@ use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuilder;
 use crate::sql::executor::physical_plans::MutationKind;
+
 impl PipelineBuilder {
     pub(crate) fn filter_transform_builder(
         &self,
         predicates: &[RemoteExpr],
-        projections: HashSet<usize>,
+        projections: ColumnSet,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let predicate = predicates
             .iter()

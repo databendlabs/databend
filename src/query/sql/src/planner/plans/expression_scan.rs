@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchemaRef;
 
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::ColumnSet;
 use crate::ScalarExpr;
 
 // Constant table is a table with constant values.
@@ -42,7 +41,7 @@ pub struct ExpressionScan {
 
 impl ExpressionScan {
     pub fn used_columns(&self) -> Result<ColumnSet> {
-        let mut columns = HashSet::new();
+        let mut columns = ColumnSet::new();
         for row in self.values.iter() {
             for value in row {
                 columns.extend(value.used_columns());

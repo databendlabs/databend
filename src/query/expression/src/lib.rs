@@ -98,3 +98,6 @@ pub mod expr {
     pub use super::expression::FunctionCall;
     pub use super::expression::LambdaFunctionCall;
 }
+
+type IndexType = usize;
+type ColumnSet = std::collections::BTreeSet<IndexType>;

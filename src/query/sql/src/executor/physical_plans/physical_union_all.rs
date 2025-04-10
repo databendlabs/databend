@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -85,15 +83,12 @@ impl PhysicalPlanBuilder {
                 .collect();
             if indices.is_empty() {
                 (
-                    HashSet::from([union_all.left_outputs[0].0]),
-                    HashSet::from([union_all.right_outputs[0].0]),
+                    ColumnSet::from([union_all.left_outputs[0].0]),
+                    ColumnSet::from([union_all.right_outputs[0].0]),
                 )
             } else {
                 indices.iter().fold(
-                    (
-                        HashSet::with_capacity(indices.len()),
-                        HashSet::with_capacity(indices.len()),
-                    ),
+                    (ColumnSet::default(), ColumnSet::default()),
                     |(mut left, mut right), &index| {
                         left.insert(union_all.left_outputs[index].0);
                         right.insert(union_all.right_outputs[index].0);

@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use core::ops::Range;
-use std::collections::HashSet;
 
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 
 use crate::filter::SelectExpr;
 use crate::filter::Selector;
+use crate::ColumnSet;
 use crate::DataBlock;
 use crate::Evaluator;
 use crate::Expr;
@@ -35,7 +35,7 @@ pub struct FilterExecutor {
     true_selection: Vec<u32>,
     false_selection: Vec<u32>,
     has_or: bool,
-    projections: Option<HashSet<usize>>,
+    projections: Option<ColumnSet>,
     max_block_size: usize,
     selection_range: Vec<Range<u32>>,
     fn_registry: &'static FunctionRegistry,
@@ -47,7 +47,7 @@ impl FilterExecutor {
         expr: Expr,
         func_ctx: FunctionContext,
         max_block_size: usize,
-        projections: Option<HashSet<usize>>,
+        projections: Option<ColumnSet>,
         fn_registry: &'static FunctionRegistry,
         keep_order: bool,
     ) -> Self {

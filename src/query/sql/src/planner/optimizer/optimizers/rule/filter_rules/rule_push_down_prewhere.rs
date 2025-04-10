@@ -21,7 +21,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
@@ -34,6 +33,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;

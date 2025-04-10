@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -158,9 +157,7 @@ impl Processor for UnbranchedReplaceIntoProcessor {
             let start = Instant::now();
             if let Some(delete_column) = self.delete_column {
                 let column_num = data_block.num_columns();
-                let projections = (0..column_num)
-                    .filter(|i| *i != delete_column)
-                    .collect::<HashSet<_>>();
+                let projections = (0..column_num).filter(|i| *i != delete_column).collect();
                 data_block = data_block.project(&projections);
             }
             let replace_into_action = self.replace_into_mutator.process_input_block(&data_block)?;

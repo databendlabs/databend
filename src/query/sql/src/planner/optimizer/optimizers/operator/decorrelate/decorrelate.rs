@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
@@ -30,7 +29,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -51,7 +49,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
-use crate::IndexType;
+use crate::ColumnSet;
 
 impl SubqueryDecorrelatorOptimizer {
     // Try to decorrelate a `CrossApply` into `SemiJoin` or `AntiJoin`.
@@ -458,7 +456,7 @@ impl SubqueryDecorrelatorOptimizer {
     pub fn add_equi_conditions(
         &self,
         span: Span,
-        correlated_columns: &HashSet<IndexType>,
+        correlated_columns: &ColumnSet,
         left_conditions: &mut Vec<ScalarExpr>,
         right_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {

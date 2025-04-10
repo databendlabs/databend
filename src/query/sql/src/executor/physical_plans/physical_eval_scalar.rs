@@ -26,12 +26,12 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plan_builder::PhysicalPlanBuilder;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::SExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::TypeCheck;
 

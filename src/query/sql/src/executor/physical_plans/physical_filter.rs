@@ -23,8 +23,8 @@ use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::SExpr;
+use crate::ColumnSet;
 use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

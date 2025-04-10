@@ -17,7 +17,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
-use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
@@ -104,7 +103,6 @@ impl PhysicalPlanBuilder {
         let lazy_columns = metadata
             .lazy_columns()
             .iter()
-            .sorted() // Needs sort because we need to make the order deterministic.
             .filter(|index| !input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
             .cloned()
             .collect::<Vec<_>>();

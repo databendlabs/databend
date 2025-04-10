@@ -18,11 +18,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
-use itertools::Itertools;
 
 use super::ScalarExpr;
 use crate::binder::MutationType;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -32,6 +30,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::ColumnSet;
 use crate::IndexType;
 
 #[derive(Clone, Debug, Default)]
@@ -56,7 +55,7 @@ impl Eq for MutationSource {}
 impl std::hash::Hash for MutationSource {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.table_index.hash(state);
-        for column in self.columns.iter().sorted() {
+        for column in self.columns.iter() {
             column.hash(state);
         }
     }

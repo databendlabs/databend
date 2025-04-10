@@ -21,7 +21,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use log::debug;
 
 use super::BlockOperator;
-use crate::optimizer::ir::ColumnSet;
+use crate::ColumnSet;
 
 /// Eliminate common expression in `Map` operator
 pub fn apply_cse(
