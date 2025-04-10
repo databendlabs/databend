@@ -151,6 +151,7 @@ impl GlobalServices {
             &config.cache,
             &config.query.max_server_memory_usage,
             config.query.tenant_id.tenant_name().to_string(),
+            ee_mode,
         )?;
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 

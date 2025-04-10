@@ -93,6 +93,7 @@ impl CacheManager {
         config: &CacheConfig,
         max_server_memory_usage: &u64,
         tenant_id: impl Into<String>,
+        ee_mode: bool,
     ) -> Result<()> {
         let tenant_id = tenant_id.into();
         let on_disk_cache_sync_data = config.disk_cache_config.sync_data;
@@ -114,22 +115,26 @@ impl CacheManager {
             match config.data_cache_storage {
                 CacheStorageTypeInnerConfig::None => CacheSlot::new(None),
                 CacheStorageTypeInnerConfig::Disk => {
-                    let real_disk_cache_root = PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.clone())
-                        .join("v1");
+                    let table_data_on_disk_cache_path =
+                        PathBuf::from(&config.disk_cache_config.path)
+                            .join(tenant_id.clone())
+                            .join("v1");
 
                     info!(
-                        "disk cache enabled, cache population queue size {}",
+                        "On-disk table data cache enabled, cache population queue size {}",
                         on_disk_cache_queue_size
                     );
 
-                    Self::new_block_data_cache(
-                        &real_disk_cache_root,
+                    let cache = Self::new_on_disk_cache(
+                        DISK_TABLE_DATA_CACHE_NAME.to_owned(),
+                        &table_data_on_disk_cache_path,
                         on_disk_cache_queue_size,
                         config.disk_cache_config.max_bytes as usize,
                         config.data_cache_key_reload_policy.clone(),
                         on_disk_cache_need_sync_data,
-                    )?
+                        ee_mode,
+                    )?;
+                    CacheSlot::new(cache)
                 }
             }
         };
@@ -195,6 +200,7 @@ impl CacheManager {
                     config.disk_cache_table_bloom_index_data_size as usize,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
+                    ee_mode,
                 )?
             };
 
@@ -212,6 +218,7 @@ impl CacheManager {
                     config.disk_cache_table_bloom_index_meta_size as usize,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
+                    ee_mode,
                 )?
             };
 
@@ -510,25 +517,27 @@ impl CacheManager {
         }
     }
 
-    fn new_block_data_cache(
+    fn new_on_disk_cache(
+        cache_name: String,
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: usize,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
-    ) -> Result<CacheSlot<TableDataCache>> {
-        if disk_cache_bytes_size > 0 {
+        ee_mode: bool,
+    ) -> Result<Option<TableDataCache>> {
+        if disk_cache_bytes_size == 0 || !ee_mode {
+            Ok(None)
+        } else {
             let cache_holder = DiskCacheBuilder::try_build_disk_cache(
-                DISK_TABLE_DATA_CACHE_NAME.to_owned(),
+                cache_name,
                 path,
                 population_queue_size,
                 disk_cache_bytes_size,
                 disk_cache_key_reload_policy,
                 sync_data,
             )?;
-            Ok(CacheSlot::new(Some(cache_holder)))
-        } else {
-            Ok(CacheSlot::new(None))
+            Ok(Some(cache_holder))
         }
     }
 
@@ -541,6 +550,7 @@ impl CacheManager {
         disk_cache_bytes_size: usize,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
+        ee_mode: bool,
     ) -> Result<CacheSlot<HybridCache<V>>> {
         let name = name.into();
         let in_mem_cache_name = HybridCache::<V>::in_memory_cache_name(&name);
@@ -557,28 +567,21 @@ impl CacheManager {
             }
         };
 
-        if disk_cache_bytes_size > 0 {
-            let on_disk_cache = DiskCacheBuilder::try_build_disk_cache(
-                disk_cache_name,
-                disk_cache_path,
-                disk_cache_population_queue_size,
-                disk_cache_bytes_size,
-                disk_cache_key_reload_policy,
-                sync_data,
-            )?;
-            Ok(CacheSlot::new(Some(HybridCache::new(
-                name,
-                in_memory_cache,
-                Some(on_disk_cache),
-            ))))
-        } else {
-            // disk cache is disabled
-            Ok(CacheSlot::new(Some(HybridCache::new(
-                name,
-                in_memory_cache,
-                None,
-            ))))
-        }
+        let on_disk_cache = Self::new_on_disk_cache(
+            disk_cache_name,
+            disk_cache_path,
+            disk_cache_population_queue_size,
+            disk_cache_bytes_size,
+            disk_cache_key_reload_policy,
+            sync_data,
+            ee_mode,
+        )?;
+
+        Ok(CacheSlot::new(Some(HybridCache::new(
+            name,
+            in_memory_cache,
+            on_disk_cache,
+        ))))
     }
 }
 
