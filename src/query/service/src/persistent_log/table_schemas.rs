@@ -40,7 +40,6 @@ pub trait PersistentLogTable: Send + Sync + 'static {
     }
 
     fn copy_into_sql(&self, stage_name: &str, files: &[String]) -> String;
-
     fn schema_equal(&self, other: TableSchemaRef) -> bool {
         self.schema().fields().len() == other.fields().len()
             && self
@@ -50,6 +49,7 @@ pub trait PersistentLogTable: Send + Sync + 'static {
                 .zip(other.fields().iter())
                 .all(|(a, b)| a.name() == b.name() && a.data_type() == b.data_type())
     }
+    fn clean_sql(&self, retention: usize) -> String;
 }
 
 pub struct QueryLogTable;
@@ -117,6 +117,14 @@ impl PersistentLogTable for QueryLogTable {
             self.table_name(),
             stage_name,
             file_names
+        )
+    }
+
+    fn clean_sql(&self, retention: usize) -> String {
+        let table_name = self.table_name();
+        format!(
+            "DELETE FROM persistent_system.{} WHERE timestamp < subtract_hours(NOW(), {})",
+            table_name, retention
         )
     }
 }
@@ -359,6 +367,14 @@ impl PersistentLogTable for QueryDetailsTable {
             file_names
         )
     }
+
+    fn clean_sql(&self, retention: usize) -> String {
+        let table_name = self.table_name();
+        format!(
+            "DELETE FROM persistent_system.{} WHERE event_time < subtract_hours(NOW(), {})",
+            table_name, retention
+        )
+    }
 }
 
 pub struct QueryProfileTable;
@@ -370,6 +386,10 @@ impl PersistentLogTable for QueryProfileTable {
 
     fn schema(&self) -> TableSchemaRef {
         TableSchemaRefExt::create(vec![
+            TableField::new(
+                "timestamp",
+                TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
+            ),
             TableField::new(
                 "query_id",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
@@ -386,7 +406,7 @@ impl PersistentLogTable for QueryProfileTable {
     }
 
     fn cluster_by(&self) -> Vec<String> {
-        vec!["query_id".to_string()]
+        vec!["timestamp".to_string(), "query_id".to_string()]
     }
 
     fn copy_into_sql(&self, stage_name: &str, files: &[String]) -> String {
@@ -394,16 +414,25 @@ impl PersistentLogTable for QueryProfileTable {
             .schema()
             .fields()
             .iter()
+            .filter(|f| f.name() != "timestamp")
             .map(|f| format!("m['{}']", f.name()))
             .collect::<Vec<_>>()
             .join(", ");
         let file_names = files.iter().map(|f| format!("'{}'", f)).join(",");
         format!(
-            "INSERT INTO persistent_system.{} FROM (SELECT {} FROM (SELECT parse_json(message) as m FROM @{} (FILES=>({})) WHERE target='databend::log::profile'))",
+            "INSERT INTO persistent_system.{} FROM (SELECT timestamp, {} FROM (SELECT timestamp, parse_json(message) as m FROM @{} (FILES=>({})) WHERE target='databend::log::profile'))",
             self.table_name(),
             fields,
             stage_name,
             file_names
+        )
+    }
+
+    fn clean_sql(&self, retention: usize) -> String {
+        let table_name = self.table_name();
+        format!(
+            "DELETE FROM persistent_system.{} WHERE timestamp < subtract_hours(NOW(), {})",
+            table_name, retention
         )
     }
 }

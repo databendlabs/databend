@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::spawn;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
@@ -25,23 +26,21 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_store::MetaStore;
-use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::txn_condition;
-use databend_common_meta_types::ConditionResult;
-use databend_common_meta_types::TxnCondition;
-use databend_common_meta_types::TxnOp;
-use databend_common_meta_types::TxnRequest;
+use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_semaphore::acquirer::Permit;
+use databend_common_meta_semaphore::Semaphore;
 use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::GlobalLogger;
 use log::error;
 use log::info;
 use rand::random;
+use tokio::time::sleep;
 
 use crate::interpreters::InterpreterFactory;
 use crate::persistent_log::session::create_session;
@@ -52,7 +51,7 @@ use crate::persistent_log::table_schemas::QueryProfileTable;
 use crate::sessions::QueryContext;
 
 pub struct GlobalPersistentLog {
-    meta_store: MetaStore,
+    meta_client: Option<Arc<ClientHandle>>,
     interval: usize,
     tenant_id: String,
     node_id: String,
@@ -61,7 +60,6 @@ pub struct GlobalPersistentLog {
     initialized: AtomicBool,
     stopped: AtomicBool,
     tables: Vec<Box<dyn PersistentLogTable>>,
-    #[allow(dead_code)]
     retention: usize,
 }
 
@@ -69,8 +67,10 @@ impl GlobalPersistentLog {
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         setup_operator().await?;
 
-        let provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
-        let meta_store = provider.create_meta_store().await?;
+        let meta_client =
+            MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf()).map_err(|_e| {
+                ErrorCode::Internal("Create MetaClient failed for GlobalPersistentLog")
+            })?;
 
         let mut tables: Vec<Box<dyn PersistentLogTable>> = vec![];
 
@@ -100,7 +100,7 @@ impl GlobalPersistentLog {
         tables.push(Box::new(query_log));
 
         let instance = Arc::new(Self {
-            meta_store,
+            meta_client: Some(meta_client),
             interval: cfg.log.persistentlog.interval,
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
             node_id: cfg.query.node_id.clone(),
@@ -112,12 +112,35 @@ impl GlobalPersistentLog {
             retention: cfg.log.persistentlog.retention,
         });
         GlobalInstance::set(instance);
-        GlobalIORuntime::instance().spawn(async move {
-            if let Err(e) = GlobalPersistentLog::instance().work().await {
-                error!("persistent log exit {}", e);
-            }
-        });
+        GlobalIORuntime::instance().try_spawn(
+            async move {
+                if let Err(e) = GlobalPersistentLog::instance().work().await {
+                    error!("persistent log exit {}", e);
+                }
+            },
+            Some("persistent-log-worker".to_string()),
+        )?;
         Ok(())
+    }
+
+    pub async fn create_dummy(cfg: &InnerConfig) -> Result<Self> {
+        setup_operator().await?;
+        Ok(Self {
+            meta_client: None,
+            interval: cfg.log.persistentlog.interval,
+            tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
+            node_id: cfg.query.node_id.clone(),
+            cluster_id: cfg.query.cluster_id.clone(),
+            stage_name: cfg.log.persistentlog.stage_name.clone(),
+            initialized: AtomicBool::new(false),
+            stopped: AtomicBool::new(false),
+            tables: vec![
+                Box::new(QueryDetailsTable),
+                Box::new(QueryProfileTable),
+                Box::new(QueryLogTable),
+            ],
+            retention: cfg.log.persistentlog.retention,
+        })
     }
 
     pub fn instance() -> Arc<GlobalPersistentLog> {
@@ -130,29 +153,32 @@ impl GlobalPersistentLog {
 
     pub async fn work(&self) -> Result<()> {
         let mut prepared = false;
-
-        // // Use a counter rather than a time interval to trigger cleanup operations.
-        // // because in cluster environment, a time-based interval would cause cleanup frequency
-        // // to scale with the number of nodes in the cluster, whereas this count-based
-        // // approach ensures consistent cleanup frequency regardless of cluster size.
-        // let thirty_minutes_in_seconds = 30 * 60;
-        // let copy_into_threshold = thirty_minutes_in_seconds / self.interval;
-        // let mut copy_into_count = 0;
-
+        // Wait all services to be initialized
         loop {
-            // add a random sleep time to avoid always one node doing the work
-            let sleep_time = self.interval as u64 * 1000 + random::<u64>() % 1000;
-            tokio::time::sleep(Duration::from_millis(sleep_time)).await;
+            if !self.initialized.load(Ordering::SeqCst) {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            } else {
+                break;
+            }
+        }
+        spawn(async move {
+            if let Err(e) = GlobalPersistentLog::instance().clean_work().await {
+                error!("Persistent log clean_work exit {}", e);
+            }
+        });
+        loop {
             if self.stopped.load(Ordering::SeqCst) {
                 return Ok(());
             }
-            // Wait all services to be initialized
-            if !self.initialized.load(Ordering::SeqCst) {
-                continue;
-            }
             // create the stage, database and table if not exists
-            // only execute once, it is ok to do this in multiple nodes without lock
+            // alter the table if schema is changed
             if !prepared {
+                let prepare_guard = self
+                    .acquire(
+                        format!("{}/persistent_log_prepare", self.tenant_id),
+                        self.interval as u64,
+                    )
+                    .await?;
                 match self.prepare().await {
                     Ok(_) => {
                         info!("Persistent log prepared successfully");
@@ -162,43 +188,41 @@ impl GlobalPersistentLog {
                         error!("Persistent log prepare failed: {:?}", e);
                     }
                 }
+                drop(prepare_guard);
             }
-            if let Ok(acquired_lock) = self.try_acquire().await {
-                if acquired_lock {
-                    if let Err(e) = self.do_copy_into().await {
-                        error!("Persistent log copy into failed: {:?}", e);
-                    }
-                    // copy_into_count += 1;
-                    // if copy_into_count > copy_into_threshold {
-                    //     if let Err(e) = self.clean().await {
-                    //         error!("Persistent log delete failed: {:?}", e);
-                    //     }
-                    //     copy_into_count = 0;
-                    // }
-                }
+
+            let guard = self
+                .acquire(
+                    format!("{}/persistent_log_work", self.tenant_id),
+                    self.interval as u64,
+                )
+                .await?;
+            // add a random sleep time to avoid always one node doing the work
+            let sleep_time = self.interval as u64 * 1000 + random::<u64>() % 1000;
+            tokio::time::sleep(Duration::from_millis(sleep_time)).await;
+
+            if let Err(e) = self.do_copy_into().await {
+                error!("Persistent log copy into failed: {:?}", e);
             }
+
+            drop(guard)
         }
     }
 
     /// Multiple nodes doing the work may make commit conflict.
-    pub async fn try_acquire(&self) -> Result<bool> {
-        let meta_key = format!("{}/persistent_log_lock", self.tenant_id);
-        let condition = vec![TxnCondition {
-            key: meta_key.clone(),
-            expected: ConditionResult::Eq as i32,
-            target: Some(txn_condition::Target::Seq(0)),
-        }];
+    /// acquire the semaphore to avoid this.
+    pub async fn acquire(&self, meta_key: String, lease: u64) -> Result<Permit> {
+        let acquired_guard = Semaphore::new_acquired(
+            self.meta_client.clone().unwrap(),
+            meta_key,
+            1,
+            self.node_id.clone(),
+            Duration::from_secs(lease),
+        )
+        .await
+        .map_err(|_e| "acquire semaphore failed from GlobalPersistentLog")?;
 
-        let if_then = vec![TxnOp::put_with_ttl(
-            &meta_key,
-            self.node_id.clone().into(),
-            Some(Duration::from_secs(self.interval as u64)),
-        )];
-
-        let txn = TxnRequest::new(condition, if_then);
-        let resp = self.meta_store.transaction(txn).await?;
-
-        Ok(resp.success)
+        Ok(acquired_guard)
     }
 
     async fn execute_sql(&self, sql: &str) -> Result<()> {
@@ -256,8 +280,8 @@ impl GlobalPersistentLog {
         Ok(())
     }
 
-    async fn do_copy_into(&self) -> Result<()> {
-        let stage_name = GlobalPersistentLog::instance().stage_name.clone();
+    pub async fn do_copy_into(&self) -> Result<()> {
+        let stage_name = self.stage_name.clone();
         let operator = GlobalLogger::instance().get_operator().await;
         if let Some(op) = operator {
             let path = format!("stage/internal/{}/", stage_name);
@@ -284,14 +308,24 @@ impl GlobalPersistentLog {
         Ok(())
     }
 
-    /// Do retention and vacuum
-    #[allow(dead_code)]
-    async fn clean(&self) -> Result<()> {
-        let delete = format!(
-            "DELETE FROM persistent_system.query_log WHERE timestamp < subtract_hours(NOW(), {})",
-            self.retention
-        );
-        self.execute_sql(&delete).await?;
+    async fn clean_work(&self) -> Result<()> {
+        loop {
+            let guard = self
+                .acquire(format!("{}/persistent_log_clean", self.tenant_id), 60)
+                .await?;
+            sleep(Duration::from_mins(60)).await;
+            if let Err(e) = self.do_clean().await {
+                error!("persistent log clean failed: {}", e);
+            }
+            drop(guard);
+        }
+    }
+
+    pub async fn do_clean(&self) -> Result<()> {
+        for table in &self.tables {
+            let clean_sql = table.clean_sql(self.retention);
+            self.execute_sql(&clean_sql).await?;
+        }
 
         let session = create_session(&self.tenant_id, &self.cluster_id).await?;
         let context = session.create_query_context().await?;
@@ -299,8 +333,10 @@ impl GlobalPersistentLog {
             .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
             .is_ok()
         {
-            let vacuum = "VACUUM TABLE persistent_system.query_log";
-            self.execute_sql(vacuum).await?
+            for table in &self.tables {
+                let vacuum = format!("VACUUM TABLE persistent_system.{}", table.table_name());
+                self.execute_sql(&vacuum).await?
+            }
         }
         Ok(())
     }
