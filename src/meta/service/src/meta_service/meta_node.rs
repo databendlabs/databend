@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::time::Duration;
 
 use anyerror::AnyError;
@@ -110,7 +111,10 @@ pub type MetaRaft = Raft<TypeConfig>;
 /// MetaNode is the container of metadata related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     pub raft_store: RaftStore,
-    pub dispatcher_handle: DispatcherHandle,
+    /// MetaNode hold a strong reference to the dispatcher handle.
+    ///
+    /// Other components should keep a weak one.
+    pub dispatcher_handle: Arc<DispatcherHandle>,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
@@ -163,7 +167,8 @@ impl MetaNodeBuilder {
         let (tx, rx) = watch::channel::<()>(());
 
         let handle = Dispatcher::spawn();
-        let handle = DispatcherHandle::new(handle);
+        let handle = DispatcherHandle::new(handle, node_id);
+        let handle = Arc::new(handle);
 
         sto.get_state_machine()
             .await
@@ -1153,7 +1158,7 @@ impl MetaNode {
         &self,
         request: WatchRequest,
         tx: mpsc::Sender<Result<WatchResponse, Status>>,
-    ) -> Result<Arc<WatchStreamSender<WatchTypes>>, Status> {
+    ) -> Result<Weak<WatchStreamSender<WatchTypes>>, Status> {
         let stream_sender = self
             .dispatcher_handle
             .request_blocking(move |d: &mut Dispatcher<WatchTypes>| {

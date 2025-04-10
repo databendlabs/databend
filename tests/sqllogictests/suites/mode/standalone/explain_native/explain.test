@@ -38,6 +38,8 @@ Filter
     ├── probe keys: [t2.a (#2)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t1
@@ -58,6 +60,7 @@ Filter
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
         ├── push downs: [filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)], limit: NONE]
+        ├── apply join filters: [#0]
         └── estimated rows: 3.40
 
 query T
@@ -70,6 +73,8 @@ HashJoin
 ├── probe keys: [t2.a (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
@@ -90,6 +95,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 5.00
 
 query T
@@ -305,6 +311,7 @@ Filter
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
+    ├── build join filters:
     ├── estimated rows: 4.40
     ├── TableScan(Build)
     │   ├── table: default.default.t1
@@ -341,6 +348,7 @@ Filter
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
+    ├── build join filters:
     ├── estimated rows: 5.00
     ├── TableScan(Build)
     │   ├── table: default.default.t1
@@ -379,6 +387,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [(((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4)) OR t3.a (#4) = 2)]
+├── build join filters:
 ├── estimated rows: 50.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -387,6 +396,7 @@ HashJoin
 │   ├── probe keys: []
 │   ├── keys is null equal: []
 │   ├── filters: []
+│   ├── build join filters:
 │   ├── estimated rows: 5.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t1
@@ -429,6 +439,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
+├── build join filters:
 ├── estimated rows: 28.16
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -441,6 +452,7 @@ HashJoin
 │       ├── probe keys: []
 │       ├── keys is null equal: []
 │       ├── filters: []
+│       ├── build join filters:
 │       ├── estimated rows: 4.40
 │       ├── TableScan(Build)
 │       │   ├── table: default.default.t1
@@ -496,6 +508,7 @@ Limit
             ├── probe keys: []
             ├── keys is null equal: []
             ├── filters: []
+            ├── build join filters:
             ├── estimated rows: 4.40
             ├── TableScan(Build)
             │   ├── table: default.default.t1
@@ -528,6 +541,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
+├── build join filters:
 ├── estimated rows: 5.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
@@ -739,6 +753,7 @@ Sort
     ├── probe keys: [t1.i (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build join filters:
     ├── estimated rows: 3.00
     ├── EmptyResultScan(Build)
     └── TableScan(Probe)

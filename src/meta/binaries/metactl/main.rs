@@ -15,11 +15,14 @@
 #![allow(clippy::uninlined_format_args)]
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::Duration;
 
 use clap::CommandFactory;
 use clap::Parser;
 use clap::Subcommand;
 use databend_common_base::base::tokio;
+use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_control::admin::MetaAdminClient;
 use databend_common_meta_control::args::BenchArgs;
@@ -28,14 +31,21 @@ use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::args::StatusArgs;
 use databend_common_meta_control::args::TransferLeaderArgs;
+use databend_common_meta_control::args::UpsertArgs;
+use databend_common_meta_control::args::WatchArgs;
 use databend_common_meta_control::export_from_disk;
 use databend_common_meta_control::export_from_grpc;
 use databend_common_meta_control::import;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::UpsertKV;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
+use display_more::DisplayOptionExt;
+use futures::stream::TryStreamExt;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Parser)]
@@ -166,6 +176,49 @@ impl App {
         import::import_data(args).await?;
         Ok(())
     }
+
+    async fn watch(&self, args: &WatchArgs) -> anyhow::Result<()> {
+        let addresses = vec![args.grpc_api_address.clone()];
+        let client = self.new_grpc_client(addresses)?;
+
+        let watch = WatchRequest::new_dir(&args.prefix).with_initial_flush(true);
+
+        let mut strm = client.request(watch).await?;
+        while let Some(watch_response) = strm.try_next().await? {
+            println!("received-watch-event: {}", watch_response);
+        }
+        Ok(())
+    }
+
+    async fn upsert(&self, args: &UpsertArgs) -> anyhow::Result<()> {
+        let addresses = vec![args.grpc_api_address.clone()];
+        let client = self.new_grpc_client(addresses)?;
+
+        let upsert = UpsertKV::update(args.key.clone(), args.value.as_bytes());
+
+        let res = client.request(upsert).await?;
+        println!(
+            "upsert-result: {}: {:?} -> {:?}",
+            res.ident.display(),
+            res.prev,
+            res.result
+        );
+        Ok(())
+    }
+
+    fn new_grpc_client(
+        &self,
+        addresses: Vec<String>,
+    ) -> Result<Arc<ClientHandle>, MetaClientError> {
+        MetaGrpcClient::try_create(
+            addresses,
+            "root",
+            "xxx",
+            Some(Duration::from_secs(2)),
+            Some(Duration::from_secs(1)),
+            None,
+        )
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Subcommand)]
@@ -175,6 +228,8 @@ enum CtlCommand {
     Import(ImportArgs),
     TransferLeader(TransferLeaderArgs),
     BenchClientNumConn(BenchArgs),
+    Watch(WatchArgs),
+    Upsert(UpsertArgs),
 }
 
 /// Usage:
@@ -220,6 +275,12 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Import(args) => {
                 app.import(args).await?;
+            }
+            CtlCommand::Watch(args) => {
+                app.watch(args).await?;
+            }
+            CtlCommand::Upsert(args) => {
+                app.upsert(args).await?;
             }
         },
         // for backward compatibility

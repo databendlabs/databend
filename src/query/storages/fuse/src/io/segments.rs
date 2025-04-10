@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
@@ -27,6 +28,7 @@ use fastrace::func_path;
 use fastrace::prelude::*;
 use opendal::Operator;
 
+use super::read::SegmentReader;
 use crate::io::MetaReaders;
 
 #[derive(Clone)]
@@ -98,6 +100,88 @@ impl SegmentsIO {
                     compact_segment
                         .try_into()
                         .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))
+                }
+                .in_span(Span::enter_with_local_parent(func_path!()))
+            })
+        });
+
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = threads_nums * 2;
+        execute_futures_in_parallel(
+            tasks,
+            threads_nums,
+            permit_nums,
+            "fuse-req-segments-worker".to_owned(),
+        )
+        .await
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn generic_read_compact_segments<R: SegmentReader>(
+        &self,
+        segment_locations: &[Location],
+        put_cache: bool,
+        projection: &HashSet<String>,
+    ) -> Result<Vec<Result<Arc<R::CompactSegment>>>> {
+        let mut iter = segment_locations.iter();
+        let tasks = std::iter::from_fn(|| {
+            iter.next().map(|location| {
+                let dal = self.operator.clone();
+                let table_schema = self.schema.clone();
+                let segment_location = location.clone();
+                let projection = projection.clone();
+                async move {
+                    let segment = R::read_compact_segment(
+                        dal,
+                        segment_location,
+                        &projection,
+                        table_schema,
+                        put_cache,
+                    )
+                    .await?;
+                    Ok(segment)
+                }
+                .in_span(Span::enter_with_local_parent(func_path!()))
+            })
+        });
+
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = threads_nums * 2;
+        execute_futures_in_parallel(
+            tasks,
+            threads_nums,
+            permit_nums,
+            "fuse-req-segments-worker".to_owned(),
+        )
+        .await
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn generic_read_segments<R: SegmentReader>(
+        &self,
+        segment_locations: &[Location],
+        put_cache: bool,
+        projection: &HashSet<String>,
+    ) -> Result<Vec<Result<R::Segment>>> {
+        let mut iter = segment_locations.iter();
+        let tasks = std::iter::from_fn(|| {
+            iter.next().map(|location| {
+                let dal = self.operator.clone();
+                let table_schema = self.schema.clone();
+                let segment_location = location.clone();
+                let projection = projection.clone();
+                async move {
+                    let segment = R::read_segment(
+                        dal,
+                        segment_location,
+                        &projection,
+                        table_schema,
+                        put_cache,
+                    )
+                    .await?;
+                    Ok(segment)
                 }
                 .in_span(Span::enter_with_local_parent(func_path!()))
             })

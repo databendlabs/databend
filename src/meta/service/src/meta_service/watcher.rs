@@ -14,6 +14,7 @@
 
 //! This mod integrates watcher into meta service
 
+use std::fmt;
 use std::future::Future;
 use std::io::Error;
 use std::ops::Deref;
@@ -22,6 +23,7 @@ use databend_common_meta_raft_store::state_machine_api::SMEventSender;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::SeqV;
 use futures::future::BoxFuture;
+use log::debug;
 use tonic::Status;
 use watcher::dispatch::Command;
 use watcher::dispatch::DispatcherHandle as GenericDispatcherHandle;
@@ -65,9 +67,16 @@ impl TypeConfig for WatchTypes {
 ///
 /// This is a wrapper around the generic dispatcher handle,
 /// in order to implement 3rd party traits for it.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct DispatcherHandle {
     handle: GenericDispatcherHandle<WatchTypes>,
+    name: String,
+}
+
+impl Drop for DispatcherHandle {
+    fn drop(&mut self) {
+        debug!("{}: drop", self);
+    }
 }
 
 impl Deref for DispatcherHandle {
@@ -78,9 +87,20 @@ impl Deref for DispatcherHandle {
     }
 }
 
+impl fmt::Display for DispatcherHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "watcher-DispatcherHandle({})", self.name,)
+    }
+}
+
 impl DispatcherHandle {
-    pub fn new(handle: GenericDispatcherHandle<WatchTypes>) -> Self {
-        DispatcherHandle { handle }
+    pub fn new(handle: GenericDispatcherHandle<WatchTypes>, id: impl ToString) -> Self {
+        let h = DispatcherHandle {
+            handle,
+            name: id.to_string(),
+        };
+        debug!("{}: new", h);
+        h
     }
 }
 

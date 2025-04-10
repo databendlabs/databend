@@ -66,6 +66,7 @@ subtract -> minus
 to_datetime -> to_timestamp
 to_text -> to_string
 to_varchar -> to_string
+trunc -> truncate
 try_ipv4_num_to_string -> try_inet_ntoa
 try_ipv4_string_to_num -> try_inet_aton
 try_to_datetime -> try_to_timestamp
@@ -1673,10 +1674,8 @@ Functions overloads:
 0 divnull(Float64 NULL, Float64 NULL) :: Float64 NULL
 0 epoch(Timestamp) :: Float64
 1 epoch(Timestamp NULL) :: Float64 NULL
-2 epoch(Int64) :: Interval
-3 epoch(Int64 NULL) :: Interval NULL
-4 epoch(Interval) :: Float64
-5 epoch(Interval NULL) :: Float64 NULL
+2 epoch(Interval) :: Float64
+3 epoch(Interval NULL) :: Float64 NULL
 0 eq(Variant, Variant) :: Boolean
 1 eq(Variant NULL, Variant NULL) :: Boolean NULL
 2 eq(String, String) :: Boolean

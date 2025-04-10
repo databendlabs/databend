@@ -29,6 +29,20 @@ impl WatchRequest {
         }
     }
 
+    /// Create a new `WatchRequest` that watch a dir with a directory prefix.
+    ///
+    /// Such as `/tenant` or `tenant/abc`.
+    /// A slash "/" will be appended to the prefix if it does not end with a slash.
+    pub fn new_dir(prefix: impl ToString) -> Self {
+        let prefix = prefix.to_string();
+        let prefix = prefix.trim_end_matches('/');
+
+        let left = format!("{}/", prefix);
+        let right = format!("{}0", prefix);
+
+        Self::new(left, Some(right))
+    }
+
     pub fn with_filter(mut self, filter_type: FilterType) -> Self {
         self.filter_type = filter_type as _;
         self
@@ -69,5 +83,19 @@ impl WatchResponse {
         let current = ev.current.map(SeqV::from);
 
         Some((key, prev, current))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_new_dir() {
+        let req = super::WatchRequest::new_dir("/tenant");
+        assert_eq!(req.key, "/tenant/");
+        assert_eq!(req.key_end, Some("/tenant0".to_string()));
+
+        let req = super::WatchRequest::new_dir("tenant/abc/");
+        assert_eq!(req.key, "tenant/abc/");
+        assert_eq!(req.key_end, Some("tenant/abc0".to_string()));
     }
 }

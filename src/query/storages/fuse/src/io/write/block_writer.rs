@@ -44,6 +44,7 @@ use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -165,12 +166,10 @@ impl BloomIndexBuilder {
 
     pub async fn bloom_index_state_from_block_meta(
         &self,
-        block_meta: &BlockMeta,
+        bloom_index_location: &Location,
+        block_read_info: &BlockReadInfo,
     ) -> Result<Option<(BloomIndexState, BloomIndex)>> {
         let ctx = self.table_ctx.clone();
-
-        // the caller should not pass a block meta without a bloom index location here.
-        assert!(block_meta.bloom_filter_index_location.is_some());
 
         let projection =
             Projection::Columns((0..self.table_schema.fields().len()).collect::<Vec<usize>>());
@@ -187,14 +186,22 @@ impl BloomIndexBuilder {
 
         let settings = ReadSettings::from_ctx(&self.table_ctx)?;
 
-        let data_block = block_reader
-            .read_by_meta(&settings, block_meta, &self.storage_format)
+        let merge_io_read_result = block_reader
+            .read_columns_data_by_merge_io(
+                &settings,
+                &block_read_info.location,
+                &block_read_info.col_metas,
+                &None,
+            )
             .await?;
 
-        self.bloom_index_state_from_data_block(
-            &data_block,
-            block_meta.bloom_filter_index_location.clone().unwrap(),
-        )
+        let data_block = block_reader.deserialize_chunks_with_meta(
+            block_read_info,
+            &self.storage_format,
+            merge_io_read_result,
+        )?;
+
+        self.bloom_index_state_from_data_block(&data_block, bloom_index_location.clone())
     }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,5 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bloom_filter;
-mod xor8;
+use log::debug;
+
+/// A struct that implements the Drop trait to log a message when it is dropped.
+///
+/// It can be used to track the lifetime. For example, use it a struct field of as a local variable of a closure.
+pub struct DropDebug {
+    message: String,
+}
+
+impl Drop for DropDebug {
+    fn drop(&mut self) {
+        debug!("DropDebug: {}", self.message);
+    }
+}
+
+impl DropDebug {
+    pub fn new(m: impl ToString) -> Self {
+        Self {
+            message: m.to_string(),
+        }
+    }
+}
