@@ -15,7 +15,7 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
@@ -43,7 +43,6 @@ use crate::servers::http::v1::session::consts::STATE_REFRESH_INTERVAL_META;
 use crate::servers::http::v1::session::consts::TOMBSTONE_TTL;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_META;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_QUERY;
-use crate::servers::http::v1::session::token::unix_ts;
 use crate::servers::http::v1::SessionClaim;
 use crate::sessions::Session;
 use crate::sessions::SessionPrivilegeManager;
@@ -185,7 +184,7 @@ impl ClientSessionManager {
         let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
 
         // new refresh token
-        let now = unix_ts();
+        let now = SystemTime::now();
         let mut claim = SessionClaim::new(
             client_session_id.clone(),
             &tenant_name,
@@ -217,7 +216,10 @@ impl ClientSessionManager {
             .insert(refresh_token_hash.clone(), None);
 
         // session token
-        claim.expire_at_in_secs = (now + SESSION_TOKEN_TTL).as_secs();
+        claim.expire_at_in_secs = (now + SESSION_TOKEN_TTL)
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         claim.nonce = uuid::Uuid::new_v4().to_string();
 
         let session_token = claim.encode(TokenType::Session);
@@ -260,8 +262,7 @@ impl ClientSessionManager {
 
     pub(crate) async fn verify_token(self: &Arc<Self>, token: &str) -> Result<SessionClaim> {
         let (claim, token_type) = SessionClaim::decode(token)?;
-        let now = unix_ts().as_secs();
-        if now > claim.expire_at_in_secs + TTL_GRACE_PERIOD_QUERY.as_secs() {
+        if SystemTime::now() > claim.expire_at() + TTL_GRACE_PERIOD_QUERY {
             return match token_type {
                 TokenType::Refresh => Err(ErrorCode::RefreshTokenExpired("refresh token expired")),
                 TokenType::Session => Err(ErrorCode::SessionTokenExpired("session token expired")),
@@ -320,12 +321,10 @@ impl ClientSessionManager {
 
     pub async fn drop_client_session_token(self: &Arc<Self>, session_token: &str) -> Result<()> {
         let (claim, _) = SessionClaim::decode(session_token)?;
-        let now = unix_ts().as_secs();
-
         let client_session_api =
             UserApiProvider::instance().client_session_api(&Tenant::new_literal(&claim.tenant));
 
-        if now < claim.expire_at_in_secs {
+        if SystemTime::now() < claim.expire_at() {
             let session_token_hash = hash_token(session_token.as_bytes());
             // should exist after `verify_token`
             let refresh_token_hash =
@@ -403,10 +402,11 @@ impl ClientSessionManager {
         tenant: Tenant,
         client_session_id: &str,
         user_name: &str,
-        last_access_time: u64,
+        last_access_time: &SystemTime,
     ) -> Result<()> {
-        let last_access_time = Duration::from_secs(last_access_time);
-        let elapsed = unix_ts() - last_access_time;
+        let Ok(elapsed) = last_access_time.elapsed() else {
+            return Ok(());
+        };
         if elapsed > STATE_REFRESH_INTERVAL_MEMORY {
             self.refresh_in_memory_states(client_session_id, user_name);
         }
