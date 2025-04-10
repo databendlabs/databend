@@ -257,8 +257,8 @@ impl PullUpFilterOptimizer {
 
 #[async_trait::async_trait]
 impl Optimizer for PullUpFilterOptimizer {
-    fn name(&self) -> &'static str {
-        "PullUpFilterOptimizer"
+    fn name(&self) -> String {
+        "PullUpFilterOptimizer".to_string()
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {

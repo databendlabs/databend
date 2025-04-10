@@ -862,8 +862,8 @@ impl DPhpy {
 
 #[async_trait::async_trait]
 impl Optimizer for DPhpy {
-    fn name(&self) -> &'static str {
-        "DPhpy"
+    fn name(&self) -> String {
+        "DPhpy".to_string()
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {

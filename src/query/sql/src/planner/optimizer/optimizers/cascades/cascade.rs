@@ -246,8 +246,8 @@ impl CascadesOptimizer {
 
 #[async_trait::async_trait]
 impl Optimizer for CascadesOptimizer {
-    fn name(&self) -> &'static str {
-        "CascadesOptimizer"
+    fn name(&self) -> String {
+        "CascadesOptimizer".to_string()
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {

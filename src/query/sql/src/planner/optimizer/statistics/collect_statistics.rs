@@ -156,8 +156,8 @@ impl CollectStatisticsOptimizer {
 
 #[async_trait::async_trait]
 impl Optimizer for CollectStatisticsOptimizer {
-    fn name(&self) -> &'static str {
-        "CollectStatisticsOptimizer"
+    fn name(&self) -> String {
+        "CollectStatisticsOptimizer".to_string()
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
