@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::tokio;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
@@ -114,6 +115,8 @@ impl SimpleArgFunc for FuseTimeTravelSize {
         let mut data_retention_period_in_hours = Vec::new();
         let mut errors = Vec::new();
         let mut tasks = Vec::new();
+        let num_threads = ctx.get_settings().get_max_threads()? as usize;
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(num_threads));
         let catalog = ctx.get_default_catalog()?;
         let dbs = match &args.database_name {
             Some(db_name) => {
@@ -162,10 +165,18 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                     continue;
                 }
                 let table_clone = tbl.clone();
+                let semaphore = semaphore.clone();
                 tasks.push(async move {
+                    let permit = semaphore.acquire_owned().await.map_err(|e| {
+                        ErrorCode::Internal(format!(
+                            "semaphore closed, acquire permit failure. {}",
+                            e
+                        ))
+                    })?;
                     let fuse_table = FuseTable::try_from_table(table_clone.as_ref()).unwrap();
                     let (time_travel_size, latest_snapshot_size) =
                         calc_tbl_size(fuse_table).await?;
+                    drop(permit);
                     Ok::<_, ErrorCode>((time_travel_size, latest_snapshot_size))
                 });
                 let data_retention_period_in_hour = fuse_table
