@@ -4104,7 +4104,6 @@ dependencies = [
  "roaring",
  "serde",
  "sha2",
- "similar",
  "simsearch",
  "tokio",
  "unicase",
@@ -5070,7 +5069,9 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "databend-meta",
+ "display-more",
  "fastrace",
+ "futures",
  "log",
  "rand 0.8.5",
  "serde",
@@ -5444,12 +5445,16 @@ dependencies = [
 name = "databend-storages-common-table-meta"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "bincode 1.3.3",
+ "bytes",
  "chrono",
  "databend-common-base",
+ "databend-common-column",
  "databend-common-datavalues",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-functions",
  "databend-common-io",
  "databend-common-native",
  "databend-common-storage",
@@ -5816,8 +5821,8 @@ dependencies = [
 
 [[package]]
 name = "display-more"
-version = "0.1.1"
-source = "git+https://github.com/databendlabs/display-more?tag=v0.1.1#41a61e3b731cf740831662d8e158b0a088c9adb8"
+version = "0.1.2"
+source = "git+https://github.com/databendlabs/display-more?tag=v0.1.2#723acc184363f9509364ca9d652adac92e4fcfc1"
 dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
@@ -9624,8 +9629,7 @@ dependencies = [
 [[package]]
 name = "logforth"
 version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "415235aa09d81980f2049c725f3c9db3b227f263497359e8292313d023c1a6e9"
+source = "git+https://github.com/datafuse-extras/logforth?branch=global-max-files-v0.14#cedfff08d59a683ac2bf08ff54724e0b43bd218b"
 dependencies = [
  "anyhow",
  "colored",
@@ -13461,9 +13465,9 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
 name = "similar"
-version = "2.7.0"
+version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+checksum = "1de1d4f81173b03af4c0cbed3c898f6bff5b870e4a7f5d6f4057d62a7a4b686e"
 dependencies = [
  "bstr",
  "unicode-segmentation",
@@ -16169,8 +16173,8 @@ dependencies = [
 
 [[package]]
 name = "watcher"
-version = "0.1.0"
-source = "git+https://github.com/databendlabs/watcher?tag=v0.1.0#bb04329f099b10e2f29f4faca0a0980d51f1c1b7"
+version = "0.1.1"
+source = "git+https://github.com/databendlabs/watcher?tag=v0.1.1#de30194284b8382f4a2727ebdb7fbd4dd53e39b1"
 dependencies = [
  "futures",
  "log",
