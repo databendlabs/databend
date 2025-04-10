@@ -345,7 +345,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     }
 
     pub fn is_sliced(&self) -> bool {
-        self.views.as_ptr() != self.views.data_ptr()
+        !std::ptr::eq(self.views.as_ptr(), self.views.data_ptr())
     }
 
     fn slice(&mut self, offset: usize, length: usize) {

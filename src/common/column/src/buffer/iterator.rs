@@ -43,7 +43,7 @@ impl<T: Copy> Iterator for IntoIter<T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current == self.end {
+        if std::ptr::eq(self.current, self.end) {
             None
         } else {
             let value = unsafe { *self.current };
@@ -62,7 +62,7 @@ impl<T: Copy> Iterator for IntoIter<T> {
 impl<T: Copy> DoubleEndedIterator for IntoIter<T> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.current == self.end {
+        if std::ptr::eq(self.current, self.end) {
             None
         } else {
             self.end = unsafe { self.end.sub(1) };

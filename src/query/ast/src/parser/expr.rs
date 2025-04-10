@@ -435,7 +435,7 @@ impl ExprElement {
             ExprElement::PreviousDay { .. } => Affix::Nilfix,
             ExprElement::NextDay { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
-            ExprElement::Placeholder { .. } => Affix::Nilfix,
+            ExprElement::Placeholder => Affix::Nilfix,
             ExprElement::VariableAccess { .. } => Affix::Nilfix,
         }
     }

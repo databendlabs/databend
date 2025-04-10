@@ -49,23 +49,23 @@ fn build_proto() -> Result<()> {
     let output = cmd.output()?;
     let version = if output.status.success() {
         let content = String::from_utf8_lossy(&output.stdout);
-        let content = content.trim().split(' ').last().ok_or_else(|| {
-            Error::new(
-                ErrorKind::Other,
-                format!("protoc --version got unexpected output: {}", content),
-            )
+        let content = content.trim().split(' ').next_back().ok_or_else(|| {
+            Error::other(format!(
+                "protoc --version got unexpected output: {}",
+                content
+            ))
         })?;
         lenient_semver::parse(content).map_err(|err| {
-            Error::new(
-                ErrorKind::Other,
-                format!("protoc --version doesn't return valid version: {:?}", err),
-            )
+            Error::other(format!(
+                "protoc --version doesn't return valid version: {:?}",
+                err
+            ))
         })?
     } else {
-        return Err(Error::new(
-            ErrorKind::Other,
-            format!("protoc failed: {}", String::from_utf8_lossy(&output.stderr)),
-        ));
+        return Err(Error::other(format!(
+            "protoc failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
     };
 
     let mut config = prost_build::Config::new();
@@ -73,8 +73,7 @@ fn build_proto() -> Result<()> {
 
     // Version before 3.12 doesn't support allow_proto3_optional
     if version < Version::new(3, 12, 0) {
-        return Err(Error::new(
-            ErrorKind::Other,
+        return Err(Error::other(
             format!(
                 "protoc version is outdated, expect: >= 3.12.0, actual: {version}, reason: need feature --experimental_allow_proto3_optional"
             ),
