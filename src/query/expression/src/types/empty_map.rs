@@ -34,7 +34,7 @@ impl ValueType for EmptyMapType {
     type ScalarRef<'a> = ();
     type Column = usize;
     type Domain = ();
-    type ColumnIterator<'a> = std::iter::Take<std::iter::Repeat<()>>;
+    type ColumnIterator<'a> = std::iter::RepeatN<()>;
     type ColumnBuilder = usize;
 
     #[inline]
@@ -123,7 +123,7 @@ impl ValueType for EmptyMapType {
     }
 
     fn iter_column(len: &Self::Column) -> Self::ColumnIterator<'_> {
-        std::iter::repeat(()).take(*len)
+        std::iter::repeat_n((), *len)
     }
 
     fn column_to_builder(len: Self::Column) -> Self::ColumnBuilder {

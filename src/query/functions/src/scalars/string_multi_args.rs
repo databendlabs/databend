@@ -355,10 +355,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
             let cached_reg = match &pat_arg {
                 Value::Scalar(pat) => {
-                    match regexp::build_regexp_from_pattern("regexp_extract", pat, None) {
-                        Ok(re) => Some(re),
-                        _ => None,
-                    }
+                    regexp::build_regexp_from_pattern("regexp_extract", pat, None).ok()
                 }
                 _ => None,
             };
@@ -541,12 +538,7 @@ fn regexp_extract_all(
             _ => None,
         });
     let cached_reg = match &pat_arg {
-        Value::Scalar(pat) => {
-            match regexp::build_regexp_from_pattern("regexp_extract", pat, None) {
-                Ok(re) => Some(re),
-                _ => None,
-            }
-        }
+        Value::Scalar(pat) => regexp::build_regexp_from_pattern("regexp_extract", pat, None).ok(),
         _ => None,
     };
 
@@ -626,12 +618,7 @@ fn inner_regexp_extract(
         });
 
     let cached_reg = match &pat_arg {
-        Value::Scalar(pat) => {
-            match regexp::build_regexp_from_pattern("regexp_extract", pat, None) {
-                Ok(re) => Some(re),
-                _ => None,
-            }
-        }
+        Value::Scalar(pat) => regexp::build_regexp_from_pattern("regexp_extract", pat, None).ok(),
         _ => None,
     };
 
@@ -735,16 +722,10 @@ fn regexp_instr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyT
 
     let cached_reg = match (&pat_arg, &mt_arg) {
         (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
-            match regexp::build_regexp_from_pattern("regexp_instr", pat, Some(mt)) {
-                Ok(re) => Some(re),
-                _ => None,
-            }
+            regexp::build_regexp_from_pattern("regexp_instr", pat, Some(mt)).ok()
         }
         (Value::Scalar(pat), None) => {
-            match regexp::build_regexp_from_pattern("regexp_instr", pat, None) {
-                Ok(re) => Some(re),
-                _ => None,
-            }
+            regexp::build_regexp_from_pattern("regexp_instr", pat, None).ok()
         }
         _ => None,
     };
@@ -825,16 +806,10 @@ fn regexp_like_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyTy
 
     let cached_reg = match (&pat_arg, &mt_arg) {
         (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
-            match regexp::build_regexp_from_pattern("regexp_like", pat, Some(mt)) {
-                Ok(re) => Some(re),
-                _ => None,
-            }
+            regexp::build_regexp_from_pattern("regexp_like", pat, Some(mt)).ok()
         }
         (Value::Scalar(pat), None) => {
-            match regexp::build_regexp_from_pattern("regexp_like", pat, None) {
-                Ok(re) => Some(re),
-                _ => None,
-            }
+            regexp::build_regexp_from_pattern("regexp_like", pat, None).ok()
         }
         _ => None,
     };
@@ -902,16 +877,10 @@ fn regexp_replace_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<An
 
     let cached_reg = match (&pat_arg, &mt_arg) {
         (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
-            match regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)) {
-                Ok(re) => Some(re),
-                _ => None,
-            }
+            regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)).ok()
         }
         (Value::Scalar(pat), None) => {
-            match regexp::build_regexp_from_pattern("regexp_replace", pat, None) {
-                Ok(re) => Some(re),
-                _ => None,
-            }
+            regexp::build_regexp_from_pattern("regexp_replace", pat, None).ok()
         }
         _ => None,
     };
@@ -1007,16 +976,10 @@ fn regexp_substr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<Any
 
     let cached_reg = match (&pat_arg, &mt_arg) {
         (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
-            match regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)) {
-                Ok(re) => Some(re),
-                _ => None,
-            }
+            regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)).ok()
         }
         (Value::Scalar(pat), None) => {
-            match regexp::build_regexp_from_pattern("regexp_replace", pat, None) {
-                Ok(re) => Some(re),
-                _ => None,
-            }
+            regexp::build_regexp_from_pattern("regexp_replace", pat, None).ok()
         }
         _ => None,
     };
