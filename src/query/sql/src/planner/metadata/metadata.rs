@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -45,7 +45,7 @@ pub const DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
 pub const DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
 
 /// ColumnSet represents a set of columns identified by its IndexType.
-pub type ColumnSet = HashSet<IndexType>;
+pub type ColumnSet = BTreeSet<IndexType>;
 
 /// A Send & Send version of [`Metadata`].
 ///
@@ -62,14 +62,14 @@ pub struct Metadata {
     /// Table column indexes that are lazy materialized.
     table_lazy_columns: HashMap<IndexType, ColumnSet>,
     table_source: HashMap<IndexType, DataSourcePlan>,
-    retained_columns: HashSet<IndexType>,
+    retained_columns: ColumnSet,
     /// Columns that are lazy materialized.
-    lazy_columns: HashSet<IndexType>,
+    lazy_columns: ColumnSet,
     /// Columns that are used for compute lazy materialized.
     /// If outer query match the lazy materialized rule but inner query doesn't,
     /// we need add cols that inner query required to non_lazy_columns
     /// to prevent these cols to be pruned.
-    non_lazy_columns: HashSet<IndexType>,
+    non_lazy_columns: ColumnSet,
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, IndexType>,
     agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
@@ -138,7 +138,7 @@ impl Metadata {
         self.retained_columns.insert(index);
     }
 
-    pub fn get_retained_column(&self) -> &HashSet<IndexType> {
+    pub fn get_retained_column(&self) -> &ColumnSet {
         &self.retained_columns
     }
 
@@ -162,7 +162,7 @@ impl Metadata {
         self.lazy_columns.contains(&index)
     }
 
-    pub fn add_lazy_columns(&mut self, indices: HashSet<usize>) {
+    pub fn add_lazy_columns(&mut self, indices: ColumnSet) {
         if !self.lazy_columns.is_empty() {
             // `lazy_columns` is only allowed to be set once.
             return;
@@ -175,16 +175,16 @@ impl Metadata {
         self.lazy_columns.clear();
     }
 
-    pub fn add_non_lazy_columns(&mut self, indices: HashSet<usize>) {
+    pub fn add_non_lazy_columns(&mut self, indices: ColumnSet) {
         debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
         self.non_lazy_columns.extend(indices);
     }
 
-    pub fn lazy_columns(&self) -> &HashSet<usize> {
+    pub fn lazy_columns(&self) -> &ColumnSet {
         &self.lazy_columns
     }
 
-    pub fn non_lazy_columns(&self) -> &HashSet<usize> {
+    pub fn non_lazy_columns(&self) -> &ColumnSet {
         &self.non_lazy_columns
     }
 

@@ -22,7 +22,6 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -40,6 +39,7 @@ use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;

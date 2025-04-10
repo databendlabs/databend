@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
@@ -23,6 +22,7 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
+use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
 
 use crate::interpreters::interpreter_optimize_purge::purge;
@@ -83,7 +83,7 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
         let mut builder = PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
-        match builder.build(&self.s_expr, HashSet::new()).await {
+        match builder.build(&self.s_expr, ColumnSet::new()).await {
             Ok(physical_plan) => {
                 build_res =
                     build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)

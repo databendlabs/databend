@@ -21,7 +21,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -29,6 +28,7 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::ColumnSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecursiveCteScan {
@@ -38,7 +38,7 @@ pub struct RecursiveCteScan {
 
 impl RecursiveCteScan {
     pub fn used_columns(&self) -> Result<ColumnSet> {
-        let mut used_columns = ColumnSet::with_capacity(self.fields.len());
+        let mut used_columns = ColumnSet::new();
         for field in self.fields.iter() {
             used_columns.insert(field.name().parse()?);
         }

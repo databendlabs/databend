@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -38,6 +37,7 @@ use databend_common_sql::planner::plans::JoinType;
 use databend_common_sql::planner::plans::RelOperator;
 use databend_common_sql::planner::plans::ScalarExpr;
 use databend_common_sql::planner::plans::Scan;
+use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use pretty_assertions::assert_eq;
@@ -179,7 +179,7 @@ struct JoinFilterTestCase {
 }
 
 /// Helper functions for plan creation and verification
-fn create_table_scan(table_index: usize, column_indices: Option<HashSet<IndexType>>) -> SExpr {
+fn create_table_scan(table_index: usize, column_indices: Option<ColumnSet>) -> SExpr {
     let columns = column_indices.unwrap_or_default();
     let scan = Scan {
         table_index,
@@ -403,8 +403,8 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
     let join_condition = JoinEquiCondition::new(t1_id.clone(), t2_id.clone(), false);
 
     // Create table scans
-    let left_scan = create_table_scan(0, Some(HashSet::from([0, 2])));
-    let right_scan = create_table_scan(1, Some(HashSet::from([1, 3])));
+    let left_scan = create_table_scan(0, Some(ColumnSet::from([0, 2])));
+    let right_scan = create_table_scan(1, Some(ColumnSet::from([1, 3])));
 
     // Create join
     let join = create_join(
@@ -1378,9 +1378,9 @@ fn test_push_down_complex_or_expressions() -> Result<()> {
 
     // Create table scans
     // SQL: FROM t1
-    let left_scan = create_table_scan(0, Some(HashSet::from([0, 2])));
+    let left_scan = create_table_scan(0, Some(ColumnSet::from([0, 2])));
     // SQL: FROM t2
-    let right_scan = create_table_scan(1, Some(HashSet::from([1, 3])));
+    let right_scan = create_table_scan(1, Some(ColumnSet::from([1, 3])));
 
     // Create join
     // SQL: FROM t1 INNER JOIN t2 ON t1.id = t2.id
