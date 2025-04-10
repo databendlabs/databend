@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
@@ -405,9 +407,16 @@ impl<E> HTTPSessionEndpoint<E> {
             if let Some(ts) = &last_access_time {
                 let ts = ts
                     .parse::<u64>()
-                    .map_err(|_| ErrorCode::BadArguments(format!("bad last_access_time {}", ts)))?;
+                    .map_err(|_| ErrorCode::BadArguments(format!("bad last_access_time {ts}")))?;
+                let ts = SystemTime::UNIX_EPOCH + Duration::from_secs(ts);
+                if let Err(err) = ts.elapsed() {
+                    log::error!(
+                        "last_access_time is incorrect or has clock drift, difference: {:?}",
+                        err.duration()
+                    );
+                };
                 ClientSessionManager::instance()
-                    .refresh_state(session.get_current_tenant(), id, &user_name, ts)
+                    .refresh_state(session.get_current_tenant(), id, &user_name, &ts)
                     .await?;
             }
         }

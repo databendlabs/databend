@@ -96,7 +96,7 @@ pub fn make_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, Met
         addresses,
         "root",
         "xxx",
-        None,
+        Some(Duration::from_secs(2)), // timeout
         Some(Duration::from_secs(10)),
         None,
     )?;

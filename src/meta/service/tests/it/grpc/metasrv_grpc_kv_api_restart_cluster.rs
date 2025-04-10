@@ -190,6 +190,8 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         stopped_tcs
     };
 
+    sleep(Duration::from_secs(1)).await;
+
     info!("--- restart the cluster");
     let tcs = {
         let mut tcs = vec![];
