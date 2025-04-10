@@ -46,7 +46,7 @@ const RELATION_THRESHOLD: usize = 10;
 
 // The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
 // See the paper for more details.
-pub struct DPhpy {
+pub struct DPhpyOptimizer {
     opt_ctx: Arc<OptimizerContext>,
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
@@ -60,7 +60,7 @@ pub struct DPhpy {
     emit_count: usize,
 }
 
-impl DPhpy {
+impl DPhpyOptimizer {
     pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
         Self {
             opt_ctx,
@@ -91,7 +91,7 @@ impl DPhpy {
         let left_expr = s_expr.children[0].clone();
         let opt_ctx = self.opt_ctx.clone();
         let left_res = spawn(async move {
-            let mut dphyp = DPhpy::new(opt_ctx.clone());
+            let mut dphyp = DPhpyOptimizer::new(opt_ctx.clone());
             (
                 dphyp.optimize_async(&left_expr).await,
                 dphyp.table_index_map,
@@ -100,7 +100,7 @@ impl DPhpy {
         let right_expr = s_expr.children[1].clone();
         let opt_ctx = self.opt_ctx.clone();
         let right_res = spawn(async move {
-            let mut dphyp = DPhpy::new(opt_ctx.clone());
+            let mut dphyp = DPhpyOptimizer::new(opt_ctx.clone());
             (
                 dphyp.optimize_async(&right_expr).await,
                 dphyp.table_index_map,
@@ -127,7 +127,7 @@ impl DPhpy {
     }
 
     // Traverse the s_expr and get all base relations and join conditions
-    #[async_recursion::async_recursion(#[recursive::recursive])]
+    #[async_recursion::async_recursion(# [recursive::recursive])]
     async fn get_base_relations(
         &mut self,
         s_expr: &SExpr,
@@ -138,7 +138,7 @@ impl DPhpy {
     ) -> Result<(Arc<SExpr>, bool)> {
         if is_subquery {
             // If it's a subquery, start a new dphyp
-            let mut dphyp = DPhpy::new(self.opt_ctx.clone());
+            let mut dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
             let new_s_expr = Arc::new(dphyp.optimize_async(s_expr).await?);
             // Merge `table_index_map` of subquery into current `table_index_map`.
             let relation_idx = self.join_relations.len() as IndexType;
@@ -578,7 +578,7 @@ impl DPhpy {
 
     // EnumerateCsgRec will extend the given `nodes`.
     // It'll consider each non-empty, proper subset of the neighborhood of nodes that are not forbidden.
-    #[async_recursion::async_recursion(#[recursive::recursive])]
+    #[async_recursion::async_recursion(# [recursive::recursive])]
     async fn enumerate_csg_rec(
         &mut self,
         nodes: &[IndexType],
@@ -723,7 +723,7 @@ impl DPhpy {
 
     // The second parameter is a set which is connected and must be extended until a valid csg-cmp-pair is reached.
     // Therefore, it considers the neighborhood of right.
-    #[async_recursion::async_recursion(#[recursive::recursive])]
+    #[async_recursion::async_recursion(# [recursive::recursive])]
     async fn enumerate_cmp_rec(
         &mut self,
         left: &[IndexType],
@@ -861,9 +861,9 @@ impl DPhpy {
 }
 
 #[async_trait::async_trait]
-impl Optimizer for DPhpy {
+impl Optimizer for DPhpyOptimizer {
     fn name(&self) -> String {
-        "DPhpy".to_string()
+        "DPhpyOptimizer".to_string()
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
