@@ -137,7 +137,7 @@ impl CatalogCreator for IcebergCreator {
 ///
 /// - Metadata of databases are saved in meta store
 /// - Instances of `Database` are created from reading subdirectories of
-///    Iceberg table
+///   Iceberg table
 /// - Table metadata are saved in external Iceberg storage
 #[derive(Clone, Debug)]
 pub struct IcebergCatalog {

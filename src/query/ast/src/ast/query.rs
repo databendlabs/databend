@@ -827,6 +827,7 @@ impl Display for SampleConfig {
 }
 
 /// A table name or a parenthesized subquery with an optional alias
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TableReference {
     // Table name

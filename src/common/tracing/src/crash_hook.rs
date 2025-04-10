@@ -321,7 +321,7 @@ pub unsafe fn add_signal_stack(stack_bytes: usize) {
         0,
     );
 
-    if stack_memory_arena == libc::MAP_FAILED {
+    if std::ptr::eq(stack_memory_arena, libc::MAP_FAILED) {
         return;
     }
 

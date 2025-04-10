@@ -81,6 +81,7 @@ use crate::executor::physical_plans::WindowPartition;
     Clone(bound = false, attrs = "#[recursive::recursive]"),
     Debug(bound = false, attrs = "#[recursive::recursive]")
 )]
+#[allow(clippy::large_enum_variant)]
 pub enum PhysicalPlan {
     /// Query
     TableScan(TableScan),

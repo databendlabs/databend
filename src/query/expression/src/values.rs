@@ -770,7 +770,7 @@ impl ScalarRef<'_> {
     /// The estimated memory size (in bytes) that `n` repetitions of `scalar` would occupy.
     pub fn estimated_scalar_repeat_size(&self, n: usize, data_type: &DataType) -> usize {
         if let DataType::Nullable(ty) = data_type {
-            let mut memory_size = (n + 7) / 8;
+            let mut memory_size = n.div_ceil(8);
             if !self.is_null() {
                 memory_size += self.estimated_scalar_repeat_size(n, ty);
             }
@@ -782,7 +782,7 @@ impl ScalarRef<'_> {
             ScalarRef::EmptyArray | ScalarRef::EmptyMap => std::mem::size_of::<usize>(),
             ScalarRef::Number(_) => n * self.memory_size(),
             ScalarRef::Decimal(_) => n * self.memory_size(),
-            ScalarRef::Boolean(_) => (n + 7) / 8,
+            ScalarRef::Boolean(_) => n.div_ceil(8),
             ScalarRef::Binary(s) => s.len() * n + (n + 1) * 8,
             ScalarRef::String(s) => s.len() * n + n * 12,
             ScalarRef::Timestamp(_) => n * 8,
@@ -1366,7 +1366,6 @@ impl Column {
                         rng.sample_iter(&Alphanumeric)
                             // randomly generate 5 characters.
                             .take(str_len)
-                            .map(u8::from)
                             .collect::<Vec<_>>()
                     })
                     .collect_vec(),

@@ -437,7 +437,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 let snapshot_has_changed = self.prev_snapshot_id.is_some_and(|prev_snapshot_id| {
                     previous
                         .as_ref()
-                        .map_or(true, |previous| previous.snapshot_id != prev_snapshot_id)
+                        .is_none_or(|previous| previous.snapshot_id != prev_snapshot_id)
                 });
                 if snapshot_has_changed {
                     // if snapshot has changed abort operation

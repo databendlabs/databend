@@ -49,9 +49,7 @@ impl MetaClientError {
 impl From<MetaClientError> for io::Error {
     fn from(e: MetaClientError) -> Self {
         match e {
-            MetaClientError::ClientRuntimeError(e) => {
-                io::Error::new(io::ErrorKind::Other, e.to_string())
-            }
+            MetaClientError::ClientRuntimeError(e) => io::Error::other(e.to_string()),
             MetaClientError::ConfigError(e) => {
                 io::Error::new(io::ErrorKind::InvalidInput, e.to_string())
             }
