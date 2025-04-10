@@ -362,7 +362,8 @@ impl Binder {
                 .insert(table_index);
             let mut virtual_column_name_map = HashMap::with_capacity(virtual_schema.fields.len());
             for virtual_field in virtual_schema.fields.iter() {
-                let Ok(source_field) = source_schema.field_of_column_id(virtual_field.source_column_id)
+                let Ok(source_field) =
+                    source_schema.field_of_column_id(virtual_field.source_column_id)
                 else {
                     continue;
                 };

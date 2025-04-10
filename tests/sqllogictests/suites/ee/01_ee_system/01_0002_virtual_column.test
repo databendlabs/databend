@@ -30,16 +30,9 @@ create table t1(id int, val json) storage_format = 'native'
 statement ok
 insert into t1 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'), (3, '3')
 
-statement ok
-create virtual column (val['a'], val['b']::int, val['c']::string) for t1
-
-statement ok
-refresh virtual column for t1
-
 query TTT
 show virtual columns from t1
 ----
-test_virtual_column t1 val['a'], val['b']::Int32, val['c']::String
 
 statement ok
 insert into t1 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
@@ -47,31 +40,31 @@ insert into t1 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"
 query ITIT
 select id, val['a'], val['b'], val['c'] from t1 order by id
 ----
-1 11 1 test
-2 22 2 data
+1 11 1 "test"
+2 22 2 "data"
 3 NULL NULL NULL
-4 44 4 value
-5 55 5 bend
+4 44 4 "value"
+5 55 5 "bend"
 6 NULL NULL NULL
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val from t1 order by id
 ----
-1 11 1 test {"a":11,"b":1,"c":"test"}
-2 22 2 data {"a":22,"b":2,"c":"data"}
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+2 22 2 "data" {"a":22,"b":2,"c":"data"}
 3 NULL NULL NULL 3
-4 44 4 value {"a":44,"b":4,"c":"value"}
-5 55 5 bend {"a":55,"b":5,"c":"bend"}
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
+5 55 5 "bend" {"a":55,"b":5,"c":"bend"}
 6 NULL NULL NULL 6
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val['d'] from t1 order by id
 ----
-1 11 1 test NULL
-2 22 2 data NULL
+1 11 1 "test" NULL
+2 22 2 "data" NULL
 3 NULL NULL NULL NULL
-4 44 4 value NULL
-5 55 5 bend NULL
+4 44 4 "value" NULL
+5 55 5 "bend" NULL
 6 NULL NULL NULL NULL
 
 query ITIT
@@ -89,14 +82,14 @@ select id, val['a'], val['b'], val from t1 where val=3 or val=6 order by id
 query ITIT
 select id, val['a'], val['b'], val['c'] from t1 where val['a']=11 or val['a']=44 order by id
 ----
-1 11 1 test
-4 44 4 value
+1 11 1 "test"
+4 44 4 "value"
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val from t1 where val['a']=11 or val['a']=44 order by id
 ----
-1 11 1 test {"a":11,"b":1,"c":"test"}
-4 44 4 value {"a":44,"b":4,"c":"value"}
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
 
 query IT
 select max(id), val:a from t1 group by val:a order by val:a
@@ -134,16 +127,12 @@ create table t2(id int, val json) storage_format = 'parquet'
 statement ok
 insert into t2 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'), (3, '3')
 
-statement ok
-create virtual column (val['a'], val['b']::int, val['c']::string) for t2
-
-statement ok
-refresh virtual column for t2
-
-query TTT
+query TTTTTT
 show virtual columns from t2
 ----
-test_virtual_column t2 val['a'], val['b']::Int32, val['c']::String
+test_virtual_column t2 val 3000000000 ['a'] UInt64
+test_virtual_column t2 val 3000000001 ['b'] UInt64
+test_virtual_column t2 val 3000000002 ['c'] String
 
 statement ok
 insert into t2 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
@@ -230,13 +219,6 @@ SELECT r.id, r.val['a'], r.val['b'], r.nval:a, r.nval:b FROM ( SELECT r.id, r.va
 6 NULL NULL NULL NULL
 
 statement ok
-create or replace virtual column (val['a']) for t1;
-
-query TT
-show virtual columns from t1
-----
-test_virtual_column t1 val['a']
-
-statement ok
 DROP DATABASE test_virtual_column
+
 

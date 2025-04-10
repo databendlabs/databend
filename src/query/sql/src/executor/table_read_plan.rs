@@ -32,7 +32,6 @@ use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableField;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_users::UserApiProvider;
