@@ -37,6 +37,7 @@ use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
+use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
@@ -87,7 +88,7 @@ pub async fn filter_selectivity_sample(
         );
 
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
-        let mut required = HashSet::new();
+        let mut required = ColumnSet::new();
         required.insert(0);
         let plan = builder.build(&new_s_expr, required).await?;
 

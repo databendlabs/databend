@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
@@ -34,6 +33,7 @@ use databend_common_sql::executor::physical_plans::ChunkFilter;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::Duplicate;
 use databend_common_sql::executor::physical_plans::Shuffle;
+use databend_common_sql::ColumnSet;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -60,7 +60,7 @@ impl PipelineBuilder {
             return Ok(());
         }
         let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(plan.predicates.len());
-        let projection: HashSet<_> = (0..plan.input.output_schema()?.fields.len()).collect();
+        let projection: ColumnSet = (0..plan.input.output_schema()?.fields.len()).collect();
         for predicate in plan.predicates.iter() {
             if let Some(predicate) = predicate {
                 f.push(Box::new(self.filter_transform_builder(

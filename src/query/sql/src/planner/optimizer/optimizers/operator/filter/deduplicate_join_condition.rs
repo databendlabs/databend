@@ -237,8 +237,8 @@ impl DeduplicateJoinConditionOptimizer {
 
 #[async_trait::async_trait]
 impl Optimizer for DeduplicateJoinConditionOptimizer {
-    fn name(&self) -> &'static str {
-        "DeduplicateJoinConditionOptimizer"
+    fn name(&self) -> String {
+        "DeduplicateJoinConditionOptimizer".to_string()
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {

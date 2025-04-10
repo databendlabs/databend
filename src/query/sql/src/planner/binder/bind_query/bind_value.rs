@@ -32,7 +32,6 @@ use databend_common_expression::Evaluator;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
@@ -48,6 +47,7 @@ use crate::BindContext;
 use crate::Binder;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
+use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;

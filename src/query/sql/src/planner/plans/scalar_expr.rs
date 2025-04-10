@@ -45,8 +45,8 @@ use itertools::Itertools;
 use super::WindowFuncFrame;
 use super::WindowFuncType;
 use crate::binder::ColumnBinding;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::SExpr;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 

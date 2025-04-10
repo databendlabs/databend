@@ -14,7 +14,6 @@
 
 use std::cmp::max;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -26,7 +25,6 @@ use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
@@ -41,6 +39,7 @@ use crate::optimizer::ir::UniformSampleSet;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::ColumnSet;
 use crate::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
@@ -516,7 +515,7 @@ impl Operator for Join {
         for condition in self.equi_conditions.iter() {
             let left_used_columns = condition.left.used_columns();
             let right_used_columns = condition.right.used_columns();
-            let used_columns: HashSet<usize> = left_used_columns
+            let used_columns: ColumnSet = left_used_columns
                 .union(&right_used_columns)
                 .cloned()
                 .collect();

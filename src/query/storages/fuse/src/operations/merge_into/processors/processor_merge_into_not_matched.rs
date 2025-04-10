@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -34,6 +33,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::ColumnSet;
 use databend_common_storage::MutationStatus;
 use itertools::Itertools;
 
@@ -68,7 +68,7 @@ impl MergeIntoNotMatchedProcessor {
     ) -> Result<Self> {
         let mut ops = Vec::<InsertDataBlockMutation>::with_capacity(unmatched.len());
         for item in unmatched.iter() {
-            let eval_projections: HashSet<usize> =
+            let eval_projections: ColumnSet =
                 (input_schema.num_fields()..input_schema.num_fields() + item.2.len()).collect();
             ops.push(InsertDataBlockMutation {
                 op: BlockOperator::Map {

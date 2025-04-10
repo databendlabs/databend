@@ -1242,6 +1242,22 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_optimizer_trace", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables optimizer trace.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                // Add this to the HashMap in DefaultSettings::instance()
+   ("optimizer_skip_list", DefaultSettingValue {
+                value: UserSettingValue::String(String::new()),
+                desc: "Comma-separated(,) list of optimizer names to skip during query optimization",
+                mode: SettingMode::Both,
+                scope: SettingScope::Both,
+                range: None,
+            }),
+
             ]);
 
             Ok(Arc::new(DefaultSettings {

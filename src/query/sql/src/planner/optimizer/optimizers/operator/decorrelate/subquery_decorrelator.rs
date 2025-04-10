@@ -814,8 +814,8 @@ pub fn check_child_expr_in_subquery(
 #[async_trait::async_trait]
 impl Optimizer for SubqueryDecorrelatorOptimizer {
     /// Returns the name of this optimizer
-    fn name(&self) -> &'static str {
-        "SubqueryRewriter"
+    fn name(&self) -> String {
+        "SubqueryDecorrelatorOptimizer".to_string()
     }
 
     /// Optimize the expression by rewriting subqueries

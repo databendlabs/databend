@@ -26,7 +26,6 @@ pub use expr::SExpr;
 pub use group::Group;
 pub use group::GroupState;
 pub use memo::Memo;
-pub use property::ColumnSet;
 pub use property::Distribution;
 pub use property::DistributionEnforcer;
 pub use property::Enforcer;

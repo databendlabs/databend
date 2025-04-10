@@ -376,9 +376,7 @@ fn constant_scan_to_format_tree<I: IdHumanizer>(
             "columns: [{}]",
             plan.columns
                 .iter()
-                .copied()
-                .sorted()
-                .map(|id| id_humanizer.humanize_column_id(id))
+                .map(|id| id_humanizer.humanize_column_id(*id))
                 .join(", ")
         )),
         FormatTreeNode::new(format!("num_rows: [{}]", plan.num_rows)),

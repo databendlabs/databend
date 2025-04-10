@@ -20,4 +20,4 @@ pub mod recursive;
 pub mod rule;
 
 pub use cascades::CascadesOptimizer;
-pub use hyper_dp::DPhpy;
+pub use hyper_dp::DPhpyOptimizer;

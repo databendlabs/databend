@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -25,6 +24,7 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::PhysicalPlan;
+use crate::ColumnSet;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Duplicate {
     pub plan_id: u32,
@@ -83,7 +83,7 @@ pub struct ChunkEvalScalar {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MultiInsertEvalScalar {
     pub remote_exprs: Vec<RemoteExpr>,
-    pub projection: HashSet<usize>,
+    pub projection: ColumnSet,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

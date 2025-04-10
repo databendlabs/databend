@@ -25,11 +25,11 @@ use crate::binder::JoinPredicate;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
 use crate::plans::JoinType;
+use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 

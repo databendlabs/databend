@@ -181,8 +181,8 @@ impl Default for RuleNormalizeAggregateOptimizer {
 
 #[async_trait::async_trait]
 impl Optimizer for RuleNormalizeAggregateOptimizer {
-    fn name(&self) -> &'static str {
-        "RuleNormalizeAggregateOptimizer"
+    fn name(&self) -> String {
+        "RuleNormalizeAggregateOptimizer".to_string()
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {

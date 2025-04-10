@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
+mod expr_diff;
 #[allow(clippy::module_inception)]
-mod pipeline;
 mod trace;
 
-pub use pipeline::OptimizerPipeline;
+pub use trace::OptimizerExecution;
 pub use trace::OptimizerTrace;
+pub use trace::OptimizerTraceCollector;

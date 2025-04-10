@@ -50,6 +50,7 @@ use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::plans::Visitor as _;
 use crate::ColumnEntry;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::Visibility;
 
@@ -540,7 +541,7 @@ impl Binder {
         {
             let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
             let mut finder = Finder::new(&f);
-            let mut non_lazy_cols = HashSet::new();
+            let mut non_lazy_cols = ColumnSet::new();
 
             for s in select_list.items.iter() {
                 // The TableScan's schema uses name_mapping to prune columns,
