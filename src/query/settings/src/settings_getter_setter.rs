@@ -924,4 +924,8 @@ impl Settings {
     pub fn get_enable_use_vacuum2_to_purge_transient_table_data(&self) -> Result<bool> {
         Ok(self.try_get_u64("use_vacuum2_to_purge_transient_table_data")? == 1)
     }
+
+    pub fn get_enable_optimizer_trace(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_optimizer_trace")? == 1)
+    }
 }

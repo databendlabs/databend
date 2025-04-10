@@ -1242,6 +1242,14 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_optimizer_trace", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables optimizer trace.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+
             ]);
 
             Ok(Arc::new(DefaultSettings {
