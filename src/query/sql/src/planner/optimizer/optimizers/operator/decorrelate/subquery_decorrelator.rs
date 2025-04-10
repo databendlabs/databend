@@ -815,7 +815,7 @@ pub fn check_child_expr_in_subquery(
 impl Optimizer for SubqueryDecorrelatorOptimizer {
     /// Returns the name of this optimizer
     fn name(&self) -> String {
-        "SubqueryRewriter".to_string()
+        "SubqueryDecorrelatorOptimizer".to_string()
     }
 
     /// Optimize the expression by rewriting subqueries

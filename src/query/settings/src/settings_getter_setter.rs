@@ -928,4 +928,8 @@ impl Settings {
     pub fn get_enable_optimizer_trace(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_optimizer_trace")? == 1)
     }
+
+    pub fn get_optimizer_skip_list(&self) -> Result<String> {
+        self.try_get_string("optimizer_skip_list")
+    }
 }

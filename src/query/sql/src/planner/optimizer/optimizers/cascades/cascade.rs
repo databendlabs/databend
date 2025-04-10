@@ -27,8 +27,8 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::cascades::cost::DefaultCostModel;
 use crate::optimizer::optimizers::cascades::rule::StrategyFactory;
 use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupTask;
-use crate::optimizer::optimizers::cascades::tasks::Scheduler;
 use crate::optimizer::optimizers::cascades::tasks::Task;
+use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::cascades::tasks::DEFAULT_TASK_LIMIT;
 use crate::optimizer::optimizers::distributed::DistributedOptimizer;
 use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
@@ -178,7 +178,7 @@ impl CascadesOptimizer {
             0
         };
 
-        let mut scheduler = Scheduler::new().with_task_limit(task_limit);
+        let mut scheduler = TaskManager::new().with_task_limit(task_limit);
         scheduler.add_task(Task::OptimizeGroup(root_task));
         scheduler.run(self)?;
 
