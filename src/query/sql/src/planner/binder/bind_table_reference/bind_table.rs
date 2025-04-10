@@ -375,7 +375,9 @@ impl Binder {
                 // If all blocks contain virtual columns and are of the same type, we can be sure to use the primitive type.
                 // Otherwise, only variant types can be used, which may cause additional cast.
                 let data_type = if let Some(number_of_blocks) = number_of_blocks {
-                    if number_of_blocks == virtual_schema.number_of_blocks && virtual_field.data_types.len() {
+                    if number_of_blocks == virtual_schema.number_of_blocks
+                        && virtual_field.data_types.len() == 1
+                    {
                         match virtual_field.data_types[0] {
                             VariantDataType::Boolean => {
                                 TableDataType::Nullable(Box::new(TableDataType::Boolean))

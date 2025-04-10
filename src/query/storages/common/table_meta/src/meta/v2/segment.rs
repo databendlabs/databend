@@ -18,9 +18,11 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::VariantDataType;
 use databend_common_native::ColumnMeta as NativeColumnMeta;
@@ -99,7 +101,7 @@ impl VirtualColumnMeta {
     pub fn data_type(&self) -> TableDataType {
         match self.data_type {
             2 => TableDataType::Nullable(Box::new(TableDataType::Boolean)),
-            3 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Uint64))),
+            3 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             4 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
             5 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Float64))),
             6 => TableDataType::Nullable(Box::new(TableDataType::String)),
