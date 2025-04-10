@@ -300,13 +300,13 @@ impl AsyncTransform for VirtualColumnTransform {
             }
         }
 
-        let extened_block_meta = ExtendedBlockMeta {
+        let extended_block_meta = ExtendedBlockMeta {
             block_meta: block_meta.clone(),
             draft_virtual_block_meta: Some(virtual_column_state.draft_virtual_block_meta),
         };
 
         let new_block = DataBlock::new(vec![], 0);
-        let new_block = new_block.add_meta(Some(extened_block_meta.boxed()))?;
+        let new_block = new_block.add_meta(Some(extended_block_meta.boxed()))?;
         Ok(new_block)
     }
 }

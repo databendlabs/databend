@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::eval_function;
@@ -27,6 +28,7 @@ use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_common_expression::TableSchemaRef;
 
 use super::VirtualColumnReader;
 use crate::io::read::block::parquet::column_chunks_to_record_batch;
@@ -36,6 +38,7 @@ pub struct VirtualBlockReadResult {
     pub num_rows: usize,
     pub compression: Compression,
     pub data: BlockReadResult,
+    pub schema: TableSchemaRef,
     // Source columns that can be ignored without reading
     pub ignore_column_ids: Option<HashSet<ColumnId>>,
 }
@@ -67,10 +70,19 @@ impl VirtualColumnReader {
             return None;
         };
 
+        let mut schema = TableSchema::empty();
         let mut ranges = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
         for (virtual_column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
             let (offset, len) = virtual_column_meta.offset_length();
             ranges.push((*virtual_column_id, offset..(offset + len)));
+            let data_type = virtual_column_meta.data_type();
+
+            let name = format!("{}", virtual_column_id);
+            schema.add_internal_field(
+                &name,
+                data_type,
+                virtual_column_meta
+            );
         }
 
         let virtual_loc = &virtual_block_meta.virtual_block_location;
@@ -90,6 +102,7 @@ impl VirtualColumnReader {
             num_rows,
             self.compression.into(),
             block_read_res,
+            schema: Arc::new(schema),
             ignore_column_ids,
         ))
     }
@@ -104,10 +117,19 @@ impl VirtualColumnReader {
             return None;
         };
 
+        let mut schema = TableSchema::empty();
         let mut ranges = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
         for (virtual_column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
             let (offset, len) = virtual_column_meta.offset_length();
             ranges.push((*virtual_column_id, offset..(offset + len)));
+            let data_type = virtual_column_meta.data_type();
+
+            let name = format!("{}", virtual_column_id);
+            schema.add_internal_field(
+                &name,
+                data_type,
+                virtual_column_meta
+            );
         }
 
         let virtual_loc = &virtual_block_meta.virtual_block_location;
@@ -124,6 +146,7 @@ impl VirtualColumnReader {
             num_rows,
             self.compression.into(),
             block_read_res,
+            schema: Arc::new(schema),
             ignore_column_ids,
         ))
     }
@@ -137,7 +160,7 @@ impl VirtualColumnReader {
             .map(|virtual_data| {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
                 column_chunks_to_record_batch(
-                    &self.virtual_column_info.schema,
+                    &virtual_data.schema,
                     virtual_data.num_rows,
                     &columns_chunks,
                     &virtual_data.compression,
@@ -151,11 +174,29 @@ impl VirtualColumnReader {
         for virtual_column_field in self.virtual_column_info.virtual_column_fields.iter() {
             if let Some(arrow_array) = record_batch
                 .as_ref()
-                .and_then(|r| r.column_by_name(&virtual_column_field.name).cloned())
+                .and_then(|r| {
+                    let name = format!("{}", virtual_column_field.column_id)
+                    r.column_by_name(&name).cloned()
+                })
             {
+                let orig_type: DataType = arrow_array.data_type().into();
+                let value = Value::Column(Column::from_arrow_rs(arrow_array, &orig_type)?);
                 let data_type: DataType = virtual_column_field.data_type.as_ref().into();
-                let value = Value::Column(Column::from_arrow_rs(arrow_array, &data_type)?);
-                data_block.add_column(BlockEntry::new(data_type, value));
+                let column = if orig_type != data_type {
+                    let cast_func_name = format!("to_{}", data_type.to_string().to_lowercase());
+                    let (cast_value, cast_data_type) = eval_function(
+                        None,
+                        cast_func_name,
+                        [(value, orig_type)],
+                        &func_ctx,
+                        data_block.num_rows(),
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+                    BlockEntry::new(cast_data_type, cast_value)
+                } else {
+                    BlockEntry::new(data_type, value)
+                };
+                data_block.add_column(column);
                 continue;
             }
             let src_index = self

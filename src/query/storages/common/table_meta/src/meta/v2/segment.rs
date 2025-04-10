@@ -95,6 +95,17 @@ impl VirtualColumnMeta {
     pub fn offset_length(&self) -> (u64, u64) {
         (self.offset, self.len)
     }
+
+    pub fn data_type(&self) -> TableDataType {
+        match self.data_type {
+            2 => TableDataType::Nullable(Box::new(TableDataType::Boolean)),
+            3 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Uint64))),
+            4 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
+            5 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Float64))),
+            6 => TableDataType::Nullable(Box::new(TableDataType::String)),
+            _ => TableDataType::Nullable(Box::new(TableDataType::Variant)),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

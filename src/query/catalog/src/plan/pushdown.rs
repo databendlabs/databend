@@ -53,8 +53,7 @@ pub struct VirtualColumnField {
     pub source_column_id: u32,
     /// The source column name.
     pub source_name: String,
-    /// The virtual column id, it is not a real column,
-    /// but is used to identify a virtual column when reading data.
+    /// The virtual column id
     pub column_id: u32,
     /// The virtual column name.
     pub name: String,
