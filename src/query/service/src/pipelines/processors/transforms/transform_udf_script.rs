@@ -18,7 +18,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use arrow_udf_js::FunctionOptions;
+use arrow_udf_runtime::javascript::FunctionOptions;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -66,7 +66,7 @@ impl ScriptRuntime {
             }
             UDFLanguage::WebAssembly => {
                 let start = std::time::Instant::now();
-                let runtime = arrow_udf_wasm::Runtime::new(code).map_err(|err| {
+                let runtime = arrow_udf_runtime::wasm::Runtime::new(code).map_err(|err| {
                     ErrorCode::UDFRuntimeError(format!(
                         "Failed to create WASM runtime for module: {err}"
                     ))
@@ -168,7 +168,7 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
     fn build(&self) -> Result<arrow_udf_js::Runtime> {
         let start = std::time::Instant::now();
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            arrow_udf_js::Runtime::new()
+            arrow_udf_runtime::javascript::Runtime::new()
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
         })?;

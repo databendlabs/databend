@@ -22,7 +22,7 @@ use arrow_array::Array;
 use arrow_array::RecordBatch;
 use arrow_schema::ArrowError;
 use arrow_schema::DataType as ArrowType;
-use arrow_udf_js::AggregateOptions;
+use arrow_udf_runtime::javascript::AggregateOptions;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -318,7 +318,7 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
 
     fn build(&self) -> std::result::Result<arrow_udf_js::Runtime, Self::Error> {
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            arrow_udf_js::Runtime::new()
+            arrow_udf_runtime::javascript::Runtime::new()
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
         })?;
