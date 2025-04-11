@@ -22,7 +22,7 @@ use arrow_array::Array;
 use arrow_array::RecordBatch;
 use arrow_schema::ArrowError;
 use arrow_schema::DataType as ArrowType;
-use arrow_udf_js::AggregateOptions;
+use arrow_udf_runtime::javascript::AggregateOptions;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -313,12 +313,12 @@ struct JsRuntimeBuilder {
     output_type: DataType,
 }
 
-impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
+impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder {
     type Error = ErrorCode;
 
-    fn build(&self) -> std::result::Result<arrow_udf_js::Runtime, Self::Error> {
+    fn build(&self) -> std::result::Result<arrow_udf_runtime::javascript::Runtime, Self::Error> {
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            arrow_udf_js::Runtime::new()
+            arrow_udf_runtime::javascript::Runtime::new()
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
         })?;
@@ -351,7 +351,7 @@ fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
     (&field).into()
 }
 
-type JsRuntimePool = Pool<arrow_udf_js::Runtime, JsRuntimeBuilder>;
+type JsRuntimePool = Pool<arrow_udf_runtime::javascript::Runtime, JsRuntimeBuilder>;
 
 #[cfg(feature = "python-udf")]
 mod python_pool {
@@ -364,25 +364,23 @@ mod python_pool {
         pub output_type: DataType,
     }
 
-    impl RuntimeBuilder<arrow_udf_python::Runtime> for PyRuntimeBuilder {
+    impl RuntimeBuilder<arrow_udf_runtime::python::Runtime> for PyRuntimeBuilder {
         type Error = ErrorCode;
 
-        fn build(&self) -> std::result::Result<arrow_udf_python::Runtime, Self::Error> {
-            let mut runtime = arrow_udf_python::Builder::default()
-                .sandboxed(true)
-                .build()?;
+        fn build(&self) -> std::result::Result<arrow_udf_runtime::python::Runtime, Self::Error> {
+            let mut runtime = arrow_udf_runtime::python::Builder::default().build()?;
             runtime.add_aggregate(
                 &self.name,
                 self.state_type.clone(),
                 arrow_field_from_data_type(&self.name, self.output_type.clone()),
-                arrow_udf_python::CallMode::CalledOnNullInput,
+                arrow_udf_runtime::CallMode::CalledOnNullInput,
                 &self.code,
             )?;
             Ok(runtime)
         }
     }
 
-    pub type PyRuntimePool = Pool<arrow_udf_python::Runtime, PyRuntimeBuilder>;
+    pub type PyRuntimePool = Pool<arrow_udf_runtime::python::Runtime, PyRuntimeBuilder>;
 }
 
 enum UDAFRuntime {
