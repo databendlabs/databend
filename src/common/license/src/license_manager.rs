@@ -124,12 +124,13 @@ mod tests {
     use std::sync::Arc;
 
     use databend_common_exception::ErrorCode;
+    use databend_common_exception::Result;
 
     use super::*;
 
     // A mock LicenseManager implementation for testing
     struct MockLicenseManager {
-        license_claim: std::result::Result<JWTClaims<LicenseInfo>, ErrorCode>,
+        license_claim: Result<JWTClaims<LicenseInfo>>,
     }
 
     struct MockLicenseManagerBuilder;

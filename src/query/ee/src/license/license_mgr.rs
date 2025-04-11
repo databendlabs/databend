@@ -133,6 +133,7 @@ impl LicenseManager for RealLicenseManager {
             // Previously cached valid license might be expired
             let claim = v.value();
             if Self::verify_license_expired(claim)? {
+                warn!("Cached License expired");
                 Err(ErrorCode::LicenseKeyExpired("license key is expired."))
             } else {
                 Ok((*claim).clone())
