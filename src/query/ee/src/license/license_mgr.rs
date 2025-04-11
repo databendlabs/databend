@@ -46,6 +46,31 @@ pub struct RealLicenseManager {
     pub(crate) cache: DashMap<String, JWTClaims<LicenseInfo>>,
 }
 
+impl RealLicenseManager {
+    fn parse_license_impl(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+        for public_key in &self.public_keys {
+            let public_key = ES256PublicKey::from_pem(public_key)
+                .map_err_to_code(ErrorCode::LicenseKeyParseError, || "public key load failed")?;
+
+            return match public_key.verify_token::<LicenseInfo>(raw, None) {
+                Ok(v) => Ok(v),
+                Err(cause) => match cause.downcast_ref::<JWTError>() {
+                    Some(JWTError::TokenHasExpired) => {
+                        warn!("License expired");
+                        Err(ErrorCode::LicenseKeyExpired("license key is expired."))
+                    }
+                    Some(JWTError::InvalidSignature) => {
+                        continue;
+                    }
+                    _ => Err(ErrorCode::LicenseKeyParseError("jwt claim decode failed")),
+                },
+            };
+        }
+
+        Err(ErrorCode::LicenseKeyParseError("wt claim decode failed"))
+    }
+}
+
 impl LicenseManager for RealLicenseManager {
     fn init(tenant: String) -> Result<()> {
         let public_key_str = embedded_public_keys()?;
@@ -68,7 +93,9 @@ impl LicenseManager for RealLicenseManager {
             cache: DashMap::new(),
         };
 
-        GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
+        let license_manager_switch = Arc::new(LicenseManagerSwitch::create(Box::new(rm)));
+
+        GlobalInstance::set(license_manager_switch);
         Ok(())
     }
 
@@ -88,7 +115,7 @@ impl LicenseManager for RealLicenseManager {
             return self.verify_feature(v.value(), feature);
         }
 
-        match self.parse_license(&license_key) {
+        match self.parse_license_impl(&license_key) {
             Ok(license) => {
                 self.verify_feature(&license, feature)?;
                 self.cache.insert(license_key, license);
@@ -102,26 +129,18 @@ impl LicenseManager for RealLicenseManager {
     }
 
     fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
-        for public_key in &self.public_keys {
-            let public_key = ES256PublicKey::from_pem(public_key)
-                .map_err_to_code(ErrorCode::LicenseKeyParseError, || "public key load failed")?;
-
-            return match public_key.verify_token::<LicenseInfo>(raw, None) {
-                Ok(v) => Ok(v),
-                Err(cause) => match cause.downcast_ref::<JWTError>() {
-                    Some(JWTError::TokenHasExpired) => {
-                        warn!("License expired");
-                        Err(ErrorCode::LicenseKeyExpired("license key is expired."))
-                    }
-                    Some(JWTError::InvalidSignature) => {
-                        continue;
-                    }
-                    _ => Err(ErrorCode::LicenseKeyParseError("jwt claim decode failed")),
-                },
-            };
+        // TODO can we return a reference?
+        if let Some(v) = self.cache.get(raw) {
+            // Previously cached valid license might be expired
+            let claim = v.value();
+            if Self::verify_license_expired(claim)? {
+                Err(ErrorCode::LicenseKeyExpired("license key is expired."))
+            } else {
+                Ok((*claim).clone())
+            }
+        } else {
+            self.parse_license_impl(raw)
         }
-
-        Err(ErrorCode::LicenseKeyParseError("wt claim decode failed"))
     }
 
     fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota> {
