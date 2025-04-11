@@ -33,7 +33,7 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::TransformSortBuilder;
+use crate::pipelines::processors::transforms::TransformSortBuilder;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;

@@ -15,4 +15,6 @@
 pub use databend_common_pipeline_core::processors::*;
 pub mod transforms;
 
-pub use transforms::*;
+pub use transforms::HashJoinBuildState;
+pub use transforms::HashJoinDesc;
+pub use transforms::HashJoinState;

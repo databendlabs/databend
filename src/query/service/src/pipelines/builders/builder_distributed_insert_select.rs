@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 
-use crate::pipelines::processors::TransformCastSchema;
+use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
