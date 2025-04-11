@@ -35,9 +35,6 @@ pub trait LicenseManager: Sync + Send {
     /// This function returns `LicenseKeyInvalid` error if enterprise license key is not valid or expired.
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()>;
 
-    fn check_license(&self, license_key: String) -> Result<()> {
-        self.parse_license(&license_key).map(|_| {})
-    }
     /// Encodes a raw license string as a JWT using the constant public key.
     ///
     /// This function takes a raw license string and a secret key,
