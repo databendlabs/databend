@@ -591,6 +591,8 @@ pub enum TokenKind {
     ENGINES,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
+    #[token("YEARWEEK", ignore(ascii_case))]
+    YEARWEEK,
     #[token("MICROSECOND", ignore(ascii_case))]
     MICROSECOND,
     #[token("ERROR_ON_COLUMN_COUNT_MISMATCH", ignore(ascii_case))]
