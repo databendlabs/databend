@@ -21,13 +21,13 @@ use parquet::data_type::AsBytes;
 
 use crate::CacheAccessor;
 use crate::CacheValue;
+use crate::DiskCacheAccessor;
 use crate::InMemoryLruCache;
-use crate::TableDataCache;
 
 pub struct HybridCache<V: Into<CacheValue<V>>> {
     name: String,
     memory_cache: InMemoryLruCache<V>,
-    disk_cache: Option<TableDataCache>,
+    disk_cache: Option<DiskCacheAccessor>,
 }
 
 impl<T: Into<CacheValue<T>>> HybridCache<T> {
@@ -53,7 +53,7 @@ impl<V: Into<CacheValue<V>>> HybridCache<V> {
     pub fn new(
         name: String,
         memory_cache: InMemoryLruCache<V>,
-        disk_cache: Option<TableDataCache>,
+        disk_cache: Option<DiskCacheAccessor>,
     ) -> Self {
         Self {
             name,
@@ -66,8 +66,20 @@ impl<V: Into<CacheValue<V>>> HybridCache<V> {
         &self.memory_cache
     }
 
-    pub fn on_disk_cache(&self) -> &Option<TableDataCache> {
+    pub fn on_disk_cache(&self) -> &Option<DiskCacheAccessor> {
         &self.disk_cache
+    }
+
+    pub fn toggle_off_disk_cache(self) -> Self {
+        if self.disk_cache.is_some() {
+            Self {
+                name: self.name,
+                memory_cache: self.memory_cache,
+                disk_cache: None,
+            }
+        } else {
+            self
+        }
     }
 }
 
@@ -526,5 +538,63 @@ mod tests {
         assert_eq!(cache.len(), 5);
         assert!(!cache.is_empty());
         assert!(cache.bytes_size() > 0);
+    }
+
+    #[test]
+    fn test_toggle_off_disk_cache() {
+        // Case 1: Test with disk cache present
+
+        // Create temporary directory for disk cache
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_path_buf();
+
+        // Create memory cache
+        let memory_cache: InMemoryLruCache<TestData> =
+            InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
+
+        // Create disk cache
+        let disk_cache = DiskCacheBuilder::try_build_disk_cache(
+            "test_disk".to_string(),
+            &cache_path,
+            100,         // population_queue_size
+            1024 * 1024, // disk_cache_bytes_size
+            DiskCacheKeyReloadPolicy::Fuzzy,
+            false, // sync_data
+        )
+        .unwrap();
+
+        // Create hybrid cache with disk cache
+        let cache_with_disk = HybridCache::new(
+            "test_hybrid_with_disk".to_string(),
+            memory_cache.clone(),
+            Some(disk_cache),
+        );
+
+        // Verify disk cache is present
+        assert!(cache_with_disk.on_disk_cache().is_some());
+
+        // Toggle off disk cache
+        let cache_without_disk = cache_with_disk.toggle_off_disk_cache();
+
+        // Verify disk cache is now None
+        assert!(cache_without_disk.on_disk_cache().is_none());
+        // Verify other properties remain the same
+        assert_eq!(cache_without_disk.name(), "test_hybrid_with_disk");
+
+        // Case 2: Test when disk cache is already None
+
+        // Create hybrid cache without disk cache
+        let cache_no_disk = HybridCache::new("test_hybrid_no_disk".to_string(), memory_cache, None);
+
+        // Verify disk cache is None
+        assert!(cache_no_disk.on_disk_cache().is_none());
+
+        // Toggle off disk cache (should be no-op)
+        let unchanged_cache = cache_no_disk.toggle_off_disk_cache();
+
+        // Verify disk cache is still None
+        assert!(unchanged_cache.on_disk_cache().is_none());
+        // Verify other properties remain the same
+        assert_eq!(unchanged_cache.name(), "test_hybrid_no_disk");
     }
 }

@@ -49,6 +49,7 @@ pub use inner::CacheConfig;
 pub use inner::CacheStorageTypeConfig as CacheStorageTypeInnerConfig;
 pub use inner::CatalogConfig;
 pub use inner::CatalogHiveConfig;
+pub use inner::DiskCacheConfig as DiskCacheInnerConfig;
 pub use inner::DiskCacheKeyReloadPolicy;
 pub use inner::InnerConfig;
 pub use inner::SpillConfig;
