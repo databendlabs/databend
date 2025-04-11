@@ -32,8 +32,12 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::Semaphore;
+use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::UpsertKV;
 use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::GlobalLogger;
@@ -52,7 +56,7 @@ use crate::sessions::QueryContext;
 
 pub struct GlobalPersistentLog {
     meta_client: Option<Arc<ClientHandle>>,
-    interval: usize,
+    interval: u64,
     tenant_id: String,
     node_id: String,
     cluster_id: String,
@@ -101,7 +105,7 @@ impl GlobalPersistentLog {
 
         let instance = Arc::new(Self {
             meta_client: Some(meta_client),
-            interval: cfg.log.persistentlog.interval,
+            interval: cfg.log.persistentlog.interval as u64,
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
             node_id: cfg.query.node_id.clone(),
             cluster_id: cfg.query.cluster_id.clone(),
@@ -127,7 +131,7 @@ impl GlobalPersistentLog {
         setup_operator().await?;
         Ok(Self {
             meta_client: None,
-            interval: cfg.log.persistentlog.interval,
+            interval: cfg.log.persistentlog.interval as u64,
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
             node_id: cfg.query.node_id.clone(),
             cluster_id: cfg.query.cluster_id.clone(),
@@ -175,8 +179,9 @@ impl GlobalPersistentLog {
             if !prepared {
                 let prepare_guard = self
                     .acquire(
-                        format!("{}/persistent_log_prepare", self.tenant_id),
-                        self.interval as u64,
+                        &format!("{}/persistent_log_prepare", self.tenant_id),
+                        self.interval,
+                        0,
                     )
                     .await?;
                 match self.prepare().await {
@@ -190,28 +195,33 @@ impl GlobalPersistentLog {
                 }
                 drop(prepare_guard);
             }
-
-            let guard = self
-                .acquire(
-                    format!("{}/persistent_log_work", self.tenant_id),
-                    self.interval as u64,
-                )
+            let meta_key = format!("{}/persistent_log_work", self.tenant_id);
+            let may_permit = self
+                .acquire(&meta_key, self.interval, self.interval)
                 .await?;
-            // add a random sleep time to avoid always one node doing the work
-            let sleep_time = self.interval as u64 * 1000 + random::<u64>() % 1000;
-            tokio::time::sleep(Duration::from_millis(sleep_time)).await;
-
-            if let Err(e) = self.do_copy_into().await {
-                error!("Persistent log copy into failed: {:?}", e);
+            if let Some(guard) = may_permit {
+                if let Err(e) = self.do_copy_into().await {
+                    error!("Persistent log copy into failed: {:?}", e);
+                }
+                self.finish_hook(&meta_key).await?;
+                drop(guard);
             }
-
-            drop(guard)
+            // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
+            let sleep_time = self.interval * 500 + random::<u64>() % (self.interval * 1000);
+            tokio::time::sleep(Duration::from_millis(sleep_time)).await;
         }
     }
 
-    /// Multiple nodes doing the work may make commit conflict.
-    /// acquire the semaphore to avoid this.
-    pub async fn acquire(&self, meta_key: String, lease: u64) -> Result<Permit> {
+    /// Acquires a permit from a distributed semaphore with timestamp-based rate limiting.
+    ///
+    /// This function attempts to acquire a permit from a distributed semaphore identified by `meta_key`.
+    /// It also implements a rate limiting mechanism based on the last execution timestamp.
+    pub async fn acquire(
+        &self,
+        meta_key: &str,
+        lease: u64,
+        interval: u64,
+    ) -> Result<Option<Permit>> {
         let acquired_guard = Semaphore::new_acquired(
             self.meta_client.clone().unwrap(),
             meta_key,
@@ -221,8 +231,45 @@ impl GlobalPersistentLog {
         )
         .await
         .map_err(|_e| "acquire semaphore failed from GlobalPersistentLog")?;
+        if interval == 0 {
+            return Ok(Some(acquired_guard));
+        }
+        if match self
+            .meta_client
+            .clone()
+            .unwrap()
+            .get_kv(&format!("{}/last_timestamp", meta_key))
+            .await?
+        {
+            Some(v) => {
+                let last: u64 = serde_json::from_slice(&v.data)?;
+                chrono::Local::now().timestamp_millis() as u64
+                    - Duration::from_secs(interval).as_millis() as u64
+                    > last
+            }
+            None => true,
+        } {
+            Ok(Some(acquired_guard))
+        } else {
+            drop(acquired_guard);
+            Ok(None)
+        }
+    }
 
-        Ok(acquired_guard)
+    pub async fn finish_hook(&self, meta_key: &str) -> Result<()> {
+        self.meta_client
+            .clone()
+            .unwrap()
+            .upsert_kv(UpsertKV::new(
+                format!("{}/last_timestamp", meta_key),
+                MatchSeq::Any,
+                Operation::Update(serde_json::to_vec(
+                    &chrono::Local::now().timestamp_millis(),
+                )?),
+                None,
+            ))
+            .await?;
+        Ok(())
     }
 
     async fn execute_sql(&self, sql: &str) -> Result<()> {
@@ -263,7 +310,7 @@ impl GlobalPersistentLog {
                 let old_schema = old_table?.schema();
                 if !table.schema_equal(old_schema) {
                     let rename_target =
-                        format!("`{}_old_{}`", table_name, chrono::Utc::now().timestamp());
+                        format!("`{}_old_{}`", table_name, chrono::Local::now().timestamp());
                     let rename = format!(
                         "ALTER TABLE persistent_system.{} RENAME TO {}",
                         table_name, rename_target
@@ -310,14 +357,18 @@ impl GlobalPersistentLog {
 
     async fn clean_work(&self) -> Result<()> {
         loop {
-            let guard = self
-                .acquire(format!("{}/persistent_log_clean", self.tenant_id), 60)
-                .await?;
-            sleep(Duration::from_mins(60)).await;
-            if let Err(e) = self.do_clean().await {
-                error!("persistent log clean failed: {}", e);
+            let meta_key = format!("{}/persistent_log_clean", self.tenant_id);
+            let may_permit = self.acquire(&meta_key, 60, 60 * 60).await?;
+            if let Some(guard) = may_permit {
+                if let Err(e) = self.do_clean().await {
+                    error!("persistent log clean failed: {}", e);
+                }
+                self.finish_hook(&meta_key).await?;
+                drop(guard);
             }
-            drop(guard);
+
+            // sleep for a random time between 30 and 90 minutes
+            sleep(Duration::from_mins(30 + random::<u64>() % 60)).await;
         }
     }
 
