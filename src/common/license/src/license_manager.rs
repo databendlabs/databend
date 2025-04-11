@@ -52,8 +52,16 @@ pub trait LicenseManager: Sync + Send {
     /// # Errors
     ///
     /// This function may return `LicenseKeyParseError` error if the encoding or decoding of the JWT fails.
-    /// ```
     fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>>;
+
+    fn is_license_valid(&self, license_key: String) -> bool {
+        self.parse_license(&license_key).is_ok()
+    }
+
+    fn check_license(&self, license_key: String) -> Result<()> {
+        self.parse_license(&license_key)?;
+        Ok(())
+    }
 
     /// Get the storage quota from license key.
     fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota>;
@@ -108,5 +116,119 @@ impl LicenseManager for OssLicenseManager {
     /// Always return default storage quota.
     fn get_storage_quota(&self, _: String) -> Result<StorageQuota> {
         Ok(StorageQuota::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_exception::ErrorCode;
+
+    use super::*;
+
+    // Constants for testing
+    const VALID_LICENSE_KEY: &str = "valid-license-key";
+    const INVALID_LICENSE_KEY: &str = "invalid-license-key";
+    const INVALID_LICENSE_MSG: &str = "Invalid license key";
+
+    // A mock LicenseManager implementation for testing
+    struct MockLicenseManager {
+        valid_license: bool,
+    }
+
+    impl LicenseManager for MockLicenseManager {
+        fn init(_tenant: String) -> Result<()> {
+            unimplemented!()
+        }
+
+        fn instance() -> Arc<Box<dyn LicenseManager>> {
+            unimplemented!()
+        }
+
+        fn check_enterprise_enabled(&self, _license_key: String, _feature: Feature) -> Result<()> {
+            unimplemented!()
+        }
+
+        fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+            if self.valid_license && raw == VALID_LICENSE_KEY {
+                Ok(JWTClaims {
+                    issued_at: None,
+                    expires_at: None,
+                    invalid_before: None,
+                    issuer: None,
+                    subject: None,
+                    audiences: None,
+                    jwt_id: None,
+                    nonce: None,
+                    custom: LicenseInfo {
+                        r#type: None,
+                        org: None,
+                        tenants: None,
+                        features: None,
+                    },
+                })
+            } else {
+                // Simulate an invalid license
+                Err(ErrorCode::LicenceDenied(INVALID_LICENSE_MSG.to_string()))
+            }
+        }
+
+        fn get_storage_quota(&self, _license_key: String) -> Result<StorageQuota> {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn test_is_license_valid() {
+        // Create a MockLicenseManager that accepts the VALID_LICENSE_KEY
+        let valid_manager = MockLicenseManager {
+            valid_license: true,
+        };
+
+        // Test with a valid license key
+        assert!(valid_manager.is_license_valid(VALID_LICENSE_KEY.to_string()));
+
+        // Test with an invalid license key
+        assert!(!valid_manager.is_license_valid(INVALID_LICENSE_KEY.to_string()));
+
+        // Create a MockLicenseManager that denied all the keys
+        let invalid_manager = MockLicenseManager {
+            valid_license: false,
+        };
+
+        // All license keys should be considered invalid
+        assert!(!invalid_manager.is_license_valid(VALID_LICENSE_KEY.to_string()));
+        assert!(!invalid_manager.is_license_valid(INVALID_LICENSE_KEY.to_string()));
+    }
+
+    #[test]
+    fn test_check_license() {
+        // Create a MockLicenseManager that accepts the VALID_LICENSE_KEY
+        let valid_manager = MockLicenseManager {
+            valid_license: true,
+        };
+
+        // Test with a valid license key
+        let result = valid_manager.check_license(VALID_LICENSE_KEY.to_string());
+        assert!(result.is_ok());
+
+        // Test with an invalid license key
+        let result = valid_manager.check_license(INVALID_LICENSE_KEY.to_string());
+        assert!(result.is_err());
+
+        let e = result.unwrap_err();
+        assert_eq!(ErrorCode::LICENCE_DENIED, e.code());
+
+        // Create a MockLicenseManager that denied all the keys
+        let invalid_manager = MockLicenseManager {
+            valid_license: false,
+        };
+
+        // All license keys should return an error
+        let result = invalid_manager.check_license(VALID_LICENSE_KEY.to_string());
+        assert!(result.is_err());
+        let e = result.unwrap_err();
+        assert_eq!(ErrorCode::LICENCE_DENIED, e.code());
     }
 }
