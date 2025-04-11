@@ -487,7 +487,7 @@ impl CacheManager {
     fn get_hybrid_cache<T>(&self, cache: Option<HybridCache<T>>) -> Option<HybridCache<T>>
     where CacheValue<T>: From<T> {
         if let Some(cache) = cache {
-            if self.allows_on_disk_cache.load(Ordering::Acquire) {
+            if self.allows_on_disk_cache.load(Ordering::Relaxed) {
                 // Returns the original cache as it is, which may or may not have on-disk cache
                 Some(cache)
             } else {
@@ -516,7 +516,7 @@ impl CacheManager {
     }
 
     pub fn get_table_data_cache(&self) -> Option<DiskCacheAccessor> {
-        if self.allows_on_disk_cache.load(Ordering::Acquire) {
+        if self.allows_on_disk_cache.load(Ordering::Relaxed) {
             // If on-disk cache is allowed, return it as it is (which may be some cache, or none)
             self.table_data_cache.get()
         } else {
@@ -533,7 +533,7 @@ impl CacheManager {
     }
 
     pub fn set_allows_disk_cache(&self, flag: bool) {
-        self.allows_on_disk_cache.store(flag, Ordering::Release)
+        self.allows_on_disk_cache.store(flag, Ordering::Relaxed)
     }
 
     fn new_items_cache_slot<V: Into<CacheValue<V>>>(
