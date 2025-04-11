@@ -105,7 +105,7 @@ impl LibraryLoader {
             0,
         );
 
-        match ptr == libc::MAP_FAILED {
+        match std::ptr::eq(ptr, libc::MAP_FAILED) {
             true => Err(std::io::Error::other("Cannot mmap")),
             false => Ok(Library::create(name, ptr as *const u8, file_len as usize)),
         }

@@ -36,7 +36,7 @@ pub fn hilbert_index(point: &[&[u8]], width: usize) -> Vec<u8> {
 
     let num_bits = width * 8;
     let total_bits = num_bits * n;
-    let total_bytes = (total_bits + 7) / 8;
+    let total_bytes = total_bits.div_ceil(8);
     let initial_offset = (total_bytes * 8) - total_bits;
 
     let states = LUT[n - 2];

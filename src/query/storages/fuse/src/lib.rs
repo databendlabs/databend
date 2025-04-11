@@ -20,7 +20,6 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(int_roundings)]
 #![feature(iterator_try_reduce)]
-#![feature(slice_take)]
 #![allow(clippy::large_enum_variant)]
 #![recursion_limit = "256"]
 

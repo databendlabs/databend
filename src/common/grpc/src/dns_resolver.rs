@@ -33,8 +33,6 @@ use hyper::Uri;
 use hyper_util::client::legacy::connect::dns::Name;
 use hyper_util::client::legacy::connect::HttpConnector;
 use log::info;
-use serde::Deserialize;
-use serde::Serialize;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
@@ -223,7 +221,7 @@ impl ConnectionFactory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum GrpcConnectionError {
     #[error("invalid uri: {uri}, error: {source}")]
     InvalidUri {

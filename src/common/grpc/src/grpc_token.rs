@@ -17,7 +17,7 @@ use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use jwt_simple::prelude::*;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct GrpcClaim {
     pub username: String,
 }

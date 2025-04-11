@@ -15,6 +15,7 @@
 use core::fmt;
 use std::borrow::Cow;
 use std::fmt::Display;
+use std::fmt::FormattingOptions;
 use std::io::Write;
 
 use chrono::Datelike;
@@ -702,7 +703,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
                 let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
                 let format = replace_time_format(format);
                 let mut buf = String::new();
-                let mut formatter = fmt::Formatter::new(&mut buf);
+                let mut formatter = fmt::Formatter::new(&mut buf, FormattingOptions::new());
                 if Display::fmt(&ts.strftime(format.as_ref()), &mut formatter).is_err() {
                     ctx.set_error(output.len(), format!("{format} is invalid time format"));
                     output.builder.commit_row();

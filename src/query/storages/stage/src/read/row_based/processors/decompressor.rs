@@ -80,9 +80,21 @@ impl AccumulatingTransform for Decompressor {
         }
 
         if let Some((de, offset)) = &mut self.decompressor {
-            let mut data = de.decompress_batch(&batch.data)?;
+            let mut data = de.decompress_batch(&batch.data).map_err(|e| {
+                if let Some(p) = &self.path {
+                    e.add_detail_back(format!("file path: {p}"))
+                } else {
+                    e
+                }
+            })?;
             if batch.is_eof {
-                let mut end = de.decompress_batch(&[])?;
+                let mut end = de.decompress_batch(&[]).map_err(|e| {
+                    if let Some(p) = &self.path {
+                        e.add_detail_back(format!("file path: {p}"))
+                    } else {
+                        e
+                    }
+                })?;
                 data.append(&mut end);
                 let state = de.state();
                 if !matches!(state, DecompressState::Done) {

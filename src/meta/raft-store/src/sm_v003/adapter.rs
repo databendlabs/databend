@@ -139,7 +139,7 @@ pub async fn upgrade_snapshot_data_v002_to_v003_or_v004(
     snapshot_id: SnapshotId,
 ) -> Result<DB, io::Error> {
     fn closed_err(e: impl std::error::Error) -> io::Error {
-        io::Error::new(io::ErrorKind::Other, format!("channel closed: {}", e))
+        io::Error::other(format!("channel closed: {}", e))
     }
 
     let data_size = data.data_size().await?;
@@ -183,9 +183,7 @@ pub async fn upgrade_snapshot_data_v002_to_v003_or_v004(
         let mut kv_cache = Vec::with_capacity(1_000_000);
 
         while let Some(res) = ordq_rx.recv() {
-            let res = res.map_err(|e| {
-                io::Error::new(io::ErrorKind::Other, format!("ordq recv error: {}", e))
-            })?; // ordq recv error
+            let res = res.map_err(|e| io::Error::other(format!("ordq recv error: {}", e)))?; // ordq recv error
 
             let ent = res?; // io error
 
@@ -230,12 +228,12 @@ pub async fn upgrade_snapshot_data_v002_to_v003_or_v004(
                 let chunk = c.collect::<Result<Vec<_>, _>>()?;
                 ordq_tx
                     .send(WriteEntry::Data(chunk))
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+                    .map_err(io::Error::other)?
             }
 
             ordq_tx
                 .send(WriteEntry::Finish(()))
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                .map_err(io::Error::other)?;
         }
 
         Ok::<_, io::Error>(())

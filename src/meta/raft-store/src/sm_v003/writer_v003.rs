@@ -68,18 +68,16 @@ impl WriterV003 {
 
         while let Some((k, v)) = stream.try_next().await? {
             let ent = WriteEntry::Data((k, v));
-            tx.send(ent).await.map_err(|_e| {
-                io::Error::new(io::ErrorKind::Other, "fail to send entry to writer thread")
-            })?;
+            tx.send(ent)
+                .await
+                .map_err(|_e| io::Error::other("fail to send entry to writer thread"))?;
         }
 
-        tx.send(WriteEntry::Finish(sys_data)).await.map_err(|_e| {
-            io::Error::new(io::ErrorKind::Other, "fail to send entry to writer thread")
-        })?;
-
-        let temp_snapshot = jh
+        tx.send(WriteEntry::Finish(sys_data))
             .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))??;
+            .map_err(|_e| io::Error::other("fail to send entry to writer thread"))?;
+
+        let temp_snapshot = jh.await.map_err(io::Error::other)??;
 
         Ok(temp_snapshot)
     }

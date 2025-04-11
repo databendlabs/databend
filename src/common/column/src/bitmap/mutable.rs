@@ -323,7 +323,7 @@ impl MutableBitmap {
             let required = (self.length + additional).saturating_add(7) / 8;
             // add remaining as full bytes
             self.buffer
-                .extend(std::iter::repeat(0b11111111u8).take(required - existing));
+                .extend(std::iter::repeat_n(0b11111111u8, required - existing));
             self.length += additional;
         }
     }
@@ -509,7 +509,7 @@ unsafe fn extend_aligned_trusted_iter_unchecked(
     let chunks = additional_bits / 64;
     let remainder = additional_bits % 64;
 
-    let additional = (additional_bits + 7) / 8;
+    let additional = additional_bits.div_ceil(8);
     debug_assert_eq!(
         additional,
         // a hint of how the following calculation will be done

@@ -508,8 +508,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                 match ewkb_to_geo(&mut Ewkb(ewkb)).and_then(|(geo, srid)| match geo {
                     Geometry::LineString(line_string) => {
-                        let points = line_string.points();
-                        if let Some(point) = points.last() {
+                        let mut points = line_string.points();
+                        if let Some(point) = points.next_back() {
                             geo_to_ewkb(Geometry::from(point), srid).map(Some)
                         } else {
                             Ok(None)

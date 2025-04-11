@@ -53,6 +53,7 @@ pub fn set_operation(i: Input) -> IResult<SetExpr> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum SetOperationElement {
     With(With),
     SelectStmt {

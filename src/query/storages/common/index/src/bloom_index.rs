@@ -572,7 +572,7 @@ impl BloomIndex {
         } else {
             scalar_map
                 .get(target)
-                .map_or(true, |digest| filter.contains_digest(*digest))
+                .is_none_or(|digest| filter.contains_digest(*digest))
         };
 
         if contains {

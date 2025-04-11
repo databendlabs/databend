@@ -95,7 +95,7 @@ impl<T: DoubleType> DoubleCompression<T> for Freq {
             Err(_) => unreachable!(),
         };
         let top_value = T::from_le_bytes(a);
-        output.extend(std::iter::repeat(top_value).take(length));
+        output.extend(std::iter::repeat_n(top_value, length));
 
         // read exceptions bitmap
         let exceptions_bitmap_size = input.read_u32::<LittleEndian>()?;

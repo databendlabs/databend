@@ -207,8 +207,7 @@ async fn execute(
                     handle.await.expect("must")
                 }
 
-                let stream =
-                    stream.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
+                let stream = stream.map_err(std::io::Error::other);
                 Ok(
                     Body::from_bytes_stream(stream)
                         .with_content_type(format_typ.get_content_type()),

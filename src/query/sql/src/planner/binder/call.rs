@@ -28,7 +28,7 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &CallStmt,
     ) -> Result<Plan> {
-        let table_function_name = stmt.name.split('$').last().unwrap();
+        let table_function_name = stmt.name.split('$').next_back().unwrap();
 
         let query = if table_function_name.eq_ignore_ascii_case("search_tables") {
             if stmt.args.len() != 1 {

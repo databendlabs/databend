@@ -35,8 +35,7 @@ pub struct TokenFile {
 
 impl TokenFile {
     pub fn new(path: &Path) -> Result<Self, Error> {
-        let token =
-            std::fs::read_to_string(path).map_err(|err| Error::new(ErrorKind::Other, err))?;
+        let token = std::fs::read_to_string(path).map_err(Error::other)?;
         Ok(Self {
             path: path.to_path_buf(),
             token,

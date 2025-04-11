@@ -279,7 +279,7 @@ impl DmaFile {
         match rustix::io::write(&self.fd, buf) {
             Ok(n) => {
                 if n != buf.len() {
-                    return Err(io::Error::new(io::ErrorKind::Other, "short write"));
+                    return Err(io::Error::other("short write"));
                 }
                 self.mut_buffer().clear();
                 Ok(n)
@@ -292,7 +292,7 @@ impl DmaFile {
         let Self { fd, buf, .. } = self;
         let buf = buf.as_mut().unwrap();
         if n > buf.capacity() - buf.len() {
-            return Err(io::Error::new(io::ErrorKind::Other, "buf not sufficient"));
+            return Err(io::Error::other("buf not sufficient"));
         }
         let start = buf.len();
         unsafe { buf.set_len(buf.len() + n) };
@@ -341,10 +341,7 @@ where
 {
     match spawn_blocking(f).await {
         Ok(res) => res,
-        Err(_) => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "background task failed",
-        )),
+        Err(_) => Err(io::Error::other("background task failed")),
     }
 }
 

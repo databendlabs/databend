@@ -66,13 +66,10 @@ impl OnDisk {
             let tree = SledTree::open(&db, "raft_log", self.config.is_sync())?;
             let ks = tree.key_space::<LogMeta>();
             let purged = ks.get(&LogMetaKey::LastPurged).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "{}; when(get last purged index from sled db for upgrading V003 to V004)",
-                        e
-                    ),
-                )
+                io::Error::other(format!(
+                    "{}; when(get last purged index from sled db for upgrading V003 to V004)",
+                    e
+                ))
             })?;
 
             purged.map(|v| v.log_id()).next_index()
@@ -85,13 +82,10 @@ impl OnDisk {
 
             for (i, rkv) in it.enumerate() {
                 let (k, v) = rkv.map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!(
-                            "{}; when(iterating raft log in sled db for upgrading V003 to V004)",
-                            e
-                        ),
-                    )
+                    io::Error::other(format!(
+                        "{}; when(iterating raft log in sled db for upgrading V003 to V004)",
+                        e
+                    ))
                 })?;
 
                 let ent = RaftStoreEntry::deserialize(&k, &v)?;
@@ -141,13 +135,10 @@ impl OnDisk {
             let options = CopyOptions::new().overwrite(true).copy_inside(true);
 
             fs_extra::dir::copy(&v003_path, &v004_path, &options).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "{}; when(copy snapshot from {} to {})",
-                        e, v003_path, v004_path,
-                    ),
-                )
+                io::Error::other(format!(
+                    "{}; when(copy snapshot from {} to {})",
+                    e, v003_path, v004_path,
+                ))
             })?;
         }
 
@@ -196,10 +187,7 @@ impl OnDisk {
 
         if fs::metadata(&v003_path).is_ok() {
             fs::remove_dir_all(&v003_path).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("{}; when(remove V003 snapshot: {})", e, v003_path,),
-                )
+                io::Error::other(format!("{}; when(remove V003 snapshot: {})", e, v003_path,))
             })?;
         }
 
@@ -226,8 +214,7 @@ impl OnDisk {
 
             db.drop_tree(&tree_name)
                 .map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
+                    io::Error::other(
                         format!(
                             "{}; when(drop sled tree: {})as_str; when(clear sled db after upgrading V003 to V004)",
                             e,

@@ -129,7 +129,7 @@ pub enum Response {
     StreamList(Result<BoxStream<StreamItem>, MetaError>),
     Upsert(Result<UpsertKVReply, MetaError>),
     Txn(Result<TxnReply, MetaError>),
-    Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaError>),
+    Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaClientError>),
     Export(Result<tonic::codec::Streaming<ExportedChunk>, MetaError>),
     MakeEstablishedClient(Result<EstablishedClient, MetaClientError>),
     GetEndpoints(Result<Vec<String>, MetaError>),

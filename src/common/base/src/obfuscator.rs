@@ -311,11 +311,8 @@ where
         let mut hash = std::hash::DefaultHasher::new();
         hash.write_u64(seed);
 
-        let sliding_window_overflow = if written + sliding_window_size > determinator_size {
-            written + sliding_window_size - determinator_size
-        } else {
-            0
-        };
+        let sliding_window_overflow =
+            (written + sliding_window_size).saturating_sub(determinator_size);
 
         let start = written - sliding_window_overflow;
         let end = start + sliding_window_size;

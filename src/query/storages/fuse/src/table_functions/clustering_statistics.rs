@@ -190,8 +190,10 @@ impl<'a> ClusteringStatisticsImpl<'a> {
                 .await?;
             for (i, segment) in segments.into_iter().enumerate() {
                 let segment = segment?;
-                segment_name
-                    .extend(std::iter::repeat(chunk[i].0.clone()).take(segment.blocks.len()));
+                segment_name.extend(std::iter::repeat_n(
+                    chunk[i].0.clone(),
+                    segment.blocks.len(),
+                ));
 
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();

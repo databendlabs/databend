@@ -25,7 +25,7 @@ pub struct GlobalQueryRuntime(pub Runtime);
 
 impl GlobalQueryRuntime {
     #[inline(always)]
-    pub fn runtime<'a>(self: &'a Arc<Self>) -> &'a Runtime {
+    pub fn runtime(self: &Arc<Self>) -> &Runtime {
         &self.0
     }
 }

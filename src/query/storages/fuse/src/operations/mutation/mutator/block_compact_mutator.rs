@@ -525,7 +525,7 @@ impl CompactTaskBuilder {
                 block
                     .cluster_stats
                     .as_ref()
-                    .map_or(true, |v| v.cluster_key_id != key)
+                    .is_none_or(|v| v.cluster_key_id != key)
             })
         } else {
             true

@@ -15,6 +15,7 @@
 use std::io;
 
 use anyerror::AnyError;
+use tonic::Status;
 
 use crate::MetaHandshakeError;
 use crate::MetaNetworkError;
@@ -46,12 +47,16 @@ impl MetaClientError {
     }
 }
 
+impl From<Status> for MetaClientError {
+    fn from(status: Status) -> Self {
+        Self::NetworkError(status.into())
+    }
+}
+
 impl From<MetaClientError> for io::Error {
     fn from(e: MetaClientError) -> Self {
         match e {
-            MetaClientError::ClientRuntimeError(e) => {
-                io::Error::new(io::ErrorKind::Other, e.to_string())
-            }
+            MetaClientError::ClientRuntimeError(e) => io::Error::other(e.to_string()),
             MetaClientError::ConfigError(e) => {
                 io::Error::new(io::ErrorKind::InvalidInput, e.to_string())
             }

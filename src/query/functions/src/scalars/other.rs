@@ -506,7 +506,7 @@ pub(crate) mod jaro_winkler {
                 DataWrapper::Bitwise(0)
             } else {
                 let mut internal = Vec::with_capacity(len);
-                internal.extend(std::iter::repeat(false).take(len));
+                internal.extend(std::iter::repeat_n(false, len));
                 DataWrapper::Vec(internal)
             }
         }

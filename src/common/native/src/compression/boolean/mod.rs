@@ -95,7 +95,7 @@ pub fn decompress_boolean<R: NativeReadBuf>(
     let compressor = BooleanCompressor::from_compression(compression)?;
     match compressor {
         BooleanCompressor::Basic(c) => {
-            let bytes = (length + 7) / 8;
+            let bytes = length.div_ceil(8);
             let mut buffer = vec![0u8; bytes];
             c.decompress(&input[..compressed_size], &mut buffer)?;
             output.extend_from_slice(buffer.as_slice(), 0, length);

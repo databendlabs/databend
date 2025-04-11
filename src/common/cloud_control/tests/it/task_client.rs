@@ -179,10 +179,7 @@ async fn test_task_client_success_cases() -> Result<()> {
                 if let Some(client) = client {
                     Ok(client)
                 } else {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Client already taken",
-                    ))
+                    Err(std::io::Error::other("Client already taken"))
                 }
             }
         }))

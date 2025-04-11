@@ -439,7 +439,7 @@ pub fn test_take_compact() -> databend_common_exception::Result<()> {
             let batch_index = rng.gen_range(0..len);
             let batch_size = rng.gen_range(1..1025);
             count += batch_size;
-            take_indices.extend(std::iter::repeat(batch_index as u32).take(batch_size));
+            take_indices.extend(std::iter::repeat_n(batch_index as u32, batch_size));
             take_compact_indices.push((batch_index as u32, batch_size as u32));
         }
         let block_1 = block.take(&take_indices)?;

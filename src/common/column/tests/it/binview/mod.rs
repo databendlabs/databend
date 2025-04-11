@@ -106,7 +106,7 @@ fn from() {
 
 #[test]
 fn from_iter() {
-    let iter = std::iter::repeat(b"hello").take(2);
+    let iter = std::iter::repeat_n(b"hello", 2);
     let a: BinaryViewColumn = iter.collect();
     assert_eq!(a.len(), 2);
 }

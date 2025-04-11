@@ -95,14 +95,14 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         let e = res.unwrap_err();
 
         let want = format!(
-            "metasrv protocol_version({}) < meta-client min-compatible({})",
+            "Invalid: server protocol_version({}) < client min-compatible({})",
             // strip `nightly` from 0.7.57-nightly
             from_digit_ver(to_digit_ver(METACLI_COMMIT_SEMVER.deref(),)),
             min_srv_ver,
         );
         assert!(
             e.to_string().contains(&want),
-            "handshake err: {:?} contains: {}",
+            "handshake err: {} contains: {}",
             e,
             want
         );
