@@ -63,7 +63,7 @@ impl GlobalLogger {
     }
 
     // Get the operator for remote log when it is ready.
-    pub(crate) async fn get_operator(&self) -> Option<Operator> {
+    pub async fn get_operator(&self) -> Option<Operator> {
         let operator = self.remote_log_operator.read().await;
         if let Some(operator) = operator.as_ref() {
             return Some(operator.clone());
@@ -383,14 +383,14 @@ pub fn init_logging(
         let mut filter_builder =
             EnvFilterBuilder::new().filter(Some("databend::log::structlog"), LevelFilter::Off);
 
-        if cfg.profile.on && !cfg.profile.dir.is_empty() {
+        if cfg.profile.on {
             filter_builder =
                 filter_builder.filter(Some("databend::log::profile"), LevelFilter::Trace);
         } else {
             filter_builder =
                 filter_builder.filter(Some("databend::log::profile"), LevelFilter::Off);
         }
-        if cfg.query.on && !cfg.query.dir.is_empty() {
+        if cfg.query.on {
             filter_builder =
                 filter_builder.filter(Some("databend::log::query"), LevelFilter::Trace);
         } else {
