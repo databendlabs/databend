@@ -2261,20 +2261,35 @@ fn path_predicate_fn<'a>(
                     match json_row {
                         ScalarRef::Variant(v) => {
                             let jsonb = RawJsonb::new(v);
-                            let res = if is_match {
-                                jsonb.path_match(&path)
-                            } else {
-                                jsonb.path_exists(&path)
-                            };
-                            match res {
-                                Ok(r) => {
-                                    output.push(r);
-                                    validity.push(true);
+                            if is_match {
+                                let res = jsonb.path_match(&path);
+                                match res {
+                                    Ok(Some(r)) => {
+                                        output.push(r);
+                                        validity.push(true);
+                                    }
+                                    Ok(None) => {
+                                        output.push(false);
+                                        validity.push(false);
+                                    }
+                                    Err(err) => {
+                                        ctx.set_error(output.len(), err.to_string());
+                                        output.push(false);
+                                        validity.push(false);
+                                    }
                                 }
-                                Err(err) => {
-                                    ctx.set_error(output.len(), err.to_string());
-                                    output.push(false);
-                                    validity.push(false);
+                            } else {
+                                let res = jsonb.path_exists(&path);
+                                match res {
+                                    Ok(r) => {
+                                        output.push(r);
+                                        validity.push(true);
+                                    }
+                                    Err(err) => {
+                                        ctx.set_error(output.len(), err.to_string());
+                                        output.push(false);
+                                        validity.push(false);
+                                    }
                                 }
                             }
                         }
