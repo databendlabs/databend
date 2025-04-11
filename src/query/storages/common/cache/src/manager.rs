@@ -730,7 +730,7 @@ mod tests {
 
         let ee_mode = true;
 
-        // Create cache config with disk cache enabled
+        // Suite 1: Create cache config with disk cache enabled
         let cache_config = config_with_disk_cache_enabled(&cache_path);
         // In EE mode
         let cache_manager = CacheManager::try_new(
@@ -751,9 +751,8 @@ mod tests {
         cache_manager.set_allows_disk_cache(true);
         assert!(all_disk_cache_enabled(&cache_manager));
 
-        // Create cache config with disk cache disabled
+        // Suite 2: Create cache config with disk cache disabled
         let cache_config = config_with_disk_cache_disabled();
-        // In EE mode
         let cache_manager = CacheManager::try_new(
             &cache_config,
             &max_server_memory_usage,
@@ -764,7 +763,7 @@ mod tests {
         // All disk caches should be disabled as specified in the configuration
         assert!(all_disk_cache_disabled(&cache_manager));
 
-        // All disk caches should still be enabled, even if toggled on disk caches
+        // All disk caches should still be disabled, even if toggled on disk caches
         cache_manager.set_allows_disk_cache(true);
         assert!(all_disk_cache_disabled(&cache_manager));
 
