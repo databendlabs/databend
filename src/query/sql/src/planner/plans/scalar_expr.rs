@@ -293,6 +293,33 @@ impl ScalarExpr {
         Ok(())
     }
 
+    pub fn replace_column_datatype_to_nullable(
+        &mut self,
+        old: IndexType,
+        new: IndexType,
+    ) -> Result<()> {
+        struct Replace {
+            old: IndexType,
+            new: IndexType,
+        }
+
+        impl VisitorMut<'_> for Replace {
+            fn visit_bound_column_ref(&mut self, col: &mut BoundColumnRef) -> Result<()> {
+                if col.column.index == self.old {
+                    col.column.index = self.new;
+                    if !col.column.data_type.is_nullable() {
+                        col.column.data_type = Box::new(col.column.data_type.wrap_nullable())
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        let mut visitor = Replace { old, new };
+        visitor.visit(self)?;
+        Ok(())
+    }
+
     pub fn columns_and_data_types(&self, metadata: MetadataRef) -> HashMap<usize, DataType> {
         struct UsedColumnsVisitor {
             columns: HashMap<IndexType, DataType>,
