@@ -12,24 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 use databend_common_base::base::tokio;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnMeta;
-use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
+use databend_common_expression::block_debug::pretty_format_blocks;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::SNAPSHOT_NAME_COL_NAME;
+use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -39,11 +46,11 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures::TryStreamExt;
 
 fn expected_data_block(
-    parts: &Partitions,
+    parts: &Vec<PartInfoPtr>,
     internal_columns: &Vec<InternalColumn>,
 ) -> Result<Vec<DataBlock>> {
-    let mut data_blocks = Vec::with_capacity(parts.partitions.len());
-    for part in &parts.partitions {
+    let mut data_blocks = Vec::with_capacity(parts.len());
+    for part in parts {
         let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let num_rows = fuse_part.nums_rows;
         let block_meta = fuse_part.block_meta_index.as_ref().unwrap();
@@ -65,28 +72,22 @@ fn expected_data_block(
         }
         data_blocks.push(DataBlock::new(columns, num_rows));
     }
-    data_blocks.reverse();
 
     Ok(data_blocks)
 }
 
 fn check_data_block(expected: Vec<DataBlock>, blocks: Vec<DataBlock>) -> Result<()> {
-    let expected_data_block = DataBlock::concat(&expected)?.consume_convert_to_full();
-    let data_block = DataBlock::concat(&blocks)?.consume_convert_to_full();
-
-    for (expected_column, column) in expected_data_block
-        .columns()
-        .iter()
-        .zip(data_block.columns())
-    {
-        assert_eq!(expected_column.data_type, column.data_type);
-        assert_eq!(expected_column.value, column.value);
-    }
+    let expected_blocks = pretty_format_blocks(&expected)?;
+    let expected_str: Vec<&str> = expected_blocks.split('\n').collect();
+    databend_common_expression::block_debug::assert_blocks_sorted_eq(
+        expected_str,
+        blocks.as_slice(),
+    );
 
     Ok(())
 }
 
-async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<()> {
+async fn check_partitions(parts: &Vec<PartInfoPtr>, fixture: &TestFixture) -> Result<()> {
     let mut segment_name = HashSet::new();
     let mut block_name = HashSet::new();
 
@@ -129,7 +130,7 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
         }
     }
 
-    for part in &parts.partitions {
+    for part in parts {
         let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let block_meta = fuse_part.block_meta_index.as_ref().unwrap();
         assert_eq!(
@@ -166,6 +167,11 @@ async fn test_internal_column() -> Result<()> {
             .get_internal_column(BLOCK_NAME_COL_NAME)
             .unwrap(),
     ];
+    let internal_columns_map = internal_columns
+        .iter()
+        .enumerate()
+        .map(|(i, col)| (i, col.clone()))
+        .collect::<BTreeMap<FieldIndex, InternalColumn>>();
 
     // insert 5 times
     let n = 5;
@@ -188,7 +194,34 @@ async fn test_internal_column() -> Result<()> {
     let blocks = res.try_collect::<Vec<DataBlock>>().await?;
 
     let table = fixture.latest_default_table().await?;
-    let (_, parts) = table.read_partitions(ctx.clone(), None, true).await?;
+    let data_source_plan = table
+        .read_plan(
+            ctx.clone(),
+            None,
+            Some(internal_columns_map.clone()),
+            false,
+            false,
+        )
+        .await?;
+
+    let mut dummy_pipeline = Pipeline::create();
+    let parts = if let Some(mut prune_pipeline) =
+        table.build_prune_pipeline(ctx.clone(), &data_source_plan, &mut dummy_pipeline)?
+    {
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let rx = fuse_table.pruned_result_receiver.lock().clone().unwrap();
+        prune_pipeline.set_max_threads(1);
+        let settings = ExecutorSettings::try_create(ctx.clone())?;
+        let executor = QueryPipelineExecutor::create(prune_pipeline, settings)?;
+        executor.execute()?;
+        let mut parts = Vec::new();
+        while let Ok(Ok(segment)) = rx.recv().await {
+            parts.push(segment);
+        }
+        parts
+    } else {
+        data_source_plan.parts.partitions.clone()
+    };
     let expected = expected_data_block(&parts, &internal_columns)?;
     check_partitions(&parts, &fixture).await?;
     check_data_block(expected, blocks)?;
@@ -213,7 +246,35 @@ async fn test_internal_column() -> Result<()> {
     let blocks = res.try_collect::<Vec<DataBlock>>().await?;
 
     let table = fixture.latest_default_table().await?;
-    let (_, parts) = table.read_partitions(ctx.clone(), None, true).await?;
+    let data_source_plan = table
+        .read_plan(
+            ctx.clone(),
+            None,
+            Some(internal_columns_map.clone()),
+            false,
+            false,
+        )
+        .await?;
+
+    let mut dummy_pipeline = Pipeline::create();
+    let parts = if let Some(mut prune_pipeline) =
+        table.build_prune_pipeline(ctx.clone(), &data_source_plan, &mut dummy_pipeline)?
+    {
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let rx = fuse_table.pruned_result_receiver.lock().clone().unwrap();
+        prune_pipeline.set_max_threads(1);
+        let settings = ExecutorSettings::try_create(ctx.clone())?;
+        let executor = QueryPipelineExecutor::create(prune_pipeline, settings)?;
+        executor.execute()?;
+        let mut parts = Vec::new();
+        while let Ok(Ok(segment)) = rx.recv().await {
+            parts.push(segment);
+        }
+        parts
+    } else {
+        data_source_plan.parts.partitions.clone()
+    };
+
     let expected = expected_data_block(&parts, &internal_columns)?;
     check_partitions(&parts, &fixture).await?;
     check_data_block(expected, blocks)?;

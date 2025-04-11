@@ -66,11 +66,14 @@ impl SendPartState {
         limit: Option<usize>,
         fuse_pruner: Arc<FusePruner>,
         data_metrics: Arc<StorageMetrics>,
+        partitions_total: usize,
     ) -> Self {
+        let mut statistics = PartStatistics::default_exact();
+        statistics.partitions_total = partitions_total;
         SendPartState {
             cache: Mutex::new(SendPartCache {
                 partitions: Partitions::default(),
-                statistics: PartStatistics::default_exact(),
+                statistics,
                 derterministic_cache_key,
                 fuse_pruner,
             }),
@@ -79,11 +82,16 @@ impl SendPartState {
         }
     }
 
-    pub fn populating_cache(&self) {
-        type CacheItem = (PartStatistics, Partitions);
+    pub fn get_pruned_stats(&self) -> PartStatistics {
         let mut send_part_cache = self.cache.lock();
         let pruning_stats = send_part_cache.fuse_pruner.pruning_stats();
         send_part_cache.statistics.pruning_stats = pruning_stats;
+        send_part_cache.statistics.clone()
+    }
+
+    pub fn populating_cache(&self) {
+        type CacheItem = (PartStatistics, Partitions);
+        let send_part_cache = self.cache.lock();
         if let Some(cache_key) = &send_part_cache.derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
                 cache.insert(
@@ -126,6 +134,7 @@ pub struct SendPartInfoSink {
     statistics: PartStatistics,
     send_part_state: Arc<SendPartState>,
     enable_cache: bool,
+    dry_run: bool,
 }
 
 impl SendPartInfoSink {
@@ -137,6 +146,7 @@ impl SendPartInfoSink {
         schema: TableSchemaRef,
         send_part_state: Arc<SendPartState>,
         enable_cache: bool,
+        dry_run: bool,
     ) -> Result<ProcessorPtr> {
         let partitions = Partitions::default();
         let statistics = PartStatistics::default();
@@ -151,6 +161,7 @@ impl SendPartInfoSink {
                 statistics,
                 send_part_state,
                 enable_cache,
+                dry_run,
             },
         )))
     }
@@ -191,6 +202,9 @@ impl AsyncSink for SendPartInfoSink {
                     self.partitions.partitions.extend(info_ptr.clone());
                 }
 
+                if self.dry_run {
+                    return Ok(false);
+                }
                 for info in info_ptr {
                     if let Some(sender) = &self.sender {
                         if let Err(_e) = sender.send(Ok(info)).await {

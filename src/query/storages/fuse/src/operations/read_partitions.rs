@@ -101,7 +101,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        dry_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
@@ -147,9 +147,7 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if self.is_column_oriented()
-                    || (!dry_run && segment_len > nodes_num && distributed_pruning)
-                {
+                if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
                     let mut segments = Vec::with_capacity(segment_locs.len());
                     for (idx, segment_location) in segment_locs.into_iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
@@ -185,11 +183,12 @@ impl FuseTable {
         }
     }
 
-    pub(crate) fn do_build_prune_pipeline(
+    pub fn do_build_prune_pipeline(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
+        dry_run: bool,
     ) -> Result<Option<Pipeline>> {
         let snapshot = plan.statistics.snapshot.clone();
         let table_schema = self.schema_with_stream();
@@ -230,7 +229,8 @@ impl FuseTable {
                 });
 
         if ctx.get_settings().get_enable_prune_cache()? {
-            if let Some((_stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
+            if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
+                ctx.set_pruned_partitions_stats(stat);
                 let sender = part_info_tx.clone();
                 info!("prune pipeline: get prune result from cache");
                 source_pipeline.set_on_init(move || {
@@ -277,6 +277,8 @@ impl FuseTable {
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
+                    lazy_init_segments.len(),
+                    dry_run,
                 )?;
             }
             FuseSegmentFormat::Column => {
@@ -396,6 +398,8 @@ impl FuseTable {
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
+        partitions_total: usize,
+        dry_run: bool,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
@@ -480,6 +484,7 @@ impl FuseTable {
             limit,
             pruner.clone(),
             self.data_metrics.clone(),
+            partitions_total,
         ));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(
@@ -490,19 +495,22 @@ impl FuseTable {
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
                 enable_prune_cache,
+                dry_run,
             )
         })?;
 
-        if enable_prune_cache {
-            info!("prune pipeline: enable prune cache");
-            prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
-                if let Ok(()) = info.res {
-                    // only populating cache when the pipeline is finished successfully
+        prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+            if let Ok(()) = info.res {
+                // only populating cache when the pipeline is finished successfully
+                let pruned_part_stats = send_part_state.get_pruned_stats();
+                ctx.set_pruned_partitions_stats(pruned_part_stats);
+                if enable_prune_cache {
+                    info!("prune pipeline: enable prune cache");
                     send_part_state.populating_cache();
                 }
-                Ok(())
-            });
-        }
+            }
+            Ok(())
+        });
 
         Ok(())
     }
