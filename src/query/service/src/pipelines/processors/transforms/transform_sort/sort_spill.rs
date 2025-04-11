@@ -179,6 +179,10 @@ where A: SortAlgorithm
             return self.restore_and_output().await;
         }
 
+        if self.subsequent.is_empty() && self.current.is_empty() {
+            return Ok(true);
+        }
+
         while self.current.is_empty() {
             self.choice_streams_by_bound();
         }

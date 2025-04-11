@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::intrinsics::unlikely;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -42,6 +43,7 @@ mod sort_spill;
 mod builder;
 pub use builder::TransformSortBuilder;
 
+#[derive(Debug)]
 enum State {
     /// This state means the processor will collect incoming blocks.
     Collect,
@@ -268,7 +270,7 @@ where
         if self.input.has_data() {
             return match self.state {
                 State::Collect => {
-                    if self.memory_settings.check_spill() {
+                    if !self.input_data.is_empty() && self.memory_settings.check_spill() {
                         Ok(Event::Async)
                     } else {
                         Ok(Event::Sync)
@@ -358,6 +360,9 @@ where
             State::Collect => {
                 let block = self.input.pull_data().unwrap()?;
                 self.input.set_need_data();
+                if unlikely(block.is_empty()) {
+                    return Ok(());
+                }
                 self.collect_block(block)
             }
             State::Sort => {
