@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2022 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,21 @@ use std::sync::Arc;
 
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::map::KvColumn;
 use databend_common_expression::types::map::KvPair;
-use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::number::UInt8Type;
-use databend_common_expression::types::*;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::ArrayColumn;
+use databend_common_expression::types::Buffer;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::Int16Type;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int8Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt8Type;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnRef;
@@ -42,13 +51,12 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_common_functions::test_utils::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_storages_common_index::filters::BlockFilter as LatestBloom;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use databend_storages_common_table_meta::meta::Versioned;
 use goldenfile::Mint;
 
 #[test]
@@ -478,14 +486,10 @@ fn eval_index_expr(
             BloomIndex::calculate_scalar_digest(&func_ctx, scalar, &ty).unwrap()
         });
     }
-    let index = BloomIndex::try_create(
-        func_ctx.clone(),
-        LatestBloom::VERSION,
-        block,
-        bloom_columns.clone(),
-    )
-    .unwrap()
-    .unwrap();
+
+    let mut builder = BloomIndexBuilder::create(func_ctx.clone(), bloom_columns.clone());
+    builder.add_block(block).unwrap();
+    let index = builder.finalize().unwrap().unwrap();
 
     let column_stats = block
         .columns()

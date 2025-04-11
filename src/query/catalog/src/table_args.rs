@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
@@ -130,15 +129,6 @@ pub fn bool_literal(val: bool) -> Scalar {
 
 pub fn u64_literal(val: u64) -> Scalar {
     Scalar::Number(NumberScalar::UInt64(val))
-}
-
-pub fn cmp_with_null(v1: &Scalar, v2: &Scalar) -> Ordering {
-    match (v1.is_null(), v2.is_null()) {
-        (true, true) => Ordering::Equal,
-        (true, false) => Ordering::Greater,
-        (false, true) => Ordering::Less,
-        (false, false) => v1.cmp(v2),
-    }
 }
 
 pub fn parse_sequence_args(table_args: &TableArgs, func_name: &str) -> Result<String> {

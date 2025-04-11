@@ -25,6 +25,7 @@ mod page_index;
 mod range_index;
 
 pub use bloom_index::BloomIndex;
+pub use bloom_index::BloomIndexBuilder;
 pub use bloom_index::BloomIndexMeta;
 pub use bloom_index::FilterEvalResult;
 pub use eliminate_cast::eliminate_cast;
