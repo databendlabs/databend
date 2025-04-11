@@ -29,6 +29,7 @@ use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
 use jwt_simple::prelude::ECDSAP256PublicKeyLike;
 use jwt_simple::JWTError;
+use log::info;
 
 const LICENSE_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0a
@@ -109,6 +110,7 @@ impl LicenseManager for RealLicenseManager {
                 Ok(v) => Ok(v),
                 Err(cause) => match cause.downcast_ref::<JWTError>() {
                     Some(JWTError::TokenHasExpired) => {
+                        info!("License expired");
                         Err(ErrorCode::LicenseKeyExpired("license key is expired."))
                     }
                     Some(JWTError::InvalidSignature) => {
