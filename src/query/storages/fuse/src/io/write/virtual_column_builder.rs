@@ -127,26 +127,12 @@ impl VirtualColumnBuilder {
                 continue;
             }
 
-            // Discard redundant virtual values to avoid generating too much virtual fields.
-            if virtual_fields.len() + virtual_values.len() > VIRTUAL_COLUMNS_LIMIT {
-                let redundant_num =
-                    virtual_fields.len() + virtual_values.len() - VIRTUAL_COLUMNS_LIMIT;
-                for _ in 0..redundant_num {
-                    let _ = virtual_values.pop_last();
-                }
-            }
-
-            // TODO: Ignore columns that are mostly NULL value and JSON scalar value.
-
-            // Fill in the NULL values, keeping each column the same length.
-            for (_, vals) in virtual_values.iter_mut() {
-                while vals.len() < num_rows {
-                    vals.push(None);
-                }
-            }
+            Self::discard_virtual_values(num_rows, virtual_fields.len(), &mut virtual_values);
 
             let value_types = Self::inference_data_type(&virtual_values);
-            for ((key, vals), val_type) in virtual_values.into_iter().zip(value_types.into_iter()) {
+            for ((key_paths, vals), val_type) in
+                virtual_values.into_iter().zip(value_types.into_iter())
+            {
                 let virtual_type = match val_type {
                     VariantDataType::Jsonb => DataType::Nullable(Box::new(DataType::Variant)),
                     VariantDataType::Boolean => DataType::Nullable(Box::new(DataType::Boolean)),
@@ -198,7 +184,16 @@ impl VirtualColumnBuilder {
                 let virtual_table_type = infer_schema_type(&virtual_type).unwrap();
                 virtual_columns.push(BlockEntry::new(virtual_type, Value::Column(column)));
 
-                let virtual_name = format!("{}{}", source_field.name, key);
+                let mut key_name = String::new();
+                for path in key_paths {
+                    key_name.push('[');
+                    key_name.push('\'');
+                    key_name.push_str(&path);
+                    key_name.push('\'');
+                    key_name.push(']');
+                }
+
+                let virtual_name = format!("{}{}", source_field.name, key_name);
                 let virtual_field = TableField::new_from_column_id(
                     &virtual_name,
                     virtual_table_type,
@@ -207,7 +202,7 @@ impl VirtualColumnBuilder {
                 virtual_fields.push(virtual_field);
                 tmp_column_id += 1;
 
-                virtual_column_names.push((source_column_id, key, val_type));
+                virtual_column_names.push((source_column_id, key_name, val_type));
             }
             if virtual_fields.len() >= VIRTUAL_COLUMNS_LIMIT {
                 break;
@@ -268,7 +263,7 @@ impl VirtualColumnBuilder {
         val: &JsonbValue<'a>,
         row: usize,
         paths: &mut VecDeque<String>,
-        virtual_values: &mut BTreeMap<String, Vec<Option<JsonbValue<'a>>>>,
+        virtual_values: &mut BTreeMap<Vec<String>, Vec<Option<JsonbValue<'a>>>>,
     ) {
         if let JsonbValue::Object(obj) = val {
             for (key, val) in obj {
@@ -285,14 +280,7 @@ impl VirtualColumnBuilder {
         }
 
         // only collect leaf node scalar values.
-        let mut name = String::new();
-        for path in paths {
-            name.push('[');
-            name.push('\'');
-            name.push_str(path);
-            name.push('\'');
-            name.push(']');
-        }
+        let name = paths.iter().cloned().collect();
 
         if let Some(vals) = virtual_values.get_mut(&name) {
             while vals.len() < row {
@@ -309,8 +297,68 @@ impl VirtualColumnBuilder {
         }
     }
 
+    fn discard_virtual_values(
+        num_rows: usize,
+        virtual_field_num: usize,
+        virtual_values: &mut BTreeMap<Vec<String>, Vec<Option<JsonbValue<'_>>>>,
+    ) {
+        // Fill in the NULL values, keeping each column the same length.
+        for (_, vals) in virtual_values.iter_mut() {
+            while vals.len() < num_rows {
+                vals.push(None);
+            }
+        }
+
+        // 1. Discard virtual columns with most values are Null values.
+        let mut keys_to_remove_none = Vec::new();
+        for (key, value) in virtual_values.iter() {
+            let none_count = value.iter().filter(|x| x.is_none()).count();
+            let none_percentage = none_count as f64 / value.len() as f64;
+            if none_percentage > 0.7 {
+                keys_to_remove_none.push(key.clone());
+            }
+        }
+        for key in keys_to_remove_none {
+            virtual_values.remove(&key);
+        }
+
+        // 2. Discard names with the same prefix and ensure that the values of the virtual columns are leaf nodes
+        // for example, we have following variant values.
+        // {"k1":{"k2":"val"}}
+        // {"k1":100}
+        // we should not create virtual column for `k1`.
+        let mut keys_to_remove_prefix = Vec::new();
+        let mut keys: Vec<Vec<String>> = virtual_values.keys().cloned().collect();
+        keys.sort_by_key(|k| k.len());
+
+        for i in 0..keys.len() {
+            let key1 = &keys[i];
+            for key2 in keys.iter().skip(i + 1) {
+                if key2.starts_with(key1) {
+                    keys_to_remove_prefix.push(key1.clone());
+                    break;
+                }
+            }
+        }
+
+        keys_to_remove_prefix.sort();
+        keys_to_remove_prefix.dedup();
+
+        for key in keys_to_remove_prefix {
+            virtual_values.remove(&key);
+        }
+
+        // 3. Discard redundant virtual values to avoid generating too much virtual fields.
+        if virtual_field_num + virtual_values.len() > VIRTUAL_COLUMNS_LIMIT {
+            let redundant_num = virtual_field_num + virtual_values.len() - VIRTUAL_COLUMNS_LIMIT;
+            for _ in 0..redundant_num {
+                let _ = virtual_values.pop_last();
+            }
+        }
+    }
+
     fn inference_data_type(
-        virtual_values: &BTreeMap<String, Vec<Option<JsonbValue>>>,
+        virtual_values: &BTreeMap<Vec<String>, Vec<Option<JsonbValue>>>,
     ) -> Vec<VariantDataType> {
         let mut val_types = Vec::with_capacity(virtual_values.len());
         let mut val_type_set = BTreeSet::new();
