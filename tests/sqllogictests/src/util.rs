@@ -263,7 +263,7 @@ pub async fn run_ttc_container(
         .collect();
     let container_name = format!("databend-ttc-{}-{}", port, x);
     let start = Instant::now();
-    println!("Start container {container_name}");
+    println!("Starting container {container_name}");
 
     let mut i = 1;
     loop {
@@ -293,17 +293,17 @@ pub async fn run_ttc_container(
                 return Ok(());
             }
             Err(err) => {
-                println!("Start container {container_name} using {duration} secs failed: {err}");
+                println!("Failed to start container {container_name} using {duration} secs: {err}");
                 if err.to_string().to_ascii_lowercase().contains("timeout")
                     || err.to_string().to_ascii_lowercase().contains("conflict")
                 {
-                    println!("Start to stop container {container_name}");
+                    println!("Stopping container {container_name}");
                     stop_container(docker, &container_name).await;
                 }
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
                     break;
                 } else {
-                    println!("retry start container {container_name} after {duration} secs");
+                    println!("Retrying to start container {container_name} after {duration} secs");
                     i += 1;
                 }
             }
