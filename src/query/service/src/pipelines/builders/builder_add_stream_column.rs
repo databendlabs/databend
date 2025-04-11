@@ -20,7 +20,7 @@ use databend_common_sql::executor::physical_plans::AddStreamColumn;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::TableContext;
 
-use crate::pipelines::processors::TransformAddStreamColumns;
+use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

@@ -308,6 +308,7 @@ impl TransformSortMergeBuilder {
     }
 
     fn build_sort(self) -> Result<Box<dyn Processor>> {
+        /////////
         if self.sort_desc.len() == 1 {
             let sort_type = self.schema.field(self.sort_desc[0].offset).data_type();
             let asc = self.sort_desc[0].asc;
@@ -368,6 +369,7 @@ impl TransformSortMergeBuilder {
     }
 
     fn build_sort_limit(self) -> Result<Box<dyn Processor>> {
+        //////
         if self.sort_desc.len() == 1 {
             let sort_type = self.schema.field(self.sort_desc[0].offset).data_type();
             let asc = self.sort_desc[0].asc;

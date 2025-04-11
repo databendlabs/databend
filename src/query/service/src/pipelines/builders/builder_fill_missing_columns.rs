@@ -25,8 +25,8 @@ use databend_common_sql::DefaultExprBinder;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
-use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::processors::TransformResortAddOn;
+use crate::pipelines::processors::transforms::TransformCastSchema;
+use crate::pipelines::processors::transforms::TransformResortAddOn;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 

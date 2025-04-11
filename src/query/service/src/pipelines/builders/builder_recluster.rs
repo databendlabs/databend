@@ -36,7 +36,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::builders::SortPipelineBuilder;
-use crate::pipelines::processors::TransformAddStreamColumns;
+use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

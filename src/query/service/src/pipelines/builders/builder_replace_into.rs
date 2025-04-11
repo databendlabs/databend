@@ -57,7 +57,7 @@ use databend_common_storages_fuse::operations::UnbranchedReplaceIntoProcessor;
 use databend_common_storages_fuse::FuseTable;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::TransformCastSchema;
+use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

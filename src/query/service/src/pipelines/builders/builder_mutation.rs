@@ -40,7 +40,7 @@ use databend_common_storages_fuse::operations::UnMatchedExprs;
 use databend_common_storages_fuse::FuseTable;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
-use crate::pipelines::processors::TransformResortAddOnWithoutSourceSchema;
+use crate::pipelines::processors::transforms::TransformResortAddOnWithoutSourceSchema;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

@@ -30,7 +30,7 @@ use databend_common_sql::executor::PhysicalPlan;
 
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
-use crate::pipelines::processors::transforms::HashJoinBuildState;
+use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
