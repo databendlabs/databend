@@ -24,7 +24,6 @@ use databend_common_pipeline_transforms::processors::add_k_way_merge_sort;
 use databend_common_pipeline_transforms::processors::sort::utils::add_order_field;
 use databend_common_pipeline_transforms::processors::try_add_multi_sort_merge;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_pipeline_transforms::processors::TransformSortMergeBuilder;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::evaluator::BlockOperator;
@@ -34,7 +33,7 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::create_transform_stream_sort_spill;
+use crate::pipelines::processors::TransformSortBuilder;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
@@ -91,7 +90,7 @@ impl PipelineBuilder {
         self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
     }
 
-    pub(crate) fn build_sort_pipeline(
+    fn build_sort_pipeline(
         &mut self,
         plan_schema: DataSchemaRef,
         sort_desc: Vec<SortColumnDescription>,
@@ -212,10 +211,7 @@ impl SortPipelineBuilder {
         });
 
         let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
-        let enable_spill =
-            memory_settings.enable_query_level_spill || memory_settings.enable_global_level_spill;
-
-        let sort_merge_output_schema = match output_order_col || enable_spill {
+        let sort_merge_output_schema = match output_order_col {
             true => add_order_field(self.schema.clone(), &self.sort_desc),
             false => self.schema.clone(),
         };
@@ -223,48 +219,35 @@ impl SortPipelineBuilder {
         let settings = self.ctx.get_settings();
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
 
-        pipeline.add_transform(|input, output| {
-            let builder = TransformSortMergeBuilder::create(
-                input,
-                output,
-                sort_merge_output_schema.clone(),
-                self.sort_desc.clone(),
-                self.block_size,
-            )
-            .with_limit(self.limit)
-            .with_order_col_generated(order_col_generated)
-            .with_output_order_col(output_order_col || enable_spill)
-            .with_memory_settings(memory_settings.clone())
-            .with_enable_loser_tree(enable_loser_tree);
-
-            Ok(ProcessorPtr::create(builder.build()?))
-        })?;
-
-        if enable_spill {
-            let schema = add_order_field(sort_merge_output_schema.clone(), &self.sort_desc);
+        let spiller = {
             let location_prefix = self.ctx.query_id_spill_prefix();
-
             let config = SpillerConfig {
                 spiller_type: SpillerType::OrderBy,
                 location_prefix,
                 disk_spill: None,
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
-            pipeline.add_transform(|input, output| {
-                let op = DataOperator::instance().spill_operator();
-                let spiller = Spiller::create(self.ctx.clone(), op, config.clone())?;
-                Ok(ProcessorPtr::create(create_transform_stream_sort_spill(
-                    input,
-                    output,
-                    schema.clone(),
-                    self.sort_desc.clone(),
-                    self.limit,
-                    spiller,
-                    output_order_col,
-                    enable_loser_tree,
-                )))
-            })?;
-        }
+            let op = DataOperator::instance().spill_operator();
+            Arc::new(Spiller::create(self.ctx.clone(), op, config.clone())?)
+        };
+
+        pipeline.add_transform(|input, output| {
+            let builder = TransformSortBuilder::create(
+                input,
+                output,
+                sort_merge_output_schema.clone(),
+                self.sort_desc.clone(),
+                self.block_size,
+                spiller.clone(),
+            )
+            .with_limit(self.limit)
+            .with_order_col_generated(order_col_generated)
+            .with_output_order_col(output_order_col)
+            .with_memory_settings(memory_settings.clone())
+            .with_enable_loser_tree(enable_loser_tree);
+
+            Ok(ProcessorPtr::create(builder.build()?))
+        })?;
 
         if !need_multi_merge {
             return Ok(());

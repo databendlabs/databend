@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
@@ -23,25 +22,13 @@ use std::sync::Arc;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::sampler::FixedRateSampler;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_transforms::processors::sort::algorithm::HeapSort;
-use databend_common_pipeline_transforms::processors::sort::algorithm::LoserTreeSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
-use databend_common_pipeline_transforms::processors::sort::select_row_type;
-use databend_common_pipeline_transforms::processors::sort::utils::has_order_field;
 use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::Rows;
-use databend_common_pipeline_transforms::processors::sort::RowsTypeVisitor;
-use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
-use databend_common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use databend_common_pipeline_transforms::processors::SortSpillParams;
 use rand::rngs::StdRng;
@@ -50,36 +37,23 @@ use rand::SeedableRng;
 use crate::spillers::Location;
 use crate::spillers::Spiller;
 
-enum State {
-    /// The initial state of the processor.
-    Init,
-    /// This state means the processor will never spill incoming blocks.
-    Pass,
-    /// This state means the processor will spill incoming blocks except the last block.
-    Spill,
-    /// This state means the processor is restoring spilled blocks.
-    Restore,
-    /// Finish the process.
-    Finish,
+enum Sampler {
+    Uninit,
+    Collect(FixedRateSampler<StdRng>),
+    /// Partition boundaries for restoring and sorting blocks, stored in reverse order of Column.
+    /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
+    Finish(Vec<Column>),
 }
-///////////
+
 pub struct TransformStreamSortSpill<A: SortAlgorithm> {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
     schema: DataSchemaRef,
     sort_row_offset: usize,
-    output_order_col: bool,
     limit: Option<usize>,
     spiller: Arc<Spiller>,
 
-    input_data: Vec<DataBlock>,
-    output_data: Option<DataBlock>,
-    state: State,
+    pub output_data: Option<DataBlock>,
 
-    sampler: Option<FixedRateSampler<StdRng>>,
-    /// Partition boundaries for restoring and sorting blocks, stored in reverse order of Column.
-    /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
-    bounds: Vec<Column>,
+    sampler: Sampler,
     cur_bound: Option<A::Rows>,
 
     batch_rows: usize,
@@ -92,210 +66,22 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
     output_merger: Option<Merger<A, BoundBlockStream<A::Rows>>>,
 }
 
-#[inline(always)]
-fn take_spill_meta(block: &mut DataBlock) -> Option<Option<SortSpillParams>> {
-    block.take_meta().map(|meta| {
-        if SortSpillMeta::downcast_ref_from(&meta).is_some() {
-            return None;
-        }
-        Some(
-            SortSpillMetaWithParams::downcast_from(meta)
-                .expect("unknown meta type")
-                .0,
-        )
-    })
-}
-
-#[async_trait::async_trait]
-impl<A> Processor for TransformStreamSortSpill<A>
-where
-    A: SortAlgorithm + 'static,
-    A::Rows: 'static,
-{
-    fn name(&self) -> String {
-        String::from("TransformSortSpill")
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
-            self.input.finish();
-            return Ok(Event::Finished);
-        }
-
-        if !self.output.can_push() {
-            match self.state {
-                State::Init => {
-                    self.input.set_need_data();
-                    return Ok(Event::NeedData);
-                }
-                State::Pass | State::Finish => {
-                    self.input.set_not_need_data();
-                    return Ok(Event::NeedConsume);
-                }
-                State::Spill | State::Restore => {
-                    // may should pull upstream?
-                    self.input.set_not_need_data();
-                    return Ok(Event::NeedConsume);
-                }
-            }
-        }
-
-        if self.output_data.is_some() {
-            match self.state {
-                State::Pass | State::Restore | State::Finish => {
-                    let block = self.output_data.take().unwrap();
-                    self.output_block(block);
-                    return Ok(Event::NeedConsume);
-                }
-                _ => unreachable!(),
-            }
-        }
-
-        if matches!(self.state, State::Finish) {
-            assert!(self.input.is_finished());
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        if self.input.has_data() {
-            let mut block = self.input.pull_data().unwrap()?;
-            let meta = take_spill_meta(&mut block);
-            return match self.state {
-                State::Init => match meta {
-                    Some(Some(params)) => {
-                        // Need to spill this block.
-                        self.batch_rows = params.batch_rows;
-                        self.num_merge = params.num_merge;
-
-                        log::info!(
-                            "batch_rows {} num_merge {}",
-                            params.batch_rows,
-                            params.num_merge
-                        );
-
-                        self.input_data.push(block);
-                        self.state = State::Spill;
-
-                        self.sampler = Some(
-                            FixedRateSampler::new(
-                                vec![self.sort_row_offset],
-                                self.batch_rows,
-                                self.batch_rows * self.num_merge,
-                                self.batch_rows,
-                                StdRng::seed_from_u64(rand::random()),
-                            )
-                            .unwrap(),
-                        );
-
-                        self.input.set_need_data();
-                        Ok(Event::NeedData)
-                    }
-                    Some(None) => unreachable!(),
-                    None => {
-                        // If we get a memory block at initial state, it means we will never spill data.
-                        self.output_block(block);
-                        self.state = State::Pass;
-                        Ok(Event::NeedConsume)
-                    }
-                },
-                State::Pass => {
-                    debug_assert!(meta.is_none());
-                    self.output_block(block);
-                    Ok(Event::NeedConsume)
-                }
-                State::Spill => {
-                    self.input_data.push(block);
-                    if self.input_rows() + self.subsequent_memory_rows() > self.max_rows() {
-                        Ok(Event::Async)
-                    } else {
-                        self.input.set_need_data();
-                        Ok(Event::NeedData)
-                    }
-                }
-                _ => unreachable!(),
-            };
-        }
-
-        if self.input.is_finished() {
-            return match &self.state {
-                State::Init | State::Pass | State::Finish => {
-                    self.output.finish();
-                    Ok(Event::Finished)
-                }
-                State::Spill => {
-                    if self.input_data.is_empty() {
-                        self.state = State::Restore;
-                    }
-                    Ok(Event::Async)
-                }
-                State::Restore => Ok(Event::Async),
-            };
-        }
-
-        self.input.set_need_data();
-        Ok(Event::NeedData)
-    }
-
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        match &self.state {
-            State::Spill => {
-                let input = self.input_rows();
-                let subsequent = self.subsequent_memory_rows();
-                let max = self.max_rows();
-
-                if subsequent > 0 && subsequent + input > max {
-                    self.subsequent_spill_last(subsequent + input - max).await?;
-                }
-                let finished = self.input.is_finished();
-                if input > max || finished && input > 0 {
-                    self.sort_input_data()?;
-                }
-                if finished {
-                    self.state = State::Restore;
-                }
-                Ok(())
-            }
-            State::Restore => {
-                debug_assert!(self.input_data.is_empty());
-                self.on_restore().await
-            }
-            _ => unreachable!(),
-        }
-    }
-}
-
 impl<A> TransformStreamSortSpill<A>
-where
-    A: SortAlgorithm + 'static,
-    A::Rows: 'static,
+where A: SortAlgorithm
 {
     pub fn new(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
         schema: DataSchemaRef,
         limit: Option<usize>,
-        spiller: Spiller,
+        spiller: Arc<Spiller>,
         sort_row_offset: usize,
-        output_order_col: bool,
     ) -> Self {
         Self {
-            input,
-            output,
             schema,
             sort_row_offset,
-            output_order_col,
             limit,
-            input_data: Vec::new(),
             output_data: None,
-            state: State::Init,
-            spiller: Arc::new(spiller),
-            sampler: None,
-            bounds: Vec::new(),
+            spiller,
+            sampler: Sampler::Uninit,
             cur_bound: None,
             batch_rows: 0,
             num_merge: 0,
@@ -305,26 +91,45 @@ where
         }
     }
 
-    fn output_block(&self, mut block: DataBlock) {
-        if !self.output_order_col {
-            block.pop_columns(1);
-        }
-        self.output.push_data(Ok(block));
+    pub fn init_spill(&mut self, params: SortSpillParams) {
+        debug_assert!(matches!(self.sampler, Sampler::Uninit));
+
+        self.batch_rows = params.batch_rows;
+        self.num_merge = params.num_merge;
+
+        log::info!(
+            "batch_rows {} num_merge {}",
+            params.batch_rows,
+            params.num_merge
+        );
+
+        self.sampler = Sampler::Collect(
+            FixedRateSampler::new(
+                vec![self.sort_row_offset],
+                self.batch_rows,
+                self.batch_rows * self.num_merge,
+                self.batch_rows,
+                StdRng::seed_from_u64(rand::random()),
+            )
+            .unwrap(),
+        );
     }
 
-    fn sort_input_data(&mut self) -> Result<()> {
-        let sampler = self.sampler.as_mut().unwrap();
-        for data in &self.input_data {
+    pub fn sort_input_data(&mut self, mut input_data: Vec<DataBlock>) -> Result<()> {
+        let Sampler::Collect(sampler) = &mut self.sampler else {
+            unreachable!()
+        };
+
+        for data in &input_data {
             sampler.add_block(data.clone());
         }
         sampler.compact_blocks(false);
 
-        let sorted = if self.input_data.len() == 1 {
-            let data = self.input_data.pop().unwrap();
+        let sorted = if input_data.len() == 1 {
+            let data = input_data.pop().unwrap();
             vec![SpillableBlock::new(data, self.sort_row_offset)].into()
         } else {
-            let streams = self
-                .input_data
+            let streams = input_data
                 .drain(..)
                 .map(|data| DataBlockStream::new(data, self.sort_row_offset))
                 .collect();
@@ -344,7 +149,7 @@ where
         Ok(())
     }
 
-    async fn subsequent_spill_last(&mut self, target_rows: usize) -> Result<()> {
+    pub async fn subsequent_spill_last(&mut self, target_rows: usize) -> Result<()> {
         let Some(s) = self.subsequent.last_mut() else {
             return Ok(());
         };
@@ -363,16 +168,15 @@ where
         Ok(())
     }
 
-    async fn on_restore(&mut self) -> Result<()> {
-        if self.sampler.is_some() {
-            self.determine_bounds()?;
+    pub async fn on_restore(&mut self) -> Result<bool> {
+        if let Sampler::Collect(sampler) = &mut self.sampler {
+            sampler.compact_blocks(true);
+            let sampled_rows = std::mem::take(&mut sampler.dense_blocks);
+            self.sampler = Sampler::Finish(self.determine_bounds(sampled_rows)?)
         }
 
         if self.output_merger.is_some() {
-            if self.restore_and_output().await? {
-                self.state = State::Finish;
-            }
-            return Ok(());
+            return self.restore_and_output().await;
         }
 
         while self.current.is_empty() {
@@ -380,12 +184,10 @@ where
         }
 
         if self.current.len() > self.num_merge {
-            self.merge_current().await
+            self.merge_current().await?;
+            Ok(false)
         } else {
-            if self.restore_and_output().await? {
-                self.state = State::Finish;
-            }
-            Ok(())
+            self.restore_and_output().await
         }
     }
 
@@ -566,11 +368,7 @@ where
         self.current.sort_by_key(|s| s.blocks[0].data.is_some());
     }
 
-    fn input_rows(&self) -> usize {
-        self.input_data.iter().map(|b| b.num_rows()).sum::<usize>()
-    }
-
-    fn subsequent_memory_rows(&self) -> usize {
+    pub fn subsequent_memory_rows(&self) -> usize {
         self.subsequent
             .iter()
             .map(|s| s.in_memory_rows())
@@ -584,7 +382,7 @@ where
             .sum::<usize>()
     }
 
-    fn max_rows(&self) -> usize {
+    pub fn max_rows(&self) -> usize {
         debug_assert!(self.num_merge > 0);
         self.num_merge * self.batch_rows
     }
@@ -603,39 +401,37 @@ where
     }
 
     fn next_bound(&mut self) -> Option<A::Rows> {
-        let bounds = self.bounds.last_mut()?;
-        let bound = match bounds.len() {
+        let Sampler::Finish(bounds) = &mut self.sampler else {
+            unreachable!()
+        };
+
+        let last = bounds.last_mut()?;
+        let bound = match last.len() {
             0 => unreachable!(),
-            1 => self.bounds.pop().unwrap(),
+            1 => bounds.pop().unwrap(),
             _ => {
-                let bound = bounds.slice(0..1).maybe_gc();
-                *bounds = bounds.slice(1..bounds.len());
+                let bound = last.slice(0..1).maybe_gc();
+                *last = last.slice(1..last.len());
                 bound
             }
         };
         Some(A::Rows::from_column(&bound).unwrap())
     }
 
-    fn determine_bounds(&mut self) -> Result<()> {
-        let mut sampler = self.sampler.take().unwrap();
-        sampler.compact_blocks(true);
-        let sampled_rows = sampler.dense_blocks;
-
+    fn determine_bounds(&self, sampled_rows: Vec<DataBlock>) -> Result<Vec<Column>> {
         match sampled_rows.len() {
-            0 => (),
-            1 => self.bounds.push(
-                DataBlock::sort(
-                    &sampled_rows[0],
-                    &[SortColumnDescription {
-                        offset: 0,
-                        asc: A::Rows::IS_ASC_COLUMN,
-                        nulls_first: false,
-                    }],
-                    None,
-                )?
-                .get_last_column()
-                .clone(),
-            ),
+            0 => Ok(vec![]),
+            1 => Ok(vec![DataBlock::sort(
+                &sampled_rows[0],
+                &[SortColumnDescription {
+                    offset: 0,
+                    asc: A::Rows::IS_ASC_COLUMN,
+                    nulls_first: false,
+                }],
+                None,
+            )?
+            .get_last_column()
+            .clone()]),
             _ => {
                 let streams = sampled_rows
                     .into_iter()
@@ -663,15 +459,13 @@ where
                 }
                 debug_assert!(merger.is_finished());
 
-                self.bounds = blocks
+                Ok(blocks
                     .iter()
                     .rev()
                     .map(|b| b.get_last_column().clone())
-                    .collect::<Vec<_>>();
+                    .collect::<Vec<_>>())
             }
-        };
-
-        Ok(())
+        }
     }
 
     #[allow(unused)]
@@ -679,7 +473,7 @@ where
         f.debug_struct("TransformStreamSortSpill")
             .field("num_merge", &self.num_merge)
             .field("batch_rows", &self.batch_rows)
-            .field("input_rows", &self.input_rows())
+            //.field("input_rows", &self.input_rows())
             .field("current_memory_rows", &self.current_memory_rows())
             .field("current", &self.current)
             .field("subsequent_memory_rows", &self.subsequent_memory_rows())
@@ -936,81 +730,6 @@ fn get_domain(col: &Column) -> Column {
     }
 }
 
-pub fn create_transform_stream_sort_spill(
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
-    limit: Option<usize>,
-    spiller: Spiller,
-    output_order_col: bool,
-    enable_loser_tree: bool,
-) -> Box<dyn Processor> {
-    debug_assert!(has_order_field(&schema));
-    let mut builder = Builder {
-        schema,
-        sort_desc,
-        input,
-        output,
-        output_order_col,
-        limit,
-        spiller: Some(spiller),
-        enable_loser_tree,
-        processor: None,
-    };
-    select_row_type(&mut builder);
-    builder.processor.take().unwrap()
-}
-
-struct Builder {
-    schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
-
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    output_order_col: bool,
-    limit: Option<usize>,
-    spiller: Option<Spiller>,
-    enable_loser_tree: bool,
-    processor: Option<Box<dyn Processor>>,
-}
-
-impl RowsTypeVisitor for Builder {
-    fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
-    }
-
-    fn sort_desc(&self) -> &[SortColumnDescription] {
-        &self.sort_desc
-    }
-
-    fn visit_type<R: Rows + 'static>(&mut self) {
-        let sort_row_offset = self.schema.fields().len() - 1;
-        let processor: Box<dyn Processor> = if self.enable_loser_tree {
-            Box::new(TransformStreamSortSpill::<LoserTreeSort<R>>::new(
-                self.input.clone(),
-                self.output.clone(),
-                self.schema.clone(),
-                self.limit,
-                self.spiller.take().unwrap(),
-                sort_row_offset,
-                self.output_order_col,
-            ))
-        } else {
-            Box::new(TransformStreamSortSpill::<HeapSort<R>>::new(
-                self.input.clone(),
-                self.output.clone(),
-                self.schema.clone(),
-                self.limit,
-                self.spiller.take().unwrap(),
-                sort_row_offset,
-                self.output_order_col,
-            ))
-        };
-        self.processor = Some(processor)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use databend_common_expression::types::DataType;
@@ -1018,6 +737,7 @@ mod tests {
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::StringType;
     use databend_common_expression::BlockEntry;
+    use databend_common_expression::Column;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;

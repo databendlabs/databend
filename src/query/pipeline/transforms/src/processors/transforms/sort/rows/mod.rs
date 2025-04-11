@@ -38,7 +38,7 @@ where Self: Sized
         sort_columns_descriptions: &[SortColumnDescription],
         output_schema: DataSchemaRef,
     ) -> Result<Self>;
-    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<T>;
+    fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<T>;
 }
 
 /// Rows can be compared.

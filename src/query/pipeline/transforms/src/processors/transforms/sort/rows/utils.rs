@@ -86,8 +86,8 @@ fn convert_columns<R: Rows, C: RowConverter<R>>(
     columns: &[BlockEntry],
     num_rows: usize,
 ) -> Result<Column> {
-    let mut converter = C::create(sort_desc, schema)?;
-    let rows = C::convert(&mut converter, columns, num_rows)?;
+    let converter = C::create(sort_desc, schema)?;
+    let rows = C::convert(&converter, columns, num_rows)?;
     Ok(rows.to_column())
 }
 
