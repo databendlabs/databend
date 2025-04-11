@@ -35,9 +35,9 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CacheValue;
+use databend_storages_common_cache::DiskCacheAccessor;
 use databend_storages_common_cache::HybridCache;
 use databend_storages_common_cache::InMemoryLruCache;
-use databend_storages_common_cache::TableDataCache;
 use databend_storages_common_cache::Unit;
 
 use crate::SyncOneBlockSystemTable;
@@ -222,7 +222,7 @@ impl CachesTable {
     }
 
     fn append_on_disk_cache_row(
-        cache: &Option<TableDataCache>,
+        cache: &Option<DiskCacheAccessor>,
         local_node: &str,
         columns: &mut CachesTableColumns,
     ) {

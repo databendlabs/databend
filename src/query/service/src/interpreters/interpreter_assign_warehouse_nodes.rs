@@ -53,7 +53,7 @@ impl Interpreter for AssignWarehouseNodesInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+            .check_feature_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
         let mut cluster_selected_nodes = HashMap::with_capacity(self.plan.assign_clusters.len());
         for (cluster, nodes_map) in &self.plan.assign_clusters {

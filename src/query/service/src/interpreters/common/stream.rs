@@ -45,7 +45,7 @@ pub async fn dml_build_update_stream_req(
     }
 
     LicenseManagerSwitch::instance()
-        .check_enterprise_enabled(ctx.get_license_key(), Feature::Stream)?;
+        .check_feature_enabled(ctx.get_license_key(), Feature::Stream)?;
 
     let mut reqs = Vec::with_capacity(tables.len());
     for table in tables.into_iter() {
@@ -104,7 +104,7 @@ pub async fn query_build_update_stream_req(
     }
 
     LicenseManagerSwitch::instance()
-        .check_enterprise_enabled(ctx.get_license_key(), Feature::Stream)?;
+        .check_feature_enabled(ctx.get_license_key(), Feature::Stream)?;
 
     let cap = streams.len();
     let mut update_table_meta_reqs = Vec::with_capacity(cap);

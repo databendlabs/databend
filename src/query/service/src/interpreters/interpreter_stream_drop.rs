@@ -49,7 +49,7 @@ impl Interpreter for DropStreamInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
+            .check_feature_enabled(self.ctx.get_license_key(), Feature::Stream)?;
 
         let handler = get_stream_handler();
         let _ = handler.do_drop_stream(self.ctx.clone(), &self.plan).await?;

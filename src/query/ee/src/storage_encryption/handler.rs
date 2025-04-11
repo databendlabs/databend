@@ -40,7 +40,7 @@ impl StorageEncryptionHandler for RealStorageEncryptionHandler {
         let settings = session.get_settings();
 
         // check for valid license
-        LicenseManagerSwitch::instance().check_enterprise_enabled(
+        LicenseManagerSwitch::instance().check_feature_enabled(
             unsafe { settings.get_enterprise_license().unwrap_or_default() },
             Feature::StorageEncryption,
         )

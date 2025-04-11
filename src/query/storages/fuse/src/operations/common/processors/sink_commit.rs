@@ -129,7 +129,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .get_enable_use_vacuum2_to_purge_transient_table_data()?;
 
         let vacuum_handler = if LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(ctx.get_license_key(), Vacuum)
+            .check_feature_enabled(ctx.get_license_key(), Vacuum)
             .is_ok()
         {
             let handler: Arc<VacuumHandlerWrapper> = GlobalInstance::get();

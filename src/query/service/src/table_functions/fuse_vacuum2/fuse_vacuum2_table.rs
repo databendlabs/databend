@@ -88,7 +88,7 @@ impl SimpleTableFunc for FuseVacuum2Table {
         ctx: &Arc<dyn TableContext>,
         _: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
-        LicenseManagerSwitch::instance().check_enterprise_enabled(ctx.get_license_key(), Vacuum)?;
+        LicenseManagerSwitch::instance().check_feature_enabled(ctx.get_license_key(), Vacuum)?;
 
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
         let res = match &self.args {

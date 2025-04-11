@@ -53,7 +53,7 @@ impl Interpreter for AlterVirtualColumnInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)?;
+            .check_feature_enabled(self.ctx.get_license_key(), VirtualColumn)?;
 
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();

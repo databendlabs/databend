@@ -85,7 +85,7 @@ impl ModifyTableColumnInterpreter {
         mask_name: String,
     ) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
+            .check_feature_enabled(self.ctx.get_license_key(), DataMask)?;
 
         if table.is_temp() {
             return Err(ErrorCode::StorageOther(format!(
@@ -462,7 +462,7 @@ impl ModifyTableColumnInterpreter {
         column: String,
     ) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
+            .check_feature_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let table_info = table.get_table_info();
         let table_id = table_info.ident.table_id;
@@ -498,7 +498,7 @@ impl ModifyTableColumnInterpreter {
         column: String,
     ) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
+            .check_feature_enabled(self.ctx.get_license_key(), ComputedColumn)?;
 
         let table_info = table.get_table_info();
         let schema = table.schema();

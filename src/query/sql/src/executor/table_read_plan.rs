@@ -174,7 +174,7 @@ impl ToReadDataSourcePlan for dyn Table {
 
             if let Some(column_mask_policy) = &table_meta.column_mask_policy {
                 if LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(ctx.get_license_key(), DataMask)
+                    .check_feature_enabled(ctx.get_license_key(), DataMask)
                     .is_err()
                 {
                     None

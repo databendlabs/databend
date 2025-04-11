@@ -151,7 +151,7 @@ impl Binder {
             {
                 #[allow(clippy::collapsible_if)]
                 if LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), AggregateIndex)
+                    .check_feature_enabled(self.ctx.get_license_key(), AggregateIndex)
                     .is_ok()
                 {
                     let indexes = self

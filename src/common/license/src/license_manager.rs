@@ -33,8 +33,11 @@ pub trait LicenseManager: Sync + Send {
 
     /// Check whether enterprise feature is available given context
     /// This function returns `LicenseKeyInvalid` error if enterprise license key is not valid or expired.
-    fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()>;
+    fn check_feature_enabled(&self, license_key: String, feature: Feature) -> Result<()>;
 
+    fn check_license(&self, license_key: String) -> Result<()> {
+        self.parse_license(&license_key).map(|_| {})
+    }
     /// Encodes a raw license string as a JWT using the constant public key.
     ///
     /// This function takes a raw license string and a secret key,
@@ -102,7 +105,7 @@ impl LicenseManager for OssLicenseManager {
         GlobalInstance::get()
     }
 
-    fn check_enterprise_enabled(&self, _license_key: String, feature: Feature) -> Result<()> {
+    fn check_feature_enabled(&self, _license_key: String, feature: Feature) -> Result<()> {
         // oss ignore license key.
         feature.verify_default("Need Commercial License".to_string())
     }
