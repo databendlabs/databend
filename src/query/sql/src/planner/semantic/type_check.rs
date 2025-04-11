@@ -3116,11 +3116,20 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Minute => self.resolve_function(span, "to_minute", vec![], &[arg]),
             ASTIntervalKind::Second => self.resolve_function(span, "to_second", vec![], &[arg]),
             ASTIntervalKind::Doy => self.resolve_function(span, "to_day_of_year", vec![], &[arg]),
-            ASTIntervalKind::Dow => self.resolve_function(span, "to_day_of_week", vec![], &[arg]),
+            // Day of the week (Sunday = 0, Saturday = 6)
+            ASTIntervalKind::Dow => self.resolve_function(span, "dayofweek", vec![], &[arg]),
             ASTIntervalKind::Week => self.resolve_function(span, "to_week_of_year", vec![], &[arg]),
             ASTIntervalKind::Epoch => self.resolve_function(span, "epoch", vec![], &[arg]),
             ASTIntervalKind::MicroSecond => {
                 self.resolve_function(span, "to_microsecond", vec![], &[arg])
+            }
+            // ISO day of the week (Monday = 1, Sunday = 7)
+            ASTIntervalKind::ISODow => {
+                self.resolve_function(span, "to_day_of_week", vec![], &[arg])
+            }
+            ASTIntervalKind::YearWeek => self.resolve_function(span, "yearweek", vec![], &[arg]),
+            ASTIntervalKind::Millennium => {
+                self.resolve_function(span, "millennium", vec![], &[arg])
             }
         }
     }

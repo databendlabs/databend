@@ -14,6 +14,7 @@
 "flate" = "flate"
 "Tke" = "Tke"
 "typ" = "typ"
+"dows" = "dows"
 
 [files]
 extend-exclude = [

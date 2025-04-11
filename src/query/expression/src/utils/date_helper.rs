@@ -177,6 +177,52 @@ impl EvalYearsImpl {
     }
 }
 
+pub struct EvalISOYearsImpl;
+impl EvalISOYearsImpl {
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TimeZone) -> i32 {
+        let date_start = date_start.to_date(tz.clone());
+        let date_end = date_end.to_date(tz);
+        date_end.iso_week_date().year() as i32 - date_start.iso_week_date().year() as i32
+    }
+
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
+        let date_start = date_start.to_timestamp(tz.clone());
+        let date_end = date_end.to_timestamp(tz);
+        date_end.date().iso_week_date().year() as i64 - date_start.iso_week_date().year() as i64
+    }
+}
+
+pub struct EvalYearWeeksImpl;
+impl EvalYearWeeksImpl {
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TimeZone) -> i32 {
+        let date_start = date_start.to_date(tz.clone());
+        let date_end = date_end.to_date(tz);
+        let week_date = date_end.iso_week_date();
+        let year = week_date.year() as i32 * 100;
+        let end = year + date_end.iso_week_date().week() as i32;
+
+        let week_date = date_start.iso_week_date();
+        let year = week_date.year() as i32 * 100;
+        let start = year + date_start.iso_week_date().week() as i32;
+
+        end - start
+    }
+
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
+        let date_start = date_start.to_timestamp(tz.clone());
+        let date_end = date_end.to_timestamp(tz);
+        let week_date = date_end.date().iso_week_date();
+        let year = week_date.year() as i64 * 100;
+        let end = year + date_end.date().iso_week_date().week() as i64;
+
+        let week_date = date_start.date().iso_week_date();
+        let year = week_date.year() as i64 * 100;
+        let start = year + date_start.date().iso_week_date().week() as i64;
+
+        end - start
+    }
+}
+
 pub struct EvalQuartersImpl;
 
 impl EvalQuartersImpl {
@@ -351,16 +397,21 @@ impl ToNumberImpl {
 }
 
 pub struct ToYYYYMM;
+pub struct ToYYYYWW;
 pub struct ToYYYYMMDD;
 pub struct ToYYYYMMDDHH;
 pub struct ToYYYYMMDDHHMMSS;
 pub struct ToYear;
+pub struct ToTimezoneHour;
+pub struct ToTimezoneMinute;
+pub struct ToMillennium;
 pub struct ToISOYear;
 pub struct ToQuarter;
 pub struct ToMonth;
 pub struct ToDayOfYear;
 pub struct ToDayOfMonth;
 pub struct ToDayOfWeek;
+pub struct DayOfWeek;
 pub struct ToHour;
 pub struct ToMinute;
 pub struct ToSecond;
@@ -371,6 +422,12 @@ pub struct ToWeekOfYear;
 impl ToNumber<u32> for ToYYYYMM {
     fn to_number(dt: &Zoned) -> u32 {
         dt.year() as u32 * 100 + dt.month() as u32
+    }
+}
+
+impl ToNumber<u16> for ToMillennium {
+    fn to_number(dt: &Zoned) -> u16 {
+        dt.year() as u16 / 1000 + 1
     }
 }
 
@@ -412,9 +469,29 @@ impl ToNumber<u16> for ToYear {
     }
 }
 
+impl ToNumber<i16> for ToTimezoneHour {
+    fn to_number(dt: &Zoned) -> i16 {
+        dt.offset().seconds().div_ceil(3600) as i16
+    }
+}
+
+impl ToNumber<i16> for ToTimezoneMinute {
+    fn to_number(dt: &Zoned) -> i16 {
+        (dt.offset().seconds() % 3600).div_ceil(60) as i16
+    }
+}
+
 impl ToNumber<u16> for ToISOYear {
     fn to_number(dt: &Zoned) -> u16 {
         dt.date().iso_week_date().year() as _
+    }
+}
+
+impl ToNumber<u32> for ToYYYYWW {
+    fn to_number(dt: &Zoned) -> u32 {
+        let week_date = dt.date().iso_week_date();
+        let year = week_date.year() as u32 * 100;
+        year + dt.date().iso_week_date().week() as u32
     }
 }
 
@@ -446,6 +523,12 @@ impl ToNumber<u8> for ToDayOfMonth {
 impl ToNumber<u8> for ToDayOfWeek {
     fn to_number(dt: &Zoned) -> u8 {
         dt.weekday().to_monday_one_offset() as u8
+    }
+}
+
+impl ToNumber<u8> for DayOfWeek {
+    fn to_number(dt: &Zoned) -> u8 {
+        dt.weekday().to_sunday_zero_offset() as u8
     }
 }
 
