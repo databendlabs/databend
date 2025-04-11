@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod virtual_column_reader;
-mod virtual_column_reader_native;
 mod virtual_column_reader_parquet;
 
 pub use virtual_column_reader::VirtualColumnReader;

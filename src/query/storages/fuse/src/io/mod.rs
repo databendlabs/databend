@@ -51,4 +51,5 @@ pub use write::CachedMetaWriter;
 pub use write::InvertedIndexBuilder;
 pub use write::InvertedIndexWriter;
 pub use write::MetaWriter;
+pub use write::VirtualColumnBuilder;
 pub use write::WriteSettings;

@@ -64,7 +64,6 @@ use crate::pruning::FusePruningStatistics;
 use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
 use crate::pruning::VirtualColumnPruner;
-use crate::FuseStorageFormat;
 
 const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
 
@@ -97,7 +96,6 @@ impl PruningContext {
         bloom_index_cols: BloomIndexColumns,
         max_concurrency: usize,
         bloom_index_builder: Option<BloomIndexBuilder>,
-        storage_format: FuseStorageFormat,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
 
@@ -167,8 +165,7 @@ impl PruningContext {
         let inverted_index_pruner = InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?;
 
         // virtual column pruner, used to read virtual column metas and ignore source columns.
-        let virtual_column_pruner =
-            VirtualColumnPruner::try_create(dal.clone(), push_down, storage_format)?;
+        let virtual_column_pruner = VirtualColumnPruner::try_create(push_down)?;
 
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
@@ -223,7 +220,6 @@ impl FusePruner {
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
         bloom_index_builder: Option<BloomIndexBuilder>,
-        storage_format: FuseStorageFormat,
     ) -> Result<Self> {
         Self::create_with_pages(
             ctx,
@@ -234,7 +230,6 @@ impl FusePruner {
             vec![],
             bloom_index_cols,
             bloom_index_builder,
-            storage_format,
         )
     }
 
@@ -248,7 +243,6 @@ impl FusePruner {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         bloom_index_builder: Option<BloomIndexBuilder>,
-        storage_format: FuseStorageFormat,
     ) -> Result<Self> {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -275,7 +269,6 @@ impl FusePruner {
             bloom_index_cols,
             max_concurrency,
             bloom_index_builder,
-            storage_format,
         )?;
 
         Ok(FusePruner {

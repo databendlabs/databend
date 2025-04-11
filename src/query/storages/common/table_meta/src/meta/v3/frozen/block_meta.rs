@@ -62,6 +62,7 @@ impl From<BlockMeta> for crate::meta::BlockMeta {
             bloom_filter_index_location: value.bloom_filter_index_location,
             bloom_filter_index_size: value.bloom_filter_index_size,
             inverted_index_size: None,
+            virtual_block_meta: None,
             compression: value.compression.into(),
             create_on: None,
         }

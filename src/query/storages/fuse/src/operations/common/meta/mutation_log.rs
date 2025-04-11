@@ -18,7 +18,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_common_expression::VirtualDataSchema;
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::FormatVersion;
 use databend_storages_common_table_meta::meta::Statistics;
 
@@ -38,9 +39,10 @@ pub enum MutationLogEntry {
         segment_location: String,
         format_version: FormatVersion,
         summary: Statistics,
+        virtual_schema: Option<VirtualDataSchema>,
     },
     ReclusterAppendBlock {
-        block_meta: Arc<BlockMeta>,
+        block_meta: Arc<ExtendedBlockMeta>,
     },
     DeletedBlock {
         index: BlockMetaIndex,
@@ -50,7 +52,7 @@ pub enum MutationLogEntry {
     },
     ReplacedBlock {
         index: BlockMetaIndex,
-        block_meta: Arc<BlockMeta>,
+        block_meta: Arc<ExtendedBlockMeta>,
     },
     CompactExtras {
         extras: CompactExtraInfo,

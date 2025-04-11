@@ -43,7 +43,6 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::FuseBlockPartInfo;
-use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
@@ -82,7 +81,6 @@ async fn apply_snapshot_pruning(
         push_down,
         bloom_index_cols,
         None,
-        FuseStorageFormat::Parquet,
     )?);
 
     let mut prune_pipeline = Pipeline::create();

@@ -88,6 +88,7 @@ impl FuseTable {
 
         pipeline.add_transform(|input, output| {
             new_serialize_segment_processor(
+                ctx.clone(),
                 input,
                 output,
                 self,

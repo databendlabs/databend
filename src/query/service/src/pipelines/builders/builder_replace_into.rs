@@ -135,6 +135,7 @@ impl PipelineBuilder {
         block_builder.source_schema = table.schema_with_stream();
 
         let serialize_segment_transform = new_serialize_segment_pipe_item(
+            self.ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             table,
