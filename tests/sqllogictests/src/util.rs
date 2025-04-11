@@ -286,7 +286,7 @@ pub async fn run_ttc_container(
         match container_res {
             Ok(container) => {
                 println!(
-                    "Start container {container_name} {} using {duration} secs success",
+                    "Started container {container_name} {} using {duration} secs",
                     container.id(),
                 );
                 cs.push(container);
