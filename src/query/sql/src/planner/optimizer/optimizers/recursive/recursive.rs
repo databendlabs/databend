@@ -102,7 +102,7 @@ impl Optimizer for RecursiveRuleOptimizer {
         } else {
             format!("{:?},{:?},...({})", self.rules[0], self.rules[1], total - 2)
         };
-        format!("RecursiveOptimizer[{}]", preview)
+        format!("RecursiveRuleOptimizer[{}]", preview)
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {

@@ -23,7 +23,7 @@ use crate::optimizer::optimizers::cascades::tasks::ExploreExprTask;
 use crate::optimizer::optimizers::cascades::tasks::ExploreGroupTask;
 use crate::optimizer::optimizers::cascades::tasks::OptimizeExprTask;
 use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupTask;
-use crate::optimizer::optimizers::cascades::tasks::Scheduler;
+use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::CascadesOptimizer;
 
 #[derive(Debug)]
@@ -81,7 +81,7 @@ impl Task {
     pub fn execute(
         self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<Option<Self>> {
         match self {
             Task::ApplyRule(task) => {

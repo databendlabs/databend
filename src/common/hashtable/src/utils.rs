@@ -305,7 +305,7 @@ impl MergeIntoBlockInfoIndex {
         let mut l = 0;
         let mut r = self.length - 1;
         while l < r {
-            let mid = (l + r + 1) / 2;
+            let mid = (l + r).div_ceil(2);
             if self.intervals[mid].0 <= offset {
                 l = mid;
             } else {

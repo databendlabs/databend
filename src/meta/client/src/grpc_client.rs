@@ -58,7 +58,6 @@ use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::GrpcConfig;
-use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaHandshakeError;
@@ -924,8 +923,9 @@ impl MetaGrpcClient {
         let mut payload = vec![];
 
         // TODO: return MetaNetworkError
-        auth.encode(&mut payload)
-            .map_err(|e| MetaHandshakeError::new("encode auth payload", &e))?;
+        auth.encode(&mut payload).map_err(|e| {
+            MetaHandshakeError::new("Fail to encode request payload").with_source(&e)
+        })?;
 
         let my_ver = to_digit_ver(client_ver);
         let req = Request::new(futures::stream::once(async move {
@@ -939,19 +939,16 @@ impl MetaGrpcClient {
         let rx = client
             .handshake(req)
             .await
-            .map_err(|e| MetaHandshakeError::new("when sending handshake rpc", &e))?;
+            .map_err(|e| MetaHandshakeError::new("Connection Failure").with_source(&e))?;
         let mut rx = rx.into_inner();
 
-        // TODO: return MetaNetworkError
-        let res = rx.next().await.ok_or_else(|| {
-            MetaHandshakeError::new(
-                "when recv from handshake stream",
-                &AnyError::error("handshake returns nothing"),
-            )
-        })?;
+        let res = rx
+            .next()
+            .await
+            .ok_or_else(|| MetaHandshakeError::new("Server returned nothing"))?;
 
-        let resp =
-            res.map_err(|status| MetaHandshakeError::new("handshake is refused", &status))?;
+        let resp = res
+            .map_err(|status| MetaHandshakeError::new("Connection Failure").with_source(&status))?;
 
         assert!(
             resp.protocol_version > 0,
@@ -960,15 +957,11 @@ impl MetaGrpcClient {
 
         let min_compatible = to_digit_ver(min_metasrv_ver);
         if resp.protocol_version < min_compatible {
-            let invalid_err = AnyError::error(format!(
-                "metasrv protocol_version({}) < meta-client min-compatible({})",
+            return Err(MetaHandshakeError::new(format!(
+                "Invalid: server protocol_version({}) < client min-compatible({})",
                 from_digit_ver(resp.protocol_version),
-                min_metasrv_ver,
-            ));
-            return Err(MetaHandshakeError::new(
-                "incompatible protocol version",
-                &invalid_err,
-            ));
+                min_metasrv_ver
+            )));
         }
 
         let token = resp.payload;
@@ -983,7 +976,7 @@ impl MetaGrpcClient {
     pub(crate) async fn watch(
         &self,
         watch_request: WatchRequest,
-    ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaError> {
+    ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaClientError> {
         debug!("{}: handle watch request: {:?}", self, watch_request);
 
         let mut client = self.get_established_client().await?;
@@ -996,17 +989,13 @@ impl MetaGrpcClient {
 
             if server_version < least_server_version {
                 let err = format!(
-                    "WatchRequest::initial_flush requires databend-meta is at least {}, but: {}",
+                    "WatchRequest::initial_flush requires databend-meta server is at least {}, but: {}",
                     least_server_version, server_version
                 );
 
                 error!("{}", err);
 
-                return Err(InvalidArgument::new(
-                    AnyError::error("databend-meta version too low"),
-                    err,
-                )
-                .into());
+                return Err(MetaHandshakeError::new(err).into());
             }
         }
         let res = client.watch(watch_request).await?;

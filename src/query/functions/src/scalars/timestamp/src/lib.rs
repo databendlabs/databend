@@ -24,6 +24,7 @@
 #![feature(downcast_unchecked)]
 #![feature(str_internals)]
 #![feature(fmt_internals)]
+#![feature(formatting_options)]
 extern crate core;
 
 pub mod datetime;
