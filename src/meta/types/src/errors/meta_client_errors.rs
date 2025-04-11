@@ -15,6 +15,7 @@
 use std::io;
 
 use anyerror::AnyError;
+use tonic::Status;
 
 use crate::MetaHandshakeError;
 use crate::MetaNetworkError;
@@ -43,6 +44,12 @@ impl MetaClientError {
             MetaClientError::NetworkError(err) => err.name(),
             MetaClientError::HandshakeError(_) => "MetaHandshakeError",
         }
+    }
+}
+
+impl From<Status> for MetaClientError {
+    fn from(status: Status) -> Self {
+        Self::NetworkError(status.into())
     }
 }
 
