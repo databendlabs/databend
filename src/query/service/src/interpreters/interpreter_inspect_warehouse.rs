@@ -55,7 +55,7 @@ impl Interpreter for InspectWarehouseInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+            .check_feature_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
         let mut warehouse_nodes = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
             .inspect_warehouse(self.plan.warehouse.clone())

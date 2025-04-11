@@ -115,11 +115,11 @@ impl Interpreter for CreateTableInterpreter {
             .any(|f| f.computed_expr().is_some());
         if has_computed_column {
             LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
+                .check_feature_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
         if self.plan.inverted_indexes.is_some() {
             LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), InvertedIndex)?;
+                .check_feature_enabled(self.ctx.get_license_key(), InvertedIndex)?;
         }
 
         let quota_api = UserApiProvider::instance().tenant_quota_api(tenant);
@@ -464,7 +464,7 @@ impl CreateTableInterpreter {
 
     async fn build_attach_request(&self, storage_prefix: &str) -> Result<CreateTableReq> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AttacheTable)?;
+            .check_feature_enabled(self.ctx.get_license_key(), Feature::AttacheTable)?;
 
         let handler = get_attach_table_handler();
         handler

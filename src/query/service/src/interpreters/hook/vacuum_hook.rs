@@ -38,7 +38,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
     // disable all s3 operator if vacuum limit = 0
     if vacuum_limit != 0
         && LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(query_ctx.get_license_key(), Vacuum)
+            .check_feature_enabled(query_ctx.get_license_key(), Vacuum)
             .is_ok()
     {
         let handler = get_vacuum_handler();

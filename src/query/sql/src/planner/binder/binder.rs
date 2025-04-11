@@ -1082,7 +1082,7 @@ impl<'a> Binder {
         // check inverted index license
         if !bind_context.inverted_index_map.is_empty() {
             LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+                .check_feature_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
         }
         let bound_internal_columns = &bind_context.bound_internal_columns;
         let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);

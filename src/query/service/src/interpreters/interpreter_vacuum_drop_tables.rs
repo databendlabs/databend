@@ -114,7 +114,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
+            .check_feature_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let ctx = self.ctx.clone();
         let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);

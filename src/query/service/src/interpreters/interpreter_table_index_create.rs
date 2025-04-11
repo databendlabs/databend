@@ -50,7 +50,7 @@ impl Interpreter for CreateTableIndexInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+            .check_feature_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
 
         let index_name = self.plan.index_name.clone();
         let column_ids = self.plan.column_ids.clone();

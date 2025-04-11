@@ -110,7 +110,7 @@ impl Interpreter for VacuumTableInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
+            .check_feature_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();

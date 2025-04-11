@@ -76,7 +76,7 @@ impl Binder {
 
         // whether allow rewrite virtual column and pushdown
         let allow_pushdown = LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
+            .check_feature_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
             .is_ok();
         bind_context.virtual_column_context.allow_pushdown = allow_pushdown;
 

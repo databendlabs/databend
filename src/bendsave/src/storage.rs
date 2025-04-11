@@ -117,7 +117,7 @@ pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
     let session = session_manager.register_session(session)?;
     let settings = session.get_settings();
 
-    LicenseManagerSwitch::instance().check_enterprise_enabled(
+    LicenseManagerSwitch::instance().check_feature_enabled(
         unsafe { settings.get_enterprise_license().unwrap_or_default() },
         Feature::SystemManagement,
     )?;

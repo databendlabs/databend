@@ -53,7 +53,7 @@ impl Interpreter for ShowOnlineNodesInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+            .check_feature_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
         let online_nodes = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
             .list_online_nodes()

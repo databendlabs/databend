@@ -59,7 +59,7 @@ impl Interpreter for CreateWarehouseInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+            .check_feature_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
         let tenant = self.ctx.get_tenant();
         if let Some(warehouse_size) = self.plan.options.get("warehouse_size") {

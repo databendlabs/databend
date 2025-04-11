@@ -61,9 +61,8 @@ impl AsRef<str> for TableDataCacheKey {
     }
 }
 
-// TODO rename this, out of names now ... :(
 #[derive(Clone)]
-pub struct TableDataCache<T = LruDiskCacheHolder> {
+pub struct DiskCacheAccessor<T = LruDiskCacheHolder> {
     name: String,
     lru_disk_cache: T,
     population_queue: crossbeam_channel::Sender<CacheItem>,
@@ -71,7 +70,7 @@ pub struct TableDataCache<T = LruDiskCacheHolder> {
 }
 
 #[cfg(test)]
-impl TableDataCache {
+impl DiskCacheAccessor {
     fn is_populate_queue_drained(&self) -> bool {
         self._cache_populator.receiver.is_empty()
     }
@@ -90,7 +89,7 @@ impl DiskCacheBuilder {
         disk_cache_bytes_size: usize,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
-    ) -> Result<TableDataCache<LruDiskCacheHolder>> {
+    ) -> Result<DiskCacheAccessor<LruDiskCacheHolder>> {
         let disk_cache = LruDiskCacheBuilder::new_disk_cache(
             path,
             disk_cache_bytes_size,
@@ -99,7 +98,7 @@ impl DiskCacheBuilder {
         )?;
         let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
-        Ok(TableDataCache {
+        Ok(DiskCacheAccessor {
             name,
             lru_disk_cache: disk_cache.clone(),
             population_queue: tx,
@@ -108,7 +107,7 @@ impl DiskCacheBuilder {
     }
 }
 
-impl CacheAccessor for TableDataCache {
+impl CacheAccessor for DiskCacheAccessor {
     type V = Bytes;
 
     fn name(&self) -> &str {
