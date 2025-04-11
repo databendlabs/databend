@@ -130,7 +130,6 @@ mod tests {
     // Constants for testing
     const VALID_LICENSE_KEY: &str = "valid-license-key";
     const INVALID_LICENSE_KEY: &str = "invalid-license-key";
-    const INVALID_LICENSE_MSG: &str = "Invalid license key";
 
     // A mock LicenseManager implementation for testing
     struct MockLicenseManager {
@@ -152,6 +151,7 @@ mod tests {
 
         fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
             if self.valid_license && raw == VALID_LICENSE_KEY {
+                // We do not care about the claims
                 Ok(JWTClaims {
                     issued_at: None,
                     expires_at: None,
@@ -170,7 +170,7 @@ mod tests {
                 })
             } else {
                 // Simulate an invalid license
-                Err(ErrorCode::LicenceDenied(INVALID_LICENSE_MSG.to_string()))
+                Err(ErrorCode::LicenceDenied("Invalid cert".to_string()))
             }
         }
 
@@ -192,7 +192,7 @@ mod tests {
         // Test with an invalid license key
         assert!(!valid_manager.is_license_valid(INVALID_LICENSE_KEY.to_string()));
 
-        // Create a MockLicenseManager that denied all the keys
+        // Create a MockLicenseManager that denies all the keys
         let invalid_manager = MockLicenseManager {
             valid_license: false,
         };
@@ -220,12 +220,12 @@ mod tests {
         let e = result.unwrap_err();
         assert_eq!(ErrorCode::LICENCE_DENIED, e.code());
 
-        // Create a MockLicenseManager that denied all the keys
+        // Create a MockLicenseManager that denies all the keys
         let invalid_manager = MockLicenseManager {
             valid_license: false,
         };
 
-        // All license keys should return an error
+        // All license keys should be considered invalid
         let result = invalid_manager.check_license(VALID_LICENSE_KEY.to_string());
         assert!(result.is_err());
         let e = result.unwrap_err();
