@@ -69,9 +69,6 @@ impl ColumnStatisticsState {
         let rows = data_block.num_rows();
         let leaves = traverse_values_dfs(data_block.columns(), schema.fields())?;
         for (column_id, col, data_type) in leaves {
-            if !self.col_stats.contains_key(&column_id) {
-                continue;
-            }
             match col {
                 Value::Scalar(s) => {
                     let unset_bits = if s == Scalar::Null { rows } else { 0 };

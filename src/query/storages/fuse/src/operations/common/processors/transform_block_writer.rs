@@ -42,7 +42,7 @@ use parquet::basic::ZstdLevel;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterVersion;
-
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use crate::io::create_inverted_index_builders;
 use crate::io::StreamBlockBuilder;
 use crate::io::StreamBlockProperties;
@@ -66,33 +66,22 @@ impl TransformBlockWriter {
         output: Arc<OutputPort>,
         table: &FuseTable,
         kind: MutationKind,
+        table_meta_timestamps: TableMetaTimestamps,
+        with_tid: bool,
     ) -> Result<ProcessorPtr> {
-        // remove virtual computed fields.
-        let mut fields = table
-            .schema()
-            .fields()
-            .iter()
-            .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
-            .cloned()
-            .collect::<Vec<_>>();
-        if !matches!(kind, MutationKind::Insert | MutationKind::Replace) {
-            // add stream fields.
-            for stream_column in table.stream_columns().iter() {
-                fields.push(stream_column.table_field());
+        let do_append = matches!(kind, MutationKind::Insert | MutationKind::Replace);
+        let properties = StreamBlockProperties::try_create(ctx, table, table_meta_timestamps, do_append)?;
+        Ok(ProcessorPtr::create(Box::new(
+            TransformBlockWriter {
+                input,
+                output,
+                properties,
+                builder: None,
+                dal: table.get_operator(),
+                table_id: if with_tid { Some(table.get_id()) } else { None },
+                kind,
             }
-        }
-        let source_schema = Arc::new(TableSchema {
-            fields,
-            ..table.schema().as_ref().clone()
-        });
-
-        let bloom_columns_map = table
-            .bloom_index_cols
-            .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
-
-        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
-
-        todo!()
+        )))
     }
     pub fn reinit_writer(&mut self) -> Result<()> {
         Ok(())
