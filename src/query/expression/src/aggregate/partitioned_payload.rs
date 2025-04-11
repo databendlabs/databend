@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use itertools::Itertools;
+use serde::Deserializer;
+use serde::Serializer;
 
 use super::payload::Payload;
 use super::probe_state::ProbeState;
@@ -49,6 +51,18 @@ pub struct PartitionedPayload {
 
 unsafe impl Send for PartitionedPayload {}
 unsafe impl Sync for PartitionedPayload {}
+
+impl serde::Serialize for PartitionedPayload {
+    fn serialize<S: Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+        unreachable!("PartitionedPayload must not be exchanged between multiple nodes.")
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PartitionedPayload {
+    fn deserialize<D: Deserializer<'de>>(_: D) -> Result<Self, D::Error> {
+        unreachable!("PartitionedPayload must not be exchanged between multiple nodes.")
+    }
+}
 
 impl PartitionedPayload {
     pub fn new(
@@ -116,9 +130,9 @@ impl PartitionedPayload {
         if self.payloads.len() == 1 {
             self.payloads[0].reserve_append_rows(
                 &state.empty_vector,
-                &state.group_hashes,
-                &mut state.addresses,
-                &mut state.page_index,
+                state.group_hashes.as_slice(),
+                state.addresses.as_mut_slice(),
+                state.page_index.as_mut_slice(),
                 new_group_rows,
                 group_columns,
             );
@@ -143,9 +157,9 @@ impl PartitionedPayload {
 
                     self.payloads[partition_index].reserve_append_rows(
                         sel,
-                        &state.group_hashes,
-                        &mut state.addresses,
-                        &mut state.page_index,
+                        state.group_hashes.as_slice(),
+                        state.addresses.as_mut_slice(),
+                        state.page_index.as_mut_slice(),
                         count,
                         group_columns,
                     );

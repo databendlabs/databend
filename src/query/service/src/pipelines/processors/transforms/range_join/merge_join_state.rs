@@ -137,6 +137,7 @@ impl RangeJoinState {
                 j += 1;
             }
         }
+
         Ok(result_blocks)
     }
 

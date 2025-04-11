@@ -93,7 +93,7 @@ impl MemStatBuffer {
         if self.destroyed_thread_local_macro {
             let used = mem_stat.used.fetch_add(usage, Ordering::Relaxed);
             mem_stat
-                .peek_used
+                .peak_used
                 .fetch_max(used + usage, Ordering::Relaxed);
             return Ok(());
         }
@@ -134,7 +134,7 @@ impl MemStatBuffer {
         if self.destroyed_thread_local_macro {
             let used = mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
             mem_stat
-                .peek_used
+                .peak_used
                 .fetch_max(used + memory_usage, Ordering::Relaxed);
             return;
         }

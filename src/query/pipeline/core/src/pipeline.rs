@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_base::runtime::defer;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
@@ -36,6 +37,7 @@ use crate::processors::DuplicateProcessor;
 use crate::processors::Exchange;
 use crate::processors::InputPort;
 use crate::processors::MergePartitionProcessor;
+use crate::processors::OnePartitionProcessor;
 use crate::processors::OutputPort;
 use crate::processors::PartitionProcessor;
 use crate::processors::PlanScope;
@@ -448,22 +450,38 @@ impl Pipeline {
     }
 
     pub fn exchange<T: Exchange>(&mut self, n: usize, exchange: Arc<T>) {
+        debug_assert_ne!(n, 0);
+
         if let Some(pipe) = self.pipes.last() {
             if pipe.output_length < 1 {
                 return;
             }
 
             let input_len = pipe.output_length;
+            let barrier = Arc::new(Barrier::new(input_len));
             let mut items = Vec::with_capacity(input_len);
 
-            for _index in 0..input_len {
+            for index in 0..input_len {
                 let input = InputPort::create();
-                let outputs: Vec<_> = (0..n).map(|_| OutputPort::create()).collect();
-                items.push(PipeItem::create(
-                    PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
-                    vec![input],
-                    outputs,
-                ));
+                let outputs = (0..n).map(|_| OutputPort::create()).collect::<Vec<_>>();
+                let partition_processor = match n {
+                    1 => OnePartitionProcessor::create(
+                        input.clone(),
+                        outputs[0].clone(),
+                        exchange.clone(),
+                        index,
+                        barrier.clone(),
+                    ),
+                    _ => PartitionProcessor::create(
+                        input.clone(),
+                        outputs.clone(),
+                        exchange.clone(),
+                        index,
+                        barrier.clone(),
+                    ),
+                };
+
+                items.push(PipeItem::create(partition_processor, vec![input], outputs));
             }
 
             // partition data block
@@ -481,7 +499,7 @@ impl Pipeline {
                 let output = OutputPort::create();
                 let inputs: Vec<_> = (0..input_len).map(|_| InputPort::create()).collect();
                 items.push(PipeItem::create(
-                    MergePartitionProcessor::create(
+                    MergePartitionProcessor::<T>::create(
                         inputs.clone(),
                         output.clone(),
                         exchange.clone(),
