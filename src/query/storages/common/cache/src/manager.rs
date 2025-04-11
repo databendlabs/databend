@@ -666,25 +666,31 @@ const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";
 #[cfg(test)]
 mod tests {
     use databend_common_config::CacheConfig;
+    use databend_common_config::DiskCacheInnerConfig;
     use tempfile::TempDir;
 
     use super::*;
     fn config_with_disk_cache_enabled(cache_path: &str) -> CacheConfig {
-        let mut cache_config = CacheConfig::default();
-        cache_config.data_cache_storage = CacheStorageTypeInnerConfig::Disk;
-        cache_config.disk_cache_config.max_bytes = 1024 * 1024;
-        cache_config.disk_cache_config.path = cache_path.to_string();
-        cache_config.disk_cache_table_bloom_index_data_size = 1024 * 1024;
-        cache_config.disk_cache_table_bloom_index_meta_size = 1024 * 1024;
-        cache_config
+        CacheConfig {
+            data_cache_storage: CacheStorageTypeInnerConfig::Disk,
+            disk_cache_config: DiskCacheInnerConfig {
+                max_bytes: 1024 * 1024,
+                path: cache_path.to_string(),
+                ..Default::default()
+            },
+            disk_cache_table_bloom_index_data_size: 1024 * 1024,
+            disk_cache_table_bloom_index_meta_size: 1024 * 1024,
+            ..CacheConfig::default()
+        }
     }
 
     fn config_with_disk_cache_disabled() -> CacheConfig {
-        let mut cache_config = CacheConfig::default();
-        cache_config.data_cache_storage = CacheStorageTypeInnerConfig::None;
-        cache_config.disk_cache_table_bloom_index_data_size = 0;
-        cache_config.disk_cache_table_bloom_index_meta_size = 0;
-        cache_config
+        CacheConfig {
+            data_cache_storage: CacheStorageTypeInnerConfig::None,
+            disk_cache_table_bloom_index_data_size: 0,
+            disk_cache_table_bloom_index_meta_size: 0,
+            ..CacheConfig::default()
+        }
     }
 
     fn all_disk_cache_enabled(cache_manager: &CacheManager) -> bool {
@@ -718,7 +724,7 @@ mod tests {
     #[test]
     fn test_cache_manager_ee_mode() -> Result<()> {
         let temp_dir = TempDir::new().unwrap();
-        let cache_path = temp_dir.path().to_string_lossy().to_owned();
+        let cache_path = temp_dir.path().to_string_lossy().clone();
 
         let max_server_memory_usage = 1024 * 1024;
 
@@ -773,7 +779,7 @@ mod tests {
     #[test]
     fn test_cache_manager_non_ee_mode() -> Result<()> {
         let temp_dir = TempDir::new().unwrap();
-        let cache_path = temp_dir.path().to_string_lossy().to_owned();
+        let cache_path = temp_dir.path().to_string_lossy().clone();
         let max_server_memory_usage = 1024 * 1024;
 
         // The behaviors we expected in the NON-EE mode:

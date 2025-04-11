@@ -105,7 +105,7 @@ pub trait Interpreter: Sync + Send {
 
         CacheManager::instance().set_allows_disk_cache(
             LicenseManagerSwitch::instance()
-                .check_license(ctx.get_license_key())
+                .parse_license(ctx.get_license_key().as_str())
                 .is_ok(),
         );
 
