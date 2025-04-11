@@ -72,7 +72,7 @@ impl SimpleTableFunc for FuseAmendTable {
         _plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(ctx.get_license_key(), Feature::AmendTable)?;
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::AmendTable)?;
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
             .get_catalog(CATALOG_DEFAULT)

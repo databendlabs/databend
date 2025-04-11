@@ -53,7 +53,7 @@ impl Interpreter for DropIndexInterpreter {
         let tenant = self.ctx.get_tenant();
 
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
 
         let index_name = self.plan.index.clone();
         let catalog = self

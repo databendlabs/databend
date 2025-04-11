@@ -57,7 +57,7 @@ impl Interpreter for DropWarehouseInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
         let tenant = self.ctx.get_tenant();
         let warehouse = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()

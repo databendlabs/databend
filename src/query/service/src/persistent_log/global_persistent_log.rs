@@ -234,7 +234,7 @@ impl GlobalPersistentLog {
         let session = create_session(&self.tenant_id, &self.cluster_id).await?;
         let context = session.create_query_context().await?;
         if LicenseManagerSwitch::instance()
-            .check_feature_enabled(context.get_license_key(), Feature::Vacuum)
+            .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
             .is_ok()
         {
             let vacuum = "VACUUM TABLE persistent_system.query_log";

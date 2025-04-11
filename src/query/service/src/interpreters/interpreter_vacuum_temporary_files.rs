@@ -53,7 +53,7 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Vacuum)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let handler = get_vacuum_handler();
 

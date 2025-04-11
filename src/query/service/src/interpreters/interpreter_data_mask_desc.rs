@@ -55,7 +55,7 @@ impl Interpreter for DescDataMaskInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Feature::DataMask)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
         let policy = handler

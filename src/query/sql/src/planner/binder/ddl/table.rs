@@ -1622,7 +1622,7 @@ impl Binder {
         let expr_len = cluster_exprs.len();
         if matches!(cluster_type, AstClusterType::Hilbert) {
             LicenseManagerSwitch::instance()
-                .check_feature_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
 
             if !(2..=5).contains(&expr_len) {
                 return Err(ErrorCode::InvalidClusterKeys(

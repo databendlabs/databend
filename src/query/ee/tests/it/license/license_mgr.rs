@@ -56,11 +56,11 @@ async fn test_parse_license() -> databend_common_exception::Result<()> {
     assert!(parsed.is_ok());
 
     assert!(license_mgr
-        .check_feature_enabled(token.clone(), Feature::Test)
+        .check_enterprise_enabled(token.clone(), Feature::Test)
         .is_ok());
     // test cache hit
     assert!(license_mgr
-        .check_feature_enabled(token, Feature::Test)
+        .check_enterprise_enabled(token, Feature::Test)
         .is_ok());
 
     // test expired token
@@ -73,7 +73,7 @@ async fn test_parse_license() -> databend_common_exception::Result<()> {
     let parsed = license_mgr.parse_license(token.as_str());
     assert!(parsed.is_err());
     assert!(license_mgr
-        .check_feature_enabled(token, Feature::Test)
+        .check_enterprise_enabled(token, Feature::Test)
         .is_err());
 
     Ok(())
@@ -107,27 +107,27 @@ async fn test_license_features() -> databend_common_exception::Result<()> {
     assert!(parsed.is_ok());
 
     assert!(license_mgr
-        .check_feature_enabled(token.clone(), Feature::ComputedColumn)
+        .check_enterprise_enabled(token.clone(), Feature::ComputedColumn)
         .is_err());
 
     assert!(license_mgr
-        .check_feature_enabled(token.clone(), Feature::LicenseInfo)
+        .check_enterprise_enabled(token.clone(), Feature::LicenseInfo)
         .is_ok());
 
     assert!(license_mgr
-        .check_feature_enabled(token.clone(), Feature::VirtualColumn)
+        .check_enterprise_enabled(token.clone(), Feature::VirtualColumn)
         .is_err());
 
     assert!(license_mgr
-        .check_feature_enabled(token.clone(), Feature::Test)
+        .check_enterprise_enabled(token.clone(), Feature::Test)
         .is_ok());
 
     assert!(license_mgr
-        .check_feature_enabled(token.clone(), Feature::Vacuum)
+        .check_enterprise_enabled(token.clone(), Feature::Vacuum)
         .is_ok());
 
     assert!(license_mgr
-        .check_feature_enabled(token, Feature::Stream)
+        .check_enterprise_enabled(token, Feature::Stream)
         .is_ok());
 
     // test expired token
@@ -144,7 +144,7 @@ async fn test_license_features() -> databend_common_exception::Result<()> {
     let parsed = license_mgr.parse_license(token.as_str());
     assert!(parsed.is_err());
     assert!(license_mgr
-        .check_feature_enabled(token, Feature::Test)
+        .check_enterprise_enabled(token, Feature::Test)
         .is_err());
 
     Ok(())

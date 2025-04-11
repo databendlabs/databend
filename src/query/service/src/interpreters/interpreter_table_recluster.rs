@@ -300,7 +300,7 @@ impl ReclusterTableInterpreter {
         hilbert_info: &mut Option<HilbertBuildInfo>,
     ) -> Result<Option<PhysicalPlan>> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
         let handler = get_hilbert_clustering_handler();
         let Some((recluster_info, snapshot)) = handler
             .do_hilbert_clustering(tbl.clone(), self.ctx.clone(), push_downs.clone())
