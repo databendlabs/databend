@@ -53,7 +53,7 @@ impl Interpreter for AddWarehouseClusterInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
         if let Some(cluster_size) = self.plan.options.get("cluster_size") {
             if !self.plan.nodes.is_empty() {

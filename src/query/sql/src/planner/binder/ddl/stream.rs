@@ -115,7 +115,7 @@ impl Binder {
         stmt: &ShowStreamsStmt,
     ) -> Result<Plan> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Feature::Stream)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
 
         let ShowStreamsStmt {
             catalog,
@@ -189,7 +189,7 @@ impl Binder {
         stmt: &DescribeStreamStmt,
     ) -> Result<Plan> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Feature::Stream)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
 
         let DescribeStreamStmt {
             catalog,

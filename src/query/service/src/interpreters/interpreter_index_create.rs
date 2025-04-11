@@ -57,7 +57,7 @@ impl Interpreter for CreateIndexInterpreter {
         let tenant = self.ctx.get_tenant();
 
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
 
         let index_name = self.plan.index_name.clone();
         let catalog = self.ctx.get_current_catalog();

@@ -101,7 +101,7 @@ impl Interpreter for AddTableColumnInterpreter {
         let field = self.plan.field.clone();
         if field.computed_expr().is_some() {
             LicenseManagerSwitch::instance()
-                .check_feature_enabled(self.ctx.get_license_key(), ComputedColumn)?;
+                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
         if field.default_expr().is_some() {

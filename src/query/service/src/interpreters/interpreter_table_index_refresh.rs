@@ -52,7 +52,7 @@ impl Interpreter for RefreshTableIndexInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
 
         let table = self
             .ctx

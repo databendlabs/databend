@@ -50,7 +50,7 @@ impl Interpreter for UseWarehouseInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
         // check warehouse exists
         let _nodes = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()

@@ -51,7 +51,7 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(self.ctx.get_license_key(), VirtualColumn)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)?;
 
         let table = self
             .ctx

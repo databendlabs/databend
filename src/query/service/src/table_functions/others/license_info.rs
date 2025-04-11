@@ -224,7 +224,7 @@ impl AsyncSource for LicenseInfoSource {
         };
 
         LicenseManagerSwitch::instance()
-            .check_feature_enabled(license.clone(), Feature::LicenseInfo)?;
+            .check_enterprise_enabled(license.clone(), Feature::LicenseInfo)?;
 
         let info = LicenseManagerSwitch::instance()
             .parse_license(license.as_str())
