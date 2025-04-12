@@ -3623,6 +3623,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "thiserror 1.0.65",
  "tonic",
 ]
 
