@@ -369,11 +369,10 @@ where
             State::Sort => {
                 debug_assert!(self.input_data.is_empty());
                 let spill_sort = self.spill_sort.as_mut().unwrap();
-                if spill_sort.on_restore().await? {
+                let (block, finish) = spill_sort.on_restore().await?;
+                self.output_data.extend(block);
+                if finish {
                     self.state = State::Finish
-                }
-                if let Some(block) = spill_sort.output_data.take() {
-                    self.output_data.push_back(block)
                 }
                 Ok(())
             }

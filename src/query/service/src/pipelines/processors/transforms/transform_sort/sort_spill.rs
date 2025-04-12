@@ -86,8 +86,6 @@ pub struct TransformStreamSortSpill<A: SortAlgorithm> {
     limit: Option<usize>,
     spiller: Arc<Spiller>,
 
-    pub output_data: Option<DataBlock>,
-
     step: Step<A::Rows>,
 
     subsequent: Vec<BoundBlockStream<A::Rows>>,
@@ -109,7 +107,6 @@ where A: SortAlgorithm
             schema,
             sort_row_offset,
             limit,
-            output_data: None,
             spiller,
             step: Step::Uninit,
             subsequent: Vec::new(),
@@ -186,9 +183,9 @@ where A: SortAlgorithm
         Ok(())
     }
 
-    pub async fn on_restore(&mut self) -> Result<bool> {
+    pub async fn on_restore(&mut self) -> Result<(Option<DataBlock>, bool)> {
         let params = match &mut self.step {
-            Step::Uninit => return Ok(true),
+            Step::Uninit => return Ok((None, true)),
             Step::Collect(sampler, params) => {
                 let params = *params;
                 sampler.compact_blocks(true);
@@ -213,7 +210,7 @@ where A: SortAlgorithm
 
         if self.current.len() > params.num_merge {
             self.merge_current().await?;
-            Ok(false)
+            Ok((None, false))
         } else {
             self.restore_and_output().await
         }
@@ -256,7 +253,7 @@ where A: SortAlgorithm
         Ok(())
     }
 
-    async fn restore_and_output(&mut self) -> Result<bool> {
+    async fn restore_and_output(&mut self) -> Result<(Option<DataBlock>, bool)> {
         let params = self.step.params();
         let merger = match self.output_merger.as_mut() {
             Some(merger) => merger,
@@ -265,7 +262,7 @@ where A: SortAlgorithm
                 if self.current.len() == 1 {
                     let mut s = self.current.pop().unwrap();
                     s.restore_first().await?;
-                    self.output_data = Some(s.take_next_bounded_block());
+                    let block = Some(s.take_next_bounded_block());
 
                     if !s.is_empty() {
                         if s.should_include_first() {
@@ -273,10 +270,10 @@ where A: SortAlgorithm
                         } else {
                             self.subsequent.push(s);
                         }
-                        return Ok(false);
+                        return Ok((block, false));
                     }
 
-                    return Ok(self.subsequent.is_empty());
+                    return Ok((block, self.subsequent.is_empty()));
                 }
 
                 self.sort_spill().await?;
@@ -293,7 +290,7 @@ where A: SortAlgorithm
             let streams = self.output_merger.take().unwrap().streams();
             self.subsequent
                 .extend(streams.into_iter().filter(|s| !s.is_empty()));
-            return Ok(self.subsequent.is_empty());
+            return Ok((None, self.subsequent.is_empty()));
         };
 
         let Step::Sort(step_sort) = &self.step else {
@@ -309,12 +306,15 @@ where A: SortAlgorithm
             .blocks
             .push_back(SpillableBlock::new(data, self.sort_row_offset));
 
-        if sorted.should_include_first() {
-            self.output_data = Some(sorted.take_next_bounded_block());
+        let block = if sorted.should_include_first() {
+            let block = Some(sorted.take_next_bounded_block());
             if sorted.is_empty() {
-                return Ok(false);
+                return Ok((block, false));
             }
-        }
+            block
+        } else {
+            None
+        };
 
         while let Some(data) = merger.async_next_block().await? {
             let mut block = SpillableBlock::new(data, self.sort_row_offset);
@@ -329,7 +329,7 @@ where A: SortAlgorithm
         let streams = self.output_merger.take().unwrap().streams();
         self.subsequent
             .extend(streams.into_iter().filter(|s| !s.is_empty()));
-        Ok(self.subsequent.is_empty())
+        Ok((block, self.subsequent.is_empty()))
     }
 
     async fn sort_spill(&mut self) -> Result<()> {
