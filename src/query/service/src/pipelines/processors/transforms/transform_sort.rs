@@ -224,7 +224,7 @@ where
     C: RowConverter<A::Rows> + Send + 'static,
 {
     fn name(&self) -> String {
-        String::from("TransformSortSpill")
+        String::from("TransformSortMerge")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

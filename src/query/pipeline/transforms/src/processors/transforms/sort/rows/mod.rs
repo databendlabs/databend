@@ -32,7 +32,7 @@ pub use utils::*;
 
 /// Convert columns to rows.
 pub trait RowConverter<T: Rows>
-where Self: Sized
+where Self: Sized + Debug
 {
     fn create(
         sort_columns_descriptions: &[SortColumnDescription],

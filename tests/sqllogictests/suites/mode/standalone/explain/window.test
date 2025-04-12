@@ -73,17 +73,16 @@ explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY d
 ----
 CompoundBlockOperator(Project) × 1
   Merge to MultiSortMerge × 1
-    TransformSortSpill × 4
-      TransformSortMerge × 4
-        SortPartialTransform × 4
-          Merge to Resize × 4
-            Transform Window × 1
-              TransformWindowPartitionCollect(Sort) × 1
-                ShuffleMergePartition(Window) × 1
-                  ShufflePartition(Window) × 1
-                    DeserializeDataTransform × 1
-                      SyncReadParquetDataTransform × 1
-                        BlockPartitionSource × 1
+    TransformSortMerge × 4
+      SortPartialTransform × 4
+        Merge to Resize × 4
+          Transform Window × 1
+            TransformWindowPartitionCollect(Sort) × 1
+              ShuffleMergePartition(Window) × 1
+                ShufflePartition(Window) × 1
+                  DeserializeDataTransform × 1
+                    SyncReadParquetDataTransform × 1
+                      BlockPartitionSource × 1
 
 
 statement ok
@@ -468,7 +467,7 @@ CompoundBlockOperator(Project) × 1
   TransformRowsFetcher × 1
     LimitTransform × 1
       Merge to MultiSortMerge × 1
-        TransformSortMergeLimit × 4
+        TransformSortMerge × 4
           SortPartialTransform × 4
             Merge to Resize × 4
               Transform Window × 1

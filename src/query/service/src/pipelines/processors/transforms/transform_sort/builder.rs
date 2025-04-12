@@ -27,6 +27,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::sort::algorithm::HeapSort;
 use databend_common_pipeline_transforms::sort::algorithm::LoserTreeSort;
+use databend_common_pipeline_transforms::sort::utils::add_order_field;
 use databend_common_pipeline_transforms::sort::utils::ORDER_COL_NAME;
 use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::SimpleRowConverter;
@@ -176,10 +177,11 @@ impl TransformSortBuilder {
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
+        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
         Ok(Box::new(TransformSort::<A, C>::new(
             self.input,
             self.output,
-            self.schema,
+            schema,
             self.sort_desc,
             self.limit,
             self.spiller,
@@ -251,10 +253,11 @@ impl TransformSortBuilder {
             self.block_size,
             self.limit.unwrap(),
         ));
+        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
         Ok(Box::new(TransformSort::<A, C>::new(
             self.input,
             self.output,
-            self.schema,
+            schema,
             self.sort_desc,
             self.limit,
             self.spiller,

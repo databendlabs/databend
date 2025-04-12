@@ -62,7 +62,7 @@ enum State {
     /// Finish the process.
     Finish,
 }
-///////////
+
 pub struct TransformStreamSortSpill<A: SortAlgorithm> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,

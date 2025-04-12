@@ -117,6 +117,7 @@ where
 
 /// If there is only one sort field and its type is a primitive type,
 /// use this converter.
+#[derive(Debug)]
 pub struct SimpleRowConverter<T> {
     _t: PhantomData<T>,
 }
