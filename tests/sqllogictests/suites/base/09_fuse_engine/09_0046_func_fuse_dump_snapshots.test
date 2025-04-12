@@ -1,0 +1,35 @@
+statement ok
+CREATE OR REPLACE DATABASE dump_snapshots;
+
+statement ok
+USE dump_snapshots;
+
+statement ok
+create table t(c int)
+
+
+statement ok
+insert into t values (1)
+
+statement ok
+insert into t values (1)
+
+# By default, only the latest snapshot is returned:
+# Expects one snapshot which contains 2 blocks
+query III
+select length(snapshot_id), snapshot:summary:block_count from fuse_dump_snapshots('dump_snapshots', 't')
+----
+32 2
+
+
+
+# If limit is set, more snapshots will be returned up to the specified limit
+#
+# Expects 2 snapshots:
+# - The latest one contains 2 blocks
+# - The second to the last one contains 1 block
+query III
+select length(snapshot_id), snapshot:summary:block_count from fuse_dump_snapshots('dump_snapshots', 't') limit 100
+----
+32 2
+32 1
