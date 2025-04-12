@@ -3594,6 +3594,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-meta-cache"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "databend-common-base",
+ "databend-common-meta-client",
+ "databend-common-meta-types",
+ "futures",
+ "log",
+ "pretty_assertions",
+ "thiserror 1.0.65",
+ "tokio",
+ "tonic",
+]
+
+[[package]]
 name = "databend-common-meta-client"
 version = "0.1.0"
 dependencies = [
@@ -4988,6 +5004,7 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-http",
  "databend-common-meta-api",
+ "databend-common-meta-cache",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
