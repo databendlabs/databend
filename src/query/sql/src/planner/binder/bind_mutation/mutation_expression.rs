@@ -458,7 +458,7 @@ impl Binder {
 
         let row_id_index: usize = column_binding.index;
 
-        *expr = SExpr::add_internal_column_index(expr, table_index, row_id_index, &None);
+        *expr = expr.add_column_index_to_scans(table_index, row_id_index, &None);
 
         self.metadata
             .write()

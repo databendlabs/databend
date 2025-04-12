@@ -1108,12 +1108,7 @@ impl<'a> Binder {
                 i.has_score = has_score;
                 i
             });
-            s_expr = SExpr::add_internal_column_index(
-                &s_expr,
-                *table_index,
-                *column_index,
-                &inverted_index,
-            );
+            s_expr = s_expr.add_column_index_to_scans(*table_index, *column_index, &inverted_index);
         }
         Ok(s_expr)
     }
