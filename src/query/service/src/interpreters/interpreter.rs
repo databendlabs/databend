@@ -104,9 +104,7 @@ pub trait Interpreter: Sync + Send {
         ctx.check_aborting().with_context(make_error)?;
 
         CacheManager::instance().set_allows_disk_cache(
-            LicenseManagerSwitch::instance()
-                .parse_license(ctx.get_license_key().as_str())
-                .is_ok(),
+            LicenseManagerSwitch::instance().is_license_valid(ctx.get_license_key()),
         );
 
         let mut build_res = match self.execute2().await {
