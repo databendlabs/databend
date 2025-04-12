@@ -175,7 +175,7 @@ impl Feature {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct LicenseInfo {
     #[serde(rename = "type")]
     pub r#type: Option<String>,
