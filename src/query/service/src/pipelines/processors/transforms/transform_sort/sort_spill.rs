@@ -97,12 +97,6 @@ where A: SortAlgorithm
         self.batch_rows = params.batch_rows;
         self.num_merge = params.num_merge;
 
-        log::info!(
-            "batch_rows {} num_merge {}",
-            params.batch_rows,
-            params.num_merge
-        );
-
         self.sampler = Sampler::Collect(
             FixedRateSampler::new(
                 vec![self.sort_row_offset],
@@ -473,17 +467,24 @@ where A: SortAlgorithm
     }
 
     #[allow(unused)]
-    pub fn format_memory_usage(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    pub fn format_memory_usage(&self) -> FmtMemoryUsage<'_, A> {
+        FmtMemoryUsage(&self)
+    }
+}
+
+pub struct FmtMemoryUsage<'a, A: SortAlgorithm>(&'a TransformStreamSortSpill<A>);
+
+impl<A: SortAlgorithm> fmt::Debug for FmtMemoryUsage<'_, A> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("TransformStreamSortSpill")
-            .field("num_merge", &self.num_merge)
-            .field("batch_rows", &self.batch_rows)
-            //.field("input_rows", &self.input_rows())
-            .field("current_memory_rows", &self.current_memory_rows())
-            .field("current", &self.current)
-            .field("subsequent_memory_rows", &self.subsequent_memory_rows())
-            .field("subsequent", &self.subsequent)
-            .field("has_output_merger", &self.output_merger.is_some())
-            .field("cur_bound", &self.cur_bound)
+            .field("num_merge", &self.0.num_merge)
+            .field("batch_rows", &self.0.batch_rows)
+            .field("current_memory_rows", &self.0.current_memory_rows())
+            .field("current", &self.0.current)
+            .field("subsequent_memory_rows", &self.0.subsequent_memory_rows())
+            .field("subsequent", &self.0.subsequent)
+            .field("has_output_merger", &self.0.output_merger.is_some())
+            .field("cur_bound", &self.0.cur_bound)
             .finish()
     }
 }

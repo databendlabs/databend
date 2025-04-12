@@ -169,12 +169,12 @@ where
         self.spill_params = Some(self.determine_params(num_bytes, num_rows));
     }
 
-    fn determine_params(&self, num_bytes: usize, num_rows: usize) -> SortSpillParams {
+    fn determine_params(&self, bytes: usize, rows: usize) -> SortSpillParams {
         // We use the first memory calculation to estimate the batch size and the number of merge.
-        let num_merge = num_bytes
-            .div_ceil(self.memory_settings.spill_unit_size)
-            .max(2);
-        let batch_rows = num_rows.div_ceil(num_merge);
+        let unit_size = self.memory_settings.spill_unit_size;
+        let num_merge = bytes.div_ceil(unit_size).max(2);
+        let batch_rows = rows.div_ceil(num_merge);
+        log::info!("determine sort spill params, buffer_bytes: {bytes}, buffer_rows: {rows}, spill_unit_size: {unit_size}, batch_rows: {batch_rows}, batch_num_merge {num_merge}");
         SortSpillParams {
             batch_rows,
             num_merge,
@@ -213,6 +213,32 @@ where
 
     fn input_rows(&self) -> usize {
         self.input_data.iter().map(|b| b.num_rows()).sum::<usize>()
+    }
+
+    fn check_spill(&self) -> bool {
+        if !self.memory_settings.check_spill() {
+            return false;
+        }
+
+        if self.spill_params.is_none()
+            && let Some(limit_sort) = &self.limit_sort
+        {
+            return limit_sort.num_bytes() > self.memory_settings.spill_unit_size * 2;
+        }
+
+        match &self.spill_params {
+            Some(params) => {
+                self.input_data.iter().map(|b| b.num_rows()).sum::<usize>()
+                    > params.batch_rows * params.num_merge
+            }
+            None => {
+                self.input_data
+                    .iter()
+                    .map(|b| b.memory_size())
+                    .sum::<usize>()
+                    > self.memory_settings.spill_unit_size * 2
+            }
+        }
     }
 }
 
@@ -270,7 +296,7 @@ where
         if self.input.has_data() {
             return match self.state {
                 State::Collect => {
-                    if !self.input_data.is_empty() && self.memory_settings.check_spill() {
+                    if self.check_spill() {
                         Ok(Event::Async)
                     } else {
                         Ok(Event::Sync)
