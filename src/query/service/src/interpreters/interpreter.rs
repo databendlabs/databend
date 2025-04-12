@@ -33,6 +33,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
@@ -42,6 +43,7 @@ use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
 use databend_common_storages_system::ProfilesLogElement;
 use databend_common_storages_system::ProfilesLogQueue;
+use databend_storages_common_cache::CacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use log::error;
@@ -100,6 +102,10 @@ pub trait Interpreter: Sync + Send {
 
         ctx.set_status_info("building pipeline");
         ctx.check_aborting().with_context(make_error)?;
+
+        CacheManager::instance().set_allows_disk_cache(
+            LicenseManagerSwitch::instance().is_license_valid(ctx.get_license_key()),
+        );
 
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
