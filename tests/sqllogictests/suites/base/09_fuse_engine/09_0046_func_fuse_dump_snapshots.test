@@ -7,6 +7,9 @@ USE dump_snapshots;
 statement ok
 create table t(c int)
 
+query III
+select length(snapshot_id), snapshot:summary:block_count from fuse_dump_snapshots('dump_snapshots', 't')
+----
 
 statement ok
 insert into t values (1)
@@ -33,3 +36,14 @@ select length(snapshot_id), snapshot:summary:block_count from fuse_dump_snapshot
 ----
 32 2
 32 1
+
+
+
+statement ok
+create table m(c int) engine = memory;
+
+statement ok
+insert into m values (1)
+
+statement error
+select * from fuse_dump_snapshots('dump_snapshots', 'm')
