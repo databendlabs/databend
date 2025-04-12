@@ -188,7 +188,7 @@ where A: SortAlgorithm
 
     pub async fn on_restore(&mut self) -> Result<bool> {
         let params = match &mut self.step {
-            Step::Uninit => unreachable!(),
+            Step::Uninit => return Ok(true),
             Step::Collect(sampler, params) => {
                 let params = *params;
                 sampler.compact_blocks(true);
@@ -198,20 +198,13 @@ where A: SortAlgorithm
                     cur_bound: None,
                     params,
                 });
-                let Step::Sort(step_sort) = &self.step else {
-                    unreachable!()
-                };
-                step_sort.params
+                params
             }
             Step::Sort(ref step_sort) => step_sort.params,
         };
 
         if self.output_merger.is_some() {
             return self.restore_and_output().await;
-        }
-
-        if self.subsequent.is_empty() && self.current.is_empty() {
-            return Ok(true);
         }
 
         while self.current.is_empty() {
