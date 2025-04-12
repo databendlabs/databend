@@ -1854,9 +1854,12 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     let second = value(IntervalKind::Second, rule! { SECOND });
     let doy = value(IntervalKind::Doy, rule! { DOY });
     let dow = value(IntervalKind::Dow, rule! { DOW });
+    let isodow = value(IntervalKind::ISODow, rule! { ISODOW });
     let week = value(IntervalKind::Week, rule! { WEEK });
     let epoch = value(IntervalKind::Epoch, rule! { EPOCH });
     let microsecond = value(IntervalKind::MicroSecond, rule! { MICROSECOND });
+    let millennium = value(IntervalKind::Millennium, rule! { MILLENNIUM });
+    let yearweek = value(IntervalKind::YearWeek, rule! { YEARWEEK });
 
     let iso_year_str = value(
         IntervalKind::ISOYear,
@@ -1892,15 +1895,19 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     );
     let doy_str = value(
         IntervalKind::Doy,
-        rule! { #literal_string_eq_ignore_case("DOY")  },
+        rule! { #literal_string_eq_ignore_case("DOY") | #literal_string_eq_ignore_case("DAYOFYEAR")  },
     );
     let dow_str = value(
         IntervalKind::Dow,
-        rule! { #literal_string_eq_ignore_case("DOW")  },
+        rule! { (#literal_string_eq_ignore_case("DOW") | #literal_string_eq_ignore_case("WEEKDAY") | #literal_string_eq_ignore_case("DAYOFWEEK") )  },
+    );
+    let isodow_str = value(
+        IntervalKind::ISODow,
+        rule! { #literal_string_eq_ignore_case("ISODOW")  },
     );
     let week_str = value(
         IntervalKind::Week,
-        rule! { #literal_string_eq_ignore_case("WEEK")  },
+        rule! { (#literal_string_eq_ignore_case("WEEK") | #literal_string_eq_ignore_case("WEEKS") | #literal_string_eq_ignore_case("W"))  },
     );
     let epoch_str = value(
         IntervalKind::Epoch,
@@ -1909,6 +1916,14 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     let microsecond_str = value(
         IntervalKind::MicroSecond,
         rule! { #literal_string_eq_ignore_case("MICROSECOND")  },
+    );
+    let yearweek_str = value(
+        IntervalKind::YearWeek,
+        rule! { #literal_string_eq_ignore_case("YEARWEEK")  },
+    );
+    let millennium_str = value(
+        IntervalKind::Millennium,
+        rule! { #literal_string_eq_ignore_case("MILLENNIUM")  },
     );
     alt((
         rule!(
@@ -1925,6 +1940,9 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #week
             | #epoch
             | #microsecond
+            | #isodow
+            | #millennium
+            | #yearweek
         ),
         rule!(
             #year_str
@@ -1940,6 +1958,9 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #week_str
             | #epoch_str
             | #microsecond_str
+            | #isodow_str
+            | #yearweek_str
+            | #millennium_str
         ),
     ))(i)
 }
