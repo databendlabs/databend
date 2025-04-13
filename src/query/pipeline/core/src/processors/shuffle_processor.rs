@@ -195,6 +195,7 @@ pub struct PartitionProcessor<T: Exchange> {
     index: usize,
     initialized: bool,
     barrier: Arc<Barrier>,
+    hit: usize,
 }
 
 impl<T: Exchange> PartitionProcessor<T> {
@@ -206,6 +207,7 @@ impl<T: Exchange> PartitionProcessor<T> {
         barrier: Arc<Barrier>,
     ) -> ProcessorPtr {
         let partitioned_data = vec![None; outputs.len()];
+        let hit = index % outputs.len();
         ProcessorPtr::create(Box::new(PartitionProcessor {
             input,
             outputs,
@@ -215,6 +217,7 @@ impl<T: Exchange> PartitionProcessor<T> {
             initialized: !T::MULTIWAY_SORT,
             index,
             barrier,
+            hit,
         }))
     }
 }
@@ -233,7 +236,15 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
         let mut all_output_finished = true;
         let mut all_data_pushed_output = true;
 
-        for (index, output) in self.outputs.iter().enumerate() {
+        for _index in 0..self.outputs.len() {
+            let index = self.hit;
+            let output = &self.outputs[self.hit];
+            self.hit += 1;
+
+            if self.hit == self.outputs.len() {
+                self.hit = 0;
+            }
+
             if output.is_finished() {
                 self.partitioned_data[index].take();
                 continue;
@@ -245,9 +256,8 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
                 if let Some(block) = self.partitioned_data[index].take() {
                     if !block.is_empty() || block.get_meta().is_some() {
                         output.push_data(Ok(block));
+                        return Ok(Event::NeedConsume);
                     }
-
-                    continue;
                 }
             }
 

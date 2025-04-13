@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -25,11 +26,10 @@ use databend_common_expression::InputColumns;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
+use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_transforms::AccumulatingTransform;
-use databend_common_pipeline_transforms::AccumulatingTransformer;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
@@ -38,18 +38,110 @@ pub struct TransformFinalAggregate {
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
     hash_table: AggregateHashTable,
-    has_output: bool,
 
     working_partition: isize,
-    recv_final: usize,
-    init: bool,
+
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+
+    next_partition_data: Option<(AggregateMeta, DataBlock)>,
+
+    input_data: Vec<(AggregateMeta, DataBlock)>,
+    output_data: Option<DataBlock>,
 }
 
-impl AccumulatingTransform for TransformFinalAggregate {
-    const NAME: &'static str = "TransformFinalAggregate";
+#[async_trait::async_trait]
+impl Processor for TransformFinalAggregate {
+    fn name(&self) -> String {
+        String::from("TransformFinalAggregate")
+    }
 
-    fn transform(&mut self, mut data: DataBlock) -> Result<Vec<DataBlock>> {
-        let Some(meta) = data.take_meta() else {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.output.is_finished() {
+            self.input_data.clear();
+            self.next_partition_data.take();
+
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if let Some(data_block) = self.output_data.take() {
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.has_data() {
+            return match self.add_data(self.input.pull_data().unwrap()?)? {
+                true => Ok(Event::Sync),
+                false => {
+                    self.input.set_need_data();
+                    Ok(Event::NeedData)
+                }
+            };
+        }
+
+        if self.input.is_finished() {
+            return match self.input_data.is_empty() {
+                true => {
+                    self.output.finish();
+                    Ok(Event::Finished)
+                }
+                false => Ok(Event::Sync),
+            };
+        }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
+    }
+
+    fn process(&mut self) -> Result<()> {
+        for (meta, block) in std::mem::take(&mut self.input_data).into_iter() {
+            match meta {
+                AggregateMeta::SpilledPayload(_) => unreachable!(),
+                AggregateMeta::FinalPartition => unreachable!(),
+                AggregateMeta::InFlightPayload(_) => {
+                    let payload = self.deserialize_flight(block)?;
+
+                    self.hash_table
+                        .combine_payload(&payload, &mut self.flush_state)?;
+                }
+                AggregateMeta::AggregatePayload(payload) => {
+                    self.hash_table
+                        .combine_payload(&payload.payload, &mut self.flush_state)?;
+                }
+            };
+        }
+
+        if let Some(next_partition_data) = self.next_partition_data.take() {
+            self.input_data.push(next_partition_data);
+        }
+
+        match self.hash_table.len() {
+            0 => {
+                self.output_data = Some(self.params.empty_result_block());
+            }
+            _ => {
+                let flush_blocks = self.flush_result_blocks()?;
+                self.output_data = Some(flush_blocks);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl TransformFinalAggregate {
+    pub fn add_data(&mut self, mut block: DataBlock) -> Result<bool> {
+        let Some(meta) = block.take_meta() else {
             return Err(ErrorCode::Internal(
                 "Internal, TransformFinalAggregate only recv DataBlock with meta.",
             ));
@@ -61,83 +153,45 @@ impl AccumulatingTransform for TransformFinalAggregate {
             ));
         };
 
-        let mut flush_blocks = vec![];
-
         match aggregate_meta {
-            AggregateMeta::SpilledPayload(_) => unreachable!(),
-            AggregateMeta::FinalPartition => {
-                self.recv_final += 1;
-            }
+            AggregateMeta::SpilledPayload(_) => Ok(false),
+            AggregateMeta::FinalPartition => Ok(false),
             AggregateMeta::InFlightPayload(payload) => {
                 debug_assert!(payload.partition >= self.working_partition);
                 debug_assert_eq!(payload.max_partition, payload.global_max_partition);
 
                 if self.working_partition != payload.partition {
-                    assert!(
-                        !self.init || self.recv_final > 0,
-                        "payload partition: {}, working partition: {}",
-                        payload.partition,
-                        self.working_partition
-                    );
-                    self.recv_final = 0;
-                    if self.hash_table.len() != 0 {
-                        flush_blocks = self.flush_result_blocks()?;
-                    }
-
                     self.working_partition = payload.partition;
+                    self.next_partition_data =
+                        Some((AggregateMeta::InFlightPayload(payload), block));
+                    return Ok(true);
                 }
 
-                self.init = true;
-                if !data.is_empty() {
-                    let payload = self.deserialize_flight(data)?;
-
-                    self.hash_table
-                        .combine_payload(&payload, &mut self.flush_state)?;
+                if !block.is_empty() {
+                    self.input_data
+                        .push((AggregateMeta::InFlightPayload(payload), block));
                 }
+
+                Ok(false)
             }
             AggregateMeta::AggregatePayload(payload) => {
                 debug_assert!(payload.partition >= self.working_partition);
                 debug_assert_eq!(payload.max_partition, payload.global_max_partition);
 
                 if self.working_partition != payload.partition {
-                    assert!(
-                        !self.init || self.recv_final > 0,
-                        "payload partition: {}, working partition: {}",
-                        payload.partition,
-                        self.working_partition
-                    );
-                    self.recv_final = 0;
-                    if self.hash_table.len() != 0 {
-                        flush_blocks = self.flush_result_blocks()?;
-                    }
-
                     self.working_partition = payload.partition;
+                    self.next_partition_data =
+                        Some((AggregateMeta::AggregatePayload(payload), block));
+                    return Ok(true);
                 }
 
-                self.init = true;
                 if payload.payload.len() != 0 {
-                    self.hash_table
-                        .combine_payload(&payload.payload, &mut self.flush_state)?;
+                    self.input_data
+                        .push((AggregateMeta::AggregatePayload(payload), block));
                 }
+
+                Ok(false)
             }
-        }
-
-        Ok(flush_blocks)
-    }
-
-    fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
-        if !output {
-            return Ok(vec![]);
-        }
-
-        let flush_blocks = match self.hash_table.len() == 0 {
-            true => vec![],
-            false => self.flush_result_blocks()?,
-        };
-
-        match self.has_output {
-            true => Ok(flush_blocks),
-            false => Ok(vec![self.params.empty_result_block()]),
         }
     }
 }
@@ -157,19 +211,17 @@ impl TransformFinalAggregate {
             Arc::new(Bump::new()),
         );
 
-        Ok(AccumulatingTransformer::create(
+        Ok(Box::new(TransformFinalAggregate {
+            params,
+            hash_table,
             input,
             output,
-            TransformFinalAggregate {
-                params,
-                hash_table,
-                flush_state: PayloadFlushState::default(),
-                has_output: false,
-                working_partition: 0,
-                recv_final: 0,
-                init: false,
-            },
-        ))
+            input_data: vec![],
+            output_data: None,
+            working_partition: 0,
+            next_partition_data: None,
+            flush_state: PayloadFlushState::default(),
+        }))
     }
 
     fn deserialize_flight(&mut self, data: DataBlock) -> Result<Payload> {
@@ -210,7 +262,7 @@ impl TransformFinalAggregate {
         Ok(hashtable.payload.payloads.pop().unwrap())
     }
 
-    fn flush_result_blocks(&mut self) -> Result<Vec<DataBlock>> {
+    fn flush_result_blocks(&mut self) -> Result<DataBlock> {
         let mut blocks = vec![];
         self.flush_state.clear();
 
@@ -228,7 +280,6 @@ impl TransformFinalAggregate {
             Arc::new(Bump::new()),
         );
 
-        self.has_output |= !blocks.is_empty();
-        Ok(blocks)
+        DataBlock::concat(&blocks)
     }
 }
