@@ -14,11 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_column::binary::BinaryColumn;
 use databend_common_exception::Result;
-use databend_common_expression::row::RowConverter as CommonConverter;
-use databend_common_expression::types::*;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::InputPort;
@@ -27,20 +23,17 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::sort::algorithm::HeapSort;
 use databend_common_pipeline_transforms::sort::algorithm::LoserTreeSort;
+use databend_common_pipeline_transforms::sort::select_row_type;
 use databend_common_pipeline_transforms::sort::utils::add_order_field;
 use databend_common_pipeline_transforms::sort::utils::ORDER_COL_NAME;
 use databend_common_pipeline_transforms::sort::RowConverter;
-use databend_common_pipeline_transforms::sort::SimpleRowConverter;
-use databend_common_pipeline_transforms::sort::SimpleRowsAsc;
-use databend_common_pipeline_transforms::sort::SimpleRowsDesc;
+use databend_common_pipeline_transforms::sort::Rows;
+use databend_common_pipeline_transforms::sort::RowsTypeVisitor;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::TransformSortMergeLimit;
-use match_template::match_template;
 
 use super::TransformSort;
 use crate::spillers::Spiller;
-
-type CommonRows = BinaryColumn;
 
 pub struct TransformSortBuilder {
     input: Arc<InputPort>,
@@ -54,6 +47,7 @@ pub struct TransformSortBuilder {
     spiller: Arc<Spiller>,
     enable_loser_tree: bool,
     limit: Option<usize>,
+    processor: Option<Result<Box<dyn Processor>>>,
 }
 
 impl TransformSortBuilder {
@@ -77,6 +71,7 @@ impl TransformSortBuilder {
             enable_loser_tree: false,
             limit: None,
             memory_settings: MemorySettings::disable_spill(),
+            processor: None,
         }
     }
 
@@ -105,146 +100,38 @@ impl TransformSortBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Box<dyn Processor>> {
+    pub fn build(mut self) -> Result<Box<dyn Processor>> {
         debug_assert!(if self.output_order_col {
             self.schema.has_field(ORDER_COL_NAME)
         } else {
             !self.schema.has_field(ORDER_COL_NAME)
         });
 
-        if self.limit.map(|limit| limit < 10000).unwrap_or_default() {
-            self.build_sort_limit()
-        } else {
-            self.build_sort()
-        }
+        select_row_type(&mut self);
+        self.processor.unwrap()
     }
 
-    fn build_sort(self) -> Result<Box<dyn Processor>> {
-        if self.sort_desc.len() != 1 {
-            if self.enable_loser_tree {
-                return self.build_sort_rows::<LoserTreeSort<CommonRows>, CommonConverter>();
-            } else {
-                return self.build_sort_rows::<HeapSort<CommonRows>, CommonConverter>();
-            }
-        }
-        let sort_type = self.schema.field(self.sort_desc[0].offset).data_type();
-        let asc = self.sort_desc[0].asc;
-
-        match_template! {
-            T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
-            match sort_type {
-                DataType::T => self.build_sort_rows_simple::<T>(asc),
-                DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                    NumberDataType::NUM_TYPE => {
-                        self.build_sort_rows_simple::<NumberType<NUM_TYPE>>(asc)
-                    }
-                }),
-                _ => {
-                    if self.enable_loser_tree {
-                         self.build_sort_rows::<LoserTreeSort<CommonRows>, CommonConverter>()
-                    } else {
-                         self.build_sort_rows::<HeapSort<CommonRows>, CommonConverter>()
-                    }
-                }
-            }
-        }
-    }
-
-    fn build_sort_rows_simple<T>(self, asc: bool) -> Result<Box<dyn Processor>>
-    where
-        T: ArgType + Send,
-        T::Column: Send,
-        for<'a> T::ScalarRef<'a>: Ord + Send,
-    {
-        match (asc, self.enable_loser_tree) {
-            (true, true) => {
-                self.build_sort_rows::<LoserTreeSort<SimpleRowsAsc<T>>, SimpleRowConverter<T>>()
-            }
-            (true, false) => {
-                self.build_sort_rows::<HeapSort<SimpleRowsAsc<T>>, SimpleRowConverter<T>>()
-            }
-            (false, true) => {
-                self.build_sort_rows::<LoserTreeSort<SimpleRowsDesc<T>>, SimpleRowConverter<T>>()
-            }
-            (false, false) => {
-                self.build_sort_rows::<HeapSort<SimpleRowsDesc<T>>, SimpleRowConverter<T>>()
-            }
-        }
-    }
-
-    fn build_sort_rows<A, C>(self) -> Result<Box<dyn Processor>>
+    fn build_sort<A, C>(&mut self) -> Result<Box<dyn Processor>>
     where
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
         let schema = add_order_field(self.schema.clone(), &self.sort_desc);
         Ok(Box::new(TransformSort::<A, C>::new(
-            self.input,
-            self.output,
+            self.input.clone(),
+            self.output.clone(),
             schema,
-            self.sort_desc,
+            self.sort_desc.clone(),
             self.limit,
-            self.spiller,
+            self.spiller.clone(),
             self.output_order_col,
             None,
             self.order_col_generated,
-            self.memory_settings,
+            self.memory_settings.clone(),
         )?))
     }
 
-    fn build_sort_limit(self) -> Result<Box<dyn Processor>> {
-        if self.sort_desc.len() != 1 {
-            if self.enable_loser_tree {
-                return self.build_sort_limit_rows::<LoserTreeSort<CommonRows>, CommonConverter>();
-            } else {
-                return self.build_sort_limit_rows::<HeapSort<CommonRows>, CommonConverter>();
-            }
-        }
-
-        let sort_type = self.schema.field(self.sort_desc[0].offset).data_type();
-        let asc = self.sort_desc[0].asc;
-
-        match_template! {
-            T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
-            match sort_type {
-                DataType::T => self.build_sort_limit_simple::<T>(asc),
-                DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                    NumberDataType::NUM_TYPE => {
-                        self.build_sort_limit_simple::<NumberType<NUM_TYPE>>(asc)
-                    }
-                }),
-                _ => {
-                    if self.enable_loser_tree {
-                         self.build_sort_limit_rows::<LoserTreeSort<CommonRows>, CommonConverter>()
-                    } else {
-                         self.build_sort_limit_rows::<HeapSort<CommonRows>, CommonConverter>()
-                    }
-                }
-            }
-        }
-    }
-
-    fn build_sort_limit_simple<T>(self, asc: bool) -> Result<Box<dyn Processor>>
-    where
-        T: ArgType + Send,
-        T::Column: Send,
-        for<'a> T::ScalarRef<'a>: Ord + Send,
-    {
-        match (asc, self.enable_loser_tree) {
-            (true, true) => self
-                .build_sort_limit_rows::<LoserTreeSort<SimpleRowsAsc<T>>, SimpleRowConverter<T>>(),
-            (true, false) => {
-                self.build_sort_limit_rows::<HeapSort<SimpleRowsAsc<T>>, SimpleRowConverter<T>>()
-            }
-            (false, true) => self
-                .build_sort_limit_rows::<LoserTreeSort<SimpleRowsDesc<T>>, SimpleRowConverter<T>>(),
-            (false, false) => {
-                self.build_sort_limit_rows::<HeapSort<SimpleRowsDesc<T>>, SimpleRowConverter<T>>()
-            }
-        }
-    }
-
-    fn build_sort_limit_rows<A, C>(self) -> Result<Box<dyn Processor>>
+    fn build_sort_limit<A, C>(&mut self) -> Result<Box<dyn Processor>>
     where
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
@@ -255,16 +142,43 @@ impl TransformSortBuilder {
         ));
         let schema = add_order_field(self.schema.clone(), &self.sort_desc);
         Ok(Box::new(TransformSort::<A, C>::new(
-            self.input,
-            self.output,
+            self.input.clone(),
+            self.output.clone(),
             schema,
-            self.sort_desc,
+            self.sort_desc.clone(),
             self.limit,
-            self.spiller,
+            self.spiller.clone(),
             self.output_order_col,
             limt_sort,
             self.order_col_generated,
-            self.memory_settings,
+            self.memory_settings.clone(),
         )?))
+    }
+}
+
+impl RowsTypeVisitor for TransformSortBuilder {
+    fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+
+    fn sort_desc(&self) -> &[SortColumnDescription] {
+        &self.sort_desc
+    }
+
+    fn visit_type<R, C>(&mut self)
+    where
+        R: Rows + 'static,
+        C: RowConverter<R> + Send + 'static,
+    {
+        let processor = match (
+            self.limit.map(|limit| limit < 10000).unwrap_or_default(),
+            self.enable_loser_tree,
+        ) {
+            (true, true) => self.build_sort_limit::<LoserTreeSort<R>, C>(),
+            (true, false) => self.build_sort_limit::<HeapSort<R>, C>(),
+            (false, true) => self.build_sort::<LoserTreeSort<R>, C>(),
+            (false, false) => self.build_sort::<HeapSort<R>, C>(),
+        };
+        self.processor = Some(processor)
     }
 }

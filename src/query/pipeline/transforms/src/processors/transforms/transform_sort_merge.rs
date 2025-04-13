@@ -34,9 +34,8 @@ use super::sort::Rows;
 use super::sort::SortedStream;
 use super::transform_sort_merge_base::MergeSort;
 use super::transform_sort_merge_base::TransformSortMergeBase;
-use super::AccumulatingTransform;
 use crate::processors::sort::Merger;
-use crate::MemorySettings;
+use crate::sort::utils::has_order_field;
 
 /// Merge sort blocks without limit.
 ///
@@ -200,34 +199,31 @@ impl SortedStream for BlockStream {
     }
 }
 
-pub(super) type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
-pub(super) type MergeSortCommon =
-    TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
-
 pub fn sort_merge(
     schema: DataSchemaRef,
     block_size: usize,
     sort_desc: Vec<SortColumnDescription>,
     data_blocks: Vec<DataBlock>,
-    sort_spilling_batch_bytes: usize,
+    _sort_spilling_batch_bytes: usize,
     enable_loser_tree: bool,
     have_order_col: bool,
 ) -> Result<Vec<DataBlock>> {
-    let sort_desc = Arc::new(sort_desc);
-    let mut memory_settings = MemorySettings::disable_spill();
-    memory_settings.spill_unit_size = sort_spilling_batch_bytes;
+    debug_assert!(have_order_col == has_order_field(&schema));
 
+    type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
+    type MergeSortCommon = TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
+
+    let sort_desc = Arc::new(sort_desc);
     let mut processor = MergeSortCommon::try_create(
         schema.clone(),
         sort_desc.clone(),
         have_order_col,
         false,
-        memory_settings,
         MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree, None),
     )?;
     for block in data_blocks {
         processor.transform(block)?;
     }
 
-    processor.on_finish(true)
+    processor.on_finish()
 }

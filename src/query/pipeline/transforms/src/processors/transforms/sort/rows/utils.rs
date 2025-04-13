@@ -24,6 +24,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use match_template::match_template;
@@ -103,25 +104,25 @@ pub fn select_row_type(visitor: &mut impl RowsTypeVisitor) {
         match sort_type {
             DataType::T => {
                 if asc {
-                    visitor.visit_type::<SimpleRowsAsc<T>>()
+                    visitor.visit_type::<SimpleRowsAsc<T>, SimpleRowConverter<T>>()
                 } else {
-                    visitor.visit_type::<SimpleRowsDesc<T>>()
+                    visitor.visit_type::<SimpleRowsDesc<T>, SimpleRowConverter<T>>()
                 }
             },
             DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
                 NumberDataType::NUM_TYPE => {
                     if asc {
-                        visitor.visit_type::<SimpleRowsAsc<NumberType<NUM_TYPE>>>()
+                        visitor.visit_type::<SimpleRowsAsc<NumberType<NUM_TYPE>>, SimpleRowConverter<NumberType<NUM_TYPE>>>()
                     } else {
-                        visitor.visit_type::<SimpleRowsDesc<NumberType<NUM_TYPE>>>()
+                        visitor.visit_type::<SimpleRowsDesc<NumberType<NUM_TYPE>>, SimpleRowConverter<NumberType<NUM_TYPE>>>()
                     }
                 }
             }),
-            _ => visitor.visit_type::<CommonRows>()
+            _ => visitor.visit_type::<CommonRows, CommonConverter>()
             }
         }
     } else {
-        visitor.visit_type::<CommonRows>()
+        visitor.visit_type::<CommonRows, CommonConverter>()
     }
 }
 
@@ -130,5 +131,26 @@ pub trait RowsTypeVisitor {
 
     fn sort_desc(&self) -> &[SortColumnDescription];
 
-    fn visit_type<R: Rows + 'static>(&mut self);
+    fn visit_type<R, C>(&mut self)
+    where
+        R: Rows + 'static,
+        C: RowConverter<R> + Send + 'static;
+}
+
+pub fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> DataType {
+    debug_assert!(!desc.is_empty());
+    if desc.len() == 1 {
+        let order_by_field = schema.field(desc[0].offset);
+        if matches!(
+            order_by_field.data_type(),
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::Binary
+                | DataType::String
+        ) {
+            return order_by_field.data_type().clone();
+        }
+    }
+    DataType::Binary
 }
