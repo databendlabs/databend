@@ -19,10 +19,13 @@ mod memo;
 mod property;
 mod stats;
 
+pub use expr::AsyncSExprVisitor;
 pub use expr::MExpr;
 pub use expr::Matcher;
 pub use expr::PatternExtractor;
 pub use expr::SExpr;
+pub use expr::SExprVisitor;
+pub use expr::VisitAction;
 pub use group::Group;
 pub use group::GroupState;
 pub use memo::Memo;
