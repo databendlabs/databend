@@ -19,6 +19,10 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 
 use crate::processors::Event;
@@ -64,6 +68,14 @@ pub trait Exchange: Send + Sync + 'static {
                 });
 
         position.map(|(idx, _)| idx)
+    }
+
+    fn output_window_size(&self) -> usize {
+        3
+    }
+
+    fn merge_output(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        Ok(data_blocks)
     }
 }
 
@@ -633,5 +645,475 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
             true => Ok(Event::NeedData),
             false => Ok(Event::NeedConsume),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct ShuffleMeta {
+    data_blocks: Vec<DataBlock>,
+}
+
+local_block_meta_serde!(ShuffleMeta);
+
+#[typetag::serde(name = "ShuffleMeta")]
+impl BlockMetaInfo for ShuffleMeta {}
+
+impl ShuffleMeta {
+    pub fn create(blocks: Vec<DataBlock>) -> BlockMetaInfoPtr {
+        Box::new(ShuffleMeta {
+            data_blocks: blocks,
+        })
+    }
+}
+
+pub struct NewPartitionProcessor<T: Exchange> {
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+
+    input_data: Option<DataBlock>,
+    output_data: Option<DataBlock>,
+
+    exchange: Arc<T>,
+    to_partition: usize,
+}
+
+impl<T: Exchange> NewPartitionProcessor<T> {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        to_partition: usize,
+        exchange: Arc<T>,
+    ) -> ProcessorPtr {
+        ProcessorPtr::create(Box::new(NewPartitionProcessor {
+            input,
+            output,
+            exchange,
+            to_partition,
+            input_data: None,
+            output_data: None,
+        }))
+    }
+}
+
+impl<T: Exchange> Processor for NewPartitionProcessor<T> {
+    fn name(&self) -> String {
+        String::from("PartitionProcessor")
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if let Some(data_block) = self.output_data.take() {
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.has_data() {
+            self.input_data = Some(self.input.pull_data().unwrap()?);
+            return Ok(Event::Sync);
+        }
+
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
+    }
+
+    fn process(&mut self) -> Result<()> {
+        if let Some(block) = self.input_data.take() {
+            let partitioned_data = self.exchange.partition(block, self.to_partition)?;
+            self.output_data = Some(DataBlock::empty_with_meta(ShuffleMeta::create(
+                partitioned_data,
+            )));
+        }
+
+        Ok(())
+    }
+}
+// pub struct SortingExchangeShuffleProcessor<T: Exchange> {
+//     input: Vec<Arc<InputPort>>,
+//     output: Vec<Arc<OutputPort>>,
+//
+//     // output_finished:
+//     output_window_size: usize,
+//     matrix: Vec<Vec<Option<DataBlock>>>,
+//     matrix_size: usize,
+//
+//     finished_input_size: usize,
+//     input_finish_status: Vec<bool>,
+//
+//     initialize: bool,
+//     output_finish_status: Vec<bool>,
+//     waiting_outputs: VecDeque<usize>,
+//
+//     output_matrix: Vec<Vec<DataBlock>>,
+//
+//     exchange: Arc<T>,
+//
+// }
+//
+// fn multiway_pick<T: Exchange>(data_blocks: &mut [Option<DataBlock>]) -> usize {
+//     let position =
+//         data_blocks
+//             .iter()
+//             .enumerate()
+//             .filter_map(|(idx, x)| x.as_ref().map(|d| (idx, d)))
+//             .min_by(|(left_idx, left_block), (right_idx, right_block)| {
+//                 match T::sorting_function(left_block, right_block) {
+//                     Ordering::Less => Ordering::Less,
+//                     Ordering::Greater => Ordering::Greater,
+//                     Ordering::Equal => left_idx.cmp(right_idx),
+//                 }
+//             });
+//
+//     position.map(|(idx, _)| idx).unwrap_or(0)
+// }
+//
+// impl<T: Exchange> Processor for SortingExchangeShuffleProcessor<T> {
+//     fn name(&self) -> String {
+//         String::from("SortingExchangeShuffleProcessor")
+//     }
+//
+//     fn as_any(&mut self) -> &mut dyn Any {
+//         self
+//     }
+//
+//     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+//         if !self.initialize && self.waiting_outputs.is_empty() {
+//             self.initialize = true;
+//
+//             for input in &self.input {
+//                 input.set_need_data();
+//             }
+//
+//             return Ok(Event::NeedData);
+//         }
+//
+//         if let EventCause::Input(index) = cause {
+//             if self.input[index].is_finished() && !self.input_finish_status[index] {
+//                 self.finished_input_size += 1;
+//                 self.input_finish_status[index] = true;
+//             }
+//
+//             if self.input[index].has_data() {
+//                 let data_block = self.input[index].pull_data().unwrap()?;
+//
+//                 let meta = data_block.take_meta().unwrap();
+//                 let mut meta = ShuffleMeta::downcast_from(meta).unwrap();
+//
+//                 self.matrix_size += 1;
+//                 for (idx, block) in meta.data_blocks.into_iter().enumerate() {
+//                     debug_assert!(self.matrix[idx][index].is_none());
+//
+//                     if !self.output_finish_status[idx] {
+//                         self.matrix[idx][index] = Some(block);
+//                     }
+//                 }
+//             }
+//
+//             if self.matrix_size + self.finished_input_size != self.input.len() {
+//                 return Ok(Event::NeedData);
+//             }
+//
+//             if self.matrix_size != 0 {
+//                 // matrix is full
+//                 let Some(position) = self.output_finish_status.iter().position(|x| !x) else {
+//                     for output in &self.output {
+//                         output.finish();
+//                     }
+//
+//                     return Ok(Event::Finished);
+//                 };
+//
+//                 let position = multiway_pick::<T>(&mut self.matrix[position]);
+//
+//                 for index in 0..self.output.len() {
+//                     if let Some(data_block) = self.matrix[index][position] {
+//                         self.output_matrix[index].push(data_block);
+//                     }
+//                 }
+//
+//                 self.matrix_size -= 1;
+//                 self.output_window_size += 1;
+//
+//                 if self.output_window_size != self.exchange.output_window_size() {
+//                     self.input[position].set_need_data();
+//                     return Ok(Event::NeedData);
+//                 }
+//
+//                 // self.output_window_size
+//             }
+//         }
+//
+//         if let EventCause::Output(index) = cause {
+//             if self.output[index].is_finished() && !self.output_finish_status[index] {
+//                 self.output_finish_status[index] = true;
+//             }
+//
+//             if self.output[index].can_push() {
+//                 self.waiting_outputs.push_back(index);
+//             }
+//         }
+//
+//         // while let Some(output) = self.waiting_outputs.pop_front() {
+//         //
+//         // }
+//
+//         todo!()
+//     }
+// }
+
+pub struct ExchangeShuffleProcessor<T: Exchange> {
+    input: Vec<Arc<InputPort>>,
+    output: Vec<Arc<OutputPort>>,
+
+    initialize: bool,
+
+    finished_input_size: usize,
+    input_finish_status: Vec<bool>,
+    waiting_inputs: VecDeque<usize>,
+
+    finished_output_size: usize,
+    pending_outputs: Vec<bool>,
+    output_finish_status: Vec<bool>,
+
+    exchange: Arc<T>,
+    matrix: Vec<VecDeque<DataBlock>>,
+}
+
+impl<T: Exchange> ExchangeShuffleProcessor<T> {
+    pub fn create(
+        input: Vec<Arc<InputPort>>,
+        output: Vec<Arc<OutputPort>>,
+        exchange: Arc<T>,
+    ) -> ProcessorPtr {
+        let pending_outputs = vec![false; output.len()];
+        let input_finish_status = vec![false; input.len()];
+        let output_finish_status = vec![false; output.len()];
+
+        let mut matrix = Vec::with_capacity(output.len());
+
+        for _ in 0..output.capacity() {
+            matrix.push(VecDeque::new());
+        }
+
+        ProcessorPtr::create(Box::new(ExchangeShuffleProcessor {
+            input,
+            output,
+            matrix,
+            exchange,
+            pending_outputs,
+            input_finish_status,
+            output_finish_status,
+
+            initialize: false,
+            finished_input_size: 0,
+            finished_output_size: 0,
+            waiting_inputs: VecDeque::new(),
+        }))
+    }
+}
+
+impl<T: Exchange> Processor for ExchangeShuffleProcessor<T> {
+    fn name(&self) -> String {
+        String::from("ExchangeShuffleProcessor")
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        if let EventCause::Input(index) = cause {
+            if self.input[index].has_data() {
+                let mut data_block = self.input[index].pull_data().unwrap()?;
+
+                let meta = data_block.take_meta().unwrap();
+                let meta = ShuffleMeta::downcast_from(meta).unwrap();
+
+                for (idx, block) in meta.data_blocks.into_iter().enumerate() {
+                    self.matrix[idx].push_back(block);
+                }
+            }
+
+            if self.input[index].is_finished() {
+                if !self.input_finish_status[index] {
+                    self.finished_input_size += 1;
+                    self.input_finish_status[index] = true;
+                }
+            } else {
+                self.waiting_inputs.push_back(index);
+            }
+        }
+
+        if let EventCause::Output(index) = cause {
+            if self.output[index].is_finished() && !self.output_finish_status[index] {
+                self.finished_output_size += 1;
+                self.output_finish_status[index] = true;
+            }
+
+            if self.output[index].can_push() {
+                self.pending_outputs[index] = true;
+            }
+        }
+
+        if !self.initialize {
+            self.initialize = true;
+
+            for input in &self.input {
+                input.set_need_data();
+            }
+
+            return Ok(Event::NeedData);
+        }
+
+        if self.finished_output_size == self.output.len() {
+            for input in &self.input {
+                input.finish();
+            }
+
+            return Ok(Event::Finished);
+        }
+
+        let all_input_finished = self.finished_input_size == self.input.len();
+
+        let mut sent_all_data = true;
+        for (idx, data) in self.matrix.iter_mut().enumerate() {
+            if data.is_empty() || self.output_finish_status[idx] {
+                continue;
+            }
+
+            sent_all_data = false;
+            if self.pending_outputs[idx]
+                && (all_input_finished || (data.len() >= self.exchange.output_window_size()))
+            {
+                self.pending_outputs[idx] = false;
+                let mut output_data = Vec::with_capacity(self.exchange.output_window_size());
+
+                for _index in 0..self.exchange.output_window_size() {
+                    if let Some(data) = data.pop_front() {
+                        output_data.push(data);
+                    }
+                }
+
+                self.output[idx].push_data(Ok(DataBlock::empty_with_meta(ShuffleMeta::create(
+                    output_data,
+                ))));
+                return Ok(Event::NeedConsume);
+            }
+        }
+
+        while let Some(index) = self.waiting_inputs.pop_front() {
+            if !self.input[index].is_finished() {
+                self.input[index].set_need_data();
+                return Ok(Event::NeedData);
+            } else if !self.input_finish_status[index] {
+                self.input_finish_status[index] = true;
+                self.finished_input_size += 1;
+            }
+        }
+
+        let all_input_finished = self.finished_input_size == self.input.len();
+        if sent_all_data && all_input_finished {
+            for output in &self.output {
+                output.finish();
+            }
+
+            return Ok(Event::Finished);
+        }
+
+        Ok(Event::NeedConsume)
+    }
+}
+
+pub struct NewMergePartitionProcessor<T: Exchange> {
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+
+    input_data: Option<DataBlock>,
+    output_data: VecDeque<DataBlock>,
+
+    exchange: Arc<T>,
+}
+
+impl<T: Exchange> NewMergePartitionProcessor<T> {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        exchange: Arc<T>,
+    ) -> ProcessorPtr {
+        ProcessorPtr::create(Box::new(NewMergePartitionProcessor {
+            input,
+            output,
+            input_data: None,
+            output_data: VecDeque::new(),
+            exchange,
+        }))
+    }
+}
+
+impl<T: Exchange> Processor for NewMergePartitionProcessor<T> {
+    fn name(&self) -> String {
+        String::from("MergePartitionProcessor")
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if let Some(data_block) = self.output_data.pop_front() {
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.has_data() {
+            self.input_data = Some(self.input.pull_data().unwrap()?);
+            return Ok(Event::Sync);
+        }
+
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
+    }
+
+    fn process(&mut self) -> Result<()> {
+        if let Some(mut block) = self.input_data.take() {
+            let meta = block.take_meta().unwrap();
+            let meta = ShuffleMeta::downcast_from(meta).unwrap();
+            self.output_data
+                .extend(self.exchange.merge_output(meta.data_blocks)?);
+        }
+
+        Ok(())
     }
 }

@@ -17,6 +17,7 @@ futures = { workspace = true }
 log = { workspace = true }
 petgraph = { workspace = true }
 serde = { workspace = true }
+typetag = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }

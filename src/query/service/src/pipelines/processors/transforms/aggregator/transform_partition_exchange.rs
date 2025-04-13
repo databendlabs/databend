@@ -191,4 +191,8 @@ impl Exchange for ExchangePartition {
             }
         }
     }
+
+    // fn merge_output(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    // Ok(vec![DataBlock::concat(&data_blocks)?])
+    // }
 }

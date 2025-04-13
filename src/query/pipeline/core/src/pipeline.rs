@@ -35,8 +35,11 @@ use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
 use crate::processors::DuplicateProcessor;
 use crate::processors::Exchange;
+use crate::processors::ExchangeShuffleProcessor;
 use crate::processors::InputPort;
 use crate::processors::MergePartitionProcessor;
+use crate::processors::NewMergePartitionProcessor;
+use crate::processors::NewPartitionProcessor;
 use crate::processors::OnePartitionProcessor;
 use crate::processors::OutputPort;
 use crate::processors::PartitionProcessor;
@@ -512,6 +515,39 @@ impl Pipeline {
             // merge partition
             self.add_pipe(Pipe::create(input_len * n, n, items))
         }
+    }
+
+    pub fn new_exchange<T: Exchange>(&mut self, n: usize, exchange: Arc<T>) -> Result<()> {
+        self.add_transform(|input, output| {
+            Ok(NewPartitionProcessor::create(
+                input,
+                output,
+                n,
+                exchange.clone(),
+            ))
+        })?;
+
+        let input_len = self.output_len();
+        let inputs = (0..input_len)
+            .map(|_| InputPort::create())
+            .collect::<Vec<_>>();
+        let outputs = (0..n).map(|_| OutputPort::create()).collect::<Vec<_>>();
+
+        self.add_pipe(Pipe::create(input_len, n, vec![PipeItem::create(
+            ExchangeShuffleProcessor::create(inputs.clone(), outputs.clone(), exchange.clone()),
+            inputs,
+            outputs,
+        )]));
+
+        self.add_transform(|input, output| {
+            Ok(NewMergePartitionProcessor::create(
+                input,
+                output,
+                exchange.clone(),
+            ))
+        })?;
+
+        Ok(())
     }
 
     #[track_caller]
