@@ -16,10 +16,14 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::intrinsics::unlikely;
 use std::mem;
+use std::sync::atomic;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use databend_common_column::bitmap::MutableBitmap;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::sampler::FixedRateSampler;
 use databend_common_expression::Column;
@@ -37,56 +41,37 @@ use rand::SeedableRng;
 use crate::spillers::Location;
 use crate::spillers::Spiller;
 
-enum Step<R> {
+pub struct TransformStreamSortSpill<A: SortAlgorithm> {
+    base: Base,
+    step: Step<A>,
+}
+
+#[derive(Clone)]
+struct Base {
+    schema: DataSchemaRef,
+    spiller: Arc<Spiller>,
+    sort_row_offset: usize,
+    limit: Option<usize>,
+}
+
+enum Step<A: SortAlgorithm> {
     Uninit,
-    Collect(FixedRateSampler<StdRng>, SortSpillParams),
-    Sort(StepSort<R>),
+    Collect(StepCollect<A>),
+    Sort(StepSort<A>),
 }
 
-impl<R> Step<R> {
-    fn params(&self) -> SortSpillParams {
-        match self {
-            Step::Uninit => unreachable!(),
-            Step::Collect(_, params) => *params,
-            Step::Sort(step_sort) => step_sort.params,
-        }
-    }
+struct StepCollect<A: SortAlgorithm> {
+    params: SortSpillParams,
+    sampler: FixedRateSampler<StdRng>,
+    streams: Vec<BoundBlockStream<A::Rows>>,
 }
 
-struct StepSort<R> {
+struct StepSort<A: SortAlgorithm> {
+    params: SortSpillParams,
     /// Partition boundaries for restoring and sorting blocks, stored in reverse order of Column.
     /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
     bounds: Vec<Column>,
-    cur_bound: Option<R>,
-    params: SortSpillParams,
-}
-
-impl<R: Rows> StepSort<R> {
-    fn next_bound(&mut self) {
-        let Some(last) = self.bounds.last_mut() else {
-            self.cur_bound = None;
-            return;
-        };
-        let bound = match last.len() {
-            0 => unreachable!(),
-            1 => self.bounds.pop().unwrap(),
-            _ => {
-                let bound = last.slice(0..1).maybe_gc();
-                *last = last.slice(1..last.len());
-                bound
-            }
-        };
-        self.cur_bound = Some(R::from_column(&bound).unwrap());
-    }
-}
-
-pub struct TransformStreamSortSpill<A: SortAlgorithm> {
-    schema: DataSchemaRef,
-    sort_row_offset: usize,
-    limit: Option<usize>,
-    spiller: Arc<Spiller>,
-
-    step: Step<A::Rows>,
+    cur_bound: Option<A::Rows>,
 
     subsequent: Vec<BoundBlockStream<A::Rows>>,
     current: Vec<BoundBlockStream<A::Rows>>,
@@ -104,22 +89,21 @@ where A: SortAlgorithm
         sort_row_offset: usize,
     ) -> Self {
         Self {
-            schema,
-            sort_row_offset,
-            limit,
-            spiller,
+            base: Base {
+                schema,
+                spiller,
+                sort_row_offset,
+                limit,
+            },
             step: Step::Uninit,
-            subsequent: Vec::new(),
-            current: Vec::new(),
-            output_merger: None,
         }
     }
 
     pub fn init_spill(&mut self, params: SortSpillParams) {
         debug_assert!(matches!(self.step, Step::Uninit));
-        self.step = Step::Collect(
-            FixedRateSampler::new(
-                vec![self.sort_row_offset],
+        self.step = Step::Collect(StepCollect {
+            sampler: FixedRateSampler::new(
+                vec![self.base.sort_row_offset],
                 params.batch_rows,
                 params.batch_rows * params.num_merge,
                 params.batch_rows,
@@ -127,52 +111,116 @@ where A: SortAlgorithm
             )
             .unwrap(),
             params,
-        );
+            streams: vec![],
+        });
     }
 
-    pub fn sort_input_data(&mut self, mut input_data: Vec<DataBlock>) -> Result<()> {
-        let Step::Collect(sampler, ref params) = &mut self.step else {
+    pub fn sort_input_data(
+        &mut self,
+        input_data: Vec<DataBlock>,
+        aborting: &AtomicBool,
+    ) -> Result<()> {
+        let Step::Collect(collect) = &mut self.step else {
             unreachable!()
         };
-
-        for data in &input_data {
-            sampler.add_block(data.clone());
-        }
-        sampler.compact_blocks(false);
-
-        let sorted = if input_data.len() == 1 {
-            let data = input_data.pop().unwrap();
-            vec![SpillableBlock::new(data, self.sort_row_offset)].into()
-        } else {
-            let streams = input_data
-                .drain(..)
-                .map(|data| DataBlockStream::new(data, self.sort_row_offset))
-                .collect();
-            let mut merger =
-                Merger::<A, _>::create(self.schema.clone(), streams, params.batch_rows, self.limit);
-
-            let mut sorted = VecDeque::new();
-            while let Some(data) = merger.next_block()? {
-                sorted.push_back(SpillableBlock::new(data, self.sort_row_offset));
-            }
-            debug_assert!(merger.is_finished());
-            sorted
-        };
-
-        let stream = self.new_stream(sorted, None);
-        self.subsequent.push(stream);
-        Ok(())
+        collect.sort_input_data(&self.base, input_data, aborting)
     }
 
     pub async fn subsequent_spill_last(&mut self, target_rows: usize) -> Result<()> {
-        let Some(s) = self.subsequent.last_mut() else {
+        let Step::Collect(collect) = &mut self.step else {
+            unreachable!()
+        };
+        collect.spill_last(&self.base, target_rows).await
+    }
+
+    pub fn subsequent_memory_rows(&self) -> usize {
+        match &self.step {
+            Step::Uninit => unreachable!(),
+            Step::Collect(step_collect) => step_collect.memory_rows(),
+            Step::Sort(step_sort) => step_sort.subsequent_memory_rows(),
+        }
+    }
+
+    pub async fn on_restore(&mut self) -> Result<(Option<DataBlock>, bool)> {
+        match &mut self.step {
+            Step::Uninit => return Ok((None, true)),
+            Step::Collect(collect) => self.step = Step::Sort(collect.next_step(&self.base)?),
+            Step::Sort(_) => (),
+        };
+
+        let Step::Sort(sort) = &mut self.step else {
+            unreachable!()
+        };
+
+        if sort.output_merger.is_some() {
+            return sort.restore_and_output(&self.base).await;
+        }
+
+        while sort.current.is_empty() {
+            sort.choice_streams_by_bound();
+        }
+
+        if sort.current.len() > sort.params.num_merge {
+            sort.merge_current(&self.base).await?;
+            Ok((None, false))
+        } else {
+            sort.restore_and_output(&self.base).await
+        }
+    }
+
+    pub fn max_rows(&self) -> usize {
+        let SortSpillParams {
+            batch_rows,
+            num_merge,
+        } = self.step.params();
+        num_merge * batch_rows
+    }
+
+    #[allow(unused)]
+    pub fn format_memory_usage(&self) -> FmtMemoryUsage<'_, A> {
+        FmtMemoryUsage(self)
+    }
+}
+
+impl Base {
+    fn new_stream<R: Rows>(
+        &self,
+        blocks: VecDeque<SpillableBlock>,
+        bound: Option<R>,
+    ) -> BoundBlockStream<R> {
+        BoundBlockStream::<R> {
+            blocks,
+            bound,
+            sort_row_offset: self.sort_row_offset,
+            spiller: self.spiller.clone(),
+        }
+    }
+
+    fn new_block(&self, data: DataBlock) -> SpillableBlock {
+        SpillableBlock::new(data, self.sort_row_offset)
+    }
+}
+
+impl<A: SortAlgorithm> Step<A> {
+    fn params(&self) -> SortSpillParams {
+        match self {
+            Step::Uninit => unreachable!(),
+            Step::Collect(collect) => collect.params,
+            Step::Sort(sort) => sort.params,
+        }
+    }
+}
+
+impl<A: SortAlgorithm> StepCollect<A> {
+    async fn spill_last(&mut self, base: &Base, target_rows: usize) -> Result<()> {
+        let Some(s) = self.streams.last_mut() else {
             return Ok(());
         };
 
         let mut released = 0;
         for b in s.blocks.iter_mut().rev() {
             if b.data.is_some() {
-                b.spill(&self.spiller).await?;
+                b.spill(&base.spiller).await?;
                 released += b.rows;
             }
             if released >= target_rows {
@@ -183,271 +231,54 @@ where A: SortAlgorithm
         Ok(())
     }
 
-    pub async fn on_restore(&mut self) -> Result<(Option<DataBlock>, bool)> {
-        let params = match &mut self.step {
-            Step::Uninit => return Ok((None, true)),
-            Step::Collect(sampler, params) => {
-                let params = *params;
-                sampler.compact_blocks(true);
-                let sampled_rows = std::mem::take(&mut sampler.dense_blocks);
-                self.step = Step::Sort(StepSort {
-                    bounds: self.determine_bounds(sampled_rows, &params)?,
-                    cur_bound: None,
-                    params,
-                });
-                params
-            }
-            Step::Sort(ref step_sort) => step_sort.params,
-        };
+    fn sort_input_data(
+        &mut self,
+        base: &Base,
+        mut input_data: Vec<DataBlock>,
+        aborting: &AtomicBool,
+    ) -> Result<()> {
+        let batch_rows = self.params.batch_rows;
 
-        if self.output_merger.is_some() {
-            return self.restore_and_output().await;
+        for data in &input_data {
+            self.sampler.add_block(data.clone());
         }
+        self.sampler.compact_blocks(false);
 
-        while self.current.is_empty() {
-            self.choice_streams_by_bound();
-        }
-
-        if self.current.len() > params.num_merge {
-            self.merge_current().await?;
-            Ok((None, false))
+        let sorted = if input_data.len() == 1 {
+            let data = input_data.pop().unwrap();
+            vec![base.new_block(data)].into()
         } else {
-            self.restore_and_output().await
-        }
-    }
+            let streams = input_data
+                .drain(..)
+                .map(|data| DataBlockStream::new(data, base.sort_row_offset))
+                .collect();
+            let mut merger =
+                Merger::<A, _>::create(base.schema.clone(), streams, batch_rows, base.limit);
 
-    async fn merge_current(&mut self) -> Result<()> {
-        self.subsequent_spill_all().await?;
-        let params = self.step.params();
-        for (i, s) in self.current.iter_mut().rev().enumerate() {
-            if i < params.num_merge {
-                s.spill(1).await?;
-            } else {
-                s.spill(0).await?;
-            }
-        }
-
-        let streams = self
-            .current
-            .drain(self.current.len() - params.num_merge..)
-            .collect();
-
-        let mut merger =
-            Merger::<A, _>::create(self.schema.clone(), streams, params.batch_rows, None);
-
-        let mut sorted = VecDeque::new();
-        while let Some(data) = merger.async_next_block().await? {
-            let mut block = SpillableBlock::new(data, self.sort_row_offset);
-            block.spill(&self.spiller).await?;
-            sorted.push_back(block);
-        }
-        debug_assert!(merger.is_finished());
-
-        let Step::Sort(step_sort) = &self.step else {
-            unreachable!()
-        };
-        let stream = self.new_stream(sorted, step_sort.cur_bound.clone());
-        self.current.insert(0, stream);
-        self.subsequent
-            .extend(merger.streams().into_iter().filter(|s| !s.is_empty()));
-        Ok(())
-    }
-
-    async fn restore_and_output(&mut self) -> Result<(Option<DataBlock>, bool)> {
-        let params = self.step.params();
-        let merger = match self.output_merger.as_mut() {
-            Some(merger) => merger,
-            None => {
-                debug_assert!(!self.current.is_empty());
-                if self.current.len() == 1 {
-                    let mut s = self.current.pop().unwrap();
-                    s.restore_first().await?;
-                    let block = Some(s.take_next_bounded_block());
-
-                    if !s.is_empty() {
-                        if s.should_include_first() {
-                            self.current.push(s);
-                        } else {
-                            self.subsequent.push(s);
-                        }
-                        return Ok((block, false));
-                    }
-
-                    return Ok((block, self.subsequent.is_empty()));
+            let mut sorted = VecDeque::new();
+            while let Some(data) = merger.next_block()? {
+                if unlikely(aborting.load(atomic::Ordering::Relaxed)) {
+                    return Err(ErrorCode::AbortedQuery(
+                        "Aborted query, because the server is shutting down or the query was killed.",
+                    ));
                 }
 
-                self.sort_spill().await?;
-
-                let streams = mem::take(&mut self.current);
-                let merger =
-                    Merger::<A, _>::create(self.schema.clone(), streams, params.batch_rows, None);
-                self.output_merger.insert(merger)
+                sorted.push_back(base.new_block(data));
             }
-        };
-
-        let Some(data) = merger.async_next_block().await? else {
             debug_assert!(merger.is_finished());
-            let streams = self.output_merger.take().unwrap().streams();
-            self.subsequent
-                .extend(streams.into_iter().filter(|s| !s.is_empty()));
-            return Ok((None, self.subsequent.is_empty()));
+            sorted
         };
 
-        let Step::Sort(step_sort) = &self.step else {
-            unreachable!()
-        };
-        let mut sorted = BoundBlockStream {
-            blocks: VecDeque::new(),
-            bound: step_sort.cur_bound.clone(),
-            sort_row_offset: self.sort_row_offset,
-            spiller: self.spiller.clone(),
-        };
-        sorted
-            .blocks
-            .push_back(SpillableBlock::new(data, self.sort_row_offset));
-
-        let block = if sorted.should_include_first() {
-            let block = Some(sorted.take_next_bounded_block());
-            if sorted.is_empty() {
-                return Ok((block, false));
-            }
-            block
-        } else {
-            None
-        };
-
-        while let Some(data) = merger.async_next_block().await? {
-            let mut block = SpillableBlock::new(data, self.sort_row_offset);
-            block.spill(&self.spiller).await?;
-            sorted.blocks.push_back(block);
-        }
-        debug_assert!(merger.is_finished());
-
-        if !sorted.is_empty() {
-            self.subsequent.push(sorted);
-        }
-        let streams = self.output_merger.take().unwrap().streams();
-        self.subsequent
-            .extend(streams.into_iter().filter(|s| !s.is_empty()));
-        Ok((block, self.subsequent.is_empty()))
-    }
-
-    async fn sort_spill(&mut self) -> Result<()> {
-        let params = self.step.params();
-        let need = self
-            .current
-            .iter()
-            .map(|s| if s.blocks[0].data.is_none() { 1 } else { 0 })
-            .sum::<usize>()
-            * params.batch_rows;
-
-        if need + self.subsequent_memory_rows() + self.current_memory_rows() < self.max_rows() {
-            return Ok(());
-        }
-
-        let mut unspilled = self
-            .current
-            .iter_mut()
-            .chain(self.subsequent.iter_mut())
-            .flat_map(|s| s.blocks.iter_mut())
-            .filter(|s| s.data.is_some())
-            .collect::<Vec<_>>();
-
-        unspilled.sort_by(|s1, s2| {
-            let r1 = s1.domain::<A::Rows>();
-            let r2 = s2.domain::<A::Rows>();
-            let cmp = r1.first().cmp(&r2.first());
-            cmp
-        });
-
-        let mut released = 0;
-        while let Some(block) = unspilled.pop() {
-            if released >= need {
-                break;
-            }
-
-            block.spill(&self.spiller).await?;
-            released += block.rows;
-        }
-
+        let stream = base.new_stream(sorted, None);
+        self.streams.push(stream);
         Ok(())
-    }
-
-    async fn subsequent_spill_all(&mut self) -> Result<()> {
-        for s in &mut self.subsequent {
-            s.spill(0).await?;
-        }
-        Ok(())
-    }
-
-    fn choice_streams_by_bound(&mut self) {
-        debug_assert!(self.current.is_empty());
-        debug_assert!(!self.subsequent.is_empty());
-
-        let Step::Sort(sort_step) = &mut self.step else {
-            unreachable!()
-        };
-
-        sort_step.next_bound();
-        if sort_step.cur_bound.is_none() {
-            mem::swap(&mut self.current, &mut self.subsequent);
-            for s in &mut self.current {
-                s.bound = None
-            }
-            return;
-        }
-
-        (self.current, self.subsequent) = self
-            .subsequent
-            .drain(..)
-            .map(|mut s| {
-                s.bound = sort_step.cur_bound.clone();
-                s
-            })
-            .partition(|s| s.should_include_first());
-
-        self.current.sort_by_key(|s| s.blocks[0].data.is_some());
-    }
-
-    pub fn subsequent_memory_rows(&self) -> usize {
-        self.subsequent
-            .iter()
-            .map(|s| s.in_memory_rows())
-            .sum::<usize>()
-    }
-
-    fn current_memory_rows(&self) -> usize {
-        self.current
-            .iter()
-            .map(|s| s.in_memory_rows())
-            .sum::<usize>()
-    }
-
-    pub fn max_rows(&self) -> usize {
-        match &self.step {
-            Step::Uninit => unreachable!(),
-            Step::Collect(_, params) => params.num_merge * params.batch_rows,
-            Step::Sort(sort_step) => sort_step.params.num_merge * sort_step.params.batch_rows,
-        }
-    }
-
-    fn new_stream(
-        &mut self,
-        blocks: VecDeque<SpillableBlock>,
-        bound: Option<A::Rows>,
-    ) -> BoundBlockStream<A::Rows> {
-        BoundBlockStream::<A::Rows> {
-            blocks,
-            bound,
-            sort_row_offset: self.sort_row_offset,
-            spiller: self.spiller.clone(),
-        }
     }
 
     fn determine_bounds(
         &self,
+        base: &Base,
         sampled_rows: Vec<DataBlock>,
-        params: &SortSpillParams,
+        batch_rows: usize,
     ) -> Result<Vec<Column>> {
         match sampled_rows.len() {
             0 => Ok(vec![]),
@@ -480,8 +311,8 @@ where A: SortAlgorithm
                     })
                     .collect::<Vec<_>>();
 
-                let schema = Arc::new(self.schema.project(&[self.schema.num_fields() - 1]));
-                let mut merger = Merger::<A, _>::create(schema, streams, params.batch_rows, None);
+                let schema = base.schema.project(&[base.sort_row_offset]);
+                let mut merger = Merger::<A, _>::create(schema.into(), streams, batch_rows, None);
 
                 let mut blocks = Vec::new();
                 while let Some(block) = merger.next_block()? {
@@ -498,9 +329,241 @@ where A: SortAlgorithm
         }
     }
 
-    #[allow(unused)]
-    pub fn format_memory_usage(&self) -> FmtMemoryUsage<'_, A> {
-        FmtMemoryUsage(self)
+    fn memory_rows(&self) -> usize {
+        self.streams
+            .iter()
+            .map(|s| s.in_memory_rows())
+            .sum::<usize>()
+    }
+
+    fn next_step(&mut self, base: &Base) -> Result<StepSort<A>> {
+        self.sampler.compact_blocks(true);
+        let sampled_rows = std::mem::take(&mut self.sampler.dense_blocks);
+        let bounds = self.determine_bounds(base, sampled_rows, self.params.batch_rows)?;
+
+        Ok(StepSort {
+            bounds,
+            cur_bound: None,
+            subsequent: std::mem::take(&mut self.streams),
+            current: vec![],
+            output_merger: None,
+            params: self.params,
+        })
+    }
+}
+
+impl<A: SortAlgorithm> StepSort<A> {
+    fn next_bound(&mut self) {
+        let Some(last) = self.bounds.last_mut() else {
+            self.cur_bound = None;
+            return;
+        };
+        let bound = match last.len() {
+            0 => unreachable!(),
+            1 => self.bounds.pop().unwrap(),
+            _ => {
+                let bound = last.slice(0..1).maybe_gc();
+                *last = last.slice(1..last.len());
+                bound
+            }
+        };
+        self.cur_bound = Some(A::Rows::from_column(&bound).unwrap());
+    }
+
+    async fn merge_current(&mut self, base: &Base) -> Result<()> {
+        for s in &mut self.subsequent {
+            s.spill(0).await?;
+        }
+        let SortSpillParams {
+            batch_rows,
+            num_merge,
+        } = self.params;
+        for (i, s) in self.current.iter_mut().rev().enumerate() {
+            if i < num_merge {
+                s.spill(1).await?;
+            } else {
+                s.spill(0).await?;
+            }
+        }
+
+        let streams = self
+            .current
+            .drain(self.current.len() - num_merge..)
+            .collect();
+
+        let mut merger = Merger::<A, _>::create(base.schema.clone(), streams, batch_rows, None);
+
+        let mut sorted = VecDeque::new();
+        while let Some(data) = merger.async_next_block().await? {
+            let mut block = base.new_block(data);
+            block.spill(&base.spiller).await?;
+            sorted.push_back(block);
+        }
+        debug_assert!(merger.is_finished());
+
+        let stream = base.new_stream(sorted, self.cur_bound.clone());
+        self.current.insert(0, stream);
+        self.subsequent
+            .extend(merger.streams().into_iter().filter(|s| !s.is_empty()));
+        Ok(())
+    }
+
+    async fn restore_and_output(&mut self, base: &Base) -> Result<(Option<DataBlock>, bool)> {
+        let merger = match self.output_merger.as_mut() {
+            Some(merger) => merger,
+            None => {
+                debug_assert!(!self.current.is_empty());
+                if self.current.len() == 1 {
+                    let mut s = self.current.pop().unwrap();
+                    s.restore_first().await?;
+                    let block = Some(s.take_next_bounded_block());
+
+                    if !s.is_empty() {
+                        if s.should_include_first() {
+                            self.current.push(s);
+                        } else {
+                            self.subsequent.push(s);
+                        }
+                        return Ok((block, false));
+                    }
+
+                    return Ok((block, self.subsequent.is_empty()));
+                }
+
+                self.sort_spill(base, self.params).await?;
+
+                let streams = mem::take(&mut self.current);
+                let merger = Merger::<A, _>::create(
+                    base.schema.clone(),
+                    streams,
+                    self.params.batch_rows,
+                    None,
+                );
+                self.output_merger.insert(merger)
+            }
+        };
+
+        let Some(data) = merger.async_next_block().await? else {
+            debug_assert!(merger.is_finished());
+            let streams = self.output_merger.take().unwrap().streams();
+            self.subsequent
+                .extend(streams.into_iter().filter(|s| !s.is_empty()));
+            return Ok((None, self.subsequent.is_empty()));
+        };
+
+        let mut sorted = base.new_stream([base.new_block(data)].into(), self.cur_bound.clone());
+        let block = if sorted.should_include_first() {
+            let block = Some(sorted.take_next_bounded_block());
+            if sorted.is_empty() {
+                return Ok((block, false));
+            }
+            block
+        } else {
+            None
+        };
+
+        while let Some(data) = merger.async_next_block().await? {
+            let mut block = base.new_block(data);
+            block.spill(&base.spiller).await?;
+            sorted.blocks.push_back(block);
+        }
+        debug_assert!(merger.is_finished());
+
+        if !sorted.is_empty() {
+            self.subsequent.push(sorted);
+        }
+        let streams = self.output_merger.take().unwrap().streams();
+        self.subsequent
+            .extend(streams.into_iter().filter(|s| !s.is_empty()));
+        Ok((block, self.subsequent.is_empty()))
+    }
+
+    async fn sort_spill(
+        &mut self,
+        base: &Base,
+        SortSpillParams {
+            batch_rows,
+            num_merge,
+        }: SortSpillParams,
+    ) -> Result<()> {
+        let need = self
+            .current
+            .iter()
+            .map(|s| if s.blocks[0].data.is_none() { 1 } else { 0 })
+            .sum::<usize>()
+            * batch_rows;
+
+        if need + self.subsequent_memory_rows() + self.current_memory_rows()
+            < batch_rows * num_merge
+        {
+            return Ok(());
+        }
+
+        let mut unspilled = self
+            .current
+            .iter_mut()
+            .chain(self.subsequent.iter_mut())
+            .flat_map(|s| s.blocks.iter_mut())
+            .filter(|s| s.data.is_some())
+            .collect::<Vec<_>>();
+
+        unspilled.sort_by(|s1, s2| {
+            let r1 = s1.domain::<A::Rows>();
+            let r2 = s2.domain::<A::Rows>();
+            let cmp = r1.first().cmp(&r2.first());
+            cmp
+        });
+
+        let mut released = 0;
+        while let Some(block) = unspilled.pop() {
+            if released >= need {
+                break;
+            }
+
+            block.spill(&base.spiller).await?;
+            released += block.rows;
+        }
+
+        Ok(())
+    }
+
+    fn subsequent_memory_rows(&self) -> usize {
+        self.subsequent
+            .iter()
+            .map(|s| s.in_memory_rows())
+            .sum::<usize>()
+    }
+
+    fn current_memory_rows(&self) -> usize {
+        self.current
+            .iter()
+            .map(|s| s.in_memory_rows())
+            .sum::<usize>()
+    }
+
+    fn choice_streams_by_bound(&mut self) {
+        debug_assert!(self.current.is_empty());
+        debug_assert!(!self.subsequent.is_empty());
+
+        self.next_bound();
+        if self.cur_bound.is_none() {
+            mem::swap(&mut self.current, &mut self.subsequent);
+            for s in &mut self.current {
+                s.bound = None
+            }
+            return;
+        }
+
+        (self.current, self.subsequent) = self
+            .subsequent
+            .drain(..)
+            .map(|mut s| {
+                s.bound = self.cur_bound.clone();
+                s
+            })
+            .partition(|s| s.should_include_first());
+
+        self.current.sort_by_key(|s| s.blocks[0].data.is_some());
     }
 }
 
@@ -508,28 +571,28 @@ pub struct FmtMemoryUsage<'a, A: SortAlgorithm>(&'a TransformStreamSortSpill<A>)
 
 impl<A: SortAlgorithm> fmt::Debug for FmtMemoryUsage<'_, A> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut debug = f.debug_struct("TransformStreamSortSpill");
+        let debug = &mut f.debug_struct("TransformStreamSortSpill");
         match &self.0.step {
-            Step::Collect(_, params) => {
-                debug
-                    .field("num_merge", &params.num_merge)
-                    .field("batch_rows", &params.batch_rows);
-            }
-            Step::Sort(step_sort) => {
-                debug
-                    .field("num_merge", &step_sort.params.num_merge)
-                    .field("batch_rows", &step_sort.params.batch_rows)
-                    .field("cur_bound", &step_sort.cur_bound);
-            }
-            _ => (),
-        };
-        debug
-            .field("current_memory_rows", &self.0.current_memory_rows())
-            .field("current", &self.0.current)
-            .field("subsequent_memory_rows", &self.0.subsequent_memory_rows())
-            .field("subsequent", &self.0.subsequent)
-            .field("has_output_merger", &self.0.output_merger.is_some())
-            .finish()
+            Step::Collect(step_collect) => debug
+                .field("num_merge", &step_collect.params.num_merge)
+                .field("batch_rows", &step_collect.params.batch_rows)
+                .field("subsequent", &step_collect.streams)
+                .field("subsequent_memory_rows", &step_collect.memory_rows()),
+            Step::Sort(step_sort) => debug
+                .field("num_merge", &step_sort.params.num_merge)
+                .field("batch_rows", &step_sort.params.batch_rows)
+                .field("cur_bound", &step_sort.cur_bound)
+                .field(
+                    "subsequent_memory_rows",
+                    &step_sort.subsequent_memory_rows(),
+                )
+                .field("current_memory_rows", &step_sort.current_memory_rows())
+                .field("current", &step_sort.current)
+                .field("subsequent", &step_sort.subsequent)
+                .field("has_output_merger", &step_sort.output_merger.is_some()),
+            _ => debug,
+        }
+        .finish()
     }
 }
 

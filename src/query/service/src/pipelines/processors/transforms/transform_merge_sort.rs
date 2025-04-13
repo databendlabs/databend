@@ -15,6 +15,8 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::intrinsics::unlikely;
+use std::sync::atomic;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -79,10 +81,13 @@ pub struct TransformSort<A: SortAlgorithm, C> {
     spill_sort: Option<TransformStreamSortSpill<A>>,
     limit_sort: Option<TransformSortMergeLimit<A::Rows>>,
 
+    aborting: AtomicBool,
+
     // The spill_params will be passed to the spill processor.
     // If spill_params is Some, it means we need to spill.
     spill_params: Option<SortSpillParams>,
 
+    max_block_size: usize,
     memory_settings: MemorySettings,
 }
 
@@ -97,6 +102,7 @@ where
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
+        max_block_size: usize,
         limit: Option<usize>,
         spiller: Arc<Spiller>,
         output_order_col: bool,
@@ -124,6 +130,8 @@ where
             )),
             limit_sort,
             spill_params: None,
+            max_block_size,
+            aborting: AtomicBool::new(false),
             memory_settings,
         })
     }
@@ -154,7 +162,7 @@ where
         Ok(())
     }
 
-    fn prepare_spill(&mut self) {
+    fn prepare_spill(&mut self, no_need_spill: bool) {
         let (num_rows, num_bytes) = self
             .input_data
             .iter()
@@ -162,7 +170,14 @@ where
             .fold((0, 0), |(acc_rows, acc_bytes), (rows, bytes)| {
                 (acc_rows + rows, acc_bytes + bytes)
             });
-        self.spill_params = Some(self.determine_params(num_bytes, num_rows));
+        if no_need_spill {
+            self.spill_params = Some(SortSpillParams {
+                batch_rows: self.max_block_size,
+                num_merge: 100000,
+            })
+        } else {
+            self.spill_params = Some(self.determine_params(num_bytes, num_rows));
+        }
     }
 
     fn determine_params(&self, bytes: usize, rows: usize) -> SortSpillParams {
@@ -329,11 +344,12 @@ where
     async fn async_process(&mut self) -> Result<()> {
         match &self.state {
             State::Collect => {
+                let finished = self.input.is_finished();
                 if self.spill_params.is_none() {
                     if self.limit_sort.is_some() {
                         self.prepare_spill_limit()?;
                     } else {
-                        self.prepare_spill();
+                        self.prepare_spill(finished);
                     }
                     let spill_sort = self.spill_sort.as_mut().unwrap();
                     spill_sort.init_spill(self.spill_params.unwrap());
@@ -350,10 +366,9 @@ where
                         .subsequent_spill_last(subsequent + input - max)
                         .await?;
                 }
-                let finished = self.input.is_finished();
                 if input > max || finished && input > 0 {
                     let input_data = std::mem::take(&mut self.input_data);
-                    spill_sort.sort_input_data(input_data)?;
+                    spill_sort.sort_input_data(input_data, &self.aborting)?;
                 }
                 if finished {
                     self.state = State::Sort;
@@ -385,6 +400,7 @@ where
                 self.collect_block(block)
             }
             State::Sort => {
+                debug_assert!(self.input_data.is_empty());
                 let limit_sort = self.limit_sort.as_mut().unwrap();
                 self.output_data.extend(limit_sort.on_finish(false)?);
                 self.state = State::Finish;
@@ -392,5 +408,9 @@ where
             }
             State::Finish => unreachable!(),
         }
+    }
+
+    fn interrupt(&self) {
+        self.aborting.store(true, atomic::Ordering::Release);
     }
 }
