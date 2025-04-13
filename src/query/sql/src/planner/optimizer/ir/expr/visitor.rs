@@ -12,6 +12,80 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Expression Visitor Pattern
+//!
+//! This module implements the visitor pattern for traversing and transforming expression trees
+//! in both synchronous and asynchronous contexts. The visitor pattern allows for separation of
+//! algorithms from the structure they operate on, making it easier to add new operations without
+//! modifying the expression classes.
+//!
+//! ## Examples
+//!
+//! ### Synchronous Visitor Example
+//!
+//! ```rust
+//! use databend_common_exception::Result;
+//!
+//! use crate::optimizer::ir::expr::SExpr;
+//! use crate::optimizer::ir::expr::SExprVisitor;
+//! use crate::optimizer::ir::expr::VisitAction;
+//!
+//! // A visitor that counts the number of nodes in an expression tree
+//! struct NodeCounter {
+//!     count: usize,
+//! }
+//!
+//! impl SExprVisitor for NodeCounter {
+//!     fn visit(&mut self, _expr: &SExpr) -> Result<VisitAction> {
+//!         self.count += 1;
+//!         Ok(VisitAction::Continue) // Continue traversing children
+//!     }
+//! }
+//!
+//! // Usage:
+//! // let expr = create_some_expression();
+//! // let mut counter = NodeCounter { count: 0 };
+//! // expr.accept(&mut counter)?;
+//! // println!("Expression has {} nodes", counter.count);
+//! ```
+//!
+//! ### Asynchronous Visitor Example
+//!
+//! ```rust
+//! use std::sync::Arc;
+//!
+//! use databend_common_exception::Result;
+//!
+//! use crate::optimizer::ir::expr::AsyncSExprVisitor;
+//! use crate::optimizer::ir::expr::SExpr;
+//! use crate::optimizer::ir::expr::VisitAction;
+//! use crate::plans::RelOperator;
+//!
+//! // Visitor that eliminates unnecessary Sort operations with empty sort keys
+//! struct EmptySortEliminator;
+//!
+//! #[async_trait::async_trait]
+//! impl AsyncSExprVisitor for EmptySortEliminator {
+//!     async fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+//!         // Check if this is a Sort operator with empty sort keys
+//!         if let RelOperator::Sort(sort) = expr.plan.as_ref() {
+//!             if sort.sort_keys.is_empty() {
+//!                 // If sort has no keys, it's unnecessary - replace with its child
+//!                 if expr.arity() == 1 {
+//!                     return Ok(VisitAction::Replace(expr.unary_child().clone()));
+//!                 }
+//!             }
+//!         }
+//!         Ok(VisitAction::Continue)
+//!     }
+//! }
+//!
+//! // Usage example:
+//! // let expr = create_some_expression();
+//! // let mut eliminator = EmptySortEliminator;
+//! // let optimized_expr = expr.accept_async(&mut eliminator).await?;
+//! ```
+
 use std::sync::Arc;
 
 use databend_common_exception::Result;
