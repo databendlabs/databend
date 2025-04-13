@@ -21,6 +21,8 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,6 +33,7 @@ use databend_common_expression::FromData;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::executor::format_partial_tree;
 use databend_common_sql::executor::MutationBuildInfo;
@@ -39,6 +42,8 @@ use databend_common_sql::BindContext;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
+use databend_common_storages_fuse::FuseLazyPartInfo;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
@@ -54,6 +59,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
+use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::schedulers::Fragmenter;
@@ -152,7 +158,8 @@ impl Interpreter for ExplainInterpreter {
                         schema.clone(),
                         metadata.clone(),
                     )?;
-                    let plan = interpreter.build_physical_plan(&mutation, true).await?;
+                    let mut plan = interpreter.build_physical_plan(&mutation, true).await?;
+                    self.inject_pruned_partitions_stats(&mut plan, metadata)?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
                 }
                 _ => self.explain_plan(&self.plan)?,
@@ -541,7 +548,8 @@ impl ExplainInterpreter {
         // we should not use `dry_run` mode to build the physical plan.
         // It's because we need to get the same partitions as the original selecting plan.
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
-        let plan = builder.build(s_expr, bind_context.column_set()).await?;
+        let mut plan = builder.build(s_expr, bind_context.column_set()).await?;
+        self.inject_pruned_partitions_stats(&mut plan, metadata)?;
         self.explain_physical_plan(&plan, metadata, formatted_ast)
             .await
     }
@@ -571,5 +579,55 @@ impl ExplainInterpreter {
         let line_split_result = display_string.lines().collect::<Vec<_>>();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+    }
+
+    fn inject_pruned_partitions_stats(
+        &self,
+        plan: &mut PhysicalPlan,
+        metadata: &MetadataRef,
+    ) -> Result<()> {
+        let mut sources = vec![];
+        plan.get_all_data_source(&mut sources);
+        for (id, source) in sources {
+            if let Some(stat) = self.prune_lazy_parts(metadata, &source)? {
+                plan.set_pruning_stats(id, stat);
+            }
+        }
+        Ok(())
+    }
+
+    fn prune_lazy_parts(
+        &self,
+        metadata: &MetadataRef,
+        source: &DataSourcePlan,
+    ) -> Result<Option<PartStatistics>> {
+        let partitions = source.parts.partitions.first();
+        if partitions.is_none_or(|part| part.as_any().downcast_ref::<FuseLazyPartInfo>().is_none())
+        {
+            return Ok(None);
+        }
+        let meta = metadata.read();
+        let max_threads = self.ctx.get_settings().get_max_threads()?;
+        let table_entry = meta.table(source.scan_id);
+        if let Some(fuse_table) = table_entry.table().as_any().downcast_ref::<FuseTable>() {
+            let mut dummy_pipeline = Pipeline::create();
+            let prune_pipeline = fuse_table.do_build_prune_pipeline(
+                self.ctx.clone(),
+                source,
+                &mut dummy_pipeline,
+                true,
+            )?;
+            if let Some(mut pipeline) = prune_pipeline {
+                pipeline.set_max_threads(max_threads as usize);
+                let settings = ExecutorSettings::try_create(self.ctx.clone())?;
+                let executor = QueryPipelineExecutor::create(pipeline, settings)?;
+                executor.execute()?;
+            }
+            let stats = self.ctx.get_pruned_partitions_stats();
+            if stats.is_some() {
+                return Ok(stats);
+            }
+        }
+        Ok(None)
     }
 }
