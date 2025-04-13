@@ -64,7 +64,7 @@ pub struct TransformSort<A: SortAlgorithm, C> {
     input_data: Vec<DataBlock>,
     output_data: VecDeque<DataBlock>,
 
-    sort_desc: Arc<Vec<SortColumnDescription>>,
+    sort_desc: Arc<[SortColumnDescription]>,
 
     /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
     /// we can generate and output the order column to avoid the extra converting in the next transform.
@@ -96,7 +96,7 @@ where
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
+        sort_desc: Arc<[SortColumnDescription]>,
         limit: Option<usize>,
         spiller: Arc<Spiller>,
         output_order_col: bool,

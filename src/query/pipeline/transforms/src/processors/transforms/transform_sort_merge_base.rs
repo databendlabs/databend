@@ -63,7 +63,7 @@ pub struct TransformSortMergeBase<M, R, Converter> {
     inner: M,
 
     row_converter: Converter,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
+    sort_desc: Arc<[SortColumnDescription]>,
     /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
     /// we can generate and output the order column to avoid the extra converting in the next transform.
     output_order_col: bool,
@@ -84,7 +84,7 @@ where
 {
     pub fn try_create(
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
+        sort_desc: Arc<[SortColumnDescription]>,
         order_col_generated: bool,
         output_order_col: bool,
         inner: M,

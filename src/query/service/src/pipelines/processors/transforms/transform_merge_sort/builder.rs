@@ -40,7 +40,7 @@ pub struct TransformSortBuilder {
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
     block_size: usize,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
+    sort_desc: Arc<[SortColumnDescription]>,
     order_col_generated: bool,
     output_order_col: bool,
     memory_settings: MemorySettings,
@@ -55,7 +55,7 @@ impl TransformSortBuilder {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
+        sort_desc: Arc<[SortColumnDescription]>,
         block_size: usize,
         spiller: Arc<Spiller>,
     ) -> Self {

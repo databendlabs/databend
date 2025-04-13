@@ -59,7 +59,6 @@ pub struct TransformSortMerge<R: Rows> {
 impl<R: Rows> TransformSortMerge<R> {
     pub fn create(
         schema: DataSchemaRef,
-        _sort_desc: Arc<Vec<SortColumnDescription>>,
         block_size: usize,
         enable_loser_tree: bool,
         limit: Option<usize>,
@@ -213,13 +212,12 @@ pub fn sort_merge(
     type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
     type MergeSortCommon = TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
 
-    let sort_desc = Arc::new(sort_desc);
     let mut processor = MergeSortCommon::try_create(
         schema.clone(),
-        sort_desc.clone(),
+        sort_desc.into(),
         have_order_col,
         false,
-        MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree, None),
+        MergeSortCommonImpl::create(schema, block_size, enable_loser_tree, None),
     )?;
     for block in data_blocks {
         processor.transform(block)?;

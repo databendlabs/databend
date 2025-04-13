@@ -98,7 +98,7 @@ impl PipelineBuilder {
         after_exchange: Option<bool>,
     ) -> Result<()> {
         let max_threads = self.settings.get_max_threads()? as usize;
-        let sort_desc = Arc::new(sort_desc);
+        let sort_desc = sort_desc.into();
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
@@ -144,7 +144,7 @@ impl PipelineBuilder {
 pub struct SortPipelineBuilder {
     ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
+    sort_desc: Arc<[SortColumnDescription]>,
     limit: Option<usize>,
     block_size: usize,
     remove_order_col_at_last: bool,
@@ -154,7 +154,7 @@ impl SortPipelineBuilder {
     pub fn create(
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
+        sort_desc: Arc<[SortColumnDescription]>,
     ) -> Result<Self> {
         let block_size = ctx.get_settings().get_max_block_size()? as usize;
         Ok(Self {
