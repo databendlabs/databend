@@ -135,7 +135,7 @@ impl Processor for TransformPartitionDispatch {
                     } else {
                         self.sent_final_partition[*output_index] = true;
                         output.port.push_data(Ok(DataBlock::empty_with_meta(
-                            AggregateMeta::create_final(),
+                            AggregateMeta::create_final(vec![]),
                         )));
                     }
                 } else if output.status != PortStatus::NeedData {
@@ -160,7 +160,7 @@ impl Processor for TransformPartitionDispatch {
             let (meta, data_block) = Self::unpark_block(data_block)?;
 
             match meta {
-                AggregateMeta::FinalPartition => {
+                AggregateMeta::FinalPartition(_) => {
                     self.sync_final_partition = true;
                     self.input.set_not_need_data();
                 }
@@ -184,9 +184,9 @@ impl Processor for TransformPartitionDispatch {
 
                 self.outputs[output_index]
                     .port
-                    .push_data(Ok(
-                        DataBlock::empty_with_meta(AggregateMeta::create_final()),
-                    ));
+                    .push_data(Ok(DataBlock::empty_with_meta(AggregateMeta::create_final(
+                        vec![],
+                    ))));
                 self.sent_final_partition[output_index] = true;
                 self.outputs[output_index].status = PortStatus::Idle;
             }
@@ -207,7 +207,7 @@ impl Processor for TransformPartitionDispatch {
                 let (meta, data_block) = Self::unpark_block(data_block)?;
 
                 match meta {
-                    AggregateMeta::FinalPartition => {
+                    AggregateMeta::FinalPartition(_) => {
                         self.sync_final_partition = true;
                         self.input.set_not_need_data();
                         continue;

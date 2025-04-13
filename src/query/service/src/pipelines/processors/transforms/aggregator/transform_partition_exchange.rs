@@ -35,19 +35,23 @@ use crate::pipelines::processors::transforms::aggregator::InFlightPayload;
 const HASH_SEED: u64 = 9263883436177860930;
 
 pub struct ExchangePartition {
+    merge_window_size: usize,
     params: Arc<AggregatorParams>,
 }
 
 impl ExchangePartition {
-    pub fn create(params: Arc<AggregatorParams>) -> Arc<Self> {
-        Arc::new(ExchangePartition { params })
+    pub fn create(merge_window_size: usize, params: Arc<AggregatorParams>) -> Arc<Self> {
+        Arc::new(ExchangePartition {
+            merge_window_size,
+            params,
+        })
     }
 }
 
 impl ExchangePartition {
     fn partition_final_payload(n: usize) -> Result<Vec<DataBlock>> {
         Ok((0..n)
-            .map(|_| DataBlock::empty_with_meta(AggregateMeta::create_final()))
+            .map(|_| DataBlock::empty_with_meta(AggregateMeta::create_final(vec![])))
             .collect())
     }
 
@@ -184,7 +188,7 @@ impl Exchange for ExchangePartition {
             // already restore in upstream
             AggregateMeta::SpilledPayload(_) => unreachable!(),
             // broadcast final partition to downstream
-            AggregateMeta::FinalPartition => Self::partition_final_payload(n),
+            AggregateMeta::FinalPartition(_) => Self::partition_final_payload(n),
             AggregateMeta::AggregatePayload(payload) => Self::partition_aggregate(payload, n),
             AggregateMeta::InFlightPayload(payload) => {
                 self.partition_flight_payload(payload, data_block, n)
@@ -192,7 +196,13 @@ impl Exchange for ExchangePartition {
         }
     }
 
-    // fn merge_output(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-    // Ok(vec![DataBlock::concat(&data_blocks)?])
-    // }
+    fn output_window_size(&self) -> usize {
+        self.merge_window_size
+    }
+
+    fn merge_output(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        Ok(vec![DataBlock::empty_with_meta(
+            AggregateMeta::create_final(data_blocks),
+        )])
+    }
 }

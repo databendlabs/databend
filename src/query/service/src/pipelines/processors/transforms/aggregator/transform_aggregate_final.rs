@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -44,7 +45,7 @@ pub struct TransformFinalAggregate {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    next_partition_data: Option<(AggregateMeta, DataBlock)>,
+    next_partition_data: VecDeque<(AggregateMeta, DataBlock)>,
 
     input_data: Vec<(AggregateMeta, DataBlock)>,
     output_data: Option<DataBlock>,
@@ -63,7 +64,7 @@ impl Processor for TransformFinalAggregate {
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input_data.clear();
-            self.next_partition_data.take();
+            self.next_partition_data.clear();
 
             self.input.finish();
             return Ok(Event::Finished);
@@ -107,7 +108,7 @@ impl Processor for TransformFinalAggregate {
         for (meta, block) in std::mem::take(&mut self.input_data).into_iter() {
             match meta {
                 AggregateMeta::SpilledPayload(_) => unreachable!(),
-                AggregateMeta::FinalPartition => unreachable!(),
+                AggregateMeta::FinalPartition(_) => unreachable!(),
                 AggregateMeta::InFlightPayload(_) => {
                     let payload = self.deserialize_flight(block)?;
 
@@ -121,7 +122,7 @@ impl Processor for TransformFinalAggregate {
             };
         }
 
-        if let Some(next_partition_data) = self.next_partition_data.take() {
+        while let Some(next_partition_data) = self.next_partition_data.pop_front() {
             self.input_data.push(next_partition_data);
         }
 
@@ -155,15 +156,25 @@ impl TransformFinalAggregate {
 
         match aggregate_meta {
             AggregateMeta::SpilledPayload(_) => Ok(false),
-            AggregateMeta::FinalPartition => Ok(false),
+            AggregateMeta::FinalPartition(payload) => {
+                let mut need_final = false;
+                let working_partition = self.working_partition;
+
+                for block in payload.data {
+                    self.working_partition = working_partition;
+                    need_final = self.add_data(block)?;
+                }
+
+                Ok(need_final)
+            }
             AggregateMeta::InFlightPayload(payload) => {
                 debug_assert!(payload.partition >= self.working_partition);
                 debug_assert_eq!(payload.max_partition, payload.global_max_partition);
 
                 if self.working_partition != payload.partition {
                     self.working_partition = payload.partition;
-                    self.next_partition_data =
-                        Some((AggregateMeta::InFlightPayload(payload), block));
+                    self.next_partition_data
+                        .push_back((AggregateMeta::InFlightPayload(payload), block));
                     return Ok(true);
                 }
 
@@ -180,8 +191,8 @@ impl TransformFinalAggregate {
 
                 if self.working_partition != payload.partition {
                     self.working_partition = payload.partition;
-                    self.next_partition_data =
-                        Some((AggregateMeta::AggregatePayload(payload), block));
+                    self.next_partition_data
+                        .push_back((AggregateMeta::AggregatePayload(payload), block));
                     return Ok(true);
                 }
 
@@ -219,7 +230,7 @@ impl TransformFinalAggregate {
             input_data: vec![],
             output_data: None,
             working_partition: 0,
-            next_partition_data: None,
+            next_partition_data: VecDeque::new(),
             flush_state: PayloadFlushState::default(),
         }))
     }

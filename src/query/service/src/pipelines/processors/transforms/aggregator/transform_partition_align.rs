@@ -99,7 +99,9 @@ impl TransformPartitionAlign {
             }
 
             self.output_data
-                .push_back(DataBlock::empty_with_meta(AggregateMeta::create_final()));
+                .push_back(DataBlock::empty_with_meta(AggregateMeta::create_final(
+                    vec![],
+                )));
         }
 
         Ok(())
@@ -123,7 +125,7 @@ impl TransformPartitionAlign {
 
     fn repartition(&mut self, meta: AggregateMeta, data_block: DataBlock) -> Result<()> {
         match meta {
-            AggregateMeta::FinalPartition => unreachable!(),
+            AggregateMeta::FinalPartition(_) => unreachable!(),
             AggregateMeta::SpilledPayload(_payload) => unreachable!(),
             AggregateMeta::InFlightPayload(payload) => {
                 if data_block.is_empty() {

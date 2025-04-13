@@ -71,7 +71,10 @@ pub fn build_final_aggregate(
 
     // 5. exchange local
     let pipe_size = pipeline.output_len();
-    pipeline.new_exchange(pipe_size, ExchangePartition::create(params.clone()))?;
+    pipeline.new_exchange(
+        pipe_size,
+        ExchangePartition::create(pipe_size, params.clone()),
+    )?;
 
     // 6. final aggregate
     pipeline.add_transform(|input, output| {

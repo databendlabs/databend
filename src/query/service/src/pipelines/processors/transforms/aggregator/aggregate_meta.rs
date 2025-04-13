@@ -140,7 +140,7 @@ pub struct InFlightPayload {
 }
 
 pub struct FinalPayload {
-    pub data: Arc<Vec<(AggregateMeta, DataBlock)>>,
+    pub data: Vec<DataBlock>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -148,7 +148,7 @@ pub enum AggregateMeta {
     SpilledPayload(SpilledPayload),
     AggregatePayload(AggregatePayload),
     InFlightPayload(InFlightPayload),
-    FinalPartition,
+    FinalPartition(FinalPayload),
 }
 
 impl AggregateMeta {
@@ -182,8 +182,8 @@ impl AggregateMeta {
         Box::new(AggregateMeta::SpilledPayload(payload))
     }
 
-    pub fn create_final() -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::FinalPartition)
+    pub fn create_final(blocks: Vec<DataBlock>) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::FinalPartition(FinalPayload { data: blocks }))
     }
 
     pub fn get_global_max_partition(&self) -> usize {
@@ -191,7 +191,7 @@ impl AggregateMeta {
             AggregateMeta::SpilledPayload(v) => v.global_max_partition,
             AggregateMeta::AggregatePayload(v) => v.global_max_partition,
             AggregateMeta::InFlightPayload(v) => v.global_max_partition,
-            AggregateMeta::FinalPartition => unreachable!(),
+            AggregateMeta::FinalPartition(_) => unreachable!(),
         }
     }
 
@@ -200,7 +200,7 @@ impl AggregateMeta {
             AggregateMeta::SpilledPayload(v) => v.partition,
             AggregateMeta::AggregatePayload(v) => v.partition,
             AggregateMeta::InFlightPayload(v) => v.partition,
-            AggregateMeta::FinalPartition => unreachable!(),
+            AggregateMeta::FinalPartition(_) => unreachable!(),
         }
     }
 
@@ -209,7 +209,7 @@ impl AggregateMeta {
             AggregateMeta::AggregatePayload(v) => v.partition,
             AggregateMeta::InFlightPayload(v) => v.partition,
             AggregateMeta::SpilledPayload(v) => v.get_sorting_partition(),
-            AggregateMeta::FinalPartition => unreachable!(),
+            AggregateMeta::FinalPartition(_) => unreachable!(),
         }
     }
 
@@ -218,7 +218,7 @@ impl AggregateMeta {
             AggregateMeta::SpilledPayload(v) => v.max_partition,
             AggregateMeta::AggregatePayload(v) => v.max_partition,
             AggregateMeta::InFlightPayload(v) => v.max_partition,
-            AggregateMeta::FinalPartition => unreachable!(),
+            AggregateMeta::FinalPartition(_) => unreachable!(),
         }
     }
 
@@ -233,7 +233,7 @@ impl AggregateMeta {
             AggregateMeta::InFlightPayload(v) => {
                 v.global_max_partition = global_max_partition;
             }
-            AggregateMeta::FinalPartition => unreachable!(),
+            AggregateMeta::FinalPartition(_) => unreachable!(),
         }
     }
 }
@@ -241,7 +241,7 @@ impl AggregateMeta {
 impl Debug for AggregateMeta {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            AggregateMeta::FinalPartition => {
+            AggregateMeta::FinalPartition(_) => {
                 f.debug_struct("AggregateMeta::FinalPartition").finish()
             }
             AggregateMeta::SpilledPayload(_) => {
