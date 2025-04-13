@@ -64,7 +64,7 @@ pub trait MergeSort<R: Rows> {
     /// Add a block to the merge sort processor.
     /// `block` is the input data block.
     /// `init_rows` is the initial sorting rows of this `block`.
-    fn add_block(&mut self, block: DataBlock, init_rows: R, input_index: usize) -> Result<()>;
+    fn add_block(&mut self, block: DataBlock, init_rows: R) -> Result<()>;
 
     /// Return buffered data size.
     fn num_bytes(&self) -> usize;
@@ -98,9 +98,6 @@ pub struct TransformSortMergeBase<M, R, Converter> {
     /// so we don't need to generate the order column again.
     order_col_generated: bool,
 
-    /// The index for the next input block.
-    next_index: usize,
-
     memory_settings: MemorySettings,
 
     // The spill_params will be passed to the spill processor.
@@ -132,7 +129,6 @@ where
             sort_desc,
             output_order_col,
             order_col_generated,
-            next_index: 0,
             memory_settings,
             spill_params: None,
             _r: PhantomData,
@@ -174,8 +170,6 @@ where
 
         debug_assert_eq!(self.inner.num_bytes(), 0);
         debug_assert_eq!(self.inner.num_rows(), 0);
-        // Re-count the block index.
-        self.next_index = 0;
 
         Ok(blocks)
     }
@@ -217,8 +211,7 @@ where
             rows
         };
 
-        self.inner.add_block(block, rows, self.next_index)?;
-        self.next_index += 1;
+        self.inner.add_block(block, rows)?;
 
         match self.memory_settings.check_spill() {
             false => Ok(vec![]),

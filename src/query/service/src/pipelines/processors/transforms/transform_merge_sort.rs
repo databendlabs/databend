@@ -76,9 +76,6 @@ pub struct TransformSort<A: SortAlgorithm, C> {
     /// so we don't need to generate the order column again.
     order_col_generated: bool,
 
-    /// The index for the next input block.
-    next_index: usize,
-
     spill_sort: Option<TransformStreamSortSpill<A>>,
     limit_sort: Option<TransformSortMergeLimit<A::Rows>>,
 
@@ -119,7 +116,6 @@ where
             sort_desc,
             output_order_col,
             order_col_generated,
-            next_index: 0,
             spill_sort: Some(TransformStreamSortSpill::new(
                 schema,
                 limit,
@@ -185,8 +181,7 @@ where
         if self.order_col_generated {
             if let Some(limit_sort) = &mut self.limit_sort {
                 let rows = A::Rows::from_column(block.get_last_column())?;
-                limit_sort.add_block(block, rows, self.next_index)?;
-                self.next_index += 1;
+                limit_sort.add_block(block, rows)?;
                 return Ok(());
             }
 
@@ -196,8 +191,7 @@ where
 
         let (rows, block) = self.generate_order_column(block)?;
         if let Some(limit_sort) = &mut self.limit_sort {
-            limit_sort.add_block(block, rows, self.next_index)?;
-            self.next_index += 1;
+            limit_sort.add_block(block, rows)?;
         } else {
             self.input_data.push(block);
         }

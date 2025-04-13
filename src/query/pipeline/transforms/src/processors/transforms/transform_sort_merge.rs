@@ -82,7 +82,7 @@ impl<R: Rows> TransformSortMerge<R> {
 impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     const NAME: &'static str = "TransformSortMerge";
 
-    fn add_block(&mut self, block: DataBlock, init_rows: R, _input_index: usize) -> Result<()> {
+    fn add_block(&mut self, block: DataBlock, init_rows: R) -> Result<()> {
         if unlikely(self.aborting.load(Ordering::Relaxed)) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
