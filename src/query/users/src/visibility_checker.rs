@@ -133,10 +133,19 @@ impl GrantObjectVisibilityChecker {
                         );
                     }
                     GrantObject::Database(catalog, db) => {
-                        granted_databases.insert((catalog.to_string(), db.to_string()));
+                        if !(ent.privileges().len() == 1
+                            && ent.privileges().contains(UserPrivilegeType::Usage))
+                        {
+                            granted_databases.insert((catalog.to_string(), db.to_string()));
+                        }
                     }
                     GrantObject::DatabaseById(catalog, db) => {
-                        granted_databases_id.insert((catalog.to_string(), *db));
+                        // If only has db level usage privilege means only support use db.
+                        if !(ent.privileges().len() == 1
+                            && ent.privileges().contains(UserPrivilegeType::Usage))
+                        {
+                            granted_databases_id.insert((catalog.to_string(), *db));
+                        }
                     }
                     GrantObject::Table(catalog, db, table) => {
                         granted_tables.insert((

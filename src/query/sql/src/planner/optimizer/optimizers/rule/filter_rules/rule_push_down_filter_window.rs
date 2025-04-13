@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::optimizer::ir::Matcher;
@@ -23,6 +22,7 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Filter;
 use crate::plans::RelOp;
 use crate::plans::Window;
+use crate::ColumnSet;
 
 /// Input:   Filter
 ///           \
@@ -81,7 +81,7 @@ impl Rule for RulePushDownFilterWindow {
         let window_expr = s_expr.child(0)?;
         let window: Window = window_expr.plan().clone().try_into()?;
         let allowed = window.partition_by_columns()?;
-        let rejected = HashSet::from_iter(
+        let rejected = ColumnSet::from_iter(
             window
                 .order_by_columns()?
                 .into_iter()

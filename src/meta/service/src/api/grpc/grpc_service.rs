@@ -15,6 +15,7 @@
 use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Weak;
 
 use arrow_flight::BasicAuth;
 use databend_common_base::base::tokio::sync::mpsc;
@@ -74,9 +75,11 @@ use watcher::key_range::build_key_range;
 use watcher::util::new_watch_sink;
 use watcher::util::try_forward;
 use watcher::watch_stream::WatchStream;
+use watcher::watch_stream::WatchStreamSender;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
+use crate::meta_service::watcher::DispatcherHandle;
 use crate::meta_service::watcher::WatchTypes;
 use crate::meta_service::MetaNode;
 use crate::metrics::network_metrics;
@@ -88,15 +91,34 @@ use crate::version::MIN_METACLI_SEMVER;
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
-    pub(crate) meta_node: Arc<MetaNode>,
+    /// MetaServiceImpl is not dropped if there is an alive connection.
+    ///
+    /// Thus make the reference to [`MetaNode`] a Weak reference so that it does not prevent [`MetaNode`] to be dropped
+    pub(crate) meta_node: Weak<MetaNode>,
+}
+
+impl Drop for MetaServiceImpl {
+    fn drop(&mut self) {
+        if let Some(meta_node) = self.meta_node.upgrade() {
+            debug!("MetaServiceImpl::drop: id={}", meta_node.raft_store.id);
+        } else {
+            debug!("MetaServiceImpl::drop: inner MetaNode already dropped");
+        }
+    }
 }
 
 impl MetaServiceImpl {
-    pub fn create(meta_node: Arc<MetaNode>) -> Self {
+    pub fn create(meta_node: Weak<MetaNode>) -> Self {
         Self {
             token: GrpcToken::create(),
             meta_node,
         }
+    }
+
+    pub fn try_get_meta_node(&self) -> Result<Arc<MetaNode>, Status> {
+        self.meta_node.upgrade().ok_or_else(|| {
+            Status::internal("MetaNode is already dropped, can not serve new requests")
+        })
     }
 
     fn check_token(&self, metadata: &MetadataMap) -> Result<GrpcClaim, Status> {
@@ -117,7 +139,7 @@ impl MetaServiceImpl {
         let req: MetaGrpcReq = request.try_into()?;
         debug!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
 
-        let m = &self.meta_node;
+        let m = self.try_get_meta_node()?;
         let reply = match &req {
             MetaGrpcReq::UpsertKV(a) => {
                 let res = m
@@ -144,8 +166,9 @@ impl MetaServiceImpl {
 
         let req = ForwardRequest::new(1, req);
 
-        let res = self
-            .meta_node
+        let meta_node = self.try_get_meta_node()?;
+
+        let res = meta_node
             .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
             .log_elapsed_info(format!("ReadRequest: {:?}", req))
             .await
@@ -168,8 +191,9 @@ impl MetaServiceImpl {
 
         let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(ent));
 
-        let forward_res = self
-            .meta_node
+        let meta_node = self.try_get_meta_node()?;
+
+        let forward_res = meta_node
             .handle_forwardable_request(forward_req)
             .log_elapsed_info(format!("TxnRequest: {}", txn))
             .await;
@@ -342,7 +366,8 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::ExportStream>, Status> {
         let _guard = RequestInFlight::guard();
 
-        let meta_node = &self.meta_node;
+        let meta_node = self.try_get_meta_node()?;
+
         let strm = meta_node.raft_store.inner().export();
 
         let chunk_size = 32;
@@ -370,7 +395,8 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::ExportV1Stream>, Status> {
         let _guard = RequestInFlight::guard();
 
-        let meta_node = &self.meta_node;
+        let meta_node = self.try_get_meta_node()?;
+
         let strm = meta_node.raft_store.inner().export();
 
         let chunk_size = request.get_ref().chunk_size.unwrap_or(32) as usize;
@@ -400,15 +426,13 @@ impl MetaService for MetaServiceImpl {
 
         let (tx, rx) = mpsc::channel(4);
 
-        let mn = &self.meta_node;
+        let mn = self.try_get_meta_node()?;
 
-        let sender = mn.add_watcher(watch, tx.clone()).await?;
+        let weak_sender = mn.add_watcher(watch, tx.clone()).await?;
 
-        let dispatcher_handle = mn.dispatcher_handle.clone();
+        let weak_handle = Arc::downgrade(&mn.dispatcher_handle);
         let on_drop = move || {
-            dispatcher_handle.request(move |dispatcher| {
-                dispatcher.remove_watcher(sender);
-            })
+            try_remove_sender(weak_sender, weak_handle, "on-drop-WatchStream");
         };
 
         let stream = WatchStream::new(rx, Box::new(on_drop));
@@ -450,7 +474,8 @@ impl MetaService for MetaServiceImpl {
 
         let _guard = RequestInFlight::guard();
 
-        let meta_node = &self.meta_node;
+        let meta_node = self.try_get_meta_node()?;
+
         let members = meta_node.get_grpc_advertise_addrs().await;
 
         let resp = MemberListReply { data: members };
@@ -464,8 +489,10 @@ impl MetaService for MetaServiceImpl {
         _request: Request<Empty>,
     ) -> Result<Response<ClusterStatus>, Status> {
         let _guard = RequestInFlight::guard();
-        let status = self
-            .meta_node
+
+        let meta_node = self.try_get_meta_node()?;
+
+        let status = meta_node
             .get_status()
             .await
             .map_err(|e| Status::internal(format!("get meta node status failed: {}", e)))?;
@@ -539,4 +566,39 @@ fn thread_tracking_guard<T>(req: &tonic::Request<T>) -> Option<TrackingGuard> {
     }
 
     None
+}
+
+/// Try to remove a [`WatchStream`] from the subscriber.
+///
+/// This function receives two weak references: one to the sender and one to the dispatcher handle.
+/// Using weak references prevents memory leaks by avoiding cyclic references when these are captured in closures.
+/// If either reference can't be upgraded, the function logs the situation and returns early.
+fn try_remove_sender(
+    weak_sender: Weak<WatchStreamSender<WatchTypes>>,
+    weak_handle: Weak<DispatcherHandle>,
+    ctx: &str,
+) {
+    debug!("{ctx}: try removing:  {:?}", weak_sender);
+
+    let Some(d) = weak_handle.upgrade() else {
+        debug!(
+            "{ctx}: when try removing {:?}; dispatcher is already dropped",
+            weak_sender
+        );
+        return;
+    };
+
+    let Some(sender) = weak_sender.upgrade() else {
+        debug!(
+            "on_drop is called for WatchStream {:?}; but sender is already dropped",
+            weak_sender
+        );
+        return;
+    };
+
+    debug!("{ctx}: request is sent to remove watcher: {}", sender);
+
+    d.request(move |dispatcher| {
+        dispatcher.remove_watcher(sender);
+    })
 }

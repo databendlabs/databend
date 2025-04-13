@@ -39,7 +39,6 @@
 #![feature(int_roundings)]
 #![feature(try_blocks)]
 #![feature(let_chains)]
-#![feature(trait_upcasting)]
 #![feature(alloc_layout_extra)]
 #![feature(debug_closure_helpers)]
 #![feature(never_type)]
@@ -98,3 +97,6 @@ pub mod expr {
     pub use super::expression::FunctionCall;
     pub use super::expression::LambdaFunctionCall;
 }
+
+type IndexType = usize;
+type ColumnSet = std::collections::BTreeSet<IndexType>;

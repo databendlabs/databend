@@ -253,7 +253,7 @@ fn make_date_batch(offset: Duration) -> RecordBatch {
 /// name | service.name
 fn make_names_batch(name: &str, service_name_values: Vec<&str>) -> RecordBatch {
     let num_rows = service_name_values.len();
-    let name: StringArray = std::iter::repeat(Some(name)).take(num_rows).collect();
+    let name: StringArray = std::iter::repeat_n(Some(name), num_rows).collect();
     let service_name: StringArray = service_name_values.iter().map(Some).collect();
 
     let schema = Schema::new(vec![

@@ -15,8 +15,12 @@
 mod extract;
 mod m_expr;
 mod s_expr;
+mod visitor;
 
 pub use extract::Matcher;
 pub use extract::PatternExtractor;
 pub use m_expr::MExpr;
 pub use s_expr::SExpr;
+pub use visitor::AsyncSExprVisitor;
+pub use visitor::SExprVisitor;
+pub use visitor::VisitAction;

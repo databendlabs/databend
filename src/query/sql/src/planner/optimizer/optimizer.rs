@@ -36,7 +36,7 @@ use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use crate::optimizer::optimizers::CascadesOptimizer;
-use crate::optimizer::optimizers::DPhpy;
+use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::pipeline::OptimizerPipeline;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::OptimizerContext;
@@ -54,7 +54,7 @@ use crate::plans::SetScalarsOrQuery;
 use crate::InsertInputSource;
 
 #[fastrace::trace]
-#[async_recursion(#[recursive::recursive])]
+#[async_recursion(# [recursive::recursive])]
 pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {
@@ -262,7 +262,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             RuleID::SplitAggregate,
         ]))
         // 9. Apply DPhyp algorithm for cost-based join reordering
-        .add(DPhpy::new(opt_ctx.clone()))
+        .add(DPhpyOptimizer::new(opt_ctx.clone()))
         // 10. After join reorder, Convert some single join to inner join.
         .add(SingleToInnerOptimizer::new())
         // 11. Deduplicate join conditions.
@@ -306,7 +306,7 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             RuleID::SplitAggregate,
         ]))
         // Cost based optimization
-        .add(DPhpy::new(opt_ctx.clone()))
+        .add(DPhpyOptimizer::new(opt_ctx.clone()))
         .add(CascadesOptimizer::new(opt_ctx.clone())?);
 
     let _s_expr = pipeline.execute().await?;

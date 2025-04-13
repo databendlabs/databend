@@ -121,6 +121,14 @@ impl<R> TIdent<R, ()> {
     }
 }
 
+impl<R, N> TIdent<R, N>
+where R: TenantResource
+{
+    pub fn key_space_prefix() -> &'static str {
+        R::PREFIX
+    }
+}
+
 impl<R, N> TIdent<R, N> {
     pub fn new_generic(tenant: impl ToTenant, name: N) -> Self {
         Self {

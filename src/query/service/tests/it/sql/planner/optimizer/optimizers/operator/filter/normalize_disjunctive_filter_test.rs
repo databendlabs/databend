@@ -18,86 +18,10 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 use databend_common_sql::optimizer::optimizers::operator::NormalizeDisjunctiveFilterOptimizer;
-use databend_common_sql::planner::binder::ColumnBinding;
-use databend_common_sql::planner::binder::Visibility;
-use databend_common_sql::planner::plans::BoundColumnRef;
-use databend_common_sql::planner::plans::ConstantExpr;
 use databend_common_sql::planner::plans::FunctionCall;
 use databend_common_sql::planner::plans::ScalarExpr;
-use databend_common_sql::IndexType;
 
-// ===== Helper Functions =====
-
-/// Creates a simple AND expression with two arguments
-fn create_and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "and".to_string(),
-        params: vec![],
-        arguments: vec![left, right],
-    })
-}
-
-/// Creates a simple OR expression with two arguments
-fn create_or(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "or".to_string(),
-        params: vec![],
-        arguments: vec![left, right],
-    })
-}
-
-/// Creates a column reference with the given name
-fn create_column_ref(name: &str) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "column".to_string(),
-        params: vec![],
-        arguments: vec![create_constant_string(name)],
-    })
-}
-
-/// Creates a bound column reference with the given index, name, data type, table name and table index
-fn create_bound_column_ref(
-    index: IndexType,
-    name: &str,
-    data_type: DataType,
-    table_name: Option<&str>,
-    table_index: Option<IndexType>,
-) -> ScalarExpr {
-    let column = ColumnBinding {
-        index,
-        column_name: name.to_string(),
-        data_type: Box::new(data_type),
-        database_name: None,
-        table_name: table_name.map(|s| s.to_string()),
-        column_position: None,
-        table_index,
-        visibility: Visibility::Visible,
-        virtual_expr: None,
-    };
-    ScalarExpr::BoundColumnRef(BoundColumnRef { column, span: None })
-}
-
-/// Creates a constant string value
-fn create_constant_string(value: &str) -> ScalarExpr {
-    ScalarExpr::ConstantExpr(ConstantExpr {
-        span: None,
-        value: Scalar::String(value.to_string()),
-    })
-}
-
-// Creates a constant integer value
-// Removed unused function create_constant_int
-
-/// Creates a constant boolean value
-fn create_constant_bool(value: bool) -> ScalarExpr {
-    ScalarExpr::ConstantExpr(ConstantExpr {
-        span: None,
-        value: Scalar::Boolean(value),
-    })
-}
+use crate::sql::planner::optimizer::test_utils::*;
 
 /// Runs the NormalizeDisjunctiveFilterOptimizer on the given predicates
 fn run_optimizer(predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
@@ -241,35 +165,41 @@ fn compare_exprs(
 ///
 /// Optimization: Extracts common terms from both sides of the OR, even when columns are from different tables
 fn test_different_table_columns() -> Result<()> {
+    // Create a builder for expressions
+    let mut builder = ExprBuilder::new();
+
     // Create test expressions for columns from different tables
-    let t1_a = create_bound_column_ref(
+    let t1_a = builder.column(
+        "t1.a",
         1,
         "a",
         DataType::Number(NumberDataType::Int64),
-        Some("t1"),
-        Some(1),
+        "t1",
+        1,
     );
 
-    let t2_b = create_bound_column_ref(
+    let t2_b = builder.column(
+        "t2.b",
         2,
         "b",
         DataType::Number(NumberDataType::Int64),
-        Some("t2"),
-        Some(2),
+        "t2",
+        2,
     );
 
-    let t2_c = create_bound_column_ref(
+    let t2_c = builder.column(
+        "t2.c",
         3,
         "c",
         DataType::Number(NumberDataType::Int64),
-        Some("t2"),
-        Some(2),
+        "t2",
+        2,
     );
 
     // Create the expressions: (t1.a AND t2.b) OR (t1.a AND t2.c)
-    let t1a_and_t2b = create_and(t1_a.clone(), t2_b.clone());
-    let t1a_and_t2c = create_and(t1_a.clone(), t2_c.clone());
-    let or_expr = create_or(t1a_and_t2b, t1a_and_t2c);
+    let t1a_and_t2b = builder.and(t1_a.clone(), t2_b.clone());
+    let t1a_and_t2c = builder.and(t1_a.clone(), t2_c.clone());
+    let or_expr = builder.or(t1a_and_t2b, t1a_and_t2c);
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -341,14 +271,17 @@ fn test_different_table_columns() -> Result<()> {
 ///
 /// Optimization: Applies the inverse OR distributive law to extract common terms
 fn test_basic_normalization() -> Result<()> {
-    // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
 
-    let a_and_b = create_and(a.clone(), b.clone());
-    let a_and_c = create_and(a.clone(), c.clone());
-    let or_expr = create_or(a_and_b, a_and_c);
+    // Create test expressions
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
+
+    let a_and_b = builder.and(a.clone(), b.clone());
+    let a_and_c = builder.and(a.clone(), c.clone());
+    let or_expr = builder.or(a_and_b, a_and_c);
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -381,18 +314,21 @@ fn test_basic_normalization() -> Result<()> {
 ///
 /// Optimization: Applies the inverse OR distributive law to extract common terms from nested OR expressions
 fn test_nested_normalization() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
-    let d = create_column_ref("D");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
+    let d = builder.column_by_name("D");
 
-    let a_and_b = create_and(a.clone(), b.clone());
-    let a_and_c = create_and(a.clone(), c.clone());
-    let a_and_d = create_and(a.clone(), d.clone());
+    let a_and_b = builder.and(a.clone(), b.clone());
+    let a_and_c = builder.and(a.clone(), c.clone());
+    let a_and_d = builder.and(a.clone(), d.clone());
 
-    let inner_or = create_or(a_and_b, a_and_c);
-    let outer_or = create_or(inner_or, a_and_d);
+    let inner_or = builder.or(a_and_b, a_and_c);
+    let outer_or = builder.or(inner_or, a_and_d);
 
     // Run the optimizer
     let before = vec![outer_or];
@@ -425,18 +361,21 @@ fn test_nested_normalization() -> Result<()> {
 /// Optimization: Extracts multiple common terms from both sides of the OR
 #[test]
 fn test_multiple_common_terms() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
-    let d = create_column_ref("D");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
+    let d = builder.column_by_name("D");
 
     // Create (A AND B AND C) OR (A AND B AND D)
-    let a_and_b = create_and(a.clone(), b.clone());
-    let a_and_b_and_c = create_and(a_and_b.clone(), c.clone());
-    let a_and_b_and_d = create_and(a_and_b.clone(), d.clone());
+    let a_and_b = builder.and(a.clone(), b.clone());
+    let a_and_b_and_c = builder.and(a_and_b.clone(), c.clone());
+    let a_and_b_and_d = builder.and(a_and_b.clone(), d.clone());
 
-    let or_expr = create_or(a_and_b_and_c, a_and_b_and_d);
+    let or_expr = builder.or(a_and_b_and_c, a_and_b_and_d);
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -469,16 +408,19 @@ fn test_multiple_common_terms() -> Result<()> {
 ///
 /// Optimization: No change since there are no common terms to extract
 fn test_no_common_terms() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
-    let d = create_column_ref("D");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
+    let d = builder.column_by_name("D");
 
-    let a_and_b = create_and(a, b);
-    let c_and_d = create_and(c, d);
+    let a_and_b = builder.and(a, b);
+    let c_and_d = builder.and(c, d);
 
-    let or_expr = create_or(a_and_b, c_and_d);
+    let or_expr = builder.or(a_and_b, c_and_d);
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -511,10 +453,13 @@ fn test_no_common_terms() -> Result<()> {
 ///
 /// Optimization: Simplifies duplicate terms in OR expressions
 fn test_single_term_expressions() -> Result<()> {
-    // Create test expressions
-    let a = create_column_ref("A");
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
 
-    let or_expr = create_or(a.clone(), a.clone());
+    // Create test expressions
+    let a = builder.column_by_name("A");
+
+    let or_expr = builder.or(a.clone(), a.clone());
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -547,17 +492,20 @@ fn test_single_term_expressions() -> Result<()> {
 ///
 /// Optimization: Correctly handles nested OR expressions within AND expressions
 fn test_complex_nested_expressions() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
-    let d = create_column_ref("D");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
+    let d = builder.column_by_name("D");
 
-    let c_or_d = create_or(c, d);
-    let a_and_b = create_and(a.clone(), b);
-    let a_and_c_or_d = create_and(a.clone(), c_or_d);
+    let c_or_d = builder.or(c, d);
+    let a_and_b = builder.and(a.clone(), b);
+    let a_and_c_or_d = builder.and(a.clone(), c_or_d);
 
-    let or_expr = create_or(a_and_b, a_and_c_or_d);
+    let or_expr = builder.or(a_and_b, a_and_c_or_d);
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -591,8 +539,13 @@ fn test_complex_nested_expressions() -> Result<()> {
 /// Optimization: Handles empty OR arguments by returning false
 /// Note: This is a potential bug as empty OR should evaluate to false
 fn test_empty_or_arguments() -> Result<()> {
+    // Create a builder for expressions
+    let _builder = ExprBuilder::new();
+
     // Create an OR expression with empty arguments
     // This is not a valid expression in normal SQL but testing edge case handling
+    // Since ExprBuilder doesn't directly support creating an empty OR function call,
+    // we'll create it manually
     let or_expr = ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "or".to_string(),
@@ -632,8 +585,14 @@ fn test_empty_or_arguments() -> Result<()> {
 ///
 /// Optimization: Simplifies OR with a single argument to just that argument
 fn test_single_or_argument() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create an OR expression with a single argument
-    let a = create_column_ref("A");
+    let a = builder.column_by_name("A");
+
+    // Since ExprBuilder doesn't directly support creating an OR function call with a single argument,
+    // we'll create it manually
     let or_expr = ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "or".to_string(),
@@ -672,16 +631,19 @@ fn test_single_or_argument() -> Result<()> {
 ///
 /// Optimization: No change since there are no common AND terms to extract
 fn test_mixed_and_or_no_common() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
-    let d = create_column_ref("D");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
+    let d = builder.column_by_name("D");
 
-    let a_or_b = create_or(a, b);
-    let c_and_d = create_and(c, d);
+    let a_or_b = builder.or(a, b);
+    let c_and_d = builder.and(c, d);
 
-    let or_expr = create_or(a_or_b, c_and_d);
+    let or_expr = builder.or(a_or_b, c_and_d);
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -715,30 +677,29 @@ fn test_mixed_and_or_no_common() -> Result<()> {
 /// Optimization: Should recognize that these expressions are equivalent despite different order
 /// Potential bug: The optimizer might not recognize that (A > B AND C) is the same as (C AND A > B)
 fn test_non_commutative_expressions() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
 
-    let a_gt_b = ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: ">".to_string(),
-        params: vec![],
-        arguments: vec![a.clone(), b.clone()],
-    });
+    // Create A > B using the ExprBuilder
+    let a_gt_b = builder.gt(a.clone(), b.clone());
 
-    let a_gt_b_and_c = create_and(a_gt_b.clone(), c.clone());
-    let c_and_a_gt_b = create_and(c.clone(), a_gt_b.clone());
+    let a_gt_b_and_c = builder.and(a_gt_b.clone(), c.clone());
+    let c_and_a_gt_b = builder.and(c.clone(), a_gt_b.clone());
 
-    let or_expr = create_or(a_gt_b_and_c, c_and_a_gt_b);
+    let or_expr = builder.or(a_gt_b_and_c, c_and_a_gt_b);
 
     // Run the optimizer
     let before = vec![or_expr];
     let after = run_optimizer(before.clone())?;
 
     // Define expected before and after patterns
-    let expected_before = "((>(A, B) AND C) OR (C AND >(A, B)))";
-    let expected_after = "((>(A, B)) OR C)"; // Format changed but semantically the same
+    let expected_before = "((gt(A, B) AND C) OR (C AND gt(A, B)))";
+    let expected_after = "((gt(A, B)) OR C)"; // Format changed but semantically the same
 
     // Compare before and after optimization results
     // This is a potential bug - the optimizer should recognize these as the same expression
@@ -765,15 +726,18 @@ fn test_non_commutative_expressions() -> Result<()> {
 ///
 /// Optimization: Simplifies expressions with boolean constants
 fn test_optimization_with_constants() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let true_const = create_constant_bool(true);
-    let false_const = create_constant_bool(false);
+    let a = builder.column_by_name("A");
+    let true_const = builder.bool(true);
+    let false_const = builder.bool(false);
 
-    let a_and_true = create_and(a.clone(), true_const);
-    let a_and_false = create_and(a.clone(), false_const);
+    let a_and_true = builder.and(a.clone(), true_const);
+    let a_and_false = builder.and(a.clone(), false_const);
 
-    let or_expr = create_or(a_and_true, a_and_false);
+    let or_expr = builder.or(a_and_true, a_and_false);
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -807,18 +771,21 @@ fn test_optimization_with_constants() -> Result<()> {
 ///
 /// Optimization: Extracts common terms from multiple OR expressions
 fn test_multiple_or_expressions() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
-    let d = create_column_ref("D");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
+    let d = builder.column_by_name("D");
 
-    let a_and_b = create_and(a.clone(), b);
-    let a_and_c = create_and(a.clone(), c);
-    let a_and_d = create_and(a.clone(), d);
+    let a_and_b = builder.and(a.clone(), b);
+    let a_and_c = builder.and(a.clone(), c);
+    let a_and_d = builder.and(a.clone(), d);
 
-    let or_1 = create_or(a_and_b, a_and_c);
-    let or_2 = create_or(or_1, a_and_d);
+    let or_1 = builder.or(a_and_b, a_and_c);
+    let or_2 = builder.or(or_1, a_and_d);
 
     // Run the optimizer
     let before = vec![or_2];
@@ -841,8 +808,14 @@ fn test_multiple_or_expressions() -> Result<()> {
 ///
 /// Potential issue: Function assumes args.len() >= 2 but doesn't explicitly verify
 fn test_normalize_predicate_scalar_boundary() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create an AND expression with only one argument
-    let a = create_column_ref("A");
+    let a = builder.column_by_name("A");
+
+    // Since ExprBuilder doesn't directly support creating an AND function call with a single argument,
+    // we'll create it manually
     let and_expr = ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "and".to_string(),
@@ -870,30 +843,28 @@ fn test_normalize_predicate_scalar_boundary() -> Result<()> {
 /// Potential issue: In process_duplicate_or_exprs, when comparing shortest_exprs_len,
 /// non-AND expressions are not considered
 fn test_non_and_or_expressions() -> Result<()> {
-    // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
 
-    // Create a non-AND/OR function call
-    let a_eq_b = ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "=".to_string(),
-        params: vec![],
-        arguments: vec![a.clone(), b.clone()],
-    });
+    // Create test expressions
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
+
+    // Create a non-AND/OR function call using eq from ExprBuilder
+    let a_eq_b = builder.eq(a.clone(), b.clone());
 
     // Create (A = B) OR (A AND C)
-    let a_and_c = create_and(a.clone(), c);
-    let or_expr = create_or(a_eq_b, a_and_c);
+    let a_and_c = builder.and(a.clone(), c);
+    let or_expr = builder.or(a_eq_b, a_and_c);
 
     // Run the optimizer
     let before = vec![or_expr];
     let after = run_optimizer(before.clone())?;
 
     // Expected result: Should not extract common terms since A=B is not an AND expression
-    let expected_before = "(A = B OR (A AND C))";
-    let expected_after = "(A = B OR (A AND C))";
+    let expected_before = "(eq(A, B) OR (A AND C))";
+    let expected_after = "(eq(A, B) OR (A AND C))";
 
     // Compare before and after optimization results
     compare_exprs(&before, &after, expected_before, expected_after)?;
@@ -906,18 +877,21 @@ fn test_non_and_or_expressions() -> Result<()> {
 ///
 /// Potential issue: Complex nested expressions may cause inconsistent optimizer behavior
 fn test_complex_nested_optimization() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
-    let d = create_column_ref("D");
-    let e = create_column_ref("E");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
+    let d = builder.column_by_name("D");
+    let e = builder.column_by_name("E");
 
     // Create ((A AND B) OR (C AND D)) AND E
-    let a_and_b = create_and(a, b);
-    let c_and_d = create_and(c, d);
-    let or_expr = create_or(a_and_b, c_and_d);
-    let and_expr = create_and(or_expr, e);
+    let a_and_b = builder.and(a, b);
+    let c_and_d = builder.and(c, d);
+    let or_expr = builder.or(a_and_b, c_and_d);
+    let and_expr = builder.and(or_expr, e);
 
     // Run the optimizer
     let before = vec![and_expr];
@@ -938,13 +912,16 @@ fn test_complex_nested_optimization() -> Result<()> {
 ///
 /// Potential issue: Optimizer may not correctly handle duplicate expressions
 fn test_duplicate_expressions() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
 
     // Create (A AND B) OR (A AND B), should simplify to (A AND B)
-    let a_and_b = create_and(a.clone(), b.clone());
-    let or_expr = create_or(a_and_b.clone(), a_and_b.clone());
+    let a_and_b = builder.and(a.clone(), b.clone());
+    let or_expr = builder.or(a_and_b.clone(), a_and_b.clone());
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -965,13 +942,16 @@ fn test_duplicate_expressions() -> Result<()> {
 ///
 /// Potential issue: Optimizer may not correctly handle this special case
 fn test_special_case_and_or() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
 
     // Create (A AND B) OR A, should simplify to A
-    let a_and_b = create_and(a.clone(), b);
-    let or_expr = create_or(a_and_b, a.clone());
+    let a_and_b = builder.and(a.clone(), b);
+    let or_expr = builder.or(a_and_b, a.clone());
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -992,20 +972,23 @@ fn test_special_case_and_or() -> Result<()> {
 ///
 /// Potential issue: Optimizer may not correctly handle multiple predicates
 fn test_multiple_predicates() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
-    let d = create_column_ref("D");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
+    let d = builder.column_by_name("D");
 
     // Create two predicates: (A AND B) OR (A AND C) and (B AND D) OR (C AND D)
-    let a_and_b = create_and(a.clone(), b.clone());
-    let a_and_c = create_and(a.clone(), c.clone());
-    let or_expr1 = create_or(a_and_b, a_and_c);
+    let a_and_b = builder.and(a.clone(), b.clone());
+    let a_and_c = builder.and(a.clone(), c.clone());
+    let or_expr1 = builder.or(a_and_b, a_and_c);
 
-    let b_and_d = create_and(b.clone(), d.clone());
-    let c_and_d = create_and(c.clone(), d.clone());
-    let or_expr2 = create_or(b_and_d, c_and_d);
+    let b_and_d = builder.and(b.clone(), d.clone());
+    let c_and_d = builder.and(c.clone(), d.clone());
+    let or_expr2 = builder.or(b_and_d, c_and_d);
 
     // Run the optimizer
     let before = vec![or_expr1, or_expr2];
@@ -1028,17 +1011,20 @@ fn test_multiple_predicates() -> Result<()> {
 ///
 /// Potential issue: Deep nesting may cause stack overflow
 fn test_deeply_nested_expressions() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create a deeply nested expression
-    let mut expr = create_column_ref("A");
+    let mut expr = builder.column_by_name("A");
 
     // Create a nested AND expression with depth 1000
     for i in 0..1000 {
-        let new_col = create_column_ref(&format!("Col{}", i));
-        expr = create_and(expr, new_col);
+        let new_col = builder.column_by_name(&format!("Col{}", i));
+        expr = builder.and(expr, new_col);
     }
 
     // Create OR expression
-    let or_expr = create_or(expr.clone(), expr.clone());
+    let or_expr = builder.or(expr.clone(), expr.clone());
 
     // Run the optimizer
     let before = vec![or_expr];
@@ -1058,15 +1044,18 @@ fn test_deeply_nested_expressions() -> Result<()> {
 ///
 /// Potential issue: Optimizer may not correctly handle this distributive law case
 fn test_distributive_law() -> Result<()> {
+    // Create a builder for expressions
+    let builder = ExprBuilder::new();
+
     // Create test expressions
-    let a = create_column_ref("A");
-    let b = create_column_ref("B");
-    let c = create_column_ref("C");
+    let a = builder.column_by_name("A");
+    let b = builder.column_by_name("B");
+    let c = builder.column_by_name("C");
 
     // Create (A OR B) AND (A OR C)
-    let a_or_b = create_or(a.clone(), b);
-    let a_or_c = create_or(a.clone(), c);
-    let and_expr = create_and(a_or_b, a_or_c);
+    let a_or_b = builder.or(a.clone(), b);
+    let a_or_c = builder.or(a.clone(), c);
+    let and_expr = builder.and(a_or_b, a_or_c);
 
     // Run the optimizer
     let before = vec![and_expr];

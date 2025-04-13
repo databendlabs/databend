@@ -1,0 +1,40 @@
+text      : a = 2
+expr      : eq<Int32, Int32>(a, 2_i32)
+keep      : true
+range     : Some(1..4)
+
+text      : a = 2 and b = 41
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), eq<Int32, Int32>(b, 41_i32))
+keep      : true
+range     : Some(1..4)
+
+text      : a = 3
+expr      : eq<Int32, Int32>(a, 3_i32)
+keep      : true
+range     : Some(3..5)
+
+text      : a = 3 and b < 7
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 3_i32), lt<Int32, Int32>(b, CAST<UInt8>(7_u8 AS Int32)))
+keep      : true
+range     : Some(3..5)
+
+text      : to_string(a) = '3'
+expr      : eq<String, String>(CAST<Int32>(a AS String), "3")
+keep      : true
+range     : Some(3..5)
+
+text      : to_int8(a) = 2
+expr      : eq<Int8, Int8>(CAST<Int32>(a AS Int8), 2_i8)
+keep      : true
+range     : Some(1..4)
+
+text      : to_uint8(a) = 2::int64
+expr      : eq<Int64, Int64>(CAST<UInt8>(CAST<Int32>(a AS UInt8) AS Int64), CAST<UInt8>(2_u8 AS Int64))
+keep      : true
+range     : Some(0..4)
+
+text      : to_int16(a::int8) = 1+2
+expr      : eq<Int32, Int32>(CAST<Int16>(CAST<Int8>(CAST<Int32>(a AS Int8) AS Int16) AS Int32), CAST<UInt16>(plus<UInt8, UInt8>(1_u8, 2_u8) AS Int32))
+keep      : true
+range     : Some(3..5)
+

@@ -1,0 +1,5 @@
+text      : a::string = '2'
+ctx       : [("a", Number(Int32), Number(Int32(SimpleDomain { min: -2, max: 3 })))]
+expr      : eq<String, String>(CAST<Int32>(a AS String), "2")
+rewrited  : eq<Int32, Int32>(a, 2_i32)
+

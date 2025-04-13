@@ -23,6 +23,7 @@ use databend_common_storages_fuse::table_functions::ClusteringStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseBlockFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
+use databend_common_storages_fuse::table_functions::FuseDumpSnapshotsFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
 use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
@@ -130,6 +131,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseSnapshotFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_dump_snapshots".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseDumpSnapshotsFunc>::create),
             ),
         );
 

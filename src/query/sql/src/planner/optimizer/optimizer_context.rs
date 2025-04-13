@@ -41,6 +41,10 @@ pub struct OptimizerContext {
     // Optimizer state flags
     #[educe(Debug(ignore))]
     flags: RwLock<HashMap<String, bool>>,
+
+    // Enable optimizer tracing
+    #[educe(Debug(ignore))]
+    enable_trace: RwLock<bool>,
 }
 
 impl OptimizerContext {
@@ -56,6 +60,7 @@ impl OptimizerContext {
             sample_executor: RwLock::new(None),
             planning_agg_index: RwLock::new(false),
             flags: RwLock::new(HashMap::new()),
+            enable_trace: RwLock::new(false),
         })
     }
 
@@ -133,5 +138,14 @@ impl OptimizerContext {
     pub fn get_flag(self: &Arc<Self>, name: &str) -> bool {
         let flags = self.flags.read();
         *flags.get(name).unwrap_or(&false)
+    }
+
+    pub fn set_enable_trace(self: &Arc<Self>, enable: bool) -> Arc<Self> {
+        *self.enable_trace.write() = enable;
+        self.clone()
+    }
+
+    pub fn get_enable_trace(self: &Arc<Self>) -> bool {
+        *self.enable_trace.read()
     }
 }

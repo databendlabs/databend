@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
@@ -59,7 +58,6 @@ use crate::executor::physical_plans::MutationOrganize;
 use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::RowFetch;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
@@ -69,6 +67,7 @@ use crate::plans::TruncateMode;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -577,7 +576,7 @@ fn build_mutation_row_fetch(
     metadata: MetadataRef,
     mutation_input_schema: Arc<DataSchema>,
     strategy: MutationStrategy,
-    lazy_columns: HashSet<usize>,
+    lazy_columns: ColumnSet,
     target_table_index: usize,
     row_id_offset: usize,
 ) -> RowFetch {
@@ -585,7 +584,6 @@ fn build_mutation_row_fetch(
 
     let lazy_columns = lazy_columns
         .iter()
-        .sorted() // Needs sort because we need to make the order deterministic.
         .filter(|index| !mutation_input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
         .cloned()
         .collect::<Vec<_>>();

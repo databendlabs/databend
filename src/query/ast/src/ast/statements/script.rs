@@ -53,6 +53,7 @@ impl Display for ScriptBlock {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum DeclareItem {
     Var(DeclareVar),
     Set(DeclareSet),
@@ -97,6 +98,7 @@ impl Display for DeclareSet {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum ReturnItem {
     Var(Expr),
     Set(Identifier),

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
@@ -242,7 +241,7 @@ impl MutationExpression {
                         mutation_type: mutation_type.clone(),
                         predicates: vec![],
                         predicate_column_index: None,
-                        read_partition_columns: HashSet::new(),
+                        read_partition_columns: Default::default(),
                     };
 
                     s_expr =
@@ -459,7 +458,7 @@ impl Binder {
 
         let row_id_index: usize = column_binding.index;
 
-        *expr = SExpr::add_internal_column_index(expr, table_index, row_id_index, &None);
+        *expr = expr.add_column_index_to_scans(table_index, row_id_index, &None);
 
         self.metadata
             .write()

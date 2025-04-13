@@ -30,7 +30,6 @@ use crate::binder::Finder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::FlattenInfo;
@@ -51,6 +50,7 @@ use crate::plans::ScalarItem;
 use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::ColumnSet;
 use crate::MetadataRef;
 
 pub struct JoinConditions {

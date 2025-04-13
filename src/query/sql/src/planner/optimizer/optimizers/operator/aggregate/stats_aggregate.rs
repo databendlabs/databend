@@ -223,8 +223,8 @@ impl RuleStatsAggregateOptimizer {
 
 #[async_trait::async_trait]
 impl Optimizer for RuleStatsAggregateOptimizer {
-    fn name(&self) -> &'static str {
-        "RuleStatsAggregateOptimizer"
+    fn name(&self) -> String {
+        "RuleStatsAggregateOptimizer".to_string()
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {

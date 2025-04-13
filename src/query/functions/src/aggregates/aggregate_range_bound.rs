@@ -215,7 +215,7 @@ where
             cum_weight += weight;
             if cum_weight >= target {
                 let data = &data[idx];
-                if previous_bound.as_ref().map_or(true, |prev| data > prev) {
+                if previous_bound.as_ref().is_none_or(|prev| data > prev) {
                     bounds.push(data.clone());
                     target += step;
                     j += 1;

@@ -15,5 +15,7 @@
 mod common;
 #[allow(clippy::module_inception)]
 mod pipeline;
+mod trace;
 
 pub use pipeline::OptimizerPipeline;
+pub use trace::OptimizerTrace;

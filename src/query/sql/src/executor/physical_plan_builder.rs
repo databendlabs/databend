@@ -26,10 +26,10 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::RelOperator;
+use crate::ColumnSet;
 use crate::MetadataRef;
 
 pub struct PhysicalPlanBuilder {

@@ -28,7 +28,7 @@ pub fn read_validity<R: NativeReadBuf>(reader: &mut R) -> Result<Option<Bitmap>>
     let mut buf = vec![0u8; 4];
     let length = read_u32(reader, &mut buf)? as usize;
     if length > 0 {
-        buf.resize((length + 7) / 8, 0);
+        buf.resize(length.div_ceil(8), 0);
         reader.read_exact(&mut buf)?;
         Ok(Some(Bitmap::try_new(buf, length)?))
     } else {

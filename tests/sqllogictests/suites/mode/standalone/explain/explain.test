@@ -54,6 +54,8 @@ Filter
     ├── probe keys: [t2.a (#2)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -82,6 +84,7 @@ Filter
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
             ├── push downs: [filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)], limit: NONE]
+            ├── apply join filters: [#0]
             └── estimated rows: 5.00
 
 query T
@@ -94,6 +97,8 @@ HashJoin
 ├── probe keys: [t2.a (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
@@ -114,6 +119,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 5.00
 
 query T
@@ -329,6 +335,7 @@ Filter
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
+    ├── build join filters:
     ├── estimated rows: 4.40
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -373,6 +380,7 @@ Filter
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
+    ├── build join filters:
     ├── estimated rows: 5.00
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -415,6 +423,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [(((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4)) OR t3.a (#4) = 2)]
+├── build join filters:
 ├── estimated rows: 50.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -423,6 +432,7 @@ HashJoin
 │   ├── probe keys: []
 │   ├── keys is null equal: []
 │   ├── filters: []
+│   ├── build join filters:
 │   ├── estimated rows: 5.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t1
@@ -465,6 +475,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
+├── build join filters:
 ├── estimated rows: 28.16
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -477,6 +488,7 @@ HashJoin
 │       ├── probe keys: []
 │       ├── keys is null equal: []
 │       ├── filters: []
+│       ├── build join filters:
 │       ├── estimated rows: 4.40
 │       ├── Filter(Build)
 │       │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -544,6 +556,7 @@ Limit
             ├── probe keys: []
             ├── keys is null equal: []
             ├── filters: []
+            ├── build join filters:
             ├── estimated rows: 4.40
             ├── Filter(Build)
             │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -574,7 +587,7 @@ Limit
                     ├── push downs: [filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)], limit: NONE]
                     └── estimated rows: 5.00
 
-query
+query 
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
 ----
 HashJoin
@@ -584,6 +597,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
+├── build join filters:
 ├── estimated rows: 5.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -610,7 +624,7 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 5.00
 
-query
+query 
 explain select count(distinct a) from t1;
 ----
 AggregateFinal
@@ -642,7 +656,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query
+query 
 explain select count_distinct(a) from t1;
 ----
 AggregateFinal
@@ -674,7 +688,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query
+query 
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan
@@ -688,22 +702,22 @@ drop table t1
 statement ok
 drop table t2
 
-query
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3');
 ----
 SELECT * FROM read_parquet('p1', 'p2', 'p3')
 
-query
+query 
 explain syntax select * from read_parquet(prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT * FROM read_parquet(prune_page=>TRUE,refresh_meta_cache=>TRUE)
 
-query
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT * FROM read_parquet('p1', 'p2', 'p3',prune_page=>TRUE,refresh_meta_cache=>TRUE)
 
-query
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT * FROM read_parquet('p1', 'p2', 'p3',prune_page=>TRUE,refresh_meta_cache=>TRUE)
@@ -714,7 +728,7 @@ drop table if exists t4
 statement ok
 create OR REPLACE table t4(a int, b string);
 
-query
+query 
 explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
 ----
 Filter
@@ -737,7 +751,7 @@ drop view if exists v4
 statement ok
 create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
 
-query
+query 
 explain select * from v4 where b = 'xx';
 ----
 EvalScalar
@@ -816,6 +830,8 @@ Limit
     ├── probe keys: [b.id (#2)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:a.id (#0), probe key:b.id (#2), filter type:inlist,min_max
     ├── estimated rows: 1.00
     ├── Filter(Build)
     │   ├── output columns: [a.id (#0), a.c1 (#1)]
@@ -844,6 +860,7 @@ Limit
             ├── partitions scanned: 2
             ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
             ├── push downs: [filters: [and_filters(b.c1 (#3) >= 1683648000, b.c1 (#3) <= 1683734400)], limit: NONE]
+            ├── apply join filters: [#0]
             └── estimated rows: 2.00
 
 statement ok
@@ -870,6 +887,8 @@ Sort
     ├── probe keys: [a.pt (#1), a.number (#0)]
     ├── keys is null equal: [false, false]
     ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:numbers.number (#2), probe key:a.number (#0), filter type:inlist,min_max
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
     │   ├── output columns: [numbers.number (#2), register_at (#3)]
@@ -904,6 +923,7 @@ Sort
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── push downs: [filters: [numbers.number (#0) > 5], limit: NONE]
+                ├── apply join filters: [#0]
                 └── estimated rows: 10.00
 
 statement ok
@@ -929,6 +949,9 @@ HashJoin
 ├── probe keys: [a.id (#0), a.id (#0)]
 ├── keys is null equal: [false, false]
 ├── filters: []
+├── build join filters:
+│   ├── filter id:0, build key:scalar_subquery_2 (#2), probe key:a.id (#0), filter type:inlist,min_max
+│   └── filter id:1, build key:id (#2), probe key:a.id (#0), filter type:inlist,min_max
 ├── estimated rows: 0.40
 ├── Filter(Build)
 │   ├── output columns: [b.id (#2)]
@@ -953,6 +976,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0, #1]
     └── estimated rows: 3.00
 
 statement ok
@@ -977,6 +1001,7 @@ HashJoin
 ├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
 ├── estimated rows: 3.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
@@ -1015,6 +1040,7 @@ Filter
     ├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
     ├── keys is null equal: [true]
     ├── filters: []
+    ├── build join filters:
     ├── estimated rows: 3.00
     ├── TableScan(Build)
     │   ├── table: default.default.t1
@@ -1074,6 +1100,7 @@ Sort
     ├── probe keys: [t1.i (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build join filters:
     ├── estimated rows: 3.00
     ├── EmptyResultScan(Build)
     └── TableScan(Probe)
@@ -1291,6 +1318,7 @@ EvalScalar
     ├── probe keys: [t1.a (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
+    ├── build join filters:
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [t2.b (#1)]
@@ -1343,6 +1371,8 @@ HashJoin
 ├── probe keys: [a (#0)]
 ├── keys is null equal: [false]
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
+├── build join filters:
+│   └── filter id:0, build key:a (#3), probe key:a (#0), filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── Sort(Build)
 │   ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
@@ -1378,6 +1408,7 @@ HashJoin
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 0.00
 
 query T
@@ -1390,6 +1421,8 @@ HashJoin
 ├── probe keys: [a (#0)]
 ├── keys is null equal: [false]
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
+├── build join filters:
+│   └── filter id:0, build key:a (#3), probe key:a (#0), filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── Sort(Build)
 │   ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
@@ -1425,6 +1458,7 @@ HashJoin
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 0.00
 
 query T

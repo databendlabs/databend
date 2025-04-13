@@ -39,7 +39,7 @@ pub struct SchedulerStat {
     pub optimize_group_expr_prune_count: u64,
 }
 
-pub struct Scheduler {
+pub struct TaskManager {
     task_queue: VecDeque<Task>,
 
     /// The maximum number of tasks that can be scheduled.
@@ -51,7 +51,7 @@ pub struct Scheduler {
     pub(super) stat: SchedulerStat,
 }
 
-impl Scheduler {
+impl TaskManager {
     pub fn new() -> Self {
         Self {
             task_queue: Default::default(),
@@ -146,7 +146,7 @@ impl Scheduler {
     }
 }
 
-impl Default for Scheduler {
+impl Default for TaskManager {
     fn default() -> Self {
         Self::new()
     }

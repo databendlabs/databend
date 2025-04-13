@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-
 use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
@@ -137,7 +135,7 @@ impl PhysicalPlanBuilder {
         }
 
         // Include columns referenced in left conditions and right conditions.
-        let left_required: HashSet<usize> = join
+        let left_required: ColumnSet = join
             .equi_conditions
             .iter()
             .fold(required.clone(), |acc, v| {
@@ -146,7 +144,7 @@ impl PhysicalPlanBuilder {
             .union(&others_required)
             .cloned()
             .collect();
-        let right_required: HashSet<usize> = join
+        let right_required: ColumnSet = join
             .equi_conditions
             .iter()
             .fold(required.clone(), |acc, v| {

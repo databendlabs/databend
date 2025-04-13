@@ -1232,6 +1232,9 @@ fn test_expr() {
         r#"timestamp()"#, // issue #16628
         r#"extract(year from d)"#,
         r#"date_part(year, d)"#,
+        r#"datepart(year, d)"#,
+        r#"DATEDIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))"#,
+        r#"datesub(QUARTER, 1, to_date('2018-01-02'))"#,
         r#"position('a' in str)"#,
         r#"substring(a from b for c)"#,
         r#"substring(a, b, c)"#,

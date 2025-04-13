@@ -757,7 +757,7 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
 
-                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set).await? {
+                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set, false).await? {
                             return Ok(())
                         }
 
@@ -776,7 +776,7 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set).await? {
+                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set, true).await? {
                             return Ok(());
                         }
                         let user_api = UserApiProvider::instance();
@@ -802,7 +802,7 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(&tenant, database, Some(table), db_id, table_id, grant_set).await?;
+                        let has_priv = has_priv(&tenant, database, Some(table), db_id, table_id, grant_set, false).await?;
                         return if has_priv {
                             Ok(())
                         } else {
@@ -931,7 +931,7 @@ impl AccessChecker for PrivilegeAccess {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
-                if has_priv(&tenant, &plan.database, None, show_db_id, None, grant_set).await? {
+                if has_priv(&tenant, &plan.database, None, show_db_id, None, grant_set, true).await? {
                     return Ok(());
                 }
                 let user_api = UserApiProvider::instance();
@@ -1433,6 +1433,7 @@ async fn has_priv(
     db_id: u64,
     table_id: Option<u64>,
     grant_set: UserGrantSet,
+    valid_usage_priv: bool,
 ) -> Result<bool> {
     if db_name.to_lowercase() == "information_schema" {
         return Ok(true);
@@ -1460,13 +1461,38 @@ async fn has_priv(
                     if db_name.to_lowercase() == "system" {
                         return true;
                     }
-                    e.privileges().iter().any(|privilege| {
-                        UserPrivilegeSet::available_privileges_on_database(false)
-                            .has_privilege(privilege)
-                    })
+                    if valid_usage_priv {
+                        e.privileges().iter().any(|privilege| {
+                            UserPrivilegeSet::available_privileges_on_database(false)
+                                .has_privilege(privilege)
+                        })
+                    } else {
+                        !(e.privileges().len() == 1
+                            && e.privileges().contains(UserPrivilegeType::Usage))
+                            && e.privileges().iter().any(|privilege| {
+                                UserPrivilegeSet::available_privileges_on_database(false)
+                                    .has_privilege(privilege)
+                            })
+                    }
                 }
-                GrantObject::Database(_, ldb) => *ldb == db_name,
-                GrantObject::DatabaseById(_, ldb) => *ldb == db_id,
+                GrantObject::Database(_, ldb) => {
+                    if valid_usage_priv {
+                        *ldb == db_name
+                    } else {
+                        !(e.privileges().len() == 1
+                            && e.privileges().contains(UserPrivilegeType::Usage))
+                            && *ldb == db_name
+                    }
+                }
+                GrantObject::DatabaseById(_, ldb) => {
+                    if valid_usage_priv {
+                        *ldb == db_id
+                    } else {
+                        !(e.privileges().len() == 1
+                            && e.privileges().contains(UserPrivilegeType::Usage))
+                            && *ldb == db_id
+                    }
+                }
                 GrantObject::Table(_, ldb, ltab) => {
                     if let Some(table) = table_name {
                         *ldb == db_name && *ltab == table

@@ -42,7 +42,6 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::analyze_cluster_keys;
 use databend_storages_common_index::statistics_to_domain;
-// use databend_storages_common_table_meta::meta::AbstractBlockMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;

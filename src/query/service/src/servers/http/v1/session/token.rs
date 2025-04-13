@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::time::Duration;
+use std::time::SystemTime;
 
 use base64::prelude::*;
 use databend_common_exception::ErrorCode;
@@ -94,5 +95,9 @@ impl SessionClaim {
         let claim = serde_json::from_slice::<SessionClaim>(&json)
             .map_err(|e| fmt_err(format!("json decode error: {e}")))?;
         Ok((claim, t))
+    }
+
+    pub fn expire_at(&self) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(self.expire_at_in_secs)
     }
 }

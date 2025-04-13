@@ -78,7 +78,7 @@ pub fn run_agg_ast(
     let used_columns = raw_expr
         .column_refs()
         .keys()
-        .cloned()
+        .copied()
         .sorted()
         .collect::<Vec<_>>();
 

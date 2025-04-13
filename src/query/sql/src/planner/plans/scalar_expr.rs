@@ -45,8 +45,8 @@ use itertools::Itertools;
 use super::WindowFuncFrame;
 use super::WindowFuncType;
 use crate::binder::ColumnBinding;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::SExpr;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -400,6 +400,25 @@ impl ScalarExpr {
         };
         find_udfs.visit(self)?;
         Ok(find_udfs.udfs)
+    }
+
+    pub fn has_subquery(&self) -> bool {
+        struct HasSubqueryVisitor {
+            has_subquery: bool,
+        }
+
+        impl<'a> Visitor<'a> for HasSubqueryVisitor {
+            fn visit_subquery(&mut self, _: &'a SubqueryExpr) -> Result<()> {
+                self.has_subquery = true;
+                Ok(())
+            }
+        }
+
+        let mut has_subquery = HasSubqueryVisitor {
+            has_subquery: false,
+        };
+        has_subquery.visit(self).unwrap();
+        has_subquery.has_subquery
     }
 }
 

@@ -26,6 +26,8 @@ use databend_common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaNetworkError;
 use fastrace::prelude::*;
+use futures::future::select;
+use futures::future::Either;
 use log::info;
 use tonic::transport::Identity;
 use tonic::transport::Server;
@@ -34,12 +36,22 @@ use tonic::transport::ServerTlsConfig;
 use crate::api::grpc::grpc_service::MetaServiceImpl;
 use crate::configs::Config;
 use crate::meta_service::MetaNode;
+use crate::util::DropDebug;
 
 pub struct GrpcServer {
     conf: Config,
+    /// GrpcServer is the main container of the gRPC service.
+    /// [`MetaNode`] should never be dropped while [`GrpcServer`] is alive.
+    /// Therefore, it is held by a strong reference (Arc) to ensure proper lifetime management.
     pub(crate) meta_node: Arc<MetaNode>,
     join_handle: Option<JoinHandle<()>>,
     stop_grpc_tx: Option<Sender<()>>,
+}
+
+impl Drop for GrpcServer {
+    fn drop(&mut self) {
+        info!("GrpcServer::drop: id={}", self.conf.raft_config.id);
+    }
 }
 
 impl GrpcServer {
@@ -88,13 +100,17 @@ impl GrpcServer {
 
         info!("start gRPC listening: {}", addr);
 
-        let grpc_impl = MetaServiceImpl::create(meta_node.clone());
+        let grpc_impl = MetaServiceImpl::create(Arc::downgrade(&meta_node));
         let grpc_srv = MetaServiceServer::new(grpc_impl)
             .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
+        let id = conf.raft_config.id;
+
         let j = databend_common_base::runtime::spawn(
             async move {
+                let _d = DropDebug::new(format!("GrpcServer(id={}) spawned service task", id));
+
                 let res = builder
                     .add_service(reflect_srv)
                     .add_service(grpc_srv)
@@ -128,20 +144,38 @@ impl GrpcServer {
     }
 
     async fn do_stop(&mut self, _force: Option<tokio::sync::broadcast::Receiver<()>>) {
+        let id = self.meta_node.raft_store.id;
+        let ctx = format!("gRPC-task(id={id})");
+
         if let Some(stop_grpc_tx) = self.stop_grpc_tx.take() {
-            info!("Sending stop signal to gRPC server");
+            info!("Sending stop signal to {ctx}");
             let _ = stop_grpc_tx.send(());
         }
 
-        if let Some(j) = self.join_handle.take() {
-            info!("Waiting for gRPC server stop");
-            let x = tokio::time::timeout(Duration::from_millis(1_000), j).await;
-            info!("Done: waiting for grpc stop: res: {:?}", x);
+        if let Some(jh) = self.join_handle.take() {
+            info!("Waiting for {ctx} to stop");
+
+            let timeout = Duration::from_millis(1_000);
+            let sleep = tokio::time::sleep(timeout);
+
+            let slp = std::pin::pin!(sleep);
+
+            match select(slp, jh).await {
+                Either::Left((_v1, jh)) => {
+                    info!("{ctx} stop timeout after {:?}; force abort", timeout);
+                    jh.abort();
+                    jh.await.ok();
+                    info!("Done: waiting for {ctx} force stop");
+                }
+                Either::Right((_v2, _slp)) => {
+                    info!("Done: waiting for {ctx} normal stop");
+                }
+            }
         }
 
-        info!("Waiting for meta_node stop");
+        info!("Waiting for meta_node(id={id}) to stop");
         let x = tokio::time::timeout(Duration::from_millis(1_000), self.meta_node.stop()).await;
-        info!("Done: waiting for meta_node stop: res: {:?}", x);
+        info!("Done: waiting for meta_node(id={id}) stop: res: {:?}", x);
     }
 
     async fn tls_config(conf: &Config) -> Result<Option<ServerTlsConfig>, std::io::Error> {

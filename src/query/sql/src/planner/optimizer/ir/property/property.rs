@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -20,9 +19,7 @@ use crate::optimizer::ir::ColumnStatSet;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SortItem;
-use crate::IndexType;
-
-pub type ColumnSet = HashSet<IndexType>;
+use crate::ColumnSet;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RequiredProperty {
