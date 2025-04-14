@@ -27,14 +27,12 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use testcontainers::core::client::docker_client_instance;
-use testcontainers::core::error::WaitContainerError;
 use testcontainers::core::IntoContainerPort;
 use testcontainers::core::WaitFor;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers::GenericImage;
 use testcontainers::ImageExt;
-use testcontainers::TestcontainersError;
 use testcontainers_modules::mysql::Mysql;
 use testcontainers_modules::redis::Redis;
 use testcontainers_modules::redis::REDIS_PORT;
@@ -296,11 +294,7 @@ pub async fn run_ttc_container(
                 eprintln!(
                     "Failed to start container {container_name} using {duration} secs: {err}"
                 );
-                if err.to_string().to_ascii_lowercase().contains("timeout")
-                    || err.to_string().to_ascii_lowercase().contains("conflict")
-                {
-                    stop_container(docker, &container_name).await;
-                }
+                stop_container(docker, &container_name).await;
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
                     break;
                 } else {
@@ -377,10 +371,7 @@ async fn run_redis_server(docker: &Docker) -> Result<ContainerAsync<Redis>> {
                     "Start container {} using {} secs failed: {}",
                     container_name, duration, err
                 );
-                if let TestcontainersError::WaitContainer(WaitContainerError::StartupTimeout) = err
-                {
-                    stop_container(docker, &container_name).await;
-                }
+                stop_container(docker, &container_name).await;
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
                     break;
                 } else {
@@ -450,10 +441,7 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
                     "Start container {} using {} secs failed: {}",
                     container_name, duration, err
                 );
-                if let TestcontainersError::WaitContainer(WaitContainerError::StartupTimeout) = err
-                {
-                    stop_container(docker, &container_name).await;
-                }
+                stop_container(docker, &container_name).await;
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
                     break;
                 } else {
