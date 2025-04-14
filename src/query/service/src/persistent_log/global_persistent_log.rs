@@ -138,7 +138,8 @@ impl GlobalPersistentLog {
         setup_operator().await?;
         let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf())
             .create_meta_store()
-            .await?;
+            .await
+            .map_err(|_e| ErrorCode::Internal("create memory meta store failed"))?;
         Ok(Self {
             meta_store,
             interval: cfg.log.persistentlog.interval as u64,
@@ -434,7 +435,7 @@ impl GlobalPersistentLog {
     pub async fn set_version_to_meta(&self, version: usize) -> Result<()> {
         self.meta_store
             .upsert_kv(UpsertKV::new(
-                &format!("{}/persistent_log_work/version", self.tenant_id),
+                format!("{}/persistent_log_work/version", self.tenant_id),
                 MatchSeq::Any,
                 Operation::Update(serde_json::to_vec(&version)?),
                 None,

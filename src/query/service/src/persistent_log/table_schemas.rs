@@ -68,6 +68,11 @@ impl QueryLogTable {
         }
     }
 }
+impl Default for QueryLogTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl PersistentLogTable for QueryLogTable {
     fn table_name(&self) -> String {
@@ -161,6 +166,11 @@ impl QueryDetailsTable {
         Self {
             need_version_suffix: AtomicBool::new(false),
         }
+    }
+}
+impl Default for QueryDetailsTable {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -427,6 +437,11 @@ impl QueryProfileTable {
         Self {
             need_version_suffix: AtomicBool::new(false),
         }
+    }
+}
+impl Default for QueryProfileTable {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
