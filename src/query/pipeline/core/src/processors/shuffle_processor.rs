@@ -990,7 +990,6 @@ impl<T: Exchange> Processor for BatchMergePartitionProcessor<T> {
     }
 }
 
-//
 // pub struct BatchSortingExchangeProcessor<T: Exchange> {
 //     exchange: Arc<T>,
 //
