@@ -736,6 +736,10 @@ impl<T: Exchange> Processor for BatchPartitionProcessor<T> {
 
     fn process(&mut self) -> Result<()> {
         if let Some(block) = self.input_data.take() {
+            if T::SKIP_EMPTY_DATA_BLOCK && block.is_empty() {
+                return Ok(());
+            }
+
             let partitioned_data = self.exchange.partition(block, self.to_partition)?;
             self.output_data = Some(DataBlock::empty_with_meta(ExchangeMeta::create(
                 partitioned_data,
@@ -985,3 +989,25 @@ impl<T: Exchange> Processor for BatchMergePartitionProcessor<T> {
         Ok(())
     }
 }
+
+//
+// pub struct BatchSortingExchangeProcessor<T: Exchange> {
+//     exchange: Arc<T>,
+//
+//     inputs: Vec<Arc<InputPort>>,
+//     outputs: Vec<Arc<OutputPort>>,
+// }
+//
+// impl<T: Exchange> Processor for BatchSortingExchangeProcessor<T> {
+//     fn name(&self) -> String {
+//         String::from("BatchSortingShuffleProcessor")
+//     }
+//
+//     fn as_any(&mut self) -> &mut dyn Any {
+//         self
+//     }
+//
+//     fn event_with_cause(&mut self, _cause: EventCause) -> Result<Event> {
+//         todo!()
+//     }
+// }
