@@ -455,6 +455,28 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 }
             })
         }
+        AExpr::DateBetween {
+            span,
+            unit,
+            date_start,
+            date_end,
+        } => {
+            // TODO : need impl
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span,
+                    name: concat!("between_", INTERVAL, "s").to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*date_end, columns),
+                        transform_expr(*date_start, columns),
+                    ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
+        }
         AExpr::DateSub {
             span,
             unit,

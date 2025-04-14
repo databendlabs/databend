@@ -1630,3 +1630,63 @@ select date_diff('microsecond', '2022-02-01'::Date, '2023-01-01'::Date) -- 28857
 ----
 28857600000000
 
+query T
+select datesub('year','2019-02-28'::Date, '2020-02-28'::Date), datesub('year','2019-03-01'::Date, '2020-02-28'::Date), datesub('year','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('year','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+1 0 0 -1
+
+query T
+select datesub('isoyear','2019-02-28'::Date, '2020-02-28'::Date), datesub('isoyear','2019-03-01'::Date, '2020-02-28'::Date), datesub('isoyear','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('isoyear','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);----
+----
+1 0 0 -1
+
+query T
+select datesub('month','2019-02-28'::Date, '2020-02-28'::Date), datesub('month','2019-03-01'::Date, '2020-02-28'::Date), datesub('month','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('month','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+12 11 11 -12
+
+query T
+select datesub('MILLENNIUM','2019-02-28'::Date, '2020-02-28'::Date), datesub('MILLENNIUM','2019-03-01'::Date, '2020-02-28'::Date), datesub('MILLENNIUM','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('MILLENNIUM','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+0 0 0 0
+
+query T
+select datesub('quarter','2019-02-28'::Date, '2020-02-28'::Date), datesub('quarter','2019-03-01'::Date, '2020-02-28'::Date), datesub('quarter','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('quarter','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+4 3 3 -4
+
+query T
+select datesub('yearweek','2019-02-28'::Date, '2020-02-28'::Date), datesub('yearweek','2019-03-01'::Date, '2020-02-28'::Date), datesub('yearweek','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('yearweek','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+52 52 52 -52
+
+query T
+select datesub('week','2019-02-28'::Date, '2020-02-28'::Date), datesub('week','2019-03-01'::Date, '2020-02-28'::Date), datesub('week','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('week','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+52 52 52 -52
+
+query T
+select datesub('day','2019-02-28'::Date, '2020-02-28'::Date), datesub('day','2019-03-01'::Date, '2020-02-28'::Date), datesub('day','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('day','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+365 364 364 -365
+
+query T
+select datesub('hour','2019-02-28'::Date, '2020-02-28'::Date), datesub('hour','2019-03-01'::Date, '2020-02-28'::Date), datesub('hour','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('hour','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+8760 8736 8759 -8760
+
+query T
+select datesub('minute','2019-02-28'::Date, '2020-02-28'::Date), datesub('minute','2019-03-01'::Date, '2020-02-28'::Date), datesub('minute','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('minute','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+525600 524160 525599 -525600
+
+query T
+select datesub('second','2019-02-28'::Date, '2020-02-28'::Date), datesub('second','2019-03-01'::Date, '2020-02-28'::Date), datesub('second','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('second','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+31536000 31449600 31535999 -31536000
+
+
+query T
+select datesub('microsecond','2019-02-28'::Date, '2020-02-28'::Date), datesub('microsecond','2019-03-01'::Date, '2020-02-28'::Date), datesub('microsecond','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), datesub('microsecond','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+31536000000000 31449600000000 31535999000000 -31536000000000
