@@ -12,15 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_tracing::PERSISTENT_LOG_SCHEMA_VERSION;
 use itertools::Itertools;
 
 pub trait PersistentLogTable: Send + Sync + 'static {
-    fn table_name(&self) -> &'static str;
+    fn table_name(&self) -> String;
+    fn enable_version_suffix(&self);
     fn schema(&self) -> TableSchemaRef;
     fn cluster_by(&self) -> Vec<String>;
     fn create_table_sql(&self) -> String {
@@ -52,11 +57,29 @@ pub trait PersistentLogTable: Send + Sync + 'static {
     fn clean_sql(&self, retention: usize) -> String;
 }
 
-pub struct QueryLogTable;
+pub struct QueryLogTable {
+    need_version_suffix: AtomicBool,
+}
+
+impl QueryLogTable {
+    pub fn new() -> Self {
+        Self {
+            need_version_suffix: AtomicBool::new(false),
+        }
+    }
+}
 
 impl PersistentLogTable for QueryLogTable {
-    fn table_name(&self) -> &'static str {
-        "query_log"
+    fn table_name(&self) -> String {
+        if self.need_version_suffix.load(Ordering::Relaxed) {
+            format!("query_log_v{}", PERSISTENT_LOG_SCHEMA_VERSION)
+        } else {
+            "query_log".to_string()
+        }
+    }
+
+    fn enable_version_suffix(&self) {
+        self.need_version_suffix.store(true, Ordering::Relaxed);
     }
 
     fn schema(&self) -> TableSchemaRef {
@@ -129,11 +152,29 @@ impl PersistentLogTable for QueryLogTable {
     }
 }
 
-pub struct QueryDetailsTable;
+pub struct QueryDetailsTable {
+    need_version_suffix: AtomicBool,
+}
+
+impl QueryDetailsTable {
+    pub fn new() -> Self {
+        Self {
+            need_version_suffix: AtomicBool::new(false),
+        }
+    }
+}
 
 impl PersistentLogTable for QueryDetailsTable {
-    fn table_name(&self) -> &'static str {
-        "query_details"
+    fn table_name(&self) -> String {
+        if self.need_version_suffix.load(Ordering::Relaxed) {
+            format!("query_details_v{}", PERSISTENT_LOG_SCHEMA_VERSION)
+        } else {
+            "query_details".to_string()
+        }
+    }
+
+    fn enable_version_suffix(&self) {
+        self.need_version_suffix.store(true, Ordering::Relaxed);
     }
 
     fn schema(&self) -> TableSchemaRef {
@@ -377,11 +418,29 @@ impl PersistentLogTable for QueryDetailsTable {
     }
 }
 
-pub struct QueryProfileTable;
+pub struct QueryProfileTable {
+    need_version_suffix: AtomicBool,
+}
+
+impl QueryProfileTable {
+    pub fn new() -> Self {
+        Self {
+            need_version_suffix: AtomicBool::new(false),
+        }
+    }
+}
 
 impl PersistentLogTable for QueryProfileTable {
-    fn table_name(&self) -> &'static str {
-        "query_profile"
+    fn table_name(&self) -> String {
+        if self.need_version_suffix.load(Ordering::Relaxed) {
+            format!("query_profile_v{}", PERSISTENT_LOG_SCHEMA_VERSION)
+        } else {
+            "query_profile".to_string()
+        }
+    }
+
+    fn enable_version_suffix(&self) {
+        self.need_version_suffix.store(true, Ordering::Relaxed);
     }
 
     fn schema(&self) -> TableSchemaRef {

@@ -11,16 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::io::Write;
 
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::RemoteLog;
 use databend_common_tracing::RemoteLogElement;
 use databend_query::persistent_log::GlobalPersistentLog;
+use databend_query::persistent_log::PersistentLogTable;
+use databend_query::persistent_log::QueryDetailsTable;
+use databend_query::persistent_log::QueryLogTable;
+use databend_query::persistent_log::QueryProfileTable;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
+use goldenfile::Mint;
 
 #[tokio::test(flavor = "multi_thread")]
 pub async fn test_persistent_log_write() -> Result<()> {
@@ -62,36 +70,32 @@ pub async fn test_persistent_log_alter_if_schema_change() -> Result<()> {
         .await?;
 
     let log_instance = GlobalPersistentLog::create_dummy(&config).await?;
+
+    log_instance.set_version_to_meta(0).await?;
+
     log_instance.prepare().await?;
 
-    let res = fixture
-        .execute_query("show tables from persistent_system")
-        .await?;
-    let data_blocks: Vec<DataBlock> = res.try_collect().await?;
-    let tables = data_blocks[0].columns().first();
-    let mut four_tables = vec![];
-    for i in 0..4 {
-        four_tables.push(
-            tables
-                .unwrap()
-                .value
-                .index(i)
-                .unwrap()
-                .to_string()
-                .replace("'", ""),
-        );
-    }
-    four_tables.sort();
-    assert_eq!(four_tables[0], "query_details");
-    assert_eq!(four_tables[1], "query_log");
-    assert!(four_tables[2].starts_with("query_log_old"));
-    assert_eq!(four_tables[3], "query_profile");
+    let context = fixture.new_query_ctx().await?;
+
+    assert!(context
+        .get_table(CATALOG_DEFAULT, "persistent_system", "query_log_v0")
+        .await
+        .is_ok());
+    assert!(context
+        .get_table(CATALOG_DEFAULT, "persistent_system", "query_profile")
+        .await
+        .is_ok());
+    assert!(context
+        .get_table(CATALOG_DEFAULT, "persistent_system", "query_details")
+        .await
+        .is_ok());
+    assert!(context
+        .get_table(CATALOG_DEFAULT, "persistent_system", "query_log")
+        .await
+        .is_ok());
 
     let res = fixture
-        .execute_query(&format!(
-            "select count(*) from persistent_system.{}",
-            four_tables[2]
-        ))
+        .execute_query("select count(*) from persistent_system.query_log_v0")
         .await?;
     let data_blocks: Vec<DataBlock> = res.try_collect().await?;
     let cnt = data_blocks[0].clone().take_columns()[0]
@@ -102,6 +106,27 @@ pub async fn test_persistent_log_alter_if_schema_change() -> Result<()> {
         .get_i64();
     assert_eq!(cnt, Some(1));
 
+    Ok(())
+}
+
+#[test]
+pub fn log_table_schema_change_must_increase_version_number() -> Result<()> {
+    // If this test failed, please increase version number for PERSISTENT_LOG_SCHEMA_VERSION
+    // and rerun this test with `UPDATE_GOLDENFILES=1`
+    let mut mint = Mint::new("tests/it/persistent_log/testdata");
+    let file = &mut mint.new_goldenfile("persistent_log_tables_schema.txt")?;
+    let tables: Vec<Box<dyn PersistentLogTable>> = vec![
+        Box::new(QueryDetailsTable::new()),
+        Box::new(QueryProfileTable::new()),
+        Box::new(QueryLogTable::new()),
+    ];
+    for table in tables.iter() {
+        writeln!(file, "{}", table.table_name())?;
+        let schema = table.schema();
+        for field in schema.fields().iter() {
+            writeln!(file, "{}:{}", field.name(), field.data_type())?;
+        }
+    }
     Ok(())
 }
 
