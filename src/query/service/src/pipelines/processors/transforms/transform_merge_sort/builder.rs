@@ -30,7 +30,6 @@ use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::sort::RowsTypeVisitor;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_pipeline_transforms::TransformSortMergeLimit;
 
 use super::TransformSort;
 use crate::spillers::Spiller;
@@ -123,10 +122,9 @@ impl TransformSortBuilder {
             schema,
             self.sort_desc.clone(),
             self.block_size,
-            self.limit,
+            self.limit.map(|limit| (limit, false)),
             self.spiller.clone(),
             self.output_order_col,
-            None,
             self.order_col_generated,
             self.memory_settings.clone(),
         )?))
@@ -137,10 +135,6 @@ impl TransformSortBuilder {
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
-        let limt_sort = Some(TransformSortMergeLimit::create(
-            self.block_size,
-            self.limit.unwrap(),
-        ));
         let schema = add_order_field(self.schema.clone(), &self.sort_desc);
         Ok(Box::new(TransformSort::<A, C>::new(
             self.input.clone(),
@@ -148,10 +142,9 @@ impl TransformSortBuilder {
             schema,
             self.sort_desc.clone(),
             self.block_size,
-            self.limit,
+            Some((self.limit.unwrap(), true)),
             self.spiller.clone(),
             self.output_order_col,
-            limt_sort,
             self.order_col_generated,
             self.memory_settings.clone(),
         )?))
