@@ -89,11 +89,14 @@ async fn test_virtual_column_builder() -> Result<()> {
     let result = builder.add_block(&block, &write_settings, &location)?;
 
     assert!(!result.data.is_empty());
-    assert_eq!(result.draft_virtual_block_meta.virtual_col_metas.len(), 3); // Expect a, b.c, b.d
+    assert_eq!(
+        result.draft_virtual_block_meta.virtual_column_metas.len(),
+        3
+    ); // Expect a, b.c, b.d
 
     // Check 'v'['a']
     let meta_a = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_col_metas,
+        &result.draft_virtual_block_meta.virtual_column_metas,
         1,
         "['a']",
     )
@@ -104,7 +107,7 @@ async fn test_virtual_column_builder() -> Result<()> {
 
     // Check 'v'['b']['c']
     let meta_bc = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_col_metas,
+        &result.draft_virtual_block_meta.virtual_column_metas,
         1,
         "['b']['c']",
     )
@@ -115,7 +118,7 @@ async fn test_virtual_column_builder() -> Result<()> {
 
     // Check 'v'['b']['d']
     let meta_bd = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_col_metas,
+        &result.draft_virtual_block_meta.virtual_column_metas,
         1,
         "['b']['d']",
     )
@@ -182,46 +185,49 @@ async fn test_virtual_column_builder() -> Result<()> {
     let result = builder.add_block(&block, &write_settings, &location)?;
 
     // Expected columns: id, create, text, user.id, replies, geo.lat
-    assert_eq!(result.draft_virtual_block_meta.virtual_col_metas.len(), 6);
+    assert_eq!(
+        result.draft_virtual_block_meta.virtual_column_metas.len(),
+        6
+    );
 
     // Check types for good measure
     let meta_id = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_col_metas,
+        &result.draft_virtual_block_meta.virtual_column_metas,
         1,
         "['id']",
     )
     .unwrap();
     assert_eq!(meta_id.data_type, VariantDataType::UInt64);
     let meta_create = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_col_metas,
+        &result.draft_virtual_block_meta.virtual_column_metas,
         1,
         "['create']",
     )
     .unwrap();
     assert_eq!(meta_create.data_type, VariantDataType::String);
     let meta_text = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_col_metas,
+        &result.draft_virtual_block_meta.virtual_column_metas,
         1,
         "['text']",
     )
     .unwrap();
     assert_eq!(meta_text.data_type, VariantDataType::String);
     let meta_user_id = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_col_metas,
+        &result.draft_virtual_block_meta.virtual_column_metas,
         1,
         "['user']['id']",
     )
     .unwrap();
     assert_eq!(meta_user_id.data_type, VariantDataType::UInt64);
     let meta_replies = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_col_metas,
+        &result.draft_virtual_block_meta.virtual_column_metas,
         1,
         "['replies']",
     )
     .unwrap();
     assert_eq!(meta_replies.data_type, VariantDataType::UInt64);
     let meta_geo_lat = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_col_metas,
+        &result.draft_virtual_block_meta.virtual_column_metas,
         1,
         "['geo']['lat']",
     )

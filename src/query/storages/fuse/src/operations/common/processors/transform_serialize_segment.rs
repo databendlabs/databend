@@ -259,11 +259,11 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 if let Some(ref mut virtual_column_accumulator) = self.virtual_column_accumulator {
                     // generate ColumnId for virtual columns.
                     let virtual_column_metas = virtual_column_accumulator
-                        .add_virtual_column_metas(&draft_virtual_block_meta.virtual_col_metas);
+                        .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
 
                     let virtual_block_meta = VirtualBlockMeta {
-                        virtual_col_metas: virtual_column_metas,
-                        virtual_col_size: draft_virtual_block_meta.virtual_col_size,
+                        virtual_column_metas,
+                        virtual_column_size: draft_virtual_block_meta.virtual_column_size,
                         virtual_location: draft_virtual_block_meta.virtual_location.clone(),
                     };
                     block_meta.virtual_block_meta = Some(virtual_block_meta);
@@ -302,17 +302,13 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 }
             }
             State::PreCommitSegment { location, segment } => {
-                // if let Some(segment_cache) = SegmentInfo::cache() {
-                //     segment_cache.insert(location.clone(), segment.as_ref().try_into()?);
-                // }
-
                 let format_version = SegmentInfo::VERSION;
 
                 let virtual_column_accumulator =
                     std::mem::take(&mut self.virtual_column_accumulator);
                 let virtual_schema =
                     if let Some(virtual_column_accumulator) = virtual_column_accumulator {
-                        virtual_column_accumulator.build_virtual_schema()
+                        virtual_column_accumulator.build_virtual_schema_with_block_number()
                     } else {
                         None
                     };

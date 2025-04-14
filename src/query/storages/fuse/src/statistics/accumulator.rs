@@ -69,6 +69,7 @@ impl SegmentBuilder for RowOrientedSegmentBuilder {
 pub struct VirtualColumnAccumulator {
     virtual_fields: BTreeMap<(ColumnId, String), usize>,
     virtual_schema: VirtualDataSchema,
+    number_of_blocks: u64,
 }
 
 impl VirtualColumnAccumulator {
@@ -106,6 +107,7 @@ impl VirtualColumnAccumulator {
         Some(VirtualColumnAccumulator {
             virtual_fields,
             virtual_schema,
+            number_of_blocks: 0,
         })
     }
 
@@ -151,13 +153,22 @@ impl VirtualColumnAccumulator {
 
             virtual_column_metas.insert(column_id, draft_virtual_column_meta.column_meta.clone());
         }
-        self.virtual_schema.number_of_blocks += 1;
+        self.number_of_blocks += 1;
 
         virtual_column_metas
     }
 
     pub fn build_virtual_schema(self) -> Option<VirtualDataSchema> {
-        if self.virtual_schema.number_of_blocks > 0 {
+        if self.virtual_schema.num_fields() > 0 {
+            Some(self.virtual_schema)
+        } else {
+            None
+        }
+    }
+
+    pub fn build_virtual_schema_with_block_number(mut self) -> Option<VirtualDataSchema> {
+        if self.virtual_schema.num_fields() > 0 {
+            self.virtual_schema.number_of_blocks += self.number_of_blocks;
             Some(self.virtual_schema)
         } else {
             None

@@ -352,6 +352,7 @@ fn build_test_segment_info(
         index_size: 0,
         col_stats: col_stats.clone(),
         cluster_stats: None,
+        virtual_block_count: None,
     };
 
     Ok(SegmentInfo::new(block_metas, statistics))

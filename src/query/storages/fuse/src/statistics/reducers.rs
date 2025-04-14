@@ -160,6 +160,13 @@ pub fn merge_statistics_mut(
     l.uncompressed_byte_size += r.uncompressed_byte_size;
     l.compressed_byte_size += r.compressed_byte_size;
     l.index_size += r.index_size;
+    let virtual_block_count =
+        l.virtual_block_count.unwrap_or_default() + r.virtual_block_count.unwrap_or_default();
+    l.virtual_block_count = if virtual_block_count > 0 {
+        Some(virtual_block_count)
+    } else {
+        None
+    };
 }
 
 // Deduct statistics, only be used for calculate snapshot summary.
@@ -185,6 +192,13 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
             col_stats.in_memory_size -= r_col_stats.in_memory_size;
         }
     }
+    let virtual_block_count =
+        l.virtual_block_count.unwrap_or_default() - r.virtual_block_count.unwrap_or_default();
+    l.virtual_block_count = if virtual_block_count > 0 {
+        Some(virtual_block_count)
+    } else {
+        None
+    };
 }
 
 pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
@@ -198,6 +212,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     let mut compressed_byte_size: u64 = 0;
     let mut index_size: u64 = 0;
     let mut perfect_block_count: u64 = 0;
+    let mut virtual_block_count: u64 = 0;
 
     let len = block_metas.len();
     let mut col_stats = Vec::with_capacity(len);
@@ -211,6 +226,10 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         compressed_byte_size += b.file_size;
         index_size += b.bloom_filter_index_size;
         index_size += b.inverted_index_size.unwrap_or_default();
+        if let Some(virtual_block_meta) = &b.virtual_block_meta {
+            index_size += virtual_block_meta.virtual_column_size;
+            virtual_block_count += 1;
+        }
         if thresholds.check_perfect_block(
             b.row_count as usize,
             b.block_size as usize,
@@ -225,6 +244,11 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
 
     let merged_col_stats = reduce_block_statistics(&col_stats);
     let merged_cluster_stats = reduce_cluster_statistics(&cluster_stats, default_cluster_key_id);
+    let merged_virtual_block_count = if virtual_block_count > 0 {
+        Some(virtual_block_count)
+    } else {
+        None
+    };
 
     Statistics {
         row_count,
@@ -235,5 +259,6 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         index_size,
         col_stats: merged_col_stats,
         cluster_stats: merged_cluster_stats,
+        virtual_block_count: merged_virtual_block_count,
     }
 }

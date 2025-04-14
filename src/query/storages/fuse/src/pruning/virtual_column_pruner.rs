@@ -49,7 +49,7 @@ impl VirtualColumnPruner {
             let mut need_source_column_ids = HashSet::new();
             for virtual_column_field in &self.virtual_column.virtual_column_fields {
                 if let Some(virtual_column_meta) = virtual_block_meta
-                    .virtual_col_metas
+                    .virtual_column_metas
                     .get(&virtual_column_field.column_id)
                 {
                     virtual_column_metas

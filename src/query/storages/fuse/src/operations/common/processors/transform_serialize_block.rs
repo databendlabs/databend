@@ -344,7 +344,7 @@ impl Processor for TransformSerializeBlock {
                     &extended_block_meta.draft_virtual_block_meta
                 {
                     (extended_block_meta.block_meta.block_size
-                        + draft_virtual_block_meta.virtual_col_size) as usize
+                        + draft_virtual_block_meta.virtual_column_size) as usize
                 } else {
                     extended_block_meta.block_meta.block_size as usize
                 };

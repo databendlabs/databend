@@ -545,7 +545,7 @@ impl BlockWriter {
         if let Some(virtual_column_state) = virtual_column_state {
             if virtual_column_state
                 .draft_virtual_block_meta
-                .virtual_col_size
+                .virtual_column_size
                 == 0
             {
                 return Ok(());
@@ -554,7 +554,7 @@ impl BlockWriter {
 
             let index_size = virtual_column_state
                 .draft_virtual_block_meta
-                .virtual_col_size;
+                .virtual_column_size;
             let location = &virtual_column_state
                 .draft_virtual_block_meta
                 .virtual_location

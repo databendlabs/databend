@@ -357,6 +357,8 @@ impl TableMutationAggregator {
             merge_statistics_mut(&mut merged_statistics, &stats, self.default_cluster_key_id);
         }
 
+        self.update_virtual_schema_block_number(&merged_statistics);
+
         let conflict_resolve_context =
             ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
                 appended_segments,
@@ -383,7 +385,6 @@ impl TableMutationAggregator {
 
         let mut replaced_segments = HashMap::new();
         let mut merged_statistics = Statistics::default();
-        let mut deleted_virtual_schema_num = 0;
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize;
         let segment_indices = self.mutations.keys().cloned().collect::<Vec<_>>();
         for chunk in segment_indices.chunks(chunk_size) {
@@ -410,7 +411,6 @@ impl TableMutationAggregator {
                         self.default_cluster_key_id,
                     );
                 }
-                deleted_virtual_schema_num += result.deleted_virtual_schema_num;
             }
 
             // Refresh status
@@ -429,21 +429,13 @@ impl TableMutationAggregator {
 
         info!("removed_segment_indexes:{:?}", self.removed_segment_indexes);
 
+        self.update_virtual_schema_block_number(&merged_statistics);
+
         merge_statistics_mut(
             &mut merged_statistics,
             &appended_statistics,
             self.default_cluster_key_id,
         );
-
-        if deleted_virtual_schema_num > 0 && self.virtual_schema.is_some() {
-            let mut virtual_schema = std::mem::take(&mut self.virtual_schema).unwrap();
-            if virtual_schema.number_of_blocks >= deleted_virtual_schema_num {
-                virtual_schema.number_of_blocks -= deleted_virtual_schema_num;
-            } else {
-                virtual_schema.number_of_blocks = 0;
-            }
-            self.virtual_schema = Some(virtual_schema);
-        }
 
         Ok(ConflictResolveContext::ModifiedSegmentExistsInLatest(
             SnapshotChanges {
@@ -476,7 +468,6 @@ impl TableMutationAggregator {
             tasks.push(async move {
                 let mut all_perfect = false;
                 let mut set_level = false;
-                let mut deleted_virtual_schema_num = 0;
                 let (new_blocks, origin_summary) = if let Some(loc) = location {
                     // read the old segment
                     let compact_segment_info =
@@ -490,19 +481,9 @@ impl TableMutationAggregator {
                             .enumerate(),
                     );
                     for (idx, new_meta) in segment_mutation.replaced_blocks {
-                        if let Some(old_meta) = block_editor.get(&idx) {
-                            if old_meta.virtual_block_meta.is_some() {
-                                deleted_virtual_schema_num += 1;
-                            }
-                        }
                         block_editor.insert(idx, new_meta);
                     }
                     for idx in segment_mutation.deleted_blocks {
-                        if let Some(old_meta) = block_editor.get(&idx) {
-                            if old_meta.virtual_block_meta.is_some() {
-                                deleted_virtual_schema_num += 1;
-                            }
-                        }
                         block_editor.remove(&idx);
                     }
 
@@ -511,7 +492,6 @@ impl TableMutationAggregator {
                             index,
                             new_segment_info: None,
                             origin_summary: Some(segment_info.summary),
-                            deleted_virtual_schema_num,
                         });
                     }
 
@@ -556,7 +536,6 @@ impl TableMutationAggregator {
                     index,
                     new_segment_info: Some(new_segment_info),
                     origin_summary,
-                    deleted_virtual_schema_num,
                 })
             });
         }
@@ -596,11 +575,13 @@ impl TableMutationAggregator {
                     if let Some(ref mut virtual_column_accumulator) = virtual_column_accumulator {
                         // generate ColumnId for virtual columns.
                         let virtual_column_metas = virtual_column_accumulator
-                            .add_virtual_column_metas(&draft_virtual_block_meta.virtual_col_metas);
+                            .add_virtual_column_metas(
+                                &draft_virtual_block_meta.virtual_column_metas,
+                            );
 
                         let virtual_block_meta = VirtualBlockMeta {
-                            virtual_col_metas: virtual_column_metas,
-                            virtual_col_size: draft_virtual_block_meta.virtual_col_size,
+                            virtual_column_metas,
+                            virtual_column_size: draft_virtual_block_meta.virtual_column_size,
                             virtual_location: draft_virtual_block_meta.virtual_location.clone(),
                         };
                         new_block_meta.virtual_block_meta = Some(virtual_block_meta);
@@ -656,11 +637,11 @@ impl TableMutationAggregator {
                 if let Some(ref mut virtual_column_accumulator) = virtual_column_accumulator {
                     // generate ColumnId for virtual columns.
                     let virtual_column_metas = virtual_column_accumulator
-                        .add_virtual_column_metas(&draft_virtual_block_meta.virtual_col_metas);
+                        .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
 
                     let virtual_block_meta = VirtualBlockMeta {
-                        virtual_col_metas: virtual_column_metas,
-                        virtual_col_size: draft_virtual_block_meta.virtual_col_size,
+                        virtual_column_metas,
+                        virtual_column_size: draft_virtual_block_meta.virtual_column_size,
                         virtual_location: draft_virtual_block_meta.virtual_location.clone(),
                     };
                     new_block_meta.virtual_block_meta = Some(virtual_block_meta);
@@ -677,6 +658,22 @@ impl TableMutationAggregator {
         } else {
             None
         };
+    }
+
+    fn update_virtual_schema_block_number(&mut self, merged_statistics: &Statistics) {
+        if let Some(ref mut virtual_schema) = self.virtual_schema {
+            virtual_schema.number_of_blocks +=
+                merged_statistics.virtual_block_count.unwrap_or_default();
+            let removed_virtual_block_count = self
+                .removed_statistics
+                .virtual_block_count
+                .unwrap_or_default();
+            if virtual_schema.number_of_blocks >= removed_virtual_block_count {
+                virtual_schema.number_of_blocks -= removed_virtual_block_count;
+            } else {
+                virtual_schema.number_of_blocks = 0;
+            }
+        }
     }
 }
 
@@ -747,10 +744,6 @@ struct SegmentLite {
     new_segment_info: Option<(String, Statistics)>,
     // origin segment summary.
     origin_summary: Option<Statistics>,
-    // Number of blocks containing virtual schema deleted or replaced.
-    // If a virtual column exists in all blocks and is of the same type,
-    // we can directly use the native type as the virtual column type.
-    deleted_virtual_schema_num: u64,
 }
 
 async fn write_segment(

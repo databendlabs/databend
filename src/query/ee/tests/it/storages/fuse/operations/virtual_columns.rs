@@ -90,7 +90,7 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
         for block_meta in block_metas {
             assert!(block_meta.virtual_block_meta.is_some());
             let virtual_block_meta = block_meta.virtual_block_meta.clone().unwrap();
-            assert_eq!(virtual_block_meta.virtual_col_metas.len(), 2);
+            assert_eq!(virtual_block_meta.virtual_column_metas.len(), 2);
 
             let virtual_loc = virtual_block_meta.virtual_location.0;
             assert!(dal.exists(&virtual_loc).await?);

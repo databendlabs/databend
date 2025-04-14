@@ -62,6 +62,9 @@ impl SegmentInfo {
     }
 }
 
+/// The column meta of virtual columns.
+/// Virtual column is the internal field values extracted from variant type values,
+/// used to speed up the reading of internal fields of variant data.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct VirtualColumnMeta {
     /// where the data of column start
@@ -79,7 +82,7 @@ pub struct VirtualColumnMeta {
     // 5 => float64
     // 6 => string
     pub data_type: u8,
-    // virtual column statistics.
+    /// virtual column statistics.
     pub column_stat: Option<ColumnStatistics>,
 }
 
@@ -116,16 +119,18 @@ impl VirtualColumnMeta {
     }
 }
 
+/// The block meta of virtual columns.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct VirtualBlockMeta {
-    /// key is columnId, value is VirtualColumnMeta
-    pub virtual_col_metas: HashMap<ColumnId, VirtualColumnMeta>,
+    /// key is virtual columnId, value is VirtualColumnMeta
+    pub virtual_column_metas: HashMap<ColumnId, VirtualColumnMeta>,
     /// The file size of virtual columns.
-    pub virtual_col_size: u64,
+    pub virtual_column_size: u64,
     /// The file location of virtual columns.
     pub virtual_location: Location,
 }
 
+/// The draft column meta of virtual columns, virtual ColumnId is not set.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DraftVirtualColumnMeta {
     pub source_column_id: ColumnId,
@@ -134,11 +139,13 @@ pub struct DraftVirtualColumnMeta {
     pub column_meta: VirtualColumnMeta,
 }
 
+/// The draft block meta of virtual columns.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DraftVirtualBlockMeta {
-    pub virtual_col_metas: Vec<DraftVirtualColumnMeta>,
+    /// The draft virtual oclumn metas, virtual ColumnId needs to be set.
+    pub virtual_column_metas: Vec<DraftVirtualColumnMeta>,
     /// The file size of virtual columns.
-    pub virtual_col_size: u64,
+    pub virtual_column_size: u64,
     /// The file location of virtual columns.
     pub virtual_location: Location,
 }

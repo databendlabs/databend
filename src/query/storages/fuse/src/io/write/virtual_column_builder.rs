@@ -212,8 +212,8 @@ impl VirtualColumnBuilder {
         // There are no suitable virtual columns, returning empty data.
         if virtual_fields.is_empty() {
             let draft_virtual_block_meta = DraftVirtualBlockMeta {
-                virtual_col_metas: vec![],
-                virtual_col_size: 0,
+                virtual_column_metas: vec![],
+                virtual_column_size: 0,
                 virtual_location: ("".to_string(), 0),
             };
 
@@ -248,8 +248,8 @@ impl VirtualColumnBuilder {
             TableMetaLocationGenerator::gen_virtual_block_location(&location.0);
 
         let draft_virtual_block_meta = DraftVirtualBlockMeta {
-            virtual_col_metas: draft_virtual_column_metas,
-            virtual_col_size: data_size,
+            virtual_column_metas: draft_virtual_column_metas,
+            virtual_column_size: data_size,
             virtual_location: (virtual_column_location, 0),
         };
 

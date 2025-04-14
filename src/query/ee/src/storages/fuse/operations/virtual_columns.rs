@@ -275,14 +275,14 @@ impl AsyncTransform for VirtualColumnTransform {
 
         if virtual_column_state
             .draft_virtual_block_meta
-            .virtual_col_size
+            .virtual_column_size
             > 0
         {
             let start = Instant::now();
 
             let virtual_column_size = virtual_column_state
                 .draft_virtual_block_meta
-                .virtual_col_size;
+                .virtual_column_size;
             let location = &virtual_column_state
                 .draft_virtual_block_meta
                 .virtual_location
