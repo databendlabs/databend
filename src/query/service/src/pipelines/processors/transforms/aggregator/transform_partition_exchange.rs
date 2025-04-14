@@ -51,12 +51,6 @@ impl ExchangePartition {
 }
 
 impl ExchangePartition {
-    fn partition_final_payload(n: usize) -> Result<Vec<DataBlock>> {
-        Ok((0..n)
-            .map(|_| DataBlock::empty_with_meta(AggregateMeta::create_final(vec![])))
-            .collect())
-    }
-
     fn partition_aggregate(mut payload: AggregatePayload, n: usize) -> Result<Vec<DataBlock>> {
         if payload.payload.len() == 0 {
             return Ok(vec![]);
