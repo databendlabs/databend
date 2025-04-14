@@ -46,7 +46,7 @@ use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
 const CONTAINER_RETRY_TIMES: usize = 3;
-const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 120;
+const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 180;
 const CONTAINER_TIMEOUT_SECONDS: u64 = 300;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -465,16 +465,32 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
 
 // Stop the running container to avoid conflict
 async fn stop_container(docker: &Docker, container_name: &str) {
-    println!("Stopping container {container_name}");
-    if let Err(err) = docker.stop_container(container_name, None).await {
-        eprintln!("stop container {container_name} err: {err}");
+    let container = docker.inspect_container(container_name, None).await;
+    match container {
+        Ok(container) => {
+            println!(
+                "Stopping previous container {container_name}: {:?}",
+                container.state
+            );
+            if let Err(err) = docker.stop_container(container_name, None).await {
+                eprintln!("Failed to stop container {container_name}: {err}");
+            }
+            let options = Some(RemoveContainerOptions {
+                force: true,
+                ..Default::default()
+            });
+            match docker.remove_container(container_name, options).await {
+                Ok(_) => {
+                    println!("Removed container {container_name}");
+                }
+                Err(err) => {
+                    eprintln!("Failed to remove container {container_name}: {err}");
+                }
+            }
+        }
+        Err(_) => {
+            // Container not found, skip
+            return;
+        }
     }
-    let options = Some(RemoveContainerOptions {
-        force: true,
-        ..Default::default()
-    });
-    if let Err(err) = docker.remove_container(container_name, options).await {
-        eprintln!("remove container {container_name} err: {err}");
-    }
-    eprintln!("Stopped container {container_name}");
 }
