@@ -92,6 +92,7 @@ members = [
     "src/meta/app",
     "src/meta/app-types",
     "src/meta/binaries",
+    "src/meta/cache",
     "src/meta/client",
     "src/meta/control",
     "src/meta/ee",
@@ -141,6 +142,7 @@ databend-common-management = { path = "src/query/management" }
 databend-common-meta-api = { path = "src/meta/api" }
 databend-common-meta-app = { path = "src/meta/app" }
 databend-common-meta-app-types = { path = "src/meta/app-types" }
+databend-common-meta-cache = { path = "src/meta/cache" }
 databend-common-meta-client = { path = "src/meta/client" }
 databend-common-meta-control = { path = "src/meta/control" }
 databend-common-meta-embedded = { path = "src/meta/embedded" }
