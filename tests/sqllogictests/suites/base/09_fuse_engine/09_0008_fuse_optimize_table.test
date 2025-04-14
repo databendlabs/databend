@@ -8,6 +8,9 @@ statement ok
 USE db_09_0008
 
 statement ok
+set enable_block_stream_write = 1
+
+statement ok
 create table t(a uint64 not null)
 
 statement ok

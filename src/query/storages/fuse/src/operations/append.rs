@@ -50,43 +50,38 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        match self.storage_format {
-            FuseStorageFormat::Parquet => {
-                pipeline.add_transform(|input, output| {
-                    TransformBlockWriter::try_create(
-                        ctx.clone(),
-                        input,
-                        output,
-                        self,
-                        table_meta_timestamps,
-                        false,
-                    )
-                })?;
-            }
-            FuseStorageFormat::Native => {
-                let block_thresholds = self.get_block_thresholds();
-                build_compact_block_pipeline(pipeline, block_thresholds)?;
-
-                let schema = DataSchema::from(self.schema()).into();
-                let cluster_stats_gen = self.cluster_gen_for_append(
+        let enable_stream_block_write = ctx.get_settings().get_enable_block_stream_write()?
+            && matches!(self.storage_format, FuseStorageFormat::Parquet);
+        if enable_stream_block_write {
+            pipeline.add_transform(|input, output| {
+                TransformBlockWriter::try_create(
                     ctx.clone(),
-                    pipeline,
-                    block_thresholds,
-                    Some(schema),
+                    input,
+                    output,
+                    self,
+                    table_meta_timestamps,
+                    false,
+                )
+            })?;
+        } else {
+            let block_thresholds = self.get_block_thresholds();
+            build_compact_block_pipeline(pipeline, block_thresholds)?;
+
+            let schema = DataSchema::from(self.schema()).into();
+            let cluster_stats_gen =
+                self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, Some(schema))?;
+            pipeline.add_transform(|input, output| {
+                let proc = TransformSerializeBlock::try_create(
+                    ctx.clone(),
+                    input,
+                    output,
+                    self,
+                    cluster_stats_gen.clone(),
+                    MutationKind::Insert,
+                    table_meta_timestamps,
                 )?;
-                pipeline.add_transform(|input, output| {
-                    let proc = TransformSerializeBlock::try_create(
-                        ctx.clone(),
-                        input,
-                        output,
-                        self,
-                        cluster_stats_gen.clone(),
-                        MutationKind::Insert,
-                        table_meta_timestamps,
-                    )?;
-                    proc.into_processor()
-                })?;
-            }
+                proc.into_processor()
+            })?;
         }
 
         Ok(())

@@ -932,4 +932,8 @@ impl Settings {
     pub fn get_optimizer_skip_list(&self) -> Result<String> {
         self.try_get_string("optimizer_skip_list")
     }
+
+    pub fn get_enable_block_stream_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_block_stream_write")? == 1)
+    }
 }
