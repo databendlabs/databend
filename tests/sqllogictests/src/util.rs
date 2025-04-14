@@ -478,9 +478,7 @@ async fn stop_container(docker: &Docker, container_name: &str) {
                 }
             }
         }
-        Err(_) => {
-            // Container not found, skip
-            return;
-        }
+        // Container not found, skip
+        Err(_) => {}
     }
 }
