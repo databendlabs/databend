@@ -456,29 +456,25 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
 // Stop the running container to avoid conflict
 async fn stop_container(docker: &Docker, container_name: &str) {
     let container = docker.inspect_container(container_name, None).await;
-    match container {
-        Ok(container) => {
-            println!(
-                "Stopping previous container {container_name}: {:?}",
-                container.state
-            );
-            if let Err(err) = docker.stop_container(container_name, None).await {
-                eprintln!("Failed to stop container {container_name}: {err}");
+    if let Ok(container) = container {
+        println!(
+            "Stopping previous container {container_name}: {:?}",
+            container.state
+        );
+        if let Err(err) = docker.stop_container(container_name, None).await {
+            eprintln!("Failed to stop container {container_name}: {err}");
+        }
+        let options = Some(RemoveContainerOptions {
+            force: true,
+            ..Default::default()
+        });
+        match docker.remove_container(container_name, options).await {
+            Ok(_) => {
+                println!("Removed container {container_name}");
             }
-            let options = Some(RemoveContainerOptions {
-                force: true,
-                ..Default::default()
-            });
-            match docker.remove_container(container_name, options).await {
-                Ok(_) => {
-                    println!("Removed container {container_name}");
-                }
-                Err(err) => {
-                    eprintln!("Failed to remove container {container_name}: {err}");
-                }
+            Err(err) => {
+                eprintln!("Failed to remove container {container_name}: {err}");
             }
         }
-        // Container not found, skip
-        Err(_) => {}
     }
 }
