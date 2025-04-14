@@ -105,6 +105,10 @@ pub fn register(registry: &mut FunctionRegistry) {
     // [date | timestamp] +/- [date | timestamp]
     register_diff_functions(registry);
 
+    // datesub([year | quarter | month | week | day | hour | minute | second], [date | timestamp], [date | timestamp])
+    // The number of complete partitions between the dates.
+    register_between_functions(registry);
+
     // now, today, yesterday, tomorrow
     register_real_time_functions(registry);
 
@@ -1453,6 +1457,307 @@ fn register_diff_functions(registry: &mut FunctionRegistry) {
                 EvalMonthsImpl::months_between_ts(a, b).into()
             }),
         );
+}
+
+fn register_between_functions(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_years",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_years =
+                    EvalYearsImpl::eval_date_between(date_start, date_end, ctx.func_ctx.tz.clone());
+                builder.push(between_years as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_years",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_years = EvalYearsImpl::eval_timestamp_between(
+                    date_start,
+                    date_end,
+                    ctx.func_ctx.tz.clone(),
+                );
+                builder.push(between_years);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_quarters",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_quarters = EvalMonthsImpl::eval_date_between(
+                    date_start,
+                    date_end,
+                    ctx.func_ctx.tz.clone(),
+                ) / 3;
+                builder.push(between_quarters as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_quarters",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_quarters = EvalMonthsImpl::eval_timestamp_between(
+                    date_start,
+                    date_end,
+                    ctx.func_ctx.tz.clone(),
+                ) / 3;
+                builder.push(between_quarters);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_months",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_months = EvalMonthsImpl::eval_date_between(
+                    date_start,
+                    date_end,
+                    ctx.func_ctx.tz.clone(),
+                );
+                builder.push(between_months as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_months",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_months = EvalMonthsImpl::eval_timestamp_between(
+                    date_start,
+                    date_end,
+                    ctx.func_ctx.tz.clone(),
+                );
+                builder.push(between_months);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_weeks",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_weeks =
+                    EvalWeeksImpl::eval_date_between(date_start, date_end, ctx.func_ctx.tz.clone());
+                builder.push(between_weeks as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_weeks",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_weeks = EvalWeeksImpl::eval_timestamp_between(
+                    date_start,
+                    date_end,
+                    ctx.func_ctx.tz.clone(),
+                );
+                builder.push(between_weeks);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_days",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                // day is date type unit
+                let between_days = EvalDaysImpl::eval_date_diff(date_start, date_end);
+                builder.push(between_days as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_days",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_days = EvalDaysImpl::eval_timestamp_between(
+                    date_start,
+                    date_end,
+                    ctx.func_ctx.tz.clone(),
+                );
+                builder.push(between_days);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_hours",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let between_hours = EvalDaysImpl::eval_date_diff(date_start, date_end) as i64 * 24;
+                builder.push(between_hours);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_hours",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let between_hours =
+                    EvalTimesImpl::eval_timestamp_between("hours", date_start, date_end);
+                builder.push(between_hours);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_minutes",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let between_minutes =
+                    EvalDaysImpl::eval_date_diff(date_start, date_end) as i64 * 24 * 60;
+                builder.push(between_minutes);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_minutes",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let between_minutes =
+                    EvalTimesImpl::eval_timestamp_between("minutes", date_start, date_end);
+                builder.push(between_minutes);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_seconds",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let between_seconds =
+                    EvalDaysImpl::eval_date_diff(date_start, date_end) as i64 * 24 * 3600;
+                builder.push(between_seconds);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_seconds",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let between_seconds =
+                    EvalTimesImpl::eval_timestamp_between("seconds", date_start, date_end);
+                builder.push(between_seconds);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_microseconds",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let between_microseconds =
+                    EvalDaysImpl::eval_date_diff(date_start, date_end) as i64 * MICROSECS_PER_DAY;
+                builder.push(between_microseconds);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_microseconds",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                builder.push(date_end - date_start);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_isoyears",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_isoyears = EvalISOYearsImpl::eval_date_between(
+                    date_start,
+                    date_end,
+                    ctx.func_ctx.tz.clone(),
+                );
+                builder.push(between_isoyears as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_isoyears",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_isoyears = EvalISOYearsImpl::eval_timestamp_between(
+                    date_start,
+                    date_end,
+                    ctx.func_ctx.tz.clone(),
+                );
+                builder.push(between_isoyears);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "between_millenniums",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_millenniums =
+                    EvalYearsImpl::eval_date_between(date_start, date_end, ctx.func_ctx.tz.clone());
+                builder.push((between_millenniums / 1000) as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "between_millenniums",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let between_millenniums = EvalYearsImpl::eval_timestamp_between(
+                    date_start,
+                    date_end,
+                    ctx.func_ctx.tz.clone(),
+                );
+
+                builder.push(between_millenniums / 1000);
+            },
+        ),
+    );
+    registry.register_aliases("between_seconds", &["between_epochs"]);
+    registry.register_aliases("between_weeks", &["between_yearweeks"]);
+    registry.register_aliases("between_days", &[
+        "between_dows",
+        "between_isodows",
+        "between_doys",
+    ]);
 }
 
 fn register_real_time_functions(registry: &mut FunctionRegistry) {

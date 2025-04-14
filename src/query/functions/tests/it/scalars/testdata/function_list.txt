@@ -5,6 +5,11 @@ array_get -> get
 array_length -> length
 array_size -> length
 array_slice -> slice
+between_dows -> between_days
+between_doys -> between_days
+between_epochs -> between_seconds
+between_isodows -> between_days
+between_yearweeks -> between_weeks
 bitmap_and_not -> bitmap_not
 bitmap_cardinality -> bitmap_count
 ceiling -> ceil
@@ -215,6 +220,50 @@ Functions overloads:
 1 atan(Float64 NULL) :: Float64 NULL
 0 atan2(Float64, Float64) :: Float64
 1 atan2(Float64 NULL, Float64 NULL) :: Float64 NULL
+0 between_days(Date, Date) :: Int64
+1 between_days(Date NULL, Date NULL) :: Int64 NULL
+2 between_days(Timestamp, Timestamp) :: Int64
+3 between_days(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 between_hours(Date, Date) :: Int64
+1 between_hours(Date NULL, Date NULL) :: Int64 NULL
+2 between_hours(Timestamp, Timestamp) :: Int64
+3 between_hours(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 between_isoyears(Date, Date) :: Int64
+1 between_isoyears(Date NULL, Date NULL) :: Int64 NULL
+2 between_isoyears(Timestamp, Timestamp) :: Int64
+3 between_isoyears(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 between_microseconds(Date, Date) :: Int64
+1 between_microseconds(Date NULL, Date NULL) :: Int64 NULL
+2 between_microseconds(Timestamp, Timestamp) :: Int64
+3 between_microseconds(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 between_millenniums(Date, Date) :: Int64
+1 between_millenniums(Date NULL, Date NULL) :: Int64 NULL
+2 between_millenniums(Timestamp, Timestamp) :: Int64
+3 between_millenniums(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 between_minutes(Date, Date) :: Int64
+1 between_minutes(Date NULL, Date NULL) :: Int64 NULL
+2 between_minutes(Timestamp, Timestamp) :: Int64
+3 between_minutes(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 between_months(Date, Date) :: Int64
+1 between_months(Date NULL, Date NULL) :: Int64 NULL
+2 between_months(Timestamp, Timestamp) :: Int64
+3 between_months(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 between_quarters(Date, Date) :: Int64
+1 between_quarters(Date NULL, Date NULL) :: Int64 NULL
+2 between_quarters(Timestamp, Timestamp) :: Int64
+3 between_quarters(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 between_seconds(Date, Date) :: Int64
+1 between_seconds(Date NULL, Date NULL) :: Int64 NULL
+2 between_seconds(Timestamp, Timestamp) :: Int64
+3 between_seconds(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 between_weeks(Date, Date) :: Int64
+1 between_weeks(Date NULL, Date NULL) :: Int64 NULL
+2 between_weeks(Timestamp, Timestamp) :: Int64
+3 between_weeks(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 between_years(Date, Date) :: Int64
+1 between_years(Date NULL, Date NULL) :: Int64 NULL
+2 between_years(Timestamp, Timestamp) :: Int64
+3 between_years(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 0 bin(Int64) :: String
 1 bin(Int64 NULL) :: String NULL
 0 bit_and(UInt8, UInt8) :: Int64
