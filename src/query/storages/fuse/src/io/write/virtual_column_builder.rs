@@ -426,7 +426,7 @@ impl VirtualColumnBuilder {
         let row_group = &file_meta.row_groups[0];
 
         let mut draft_virtual_column_metas = Vec::with_capacity(virtual_column_names.len());
-        for ((i, (source_column_id, name, virtual_type)), col_chunk) in virtual_column_names
+        for ((i, (source_column_id, name, variant_type)), col_chunk) in virtual_column_names
             .into_iter()
             .enumerate()
             .zip(row_group.columns.iter())
@@ -447,29 +447,20 @@ impl VirtualColumnBuilder {
                     );
                     let num_values = chunk_meta.num_values as u64;
 
-                    let virtual_type_num = match virtual_type {
-                        VariantDataType::Jsonb => 1,
-                        VariantDataType::Boolean => 2,
-                        VariantDataType::UInt64 => 3,
-                        VariantDataType::Int64 => 4,
-                        VariantDataType::Float64 => 5,
-                        VariantDataType::String => 6,
-                        _ => todo!(),
-                    };
-
+                    let variant_type_code = VirtualColumnMeta::data_type_code(&variant_type);
                     let column_stat = columns_statistics.remove(&tmp_column_id);
                     let virtual_column_meta = VirtualColumnMeta {
                         offset: col_start as u64,
                         len: col_len as u64,
                         num_values,
-                        data_type: virtual_type_num,
+                        data_type: variant_type_code,
                         column_stat,
                     };
 
                     let draft_virtual_column_meta = DraftVirtualColumnMeta {
                         source_column_id,
                         name,
-                        data_type: virtual_type,
+                        data_type: variant_type,
                         column_meta: virtual_column_meta,
                     };
                     draft_virtual_column_metas.push(draft_virtual_column_meta);

@@ -78,12 +78,6 @@ pub struct VirtualColumnMeta {
     // 4 => int64
     // 5 => float64
     // 6 => string
-    // 71 => array(jsonb)
-    // 72 => array(bool)
-    // 73 => array(uint64)
-    // 74 => array(int64)
-    // 75 => array(float64)
-    // 76 => array(string)
     pub data_type: u8,
     // virtual column statistics.
     pub column_stat: Option<ColumnStatistics>,
@@ -106,6 +100,18 @@ impl VirtualColumnMeta {
             5 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Float64))),
             6 => TableDataType::Nullable(Box::new(TableDataType::String)),
             _ => TableDataType::Nullable(Box::new(TableDataType::Variant)),
+        }
+    }
+
+    pub fn data_type_code(variant_type: &VariantDataType) -> u8 {
+        match variant_type {
+            VariantDataType::Jsonb => 1,
+            VariantDataType::Boolean => 2,
+            VariantDataType::UInt64 => 3,
+            VariantDataType::Int64 => 4,
+            VariantDataType::Float64 => 5,
+            VariantDataType::String => 6,
+            _ => unreachable!(),
         }
     }
 }
