@@ -21,6 +21,8 @@ use bytes::Bytes;
 use databend_common_column::binview::BinaryViewColumnGeneric;
 use databend_common_exception::Result;
 use databend_common_expression::types::Buffer;
+use databend_common_expression::types::NullableColumn;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -42,6 +44,7 @@ use super::BLOOM_FILTER_INDEX_SIZE;
 use super::COMPRESSION;
 use super::FILE_SIZE;
 use super::LOCATION_PATH;
+use super::NGRAM_FILTER_INDEX_SIZE;
 use super::ROW_COUNT;
 use crate::meta::column_oriented_segment::LOCATION;
 use crate::meta::format::compress;
@@ -196,6 +199,15 @@ impl ColumnOrientedSegment {
             .as_u_int64()
             .unwrap()
             .clone()
+    }
+
+    pub fn ngram_filter_index_size_col(&self) -> NullableColumn<UInt64Type> {
+        self.col_by_name(&[NGRAM_FILTER_INDEX_SIZE])
+            .unwrap()
+            .as_nullable()
+            .unwrap()
+            .try_downcast()
+            .unwrap()
     }
 
     pub fn col_by_name(&self, name: &[&str]) -> Option<Column> {

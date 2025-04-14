@@ -94,7 +94,10 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
         let compression_col = segment.compression_col();
         let create_on_col = segment.col_by_name(&[CREATE_ON]).unwrap();
         let bloom_index_location_col = segment.col_by_name(&[BLOOM_FILTER_INDEX_LOCATION]).unwrap();
+        let _ngram_index_location_col =
+            segment.col_by_name(&[NGRAM_FILTER_INDEX_LOCATION]).unwrap();
         let bloom_index_size_col = segment.bloom_filter_index_size_col();
+        let _ngram_index_size_col = segment.ngram_filter_index_size_col();
         let block_size_col = segment.block_size_col();
         let row_count_col = segment.row_count_col();
 

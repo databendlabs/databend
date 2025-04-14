@@ -74,10 +74,13 @@ pub struct BlockMeta {
     pub location: Location,
     /// location of bloom filter index
     pub bloom_filter_index_location: Option<Location>,
+    /// location of ngram filter index
+    pub ngram_filter_index_location: Option<Location>,
 
     #[serde(default)]
     pub bloom_filter_index_size: u64,
     pub inverted_index_size: Option<u64>,
+    pub ngram_filter_index_size: Option<u64>,
     pub compression: Compression,
 
     // block create_on
@@ -96,6 +99,8 @@ impl BlockMeta {
         location: Location,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
+        ngram_filter_index_location: Option<Location>,
+        ngram_filter_index_size: Option<u64>,
         inverted_index_size: Option<u64>,
         compression: Compression,
         create_on: Option<DateTime<Utc>>,
@@ -109,8 +114,10 @@ impl BlockMeta {
             cluster_stats,
             location,
             bloom_filter_index_location,
+            ngram_filter_index_location,
             bloom_filter_index_size,
             inverted_index_size,
+            ngram_filter_index_size,
             compression,
             create_on,
         }
@@ -250,10 +257,12 @@ impl BlockMeta {
             cluster_stats: None,
             location: (s.location.path.clone(), 0),
             bloom_filter_index_location: None,
+            ngram_filter_index_location: None,
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
             inverted_index_size: None,
             create_on: None,
+            ngram_filter_index_size: None,
         }
     }
 
@@ -274,10 +283,12 @@ impl BlockMeta {
             cluster_stats: None,
             location: s.location.clone(),
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
+            ngram_filter_index_location: None,
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
             inverted_index_size: None,
             create_on: None,
+            ngram_filter_index_size: None,
         }
     }
 }

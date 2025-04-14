@@ -22,6 +22,7 @@ use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_index::NgramIndexMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -58,6 +59,8 @@ pub type TableSnapshotStatisticCache = InMemoryLruCache<TableSnapshotStatistics>
 pub type BloomIndexFilterCache = HybridCache<Xor8Filter>;
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
+/// In memory object cache of parquet FileMetaData of ngram index data
+pub type NgramIndexMetaCache = HybridCache<NgramIndexMeta>;
 
 pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
 pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;
@@ -114,6 +117,13 @@ impl CachedObject<BloomIndexMeta> for BloomIndexMeta {
     type Cache = BloomIndexMetaCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_bloom_index_meta_cache()
+    }
+}
+
+impl CachedObject<NgramIndexMeta> for NgramIndexMeta {
+    type Cache = NgramIndexMetaCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_ngram_index_meta_cache()
     }
 }
 
@@ -236,6 +246,15 @@ impl From<Xor8Filter> for CacheValue<Xor8Filter> {
 
 impl From<BloomIndexMeta> for CacheValue<BloomIndexMeta> {
     fn from(value: BloomIndexMeta) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<NgramIndexMeta> for CacheValue<NgramIndexMeta> {
+    fn from(value: NgramIndexMeta) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,

@@ -68,6 +68,8 @@ pub struct ColumnOrientedSegmentBuilder {
     location: (Vec<String>, Vec<u64>),
     bloom_filter_index_location: (Vec<String>, Vec<u64>, MutableBitmap),
     bloom_filter_index_size: Vec<u64>,
+    ngram_filter_index_location: (Vec<String>, Vec<u64>, MutableBitmap),
+    ngram_filter_index_size: Vec<Option<u64>>,
     inverted_index_size: Vec<Option<u64>>,
     compression: Vec<u8>,
     create_on: Vec<Option<i64>>,
@@ -132,6 +134,13 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
                 .map(|l| l.0.clone())
                 .unwrap_or_default(),
         );
+        self.ngram_filter_index_location.0.push(
+            block_meta
+                .ngram_filter_index_location
+                .as_ref()
+                .map(|l| l.0.clone())
+                .unwrap_or_default(),
+        );
         self.bloom_filter_index_location.1.push(
             block_meta
                 .bloom_filter_index_location
@@ -139,11 +148,23 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
                 .map(|l| l.1)
                 .unwrap_or_default(),
         );
+        self.ngram_filter_index_location.1.push(
+            block_meta
+                .ngram_filter_index_location
+                .as_ref()
+                .map(|l| l.1)
+                .unwrap_or_default(),
+        );
         self.bloom_filter_index_location
             .2
             .push(block_meta.bloom_filter_index_location.is_some());
+        self.ngram_filter_index_location
+            .2
+            .push(block_meta.ngram_filter_index_location.is_some());
         self.bloom_filter_index_size
             .push(block_meta.bloom_filter_index_size);
+        self.ngram_filter_index_size
+            .push(block_meta.ngram_filter_index_size);
         self.inverted_index_size
             .push(block_meta.inverted_index_size);
         self.compression.push(block_meta.compression.to_u8());
@@ -201,7 +222,15 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
                 ]),
                 this.bloom_filter_index_location.2.into(),
             ))),
+            Column::Nullable(Box::new(NullableColumn::new(
+                Column::Tuple(vec![
+                    StringType::from_data(this.ngram_filter_index_location.0),
+                    UInt64Type::from_data(this.ngram_filter_index_location.1),
+                ]),
+                this.ngram_filter_index_location.2.into(),
+            ))),
             UInt64Type::from_data(this.bloom_filter_index_size),
+            UInt64Type::from_opt_data(this.ngram_filter_index_size),
             UInt64Type::from_opt_data(this.inverted_index_size),
             UInt8Type::from_data(this.compression),
             Int64Type::from_opt_data(this.create_on),
@@ -267,6 +296,12 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
                 MutableBitmap::with_capacity(block_per_segment),
             ),
             bloom_filter_index_size: Vec::with_capacity(block_per_segment),
+            ngram_filter_index_location: (
+                Vec::with_capacity(block_per_segment),
+                Vec::with_capacity(block_per_segment),
+                MutableBitmap::with_capacity(block_per_segment),
+            ),
+            ngram_filter_index_size: Vec::with_capacity(block_per_segment),
             inverted_index_size: Vec::with_capacity(block_per_segment),
             compression: Vec::with_capacity(block_per_segment),
             create_on: Vec::with_capacity(block_per_segment),

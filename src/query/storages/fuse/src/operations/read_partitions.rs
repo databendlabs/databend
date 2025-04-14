@@ -59,6 +59,8 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::CREATE_O
 use databend_storages_common_table_meta::meta::column_oriented_segment::FILE_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::INVERTED_INDEX_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::LOCATION;
+use databend_storages_common_table_meta::meta::column_oriented_segment::NGRAM_FILTER_INDEX_LOCATION;
+use databend_storages_common_table_meta::meta::column_oriented_segment::NGRAM_FILTER_INDEX_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ROW_COUNT;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -578,7 +580,9 @@ impl FuseTable {
         segment_column_projection.insert(CLUSTER_STATS.to_string());
         segment_column_projection.insert(LOCATION.to_string());
         segment_column_projection.insert(BLOOM_FILTER_INDEX_LOCATION.to_string());
+        segment_column_projection.insert(NGRAM_FILTER_INDEX_LOCATION.to_string());
         segment_column_projection.insert(BLOOM_FILTER_INDEX_SIZE.to_string());
+        segment_column_projection.insert(NGRAM_FILTER_INDEX_SIZE.to_string());
         segment_column_projection.insert(INVERTED_INDEX_SIZE.to_string());
         segment_column_projection.insert(COMPRESSION.to_string());
         segment_column_projection.insert(CREATE_ON.to_string());

@@ -30,10 +30,12 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_index::NgramIndexMeta;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
 use databend_storages_common_table_meta::meta::column_oriented_segment::LOCATION;
+use databend_storages_common_table_meta::meta::column_oriented_segment::NGRAM_FILTER_INDEX_LOCATION;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -454,6 +456,13 @@ impl FuseTable {
                 }
                 blooms_to_be_purged.insert(loc.to_string());
             }
+            let mut ngrams_to_be_purged = HashSet::new();
+            for loc in &locations.ngram_location {
+                if locations_referenced_by_root.ngram_location.contains(loc) {
+                    continue;
+                }
+                ngrams_to_be_purged.insert(loc.to_string());
+            }
 
             let segment_locations_to_be_purged = HashSet::from_iter(
                 chunk
@@ -481,6 +490,7 @@ impl FuseTable {
                 agg_indexes_to_be_purged,
                 inverted_indexes_to_be_purged,
                 blooms_to_be_purged,
+                ngrams_to_be_purged,
                 segment_locations_to_be_purged,
             )
             .await?;
@@ -541,6 +551,7 @@ impl FuseTable {
             agg_indexes_to_be_purged,
             inverted_indexes_to_be_purged,
             root_location_tuple.bloom_location,
+            root_location_tuple.ngram_location,
             segment_locations_to_be_purged,
         )
         .await?;
@@ -566,6 +577,7 @@ impl FuseTable {
         agg_indexes_to_be_purged: HashSet<String>,
         inverted_indexes_to_be_purged: HashSet<String>,
         blooms_to_be_purged: HashSet<String>,
+        ngrams_to_be_purged: HashSet<String>,
         segments_to_be_purged: HashSet<String>,
     ) -> Result<()> {
         // 1. Try to purge block file chunks.
@@ -601,6 +613,16 @@ impl FuseTable {
             self.try_purge_location_files_and_cache::<InvertedIndexMeta, _>(
                 ctx.clone(),
                 inverted_indexes_to_be_purged,
+            )
+            .await?;
+        }
+
+        let ngram_count = ngrams_to_be_purged.len();
+        if ngram_count > 0 {
+            counter.ngrams += ngram_count;
+            self.try_purge_location_files_and_cache::<NgramIndexMeta, _>(
+                ctx.clone(),
+                ngrams_to_be_purged,
             )
             .await?;
         }
@@ -714,12 +736,14 @@ impl FuseTable {
     ) -> Result<LocationTuple> {
         let mut blocks = HashSet::new();
         let mut blooms = HashSet::new();
+        let mut ngrams = HashSet::new();
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         let mut projection = HashSet::new();
         projection.insert(LOCATION.to_string());
         projection.insert(BLOOM_FILTER_INDEX_LOCATION.to_string());
+        projection.insert(NGRAM_FILTER_INDEX_LOCATION.to_string());
         for chunk in segment_locations.chunks(chunk_size) {
             let results = match self.is_column_oriented() {
                 true => {
@@ -779,12 +803,14 @@ impl FuseTable {
                 };
                 blocks.extend(location_tuple.block_location.into_iter());
                 blooms.extend(location_tuple.bloom_location.into_iter());
+                ngrams.extend(location_tuple.ngram_location.into_iter());
             }
         }
 
         Ok(LocationTuple {
             block_location: blocks,
             bloom_location: blooms,
+            ngram_location: ngrams,
         })
     }
 
@@ -808,6 +834,7 @@ struct RootSnapshotInfo {
 pub struct LocationTuple {
     pub block_location: HashSet<String>,
     pub bloom_location: HashSet<String>,
+    pub ngram_location: HashSet<String>,
 }
 
 impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
@@ -815,16 +842,21 @@ impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
     fn try_from(value: Arc<CompactSegmentInfo>) -> Result<Self> {
         let mut block_location = HashSet::new();
         let mut bloom_location = HashSet::new();
+        let mut ngram_location = HashSet::new();
         let block_metas = value.block_metas()?;
         for block_meta in block_metas.into_iter() {
             block_location.insert(block_meta.location.0.clone());
             if let Some(bloom_loc) = &block_meta.bloom_filter_index_location {
                 bloom_location.insert(bloom_loc.0.clone());
             }
+            if let Some(ngram_loc) = &block_meta.ngram_filter_index_location {
+                ngram_location.insert(ngram_loc.0.clone());
+            }
         }
         Ok(Self {
             block_location,
             bloom_location,
+            ngram_location,
         })
     }
 }
@@ -834,16 +866,35 @@ impl TryFrom<Arc<ColumnOrientedSegment>> for LocationTuple {
     fn try_from(value: Arc<ColumnOrientedSegment>) -> Result<Self> {
         let mut block_location = HashSet::new();
         let mut bloom_location = HashSet::new();
+        let mut ngram_location = HashSet::new();
 
         let location_path = value.location_path_col();
         for path in location_path.iter() {
             block_location.insert(path.to_string());
         }
 
-        let (index, _) = value
-            .segment_schema
-            .column_with_name(BLOOM_FILTER_INDEX_LOCATION)
-            .unwrap();
+        Self::locations_collect(
+            value.clone(),
+            &mut bloom_location,
+            BLOOM_FILTER_INDEX_LOCATION,
+        );
+        Self::locations_collect(value, &mut ngram_location, NGRAM_FILTER_INDEX_LOCATION);
+
+        Ok(Self {
+            block_location,
+            bloom_location,
+            ngram_location,
+        })
+    }
+}
+
+impl LocationTuple {
+    fn locations_collect(
+        value: Arc<ColumnOrientedSegment>,
+        locations: &mut HashSet<String>,
+        column_name: &str,
+    ) {
+        let (index, _) = value.segment_schema.column_with_name(column_name).unwrap();
         let column = value
             .block_metas
             .get_by_offset(index)
@@ -853,16 +904,11 @@ impl TryFrom<Arc<ColumnOrientedSegment>> for LocationTuple {
                 ScalarRef::Null => {}
                 ScalarRef::Tuple(values) => {
                     let path = values[0].as_string().unwrap();
-                    bloom_location.insert(path.to_string());
+                    locations.insert(path.to_string());
                 }
                 _ => unreachable!(),
             }
         }
-
-        Ok(Self {
-            block_location,
-            bloom_location,
-        })
     }
 }
 
@@ -872,6 +918,7 @@ struct PurgeCounter {
     blocks: usize,
     agg_indexes: usize,
     inverted_indexes: usize,
+    ngrams: usize,
     blooms: usize,
     segments: usize,
     table_statistics: usize,
@@ -885,6 +932,7 @@ impl PurgeCounter {
             blocks: 0,
             agg_indexes: 0,
             inverted_indexes: 0,
+            ngrams: 0,
             blooms: 0,
             segments: 0,
             table_statistics: 0,

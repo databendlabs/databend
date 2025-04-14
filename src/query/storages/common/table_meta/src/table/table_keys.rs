@@ -27,6 +27,8 @@ pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
 pub const OPT_KEY_ENGINE: &str = "engine";
 pub const OPT_KEY_BLOOM_INDEX_COLUMNS: &str = "bloom_index_columns";
+pub const OPT_KEY_NGRAM_INDEX_COLUMNS: &str = "ngram_index_columns";
+pub const OPT_KEY_GRAM_SIZE: &str = "gram_size";
 pub const OPT_KEY_CHANGE_TRACKING: &str = "change_tracking";
 pub const OPT_KEY_CHANGE_TRACKING_BEGIN_VER: &str = "begin_version";
 

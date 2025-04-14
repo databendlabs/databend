@@ -21,6 +21,7 @@ mod eliminate_cast;
 pub mod filters;
 mod index;
 mod inverted_index;
+mod ngram_index;
 mod page_index;
 mod range_index;
 
@@ -36,6 +37,7 @@ pub use inverted_index::InvertedIndexDirectory;
 pub use inverted_index::InvertedIndexFile;
 pub use inverted_index::InvertedIndexMeta;
 pub use inverted_index::TermReader;
+pub use ngram_index::NgramIndexMeta;
 pub use page_index::PageIndex;
 pub use range_index::statistics_to_domain;
 pub use range_index::RangeIndex;

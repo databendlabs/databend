@@ -413,6 +413,7 @@ impl BlockBuilder {
             cluster_stats,
             location: block_location,
             bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
+            ngram_filter_index_location: None,
             bloom_filter_index_size: bloom_index_state
                 .as_ref()
                 .map(|v| v.size)
@@ -420,6 +421,7 @@ impl BlockBuilder {
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             create_on: Some(Utc::now()),
+            ngram_filter_index_size: None,
         };
 
         let serialized = BlockSerialization {

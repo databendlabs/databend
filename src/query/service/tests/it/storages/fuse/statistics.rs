@@ -606,16 +606,18 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
     let mut acc_row_count = 0;
     let mut acc_block_size = 0;
     let mut acc_file_size = 0;
-    let mut acc_bloom_filter_index_size = 0;
+    let mut acc_filter_index_size = 0;
     for _ in 0..size {
         let row_count = rng.gen::<u64>() / size;
         let block_size = rng.gen::<u64>() / size;
         let file_size = rng.gen::<u64>() / size;
-        let bloom_filter_index_size = rng.gen::<u64>() / size;
+        let bloom_filter_index_size = rng.gen::<u32>() as u64 / size;
+        let ngram_filter_index_size = rng.gen::<u32>() as u64 / size;
         acc_row_count += row_count;
         acc_block_size += block_size;
         acc_file_size += file_size;
-        acc_bloom_filter_index_size += bloom_filter_index_size;
+        acc_filter_index_size += bloom_filter_index_size;
+        acc_filter_index_size += ngram_filter_index_size;
         let block_meta = BlockMeta::new(
             row_count,
             block_size,
@@ -627,6 +629,8 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
             None,
             bloom_filter_index_size,
             None,
+            None,
+            Some(ngram_filter_index_size),
             Compression::Lz4Raw,
             Some(Utc::now()),
         );
@@ -638,7 +642,7 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
     assert_eq!(acc_row_count, stats.row_count);
     assert_eq!(acc_block_size, stats.uncompressed_byte_size);
     assert_eq!(acc_file_size, stats.compressed_byte_size);
-    assert_eq!(acc_bloom_filter_index_size, stats.index_size);
+    assert_eq!(acc_filter_index_size, stats.index_size);
 
     Ok(())
 }

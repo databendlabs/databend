@@ -273,6 +273,48 @@ fn check_block_level_meta(
         assert_eq!(bloom_filter_index_size, &block_meta.bloom_filter_index_size);
     }
 
+    // check ngram filter index location
+    let ngram_filter_index_location = column_oriented_segment
+        .col_by_name(&[NGRAM_FILTER_INDEX_LOCATION])
+        .unwrap();
+    for (ngram_filter_index_location, block_meta) in
+        ngram_filter_index_location.iter().zip(block_metas.iter())
+    {
+        let ngram_filter_index_location = ngram_filter_index_location.as_tuple();
+        if let Some(ngram_filter_index_location) = ngram_filter_index_location {
+            assert_eq!(
+                ngram_filter_index_location[0].as_string().unwrap(),
+                &block_meta.ngram_filter_index_location.as_ref().unwrap().0
+            );
+            assert_eq!(
+                ngram_filter_index_location[1]
+                    .as_number()
+                    .unwrap()
+                    .as_u_int64()
+                    .unwrap(),
+                &block_meta.ngram_filter_index_location.as_ref().unwrap().1
+            );
+        } else {
+            assert!(block_meta.ngram_filter_index_location.is_none());
+        }
+    }
+
+    // check ngram filter index size
+    let ngram_filter_index_size = column_oriented_segment
+        .col_by_name(&[NGRAM_FILTER_INDEX_SIZE])
+        .unwrap();
+    for (ngram_filter_index_size, block_meta) in
+        ngram_filter_index_size.iter().zip(block_metas.iter())
+    {
+        let ngram_filter_index_size = ngram_filter_index_size
+            .as_number()
+            .map(|scalar| scalar.as_u_int64().unwrap());
+        assert_eq!(
+            ngram_filter_index_size,
+            block_meta.ngram_filter_index_size.as_ref()
+        );
+    }
+
     // check inverted index size
     let inverted_index_size = column_oriented_segment
         .col_by_name(&[INVERTED_INDEX_SIZE])
@@ -366,7 +408,7 @@ async fn test_segment_cache() -> Result<()> {
     )
     .await?;
     let cached = cache.get(&location).unwrap();
-    assert_eq!(cached.segment_schema.fields.len(), 10);
+    assert_eq!(cached.segment_schema.fields.len(), 12);
     assert_eq!(cached.segment_schema, segment_schema(&TableSchema::empty()));
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
@@ -379,7 +421,7 @@ async fn test_segment_cache() -> Result<()> {
     let _column_oriented_segment =
         read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
-    assert_eq!(cached.segment_schema.fields.len(), 12);
+    assert_eq!(cached.segment_schema.fields.len(), 14);
 
     let column_1 = table_schema.field_of_column_id(col_id).unwrap();
     let stat_1 = column_oriented_segment
@@ -403,7 +445,7 @@ async fn test_segment_cache() -> Result<()> {
         read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
     // column 2 does not have stats
-    assert_eq!(cached.segment_schema.fields.len(), 13);
+    assert_eq!(cached.segment_schema.fields.len(), 15);
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
     check_column_stats_and_meta(&block_metas, &cached, &[1, 2]);
@@ -417,7 +459,7 @@ async fn test_segment_cache() -> Result<()> {
         read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
     // column 2 does not have stats
-    assert_eq!(cached.segment_schema.fields.len(), 13);
+    assert_eq!(cached.segment_schema.fields.len(), 15);
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
     check_column_stats_and_meta(&block_metas, &cached, &[1, 2]);

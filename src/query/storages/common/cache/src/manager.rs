@@ -35,6 +35,7 @@ use crate::caches::ColumnOrientedSegmentInfoCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
+use crate::caches::NgramIndexMetaCache;
 use crate::caches::ParquetMetaDataCache;
 use crate::caches::PrunePartitionsCache;
 use crate::caches::SegmentBlockMetasCache;
@@ -79,6 +80,7 @@ pub struct CacheManager {
     column_oriented_segment_info_cache: CacheSlot<ColumnOrientedSegmentInfoCache>,
     bloom_index_filter_cache: CacheSlot<BloomIndexFilterCache>,
     bloom_index_meta_cache: CacheSlot<BloomIndexMetaCache>,
+    ngram_index_meta_cache: CacheSlot<NgramIndexMetaCache>,
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
     inverted_index_file_cache: CacheSlot<InvertedIndexFileCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
@@ -189,6 +191,7 @@ impl CacheManager {
                 compact_segment_info_cache: CacheSlot::new(None),
                 bloom_index_filter_cache: CacheSlot::new(None),
                 bloom_index_meta_cache: CacheSlot::new(None),
+                ngram_index_meta_cache: CacheSlot::new(None),
                 column_oriented_segment_info_cache: CacheSlot::new(None),
                 inverted_index_meta_cache: CacheSlot::new(None),
                 inverted_index_file_cache: CacheSlot::new(None),
@@ -238,8 +241,26 @@ impl CacheManager {
             let bloom_index_meta_cache = {
                 let bloom_filter_meta_on_disk_cache_path =
                     PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id)
+                        .join(tenant_id.clone())
                         .join("bloom_meta_v1");
+                Self::new_hybrid_cache_slot(
+                    HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA,
+                    config.table_bloom_index_meta_count as usize,
+                    Unit::Count,
+                    &bloom_filter_meta_on_disk_cache_path,
+                    on_disk_cache_queue_size,
+                    config.disk_cache_table_bloom_index_meta_size as usize,
+                    DiskCacheKeyReloadPolicy::Fuzzy,
+                    on_disk_cache_sync_data,
+                    ee_mode,
+                )?
+            };
+
+            let ngram_index_meta_cache = {
+                let bloom_filter_meta_on_disk_cache_path =
+                    PathBuf::from(&config.disk_cache_config.path)
+                        .join(tenant_id)
+                        .join("ngram_meta_v1");
                 Self::new_hybrid_cache_slot(
                     HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA,
                     config.table_bloom_index_meta_count as usize,
@@ -297,6 +318,7 @@ impl CacheManager {
                 column_oriented_segment_info_cache,
                 bloom_index_filter_cache,
                 bloom_index_meta_cache,
+                ngram_index_meta_cache,
                 inverted_index_meta_cache,
                 inverted_index_file_cache,
                 prune_partitions_cache,
@@ -482,6 +504,10 @@ impl CacheManager {
 
     pub fn get_bloom_index_meta_cache(&self) -> Option<BloomIndexMetaCache> {
         self.get_hybrid_cache(self.bloom_index_meta_cache.get())
+    }
+
+    pub fn get_ngram_index_meta_cache(&self) -> Option<NgramIndexMetaCache> {
+        self.get_hybrid_cache(self.ngram_index_meta_cache.get())
     }
 
     fn get_hybrid_cache<T>(&self, cache: Option<HybridCache<T>>) -> Option<HybridCache<T>>

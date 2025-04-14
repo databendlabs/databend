@@ -2929,6 +2929,14 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_meta_count: u64,
 
+    /// Max number of cached ngram index meta objects. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-table-ngram-index-meta-count",
+        value_name = "VALUE",
+        default_value = "3000"
+    )]
+    pub table_ngram_index_meta_count: u64,
+
     /// Max bytes of cached bloom index metadata on disk. The Default value is 0.
     // Set it to 0 to disable it.
     #[clap(
@@ -2937,6 +2945,15 @@ pub struct CacheConfig {
         default_value = "0"
     )]
     pub disk_cache_table_bloom_index_meta_size: u64,
+
+    /// Max bytes of cached bloom index metadata on disk. The Default value is 0.
+    // Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-table-ngram-index-meta-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_table_ngram_index_meta_size: u64,
 
     /// DEPRECATING, will be deprecated in the next production release.
     ///
@@ -2961,6 +2978,15 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_filter_size: u64,
 
+    /// Max bytes of cached ngram index filters used. Set it to 0 to disable it.
+    // One ngram index filter per column of data block being indexed will be generated if necessary.
+    #[clap(
+        long = "cache-table-ngram-index-filter-size",
+        value_name = "VALUE",
+        default_value = "2147483648"
+    )]
+    pub table_ngram_index_filter_size: u64,
+
     /// Max on-disk bytes of cached bloom index filters used. The default value of it is 0.
     #[clap(
         long = "disk-cache-table-bloom-index-data-size",
@@ -2968,6 +2994,14 @@ pub struct CacheConfig {
         default_value = "0"
     )]
     pub disk_cache_table_bloom_index_data_size: u64,
+
+    /// Max on-disk bytes of cached ngram index filters used. The default value of it is 0.
+    #[clap(
+        long = "disk-cache-table-ngram-index-data-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_table_ngram_index_data_size: u64,
 
     /// Max number of cached inverted index meta objects. Set it to 0 to disable it.
     #[clap(
@@ -3286,6 +3320,10 @@ mod cache_config_converters {
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
                 disk_cache_table_bloom_index_data_size: value
                     .disk_cache_table_bloom_index_data_size,
+                table_ngram_index_meta_count: value.table_ngram_index_meta_count,
+                table_ngram_index_filter_size: value.table_ngram_index_filter_size,
+                disk_cache_table_ngram_index_data_size: value
+                    .disk_cache_table_ngram_index_data_size,
                 inverted_index_meta_count: value.inverted_index_meta_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
@@ -3299,6 +3337,8 @@ mod cache_config_converters {
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
                 disk_cache_table_bloom_index_meta_size: value
                     .disk_cache_table_bloom_index_meta_size,
+                disk_cache_table_ngram_index_meta_size: value
+                    .disk_cache_table_ngram_index_meta_size,
             })
         }
     }
@@ -3313,12 +3353,18 @@ mod cache_config_converters {
                 block_meta_count: value.block_meta_count,
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
+                table_ngram_index_meta_count: value.table_ngram_index_meta_count,
                 disk_cache_table_bloom_index_meta_size: value
                     .disk_cache_table_bloom_index_meta_size,
+                disk_cache_table_ngram_index_meta_size: value
+                    .disk_cache_table_ngram_index_meta_size,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
+                table_ngram_index_filter_size: value.table_ngram_index_filter_size,
                 disk_cache_table_bloom_index_data_size: value
                     .disk_cache_table_bloom_index_data_size,
+                disk_cache_table_ngram_index_data_size: value
+                    .disk_cache_table_ngram_index_data_size,
                 inverted_index_meta_count: value.inverted_index_meta_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,

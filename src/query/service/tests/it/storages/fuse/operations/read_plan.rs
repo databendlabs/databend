@@ -92,6 +92,8 @@ fn test_to_partitions() -> Result<()> {
 
     let bloom_filter_location = None;
     let bloom_filter_size = 0;
+    let ngram_filter_location = None;
+    let ngram_filter_size = None;
     let block_meta = Arc::new(BlockMeta::new(
         0,
         block_size,
@@ -103,6 +105,8 @@ fn test_to_partitions() -> Result<()> {
         bloom_filter_location,
         bloom_filter_size,
         None,
+        ngram_filter_location,
+        ngram_filter_size,
         meta::Compression::Lz4Raw,
         Some(Utc::now()),
     ));

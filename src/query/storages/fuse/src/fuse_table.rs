@@ -89,7 +89,9 @@ use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_GRAM_SIZE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use databend_storages_common_table_meta::table::OPT_KEY_NGRAM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
@@ -140,6 +142,8 @@ pub struct FuseTable {
     pub(crate) segment_format: FuseSegmentFormat,
     pub(crate) table_compression: TableCompression,
     pub(crate) bloom_index_cols: BloomIndexColumns,
+    pub(crate) ngram_index_cols: BloomIndexColumns,
+    pub(crate) gram_size: u32,
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
@@ -233,6 +237,34 @@ impl FuseTable {
             .and_then(|s| s.parse::<BloomIndexColumns>().ok())
             .unwrap_or(BloomIndexColumns::All);
 
+        let gram_size = table_info
+            .options()
+            .get(OPT_KEY_GRAM_SIZE)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(3);
+
+        let ngram_index_cols = table_info
+            .options()
+            .get(OPT_KEY_NGRAM_INDEX_COLUMNS)
+            .and_then(|s| s.parse::<BloomIndexColumns>().ok())
+            .unwrap_or(BloomIndexColumns::None);
+
+        match (&bloom_index_cols, &ngram_index_cols) {
+            (BloomIndexColumns::Specify(left_names), BloomIndexColumns::Specify(right_names)) => {
+                if let Some(name) = left_names.iter().find(|s| right_names.contains(s)) {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Column: {name} has both Bloom Index and Ngram Index enabled"
+                    )));
+                }
+            }
+            (BloomIndexColumns::None, _) | (_, BloomIndexColumns::None) => (),
+            (BloomIndexColumns::All, _) | (_, BloomIndexColumns::All) => {
+                return Err(ErrorCode::BadArguments(
+                    "NgramIndex and Bloom Index cannot be enabled at the same time",
+                ))
+            }
+        }
+
         let meta_location_generator = TableMetaLocationGenerator::new(storage_prefix);
         if !table_info.meta.part_prefix.is_empty() {
             return Err(ErrorCode::StorageOther(
@@ -245,6 +277,8 @@ impl FuseTable {
             meta_location_generator,
             cluster_key_meta,
             bloom_index_cols,
+            ngram_index_cols,
+            gram_size,
             operator,
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
@@ -441,6 +475,14 @@ impl FuseTable {
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
+    }
+
+    pub fn ngram_index_cols(&self) -> BloomIndexColumns {
+        self.ngram_index_cols.clone()
+    }
+
+    pub fn gram_size(&self) -> u32 {
+        self.gram_size
     }
 
     // Check if table is attached.

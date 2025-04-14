@@ -60,8 +60,10 @@ impl From<BlockMeta> for crate::meta::BlockMeta {
             cluster_stats: value.cluster_stats.map(|v| v.into()),
             location: value.location,
             bloom_filter_index_location: value.bloom_filter_index_location,
+            ngram_filter_index_location: None,
             bloom_filter_index_size: value.bloom_filter_index_size,
             inverted_index_size: None,
+            ngram_filter_index_size: None,
             compression: value.compression.into(),
             create_on: None,
         }
