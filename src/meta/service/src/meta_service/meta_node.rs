@@ -697,7 +697,7 @@ impl MetaNode {
                         Ok(())
                     }
                     Err(e) => {
-                        error!("join cluster via {} fail: {}", addr, e.to_string());
+                        error!("join cluster via {} fail: {}", addr, e);
                         Err(e)
                     }
                 }

@@ -106,8 +106,7 @@ impl Planner {
                     }
                     Err(e) => {
                         warn!(
-                            "Try convert prql to sql failed, still use raw sql to parse. error: {}",
-                            e.to_string()
+                            "Try convert prql to sql failed, still use raw sql to parse. error: {e}"
                         );
                         sql.to_string()
                     }

@@ -38,7 +38,7 @@ pub struct SystemInfo {
 #[async_backtrace::framed]
 pub async fn system_handler() -> poem::Result<impl IntoResponse> {
     let mut sys = System::new();
-    sys.refresh_cpu();
+    sys.refresh_cpu_all();
     let cpus = sys.cpus();
     let cpu = cpus.first().ok_or_else(|| {
         poem::Error::from_string("failed to get cpu info.", StatusCode::INTERNAL_SERVER_ERROR)
