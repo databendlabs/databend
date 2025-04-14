@@ -465,14 +465,14 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
 // Stop the running container to avoid conflict
 async fn stop_container(docker: &Docker, container_name: &str) {
     if let Err(err) = docker.stop_container(container_name, None).await {
-        println!("stop container {container_name} err: {err}");
+        eprintln!("stop container {container_name} err: {err}");
     }
     let options = Some(RemoveContainerOptions {
         force: true,
         ..Default::default()
     });
     if let Err(err) = docker.remove_container(container_name, options).await {
-        println!("remove container {container_name} err: {err}");
+        eprintln!("remove container {container_name} err: {err}");
     }
-    println!("Stopped container {container_name}");
+    eprintln!("Stopped container {container_name}");
 }
