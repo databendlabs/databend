@@ -467,7 +467,7 @@ CompoundBlockOperator(Project) × 1
   TransformRowsFetcher × 1
     LimitTransform × 1
       Merge to MultiSortMerge × 1
-        TransformSortMerge × 4
+        TransformSortMergeLimit × 4
           SortPartialTransform × 4
             Merge to Resize × 4
               Transform Window × 1

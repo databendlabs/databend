@@ -240,6 +240,11 @@ where
             }
             Inner::Collect(input_data) => {
                 let input_data = std::mem::take(input_data);
+                if input_data.len() == 1 {
+                    self.output_data.extend(input_data);
+                    self.state = State::Finish;
+                    return Ok(());
+                }
                 let mut merger = create_memory_merger::<A>(
                     input_data,
                     self.base.schema.clone(),
@@ -381,6 +386,7 @@ where
                     Inner::Collect(input_data) => {
                         if input_data.is_empty() {
                             self.state = State::Finish;
+                            self.output.finish();
                             Ok(Event::Finished)
                         } else {
                             self.state = State::Sort;
@@ -395,7 +401,11 @@ where
                     }
                     Inner::Memory(_) => unreachable!(),
                 },
-                State::Sort => Ok(Event::Async),
+                State::Sort => match &self.inner {
+                    Inner::Limit(_) | Inner::Memory(_) => Ok(Event::Sync),
+                    Inner::Spill(_, _) => Ok(Event::Async),
+                    _ => unreachable!(),
+                },
             };
         }
 

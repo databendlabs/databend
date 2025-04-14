@@ -101,7 +101,7 @@ select count() > 4 from fuse_snapshot('i15760', 't1');
 query R
 select info:average_depth from clustering_information('i15760', 't1')
 ----
-2.0
+1.0
 
 statement ok
 drop table t1 all;

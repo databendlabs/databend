@@ -157,25 +157,6 @@ where A: SortAlgorithm
     }
 }
 
-impl Base {
-    fn new_stream<R: Rows>(
-        &self,
-        blocks: VecDeque<SpillableBlock>,
-        bound: Option<R>,
-    ) -> BoundBlockStream<R> {
-        BoundBlockStream::<R> {
-            blocks,
-            bound,
-            sort_row_offset: self.sort_row_offset,
-            spiller: self.spiller.clone(),
-        }
-    }
-
-    fn new_block(&self, data: DataBlock) -> SpillableBlock {
-        SpillableBlock::new(data, self.sort_row_offset)
-    }
-}
-
 impl<A: SortAlgorithm> StepCollect<A> {
     fn sort_input_data(
         &mut self,
@@ -240,65 +221,10 @@ impl<A: SortAlgorithm> StepCollect<A> {
         Ok(())
     }
 
-    fn determine_bounds(
-        &self,
-        base: &Base,
-        sampled_rows: Vec<DataBlock>,
-        batch_rows: usize,
-    ) -> Result<Vec<Column>> {
-        match sampled_rows.len() {
-            0 => Ok(vec![]),
-            1 => Ok(vec![DataBlock::sort(
-                &sampled_rows[0],
-                &[SortColumnDescription {
-                    offset: 0,
-                    asc: A::Rows::IS_ASC_COLUMN,
-                    nulls_first: false,
-                }],
-                None,
-            )?
-            .get_last_column()
-            .clone()]),
-            _ => {
-                let streams = sampled_rows
-                    .into_iter()
-                    .map(|data| {
-                        let data = DataBlock::sort(
-                            &data,
-                            &[SortColumnDescription {
-                                offset: 0,
-                                asc: A::Rows::IS_ASC_COLUMN,
-                                nulls_first: false,
-                            }],
-                            None,
-                        )
-                        .unwrap();
-                        DataBlockStream::new(data, 0)
-                    })
-                    .collect::<Vec<_>>();
-
-                let schema = base.schema.project(&[base.sort_row_offset]);
-                let mut merger = Merger::<A, _>::create(schema.into(), streams, batch_rows, None);
-
-                let mut blocks = Vec::new();
-                while let Some(block) = merger.next_block()? {
-                    blocks.push(block)
-                }
-                debug_assert!(merger.is_finished());
-
-                Ok(blocks
-                    .iter()
-                    .rev()
-                    .map(|b| b.get_last_column().clone())
-                    .collect::<Vec<_>>())
-            }
-        }
-    }
-
     fn next_step(&mut self, base: &Base) -> Result<StepSort<A>> {
         self.sampler.compact_blocks(true);
         let sampled_rows = std::mem::take(&mut self.sampler.dense_blocks);
-        let bounds = self.determine_bounds(base, sampled_rows, self.params.batch_rows)?;
+        let bounds = base.determine_bounds::<A>(sampled_rows, self.params.batch_rows)?;
 
         Ok(StepSort {
             bounds,
@@ -509,6 +435,79 @@ impl<A: SortAlgorithm> StepSort<A> {
             .partition(|s| s.should_include_first());
 
         self.current.sort_by_key(|s| s.blocks[0].data.is_some());
+    }
+}
+
+impl Base {
+    fn new_stream<R: Rows>(
+        &self,
+        blocks: VecDeque<SpillableBlock>,
+        bound: Option<R>,
+    ) -> BoundBlockStream<R> {
+        BoundBlockStream::<R> {
+            blocks,
+            bound,
+            sort_row_offset: self.sort_row_offset,
+            spiller: self.spiller.clone(),
+        }
+    }
+
+    fn new_block(&self, data: DataBlock) -> SpillableBlock {
+        SpillableBlock::new(data, self.sort_row_offset)
+    }
+
+    fn determine_bounds<A: SortAlgorithm>(
+        &self,
+        sampled_rows: Vec<DataBlock>,
+        batch_rows: usize,
+    ) -> Result<Vec<Column>> {
+        match sampled_rows.len() {
+            0 => Ok(vec![]),
+            1 => Ok(vec![DataBlock::sort(
+                &sampled_rows[0],
+                &[SortColumnDescription {
+                    offset: 0,
+                    asc: A::Rows::IS_ASC_COLUMN,
+                    nulls_first: false,
+                }],
+                None,
+            )?
+            .get_last_column()
+            .clone()]),
+            _ => {
+                let streams = sampled_rows
+                    .into_iter()
+                    .map(|data| {
+                        let data = DataBlock::sort(
+                            &data,
+                            &[SortColumnDescription {
+                                offset: 0,
+                                asc: A::Rows::IS_ASC_COLUMN,
+                                nulls_first: false,
+                            }],
+                            None,
+                        )
+                        .unwrap();
+                        DataBlockStream::new(data, 0)
+                    })
+                    .collect::<Vec<_>>();
+
+                let schema = self.schema.project(&[self.sort_row_offset]);
+                let mut merger = Merger::<A, _>::create(schema.into(), streams, batch_rows, None);
+
+                let mut blocks = Vec::new();
+                while let Some(block) = merger.next_block()? {
+                    blocks.push(block)
+                }
+                debug_assert!(merger.is_finished());
+
+                Ok(blocks
+                    .iter()
+                    .rev()
+                    .map(|b| b.get_last_column().clone())
+                    .collect::<Vec<_>>())
+            }
+        }
     }
 }
 
