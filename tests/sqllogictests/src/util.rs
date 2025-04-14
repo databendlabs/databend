@@ -297,7 +297,6 @@ pub async fn run_ttc_container(
                 if err.to_string().to_ascii_lowercase().contains("timeout")
                     || err.to_string().to_ascii_lowercase().contains("conflict")
                 {
-                    println!("Stopping container {container_name}");
                     stop_container(docker, &container_name).await;
                 }
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
@@ -464,6 +463,7 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
 
 // Stop the running container to avoid conflict
 async fn stop_container(docker: &Docker, container_name: &str) {
+    println!("Stopping container {container_name}");
     if let Err(err) = docker.stop_container(container_name, None).await {
         eprintln!("stop container {container_name} err: {err}");
     }
