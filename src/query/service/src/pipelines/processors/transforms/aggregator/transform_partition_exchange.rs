@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -188,7 +190,7 @@ impl Exchange for ExchangePartition {
             // already restore in upstream
             AggregateMeta::SpilledPayload(_) => unreachable!(),
             // broadcast final partition to downstream
-            AggregateMeta::FinalPartition(_) => Self::partition_final_payload(n),
+            AggregateMeta::FinalPartition(_) => Ok(vec![]),
             AggregateMeta::AggregatePayload(payload) => Self::partition_aggregate(payload, n),
             AggregateMeta::InFlightPayload(payload) => {
                 self.partition_flight_payload(payload, data_block, n)
@@ -201,8 +203,47 @@ impl Exchange for ExchangePartition {
     }
 
     fn merge_output(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        Ok(vec![DataBlock::empty_with_meta(
-            AggregateMeta::create_final(data_blocks),
-        )])
+        let mut blocks = BTreeMap::<isize, AggregatePayload>::new();
+        for mut data_block in data_blocks {
+            let Some(meta) = data_block.take_meta() else {
+                return Err(ErrorCode::Internal(
+                    "Internal, ExchangePartition only recv DataBlock with meta.",
+                ));
+            };
+
+            let Some(aggregate_meta) = AggregateMeta::downcast_from(meta) else {
+                return Err(ErrorCode::Internal(
+                    "Internal, ExchangePartition only recv DataBlock with meta.",
+                ));
+            };
+
+            let mut payload = match aggregate_meta {
+                AggregateMeta::SpilledPayload(_) => unreachable!(),
+                AggregateMeta::FinalPartition(_) => unreachable!(),
+                AggregateMeta::InFlightPayload(_) => unreachable!(),
+                AggregateMeta::AggregatePayload(payload) => payload,
+            };
+
+            match blocks.entry(payload.partition) {
+                Entry::Vacant(v) => {
+                    v.insert(payload);
+                }
+                Entry::Occupied(mut v) => {
+                    payload.payload.state_move_out = true;
+                    v.get_mut()
+                        .payload
+                        .arena
+                        .extend(payload.payload.arena.clone());
+                    v.get_mut().payload.combine(payload.payload);
+                }
+            }
+        }
+
+        Ok(blocks
+            .into_values()
+            .map(|payload| {
+                DataBlock::empty_with_meta(Box::new(AggregateMeta::AggregatePayload(payload)))
+            })
+            .collect())
     }
 }

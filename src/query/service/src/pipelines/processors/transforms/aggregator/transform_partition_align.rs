@@ -208,7 +208,7 @@ impl TransformPartitionAlign {
             self.params.group_data_types.clone(),
             self.params.aggregate_functions.clone(),
             to as u64,
-            vec![from.payload.arena.clone()],
+            from.payload.arena.clone(),
         );
 
         let mut flush_state = PayloadFlushState::default();

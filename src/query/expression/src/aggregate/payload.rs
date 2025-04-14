@@ -46,7 +46,7 @@ use crate::MAX_PAGE_SIZE;
 // [HASH] is the hash data of the groups
 // [STATE_ADDRS] is the state_addrs of the aggregate functions, 8 bytes each
 pub struct Payload {
-    pub arena: Arc<Bump>,
+    pub arena: Vec<Arc<Bump>>,
     // if true, the states are moved out of the payload into other payload, and will not be dropped
     pub state_move_out: bool,
     pub group_types: Vec<DataType>,
@@ -94,7 +94,7 @@ pub type Pages = Vec<Page>;
 
 impl Payload {
     pub fn new(
-        arena: Arc<Bump>,
+        arena: Vec<Arc<Bump>>,
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
         states_layout: Option<StatesLayout>,
@@ -267,7 +267,7 @@ impl Payload {
 
             unsafe {
                 serialize_column_to_rowformat(
-                    &self.arena,
+                    &self.arena[0],
                     col,
                     select_vector,
                     new_group_rows,
@@ -297,7 +297,7 @@ impl Payload {
             // write states
             let (array_layout, padded_size) = layout.repeat(new_group_rows).unwrap();
             // Bump only allocates but does not drop, so there is no use after free for any item.
-            let place = self.arena.alloc_layout(array_layout);
+            let place = self.arena[0].alloc_layout(array_layout);
             for (idx, place) in select_vector
                 .iter()
                 .take(new_group_rows)
