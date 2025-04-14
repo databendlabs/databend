@@ -302,7 +302,9 @@ pub async fn run_ttc_container(
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
                     break;
                 } else {
-                    println!("Retrying to start container {container_name} after {duration} secs");
+                    println!(
+                        "Retrying to start container {container_name} {i} after {duration} secs",
+                    );
                     i += 1;
                 }
             }
