@@ -31,7 +31,6 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::table::ClusterType;
 
-use crate::io::WriteSettings;
 use crate::FuseTable;
 
 #[derive(Default, Clone)]
@@ -42,9 +41,6 @@ pub struct ClusterStatisticsBuilder {
     extra_key_num: usize,
     operators: Vec<BlockOperator>,
     func_ctx: FunctionContext,
-
-    min_compressed_per_block: u64,
-    max_uncompressed_per_block: u64,
 }
 
 impl ClusterStatisticsBuilder {
@@ -52,7 +48,6 @@ impl ClusterStatisticsBuilder {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         source_schema: &TableSchemaRef,
-        write_settings: WriteSettings,
     ) -> Result<Arc<Self>> {
         let cluster_type = table.cluster_type();
         if cluster_type.is_none_or(|v| v == ClusterType::Hilbert) {
@@ -97,8 +92,6 @@ impl ClusterStatisticsBuilder {
             extra_key_num,
             func_ctx: ctx.get_function_context()?,
             operators,
-            min_compressed_per_block: write_settings.min_compressed_per_block as u64,
-            max_uncompressed_per_block: write_settings.max_uncompressed_per_block as u64,
         }))
     }
 }
@@ -149,7 +142,7 @@ impl ClusterStatisticsState {
         Ok(block)
     }
 
-    pub fn finalize(self, file_size: u64, block_size: u64) -> Result<Option<ClusterStatistics>> {
+    pub fn finalize(self, perfect: bool) -> Result<Option<ClusterStatistics>> {
         if self.builder.cluster_key_index.is_empty() {
             return Ok(None);
         }
@@ -171,10 +164,7 @@ impl ClusterStatisticsState {
             .unwrap()
             .clone();
 
-        let level = if min == max
-            && (block_size >= self.builder.max_uncompressed_per_block
-                || file_size >= self.builder.min_compressed_per_block)
-        {
+        let level = if min == max && perfect {
             -1
         } else {
             self.level

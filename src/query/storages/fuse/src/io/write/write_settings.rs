@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
-use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_storages_common_table_meta::table::TableCompression;
 
 use crate::FuseStorageFormat;
@@ -30,9 +28,6 @@ pub struct WriteSettings {
     pub max_page_size: usize,
 
     pub block_per_seg: usize,
-    pub max_rows_per_block: usize,
-    pub min_compressed_per_block: usize,
-    pub max_uncompressed_per_block: usize,
 }
 
 impl Default for WriteSettings {
@@ -42,9 +37,6 @@ impl Default for WriteSettings {
             table_compression: TableCompression::default(),
             max_page_size: DEFAULT_ROW_PER_PAGE,
             block_per_seg: DEFAULT_BLOCK_PER_SEGMENT,
-            max_rows_per_block: DEFAULT_BLOCK_ROW_COUNT,
-            min_compressed_per_block: (DEFAULT_BLOCK_COMPRESSED_SIZE * 4).div_ceil(5),
-            max_uncompressed_per_block: MAX_BLOCK_UNCOMPRESSED_SIZE,
         }
     }
 }

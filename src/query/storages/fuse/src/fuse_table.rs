@@ -110,7 +110,6 @@ use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 use crate::io::WriteSettings;
-use crate::io::MAX_BLOCK_UNCOMPRESSED_SIZE;
 use crate::operations::load_last_snapshot_hint;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
@@ -282,22 +281,12 @@ impl FuseTable {
         let max_page_size = self.get_option(FUSE_OPT_KEY_ROW_PER_PAGE, default_rows_per_page);
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
-        let max_buffer_size = self.get_option(
-            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_BUFFER_SIZE,
-        );
-        let max_file_size = self.get_option(FUSE_OPT_KEY_FILE_SIZE, DEFAULT_BLOCK_COMPRESSED_SIZE);
-        let max_rows_per_block =
-            self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT);
 
         WriteSettings {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
             max_page_size,
             block_per_seg,
-            max_rows_per_block,
-            min_compressed_per_block: (max_file_size * 4).div_ceil(5),
-            max_uncompressed_per_block: (max_buffer_size * 3).min(MAX_BLOCK_UNCOMPRESSED_SIZE),
         }
     }
 
@@ -1070,7 +1059,7 @@ impl Table for FuseTable {
     fn get_block_thresholds(&self) -> BlockThresholds {
         let max_rows_per_block =
             self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT);
-        let max_bytes_per_block = self.get_option(
+        let bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,
         );
@@ -1079,7 +1068,7 @@ impl Table for FuseTable {
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
         BlockThresholds::new(
             max_rows_per_block,
-            max_bytes_per_block,
+            bytes_per_block,
             max_file_size,
             block_per_segment,
         )

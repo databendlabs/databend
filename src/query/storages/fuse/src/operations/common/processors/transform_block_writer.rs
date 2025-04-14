@@ -101,6 +101,18 @@ impl TransformBlockWriter {
         }
         Ok(self.builder.as_mut().unwrap())
     }
+
+    fn calc_max_block_size(&self, block: &DataBlock) -> usize {
+        let max_bytes_per_block = self.properties.block_thresholds.max_bytes_per_block;
+        let block_size = block.estimate_block_size();
+        if block_size < max_bytes_per_block {
+            return self.max_block_size;
+        }
+        let num_rows = block.num_rows();
+        let average_row_size = block_size.div_ceil(num_rows);
+        let max_rows = max_bytes_per_block.div_ceil(average_row_size);
+        self.max_block_size.min(max_rows)
+    }
 }
 
 #[async_trait]
@@ -164,7 +176,8 @@ impl Processor for TransformBlockWriter {
             State::Serialize(block) => {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
-                let blocks = block.split_by_rows_no_tail(self.max_block_size);
+                let max_rows_per_block = self.calc_max_block_size(&block);
+                let blocks = block.split_by_rows_if_needed_no_tail(max_rows_per_block);
                 let mut blocks = VecDeque::from(blocks);
 
                 let builder = self.get_or_create_builder()?;

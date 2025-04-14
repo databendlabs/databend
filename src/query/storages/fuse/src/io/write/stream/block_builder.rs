@@ -23,6 +23,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
@@ -231,9 +232,10 @@ impl StreamBlockBuilder {
 
     pub fn need_flush(&self) -> bool {
         let file_size = self.block_writer.compressed_size();
-        file_size >= self.properties.write_settings.min_compressed_per_block
-            || self.block_size >= self.properties.write_settings.max_uncompressed_per_block
-            || self.row_count >= self.properties.write_settings.max_rows_per_block
+        self.row_count >= self.properties.block_thresholds.min_rows_per_block
+            || self.block_size >= self.properties.block_thresholds.max_bytes_per_block
+            || (file_size >= self.properties.block_thresholds.min_compressed_per_block
+                && self.block_size >= self.properties.block_thresholds.min_bytes_per_block)
     }
 
     pub fn write(&mut self, block: DataBlock) -> Result<()> {
@@ -301,17 +303,21 @@ impl StreamBlockBuilder {
         let col_metas = self.block_writer.finish(&self.properties.source_schema)?;
         let block_raw_data = mem::take(self.block_writer.inner_mut());
 
-        let file_size = block_raw_data.len() as u64;
-        let block_size = self.block_size as u64;
+        let file_size = block_raw_data.len();
         let inverted_index_size = inverted_index_states
             .iter()
             .map(|v| v.size)
             .reduce(|a, b| a + b);
-        let cluster_stats = self.cluster_stats_state.finalize(file_size, block_size)?;
+        let perfect = self.properties.block_thresholds.check_perfect_block(
+            self.row_count,
+            self.block_size,
+            file_size,
+        );
+        let cluster_stats = self.cluster_stats_state.finalize(perfect)?;
         let block_meta = BlockMeta {
             row_count: self.row_count as u64,
-            block_size,
-            file_size,
+            block_size: self.block_size as u64,
+            file_size: file_size as u64,
             col_stats,
             col_metas,
             cluster_stats,
@@ -327,7 +333,6 @@ impl StreamBlockBuilder {
         };
         let serialized = BlockSerialization {
             block_raw_data,
-            size: file_size,
             block_meta,
             bloom_index_state,
             inverted_index_states,
@@ -339,6 +344,7 @@ impl StreamBlockBuilder {
 pub struct StreamBlockProperties {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) write_settings: WriteSettings,
+    pub(crate) block_thresholds: BlockThresholds,
 
     meta_locations: TableMetaLocationGenerator,
     source_schema: TableSchemaRef,
@@ -383,12 +389,8 @@ impl StreamBlockProperties {
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 
-        let cluster_stats_builder = ClusterStatisticsBuilder::try_create(
-            table,
-            ctx.clone(),
-            &source_schema,
-            write_settings.clone(),
-        )?;
+        let cluster_stats_builder =
+            ClusterStatisticsBuilder::try_create(table, ctx.clone(), &source_schema)?;
 
         let mut stats_columns = vec![];
         let mut distinct_columns = vec![];
@@ -408,6 +410,7 @@ impl StreamBlockProperties {
         Ok(Arc::new(StreamBlockProperties {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
+            block_thresholds: table.get_block_thresholds(),
             source_schema,
             write_settings,
             cluster_stats_builder,

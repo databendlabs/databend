@@ -15,7 +15,7 @@ echo "drop table if exists t1 all" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE TABLE t1
 (
     c0 string
-) engine=fuse row_per_block=500;
+) engine=fuse row_per_block=800;
 " | $BENDSQL_CLIENT_CONNECT
 
 

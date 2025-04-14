@@ -119,7 +119,6 @@ pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str)
 
 pub struct BlockSerialization {
     pub block_raw_data: Vec<u8>,
-    pub size: u64, // TODO redundancy
     pub block_meta: BlockMeta,
     pub bloom_index_state: Option<BloomIndexState>,
     pub inverted_index_states: Vec<InvertedIndexState>,
@@ -207,7 +206,6 @@ impl BlockBuilder {
 
         let serialized = BlockSerialization {
             block_raw_data: buffer,
-            size: file_size,
             block_meta,
             bloom_index_state,
             inverted_index_states,
