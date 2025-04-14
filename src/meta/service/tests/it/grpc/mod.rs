@@ -27,3 +27,4 @@ pub mod metasrv_grpc_tls;
 pub mod metasrv_grpc_transaction;
 pub mod metasrv_grpc_watch;
 pub mod t51_metasrv_grpc_semaphore;
+pub mod t52_metasrv_grpc_cache;

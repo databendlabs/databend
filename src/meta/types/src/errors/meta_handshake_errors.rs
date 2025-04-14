@@ -12,24 +12,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+use std::fmt;
 
 use anyerror::AnyError;
 
 /// Error raised by meta service client.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("failed to handshake with meta-service: {msg}, cause: {source}")]
 pub struct MetaHandshakeError {
     msg: String,
     #[source]
-    source: AnyError,
+    source: Option<AnyError>,
+}
+
+impl fmt::Display for MetaHandshakeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "HandshakeError with databend-meta: {}", self.msg,)?;
+
+        if let Some(ref source) = self.source {
+            write!(f, "; cause: {}", source)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl MetaHandshakeError {
-    pub fn new(msg: impl Display, source: &(impl std::error::Error + 'static)) -> Self {
+    pub fn new(msg: impl fmt::Display) -> Self {
         Self {
             msg: msg.to_string(),
-            source: AnyError::new(source),
+            source: None,
         }
+    }
+
+    pub fn with_source(self, source: &(impl std::error::Error + 'static)) -> Self {
+        Self {
+            msg: self.msg,
+            source: Some(AnyError::new(source)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_meta_handshake_error() {
+        let error = MetaHandshakeError::new("test");
+        assert_eq!(error.to_string(), "HandshakeError with databend-meta: test");
+
+        let error = error.with_source(&std::io::Error::other("test"));
+        assert_eq!(
+            error.to_string(),
+            "HandshakeError with databend-meta: test; cause: std::io::error::Error: test"
+        );
     }
 }

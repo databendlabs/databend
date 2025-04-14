@@ -223,8 +223,8 @@ impl From<MetaAPIError> for io::Error {
     fn from(e: MetaAPIError) -> Self {
         match e {
             MetaAPIError::NetworkError(net_err) => net_err.into(),
-            MetaAPIError::DataError(e) => io::Error::new(io::ErrorKind::Other, e.to_string()),
-            MetaAPIError::RemoteError(e) => io::Error::new(io::ErrorKind::Other, e.to_string()),
+            MetaAPIError::DataError(e) => io::Error::other(e.to_string()),
+            MetaAPIError::RemoteError(e) => io::Error::other(e.to_string()),
             MetaAPIError::ForwardToLeader(e) => {
                 io::Error::new(io::ErrorKind::Interrupted, e.to_string())
             }

@@ -46,8 +46,14 @@ pub async fn init_resources_management(cfg: &InnerConfig) -> Result<()> {
                     let meta_api_provider =
                         MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
                     match meta_api_provider.create_meta_store().await {
-                        Err(cause) => Err(ErrorCode::from(cause)
-                            .add_message_back("(while create resources management).")),
+                        Err(cause) => {
+                            let err = ErrorCode::MetaServiceError(format!(
+                                "Failed to create meta store: {}",
+                                cause
+                            ));
+
+                            Err(err.add_message_back("(while create resources management)."))
+                        }
                         Ok(metastore) => {
                             let tenant_id = &cfg.query.tenant_id;
                             let lift_time = Duration::from_secs(60);

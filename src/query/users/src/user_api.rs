@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_management::udf::UdfMgr;
@@ -80,7 +81,12 @@ impl UserApiProvider {
         builtin: BuiltIn,
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
-        let client = MetaStoreProvider::new(conf).create_meta_store().await?;
+        let client = MetaStoreProvider::new(conf)
+            .create_meta_store()
+            .await
+            .map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?;
         let user_mgr = UserApiProvider {
             meta: client.clone(),
             client: client.arc(),

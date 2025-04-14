@@ -662,6 +662,7 @@ pub struct VirtualColumn {
     pub is_created: bool,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 pub enum ColumnEntry {
     /// Column from base table, for example `SELECT t.a, t.b FROM t`.

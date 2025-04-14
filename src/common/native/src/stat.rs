@@ -74,7 +74,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 
         if field.data_type().is_nullable() {
             let validity_size = u32::from_le_bytes(buffer[0..4].try_into().unwrap());
             debug_assert!(validity_size == 0 || validity_size as u64 == num_values);
-            let consume_validity_size = 4 + ((validity_size + 7) / 8) as usize;
+            let consume_validity_size = 4 + validity_size.div_ceil(8) as usize;
             buffer.consume(consume_validity_size);
             if validity_size > 0 {
                 opt_validity_size = Some(validity_size);

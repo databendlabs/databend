@@ -24,6 +24,7 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -64,7 +65,9 @@ impl GlobalPersistentLog {
         setup_operator().await?;
 
         let provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
-        let meta_store = provider.create_meta_store().await?;
+        let meta_store = provider.create_meta_store().await.map_err(|e| {
+            ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+        })?;
 
         let instance = Arc::new(Self {
             meta_store,

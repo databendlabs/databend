@@ -22,6 +22,7 @@ use clap::CommandFactory;
 use clap::Parser;
 use clap::Subcommand;
 use databend_common_base::base::tokio;
+use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_control::admin::MetaAdminClient;
@@ -38,7 +39,6 @@ use databend_common_meta_control::export_from_grpc;
 use databend_common_meta_control::import;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::protobuf::WatchRequest;
-use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::UpsertKV;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
@@ -206,10 +206,7 @@ impl App {
         Ok(())
     }
 
-    fn new_grpc_client(
-        &self,
-        addresses: Vec<String>,
-    ) -> Result<Arc<ClientHandle>, MetaClientError> {
+    fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
         MetaGrpcClient::try_create(
             addresses,
             "root",

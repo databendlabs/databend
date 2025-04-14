@@ -30,11 +30,8 @@ use crate::plans::Exchange;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
-use crate::plans::SubqueryExpr;
-use crate::plans::Visitor;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
-use crate::ScalarExpr;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Educe)]
@@ -177,13 +174,14 @@ impl SExpr {
 
     /// Check if contain subquery
     #[recursive::recursive]
-    pub(crate) fn contain_subquery(&self) -> bool {
-        if !find_subquery(&self.plan) {
-            return self.children.iter().any(|child| child.contain_subquery());
+    pub(crate) fn has_subquery(&self) -> bool {
+        if !self.plan.has_subquery() {
+            return self.children.iter().any(|child| child.has_subquery());
         }
         true
     }
 
+    //
     #[recursive::recursive]
     pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();
@@ -374,15 +372,15 @@ impl SExpr {
         Ok(udfs)
     }
 
-    // Add (table_index, column_index) into `Scan` node recursively.
-    pub fn add_internal_column_index(
-        expr: &SExpr,
+    // Add column index to Scan nodes that match the given table index
+    pub fn add_column_index_to_scans(
+        &self,
         table_index: IndexType,
         column_index: IndexType,
         inverted_index: &Option<InvertedIndexInfo>,
     ) -> SExpr {
         #[recursive::recursive]
-        fn add_internal_column_index_into_child(
+        fn add_column_index_to_scans_recursive(
             s_expr: &SExpr,
             column_index: IndexType,
             table_index: IndexType,
@@ -406,7 +404,7 @@ impl SExpr {
             } else {
                 let mut children = Vec::with_capacity(s_expr.children.len());
                 for child in s_expr.children.iter() {
-                    children.push(Arc::new(add_internal_column_index_into_child(
+                    children.push(Arc::new(add_column_index_to_scans_recursive(
                         child,
                         column_index,
                         table_index,
@@ -420,7 +418,7 @@ impl SExpr {
             }
         }
 
-        add_internal_column_index_into_child(expr, column_index, table_index, inverted_index)
+        add_column_index_to_scans_recursive(self, column_index, table_index, inverted_index)
     }
 
     // The method will clear the applied rules of current SExpr and its children.
@@ -456,82 +454,4 @@ impl SExpr {
         *self.rel_prop.lock().unwrap() = Some(rel_prop.clone());
         Ok(rel_prop)
     }
-}
-
-fn find_subquery(rel_op: &RelOperator) -> bool {
-    match rel_op {
-        RelOperator::Scan(_)
-        | RelOperator::Limit(_)
-        | RelOperator::Exchange(_)
-        | RelOperator::UnionAll(_)
-        | RelOperator::Sort(_)
-        | RelOperator::DummyTableScan(_)
-        | RelOperator::ConstantTableScan(_)
-        | RelOperator::ExpressionScan(_)
-        | RelOperator::CacheScan(_)
-        | RelOperator::AsyncFunction(_)
-        | RelOperator::RecursiveCteScan(_)
-        | RelOperator::Mutation(_)
-        | RelOperator::CompactBlock(_) => false,
-        RelOperator::Join(op) => {
-            op.equi_conditions.iter().any(|condition| {
-                find_subquery_in_expr(&condition.left) || find_subquery_in_expr(&condition.right)
-            }) || op.non_equi_conditions.iter().any(find_subquery_in_expr)
-        }
-        RelOperator::EvalScalar(op) => op
-            .items
-            .iter()
-            .any(|expr| find_subquery_in_expr(&expr.scalar)),
-        RelOperator::Filter(op) => op.predicates.iter().any(find_subquery_in_expr),
-        RelOperator::Aggregate(op) => {
-            op.group_items
-                .iter()
-                .any(|expr| find_subquery_in_expr(&expr.scalar))
-                || op
-                    .aggregate_functions
-                    .iter()
-                    .any(|expr| find_subquery_in_expr(&expr.scalar))
-        }
-        RelOperator::Window(op) => {
-            op.order_by
-                .iter()
-                .any(|o| find_subquery_in_expr(&o.order_by_item.scalar))
-                || op
-                    .partition_by
-                    .iter()
-                    .any(|expr| find_subquery_in_expr(&expr.scalar))
-                || match &op.function {
-                    WindowFuncType::Aggregate(agg) => agg.exprs().any(find_subquery_in_expr),
-                    _ => false,
-                }
-        }
-        RelOperator::ProjectSet(op) => op
-            .srfs
-            .iter()
-            .any(|expr| find_subquery_in_expr(&expr.scalar)),
-        RelOperator::Udf(op) => op
-            .items
-            .iter()
-            .any(|expr| find_subquery_in_expr(&expr.scalar)),
-        RelOperator::MutationSource(_) => false,
-    }
-}
-
-fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
-    struct HasSubqueryVisitor {
-        has_subquery: bool,
-    }
-
-    impl<'a> Visitor<'a> for HasSubqueryVisitor {
-        fn visit_subquery(&mut self, _: &'a SubqueryExpr) -> Result<()> {
-            self.has_subquery = true;
-            Ok(())
-        }
-    }
-
-    let mut has_subquery = HasSubqueryVisitor {
-        has_subquery: false,
-    };
-    has_subquery.visit(expr).unwrap();
-    has_subquery.has_subquery
 }

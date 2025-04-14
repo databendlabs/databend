@@ -644,9 +644,9 @@ impl Column {
         result_size: usize,
     ) -> Column {
         match &columns {
-            ColumnVec::Null { .. } => Column::Null { len: result_size },
-            ColumnVec::EmptyArray { .. } => Column::EmptyArray { len: result_size },
-            ColumnVec::EmptyMap { .. } => Column::EmptyMap { len: result_size },
+            ColumnVec::Null => Column::Null { len: result_size },
+            ColumnVec::EmptyArray => Column::EmptyArray { len: result_size },
+            ColumnVec::EmptyMap => Column::EmptyMap { len: result_size },
             ColumnVec::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumnVec::NUM_TYPE(columns) => {
                     let builder = Self::take_block_vec_primitive_types(columns, indices);

@@ -193,9 +193,8 @@ async fn test_snapshot_pruner() -> Result<()> {
         )
         .await?;
 
-    let gen_col = |value, rows| {
-        UInt64Type::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>())
-    };
+    let gen_col =
+        |value, rows| UInt64Type::from_data(std::iter::repeat_n(value, rows).collect::<Vec<u64>>());
 
     // prepare test blocks
     // - there will be `num_blocks` blocks, for each block, it comprises of `row_per_block` rows,

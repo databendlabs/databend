@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
@@ -39,9 +41,9 @@ use crate::caches::SegmentBlockMetasCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::providers::HybridCache;
+use crate::DiskCacheAccessor;
 use crate::DiskCacheBuilder;
 use crate::InMemoryLruCache;
-use crate::TableDataCache;
 use crate::Unit;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
@@ -81,10 +83,19 @@ pub struct CacheManager {
     inverted_index_file_cache: CacheSlot<InvertedIndexFileCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
     parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
-    table_data_cache: CacheSlot<TableDataCache>,
+    table_data_cache: CacheSlot<DiskCacheAccessor>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
     segment_block_metas_cache: CacheSlot<SegmentBlockMetasCache>,
     block_meta_cache: CacheSlot<BlockMetaCache>,
+
+    /// Determines whether disk caches can be used at runtime.
+    ///
+    /// This flag allows or disallows disk caches, but the cache configuration takes precedence:
+    /// - If set to `false`, disk caches are disabled, even if enabled in the configuration.
+    /// - If set to `true`, disk caches are only enabled if also enabled in the configuration.
+    ///
+    /// In non-EE mode, disk caches are always disabled.
+    allows_on_disk_cache: AtomicBool,
 }
 
 impl CacheManager {
@@ -93,10 +104,29 @@ impl CacheManager {
         config: &CacheConfig,
         max_server_memory_usage: &u64,
         tenant_id: impl Into<String>,
+        ee_mode: bool,
     ) -> Result<()> {
+        let instance = Arc::new(Self::try_new(
+            config,
+            max_server_memory_usage,
+            tenant_id,
+            ee_mode,
+        )?);
+        GlobalInstance::set(instance);
+        Ok(())
+    }
+
+    /// Initialize the caches according to the relevant configurations.
+    fn try_new(
+        config: &CacheConfig,
+        max_server_memory_usage: &u64,
+        tenant_id: impl Into<String>,
+        ee_mode: bool,
+    ) -> Result<Self> {
         let tenant_id = tenant_id.into();
         let on_disk_cache_sync_data = config.disk_cache_config.sync_data;
         let on_disk_cache_need_sync_data = config.disk_cache_config.sync_data;
+        let allows_on_disk_cache = AtomicBool::new(ee_mode);
 
         let on_disk_cache_queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
             config.table_data_cache_population_queue_size
@@ -114,22 +144,26 @@ impl CacheManager {
             match config.data_cache_storage {
                 CacheStorageTypeInnerConfig::None => CacheSlot::new(None),
                 CacheStorageTypeInnerConfig::Disk => {
-                    let real_disk_cache_root = PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.clone())
-                        .join("v1");
+                    let table_data_on_disk_cache_path =
+                        PathBuf::from(&config.disk_cache_config.path)
+                            .join(tenant_id.clone())
+                            .join("v1");
 
                     info!(
-                        "disk cache enabled, cache population queue size {}",
+                        "On-disk table data cache enabled, cache population queue size {}",
                         on_disk_cache_queue_size
                     );
 
-                    Self::new_block_data_cache(
-                        &real_disk_cache_root,
+                    let cache = Self::new_on_disk_cache(
+                        DISK_TABLE_DATA_CACHE_NAME.to_owned(),
+                        &table_data_on_disk_cache_path,
                         on_disk_cache_queue_size,
                         config.disk_cache_config.max_bytes as usize,
                         config.data_cache_key_reload_policy.clone(),
                         on_disk_cache_need_sync_data,
-                    )?
+                        ee_mode,
+                    )?;
+                    CacheSlot::new(cache)
                 }
             }
         };
@@ -147,9 +181,10 @@ impl CacheManager {
         let in_memory_table_data_cache =
             Self::new_bytes_cache_slot(MEMORY_CACHE_TABLE_DATA, memory_cache_capacity);
 
+        let instance =
         // setup in-memory table meta cache
         if !config.enable_table_meta_cache {
-            GlobalInstance::set(Arc::new(Self {
+            Self {
                 table_snapshot_cache: CacheSlot::new(None),
                 compact_segment_info_cache: CacheSlot::new(None),
                 bloom_index_filter_cache: CacheSlot::new(None),
@@ -164,7 +199,8 @@ impl CacheManager {
                 in_memory_table_data_cache,
                 segment_block_metas_cache: CacheSlot::new(None),
                 block_meta_cache: CacheSlot::new(None),
-            }));
+                allows_on_disk_cache,
+            }
         } else {
             let table_snapshot_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_TABLE_SNAPSHOT,
@@ -195,6 +231,7 @@ impl CacheManager {
                     config.disk_cache_table_bloom_index_data_size as usize,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
+                    ee_mode,
                 )?
             };
 
@@ -212,6 +249,7 @@ impl CacheManager {
                     config.disk_cache_table_bloom_index_meta_size as usize,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
+                    ee_mode,
                 )?
             };
 
@@ -253,7 +291,7 @@ impl CacheManager {
                 config.block_meta_count as usize,
             );
 
-            GlobalInstance::set(Arc::new(Self {
+            Self {
                 table_snapshot_cache,
                 compact_segment_info_cache,
                 column_oriented_segment_info_cache,
@@ -268,10 +306,11 @@ impl CacheManager {
                 segment_block_metas_cache,
                 parquet_meta_data_cache,
                 block_meta_cache,
-            }));
-        }
+                allows_on_disk_cache,
+            }
+        };
 
-        Ok(())
+        Ok(instance)
     }
 
     pub fn instance() -> Arc<CacheManager> {
@@ -438,11 +477,26 @@ impl CacheManager {
     }
 
     pub fn get_bloom_index_filter_cache(&self) -> Option<BloomIndexFilterCache> {
-        self.bloom_index_filter_cache.get()
+        self.get_hybrid_cache(self.bloom_index_filter_cache.get())
     }
 
     pub fn get_bloom_index_meta_cache(&self) -> Option<BloomIndexMetaCache> {
-        self.bloom_index_meta_cache.get()
+        self.get_hybrid_cache(self.bloom_index_meta_cache.get())
+    }
+
+    fn get_hybrid_cache<T>(&self, cache: Option<HybridCache<T>>) -> Option<HybridCache<T>>
+    where CacheValue<T>: From<T> {
+        if let Some(cache) = cache {
+            if self.allows_on_disk_cache.load(Ordering::Relaxed) {
+                // Returns the original cache as it is, which may or may not have on-disk cache
+                Some(cache)
+            } else {
+                // Toggle off on-disk cache
+                Some(cache.toggle_off_disk_cache())
+            }
+        } else {
+            None
+        }
     }
 
     pub fn get_inverted_index_meta_cache(&self) -> Option<InvertedIndexMetaCache> {
@@ -461,8 +515,13 @@ impl CacheManager {
         self.parquet_meta_data_cache.get()
     }
 
-    pub fn get_table_data_cache(&self) -> Option<TableDataCache> {
-        self.table_data_cache.get()
+    pub fn get_table_data_cache(&self) -> Option<DiskCacheAccessor> {
+        if self.allows_on_disk_cache.load(Ordering::Relaxed) {
+            // If on-disk cache is allowed, return it as it is (which may be some cache, or none)
+            self.table_data_cache.get()
+        } else {
+            None
+        }
     }
 
     pub fn get_table_data_array_cache(&self) -> Option<ColumnArrayCache> {
@@ -471,6 +530,10 @@ impl CacheManager {
 
     pub fn get_column_oriented_segment_info_cache(&self) -> Option<ColumnOrientedSegmentInfoCache> {
         self.column_oriented_segment_info_cache.get()
+    }
+
+    pub fn set_allows_disk_cache(&self, flag: bool) {
+        self.allows_on_disk_cache.store(flag, Ordering::Relaxed)
     }
 
     fn new_items_cache_slot<V: Into<CacheValue<V>>>(
@@ -510,25 +573,27 @@ impl CacheManager {
         }
     }
 
-    fn new_block_data_cache(
+    fn new_on_disk_cache(
+        cache_name: String,
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: usize,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
-    ) -> Result<CacheSlot<TableDataCache>> {
-        if disk_cache_bytes_size > 0 {
+        ee_mode: bool,
+    ) -> Result<Option<DiskCacheAccessor>> {
+        if disk_cache_bytes_size == 0 || !ee_mode {
+            Ok(None)
+        } else {
             let cache_holder = DiskCacheBuilder::try_build_disk_cache(
-                DISK_TABLE_DATA_CACHE_NAME.to_owned(),
+                cache_name,
                 path,
                 population_queue_size,
                 disk_cache_bytes_size,
                 disk_cache_key_reload_policy,
                 sync_data,
             )?;
-            Ok(CacheSlot::new(Some(cache_holder)))
-        } else {
-            Ok(CacheSlot::new(None))
+            Ok(Some(cache_holder))
         }
     }
 
@@ -541,6 +606,7 @@ impl CacheManager {
         disk_cache_bytes_size: usize,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
+        ee_mode: bool,
     ) -> Result<CacheSlot<HybridCache<V>>> {
         let name = name.into();
         let in_mem_cache_name = HybridCache::<V>::in_memory_cache_name(&name);
@@ -557,28 +623,21 @@ impl CacheManager {
             }
         };
 
-        if disk_cache_bytes_size > 0 {
-            let on_disk_cache = DiskCacheBuilder::try_build_disk_cache(
-                disk_cache_name,
-                disk_cache_path,
-                disk_cache_population_queue_size,
-                disk_cache_bytes_size,
-                disk_cache_key_reload_policy,
-                sync_data,
-            )?;
-            Ok(CacheSlot::new(Some(HybridCache::new(
-                name,
-                in_memory_cache,
-                Some(on_disk_cache),
-            ))))
-        } else {
-            // disk cache is disabled
-            Ok(CacheSlot::new(Some(HybridCache::new(
-                name,
-                in_memory_cache,
-                None,
-            ))))
-        }
+        let on_disk_cache = Self::new_on_disk_cache(
+            disk_cache_name,
+            disk_cache_path,
+            disk_cache_population_queue_size,
+            disk_cache_bytes_size,
+            disk_cache_key_reload_policy,
+            sync_data,
+            ee_mode,
+        )?;
+
+        Ok(CacheSlot::new(Some(HybridCache::new(
+            name,
+            in_memory_cache,
+            on_disk_cache,
+        ))))
     }
 }
 
@@ -603,3 +662,150 @@ const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas
 const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
 
 const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";
+
+#[cfg(test)]
+mod tests {
+    use databend_common_config::CacheConfig;
+    use databend_common_config::DiskCacheInnerConfig;
+    use tempfile::TempDir;
+
+    use super::*;
+    fn config_with_disk_cache_enabled(cache_path: &str) -> CacheConfig {
+        CacheConfig {
+            data_cache_storage: CacheStorageTypeInnerConfig::Disk,
+            disk_cache_config: DiskCacheInnerConfig {
+                max_bytes: 1024 * 1024,
+                path: cache_path.to_string(),
+                ..Default::default()
+            },
+            disk_cache_table_bloom_index_data_size: 1024 * 1024,
+            disk_cache_table_bloom_index_meta_size: 1024 * 1024,
+            ..CacheConfig::default()
+        }
+    }
+
+    fn config_with_disk_cache_disabled() -> CacheConfig {
+        CacheConfig {
+            data_cache_storage: CacheStorageTypeInnerConfig::None,
+            disk_cache_table_bloom_index_data_size: 0,
+            disk_cache_table_bloom_index_meta_size: 0,
+            ..CacheConfig::default()
+        }
+    }
+
+    fn all_disk_cache_enabled(cache_manager: &CacheManager) -> bool {
+        cache_manager.get_table_data_cache().is_some()
+            && cache_manager
+                .get_bloom_index_meta_cache()
+                .unwrap()
+                .on_disk_cache()
+                .is_some()
+            && cache_manager
+                .get_bloom_index_meta_cache()
+                .unwrap()
+                .on_disk_cache()
+                .is_some()
+    }
+
+    fn all_disk_cache_disabled(cache_manager: &CacheManager) -> bool {
+        cache_manager.get_table_data_cache().is_none()
+            && cache_manager
+                .get_bloom_index_meta_cache()
+                .unwrap()
+                .on_disk_cache()
+                .is_none()
+            && cache_manager
+                .get_bloom_index_meta_cache()
+                .unwrap()
+                .on_disk_cache()
+                .is_none()
+    }
+
+    #[test]
+    fn test_cache_manager_ee_mode() -> Result<()> {
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_string_lossy().clone();
+
+        let max_server_memory_usage = 1024 * 1024;
+
+        // The behaviors we expected in the EE mode:
+        // - If disk caches are enabled in the configuration:
+        //   They could be toggled off and on at runtime
+        // - If disk caches are disabled in the configuration:
+        //   They could not be toggled on at runtime
+
+        let ee_mode = true;
+
+        // Suite 1: Create cache config with disk cache enabled
+        let cache_config = config_with_disk_cache_enabled(&cache_path);
+        // In EE mode
+        let cache_manager = CacheManager::try_new(
+            &cache_config,
+            &max_server_memory_usage,
+            "test_tenant_id",
+            ee_mode,
+        )?;
+
+        // All disk caches should be enabled as specified in the configuration
+        assert!(all_disk_cache_enabled(&cache_manager));
+
+        // All disk caches should be disabled, if toggled off disk caches
+        cache_manager.set_allows_disk_cache(false);
+        assert!(all_disk_cache_disabled(&cache_manager));
+
+        // All disk caches should be enabled, if toggled on disk caches
+        cache_manager.set_allows_disk_cache(true);
+        assert!(all_disk_cache_enabled(&cache_manager));
+
+        // Suite 2: Create cache config with disk cache disabled
+        let cache_config = config_with_disk_cache_disabled();
+        let cache_manager = CacheManager::try_new(
+            &cache_config,
+            &max_server_memory_usage,
+            "test_tenant_id",
+            ee_mode,
+        )?;
+
+        // All disk caches should be disabled as specified in the configuration
+        assert!(all_disk_cache_disabled(&cache_manager));
+
+        // All disk caches should still be disabled, even if toggled on disk caches
+        cache_manager.set_allows_disk_cache(true);
+        assert!(all_disk_cache_disabled(&cache_manager));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_manager_non_ee_mode() -> Result<()> {
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_string_lossy().clone();
+        let max_server_memory_usage = 1024 * 1024;
+
+        // The behaviors we expected in the NON-EE mode:
+        // Even if disk caches are enabled in the configuration:
+        // - Disk caches will not be instantiated
+        // - They could not be toggled on at runtime
+
+        // Create cache config with disk cache enabled
+        let cache_config = config_with_disk_cache_enabled(&cache_path);
+
+        // In NON-EE mode
+        let ee_mode = false;
+        let cache_manager = CacheManager::try_new(
+            &cache_config,
+            &max_server_memory_usage,
+            "test_tenant_id",
+            ee_mode,
+        )?;
+
+        // All disk caches should be disabled, even if they are enabled in the configuration
+        assert!(all_disk_cache_disabled(&cache_manager));
+
+        // All disk caches should be disabled, even if disk caches are toggled on
+        cache_manager.set_allows_disk_cache(true);
+        assert!(all_disk_cache_disabled(&cache_manager));
+
+        Ok(())
+    }
+}

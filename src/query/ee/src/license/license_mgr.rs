@@ -29,6 +29,7 @@ use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
 use jwt_simple::prelude::ECDSAP256PublicKeyLike;
 use jwt_simple::JWTError;
+use log::warn;
 
 const LICENSE_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0a
@@ -43,6 +44,31 @@ pub struct RealLicenseManager {
 
     // cache available settings to get avoid of unneeded license parsing time.
     pub(crate) cache: DashMap<String, JWTClaims<LicenseInfo>>,
+}
+
+impl RealLicenseManager {
+    fn parse_license_impl(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+        for public_key in &self.public_keys {
+            let public_key = ES256PublicKey::from_pem(public_key)
+                .map_err_to_code(ErrorCode::LicenseKeyParseError, || "public key load failed")?;
+
+            return match public_key.verify_token::<LicenseInfo>(raw, None) {
+                Ok(v) => Ok(v),
+                Err(cause) => match cause.downcast_ref::<JWTError>() {
+                    Some(JWTError::TokenHasExpired) => {
+                        warn!("License expired");
+                        Err(ErrorCode::LicenseKeyExpired("license key is expired."))
+                    }
+                    Some(JWTError::InvalidSignature) => {
+                        continue;
+                    }
+                    _ => Err(ErrorCode::LicenseKeyParseError("jwt claim decode failed")),
+                },
+            };
+        }
+
+        Err(ErrorCode::LicenseKeyParseError("wt claim decode failed"))
+    }
 }
 
 impl LicenseManager for RealLicenseManager {
@@ -67,7 +93,9 @@ impl LicenseManager for RealLicenseManager {
             cache: DashMap::new(),
         };
 
-        GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
+        let license_manager_switch = Arc::new(LicenseManagerSwitch::create(Box::new(rm)));
+
+        GlobalInstance::set(license_manager_switch);
         Ok(())
     }
 
@@ -87,7 +115,7 @@ impl LicenseManager for RealLicenseManager {
             return self.verify_feature(v.value(), feature);
         }
 
-        match self.parse_license(&license_key) {
+        match self.parse_license_impl(&license_key) {
             Ok(license) => {
                 self.verify_feature(&license, feature)?;
                 self.cache.insert(license_key, license);
@@ -101,25 +129,20 @@ impl LicenseManager for RealLicenseManager {
     }
 
     fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
-        for public_key in &self.public_keys {
-            let public_key = ES256PublicKey::from_pem(public_key)
-                .map_err_to_code(ErrorCode::LicenseKeyParseError, || "public key load failed")?;
-
-            return match public_key.verify_token::<LicenseInfo>(raw, None) {
-                Ok(v) => Ok(v),
-                Err(cause) => match cause.downcast_ref::<JWTError>() {
-                    Some(JWTError::TokenHasExpired) => {
-                        Err(ErrorCode::LicenseKeyExpired("license key is expired."))
-                    }
-                    Some(JWTError::InvalidSignature) => {
-                        continue;
-                    }
-                    _ => Err(ErrorCode::LicenseKeyParseError("jwt claim decode failed")),
-                },
-            };
+        if let Some(v) = self.cache.get(raw) {
+            // Previously cached valid license might be expired
+            let claim = v.value();
+            if Self::verify_license_expired(claim)? {
+                warn!("Cached License expired");
+                Err(ErrorCode::LicenseKeyExpired("license key is expired."))
+            } else {
+                Ok((*claim).clone())
+            }
+        } else {
+            let license = self.parse_license_impl(raw)?;
+            self.cache.insert(raw.to_string(), license.clone());
+            Ok(license)
         }
-
-        Err(ErrorCode::LicenseKeyParseError("wt claim decode failed"))
     }
 
     fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota> {
@@ -232,5 +255,166 @@ fn embedded_public_keys() -> Result<String> {
             ))),
             Ok(keys) => Ok(keys),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use jwt_simple::algorithms::ECDSAP256KeyPairLike;
+    use jwt_simple::prelude::Duration;
+    use jwt_simple::prelude::ES256KeyPair;
+
+    use super::*;
+
+    impl RealLicenseManager {
+        // Helper to insert license into cache for testing
+        #[cfg(test)]
+        pub fn insert_into_cache_for_test(&self, key: &str, claims: JWTClaims<LicenseInfo>) {
+            self.cache.insert(key.to_string(), claims);
+        }
+
+        // Helper to check if license exists in cache
+        #[cfg(test)]
+        pub fn is_in_cache(&self, key: &str) -> bool {
+            self.cache.contains_key(key)
+        }
+    }
+
+    // Create expired JWT claims for testing
+    fn create_expired_claims() -> JWTClaims<LicenseInfo> {
+        JWTClaims {
+            issued_at: None,
+            expires_at: Some(Clock::now_since_epoch() - Duration::from_days(1)),
+            invalid_before: None,
+            issuer: None,
+            subject: None,
+            audiences: None,
+            jwt_id: None,
+            nonce: None,
+            custom: LicenseInfo {
+                r#type: None,
+                org: None,
+                tenants: None,
+                features: None,
+            },
+        }
+    }
+
+    // Create valid JWT claims with test data
+    fn create_valid_claims() -> JWTClaims<LicenseInfo> {
+        JWTClaims {
+            issued_at: None,
+            expires_at: Some(Clock::now_since_epoch() + Duration::from_days(30)),
+            invalid_before: None,
+            issuer: Some("Databend".into()),
+            subject: Some("test-license".into()),
+            audiences: Some("test-tenant".into()),
+            jwt_id: Some("test-jwt-id-123".into()),
+            nonce: None,
+            custom: LicenseInfo {
+                r#type: Some("enterprise".into()),
+                org: Some("Test Organization".into()),
+                tenants: Some(vec!["tenant1".into(), "tenant2".into()]),
+                features: None,
+            },
+        }
+    }
+
+    #[test]
+    fn test_parse_license_expired_in_cache() {
+        // Test retrieving expired license from cache
+        let manager =
+            RealLicenseManager::new("test-tenant".to_string(), LICENSE_PUBLIC_KEY.to_string());
+
+        let expired_claims = create_expired_claims();
+        let license_key = "expired-license";
+        manager.insert_into_cache_for_test(license_key, expired_claims);
+
+        let result = manager.parse_license(license_key);
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.code(), ErrorCode::LICENSE_KEY_EXPIRED);
+        } else {
+            panic!("Expected LicenseKeyExpired error but got Ok result");
+        }
+    }
+
+    #[test]
+    fn test_parse_license_valid_in_cache() {
+        // Test retrieving valid license from cache
+        let manager =
+            RealLicenseManager::new("test-tenant".to_string(), LICENSE_PUBLIC_KEY.to_string());
+
+        let valid_claims = create_valid_claims();
+        let license_key = "valid-license";
+        manager.insert_into_cache_for_test(license_key, valid_claims.clone());
+
+        let result = manager.parse_license(license_key);
+        assert!(result.is_ok());
+        if let Ok(claims) = result {
+            assert_eq!(claims.expires_at, valid_claims.expires_at);
+        } else {
+            panic!("Expected valid license but got Err result");
+        }
+    }
+
+    #[test]
+    fn test_parse_license_not_in_cache_but_valid() {
+        // Test validating and caching a new license
+        let key_pair = ES256KeyPair::generate();
+        let public_key = key_pair.public_key().to_pem().unwrap();
+        let valid_claims = create_valid_claims();
+        let token = key_pair.sign(valid_claims.clone()).unwrap();
+
+        let manager = RealLicenseManager::new("test-tenant".to_string(), public_key);
+        assert!(!manager.is_in_cache(&token));
+
+        // Verify successful validation adds to cache
+        let result = manager.parse_license(&token);
+        assert!(result.is_ok());
+        assert!(manager.is_in_cache(&token));
+
+        // Verify cached version returns correctly
+        let second_result = manager.parse_license(&token);
+        assert!(second_result.is_ok());
+
+        if let Ok(claims) = second_result {
+            // Verify non-timestamp fields match exactly
+            assert_eq!(claims.issuer, valid_claims.issuer);
+            assert_eq!(claims.subject, valid_claims.subject);
+            assert_eq!(claims.audiences, valid_claims.audiences);
+            assert_eq!(claims.jwt_id, valid_claims.jwt_id);
+
+            // Verify LicenseInfo fields
+            assert_eq!(claims.custom.r#type, valid_claims.custom.r#type);
+            assert_eq!(claims.custom.org, valid_claims.custom.org);
+            assert_eq!(claims.custom.tenants, valid_claims.custom.tenants);
+
+            // Verify valid expiration
+            let now = Clock::now_since_epoch();
+            assert!(claims.expires_at.unwrap() > now);
+        } else {
+            panic!("Expected valid license but got Err result");
+        }
+    }
+
+    #[test]
+    fn test_parse_license_invalid_not_added_to_cache() {
+        // Test invalid licenses aren't cached
+        let key_pair = ES256KeyPair::generate();
+        let valid_claims = create_valid_claims();
+        let token = key_pair.sign(valid_claims).unwrap();
+
+        // Use a different public key to force validation failure
+        let different_key_pair = ES256KeyPair::generate();
+        let wrong_public_key = different_key_pair.public_key().to_pem().unwrap();
+        let manager = RealLicenseManager::new("test-tenant".to_string(), wrong_public_key);
+
+        assert!(!manager.is_in_cache(&token));
+        let result = manager.parse_license(&token);
+        assert!(result.is_err());
+
+        // Verify failed validation doesn't add to cache
+        assert!(!manager.is_in_cache(&token));
     }
 }

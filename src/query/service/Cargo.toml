@@ -10,7 +10,7 @@ edition = { workspace = true }
 [features]
 default = ["simd"]
 simd = ["databend-common-column/simd"]
-python-udf = ["arrow-udf-python"]
+python-udf = ["arrow-udf-runtime/python"]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 jemalloc = ["databend-common-storages-system/jemalloc"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
@@ -29,9 +29,7 @@ arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true, features = ["lz4", "zstd"] }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
-arrow-udf-js = { workspace = true }
-arrow-udf-python = { workspace = true, optional = true }
-arrow-udf-wasm = { workspace = true }
+arrow-udf-runtime = { workspace = true, features = ["javascript", "wasm"] }
 async-backtrace = { workspace = true }
 async-channel = { workspace = true }
 async-compat = { workspace = true }

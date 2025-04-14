@@ -18,6 +18,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use databend_common_grpc::RpcClientConf;
+use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_embedded::MemMeta;
@@ -119,7 +120,7 @@ impl MetaStoreProvider {
         MetaStoreProvider { rpc_conf }
     }
 
-    pub async fn create_meta_store(&self) -> Result<MetaStore, MetaError> {
+    pub async fn create_meta_store(&self) -> Result<MetaStore, CreationError> {
         if self.rpc_conf.local_mode() {
             info!(
                 conf :? =(&self.rpc_conf);

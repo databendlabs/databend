@@ -261,7 +261,7 @@ fn create_box_table(
                 } else {
                     let mut value = values[*col_index as usize].clone();
                     if value.len() + 3 > widths[idx] {
-                        let element_size = if widths[idx] >= 6 { widths[idx] - 6 } else { 0 };
+                        let element_size = widths[idx].saturating_sub(6);
                         value = String::from_utf8(
                             value
                                 .graphemes(true)
@@ -314,7 +314,7 @@ fn create_box_table(
                     } else {
                         let mut value = values[*col_index as usize].clone();
                         if value.len() + 3 > widths[idx] {
-                            let element_size = if widths[idx] >= 6 { widths[idx] - 6 } else { 0 };
+                            let element_size = widths[idx].saturating_sub(6);
                             value = String::from_utf8(
                                 value
                                     .graphemes(true)
@@ -461,7 +461,7 @@ fn render_head(
                 let width = widths[i];
                 let mut field_name = field.name().to_string();
                 let mut field_data_type = field.data_type().to_string();
-                let element_size = if width >= 6 { width - 6 } else { 0 };
+                let element_size = width.saturating_sub(6);
 
                 if field_name.len() + 3 > width {
                     field_name = String::from_utf8(

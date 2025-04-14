@@ -31,6 +31,7 @@ pub struct IntoClause {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[allow(clippy::large_enum_variant)]
 pub enum SourceExpr {
     Expr(Expr),
     Default,

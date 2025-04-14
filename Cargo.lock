@@ -555,49 +555,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrow-udf-js"
-version = "0.6.0"
-source = "git+https://github.com/arrow-udf/arrow-udf?rev=d910692#d9106927afc1697975745772a1027d05aad9e2ac"
+name = "arrow-udf-runtime"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "788c73be21ca19d855d4197608f8e37f126dd194694c76deb8c049d8b5fb2410"
 dependencies = [
  "anyhow",
  "arrow-array",
  "arrow-buffer",
+ "arrow-ipc",
  "arrow-schema",
+ "arrow-select",
+ "async-trait",
  "atomic-time",
+ "base64 0.22.1",
  "futures-util",
+ "genawaiter2",
+ "itertools 0.14.0",
+ "pyo3",
+ "pyo3-build-config",
  "reqwest",
  "rquickjs",
  "serde_json",
+ "tempfile",
+ "thiserror 2.0.12",
  "tokio",
-]
-
-[[package]]
-name = "arrow-udf-python"
-version = "0.4.1"
-source = "git+https://github.com/arrow-udf/arrow-udf?rev=d910692#d9106927afc1697975745772a1027d05aad9e2ac"
-dependencies = [
- "anyhow",
- "arrow-array",
- "arrow-buffer",
- "arrow-ipc",
- "arrow-schema",
- "pyo3",
- "pyo3-build-config",
-]
-
-[[package]]
-name = "arrow-udf-wasm"
-version = "0.5.0"
-source = "git+https://github.com/arrow-udf/arrow-udf?rev=d910692#d9106927afc1697975745772a1027d05aad9e2ac"
-dependencies = [
- "anyhow",
- "arrow-array",
- "arrow-ipc",
- "arrow-schema",
- "async-trait",
- "base64 0.22.1",
- "genawaiter2",
- "itertools 0.14.0",
  "wasi-common",
  "wasmtime",
 ]
@@ -2502,7 +2484,7 @@ dependencies = [
  "rustc-hash 2.0.0",
  "serde",
  "smallvec",
- "target-lexicon",
+ "target-lexicon 0.12.16",
 ]
 
 [[package]]
@@ -2549,7 +2531,7 @@ dependencies = [
  "cranelift-codegen",
  "log",
  "smallvec",
- "target-lexicon",
+ "target-lexicon 0.12.16",
 ]
 
 [[package]]
@@ -2566,7 +2548,7 @@ checksum = "4d5bd76df6c9151188dfa428c863b33da5b34561b67f43c0cf3f24a794f9fa1f"
 dependencies = [
  "cranelift-codegen",
  "libc",
- "target-lexicon",
+ "target-lexicon 0.12.16",
 ]
 
 [[package]]
@@ -3612,6 +3594,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-meta-cache"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "databend-common-base",
+ "databend-common-meta-client",
+ "databend-common-meta-types",
+ "futures",
+ "log",
+ "pretty_assertions",
+ "thiserror 1.0.65",
+ "tokio",
+ "tonic",
+]
+
+[[package]]
 name = "databend-common-meta-client"
 version = "0.1.0"
 dependencies = [
@@ -3641,6 +3639,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "thiserror 1.0.65",
  "tonic",
 ]
 
@@ -5002,6 +5001,7 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-http",
  "databend-common-meta-api",
+ "databend-common-meta-cache",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
@@ -5089,9 +5089,7 @@ dependencies = [
  "arrow-ipc",
  "arrow-schema",
  "arrow-select",
- "arrow-udf-js",
- "arrow-udf-python",
- "arrow-udf-wasm",
+ "arrow-udf-runtime",
  "async-backtrace",
  "async-channel 1.9.0",
  "async-compat",
@@ -11914,15 +11912,15 @@ dependencies = [
 
 [[package]]
 name = "pyo3"
-version = "0.21.2"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5e00b96a521718e08e03b1a622f01c8a8deb50719335de3f60b3b3950f069d8"
+checksum = "17da310086b068fbdcefbba30aeb3721d5bb9af8db4987d6735b2183ca567229"
 dependencies = [
  "cfg-if",
  "indoc",
  "libc",
  "memoffset",
- "parking_lot 0.12.3",
+ "once_cell",
  "portable-atomic",
  "pyo3-build-config",
  "pyo3-ffi",
@@ -11932,19 +11930,19 @@ dependencies = [
 
 [[package]]
 name = "pyo3-build-config"
-version = "0.21.2"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7883df5835fafdad87c0d888b266c8ec0f4c9ca48a5bed6bbb592e8dedee1b50"
+checksum = "e27165889bd793000a098bb966adc4300c312497ea25cf7a690a9f0ac5aa5fc1"
 dependencies = [
  "once_cell",
- "target-lexicon",
+ "target-lexicon 0.13.2",
 ]
 
 [[package]]
 name = "pyo3-ffi"
-version = "0.21.2"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01be5843dc60b916ab4dad1dca6d20b9b4e6ddc8e15f50c47fe6d85f1fb97403"
+checksum = "05280526e1dbf6b420062f3ef228b78c0c54ba94e157f5cb724a609d0f2faabc"
 dependencies = [
  "libc",
  "pyo3-build-config",
@@ -11952,9 +11950,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-macros"
-version = "0.21.2"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77b34069fc0682e11b31dbd10321cbf94808394c56fd996796ce45217dfac53c"
+checksum = "5c3ce5686aa4d3f63359a5100c62a127c9f15e8398e5fdeb5deef1fed5cd5f44"
 dependencies = [
  "proc-macro2",
  "pyo3-macros-backend",
@@ -11964,11 +11962,11 @@ dependencies = [
 
 [[package]]
 name = "pyo3-macros-backend"
-version = "0.21.2"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08260721f32db5e1a5beae69a55553f56b99bd0e1c3e6e0a5e8851a9d0f5a85c"
+checksum = "f4cf6faa0cbfb0ed08e89beb8103ae9724eb4750e3a78084ba4017cbe94f3855"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "proc-macro2",
  "pyo3-build-config",
  "quote",
@@ -14524,6 +14522,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
+name = "target-lexicon"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e502f78cdbb8ba4718f566c418c52bc729126ffd16baee5baa718cf25dd5a69a"
+
+[[package]]
 name = "temp-env"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15933,7 +15937,7 @@ dependencies = [
  "serde_json",
  "smallvec",
  "sptr",
- "target-lexicon",
+ "target-lexicon 0.12.16",
  "wasm-encoder 0.219.1",
  "wasmparser 0.219.1",
  "wasmtime-asm-macros",
@@ -16020,7 +16024,7 @@ dependencies = [
  "log",
  "object",
  "smallvec",
- "target-lexicon",
+ "target-lexicon 0.12.16",
  "thiserror 1.0.65",
  "wasmparser 0.219.1",
  "wasmtime-environ",
@@ -16047,7 +16051,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "smallvec",
- "target-lexicon",
+ "target-lexicon 0.12.16",
  "wasm-encoder 0.219.1",
  "wasmparser 0.219.1",
  "wasmprinter",
@@ -16119,7 +16123,7 @@ dependencies = [
  "cranelift-codegen",
  "gimli 0.31.1",
  "object",
- "target-lexicon",
+ "target-lexicon 0.12.16",
  "wasmparser 0.219.1",
  "wasmtime-cranelift",
  "wasmtime-environ",
@@ -16316,7 +16320,7 @@ dependencies = [
  "gimli 0.31.1",
  "regalloc2",
  "smallvec",
- "target-lexicon",
+ "target-lexicon 0.12.16",
  "wasmparser 0.219.1",
  "wasmtime-cranelift",
  "wasmtime-environ",
