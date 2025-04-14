@@ -72,7 +72,7 @@ pub fn exchange_shuffle(
                 compression,
                 params.shuffle_scatter.clone(),
             ),
-        ),
+        )?,
         false => pipeline.exchange(
             params.destination_ids.len(),
             FlightExchange::<false>::create(
@@ -80,7 +80,7 @@ pub fn exchange_shuffle(
                 compression,
                 params.shuffle_scatter.clone(),
             ),
-        ),
+        )?,
     };
 
     Ok(())

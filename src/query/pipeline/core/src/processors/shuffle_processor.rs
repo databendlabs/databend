@@ -649,24 +649,24 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
 }
 
 #[derive(Debug)]
-pub struct ShuffleMeta {
+pub struct ExchangeMeta {
     data_blocks: Vec<DataBlock>,
 }
 
-local_block_meta_serde!(ShuffleMeta);
+local_block_meta_serde!(ExchangeMeta);
 
-#[typetag::serde(name = "ShuffleMeta")]
-impl BlockMetaInfo for ShuffleMeta {}
+#[typetag::serde(name = "LocalExchangeMeta")]
+impl BlockMetaInfo for ExchangeMeta {}
 
-impl ShuffleMeta {
+impl ExchangeMeta {
     pub fn create(blocks: Vec<DataBlock>) -> BlockMetaInfoPtr {
-        Box::new(ShuffleMeta {
+        Box::new(ExchangeMeta {
             data_blocks: blocks,
         })
     }
 }
 
-pub struct NewPartitionProcessor<T: Exchange> {
+pub struct BatchPartitionProcessor<T: Exchange> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
@@ -677,14 +677,14 @@ pub struct NewPartitionProcessor<T: Exchange> {
     to_partition: usize,
 }
 
-impl<T: Exchange> NewPartitionProcessor<T> {
+impl<T: Exchange> BatchPartitionProcessor<T> {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         to_partition: usize,
         exchange: Arc<T>,
     ) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(NewPartitionProcessor {
+        ProcessorPtr::create(Box::new(BatchPartitionProcessor {
             input,
             output,
             exchange,
@@ -695,7 +695,7 @@ impl<T: Exchange> NewPartitionProcessor<T> {
     }
 }
 
-impl<T: Exchange> Processor for NewPartitionProcessor<T> {
+impl<T: Exchange> Processor for BatchPartitionProcessor<T> {
     fn name(&self) -> String {
         String::from("PartitionProcessor")
     }
@@ -737,7 +737,7 @@ impl<T: Exchange> Processor for NewPartitionProcessor<T> {
     fn process(&mut self) -> Result<()> {
         if let Some(block) = self.input_data.take() {
             let partitioned_data = self.exchange.partition(block, self.to_partition)?;
-            self.output_data = Some(DataBlock::empty_with_meta(ShuffleMeta::create(
+            self.output_data = Some(DataBlock::empty_with_meta(ExchangeMeta::create(
                 partitioned_data,
             )));
         }
@@ -746,7 +746,7 @@ impl<T: Exchange> Processor for NewPartitionProcessor<T> {
     }
 }
 
-pub struct ExchangeShuffleProcessor<T: Exchange> {
+pub struct BatchExchangeProcessor<T: Exchange> {
     input: Vec<Arc<InputPort>>,
     output: Vec<Arc<OutputPort>>,
 
@@ -764,7 +764,7 @@ pub struct ExchangeShuffleProcessor<T: Exchange> {
     matrix: Vec<VecDeque<DataBlock>>,
 }
 
-impl<T: Exchange> ExchangeShuffleProcessor<T> {
+impl<T: Exchange> BatchExchangeProcessor<T> {
     pub fn create(
         input: Vec<Arc<InputPort>>,
         output: Vec<Arc<OutputPort>>,
@@ -780,7 +780,7 @@ impl<T: Exchange> ExchangeShuffleProcessor<T> {
             matrix.push(VecDeque::new());
         }
 
-        ProcessorPtr::create(Box::new(ExchangeShuffleProcessor {
+        ProcessorPtr::create(Box::new(BatchExchangeProcessor {
             input,
             output,
             matrix,
@@ -797,9 +797,9 @@ impl<T: Exchange> ExchangeShuffleProcessor<T> {
     }
 }
 
-impl<T: Exchange> Processor for ExchangeShuffleProcessor<T> {
+impl<T: Exchange> Processor for BatchExchangeProcessor<T> {
     fn name(&self) -> String {
-        String::from("ExchangeShuffleProcessor")
+        String::from("BatchExchangeProcessor")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -812,7 +812,7 @@ impl<T: Exchange> Processor for ExchangeShuffleProcessor<T> {
                 let mut data_block = self.input[index].pull_data().unwrap()?;
 
                 let meta = data_block.take_meta().unwrap();
-                let meta = ShuffleMeta::downcast_from(meta).unwrap();
+                let meta = ExchangeMeta::downcast_from(meta).unwrap();
 
                 for (idx, block) in meta.data_blocks.into_iter().enumerate() {
                     self.matrix[idx].push_back(block);
@@ -879,7 +879,7 @@ impl<T: Exchange> Processor for ExchangeShuffleProcessor<T> {
                     }
                 }
 
-                self.output[idx].push_data(Ok(DataBlock::empty_with_meta(ShuffleMeta::create(
+                self.output[idx].push_data(Ok(DataBlock::empty_with_meta(ExchangeMeta::create(
                     output_data,
                 ))));
                 return Ok(Event::NeedConsume);
@@ -909,7 +909,7 @@ impl<T: Exchange> Processor for ExchangeShuffleProcessor<T> {
     }
 }
 
-pub struct NewMergePartitionProcessor<T: Exchange> {
+pub struct BatchMergePartitionProcessor<T: Exchange> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
@@ -919,13 +919,13 @@ pub struct NewMergePartitionProcessor<T: Exchange> {
     exchange: Arc<T>,
 }
 
-impl<T: Exchange> NewMergePartitionProcessor<T> {
+impl<T: Exchange> BatchMergePartitionProcessor<T> {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         exchange: Arc<T>,
     ) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(NewMergePartitionProcessor {
+        ProcessorPtr::create(Box::new(BatchMergePartitionProcessor {
             input,
             output,
             input_data: None,
@@ -935,7 +935,7 @@ impl<T: Exchange> NewMergePartitionProcessor<T> {
     }
 }
 
-impl<T: Exchange> Processor for NewMergePartitionProcessor<T> {
+impl<T: Exchange> Processor for BatchMergePartitionProcessor<T> {
     fn name(&self) -> String {
         String::from("MergePartitionProcessor")
     }
@@ -977,7 +977,7 @@ impl<T: Exchange> Processor for NewMergePartitionProcessor<T> {
     fn process(&mut self) -> Result<()> {
         if let Some(mut block) = self.input_data.take() {
             let meta = block.take_meta().unwrap();
-            let meta = ShuffleMeta::downcast_from(meta).unwrap();
+            let meta = ExchangeMeta::downcast_from(meta).unwrap();
             self.output_data
                 .extend(self.exchange.merge_output(meta.data_blocks)?);
         }

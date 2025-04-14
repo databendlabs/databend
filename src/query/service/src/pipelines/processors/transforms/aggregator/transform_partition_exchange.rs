@@ -57,7 +57,6 @@ impl ExchangePartition {
         }
 
         let mut repartition_payloads = Vec::with_capacity(n);
-
         let group_types = payload.payload.group_types.clone();
         let aggrs = payload.payload.aggrs.clone();
         let mut state = PayloadFlushState::default();
@@ -183,7 +182,6 @@ impl Exchange for ExchangePartition {
         match meta {
             // already restore in upstream
             AggregateMeta::SpilledPayload(_) => unreachable!(),
-            // broadcast final partition to downstream
             AggregateMeta::FinalPartition(_) => Ok(vec![]),
             AggregateMeta::AggregatePayload(payload) => Self::partition_aggregate(payload, n),
             AggregateMeta::InFlightPayload(payload) => {

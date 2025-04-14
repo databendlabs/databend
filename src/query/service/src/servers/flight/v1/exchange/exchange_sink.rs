@@ -62,7 +62,7 @@ impl ExchangeSink {
                             compression,
                             Arc::new(Box::new(MergeFlightScatter)),
                         ),
-                    ),
+                    )?,
                     false => pipeline.exchange(
                         1,
                         FlightExchange::<false>::create(
@@ -70,7 +70,7 @@ impl ExchangeSink {
                             compression,
                             Arc::new(Box::new(MergeFlightScatter)),
                         ),
-                    ),
+                    )?,
                 };
 
                 assert_eq!(senders.len(), 1);

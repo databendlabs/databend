@@ -42,7 +42,7 @@ pub fn build_final_aggregate(
     let pipe_size = settings.get_max_threads()? as usize;
 
     // 1. resorting partition
-    pipeline.exchange(1, Arc::new(ResortingPartition::create()));
+    pipeline.exchange(1, Arc::new(ResortingPartition::create()))?;
 
     // 2. align partitions
     pipeline.add_transform(|input, output| {
