@@ -293,7 +293,9 @@ pub async fn run_ttc_container(
                 return Ok(());
             }
             Err(err) => {
-                println!("Failed to start container {container_name} using {duration} secs: {err}");
+                eprintln!(
+                    "Failed to start container {container_name} using {duration} secs: {err}"
+                );
                 if err.to_string().to_ascii_lowercase().contains("timeout")
                     || err.to_string().to_ascii_lowercase().contains("conflict")
                 {
@@ -371,7 +373,7 @@ async fn run_redis_server(docker: &Docker) -> Result<ContainerAsync<Redis>> {
                 return Ok(redis);
             }
             Err(err) => {
-                println!(
+                eprintln!(
                     "Start container {} using {} secs failed: {}",
                     container_name, duration, err
                 );
@@ -444,7 +446,7 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
                 return Ok(mysql);
             }
             Err(err) => {
-                println!(
+                eprintln!(
                     "Start container {} using {} secs failed: {}",
                     container_name, duration, err
                 );
