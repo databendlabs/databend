@@ -269,12 +269,18 @@ impl<'a> SExprVisitor for ScanStatsVisitor<'a> {
                 let new_plan = Arc::new(RelOperator::Scan(new_scan));
                 let new_expr = expr.replace_plan(new_plan);
                 println!(
-                    "Set statistics for table: {}, new stats: {:?}",
+                    "Set statistics for table: {}, table_idx:{}, new stats: {:?}",
                     table_name,
+                    table_index,
                     new_stats.clone()
                 );
 
                 return Ok(VisitAction::Replace(new_expr));
+            } else {
+                println!(
+                    "Table statistics not found from yaml for table: {}, table_idx: {}",
+                    table_name, table_index
+                );
             }
         }
 
