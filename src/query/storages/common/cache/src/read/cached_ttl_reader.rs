@@ -71,7 +71,7 @@ where
                                 let loader = self.loader.clone();
                                 let cache = cache.clone();
 
-                                let _ = databend_common_base::runtime::spawn(async move {
+                                databend_common_base::runtime::spawn(async move {
                                     let start = Instant::now();
                                     let v = loader.load(&params).await;
                                     metrics_inc_cache_miss_load_millisecond(
