@@ -30,18 +30,18 @@ fn create_pipeline(
     pipeline.add_pipe(source_pipe);
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", data_type)]);
-    let sort_desc = Arc::new(vec![SortColumnDescription {
+    let sort_desc = [SortColumnDescription {
         offset: 0,
         asc: true,
         nulls_first: true,
-    }]);
+    }];
     add_k_way_merge_sort(
         &mut pipeline,
         schema,
         worker,
         block_size,
         limit,
-        sort_desc,
+        sort_desc.into(),
         false,
         true,
     )?;
