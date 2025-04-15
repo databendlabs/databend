@@ -53,7 +53,7 @@ pub fn try_add_multi_sort_merge(
     schema: DataSchemaRef,
     block_size: usize,
     limit: Option<usize>,
-    sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
+    sort_columns_descriptions: Arc<[SortColumnDescription]>,
     remove_order_col: bool,
     enable_loser_tree: bool,
 ) -> Result<()> {
@@ -104,12 +104,10 @@ fn create_processor(
     schema: DataSchemaRef,
     block_size: usize,
     limit: Option<usize>,
-    sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
+    sort_desc: Arc<[SortColumnDescription]>,
     remove_order_col: bool,
     enable_loser_tree: bool,
 ) -> Result<Box<dyn Processor>> {
-    let sort_desc = sort_columns_descriptions;
-
     macro_rules! create {
         ($algo:ident, $rows:ty) => {
             MultiSortMergeProcessor::<$algo<$rows>>::create(
@@ -118,7 +116,6 @@ fn create_processor(
                 schema,
                 block_size,
                 limit,
-                sort_desc,
                 remove_order_col,
             )?
         };
@@ -220,7 +217,6 @@ where A: SortAlgorithm
         schema: DataSchemaRef,
         block_size: usize,
         limit: Option<usize>,
-        _sort_desc: Arc<Vec<SortColumnDescription>>,
         remove_order_col: bool,
     ) -> Result<Self> {
         let streams = inputs
