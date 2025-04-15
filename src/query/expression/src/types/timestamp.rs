@@ -59,7 +59,7 @@ pub const PRECISION_SEC: u8 = 0;
 #[inline]
 pub fn clamp_timestamp(micros: &mut i64) {
     if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(micros) {
-        error!("{}", format!("timestamp {} is out of range", micros));
+        error!("timestamp {micros} is out of range");
         *micros = TIMESTAMP_MIN;
     }
 }

@@ -265,7 +265,7 @@ brotli = "3.3"
 bstr = "1"
 buf-list = "1.0.3"
 bumpalo = "3.12.0"
-byte-unit = "4.0.19"
+byte-unit = "5.1.6"
 bytemuck = { version = "1", features = ["derive"] }
 byteorder = "1.4.3"
 bytes = "1.5.0"
@@ -274,7 +274,7 @@ cbordata = { version = "0.6.0" }
 cfg-if = "1.0.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
-cidr = { version = "0.2.2" }
+cidr = { version = "0.3.1" }
 clap = { version = "4.4.2", features = ["derive"] }
 codeq = { version = "0.5.2" }
 comfy-table = "7"
@@ -375,7 +375,7 @@ naive-cityhash = "0.2.0"
 ndarray = "0.15.6"
 num = "0.4.0"
 num-bigint = "0.4.6"
-num-derive = "0.3.3"
+num-derive = "0.4.2"
 num-traits = "0.2.19"
 num_cpus = "1.13.1"
 object = "0.36.5"
@@ -487,15 +487,15 @@ strength_reduce = "0.2.4"
 stringslice = "0.2.0"
 strum = "0.24.1"
 sys-info = "0.9"
-sysinfo = "0.30"
+sysinfo = "0.34.2"
 tantivy = "0.22.0"
 tantivy-common = "0.7.0"
 tantivy-fst = "0.5"
 tantivy-jieba = "0.11.0"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
-terminal_size = "0.2.6"
-test-harness = "0.1.1"
+terminal_size = "0.4.2"
+test-harness = "0.3.0"
 testcontainers = "0.23"
 testcontainers-modules = "0.11.5"
 thiserror = { version = "1" }
@@ -522,7 +522,7 @@ volo-thrift = "0.10"
 walkdir = "2.3.2"
 watcher = { version = "0.1.1" }
 wiremock = "0.6"
-wkt = "0.10.3"
+wkt = "0.11.1"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 xorfilter-rs = "0.5"
 zstd = "0.12.3"
@@ -547,7 +547,7 @@ vergen = { version = "8.3.1", default-features = false, features = ["build", "ca
 env_logger = "0.11"
 fastrace = { version = "0.7.4", features = ["enable"] }
 fastrace-opentelemetry = "0.7.4"
-log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
+log = { version = "0.4.27", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.9"
 opentelemetry = { version = "0.26.0", features = ["trace", "logs"] }
 opentelemetry-otlp = { version = "0.26.0", features = [
