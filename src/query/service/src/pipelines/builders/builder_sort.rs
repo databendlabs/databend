@@ -31,6 +31,7 @@ use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::Sort;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
+use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::TransformSortBuilder;
@@ -38,6 +39,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
+use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
 impl PipelineBuilder {
@@ -220,11 +222,19 @@ impl SortPipelineBuilder {
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
 
         let spiller = {
+            let temp_dir_manager = TempDirManager::instance();
+            let disk_bytes_limit = settings.get_sort_spilling_to_disk_bytes_limit()?;
+            let enable_dio = settings.get_enable_dio()?;
+            let disk_spill = temp_dir_manager
+                .get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id())
+                .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
+                .transpose()?;
+
             let location_prefix = self.ctx.query_id_spill_prefix();
             let config = SpillerConfig {
                 spiller_type: SpillerType::OrderBy,
                 location_prefix,
-                disk_spill: None,
+                disk_spill,
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
             let op = DataOperator::instance().spill_operator();
