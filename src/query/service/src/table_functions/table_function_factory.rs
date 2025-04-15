@@ -59,6 +59,7 @@ use crate::table_functions::show_roles::ShowRoles;
 use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
+use crate::table_functions::system::TableStatisticsFunc;
 use crate::table_functions::GPT2SQLTable;
 use crate::table_functions::TableFunction;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
@@ -342,7 +343,13 @@ impl TableFunctionFactory {
             "show_roles".to_string(),
             (next_id(), Arc::new(ShowRoles::create)),
         );
-
+        creators.insert(
+            "table_statistics".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<TableStatisticsFunc>::create),
+            ),
+        );
         creators.insert(
             "iceberg_snapshot".to_string(),
             (next_id(), Arc::new(IcebergInspectTable::create)),
