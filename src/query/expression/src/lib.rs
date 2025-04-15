@@ -65,7 +65,6 @@ mod register_vectorize;
 pub mod row;
 pub mod sampler;
 pub mod schema;
-pub mod simpler;
 pub mod type_check;
 pub mod types;
 pub mod utils;

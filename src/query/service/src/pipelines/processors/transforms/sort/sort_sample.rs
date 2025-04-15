@@ -17,7 +17,7 @@ use std::sync::RwLock;
 
 use databend_common_base::base::WatchNotify;
 use databend_common_exception::Result;
-use databend_common_expression::simpler::Simpler;
+use databend_common_expression::sampler::FixedSizeSampler;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -38,14 +38,14 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 use super::sort_exchange::create_exchange_pipe;
-use super::sort_wait::TransformSortSimpleWait;
+use super::sort_wait::TransformSortSampleWait;
 
-pub struct SortSimpleState {
+pub struct SortSampleState {
     inner: RwLock<StateInner>,
     pub(super) done: WatchNotify,
 }
 
-impl SortSimpleState {
+impl SortSampleState {
     pub fn partitions(&self) -> usize {
         self.inner.read().unwrap().partitions
     }
@@ -128,13 +128,13 @@ impl StateInner {
     }
 }
 
-impl SortSimpleState {
+impl SortSampleState {
     pub fn new(
         inputs: usize,
         partitions: usize,
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
-    ) -> Arc<SortSimpleState> {
+    ) -> Arc<SortSampleState> {
         let columns = sort_desc.iter().map(|desc| desc.offset).collect::<Vec<_>>();
         let schema = schema.project(&columns).into();
         let sort_desc = sort_desc
@@ -146,7 +146,7 @@ impl SortSimpleState {
                 nulls_first: desc.nulls_first,
             })
             .collect::<Vec<_>>();
-        Arc::new(SortSimpleState {
+        Arc::new(SortSampleState {
             inner: RwLock::new(StateInner {
                 partitions,
                 schema,
@@ -165,7 +165,7 @@ impl SortSimpleState {
         None
     }
 
-    pub fn commit_simple(&self, id: usize, block: Option<DataBlock>) -> Result<bool> {
+    pub fn commit_sample(&self, id: usize, block: Option<DataBlock>) -> Result<bool> {
         let mut inner = self.inner.write().unwrap();
 
         let block = block.unwrap_or(DataBlock::empty_with_schema(inner.schema.clone()));
@@ -180,35 +180,35 @@ impl SortSimpleState {
     }
 }
 
-pub struct TransformSortSimple {
+pub struct TransformSortSample {
     id: usize,
-    simpler: Simpler<StdRng>,
-    state: Arc<SortSimpleState>,
+    sampler: FixedSizeSampler<StdRng>,
+    state: Arc<SortSampleState>,
 }
 
-unsafe impl Send for TransformSortSimple {}
+unsafe impl Send for TransformSortSample {}
 
-impl TransformSortSimple {
-    fn new(id: usize, k: usize, columns: Vec<usize>, state: Arc<SortSimpleState>) -> Self {
+impl TransformSortSample {
+    fn new(id: usize, k: usize, columns: Vec<usize>, state: Arc<SortSampleState>) -> Self {
         let rng = StdRng::from_rng(rand::thread_rng()).unwrap();
-        let simpler = Simpler::new(columns, 65536, k, rng);
-        TransformSortSimple { id, simpler, state }
+        let sampler = FixedSizeSampler::new(columns, 65536, k, rng);
+        TransformSortSample { id, sampler, state }
     }
 }
 
-impl Transform for TransformSortSimple {
-    const NAME: &'static str = "TransformSortSimple";
+impl Transform for TransformSortSample {
+    const NAME: &'static str = "TransformSortSample";
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        self.simpler.add_block(data.clone());
+        self.sampler.add_block(data.clone());
         Ok(data)
     }
 
     fn on_finish(&mut self) -> Result<()> {
-        self.simpler.compact_blocks();
-        let mut simple = self.simpler.take_blocks();
+        self.sampler.compact_blocks();
+        let mut simple = self.sampler.take_blocks();
         assert!(simple.len() <= 1); // Unlikely to sample rows greater than 65536
-        self.state.commit_simple(
+        self.state.commit_sample(
             self.id,
             if simple.is_empty() {
                 None
@@ -220,9 +220,9 @@ impl Transform for TransformSortSimple {
     }
 }
 
-pub fn add_sort_simple(
+pub fn add_sort_sample(
     pipeline: &mut Pipeline,
-    state: Arc<SortSimpleState>,
+    state: Arc<SortSampleState>,
     sort_desc: Arc<[SortColumnDescription]>,
     k: usize,
 ) -> Result<()> {
@@ -231,14 +231,14 @@ pub fn add_sort_simple(
     let columns = sort_desc.iter().map(|desc| desc.offset).collect::<Vec<_>>();
     pipeline.add_transformer(|| {
         let id = i.fetch_add(1, atomic::Ordering::AcqRel);
-        TransformSortSimple::new(id, k, columns.clone(), state.clone())
+        TransformSortSample::new(id, k, columns.clone(), state.clone())
     });
     Ok(())
 }
 
 pub fn add_range_shuffle(
     pipeline: &mut Pipeline,
-    state: Arc<SortSimpleState>,
+    state: Arc<SortSampleState>,
     sort_desc: Arc<[SortColumnDescription]>,
     schema: DataSchemaRef,
     block_size: usize,
@@ -248,7 +248,7 @@ pub fn add_range_shuffle(
 ) -> Result<()> {
     pipeline.add_transform(|input, output| {
         Ok(ProcessorPtr::create(Box::new(
-            TransformSortSimpleWait::new(input, output, state.clone()),
+            TransformSortSampleWait::new(input, output, state.clone()),
         )))
     })?;
 

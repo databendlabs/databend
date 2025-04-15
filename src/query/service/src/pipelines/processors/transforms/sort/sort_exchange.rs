@@ -31,11 +31,11 @@ use databend_common_pipeline_transforms::processors::sort::Rows;
 use databend_common_pipeline_transforms::processors::sort::RowsTypeVisitor;
 use databend_common_pipeline_transforms::sort::RowConverter;
 
-use super::sort_simple::SortSimpleState;
+use super::sort_sample::SortSampleState;
 use crate::pipelines::processors::PartitionProcessor;
 
 pub struct SortRangeExchange<R: Rows> {
-    state: Arc<SortSimpleState>,
+    state: Arc<SortSampleState>,
     _r: PhantomData<R>,
 }
 
@@ -87,7 +87,7 @@ pub fn create_exchange_pipe(
     partitions: usize,
     schema: DataSchemaRef,
     sort_desc: Arc<[SortColumnDescription]>,
-    state: Arc<SortSimpleState>,
+    state: Arc<SortSampleState>,
 ) -> Pipe {
     let mut builder = Builder {
         inputs,
@@ -108,7 +108,7 @@ struct Builder {
     partitions: usize,
     sort_desc: Arc<[SortColumnDescription]>,
     schema: DataSchemaRef,
-    state: Arc<SortSimpleState>,
+    state: Arc<SortSampleState>,
     items: Vec<PipeItem>,
 }
 
