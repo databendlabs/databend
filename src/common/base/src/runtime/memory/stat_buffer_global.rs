@@ -90,7 +90,7 @@ impl GlobalStatBuffer {
                 .used
                 .fetch_add(memory_usage, Ordering::Relaxed);
             self.global_mem_stat
-                .peek_used
+                .peak_used
                 .fetch_max(used + memory_usage, Ordering::Relaxed);
             return Ok(());
         }
@@ -126,7 +126,7 @@ impl GlobalStatBuffer {
                 .used
                 .fetch_add(memory_usage, Ordering::Relaxed);
             self.global_mem_stat
-                .peek_used
+                .peak_used
                 .fetch_max(used + memory_usage, Ordering::Relaxed);
             return;
         }
