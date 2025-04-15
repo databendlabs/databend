@@ -36,8 +36,8 @@ use databend_storages_common_cache::TempDirManager;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::sort::add_range_shuffle;
 use crate::pipelines::processors::transforms::sort::add_range_shuffle_merge;
-use crate::pipelines::processors::transforms::sort::add_sort_simple;
-use crate::pipelines::processors::transforms::sort::SortSimpleState;
+use crate::pipelines::processors::transforms::sort::add_sort_sample;
+use crate::pipelines::processors::transforms::sort::SortSampleState;
 use crate::pipelines::processors::transforms::TransformLimit;
 use crate::pipelines::processors::transforms::TransformSortBuilder;
 use crate::pipelines::PipelineBuilder;
@@ -217,14 +217,14 @@ impl SortPipelineBuilder {
         let inputs = pipeline.output_len();
         let settings = self.ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
-        let simple = SortSimpleState::new(
+        let sample = SortSampleState::new(
             inputs,
             max_threads,
             self.schema.clone(),
             self.sort_desc.clone(),
         );
 
-        add_sort_simple(pipeline, simple.clone(), self.sort_desc.clone(), k)?;
+        add_sort_sample(pipeline, sample.clone(), self.sort_desc.clone(), k)?;
 
         // Partial sort
         pipeline.add_transformer(|| {
@@ -238,7 +238,7 @@ impl SortPipelineBuilder {
 
         add_range_shuffle(
             pipeline,
-            simple.clone(),
+            sample.clone(),
             self.sort_desc.clone(),
             self.schema.clone(),
             self.block_size,
