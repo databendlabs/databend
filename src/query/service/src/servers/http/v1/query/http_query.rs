@@ -23,7 +23,6 @@ use std::time::Instant;
 
 use databend_common_base::base::short_sql;
 use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
-use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::TrySpawn;
@@ -355,9 +354,9 @@ pub struct HttpQuery {
     pub(crate) session_id: String,
     pub(crate) node_id: String,
     request: HttpQueryRequest,
-    state: Arc<RwLock<Executor>>,
+    state: Arc<Mutex<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
-    expire_state: Arc<parking_lot::Mutex<ExpireState>>,
+    expire_state: Arc<Mutex<ExpireState>>,
     /// The timeout for the query result polling. In the normal case, the client driver
     /// should fetch the paginated result in a timely manner, and the interval should not
     /// exceed this result_timeout_secs.
@@ -514,7 +513,7 @@ impl HttpQuery {
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
 
-        let state = Arc::new(RwLock::new(Executor {
+        let state = Arc::new(Mutex::new(Executor {
             query_id: query_id.clone(),
             state: ExecuteState::Starting(ExecuteStarting { ctx: ctx.clone() }),
         }));
@@ -565,8 +564,7 @@ impl HttpQuery {
                         warnings: ctx_clone.pop_warnings(),
                     };
                     info!("http query change state to Stopped, fail to start {:?}", e);
-                    Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
-                        .await;
+                    Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)));
                     block_sender_closer.close();
                 }
             }
@@ -637,7 +635,7 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     async fn get_state(&self) -> ResponseState {
-        let state = self.state.read().await;
+        let state = self.state.lock();
         state.get_response_state()
     }
 
@@ -648,8 +646,15 @@ impl HttpQuery {
         // - role: updated by SET ROLE;
         // - secondary_roles: updated by SET SECONDARY ROLES ALL|NONE;
         // - settings: updated by SET XXX = YYY;
-        let executor = self.state.read().await;
-        let session_state = executor.get_session_state();
+
+        let (session_state, is_stopped) = {
+            let executor = self.state.lock();
+
+            let session_state = executor.get_session_state();
+            let is_stopped = matches!(executor.state, ExecuteState::Stopped(_));
+
+            (session_state, is_stopped)
+        };
 
         let settings = session_state
             .settings
@@ -669,7 +674,7 @@ impl HttpQuery {
             None
         };
 
-        if matches!(executor.state, ExecuteState::Stopped(_)) {
+        if is_stopped {
             if let Some(cid) = &self.client_session_id {
                 let (has_temp_table_after_run, just_changed) = {
                     let mut guard = self.has_temp_table_after_run.lock();
@@ -764,7 +769,7 @@ impl HttpQuery {
         // the query will be removed from the query manager before the session is dropped.
         self.detach().await;
 
-        Executor::stop(&self.state, Err(reason)).await;
+        Executor::stop(&self.state, Err(reason));
     }
 
     #[async_backtrace::framed]
