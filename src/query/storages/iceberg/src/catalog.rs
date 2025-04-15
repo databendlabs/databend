@@ -23,7 +23,6 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
-use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -100,9 +99,9 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
-use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
+use educe::Educe;
 use iceberg::NamespaceIdent;
 use iceberg_catalog_glue::GlueCatalog;
 use iceberg_catalog_glue::GlueCatalogConfig;
@@ -121,14 +120,8 @@ pub const ICEBERG_CATALOG: &str = "iceberg";
 pub struct IcebergCreator;
 
 impl CatalogCreator for IcebergCreator {
-    fn try_create(
-        &self,
-        info: Arc<CatalogInfo>,
-        _conf: InnerConfig,
-        _meta: &MetaStore,
-    ) -> Result<Arc<dyn Catalog>> {
+    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
         let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(info)?);
-
         Ok(catalog)
     }
 }
@@ -139,7 +132,8 @@ impl CatalogCreator for IcebergCreator {
 /// - Instances of `Database` are created from reading subdirectories of
 ///   Iceberg table
 /// - Table metadata are saved in external Iceberg storage
-#[derive(Clone, Debug)]
+#[derive(Clone, Educe)]
+#[educe(Debug)]
 pub struct IcebergCatalog {
     /// info of this iceberg table.
     info: Arc<CatalogInfo>,
@@ -321,14 +315,6 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn exists_database(&self, _tenant: &Tenant, db_name: &str) -> Result<bool> {
-        // let ns = NamespaceIdent::new(db_name.to_owned());
-        // self.iceberg_catalog()
-        //     .namespace_exists(&ns)
-        //     .await
-        //     .map_err(|err| {
-        //         ErrorCode::Internal(format!("Iceberg catalog exists database failed: {err:?}"))
-        //     })
-
         let db_names = self
             .iceberg_catalog()
             .list_namespaces(None)
