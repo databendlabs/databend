@@ -34,6 +34,7 @@ use databend_common_storages_fuse::table_functions::string_literal;
 use databend_common_storages_fuse::table_functions::SimpleTableFunc;
 use databend_common_storages_fuse::FuseTable;
 use futures::stream::StreamExt;
+use log::warn;
 
 use crate::sessions::TableContext;
 
@@ -68,6 +69,7 @@ impl SimpleTableFunc for TableStatisticsFunc {
         TableSchemaRefExt::create(vec![
             TableField::new("database", TableDataType::String),
             TableField::new("table", TableDataType::String),
+            TableField::new("engine", TableDataType::String),
             TableField::new("statistics_json", TableDataType::String),
         ])
     }
@@ -82,6 +84,7 @@ impl SimpleTableFunc for TableStatisticsFunc {
 
         let mut db_names = Vec::new();
         let mut table_names = Vec::new();
+        let mut engines = Vec::new();
         let mut stats_jsons = Vec::new();
 
         // If a specific table is specified
@@ -91,14 +94,21 @@ impl SimpleTableFunc for TableStatisticsFunc {
                 .get_table(&tenant_id, &self.args.database_name, table_name)
                 .await
             {
-                let engine = tbl.get_table_info().engine();
-
-                // Only process Fuse engine tables
-                if engine.eq_ignore_ascii_case("fuse") {
-                    if let Some(stats) = get_fuse_table_statistics(tbl).await? {
-                        db_names.push(self.args.database_name.clone());
-                        table_names.push(table_name.clone());
-                        stats_jsons.push(stats);
+                let engine = tbl.get_table_info().engine().to_string();
+                match engine.to_lowercase().as_str() {
+                    "fuse" => {
+                        if let Some(stats) = get_fuse_table_statistics(tbl).await? {
+                            db_names.push(self.args.database_name.clone());
+                            table_names.push(table_name.clone());
+                            engines.push(engine.clone());
+                            stats_jsons.push(stats);
+                        }
+                    }
+                    _ => {
+                        warn!(
+                            "TableStatistics: Database {} Table {} is not a Fuse table",
+                            self.args.database_name, table_name
+                        );
                     }
                 }
             }
@@ -121,14 +131,21 @@ impl SimpleTableFunc for TableStatisticsFunc {
                         .get_table(&tenant_id, &self.args.database_name, &table_name)
                         .await
                     {
-                        let engine = tbl.get_table_info().meta.engine.clone();
-
-                        // Only process Fuse engine tables
-                        if engine.starts_with("Fuse") {
-                            if let Some(stats) = get_fuse_table_statistics(tbl).await? {
-                                db_names.push(self.args.database_name.clone());
-                                table_names.push(table_name);
-                                stats_jsons.push(stats);
+                        let engine = tbl.get_table_info().engine().to_string();
+                        match engine.to_lowercase().as_str() {
+                            "fuse" => {
+                                if let Some(stats) = get_fuse_table_statistics(tbl).await? {
+                                    db_names.push(self.args.database_name.clone());
+                                    table_names.push(table_name.clone());
+                                    engines.push(engine.clone());
+                                    stats_jsons.push(stats);
+                                }
+                            }
+                            _ => {
+                                warn!(
+                                    "TableStatistics: Database {} Table {} is not a Fuse table",
+                                    self.args.database_name, table_name
+                                );
                             }
                         }
                     }
@@ -136,10 +153,10 @@ impl SimpleTableFunc for TableStatisticsFunc {
             }
         }
 
-        // Create result DataBlock
         Ok(Some(DataBlock::new_from_columns(vec![
             StringType::from_data(db_names),
             StringType::from_data(table_names),
+            StringType::from_data(engines),
             StringType::from_data(stats_jsons),
         ])))
     }
@@ -214,7 +231,7 @@ async fn get_fuse_table_statistics(
                     obj.remove("segments");
                 }
 
-                // Convert JSON to string
+                // Convert JSON to variant
                 return Ok(Some(serde_json::to_string(&snapshot_json)?));
             }
         }
