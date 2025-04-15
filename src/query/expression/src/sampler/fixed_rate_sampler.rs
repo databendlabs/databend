@@ -33,6 +33,8 @@ pub struct FixedRateSampler<R: Rng> {
 }
 
 impl<R: Rng> FixedRateSampler<R> {
+    /// Constructs a new `FixedRateSampler<R>`.
+    /// expectation: Average number of rows to sample one
     pub fn new(
         columns: Vec<usize>,
         block_size: usize,
