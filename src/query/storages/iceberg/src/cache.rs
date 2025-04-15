@@ -46,8 +46,8 @@ impl Loader<(Arc<dyn Table>, AtomicBool, Instant)>
         let iceberg = IcebergTable::try_create_from_iceberg_catalog(
             inner.0.clone(),
             inner.1.clone(),
-            &keys[0],
-            &keys[1],
+            keys[0],
+            keys[1],
         )
         .await?;
 
