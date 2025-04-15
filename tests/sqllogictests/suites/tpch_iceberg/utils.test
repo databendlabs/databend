@@ -54,6 +54,16 @@ partsupp
 region
 supplier
 
+statement ok
+use tpch
+
+statement ok
+use tpch
+
+query III
+select access > 0, hit > 0, miss > 0 from default.system.caches where name = 'memory_cache_iceberg_table'
+----
+1 1 1
 
 ## test database
 statement ok

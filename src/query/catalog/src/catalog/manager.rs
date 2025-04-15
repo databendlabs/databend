@@ -54,8 +54,6 @@ pub struct CatalogManager {
 
     /// catalog_creators is the catalog creators that registered.
     pub catalog_creators: HashMap<CatalogType, Arc<dyn CatalogCreator>>,
-
-    conf: InnerConfig,
 }
 
 impl CatalogManager {
@@ -114,7 +112,7 @@ impl CatalogManager {
                     created_on: Utc::now(),
                 },
             };
-            let ctl = creator.try_create(Arc::new(ctl_info), conf.to_owned(), &meta)?;
+            let ctl = creator.try_create(Arc::new(ctl_info))?;
             external_catalogs.insert(name.clone(), ctl);
         }
 
@@ -123,7 +121,6 @@ impl CatalogManager {
             default_catalog,
             external_catalogs,
             catalog_creators,
-            conf: conf.to_owned(),
         };
 
         Ok(Arc::new(catalog_manager))
@@ -153,8 +150,7 @@ impl CatalogManager {
             .catalog_creators
             .get(&typ)
             .ok_or_else(|| ErrorCode::BadArguments(format!("unknown catalog type: {:?}", typ)))?;
-
-        creator.try_create(info, self.conf.clone(), &self.meta)
+        creator.try_create(info)
     }
 
     /// Get a catalog from manager.
@@ -184,7 +180,6 @@ impl CatalogManager {
 
         // Get catalog from metasrv.
         let info = self.meta.get_catalog(&ident).await?;
-
         self.build_catalog(info, session_state)
     }
 

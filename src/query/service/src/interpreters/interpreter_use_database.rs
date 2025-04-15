@@ -50,9 +50,12 @@ impl Interpreter for UseDatabaseInterpreter {
         if self.plan.database.trim().is_empty() {
             return Err(ErrorCode::UnknownDatabase("No database selected"));
         }
-        self.ctx
+        let db = self
+            .ctx
             .set_current_database(self.plan.database.clone())
             .await?;
+        db.trigger_use().await?;
+
         self.ctx.set_affect(QueryAffect::UseDB {
             name: self.plan.database.clone(),
         });

@@ -3070,6 +3070,13 @@ pub struct CacheConfig {
     )]
     pub table_data_deserialized_memory_ratio: u64,
 
+    #[clap(
+        long = "cache-iceberg-table-meta-count",
+        value_name = "VALUE",
+        default_value = "1024"
+    )]
+    pub iceberg_table_meta_count: u64,
+
     // ----- the following options/args are all deprecated               ----
     /// Max number of cached table segment
     #[clap(long = "cache-table-meta-segment-count", value_name = "VALUE")]
@@ -3297,6 +3304,7 @@ mod cache_config_converters {
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.try_into()?,
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
+                iceberg_table_meta_count: value.iceberg_table_meta_count,
                 disk_cache_table_bloom_index_meta_size: value
                     .disk_cache_table_bloom_index_meta_size,
             })
@@ -3330,6 +3338,7 @@ mod cache_config_converters {
                 disk_cache_config: value.disk_cache_config.into(),
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
+                iceberg_table_meta_count: value.iceberg_table_meta_count,
                 table_meta_segment_count: None,
                 segment_block_metas_count: value.segment_block_metas_count,
             }
