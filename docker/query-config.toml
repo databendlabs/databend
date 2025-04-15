@@ -31,10 +31,6 @@ format = "text"
 level = "INFO"
 dir = "/var/log/databend"
 
-[log.persistentlog]
-on = true
-level = "INFO"
-
 [meta]
 endpoints = ["0.0.0.0:9191"]
 username = "root"
