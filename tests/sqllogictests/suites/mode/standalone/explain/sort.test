@@ -123,13 +123,12 @@ CompoundBlockOperator(Project) × 1
   Merge to KWayMergeCombiner × 1
     KWayMergeWorker × 4
       KWayMergePartitioner × 1
-        TransformSortSpill × 4
-          TransformSortMerge × 4
-            SortPartialTransform × 4
-              Merge to Resize × 4
-                DeserializeDataTransform × 1
-                  SyncReadParquetDataTransform × 1
-                    BlockPartitionSource × 1
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              DeserializeDataTransform × 1
+                SyncReadParquetDataTransform × 1
+                  BlockPartitionSource × 1
 
 statement ok
 set sort_spilling_memory_ratio = 0;
@@ -162,14 +161,13 @@ CompoundBlockOperator(Project) × 1
   Merge to KWayMergeCombiner × 1
     KWayMergeWorker × 4
       KWayMergePartitioner × 1
-        TransformSortSpill × 4
-          TransformSortMerge × 4
-            SortPartialTransform × 4
-              Merge to Resize × 4
-                CompoundBlockOperator(Map) × 1
-                  DeserializeDataTransform × 1
-                    SyncReadParquetDataTransform × 1
-                      BlockPartitionSource × 1
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              CompoundBlockOperator(Map) × 1
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataTransform × 1
+                    BlockPartitionSource × 1
 
 statement ok
 drop table if exists t1;

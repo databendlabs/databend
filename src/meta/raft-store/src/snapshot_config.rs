@@ -116,8 +116,7 @@ impl SnapshotConfig {
 
         info!(
             "snapshot {} moved to final path: {}",
-            snapshot_id.to_string(),
-            final_path
+            snapshot_id, final_path
         );
 
         Ok(final_path)

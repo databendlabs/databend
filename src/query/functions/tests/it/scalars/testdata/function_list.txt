@@ -16,6 +16,10 @@ date_format -> to_string
 day -> to_day_of_month
 dayofmonth -> to_day_of_month
 dayofyear -> to_day_of_year
+diff_dows -> diff_days
+diff_doys -> diff_days
+diff_epochs -> diff_seconds
+diff_isodows -> diff_days
 hex -> to_hex
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
@@ -66,6 +70,7 @@ subtract -> minus
 to_datetime -> to_timestamp
 to_text -> to_string
 to_varchar -> to_string
+trunc -> truncate
 try_ipv4_num_to_string -> try_inet_ntoa
 try_ipv4_string_to_num -> try_inet_aton
 try_to_datetime -> try_to_timestamp
@@ -1238,6 +1243,10 @@ Functions overloads:
 1 cot(Float64 NULL) :: Float64 NULL
 0 crc32(String) :: UInt32
 1 crc32(String NULL) :: UInt32 NULL
+0 dayofweek(Date) :: UInt8
+1 dayofweek(Date NULL) :: UInt8 NULL
+2 dayofweek(Timestamp) :: UInt8
+3 dayofweek(Timestamp NULL) :: UInt8 NULL
 0 degrees(Float64) :: Float64
 1 degrees(Float64 NULL) :: Float64 NULL
 0 delete_by_keypath FACTORY
@@ -1247,6 +1256,18 @@ Functions overloads:
 3 diff_days(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 0 diff_hours(Timestamp, Timestamp) :: Int64
 1 diff_hours(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_isoyears(Date, Date) :: Int64
+1 diff_isoyears(Date NULL, Date NULL) :: Int64 NULL
+2 diff_isoyears(Timestamp, Timestamp) :: Int64
+3 diff_isoyears(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_microseconds(Date, Date) :: Int64
+1 diff_microseconds(Date NULL, Date NULL) :: Int64 NULL
+2 diff_microseconds(Timestamp, Timestamp) :: Int64
+3 diff_microseconds(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_millenniums(Date, Date) :: Int64
+1 diff_millenniums(Date NULL, Date NULL) :: Int64 NULL
+2 diff_millenniums(Timestamp, Timestamp) :: Int64
+3 diff_millenniums(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 0 diff_minutes(Timestamp, Timestamp) :: Int64
 1 diff_minutes(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 0 diff_months(Date, Date) :: Int64
@@ -1267,6 +1288,10 @@ Functions overloads:
 1 diff_years(Date NULL, Date NULL) :: Int64 NULL
 2 diff_years(Timestamp, Timestamp) :: Int64
 3 diff_years(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_yearweeks(Date, Date) :: Int64
+1 diff_yearweeks(Date NULL, Date NULL) :: Int64 NULL
+2 diff_yearweeks(Timestamp, Timestamp) :: Int64
+3 diff_yearweeks(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 0 div(UInt8, UInt8) :: UInt8
 1 div(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 2 div(UInt8, UInt16) :: UInt16
@@ -1673,10 +1698,8 @@ Functions overloads:
 0 divnull(Float64 NULL, Float64 NULL) :: Float64 NULL
 0 epoch(Timestamp) :: Float64
 1 epoch(Timestamp NULL) :: Float64 NULL
-2 epoch(Int64) :: Interval
-3 epoch(Int64 NULL) :: Interval NULL
-4 epoch(Interval) :: Float64
-5 epoch(Interval NULL) :: Float64 NULL
+2 epoch(Interval) :: Float64
+3 epoch(Interval NULL) :: Float64 NULL
 0 eq(Variant, Variant) :: Boolean
 1 eq(Variant NULL, Variant NULL) :: Boolean NULL
 2 eq(String, String) :: Boolean
@@ -2280,6 +2303,10 @@ Functions overloads:
 1 markov_generate(Array(T0) NULL, String NULL, UInt64 NULL, String NULL) :: String NULL
 0 md5(String) :: String
 1 md5(String NULL) :: String NULL
+0 millennium(Date) :: UInt16
+1 millennium(Date NULL) :: UInt16 NULL
+2 millennium(Timestamp) :: UInt16
+3 millennium(Timestamp NULL) :: UInt16 NULL
 0 minus(Variant, Int32) :: Variant
 1 minus(Variant NULL, Int32 NULL) :: Variant NULL
 2 minus(Variant, String) :: Variant
@@ -4628,4 +4655,8 @@ Functions overloads:
 33 xxhash64(Float32 NULL) :: UInt64 NULL
 34 xxhash64(Float64) :: UInt64
 35 xxhash64(Float64 NULL) :: UInt64 NULL
+0 yearweek(Date) :: UInt32
+1 yearweek(Date NULL) :: UInt32 NULL
+2 yearweek(Timestamp) :: UInt32
+3 yearweek(Timestamp NULL) :: UInt32 NULL
 0 yesterday() :: Date

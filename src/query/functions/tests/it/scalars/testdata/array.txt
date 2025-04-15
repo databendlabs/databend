@@ -11,7 +11,7 @@ error:
   --> SQL:1:2
   |
 1 | ['a', 1]
-  |  ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64()`, during run expr: `array(CAST('a' AS UInt64), CAST(1 AS UInt64))`
+  |  ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`, during run expr: `array(CAST('a' AS UInt64), CAST(1 AS UInt64))`
 
 
 
@@ -139,7 +139,7 @@ error:
   --> SQL:1:8
   |
 1 | [1, 2]['a']
-  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64()`, during run expr: `get(CAST(array(1, 2) AS Array(UInt8 NULL)), CAST('a' AS UInt64))`
+  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`, during run expr: `get(CAST(array(1, 2) AS Array(UInt8 NULL)), CAST('a' AS UInt64))`
 
 
 
@@ -787,7 +787,7 @@ error:
   --> SQL:1:23
   |
 1 | array_concat([1,2,3], ['s', null])
-  |                       ^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `to_int64()`, during run expr: `array_concat(CAST(array(1, 2, 3) AS Array(Int64 NULL)), CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Int64 NULL)))`
+  |                       ^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Int64 NULL))`, during run expr: `array_concat(CAST(array(1, 2, 3) AS Array(Int64 NULL)), CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Int64 NULL)))`
 
 
 
@@ -1039,7 +1039,7 @@ error:
   --> SQL:1:22
   |
 1 | array_indexof([1,2,3,'s'], 's')
-  |                      ^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `to_int64()`, during run expr: `array_indexof(array(CAST(1 AS Int64), CAST(2 AS Int64), CAST(3 AS Int64), CAST('s' AS Int64)), CAST('s' AS Int64))`
+  |                      ^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `CAST('s' AS Int64)`, during run expr: `array_indexof(array(CAST(1 AS Int64), CAST(2 AS Int64), CAST(3 AS Int64), CAST('s' AS Int64)), CAST('s' AS Int64))`
 
 
 

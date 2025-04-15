@@ -59,7 +59,7 @@ use uuid::Version;
 ///   Snapshots whose object key does not start with `VACUUM2_OBJECT_KEY_PREFIX` are all created by
 ///   nodes of previous versions (do not support vacuum2). For such snapshot objects, if their
 ///   timestamp is less than
-///    `GC_root's timestamp - ASSUMPTION_MAX_TXN_DURATION`
+///   `GC_root's timestamp - ASSUMPTION_MAX_TXN_DURATION`
 ///   we consider them safe to delete.
 ///
 ///   Generally speaking, if a snapshot from an old version was created a sufficiently long time

@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
@@ -50,10 +51,10 @@ impl RuleStatsAggregateOptimizer {
     }
 
     #[async_recursion::async_recursion(#[recursive::recursive])]
-    pub async fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub async fn optimize_async(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
-            let child = self.optimize(child).await?;
+            let child = self.optimize_async(child).await?;
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);
@@ -217,5 +218,16 @@ impl RuleStatsAggregateOptimizer {
                 | DataType::String
                 | DataType::Decimal(_)
         )
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for RuleStatsAggregateOptimizer {
+    fn name(&self) -> String {
+        "RuleStatsAggregateOptimizer".to_string()
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_async(s_expr).await
     }
 }

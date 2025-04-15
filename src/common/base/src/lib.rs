@@ -32,7 +32,6 @@
 
 pub mod base;
 pub mod containers;
-pub mod display;
 pub mod future;
 pub mod headers;
 pub mod http_client;

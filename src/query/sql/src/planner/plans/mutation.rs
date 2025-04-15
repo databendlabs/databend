@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -31,6 +30,7 @@ use crate::binder::MutationType;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::BindContext;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -58,7 +58,7 @@ pub struct Mutation {
     pub table_name: String,
     pub table_name_alias: Option<String>,
     pub bind_context: Box<BindContext>,
-    pub required_columns: Box<HashSet<IndexType>>,
+    pub required_columns: Box<ColumnSet>,
     pub metadata: MetadataRef,
     pub mutation_type: MutationType,
     pub matched_evaluators: Vec<MatchedEvaluator>,

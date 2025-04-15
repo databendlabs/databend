@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -25,11 +24,10 @@ use databend_common_expression::DataSchema;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::FlattenInfo;
-use crate::optimizer::optimizers::operator::SubqueryRewriter;
+use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -51,10 +49,11 @@ use crate::plans::Sort;
 use crate::plans::UnionAll;
 use crate::plans::Window;
 use crate::ColumnEntry;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::Metadata;
 
-impl SubqueryRewriter {
+impl SubqueryDecorrelatorOptimizer {
     #[recursive::recursive]
     pub fn flatten_plan(
         &mut self,
@@ -171,7 +170,7 @@ impl SubqueryRewriter {
             .iter()
             .filter(|item| !correlated_columns.contains(&item.index))
             .map(Item::Scalar)
-            .chain(sorted_iter(correlated_columns).map(Item::Index))
+            .chain(correlated_columns.iter().copied().map(Item::Index))
             .map(|item| match item {
                 Item::Scalar(item) => Ok(ScalarItem {
                     scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
@@ -327,7 +326,7 @@ impl SubqueryRewriter {
         // Helper function to check if conditions need a cross join
         fn needs_cross_join(
             conditions: &[JoinEquiCondition],
-            correlated_columns: &HashSet<IndexType>,
+            correlated_columns: &ColumnSet,
             left_side: bool,
         ) -> bool {
             conditions.iter().any(|condition| {
@@ -343,7 +342,7 @@ impl SubqueryRewriter {
         // Helper function to process conditions
         fn process_conditions(
             conditions: &[ScalarExpr],
-            correlated_columns: &HashSet<IndexType>,
+            correlated_columns: &ColumnSet,
             derived_columns: &HashMap<IndexType, IndexType>,
             need_cross_join: bool,
         ) -> Result<Vec<ScalarExpr>> {
@@ -483,7 +482,7 @@ impl SubqueryRewriter {
             .group_items
             .iter()
             .map(Item::Scalar)
-            .chain(sorted_iter(correlated_columns).map(Item::Index))
+            .chain(correlated_columns.iter().copied().map(Item::Index))
             .map(|item| match item {
                 Item::Scalar(item) => {
                     let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
@@ -620,7 +619,7 @@ impl SubqueryRewriter {
             .iter()
             .cloned()
             .map(Ok)
-            .chain(sorted_iter(correlated_columns).map(|old| {
+            .chain(correlated_columns.iter().copied().map(|old| {
                 Ok(Self::scalar_item_from_index(
                     self.get_derived(old)?,
                     "outer.",
@@ -682,7 +681,7 @@ impl SubqueryRewriter {
                 };
                 Ok((new, expr))
             })
-            .chain(sorted_iter(correlated_columns).map(|old| {
+            .chain(correlated_columns.iter().copied().map(|old| {
                 let new = *self.derived_columns.get(&old).unwrap();
                 Ok((new, None))
             }))
@@ -708,8 +707,8 @@ impl SubqueryRewriter {
                 };
                 Ok((new, expr))
             })
-            .chain(sorted_iter(correlated_columns).map(|old| {
-                let new = *self.derived_columns.get(&old).unwrap();
+            .chain(correlated_columns.iter().map(|old| {
+                let new = *self.derived_columns.get(old).unwrap();
                 Ok((new, None))
             }))
             .collect::<Result<_>>()?;
@@ -718,7 +717,7 @@ impl SubqueryRewriter {
         let mut metadata = self.metadata.write();
         union_all
             .output_indexes
-            .extend(sorted_iter(correlated_columns).map(|old| {
+            .extend(correlated_columns.iter().copied().map(|old| {
                 let column_entry = metadata.column(old);
                 let name = column_entry.name();
                 let data_type = column_entry.data_type();
@@ -761,7 +760,9 @@ impl SubqueryRewriter {
 
         // Wrap logical get with distinct to eliminate duplicates rows.
         let metadata = self.metadata.read();
-        let group_items = sorted_iter(correlated_columns)
+        let group_items = correlated_columns
+            .iter()
+            .copied()
             .map(|old| {
                 Ok(Self::scalar_item_from_index(
                     self.get_derived(old)?,
@@ -876,7 +877,10 @@ impl SubqueryRewriter {
 
     fn clone_outer_constant_table_scan(&mut self, scan: &ConstantTableScan) -> Result<RelOperator> {
         let mut metadata = self.metadata.write();
-        let ((values, fields), columns) = sorted_iter(&scan.columns)
+        let ((values, fields), columns) = scan
+            .columns
+            .iter()
+            .copied()
             .map(|index| {
                 let (value, field) = scan.value(index)?;
                 let name = metadata.column(index).name();
@@ -900,7 +904,10 @@ impl SubqueryRewriter {
 
     fn clone_outer_scan(&mut self, scan: &Scan) -> RelOperator {
         let mut metadata = self.metadata.write();
-        let columns = sorted_iter(&scan.columns)
+        let columns = scan
+            .columns
+            .iter()
+            .copied()
             .map(|col| {
                 let column_entry = metadata.column(col).clone();
                 let derived_index = metadata.add_derived_column(
@@ -988,12 +995,6 @@ impl SubqueryRewriter {
             .copied()
             .ok_or_else(|| ErrorCode::Internal(format!("Missing derived column {old}")))
     }
-}
-
-fn sorted_iter(columns: &ColumnSet) -> impl Iterator<Item = IndexType> {
-    let mut v = Vec::from_iter(columns.iter().copied());
-    v.sort();
-    v.into_iter()
 }
 
 enum Item<'a> {

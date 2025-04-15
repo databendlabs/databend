@@ -31,6 +31,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
@@ -835,7 +836,7 @@ impl<'a> Binder {
             let (new_expr, _) =
                 ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             match new_expr {
-                Expr::Constant { scalar, .. } => {
+                Expr::Constant(Constant { scalar, .. }) => {
                     let value = scalar.into_string().unwrap();
                     if variable.to_lowercase().as_str() == "timezone" {
                         let tz = value.trim_matches(|c| c == '\'' || c == '\"');
@@ -1107,12 +1108,7 @@ impl<'a> Binder {
                 i.has_score = has_score;
                 i
             });
-            s_expr = SExpr::add_internal_column_index(
-                &s_expr,
-                *table_index,
-                *column_index,
-                &inverted_index,
-            );
+            s_expr = s_expr.add_column_index_to_scans(*table_index, *column_index, &inverted_index);
         }
         Ok(s_expr)
     }

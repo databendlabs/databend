@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::Optimizer;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 
@@ -28,7 +29,7 @@ impl SingleToInnerOptimizer {
         SingleToInnerOptimizer {}
     }
 
-    pub fn optimize(self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         Self::single_to_inner(s_expr)
     }
 
@@ -63,5 +64,16 @@ impl SingleToInnerOptimizer {
 impl Default for SingleToInnerOptimizer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for SingleToInnerOptimizer {
+    fn name(&self) -> String {
+        "SingleToInnerOptimizer".to_string()
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_sync(s_expr)
     }
 }

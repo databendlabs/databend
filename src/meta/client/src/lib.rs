@@ -17,6 +17,7 @@
 extern crate core;
 
 pub mod endpoints;
+pub mod errors;
 pub(crate) mod established_client;
 mod grpc_action;
 mod grpc_client;
@@ -93,8 +94,8 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2024-01-17: since 1.2.304:
 ///   🖥 server: do not use TxnPutRequest.prev_value;
 ///   🖥 server: do not use TxnDeleteRequest.prev_value;
-///              Always return the previous value;
-///              field index is reserved, no compatibility changes.
+///   Always return the previous value;
+///   field index is reserved, no compatibility changes.
 ///
 /// - 2024-01-25: since 1.2.315:
 ///   🖥 server: add export_v1() to let client specify export chunk size;
@@ -107,27 +108,27 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///
 /// - 2024-11-22: since 1.2.663
 ///   🖥 server: remove `MetaGrpcReq::GetKV/MGetKV/ListKV`,
-///              require the client to call kv_read_v1 for get/mget/list,
-///              which is added `2024-01-07: since 1.2.287`
+///   require the client to call kv_read_v1 for get/mget/list,
+///   which is added `2024-01-07: since 1.2.287`
 ///
 /// - 2024-11-23: since 1.2.663
 ///   👥 client: remove use of `Operation::AsIs`
 ///
 /// - 2024-12-16: since 1.2.674
 ///   🖥 server: add `txn_condition::Target::KeysWithPrefix`,
-///              to support matching the key count by a prefix.
+///   to support matching the key count by a prefix.
 ///
 /// - 2024-12-20: since 1.2.676
 ///   🖥 server: add `TxnRequest::operations`,
-///              to specify a complex bool expression and corresponding operations
+///   to specify a complex bool expression and corresponding operations
 ///
 /// - 2024-12-26: since 1.2.677
 ///   🖥 server: add `WatchRequest::initial_flush`,
-///              to let watch stream flush all keys in a range at the beginning.
+///   to let watch stream flush all keys in a range at the beginning.
 ///
 /// - 2025-03-28: since TODO: add version when merged.
 ///   👥 client: semaphore(watch) requires `WatchRequest::initial_flush`(`1,2.677`),
-///              other RPC does not require `1.2.677`, requires only `1.2.259`.
+///   other RPC does not require `1.2.677`, requires only `1.2.259`.
 ///
 /// Server feature set:
 /// ```yaml

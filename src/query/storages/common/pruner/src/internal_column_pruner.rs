@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
@@ -72,10 +73,13 @@ impl InternalColumnPruner {
                 &BUILTIN_FUNCTIONS,
             );
 
-            !matches!(folded_expr, Expr::Constant {
-                scalar: Scalar::Boolean(false),
-                ..
-            })
+            !matches!(
+                folded_expr,
+                Expr::Constant(Constant {
+                    scalar: Scalar::Boolean(false),
+                    ..
+                })
+            )
         } else {
             true
         }

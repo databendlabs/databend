@@ -28,10 +28,8 @@ use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_storages_common_table_meta::table::ChangeType;
-use itertools::Itertools;
 
 use super::ScalarItem;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
@@ -48,6 +46,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SortItem;
+use crate::ColumnSet;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -186,7 +185,7 @@ impl Eq for Scan {}
 impl std::hash::Hash for Scan {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.table_index.hash(state);
-        for column in self.columns.iter().sorted() {
+        for column in self.columns.iter() {
             column.hash(state);
         }
         self.push_down_predicates.hash(state);

@@ -32,13 +32,13 @@ pub use utils::*;
 
 /// Convert columns to rows.
 pub trait RowConverter<T: Rows>
-where Self: Sized
+where Self: Sized + Debug
 {
     fn create(
         sort_columns_descriptions: &[SortColumnDescription],
         output_schema: DataSchemaRef,
     ) -> Result<Self>;
-    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<T>;
+    fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<T>;
 }
 
 /// Rows can be compared.

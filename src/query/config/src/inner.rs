@@ -571,6 +571,9 @@ pub struct CacheConfig {
     /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
     pub table_bloom_index_meta_count: u64,
 
+    /// Max bytes of cached bloom index meta data on disk. Set it to 0 to disable it.
+    pub disk_cache_table_bloom_index_meta_size: u64,
+
     /// Max number of cached prune partitions objects. Set it to 0 to disable it.
     pub table_prune_partitions_count: u64,
 
@@ -584,6 +587,9 @@ pub struct CacheConfig {
     /// Max bytes of cached bloom index filters used. Set it to 0 to disable it.
     // One bloom index filter per column of data block being indexed will be generated if necessary.
     pub table_bloom_index_filter_size: u64,
+
+    /// Max bytes of cached bloom index filters on disk. Set it to 0 to disable it.
+    pub disk_cache_table_bloom_index_data_size: u64,
 
     /// Max number of cached inverted index meta objects. Set it to 0 to disable it.
     pub inverted_index_meta_count: u64,
@@ -630,6 +636,9 @@ pub struct CacheConfig {
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
     pub table_data_deserialized_memory_ratio: u64,
+
+    /// Max number of cached table count of iceberg tables
+    pub iceberg_table_meta_count: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -715,6 +724,8 @@ impl Default for CacheConfig {
             table_bloom_index_meta_count: 3000,
             table_bloom_index_filter_count: 0,
             table_bloom_index_filter_size: 2147483648,
+            disk_cache_table_bloom_index_data_size: 0,
+            disk_cache_table_bloom_index_meta_size: 0,
             inverted_index_meta_count: 3000,
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
@@ -725,6 +736,7 @@ impl Default for CacheConfig {
             data_cache_key_reload_policy: Default::default(),
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
+            iceberg_table_meta_count: 1024,
         }
     }
 }

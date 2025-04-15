@@ -111,7 +111,7 @@ impl GlobalServices {
             CatalogManager::init(config, Arc::new(default_catalog), catalog_creator).await?;
         }
 
-        QueriesQueueManager::init(config.query.max_running_queries as usize)?;
+        QueriesQueueManager::init(config.query.max_running_queries as usize, config).await?;
         HttpQueryManager::init(config).await?;
         ClientSessionManager::init(config).await?;
         DataExchangeManager::init()?;
@@ -151,6 +151,7 @@ impl GlobalServices {
             &config.cache,
             &config.query.max_server_memory_usage,
             config.query.tenant_id.tenant_name().to_string(),
+            ee_mode,
         )?;
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 

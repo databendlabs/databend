@@ -59,6 +59,7 @@ impl<const REFKIND: usize> Display for Ref<REFKIND> {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum ScriptIR {
     /// Executes a SQL query and stores the result in a named result set.
     Query {

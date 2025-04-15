@@ -12,18 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
+use std::time::Duration;
 
+use databend_common_base::base::tokio::sync::Semaphore as TokioSemaphore;
 use databend_common_grpc::RpcClientConf;
+use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_semaphore::acquirer::Permit;
+use databend_common_meta_semaphore::errors::AcquireError;
+use databend_common_meta_semaphore::errors::ConnectionClosed;
+use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::MetaError;
@@ -79,6 +87,42 @@ impl MetaStore {
             }
         }
     }
+
+    pub async fn new_acquired(
+        &self,
+        prefix: impl ToString,
+        capacity: u64,
+        id: impl ToString,
+        lease: Duration,
+    ) -> Result<Permit, AcquireError> {
+        match self {
+            MetaStore::L(v) => {
+                let mut local_lock_map = v.locks.lock().await;
+
+                let acquire_res = match local_lock_map.entry(prefix.to_string()) {
+                    Entry::Occupied(v) => v.get().clone(),
+                    Entry::Vacant(v) => v
+                        .insert(Arc::new(TokioSemaphore::new(capacity as usize)))
+                        .clone(),
+                };
+
+                match acquire_res.acquire_owned().await {
+                    Ok(guard) => Ok(Permit {
+                        fu: Box::pin(async move {
+                            let _guard = guard;
+                            Ok(())
+                        }),
+                    }),
+                    Err(_e) => Err(AcquireError::ConnectionClosed(ConnectionClosed::new_str(
+                        "",
+                    ))),
+                }
+            }
+            MetaStore::R(grpc_client) => {
+                Semaphore::new_acquired(grpc_client.clone(), prefix, capacity, id, lease).await
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -119,7 +163,7 @@ impl MetaStoreProvider {
         MetaStoreProvider { rpc_conf }
     }
 
-    pub async fn create_meta_store(&self) -> Result<MetaStore, MetaError> {
+    pub async fn create_meta_store(&self) -> Result<MetaStore, CreationError> {
         if self.rpc_conf.local_mode() {
             info!(
                 conf :? =(&self.rpc_conf);

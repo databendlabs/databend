@@ -31,7 +31,6 @@ use serde::Serialize;
 use super::AggregateFunction;
 use super::NthValueFunction;
 use crate::binder::WindowOrderByInfo;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -42,6 +41,7 @@ use crate::plans::NtileFunction;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
+use crate::ColumnSet;
 use crate::IndexType;
 
 #[derive(Clone, Debug, Educe)]

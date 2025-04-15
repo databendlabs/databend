@@ -13,8 +13,9 @@
 // limitations under the License.
 
 pub mod disk_cache;
+mod disk_cache_builder;
+mod hybrid_cache;
 mod memory_cache;
-mod table_data_cache;
 
 pub use disk_cache::io_result::Error as DiskCacheError;
 pub use disk_cache::io_result::Result as DiskCacheResult;
@@ -22,8 +23,8 @@ pub use disk_cache::DiskCacheKey;
 pub use disk_cache::LruDiskCache;
 pub use disk_cache::LruDiskCacheBuilder;
 pub use disk_cache::LruDiskCacheHolder;
+pub use disk_cache_builder::DiskCacheAccessor;
+pub use disk_cache_builder::DiskCacheBuilder;
+pub use disk_cache_builder::TableDataCacheKey;
+pub use hybrid_cache::HybridCache;
 pub use memory_cache::InMemoryLruCache;
-pub use table_data_cache::TableDataCache;
-pub use table_data_cache::TableDataCacheBuilder;
-pub use table_data_cache::TableDataCacheKey;
-pub use table_data_cache::DISK_TABLE_DATA_CACHE_NAME;

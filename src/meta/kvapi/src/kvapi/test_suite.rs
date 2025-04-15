@@ -14,8 +14,6 @@
 
 use std::time::Duration;
 
-use databend_common_base::display::display_option::DisplayOptionExt;
-use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::seq_value::KVMeta;
@@ -42,6 +40,8 @@ use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
+use display_more::DisplayOptionExt;
+use display_more::DisplaySliceExt;
 use fastrace::func_name;
 use fastrace::func_path;
 use log::debug;

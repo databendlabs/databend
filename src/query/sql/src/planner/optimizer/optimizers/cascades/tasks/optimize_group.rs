@@ -23,10 +23,10 @@ use super::optimize_expr::OptimizeExprTask;
 use super::Task;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::optimizers::cascades::tasks::ExploreGroupTask;
+use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
+use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
-use crate::optimizer::optimizers::cascades::ExploreGroupTask;
-use crate::optimizer::optimizers::cascades::Scheduler;
-use crate::optimizer::optimizers::cascades::SharedCounter;
 use crate::plans::Operator;
 use crate::IndexType;
 
@@ -90,7 +90,7 @@ impl OptimizeGroupTask {
     pub fn execute(
         mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<Option<Task>> {
         if matches!(self.state, OptimizeGroupState::Optimized) {
             return Ok(None);
@@ -102,7 +102,7 @@ impl OptimizeGroupTask {
     fn transition(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<()> {
         let event = match self.state {
             OptimizeGroupState::Init => self.explore_group(optimizer, scheduler)?,
@@ -133,7 +133,7 @@ impl OptimizeGroupTask {
     fn explore_group(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<OptimizeGroupEvent> {
         let group = optimizer.memo.group(self.group_index)?;
         if !group.state.explored() {
@@ -149,7 +149,7 @@ impl OptimizeGroupTask {
     fn optimize_group(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<OptimizeGroupEvent> {
         let group = optimizer.memo.group_mut(self.group_index)?;
 

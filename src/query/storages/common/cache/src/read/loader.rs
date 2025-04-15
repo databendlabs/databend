@@ -14,7 +14,7 @@
 
 use databend_common_exception::Result;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LoadParams {
     pub location: String,
     pub len_hint: Option<u64>,
@@ -26,7 +26,7 @@ pub type CacheKey = String;
 
 /// Loads an object from storage
 #[async_trait::async_trait]
-pub trait Loader<T> {
+pub trait Loader<T>: Send {
     /// Loads object of type T, located by [params][LoadParams].
     async fn load(&self, params: &LoadParams) -> Result<T>;
 

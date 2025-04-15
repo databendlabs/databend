@@ -38,6 +38,7 @@ use crate::SortField;
 /// Convert column-oriented data into comparable row-oriented data.
 ///
 /// **NOTE**: currently, Variant is treat as String.
+#[derive(Debug)]
 pub struct RowConverter {
     fields: Arc<[SortField]>,
 }

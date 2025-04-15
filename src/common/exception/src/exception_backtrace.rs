@@ -112,7 +112,7 @@ impl PartialEq for StackFrame {
         {
             let StackFrame::Backtrace(addr) = &self;
             let StackFrame::Backtrace(other_addr) = &other;
-            addr.ip() == other_addr.ip()
+            std::ptr::eq(addr.ip(), other_addr.ip())
         }
     }
 }

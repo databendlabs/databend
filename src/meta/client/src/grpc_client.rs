@@ -43,6 +43,7 @@ use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_api::reply::reply_to_api_result;
+use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
@@ -54,11 +55,11 @@ use databend_common_meta_types::protobuf::HandshakeRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::GrpcConfig;
-use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaHandshakeError;
@@ -92,6 +93,7 @@ use tonic::Request;
 use tonic::Status;
 
 use crate::endpoints::Endpoints;
+use crate::errors::CreationError;
 use crate::established_client::EstablishedClient;
 use crate::from_digit_ver;
 use crate::grpc_action::RequestFor;
@@ -102,6 +104,7 @@ use crate::to_digit_ver;
 use crate::ClientWorkerRequest;
 use crate::MetaGrpcReadReq;
 use crate::MetaGrpcReq;
+use crate::Streamed;
 use crate::METACLI_COMMIT_SEMVER;
 use crate::MIN_METASRV_SEMVER;
 
@@ -295,6 +298,16 @@ impl Drop for ClientHandle {
 }
 
 impl ClientHandle {
+    pub async fn list(&self, prefix: &str) -> Result<BoxStream<StreamItem>, MetaError> {
+        let strm = self
+            .request(Streamed(ListKVReq {
+                prefix: prefix.to_string(),
+            }))
+            .await?;
+
+        Ok(strm)
+    }
+
     /// Send a request to the internal worker task, which will be running in another runtime.
     #[fastrace::trace]
     #[async_backtrace::framed]
@@ -306,7 +319,10 @@ impl ClientHandle {
         <Result<Req::Reply, E> as TryFrom<Response>>::Error: std::fmt::Display,
         E: From<MetaClientError> + Debug,
     {
-        let rx = self.send_request_to_worker(req)?;
+        let rx = self
+            .send_request_to_worker(req)
+            .map_err(MetaClientError::from)?;
+
         UnlimitedFuture::create(async move {
             let _g = grpc_metrics::client_request_inflight.counter_guard();
             rx.await
@@ -327,7 +343,10 @@ impl ClientHandle {
     {
         let _g = grpc_metrics::client_request_inflight.counter_guard();
 
-        let rx = self.send_request_to_worker(req)?;
+        let rx = self
+            .send_request_to_worker(req)
+            .map_err(MetaClientError::from)?;
+
         let recv_res = rx.blocking_recv();
         Self::parse_worker_result(recv_res)
     }
@@ -336,7 +355,7 @@ impl ClientHandle {
     fn send_request_to_worker<Req>(
         &self,
         req: Req,
-    ) -> Result<oneshot::Receiver<Response>, MetaClientError>
+    ) -> Result<oneshot::Receiver<Response>, ConnectionError>
     where
         Req: Into<message::Request>,
     {
@@ -366,7 +385,7 @@ impl ClientHandle {
             ));
 
             error!("{}", err);
-            MetaClientError::ClientRuntimeError(err)
+            ConnectionError::new(err, "Meta ClientHandle failed to send request to worker")
         })?;
 
         Ok(rx)
@@ -382,13 +401,14 @@ impl ClientHandle {
         E: From<MetaClientError> + Debug,
     {
         let response = res.map_err(|e| {
+            let err = AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker");
             error!(
                 error :? =(&e);
                 "Meta ClientHandle recv response from meta client worker failed"
             );
-            MetaClientError::ClientRuntimeError(
-                AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
-            )
+            let conn_err =
+                ConnectionError::new(err, "Meta ClientHandle failed to receive from worker");
+            MetaClientError::from(conn_err)
         })?;
 
         let res: Result<Reply, E> = response
@@ -463,7 +483,7 @@ impl MetaGrpcClient {
     ///
     /// The worker is a singleton and the returned handle is cheap to clone.
     /// When all handles are dropped the worker will quit, then the runtime will be destroyed.
-    pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle>, MetaClientError> {
+    pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle>, CreationError> {
         Self::try_create(
             conf.get_endpoints(),
             &conf.username,
@@ -482,7 +502,7 @@ impl MetaGrpcClient {
         timeout: Option<Duration>,
         auto_sync_interval: Option<Duration>,
         tls_config: Option<RpcClientTlsConfig>,
-    ) -> Result<Arc<ClientHandle>, MetaClientError> {
+    ) -> Result<Arc<ClientHandle>, CreationError> {
         Self::endpoints_non_empty(&endpoints_str)?;
 
         let endpoints = Arc::new(Mutex::new(Endpoints::new(endpoints_str.clone())));
@@ -495,9 +515,7 @@ impl MetaGrpcClient {
             Some(format!("meta-client-rt-{}", endpoints_str.join(","))),
         )
         .map_err(|e| {
-            MetaClientError::ClientRuntimeError(
-                AnyError::new(&e).add_context(|| "when creating meta-client"),
-            )
+            CreationError::new_runtime_error(e.to_string()).context("when creating meta-client")
         })?;
         let rt = Arc::new(rt);
 
@@ -769,11 +787,9 @@ impl MetaGrpcClient {
         ))
     }
 
-    pub fn endpoints_non_empty(endpoints: &[String]) -> Result<(), MetaClientError> {
+    pub fn endpoints_non_empty(endpoints: &[String]) -> Result<(), CreationError> {
         if endpoints.is_empty() {
-            return Err(MetaClientError::ConfigError(AnyError::error(
-                "endpoints is empty",
-            )));
+            return Err(CreationError::new_config_error("endpoints is empty"));
         }
         Ok(())
     }
@@ -785,8 +801,8 @@ impl MetaGrpcClient {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    pub async fn set_endpoints(&self, endpoints: Vec<String>) -> Result<(), MetaError> {
-        Self::endpoints_non_empty(&endpoints)?;
+    pub fn set_endpoints(&self, endpoints: Vec<String>) {
+        debug_assert!(!endpoints.is_empty());
 
         // Older meta nodes may not store endpoint information and need to be filtered out.
         let distinct_cnt = endpoints.iter().filter(|n| !(*n).is_empty()).count();
@@ -799,12 +815,11 @@ impl MetaGrpcClient {
                 endpoints.len(),
                 endpoints
             );
-            return Ok(());
+            return;
         }
 
         let mut eps = self.endpoints.lock();
         eps.replace_nodes(endpoints);
-        Ok(())
     }
 
     #[fastrace::trace]
@@ -834,7 +849,12 @@ impl MetaGrpcClient {
         let result: Vec<String> = endpoints?.data;
         debug!("received meta endpoints: {:?}", result);
 
-        self.set_endpoints(result).await?;
+        if result.is_empty() {
+            error!("Can not update local endpoints, the returned result is empty");
+        } else {
+            self.set_endpoints(result);
+        }
+
         Ok(())
     }
 
@@ -924,8 +944,9 @@ impl MetaGrpcClient {
         let mut payload = vec![];
 
         // TODO: return MetaNetworkError
-        auth.encode(&mut payload)
-            .map_err(|e| MetaHandshakeError::new("encode auth payload", &e))?;
+        auth.encode(&mut payload).map_err(|e| {
+            MetaHandshakeError::new("Fail to encode request payload").with_source(&e)
+        })?;
 
         let my_ver = to_digit_ver(client_ver);
         let req = Request::new(futures::stream::once(async move {
@@ -939,19 +960,16 @@ impl MetaGrpcClient {
         let rx = client
             .handshake(req)
             .await
-            .map_err(|e| MetaHandshakeError::new("when sending handshake rpc", &e))?;
+            .map_err(|e| MetaHandshakeError::new("Connection Failure").with_source(&e))?;
         let mut rx = rx.into_inner();
 
-        // TODO: return MetaNetworkError
-        let res = rx.next().await.ok_or_else(|| {
-            MetaHandshakeError::new(
-                "when recv from handshake stream",
-                &AnyError::error("handshake returns nothing"),
-            )
-        })?;
+        let res = rx
+            .next()
+            .await
+            .ok_or_else(|| MetaHandshakeError::new("Server returned nothing"))?;
 
-        let resp =
-            res.map_err(|status| MetaHandshakeError::new("handshake is refused", &status))?;
+        let resp = res
+            .map_err(|status| MetaHandshakeError::new("Connection Failure").with_source(&status))?;
 
         assert!(
             resp.protocol_version > 0,
@@ -960,15 +978,11 @@ impl MetaGrpcClient {
 
         let min_compatible = to_digit_ver(min_metasrv_ver);
         if resp.protocol_version < min_compatible {
-            let invalid_err = AnyError::error(format!(
-                "metasrv protocol_version({}) < meta-client min-compatible({})",
+            return Err(MetaHandshakeError::new(format!(
+                "Invalid: server protocol_version({}) < client min-compatible({})",
                 from_digit_ver(resp.protocol_version),
-                min_metasrv_ver,
-            ));
-            return Err(MetaHandshakeError::new(
-                "incompatible protocol version",
-                &invalid_err,
-            ));
+                min_metasrv_ver
+            )));
         }
 
         let token = resp.payload;
@@ -983,28 +997,26 @@ impl MetaGrpcClient {
     pub(crate) async fn watch(
         &self,
         watch_request: WatchRequest,
-    ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaError> {
+    ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaClientError> {
         debug!("{}: handle watch request: {:?}", self, watch_request);
 
         let mut client = self.get_established_client().await?;
 
+        // Since 1.2.677, initial_flush is added to WatchRequest.
+        // If the server is not upto date to support this feature, return an error.
         if watch_request.initial_flush {
             let server_version = client.server_protocol_version();
             let least_server_version = 1002677;
 
             if server_version < least_server_version {
                 let err = format!(
-                    "WatchRequest::initial_flush requires databend-meta is at least {}, but: {}",
+                    "WatchRequest::initial_flush requires databend-meta server is at least {}, but: {}",
                     least_server_version, server_version
                 );
 
                 error!("{}", err);
 
-                return Err(InvalidArgument::new(
-                    AnyError::error("databend-meta version too low"),
-                    err,
-                )
-                .into());
+                return Err(MetaHandshakeError::new(err).into());
             }
         }
         let res = client.watch(watch_request).await?;

@@ -188,3 +188,27 @@ pub struct BenchArgs {
     #[clap(long, default_value = "127.0.0.1:9191")]
     pub grpc_api_address: String,
 }
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct WatchArgs {
+    #[clap(long, default_value = "127.0.0.1:9191")]
+    pub grpc_api_address: String,
+
+    /// The prefix of a key space to watch the changes.
+    #[clap(long)]
+    pub prefix: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct UpsertArgs {
+    #[clap(long, default_value = "127.0.0.1:9191")]
+    pub grpc_api_address: String,
+
+    /// The key to set
+    #[clap(long)]
+    pub key: String,
+
+    // The value to set
+    #[clap(long)]
+    pub value: String,
+}

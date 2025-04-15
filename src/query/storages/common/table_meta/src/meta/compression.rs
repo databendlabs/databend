@@ -28,4 +28,27 @@ impl Compression {
     pub fn legacy() -> Self {
         Compression::Lz4
     }
+
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            Compression::Lz4 => 0,
+            Compression::Lz4Raw => 1,
+            Compression::Snappy => 2,
+            Compression::Zstd => 3,
+            Compression::Gzip => 4,
+            Compression::None => 5,
+        }
+    }
+
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => Compression::Lz4,
+            1 => Compression::Lz4Raw,
+            2 => Compression::Snappy,
+            3 => Compression::Zstd,
+            4 => Compression::Gzip,
+            5 => Compression::None,
+            _ => unreachable!(),
+        }
+    }
 }

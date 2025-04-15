@@ -26,9 +26,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_common_storage::Datum;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
-use itertools::Itertools;
 
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
@@ -41,6 +39,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::ColumnSet;
 use crate::IndexType;
 
 // Constant table is a table with constant values.
@@ -129,7 +128,7 @@ impl std::hash::Hash for ConstantTableScan {
                 v.hash(state);
             }
         }
-        for column in self.columns.iter().sorted() {
+        for column in self.columns.iter() {
             column.hash(state);
         }
     }

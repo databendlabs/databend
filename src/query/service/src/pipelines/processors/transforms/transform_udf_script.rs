@@ -18,7 +18,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use arrow_udf_js::FunctionOptions;
+use arrow_udf_runtime::javascript::FunctionOptions;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -43,7 +43,7 @@ use super::runtime_pool::RuntimeBuilder;
 
 pub enum ScriptRuntime {
     JavaScript(JsRuntimePool),
-    WebAssembly(arrow_udf_wasm::Runtime),
+    WebAssembly(arrow_udf_runtime::wasm::Runtime),
     #[cfg(feature = "python-udf")]
     Python(python_pool::PyRuntimePool),
 }
@@ -66,7 +66,7 @@ impl ScriptRuntime {
             }
             UDFLanguage::WebAssembly => {
                 let start = std::time::Instant::now();
-                let runtime = arrow_udf_wasm::Runtime::new(code).map_err(|err| {
+                let runtime = arrow_udf_runtime::wasm::Runtime::new(code).map_err(|err| {
                     ErrorCode::UDFRuntimeError(format!(
                         "Failed to create WASM runtime for module: {err}"
                     ))
@@ -162,13 +162,13 @@ pub struct JsRuntimeBuilder {
     counter: AtomicUsize,
 }
 
-impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
+impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder {
     type Error = ErrorCode;
 
-    fn build(&self) -> Result<arrow_udf_js::Runtime> {
+    fn build(&self) -> Result<arrow_udf_runtime::javascript::Runtime> {
         let start = std::time::Instant::now();
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            arrow_udf_js::Runtime::new()
+            arrow_udf_runtime::javascript::Runtime::new()
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
         })?;
@@ -211,7 +211,7 @@ fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
     (&field).into()
 }
 
-type JsRuntimePool = Pool<arrow_udf_js::Runtime, JsRuntimeBuilder>;
+type JsRuntimePool = Pool<arrow_udf_runtime::javascript::Runtime, JsRuntimeBuilder>;
 
 #[cfg(feature = "python-udf")]
 pub struct PyRuntimeBuilder {
@@ -227,18 +227,16 @@ pub struct PyRuntimeBuilder {
 mod python_pool {
     use super::*;
 
-    impl RuntimeBuilder<arrow_udf_python::Runtime> for PyRuntimeBuilder {
+    impl RuntimeBuilder<arrow_udf_runtime::python::Runtime> for PyRuntimeBuilder {
         type Error = ErrorCode;
 
-        fn build(&self) -> Result<arrow_udf_python::Runtime> {
+        fn build(&self) -> Result<arrow_udf_runtime::python::Runtime> {
             let start = std::time::Instant::now();
-            let mut runtime = arrow_udf_python::Builder::default()
-                .sandboxed(true)
-                .build()?;
+            let mut runtime = arrow_udf_runtime::python::Builder::default().build()?;
             runtime.add_function_with_handler(
                 &self.name,
                 arrow_field_from_data_type(&self.name, self.output_type.clone()),
-                arrow_udf_python::CallMode::CalledOnNullInput,
+                arrow_udf_runtime::CallMode::CalledOnNullInput,
                 &self.code,
                 &self.handler,
             )?;
@@ -255,7 +253,7 @@ mod python_pool {
         }
     }
 
-    pub type PyRuntimePool = Pool<arrow_udf_python::Runtime, PyRuntimeBuilder>;
+    pub type PyRuntimePool = Pool<arrow_udf_runtime::python::Runtime, PyRuntimeBuilder>;
 }
 
 pub struct TransformUdfScript {

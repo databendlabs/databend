@@ -140,6 +140,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
 /// For example, `a + b AND c is null` is parsed as `[col(a), PLUS, col(b), AND, col(c), ISNULL]` by nom parsers.
 /// Then the Pratt parser is able to parse the expression into `AND(PLUS(col(a), col(b)), ISNULL(col(c)))`.
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum ExprElement {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
@@ -435,7 +436,7 @@ impl ExprElement {
             ExprElement::PreviousDay { .. } => Affix::Nilfix,
             ExprElement::NextDay { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
-            ExprElement::Placeholder { .. } => Affix::Nilfix,
+            ExprElement::Placeholder => Affix::Nilfix,
             ExprElement::VariableAccess { .. } => Affix::Nilfix,
         }
     }
@@ -917,7 +918,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let date_part = map(
         rule! {
-            DATE_PART ~ "(" ~ ^#interval_kind ~ "," ~ ^#subexpr(0) ~ ^")"
+            (DATE_PART | DATEPART) ~ "(" ~ ^#interval_kind ~ "," ~ ^#subexpr(0) ~ ^")"
         },
         |(_, _, field, _, expr, _)| ExprElement::DatePart {
             field,
@@ -1243,7 +1244,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let date_diff = map(
         rule! {
-            DATE_DIFF ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+            (DATE_DIFF | DATEDIFF) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
         |(_, _, unit, _, date_start, _, date_end, _)| ExprElement::DateDiff {
             unit,
@@ -1254,7 +1255,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let date_sub = map(
         rule! {
-            DATE_SUB ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+            (DATE_SUB | DATESUB) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
         |(_, _, unit, _, interval, _, date, _)| ExprElement::DateSub {
             unit,
@@ -1853,9 +1854,12 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     let second = value(IntervalKind::Second, rule! { SECOND });
     let doy = value(IntervalKind::Doy, rule! { DOY });
     let dow = value(IntervalKind::Dow, rule! { DOW });
+    let isodow = value(IntervalKind::ISODow, rule! { ISODOW });
     let week = value(IntervalKind::Week, rule! { WEEK });
     let epoch = value(IntervalKind::Epoch, rule! { EPOCH });
     let microsecond = value(IntervalKind::MicroSecond, rule! { MICROSECOND });
+    let millennium = value(IntervalKind::Millennium, rule! { MILLENNIUM });
+    let yearweek = value(IntervalKind::YearWeek, rule! { YEARWEEK });
 
     let iso_year_str = value(
         IntervalKind::ISOYear,
@@ -1891,15 +1895,19 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     );
     let doy_str = value(
         IntervalKind::Doy,
-        rule! { #literal_string_eq_ignore_case("DOY")  },
+        rule! { #literal_string_eq_ignore_case("DOY") | #literal_string_eq_ignore_case("DAYOFYEAR")  },
     );
     let dow_str = value(
         IntervalKind::Dow,
-        rule! { #literal_string_eq_ignore_case("DOW")  },
+        rule! { (#literal_string_eq_ignore_case("DOW") | #literal_string_eq_ignore_case("WEEKDAY") | #literal_string_eq_ignore_case("DAYOFWEEK") )  },
+    );
+    let isodow_str = value(
+        IntervalKind::ISODow,
+        rule! { #literal_string_eq_ignore_case("ISODOW")  },
     );
     let week_str = value(
         IntervalKind::Week,
-        rule! { #literal_string_eq_ignore_case("WEEK")  },
+        rule! { (#literal_string_eq_ignore_case("WEEK") | #literal_string_eq_ignore_case("WEEKS") | #literal_string_eq_ignore_case("W"))  },
     );
     let epoch_str = value(
         IntervalKind::Epoch,
@@ -1908,6 +1916,14 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     let microsecond_str = value(
         IntervalKind::MicroSecond,
         rule! { #literal_string_eq_ignore_case("MICROSECOND")  },
+    );
+    let yearweek_str = value(
+        IntervalKind::YearWeek,
+        rule! { #literal_string_eq_ignore_case("YEARWEEK")  },
+    );
+    let millennium_str = value(
+        IntervalKind::Millennium,
+        rule! { #literal_string_eq_ignore_case("MILLENNIUM")  },
     );
     alt((
         rule!(
@@ -1924,6 +1940,9 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #week
             | #epoch
             | #microsecond
+            | #isodow
+            | #millennium
+            | #yearweek
         ),
         rule!(
             #year_str
@@ -1939,6 +1958,9 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #week_str
             | #epoch_str
             | #microsecond_str
+            | #isodow_str
+            | #yearweek_str
+            | #millennium_str
         ),
     ))(i)
 }

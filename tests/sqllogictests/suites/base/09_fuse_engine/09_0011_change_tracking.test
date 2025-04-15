@@ -1,8 +1,5 @@
 statement ok
-DROP DATABASE IF EXISTS db1
-
-statement ok
-CREATE DATABASE db1
+CREATE OR REPLACE DATABASE db1
 
 statement ok
 USE db1
@@ -96,9 +93,6 @@ create table t2(a int)
 statement ok
 insert into t2 values(0),(2),(1)
 
-statement ok
-set enable_compact_after_write = 1;
-
 query TTT
 merge into t using t2 on t.a = t2.a when matched and t2.a = 1 then update set t.a = 8 when matched and t2.a = 2 then delete when not matched then insert *
 ----
@@ -107,12 +101,15 @@ merge into t using t2 on t.a = t2.a when matched and t2.a = 1 then update set t.
 query IBBII
 select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t order by a
 ----
-0 0 0 0 0
+0 1 1 NULL 0
 3 0 0 1 1
 5 0 0 0 0
-6 0 0 0 0
-7 0 0 1 0
+6 1 1 NULL 0
+7 1 1 NULL 0
 8 0 0 0 1
+
+statement ok
+set enable_compact_after_write = 1;
 
 statement ok
 create table t1(a int) change_tracking = true

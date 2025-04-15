@@ -22,9 +22,9 @@ use educe::Educe;
 use super::apply_rule::ApplyRuleTask;
 use super::explore_group::ExploreGroupTask;
 use super::Task;
+use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
+use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
-use crate::optimizer::optimizers::cascades::Scheduler;
-use crate::optimizer::optimizers::cascades::SharedCounter;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -82,7 +82,7 @@ impl ExploreExprTask {
     pub fn execute(
         mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<Option<Task>> {
         if matches!(self.state, ExploreExprState::ExploredSelf) {
             return Ok(None);
@@ -94,7 +94,7 @@ impl ExploreExprTask {
     fn transition(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<()> {
         let event = match self.state {
             ExploreExprState::Init => self.explore_children(optimizer, scheduler)?,
@@ -124,7 +124,7 @@ impl ExploreExprTask {
     fn explore_children(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<ExploreExprEvent> {
         let m_expr = optimizer
             .memo
@@ -152,7 +152,7 @@ impl ExploreExprTask {
     fn explore_self(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<ExploreExprEvent> {
         let m_expr = optimizer
             .memo

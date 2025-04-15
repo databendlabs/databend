@@ -499,10 +499,16 @@ pub enum TokenKind {
     DATE_ADD,
     #[token("DATE_DIFF", ignore(ascii_case))]
     DATE_DIFF,
+    #[token("DATEDIFF", ignore(ascii_case))]
+    DATEDIFF,
     #[token("DATE_PART", ignore(ascii_case))]
     DATE_PART,
+    #[token("DATEPART", ignore(ascii_case))]
+    DATEPART,
     #[token("DATE_SUB", ignore(ascii_case))]
     DATE_SUB,
+    #[token("DATESUB", ignore(ascii_case))]
+    DATESUB,
     #[token("DATE_TRUNC", ignore(ascii_case))]
     DATE_TRUNC,
     #[token("DATETIME", ignore(ascii_case))]
@@ -585,6 +591,8 @@ pub enum TokenKind {
     ENGINES,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
+    #[token("YEARWEEK", ignore(ascii_case))]
+    YEARWEEK,
     #[token("MICROSECOND", ignore(ascii_case))]
     MICROSECOND,
     #[token("ERROR_ON_COLUMN_COUNT_MISMATCH", ignore(ascii_case))]
@@ -1534,6 +1542,9 @@ impl TokenKind {
             | TokenKind::EXISTS
             | TokenKind::EXTRACT
             | TokenKind::DATE_PART
+            | TokenKind::DATEPART
+            | TokenKind::DATEDIFF
+            | TokenKind::DATESUB
             | TokenKind::FALSE
             | TokenKind::FLOAT
             // | TokenKind::FOREIGN

@@ -90,6 +90,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -114,6 +115,7 @@ use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::Trim;
+use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
 use crate::Table;
@@ -135,6 +137,7 @@ pub struct FuseTable {
 
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) storage_format: FuseStorageFormat,
+    pub(crate) segment_format: FuseSegmentFormat,
     pub(crate) table_compression: TableCompression,
     pub(crate) bloom_index_cols: BloomIndexColumns,
 
@@ -146,7 +149,7 @@ pub struct FuseTable {
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
 
-    pub(crate) pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
+    pub pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
 
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
@@ -212,6 +215,12 @@ impl FuseTable {
             .cloned()
             .unwrap_or_default();
 
+        let segment_format = table_info
+            .options()
+            .get(OPT_KEY_SEGMENT_FORMAT)
+            .cloned()
+            .unwrap_or_default();
+
         let table_compression = table_info
             .options()
             .get(OPT_KEY_TABLE_COMPRESSION)
@@ -239,6 +248,7 @@ impl FuseTable {
             operator,
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
+            segment_format: FuseSegmentFormat::from_str(segment_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
@@ -759,7 +769,7 @@ impl Table for FuseTable {
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
     ) -> Result<Option<Pipeline>> {
-        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline)
+        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, false)
     }
 
     fn commit_insertion(
@@ -867,6 +877,10 @@ impl Table for FuseTable {
             }
         };
         Ok(Some(stats))
+    }
+
+    fn is_column_oriented(&self) -> bool {
+        matches!(self.segment_format, FuseSegmentFormat::Column)
     }
 
     #[async_backtrace::framed]

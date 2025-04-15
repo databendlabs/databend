@@ -31,8 +31,8 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::utils::FromData;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -114,6 +114,7 @@ macro_rules! impl_history_aware {
                         CatalogType::Iceberg => "Iceberg".to_string(),
                         CatalogType::Hive => "Hive".to_string(),
                     };
+
                     for name in names {
                         let t = TableInfo {
                             ident: TableIdent::new(0, 0),
@@ -363,14 +364,15 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                 }
                             }
                         } else if col_name == "table_id" {
-                            match check_number::<_, u64>(
+                            match check_number::<u64, usize>(
                                 None,
                                 &FunctionContext::default(),
-                                &Expr::<usize>::Constant {
+                                &Constant {
                                     span: None,
                                     scalar: scalar.clone(),
                                     data_type: scalar.as_ref().infer_data_type(),
-                                },
+                                }
+                                .into(),
                                 &BUILTIN_FUNCTIONS,
                             ) {
                                 Ok(id) => tables_ids.push(id),
@@ -589,7 +591,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 dbs.clear();
 
                 let ownership = if get_ownership && default_catalog {
-                    user_api.get_ownerships(&tenant).await.unwrap_or_default()
+                    user_api.list_ownerships(&tenant).await.unwrap_or_default()
                 } else {
                     HashMap::new()
                 };
@@ -1023,8 +1025,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let catalog = ctx.get_catalog(&catalog_name).await?;
         let db = catalog.get_database(&tenant, &db_name).await?;
         let all_table_names = db.list_tables_names().await?;
-        let rows = all_table_names.len();
 
+        let rows = all_table_names.len();
         Self::generate_tables_block(
             vec![catalog_name; rows],
             vec![db_name; rows],

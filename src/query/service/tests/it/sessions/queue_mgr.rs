@@ -21,6 +21,8 @@ use std::time::UNIX_EPOCH;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryEntry;
@@ -30,13 +32,20 @@ use databend_query::test_kits::TestFixture;
 use log::error;
 
 #[derive(Debug)]
-struct TestData<const PASSED: bool = false>(String);
+struct TestData<const PASSED: bool = false> {
+    lock_id: String,
+    acquire_id: String,
+}
 
 impl<const PASSED: bool> QueueData for TestData<PASSED> {
     type Key = String;
 
     fn get_key(&self) -> Self::Key {
-        self.0.clone()
+        self.acquire_id.clone()
+    }
+
+    fn get_lock_key(&self) -> String {
+        self.lock_id.clone()
     }
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
@@ -54,6 +63,7 @@ impl<const PASSED: bool> QueueData for TestData<PASSED> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_passed_acquire() -> Result<()> {
+    let metastore = create_meta_store().await?;
     let test_count = (SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -62,7 +72,7 @@ async fn test_passed_acquire() -> Result<()> {
         + 5;
 
     let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
-    let queue = QueueManager::<TestData<true>>::create(1);
+    let queue = QueueManager::<TestData<true>>::create(1, metastore);
     let mut join_handles = Vec::with_capacity(test_count);
 
     let instant = Instant::now();
@@ -73,7 +83,10 @@ async fn test_passed_acquire() -> Result<()> {
             databend_common_base::runtime::spawn(async move {
                 barrier.wait().await;
                 let _guard = queue
-                    .acquire(TestData::<true>(format!("TestData{}", index)))
+                    .acquire(TestData::<true> {
+                        lock_id: String::from("test_passed_acquire"),
+                        acquire_id: format!("TestData{}", index),
+                    })
                     .await?;
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 Result::<()>::Ok(())
@@ -93,6 +106,7 @@ async fn test_passed_acquire() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_serial_acquire() -> Result<()> {
+    let metastore = create_meta_store().await?;
     let test_count = (SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -101,7 +115,7 @@ async fn test_serial_acquire() -> Result<()> {
         + 5;
 
     let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
-    let queue = QueueManager::<TestData>::create(1);
+    let queue = QueueManager::<TestData>::create(1, metastore);
     let mut join_handles = Vec::with_capacity(test_count);
 
     let instant = Instant::now();
@@ -112,7 +126,10 @@ async fn test_serial_acquire() -> Result<()> {
             databend_common_base::runtime::spawn(async move {
                 barrier.wait().await;
                 let _guard = queue
-                    .acquire(TestData(format!("TestData{}", index)))
+                    .acquire(TestData {
+                        lock_id: String::from("test_serial_acquire"),
+                        acquire_id: format!("TestData{}", index),
+                    })
                     .await?;
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 Result::<()>::Ok(())
@@ -132,6 +149,7 @@ async fn test_serial_acquire() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_concurrent_acquire() -> Result<()> {
+    let metastore = create_meta_store().await?;
     let test_count = (SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -140,7 +158,7 @@ async fn test_concurrent_acquire() -> Result<()> {
         + 5;
 
     let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
-    let queue = QueueManager::<TestData>::create(2);
+    let queue = QueueManager::<TestData>::create(2, metastore);
     let mut join_handles = Vec::with_capacity(test_count);
 
     let instant = Instant::now();
@@ -151,7 +169,10 @@ async fn test_concurrent_acquire() -> Result<()> {
             databend_common_base::runtime::spawn(async move {
                 barrier.wait().await;
                 let _guard = queue
-                    .acquire(TestData(format!("TestData{}", index)))
+                    .acquire(TestData {
+                        lock_id: String::from("test_concurrent_acquire"),
+                        acquire_id: format!("TestData{}", index),
+                    })
                     .await?;
 
                 tokio::time::sleep(Duration::from_secs(1)).await;
@@ -174,6 +195,7 @@ async fn test_concurrent_acquire() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_list_acquire() -> Result<()> {
+    let metastore = create_meta_store().await?;
     let test_count = (SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -182,7 +204,7 @@ async fn test_list_acquire() -> Result<()> {
         + 5;
 
     let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
-    let queue = QueueManager::<TestData>::create(1);
+    let queue = QueueManager::<TestData>::create(1, metastore);
     let mut join_handles = Vec::with_capacity(test_count);
 
     for index in 0..test_count {
@@ -192,7 +214,10 @@ async fn test_list_acquire() -> Result<()> {
             databend_common_base::runtime::spawn(async move {
                 barrier.wait().await;
                 let _guard = queue
-                    .acquire(TestData(format!("TestData{}", index)))
+                    .acquire(TestData {
+                        lock_id: String::from("test_list_acquire"),
+                        acquire_id: format!("TestData{}", index),
+                    })
                     .await?;
 
                 tokio::time::sleep(Duration::from_secs(10)).await;
@@ -351,4 +376,11 @@ async fn test_heavy_actions() -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn create_meta_store() -> Result<MetaStore> {
+    Ok(MetaStoreProvider::new(Default::default())
+        .create_meta_store()
+        .await
+        .unwrap())
 }

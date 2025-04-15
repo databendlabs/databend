@@ -70,14 +70,10 @@ impl NumbersTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
-        let total = check_number::<_, u64>(
+        let total = check_number::<_, usize>(
             None,
             &FunctionContext::default(),
-            &Expr::<usize>::Constant {
-                span: None,
-                scalar: args[0].clone(),
-                data_type: args[0].as_ref().infer_data_type(),
-            },
+            &Expr::constant(args[0].clone(), None),
             &BUILTIN_FUNCTIONS,
         )?;
         let engine = match table_func_name {

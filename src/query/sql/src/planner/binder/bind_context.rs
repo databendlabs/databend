@@ -100,6 +100,7 @@ pub struct InternalColumnBinding {
     pub internal_column: InternalColumn,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NameResolutionResult {
     Column(ColumnBinding),

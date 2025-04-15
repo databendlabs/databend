@@ -46,6 +46,7 @@ impl fmt::Display for ClientType {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum Client {
     MySQL(MySQLClient),
     Http(HttpClient),

@@ -95,6 +95,8 @@ async fn apply_snapshot_pruning(
         segment_rx,
         res_tx,
         cache_key,
+        segment_locs.len(),
+        false,
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {
@@ -190,9 +192,8 @@ async fn test_snapshot_pruner() -> Result<()> {
         )
         .await?;
 
-    let gen_col = |value, rows| {
-        UInt64Type::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>())
-    };
+    let gen_col =
+        |value, rows| UInt64Type::from_data(std::iter::repeat_n(value, rows).collect::<Vec<u64>>());
 
     // prepare test blocks
     // - there will be `num_blocks` blocks, for each block, it comprises of `row_per_block` rows,

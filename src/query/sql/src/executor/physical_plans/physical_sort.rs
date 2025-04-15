@@ -19,7 +19,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_pipeline_transforms::processors::sort::utils::ORDER_COL_NAME;
-use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::SortDesc;
@@ -118,7 +117,7 @@ impl PhysicalPlanBuilder {
 
         // If the query will be optimized by lazy reading, we don't need to do pre-projection.
         let pre_projection = if self.metadata.read().lazy_columns().is_empty() {
-            Some(required.iter().sorted().copied().collect())
+            Some(required.iter().copied().collect())
         } else {
             None
         };

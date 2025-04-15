@@ -106,8 +106,7 @@ impl Planner {
                     }
                     Err(e) => {
                         warn!(
-                            "Try convert prql to sql failed, still use raw sql to parse. error: {}",
-                            e.to_string()
+                            "Try convert prql to sql failed, still use raw sql to parse. error: {e}"
                         );
                         sql.to_string()
                     }
@@ -271,6 +270,7 @@ impl Planner {
             .set_enable_dphyp(settings.get_enable_dphyp()?)
             .set_max_push_down_limit(settings.get_max_push_down_limit()?)
             .set_sample_executor(self.query_executor.clone())
+            .set_enable_trace(settings.get_enable_optimizer_trace()?)
             .clone();
 
         let optimized_plan = optimize(opt_ctx, plan).await?;

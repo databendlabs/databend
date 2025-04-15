@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
@@ -30,12 +29,11 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::FlattenInfo;
-use crate::optimizer::optimizers::operator::SubqueryRewriter;
+use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::optimizer::optimizers::operator::UnnestResult;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -51,9 +49,9 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
-use crate::IndexType;
+use crate::ColumnSet;
 
-impl SubqueryRewriter {
+impl SubqueryDecorrelatorOptimizer {
     // Try to decorrelate a `CrossApply` into `SemiJoin` or `AntiJoin`.
     // We only do simple decorrelation here, the scheme is:
     // 1. If the subquery is correlated, we will try to decorrelate it into `SemiJoin`
@@ -381,6 +379,18 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
+
+                let mut is_null_equal = Vec::new();
+                for (i, (l, r)) in left_conditions
+                    .iter()
+                    .zip(right_conditions.iter())
+                    .enumerate()
+                {
+                    if l.data_type()?.is_nullable() || r.data_type()?.is_nullable() {
+                        is_null_equal.push(i);
+                    }
+                }
+
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
                 let right_condition = ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -403,6 +413,7 @@ impl SubqueryRewriter {
                     params: vec![],
                     arguments: vec![child_expr, right_condition],
                 })];
+
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
@@ -412,11 +423,12 @@ impl SubqueryRewriter {
                         None,
                     )
                 };
+
                 let mark_join = Join {
                     equi_conditions: JoinEquiCondition::new_conditions(
                         right_conditions,
                         left_conditions,
-                        vec![],
+                        is_null_equal,
                     ),
                     non_equi_conditions,
                     join_type: JoinType::RightMark,
@@ -444,7 +456,7 @@ impl SubqueryRewriter {
     pub fn add_equi_conditions(
         &self,
         span: Span,
-        correlated_columns: &HashSet<IndexType>,
+        correlated_columns: &ColumnSet,
         left_conditions: &mut Vec<ScalarExpr>,
         right_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {

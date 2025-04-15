@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
@@ -30,8 +31,10 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::visit_expr;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnId;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
@@ -42,6 +45,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
+use super::eliminate_cast::*;
 use crate::Index;
 
 #[derive(Clone)]
@@ -71,10 +75,13 @@ impl RangeIndex {
 
     pub fn try_apply_const(&self) -> Result<bool> {
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(self.expr, Expr::Constant {
-            scalar: Scalar::Boolean(false),
-            ..
-        }))
+        Ok(!matches!(
+            self.expr,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
     }
 
     pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
@@ -121,18 +128,33 @@ impl RangeIndex {
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;
+
+        let mut visitor = RewriteVisitor {
+            input_domains,
+            func_ctx: &self.func_ctx,
+            fn_registry: &BUILTIN_FUNCTIONS,
+        };
+
+        let expr = match visit_expr(&self.expr, &mut visitor).unwrap() {
+            Some(expr) => Cow::Owned(expr),
+            None => Cow::Borrowed(&self.expr),
+        };
+
         let (new_expr, _) = ConstantFolder::fold_with_domain(
-            &self.expr,
-            &input_domains,
+            &expr,
+            &visitor.input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(new_expr, Expr::Constant {
-            scalar: Scalar::Boolean(false),
-            ..
-        }))
+        Ok(!matches!(
+            new_expr,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
     }
 
     #[fastrace::trace]

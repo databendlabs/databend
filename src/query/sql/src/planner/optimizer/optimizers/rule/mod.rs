@@ -12,23 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod agg_rules;
+mod constant;
 mod factory;
-mod rewrite;
+mod filter_rules;
+mod join_rules;
+mod limit_rules;
 #[allow(clippy::module_inception)]
 mod rule;
 mod rule_set;
-mod transform;
+mod scalar_rules;
+mod sort_rules;
 mod transform_result;
-mod utils;
+mod union_rules;
 
+pub use agg_rules::*;
+pub use constant::*;
 pub use factory::RuleFactory;
-pub use rewrite::agg_index;
-pub use rewrite::RulePushDownFilterJoin;
+pub use filter_rules::*;
+pub use join_rules::*;
+pub use limit_rules::*;
 pub use rule::Rule;
 pub use rule::RuleID;
 pub use rule::RulePtr;
 pub use rule::DEFAULT_REWRITE_RULES;
 pub use rule_set::AppliedRules;
 pub use rule_set::RuleSet;
+pub use scalar_rules::*;
+pub use sort_rules::*;
 pub use transform_result::TransformResult;
-pub use utils::constant;
+pub use union_rules::*;

@@ -22,9 +22,9 @@ use educe::Educe;
 use super::explore_expr::ExploreExprTask;
 use super::Task;
 use crate::optimizer::ir::GroupState;
+use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
+use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
-use crate::optimizer::optimizers::cascades::Scheduler;
-use crate::optimizer::optimizers::cascades::SharedCounter;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -74,7 +74,7 @@ impl ExploreGroupTask {
     pub fn execute(
         mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<Option<Task>> {
         if matches!(self.state, ExploreGroupState::Explored) {
             return Ok(None);
@@ -86,7 +86,7 @@ impl ExploreGroupTask {
     pub fn transition(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<()> {
         let event = match self.state {
             ExploreGroupState::Init => self.explore_group(optimizer, scheduler)?,
@@ -111,7 +111,7 @@ impl ExploreGroupTask {
     fn explore_group(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<ExploreGroupEvent> {
         let group = optimizer.memo.group_mut(self.group_index)?;
 

@@ -14,9 +14,9 @@
 
 use std::fmt;
 
-use databend_common_base::display::display_option::DisplayOptionExt;
-use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_exception::ErrorCode;
+use display_more::DisplayOptionExt;
+use display_more::DisplaySliceExt;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -175,7 +175,7 @@ impl Feature {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct LicenseInfo {
     #[serde(rename = "type")]
     pub r#type: Option<String>,

@@ -21,7 +21,8 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_FOOTER_READ_SIZE;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::InMemoryItemCacheReader;
+use databend_storages_common_cache::HybridCacheReader;
+use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 use databend_storages_common_index::BloomIndexMeta;
@@ -44,13 +45,12 @@ use parquet::thrift::TSerializable;
 use self::thrift_file_meta_read::read_thrift_file_metadata;
 
 pub type TableSnapshotStatisticsReader =
-    InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
-pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
-pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
+    InMemoryCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
+pub type BloomIndexMetaReader = HybridCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
+pub type TableSnapshotReader = InMemoryCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type CompactSegmentInfoReader =
-    InMemoryItemCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
-pub type InvertedIndexMetaReader =
-    InMemoryItemCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
+    InMemoryCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
+pub type InvertedIndexMetaReader = InMemoryCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;
 
@@ -254,7 +254,7 @@ impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
     }
 }
 
-async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Buffer> {
+pub async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Buffer> {
     let reader = if let Some(len) = len_hint {
         op.read_with(path).range(0..len).await?
     } else {

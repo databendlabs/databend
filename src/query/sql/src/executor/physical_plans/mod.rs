@@ -79,6 +79,8 @@ pub use physical_exchange_source::ExchangeSource;
 pub use physical_expression_scan::ExpressionScan;
 pub use physical_filter::Filter;
 pub use physical_hash_join::HashJoin;
+pub use physical_hash_join::PhysicalRuntimeFilter;
+pub use physical_hash_join::PhysicalRuntimeFilters;
 pub use physical_join::PhysicalJoinType;
 pub use physical_limit::Limit;
 pub use physical_multi_table_insert::*;

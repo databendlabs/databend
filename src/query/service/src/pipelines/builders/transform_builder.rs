@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -34,27 +33,28 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::ColumnSet;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::new_serialize_segment_processor;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
-use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::Statistics;
 use meta::TableMetaTimestamps;
 
+use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::processors::transforms::TransformFilter;
+use crate::pipelines::processors::transforms::TransformResortAddOn;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuilder;
 use crate::sql::executor::physical_plans::MutationKind;
+
 impl PipelineBuilder {
     pub(crate) fn filter_transform_builder(
         &self,
         predicates: &[RemoteExpr],
-        projections: HashSet<usize>,
+        projections: ColumnSet,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let predicate = predicates
             .iter()
@@ -145,14 +145,13 @@ impl PipelineBuilder {
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let proc = TransformSerializeSegment::new(
+            new_serialize_segment_processor(
                 input,
                 output,
                 fuse_table,
                 block_thresholds,
                 table_meta_timestamps,
-            );
-            proc.into_processor()
+            )
         })
     }
 

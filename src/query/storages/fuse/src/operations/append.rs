@@ -19,6 +19,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
@@ -110,7 +111,7 @@ impl FuseTable {
                     nulls_first: false,
                 })
                 .collect();
-            let sort_desc = Arc::new(sort_desc);
+            let sort_desc: Arc<[_]> = sort_desc.into();
 
             let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 || {
@@ -159,7 +160,7 @@ impl FuseTable {
                     nulls_first: false,
                 })
                 .collect();
-            let sort_desc = Arc::new(sort_desc);
+            let sort_desc: Arc<[_]> = sort_desc.into();
             pipeline
                 .add_transformer(|| TransformSortPartial::new(LimitType::None, sort_desc.clone()));
         }
@@ -193,7 +194,7 @@ impl FuseTable {
                 .as_expr(&BUILTIN_FUNCTIONS)
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
             let index = match &expr {
-                Expr::ColumnRef { id, .. } => *id,
+                Expr::ColumnRef(ColumnRef { id, .. }) => *id,
                 _ => {
                     let cname = format!("{}", expr);
                     merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));

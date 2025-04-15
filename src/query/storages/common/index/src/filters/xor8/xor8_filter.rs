@@ -38,6 +38,31 @@ pub struct Xor8Filter {
     pub filter: Xor8,
 }
 
+impl TryFrom<&Xor8Filter> for Vec<u8> {
+    type Error = ErrorCode;
+    fn try_from(value: &Xor8Filter) -> std::result::Result<Self, Self::Error> {
+        value.to_bytes().map_err(|e| {
+            ErrorCode::StorageOther(format!("failed to encode bloom index meta {:?}", e))
+        })
+    }
+}
+
+impl TryFrom<&[u8]> for Xor8Filter {
+    type Error = ErrorCode;
+
+    fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
+        Xor8Filter::from_bytes(value)
+            .map(|(v, len)| {
+                // TODO
+                assert_eq!(len, value.len());
+                v
+            })
+            .map_err(|e| {
+                ErrorCode::StorageOther(format!("failed to decode bloom index meta {:?}", e))
+            })
+    }
+}
+
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("{msg}; cause: {cause}")]
 pub struct Xor8CodecError {

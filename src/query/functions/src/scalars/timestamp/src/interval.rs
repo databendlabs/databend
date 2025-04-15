@@ -207,15 +207,6 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
 
 fn register_number_to_interval(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
-        "epoch",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
-            let res = months_days_micros::new(0, 0, val * 1_000_000);
-            output.push(res);
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _, _>(
         "to_centuries",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {

@@ -30,7 +30,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 
-use crate::optimizer::ir::ColumnSet;
+use crate::ColumnSet;
 
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone, Debug)]

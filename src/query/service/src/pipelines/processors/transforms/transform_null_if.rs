@@ -21,6 +21,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnIndex;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -59,7 +61,7 @@ where Self: Transform
             .iter()
             .zip(insert_schema.fields().iter().enumerate())
             .map(|(from, (index, to))| {
-                let expr = Expr::ColumnRef {
+                let expr = ColumnRef {
                     span: None,
                     id: index,
                     data_type: from.data_type().clone(),
@@ -67,7 +69,7 @@ where Self: Transform
                 };
                 Self::try_null_if(
                     None,
-                    expr,
+                    expr.into(),
                     to.data_type(),
                     &BUILTIN_FUNCTIONS,
                     null_str_list,
@@ -94,7 +96,7 @@ where Self: Transform
             .iter()
             .zip(insert_schema.fields().iter().enumerate())
             .map(|(from, (index, to))| {
-                let expr = Expr::ColumnRef {
+                let expr = ColumnRef {
                     span: None,
                     id: index,
                     data_type: from.data_type().clone(),
@@ -102,7 +104,7 @@ where Self: Transform
                 };
                 Self::try_null_if(
                     None,
-                    expr,
+                    expr.into(),
                     to.data_type(),
                     &BUILTIN_FUNCTIONS,
                     null_str_list,
@@ -150,33 +152,34 @@ where Self: Transform
     ) -> Result<Expr<Index>> {
         let src_type = expr.data_type();
         let column = StringType::from_data(null_str_list.to_vec());
-        let args1 = Expr::Constant {
-            span,
-            scalar: Scalar::Array(column),
-            data_type: DataType::Array(Box::new(DataType::String)),
-        };
-        if Self::column_need_transform(src_type, dest_type) {
-            let in_expr =
-                check_function(span, "contains", &[], &[args1, expr.clone()], fn_registry)?;
-            let if_expr = check_function(
-                span,
-                "if",
-                &[],
-                &[
-                    in_expr,
-                    Expr::Constant {
-                        span,
-                        scalar: Scalar::Null,
-                        data_type: DataType::Nullable(Box::new(DataType::String)),
-                    },
-                    expr,
-                ],
-                fn_registry,
-            )?;
-            Ok(if_expr)
-        } else {
-            Ok(expr)
+        if !Self::column_need_transform(src_type, dest_type) {
+            return Ok(expr);
         }
+        let args = [
+            Constant {
+                span,
+                scalar: Scalar::Array(column),
+                data_type: DataType::Array(Box::new(DataType::String)),
+            }
+            .into(),
+            expr.clone(),
+        ];
+        check_function(
+            span,
+            "if",
+            &[],
+            &[
+                check_function(span, "contains", &[], &args, fn_registry)?,
+                Constant {
+                    span,
+                    scalar: Scalar::Null,
+                    data_type: DataType::String.wrap_nullable(),
+                }
+                .into(),
+                expr,
+            ],
+            fn_registry,
+        )
     }
 }
 

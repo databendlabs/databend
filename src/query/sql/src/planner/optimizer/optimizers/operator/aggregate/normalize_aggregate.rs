@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::Optimizer;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
@@ -34,10 +35,10 @@ impl RuleNormalizeAggregateOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
-            let child = self.optimize(child)?;
+            let child = self.optimize_sync(child)?;
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);
@@ -175,5 +176,16 @@ impl RuleNormalizeAggregateOptimizer {
 impl Default for RuleNormalizeAggregateOptimizer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for RuleNormalizeAggregateOptimizer {
+    fn name(&self) -> String {
+        "RuleNormalizeAggregateOptimizer".to_string()
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_sync(s_expr)
     }
 }

@@ -41,7 +41,7 @@ impl BooleanCompression for OneValue {
         _validity: Option<Bitmap>,
         output_buf: &mut Vec<u8>,
     ) -> Result<usize> {
-        let val = col.iter().last().unwrap_or_default();
+        let val = col.iter().next_back().unwrap_or_default();
         output_buf.push(val as u8);
         Ok(1)
     }

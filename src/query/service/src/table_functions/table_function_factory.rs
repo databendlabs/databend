@@ -23,6 +23,7 @@ use databend_common_storages_fuse::table_functions::ClusteringStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseBlockFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
+use databend_common_storages_fuse::table_functions::FuseDumpSnapshotsFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
 use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
@@ -58,6 +59,7 @@ use crate::table_functions::show_roles::ShowRoles;
 use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
+use crate::table_functions::system::TableStatisticsFunc;
 use crate::table_functions::GPT2SQLTable;
 use crate::table_functions::TableFunction;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
@@ -130,6 +132,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseSnapshotFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_dump_snapshots".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseDumpSnapshotsFunc>::create),
             ),
         );
 
@@ -333,7 +343,13 @@ impl TableFunctionFactory {
             "show_roles".to_string(),
             (next_id(), Arc::new(ShowRoles::create)),
         );
-
+        creators.insert(
+            "table_statistics".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<TableStatisticsFunc>::create),
+            ),
+        );
         creators.insert(
             "iceberg_snapshot".to_string(),
             (next_id(), Arc::new(IcebergInspectTable::create)),

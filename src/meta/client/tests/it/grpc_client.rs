@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
-use databend_common_exception::ErrorCode;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaChannelManager;
@@ -25,7 +24,6 @@ use databend_common_meta_client::Streamed;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::protobuf::StreamItem;
-use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::UpsertKV;
 use futures::StreamExt;
@@ -85,10 +83,10 @@ async fn test_grpc_client_handshake_timeout() {
         .await;
 
         let got = res.unwrap_err();
-        let got =
-            ErrorCode::from(MetaError::ClientError(MetaClientError::HandshakeError(got))).message();
-        let expect = "failed to handshake with meta-service: when sending handshake rpc, cause: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }; source: transport error; source: Timeout expired";
-        assert_eq!(got, expect);
+        let expect =
+            "HandshakeError with databend-meta: Connection Failure; cause: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }; source: transport error; source: Timeout expired";
+
+        assert_eq!(got.to_string(), expect);
     }
 
     // handshake success

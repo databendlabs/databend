@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
@@ -36,7 +35,7 @@ use crate::binder::InternalColumnBinding;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::optimizers::operator::SubqueryRewriter;
+use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::optimizer::OptimizerContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
@@ -242,7 +241,7 @@ impl MutationExpression {
                         mutation_type: mutation_type.clone(),
                         predicates: vec![],
                         predicate_column_index: None,
-                        read_partition_columns: HashSet::new(),
+                        read_partition_columns: Default::default(),
                     };
 
                     s_expr =
@@ -312,8 +311,8 @@ impl MutationExpression {
 
                     let opt_ctx =
                         OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());
-                    let mut rewriter = SubqueryRewriter::new(opt_ctx, None);
-                    let s_expr = rewriter.optimize(&s_expr)?;
+                    let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx, None);
+                    let s_expr = rewriter.optimize_sync(&s_expr)?;
 
                     Ok(MutationExpressionBindResult {
                         input: s_expr,
@@ -459,7 +458,7 @@ impl Binder {
 
         let row_id_index: usize = column_binding.index;
 
-        *expr = SExpr::add_internal_column_index(expr, table_index, row_id_index, &None);
+        *expr = expr.add_column_index_to_scans(table_index, row_id_index, &None);
 
         self.metadata
             .write()

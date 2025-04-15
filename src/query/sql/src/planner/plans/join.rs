@@ -14,7 +14,6 @@
 
 use std::cmp::max;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -26,7 +25,6 @@ use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
-use crate::optimizer::ir::ColumnSet;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
@@ -41,6 +39,7 @@ use crate::optimizer::ir::UniformSampleSet;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::ColumnSet;
 use crate::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
@@ -155,7 +154,7 @@ pub struct HashJoinBuildCacheInfo {
 pub struct JoinEquiCondition {
     pub left: ScalarExpr,
     pub right: ScalarExpr,
-    // Used for "is (not) distinct from".
+    // Used for "is (not) distinct from" and mark join
     pub is_null_equal: bool,
 }
 
@@ -516,7 +515,7 @@ impl Operator for Join {
         for condition in self.equi_conditions.iter() {
             let left_used_columns = condition.left.used_columns();
             let right_used_columns = condition.right.used_columns();
-            let used_columns: HashSet<usize> = left_used_columns
+            let used_columns: ColumnSet = left_used_columns
                 .union(&right_used_columns)
                 .cloned()
                 .collect();
@@ -668,6 +667,47 @@ impl Operator for Join {
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
+
+        // For mark join with nullable eq comparison, ensure to use broadcast for subquery side
+        if self.join_type.is_mark_join()
+            && self.equi_conditions.len() == 1
+            && self.has_null_equi_condition()
+        {
+            // subquery as left probe side
+            if matches!(self.join_type, JoinType::LeftMark) {
+                let conditions = self
+                    .equi_conditions
+                    .iter()
+                    .map(|condition| condition.right.clone())
+                    .collect();
+
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Hash(conditions),
+                    },
+                ]);
+            } else {
+                // subquery as right build side
+                let conditions = self
+                    .equi_conditions
+                    .iter()
+                    .map(|condition| condition.left.clone())
+                    .collect();
+
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: Distribution::Hash(conditions),
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                ]);
+            }
+            return Ok(children_required);
+        }
 
         let settings = ctx.get_settings();
         if self.join_type != JoinType::Cross && !settings.get_enforce_broadcast_join()? {

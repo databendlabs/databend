@@ -92,20 +92,21 @@ members = [
     "src/meta/app",
     "src/meta/app-types",
     "src/meta/binaries",
+    "src/meta/cache",
     "src/meta/client",
     "src/meta/control",
+    "src/meta/ee",
     "src/meta/embedded",
     "src/meta/kvapi",
     "src/meta/process",
+    "src/meta/proto-conv",
+    "src/meta/protos",
     "src/meta/raft-store",
+    "src/meta/semaphore",
     "src/meta/sled-store",
     "src/meta/stoerr",
     "src/meta/store",
     "src/meta/types",
-    "src/meta/ee",
-    "src/meta/proto-conv",
-    "src/meta/protos",
-    "src/meta/semaphore",
     "src/meta/service",
     "tests/sqllogictests",
     "src/tests/sqlsmith",
@@ -141,6 +142,7 @@ databend-common-management = { path = "src/query/management" }
 databend-common-meta-api = { path = "src/meta/api" }
 databend-common-meta-app = { path = "src/meta/app" }
 databend-common-meta-app-types = { path = "src/meta/app-types" }
+databend-common-meta-cache = { path = "src/meta/cache" }
 databend-common-meta-client = { path = "src/meta/client" }
 databend-common-meta-control = { path = "src/meta/control" }
 databend-common-meta-embedded = { path = "src/meta/embedded" }
@@ -235,9 +237,7 @@ arrow-ipc = { version = "54" }
 arrow-ord = { version = "54" }
 arrow-schema = { version = "54", features = ["serde"] }
 arrow-select = { version = "54" }
-arrow-udf-js = { version = "0.6.0" }
-arrow-udf-python = { version = "0.4.0" }
-arrow-udf-wasm = { version = "0.5.0" }
+arrow-udf-runtime = { version = "0.8.0", default-features = false }
 async-backtrace = "0.2"
 async-channel = "1.7.1"
 async-compat = { version = "0.2" }
@@ -265,7 +265,7 @@ brotli = "3.3"
 bstr = "1"
 buf-list = "1.0.3"
 bumpalo = "3.12.0"
-byte-unit = "4.0.19"
+byte-unit = "5.1.6"
 bytemuck = { version = "1", features = ["derive"] }
 byteorder = "1.4.3"
 bytes = "1.5.0"
@@ -274,7 +274,7 @@ cbordata = { version = "0.6.0" }
 cfg-if = "1.0.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
-cidr = { version = "0.2.2" }
+cidr = { version = "0.3.1" }
 clap = { version = "4.4.2", features = ["derive"] }
 codeq = { version = "0.5.2" }
 comfy-table = "7"
@@ -294,6 +294,7 @@ defer = "0.2"
 deltalake = "0.25"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = { version = "1.0.0", features = ["full"] }
+display-more = { version = "0.1.0" }
 dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "30e28ca" }
 dyn-clone = "1.0.9"
 educe = { version = "1.0.0", features = ["default", "full"], package = "databend_educe" }
@@ -355,7 +356,7 @@ lexical-core = "1"
 libc = { version = "0.2.158" }
 libm = "0.2.6"
 limits-rs = "0.2.0"
-logforth = { version = "0.14", features = [
+logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "global-max-files-v0.14", features = [
     'json',
     'rolling_file',
     'opentelemetry',
@@ -374,7 +375,7 @@ naive-cityhash = "0.2.0"
 ndarray = "0.15.6"
 num = "0.4.0"
 num-bigint = "0.4.6"
-num-derive = "0.3.3"
+num-derive = "0.4.2"
 num-traits = "0.2.19"
 num_cpus = "1.13.1"
 object = "0.36.5"
@@ -470,6 +471,7 @@ serfig = "0.1.0"
 sha1 = "0.10.5"
 sha2 = "0.10.8"
 simdutf8 = "0.1.4"
+similar = "2.7.0"
 simple_hll = { version = "0.0.1", features = ["serde_borsh"] }
 simsearch = "0.2"
 siphasher = "0.3"
@@ -485,15 +487,15 @@ strength_reduce = "0.2.4"
 stringslice = "0.2.0"
 strum = "0.24.1"
 sys-info = "0.9"
-sysinfo = "0.30"
+sysinfo = "0.34.2"
 tantivy = "0.22.0"
 tantivy-common = "0.7.0"
 tantivy-fst = "0.5"
 tantivy-jieba = "0.11.0"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
-terminal_size = "0.2.6"
-test-harness = "0.1.1"
+terminal_size = "0.4.2"
+test-harness = "0.3.0"
 testcontainers = "0.23"
 testcontainers-modules = "0.11.5"
 thiserror = { version = "1" }
@@ -518,9 +520,9 @@ url = "2.5.4"
 uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
 volo-thrift = "0.10"
 walkdir = "2.3.2"
-watcher = { version = "0.1.0" }
+watcher = { version = "0.1.1" }
 wiremock = "0.6"
-wkt = "0.10.3"
+wkt = "0.11.1"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 xorfilter-rs = "0.5"
 zstd = "0.12.3"
@@ -545,7 +547,7 @@ vergen = { version = "8.3.1", default-features = false, features = ["build", "ca
 env_logger = "0.11"
 fastrace = { version = "0.7.4", features = ["enable"] }
 fastrace-opentelemetry = "0.7.4"
-log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
+log = { version = "0.4.27", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.9"
 opentelemetry = { version = "0.26.0", features = ["trace", "logs"] }
 opentelemetry-otlp = { version = "0.26.0", features = [
@@ -572,6 +574,7 @@ async_fn_in_trait = "allow"
 useless_format = "allow"
 mutable_key_type = "allow"
 result_large_err = "allow"
+map_entry = "allow"
 
 ## DONT'T DELETE THIS: If we want best performance, we should use this profile but it will take longer time to compile.
 ## Test SQL:
@@ -630,14 +633,12 @@ overflow-checks = true
 rpath = false
 
 [patch.crates-io]
-arrow-udf-js = { git = "https://github.com/arrow-udf/arrow-udf", rev = "d910692" }
-arrow-udf-python = { git = "https://github.com/arrow-udf/arrow-udf", rev = "d910692" }
-arrow-udf-wasm = { git = "https://github.com/arrow-udf/arrow-udf", rev = "d910692" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
+display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.1.2" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
 jsonb = { git = "https://github.com/b41sh/jsonb", rev = "1e9f58bc50246fcba782e1cd90de9233cffae6e3" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.3" }
@@ -649,5 +650,5 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
-watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.1.0" }
+watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.1.1" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

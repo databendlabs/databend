@@ -61,33 +61,31 @@ jobs:
         if: inputs.source == 'pr'
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
-      - uses: ./.github/actions/setup_bendsql
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Download artifact
-        uses: ./.github/actions/artifact_download
-        with:
-          sha: ${{ inputs.sha }}
-          target: x86_64-unknown-linux-gnu
-          category: full
-          artifacts: meta,query
-      - name: Setup Databend Binary
-        shell: bash
-        run: |
-          sudo cp ./target/release/databend-* /usr/local/bin/
-          databend-query --version
-          databend-meta --version
-      - uses: ./.github/actions/benchmark_local
-        if: inputs.target == 'local' || inputs.target == 'all'
-        timeout-minutes: 30
-        id: benchmark
-        with:
-          sha: ${{ inputs.sha }}
-          run_id: ${{ inputs.run_id }}
-          dataset: ${{ matrix.dataset }}
-          source: ${{ inputs.source }}
-          source_id: ${{ inputs.source_id }}
+      # - uses: ./.github/actions/setup_bendsql
+      # - uses: ./.github/actions/setup_test
+      # - name: Download artifact
+      #   uses: ./.github/actions/artifact_download
+      #   with:
+      #     sha: ${{ inputs.sha }}
+      #     target: x86_64-unknown-linux-gnu
+      #     category: full
+      #     artifacts: meta,query
+      # - name: Setup Databend Binary
+      #   shell: bash
+      #   run: |
+      #     sudo cp ./target/release/databend-* /usr/local/bin/
+      #     databend-query --version
+      #     databend-meta --version
+      # - uses: ./.github/actions/benchmark_local
+      #   if: inputs.target == 'local' || inputs.target == 'all'
+      #   timeout-minutes: 30
+      #   id: benchmark
+      #   with:
+      #     sha: ${{ inputs.sha }}
+      #     run_id: ${{ inputs.run_id }}
+      #     dataset: ${{ matrix.dataset }}
+      #     source: ${{ inputs.source }}
+      #     source_id: ${{ inputs.source_id }}
 
   load:
     runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
@@ -228,7 +226,7 @@ jobs:
           - "tpch"
           - "hits"
           - "load"
-          - "internal"
+          # - "internal"
     steps:
       - uses: actions/checkout@v4
       - name: Install Dependencies

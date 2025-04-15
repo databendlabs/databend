@@ -20,24 +20,25 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::RuleFactory;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 
 /// A recursive optimizer that will apply the given rules recursively.
 /// It will keep applying the rules on the substituted expression
 /// until no more rules can be applied.
-pub struct RecursiveOptimizer {
+pub struct RecursiveRuleOptimizer {
     ctx: Arc<OptimizerContext>,
     rules: &'static [RuleID],
 }
 
-impl RecursiveOptimizer {
+impl RecursiveRuleOptimizer {
     pub fn new(ctx: Arc<OptimizerContext>, rules: &'static [RuleID]) -> Self {
         Self { ctx, rules }
     }
 
     /// Run the optimizer on the given expression.
     #[recursive::recursive]
-    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
         self.optimize_expression(s_expr)
     }
 
@@ -46,7 +47,7 @@ impl RecursiveOptimizer {
         let mut optimized_children = Vec::with_capacity(s_expr.arity());
         let mut children_changed = false;
         for expr in s_expr.children() {
-            let optimized_child = self.optimize(expr)?;
+            let optimized_child = self.optimize_sync(expr)?;
             if !optimized_child.eq(expr) {
                 children_changed = true;
             }
@@ -85,5 +86,26 @@ impl RecursiveOptimizer {
         }
 
         Ok(s_expr.clone())
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for RecursiveRuleOptimizer {
+    fn name(&self) -> String {
+        let total = self.rules.len();
+        let preview = if total <= 3 {
+            self.rules
+                .iter()
+                .map(|rule_id| format!("{:?}", rule_id))
+                .collect::<Vec<_>>()
+                .join(",")
+        } else {
+            format!("{:?},{:?},...({})", self.rules[0], self.rules[1], total - 2)
+        };
+        format!("RecursiveRuleOptimizer[{}]", preview)
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.optimize_sync(s_expr)
     }
 }

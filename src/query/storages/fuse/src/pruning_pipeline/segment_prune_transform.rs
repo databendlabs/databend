@@ -25,17 +25,18 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
 use databend_common_pipeline_transforms::AsyncAccumulatingTransformer;
 
+use super::PrunedSegmentMeta;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
-use crate::pruning_pipeline::pruned_segment_meta::PrunedSegmentMeta;
 use crate::pruning_pipeline::LazySegmentMeta;
 
-pub struct SegmentPruneTransform {
+pub struct SegmentPruneTransform<T: PrunedSegmentMeta> {
     pub segment_pruner: Arc<SegmentPruner>,
     pub pruning_ctx: Arc<PruningContext>,
+    pub _marker: std::marker::PhantomData<T>,
 }
 
-impl SegmentPruneTransform {
+impl<T: PrunedSegmentMeta> SegmentPruneTransform<T> {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -45,16 +46,17 @@ impl SegmentPruneTransform {
         Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
             input,
             output,
-            SegmentPruneTransform {
+            SegmentPruneTransform::<T> {
                 segment_pruner,
                 pruning_ctx: pruning_context,
+                _marker: std::marker::PhantomData,
             },
         )))
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncAccumulatingTransform for SegmentPruneTransform {
+impl<T: PrunedSegmentMeta> AsyncAccumulatingTransform for SegmentPruneTransform<T> {
     const NAME: &'static str = "SegmentPruneTransform";
 
     async fn transform(&mut self, mut data: DataBlock) -> Result<Option<DataBlock>> {
@@ -66,7 +68,10 @@ impl AsyncAccumulatingTransform for SegmentPruneTransform {
                         return Ok(None);
                     }
                 }
-                let mut pruned_segments = self.segment_pruner.pruning(vec![location]).await?;
+                let mut pruned_segments = self
+                    .segment_pruner
+                    .pruning_generic::<T>(vec![location])
+                    .await?;
 
                 if pruned_segments.is_empty() {
                     return Ok(None);
@@ -74,7 +79,7 @@ impl AsyncAccumulatingTransform for SegmentPruneTransform {
 
                 debug_assert!(pruned_segments.len() == 1);
 
-                return Ok(Some(DataBlock::empty_with_meta(PrunedSegmentMeta::create(
+                return Ok(Some(DataBlock::empty_with_meta(T::create(
                     pruned_segments.pop().unwrap(),
                 ))));
             }

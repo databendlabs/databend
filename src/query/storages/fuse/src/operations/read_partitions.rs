@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -37,6 +38,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::DefaultExprBinder;
@@ -46,6 +48,18 @@ use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPrunner;
+use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
+use databend_storages_common_table_meta::meta::column_oriented_segment::stat_name;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_SIZE;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_SIZE;
+use databend_storages_common_table_meta::meta::column_oriented_segment::CLUSTER_STATS;
+use databend_storages_common_table_meta::meta::column_oriented_segment::COMPRESSION;
+use databend_storages_common_table_meta::meta::column_oriented_segment::CREATE_ON;
+use databend_storages_common_table_meta::meta::column_oriented_segment::FILE_SIZE;
+use databend_storages_common_table_meta::meta::column_oriented_segment::INVERTED_INDEX_SIZE;
+use databend_storages_common_table_meta::meta::column_oriented_segment::LOCATION;
+use databend_storages_common_table_meta::meta::column_oriented_segment::ROW_COUNT;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -64,15 +78,20 @@ use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::pruning::SegmentPruner;
 use crate::pruning_pipeline::AsyncBlockPruneTransform;
+use crate::pruning_pipeline::ColumnOrientedBlockPruneSink;
 use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
+use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
+use crate::pruning_pipeline::PrunedCompactSegmentMeta;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
 use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
 use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
 use crate::pruning_pipeline::TopNPruneTransform;
+use crate::segment_format_from_location;
 use crate::FuseLazyPartInfo;
+use crate::FuseSegmentFormat;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -82,7 +101,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        dry_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
@@ -128,7 +147,7 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if !dry_run && segment_len > nodes_num && distributed_pruning {
+                if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
                     let mut segments = Vec::with_capacity(segment_locs.len());
                     for (idx, segment_location) in segment_locs.into_iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
@@ -164,16 +183,18 @@ impl FuseTable {
         }
     }
 
-    pub(crate) fn do_build_prune_pipeline(
+    pub fn do_build_prune_pipeline(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
+        dry_run: bool,
     ) -> Result<Option<Pipeline>> {
         let snapshot = plan.statistics.snapshot.clone();
         let table_schema = self.schema_with_stream();
         let dal = self.operator.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
+        let mut segment_format = FuseSegmentFormat::Row;
 
         for part in &plan.parts.partitions {
             if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
@@ -182,6 +203,7 @@ impl FuseTable {
                     location: lazy_part_info.segment_location.clone(),
                     snapshot_loc: snapshot.clone(),
                 });
+                segment_format = segment_format_from_location(&lazy_part_info.segment_location.0);
             }
         }
         // If there is no lazy part, we don't need to prune
@@ -207,7 +229,8 @@ impl FuseTable {
                 });
 
         if ctx.get_settings().get_enable_prune_cache()? {
-            if let Some((_stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
+            if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
+                ctx.set_pruned_partitions_stats(stat);
                 let sender = part_info_tx.clone();
                 info!("prune pipeline: get prune result from cache");
                 source_pipeline.set_on_init(move || {
@@ -241,18 +264,35 @@ impl FuseTable {
 
         let mut prune_pipeline = Pipeline::create();
         let pruner =
-            Arc::new(self.build_fuse_pruner(ctx.clone(), push_downs, table_schema, dal)?);
+            Arc::new(self.build_fuse_pruner(ctx.clone(), push_downs, table_schema.clone(), dal)?);
 
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
-        self.prune_segments_with_pipeline(
-            pruner.clone(),
-            &mut prune_pipeline,
-            ctx.clone(),
-            segment_rx,
-            part_info_tx,
-            derterministic_cache_key.clone(),
-        )?;
+        match segment_format {
+            FuseSegmentFormat::Row => {
+                self.prune_segments_with_pipeline(
+                    pruner.clone(),
+                    &mut prune_pipeline,
+                    ctx.clone(),
+                    segment_rx,
+                    part_info_tx,
+                    derterministic_cache_key.clone(),
+                    lazy_init_segments.len(),
+                    dry_run,
+                )?;
+            }
+            FuseSegmentFormat::Column => {
+                self.prune_column_oriented_segments_with_pipeline(
+                    pruner.clone(),
+                    &mut prune_pipeline,
+                    ctx.clone(),
+                    segment_rx,
+                    part_info_tx,
+                    derterministic_cache_key.clone(),
+                    table_schema.clone(),
+                )?;
+            }
+        }
         prune_pipeline.set_on_init(move || {
             // We cannot use the runtime associated with the query to avoid increasing its lifetime.
             GlobalIORuntime::instance().spawn(async move {
@@ -358,17 +398,22 @@ impl FuseTable {
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
+        partitions_total: usize,
+        dry_run: bool,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
             |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
             max_threads,
         )?;
-        let segment_pruner =
-            SegmentPruner::create(pruner.pruning_ctx.clone(), pruner.table_schema.clone())?;
+        let segment_pruner = SegmentPruner::create(
+            pruner.pruning_ctx.clone(),
+            pruner.table_schema.clone(),
+            Default::default(),
+        )?;
 
         prune_pipeline.add_transform(|input, output| {
-            SegmentPruneTransform::create(
+            SegmentPruneTransform::<PrunedCompactSegmentMeta>::create(
                 input,
                 output,
                 segment_pruner.clone(),
@@ -439,6 +484,7 @@ impl FuseTable {
             limit,
             pruner.clone(),
             self.data_metrics.clone(),
+            partitions_total,
         ));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(
@@ -449,20 +495,121 @@ impl FuseTable {
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
                 enable_prune_cache,
+                dry_run,
             )
         })?;
 
-        if enable_prune_cache {
-            info!("prune pipeline: enable prune cache");
-            prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
-                if let Ok(()) = info.res {
-                    // only populating cache when the pipeline is finished successfully
+        prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+            if let Ok(()) = info.res {
+                // only populating cache when the pipeline is finished successfully
+                let pruned_part_stats = send_part_state.get_pruned_stats();
+                ctx.set_pruned_partitions_stats(pruned_part_stats);
+                if enable_prune_cache {
+                    info!("prune pipeline: enable prune cache");
                     send_part_state.populating_cache();
                 }
-                Ok(())
-            });
-        }
+            }
+            Ok(())
+        });
 
+        Ok(())
+    }
+
+    pub fn prune_column_oriented_segments_with_pipeline(
+        &self,
+        pruner: Arc<FusePruner>,
+        prune_pipeline: &mut Pipeline,
+        ctx: Arc<dyn TableContext>,
+        segment_rx: Receiver<SegmentLocation>,
+        part_info_tx: Sender<Result<PartInfoPtr>>,
+        _derterministic_cache_key: Option<String>,
+        table_schema: TableSchemaRef,
+    ) -> Result<()> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let push_down = &pruner.push_down;
+        let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+
+        // Only the columns that are used in the push down will be read, cached and passed to the next pipeline.
+        let projection_column_ids = {
+            let arrow_schema = self.schema().as_ref().into();
+            let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema()));
+            let column_nodes = match push_down.as_ref().and_then(|p| p.projection.as_ref()) {
+                Some(projection) => {
+                    match push_down.as_ref().and_then(|p| p.output_columns.as_ref()) {
+                        Some(output_columns) => {
+                            output_columns.project_column_nodes(&column_nodes)?
+                        }
+                        None => projection.project_column_nodes(&column_nodes)?,
+                    }
+                }
+                None => column_nodes.column_nodes.iter().collect(),
+            };
+            column_nodes
+                .iter()
+                .flat_map(|c| c.leaf_column_ids.clone())
+                .collect::<Vec<_>>()
+        };
+        let filter_column_ids = match push_down.as_ref().and_then(|p| p.filters.as_ref()) {
+            Some(filters) => {
+                let mut column_ids = HashSet::new();
+                let filter = &filters.filter.as_expr(&BUILTIN_FUNCTIONS);
+                let column_refs = filter.column_refs();
+                for (column_name, _) in column_refs {
+                    let field = table_schema.field_with_name(&column_name)?;
+                    for column_id in field.leaf_column_ids() {
+                        column_ids.insert(column_id);
+                    }
+                }
+                column_ids
+            }
+            None => HashSet::new(),
+        };
+
+        let mut segment_column_projection = HashSet::new();
+        for column_id in projection_column_ids.iter() {
+            segment_column_projection.insert(meta_name(*column_id));
+        }
+        for column_id in filter_column_ids {
+            segment_column_projection.insert(stat_name(column_id));
+        }
+        segment_column_projection.insert(ROW_COUNT.to_string());
+        segment_column_projection.insert(BLOCK_SIZE.to_string());
+        segment_column_projection.insert(FILE_SIZE.to_string());
+        segment_column_projection.insert(CLUSTER_STATS.to_string());
+        segment_column_projection.insert(LOCATION.to_string());
+        segment_column_projection.insert(BLOOM_FILTER_INDEX_LOCATION.to_string());
+        segment_column_projection.insert(BLOOM_FILTER_INDEX_SIZE.to_string());
+        segment_column_projection.insert(INVERTED_INDEX_SIZE.to_string());
+        segment_column_projection.insert(COMPRESSION.to_string());
+        segment_column_projection.insert(CREATE_ON.to_string());
+        let segment_pruner = SegmentPruner::create(
+            pruner.pruning_ctx.clone(),
+            pruner.table_schema.clone(),
+            segment_column_projection.clone(),
+        )?;
+
+        prune_pipeline.add_source(
+            |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
+            max_threads,
+        )?;
+        prune_pipeline.add_transform(|input, output| {
+            SegmentPruneTransform::<PrunedColumnOrientedSegmentMeta>::create(
+                input,
+                output,
+                segment_pruner.clone(),
+                pruner.pruning_ctx.clone(),
+            )
+        })?;
+        // TODO(Sky): deal with sample
+        prune_pipeline.add_sink(|input| {
+            ColumnOrientedBlockPruneSink::create(
+                input,
+                block_pruner.clone(),
+                part_info_tx.clone(),
+                projection_column_ids.clone(),
+            )
+        })?;
+        // TODO(Sky): populate prune cache , deal with topn prune
         Ok(())
     }
 
@@ -657,7 +804,7 @@ impl FuseTable {
     fn is_exact(push_downs: &Option<PushDownInfo>) -> bool {
         push_downs
             .as_ref()
-            .map_or(true, |extra| extra.filters.is_none())
+            .is_none_or(|extra| extra.filters.is_none())
     }
 
     fn all_columns_partitions(

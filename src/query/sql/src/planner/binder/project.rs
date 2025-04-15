@@ -31,6 +31,7 @@ use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -518,10 +519,10 @@ impl Binder {
                 ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
 
             match new_expr {
-                databend_common_expression::Expr::Constant {
+                databend_common_expression::Expr::Constant(Constant {
                     scalar: Scalar::Array(Column::Boolean(bitmap)),
                     ..
-                } => {
+                }) => {
                     let mut new_column_idx = Vec::new();
                     for (index, val) in bitmap.iter().enumerate() {
                         if val {

@@ -43,7 +43,6 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use itertools::Itertools;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::thread_rng;
@@ -625,7 +624,7 @@ impl PhysicalPlanBuilder {
         // Build projection
         let used_columns = agg.used_columns();
         let mut col_indices = Vec::with_capacity(used_columns.len());
-        for index in used_columns.iter().sorted() {
+        for index in used_columns.iter() {
             col_indices.push(agg.schema.index_of(&index.to_string())?);
         }
         let projection = Projection::Columns(col_indices);

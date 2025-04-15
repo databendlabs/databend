@@ -48,6 +48,7 @@ impl Display for TaskSql {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum CreateTaskOption {
     Warehouse(String),
     Schedule(ScheduleOptions),

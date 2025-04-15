@@ -8,6 +8,8 @@ HashJoin
 ├── probe keys: [number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:number (#1), probe key:number (#0), filter type:inlist,min_max
 ├── estimated rows: 100.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -26,6 +28,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 10.00
 
 query T
@@ -38,6 +41,7 @@ HashJoin
 ├── probe keys: [number (#3)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
 ├── estimated rows: 1000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -59,6 +63,7 @@ HashJoin
         ├── probe keys: []
         ├── keys is null equal: []
         ├── filters: []
+        ├── build join filters:
         ├── estimated rows: 100.00
         ├── TableScan(Build)
         │   ├── table: default.system.numbers
@@ -98,6 +103,7 @@ HashJoin
 ├── probe keys: [t1.b (#3), number (#4)]
 ├── keys is null equal: [false, false]
 ├── filters: []
+├── build join filters:
 ├── estimated rows: 1000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -123,6 +129,7 @@ HashJoin
             ├── probe keys: [outer.number (#4)]
             ├── keys is null equal: [false]
             ├── filters: []
+            ├── build join filters:
             ├── estimated rows: 100.00
             ├── TableScan(Build)
             │   ├── table: default.system.numbers

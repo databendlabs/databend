@@ -26,6 +26,7 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::ColumnSet;
 use crate::DataField;
 use crate::DataSchemaRef;
 use crate::Domain;
@@ -56,10 +57,15 @@ impl BlockEntry {
     pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
         #[cfg(debug_assertions)]
         {
-            if let crate::Value::Column(c) = &value {
-                c.check_valid().unwrap();
+            use crate::Value;
+            match &value {
+                Value::Column(c) => {
+                    c.check_valid().unwrap();
+                }
+                Value::Scalar(_) => {
+                    check_type(&data_type, &value);
+                }
             }
-            check_type(&data_type, &value);
         }
 
         Self { data_type, value }
@@ -557,7 +563,7 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn project(mut self, projections: &HashSet<usize>) -> Self {
+    pub fn project(mut self, projections: &ColumnSet) -> Self {
         let mut columns = Vec::with_capacity(projections.len());
         for (index, column) in self.columns.into_iter().enumerate() {
             if !projections.contains(&index) {
@@ -570,7 +576,7 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn project_with_agg_index(self, projections: &HashSet<usize>, num_evals: usize) -> Self {
+    pub fn project_with_agg_index(self, projections: &ColumnSet, num_evals: usize) -> Self {
         let mut columns = Vec::with_capacity(projections.len());
         let eval_offset = self.columns.len() - num_evals;
         for (index, column) in self.columns.into_iter().enumerate() {

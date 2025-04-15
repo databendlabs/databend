@@ -221,9 +221,10 @@ impl ClusterDiscovery {
         let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
-            Err(cause) => {
-                Err(ErrorCode::from(cause).add_message_back("(while create cluster api)."))
-            }
+            Err(cause) => Err(ErrorCode::MetaServiceError(format!(
+                "Failed to create meta store: {}",
+                cause
+            ))),
         }
     }
 

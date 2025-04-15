@@ -20,6 +20,7 @@ use std::sync::Arc;
 use arrow_schema::Field;
 use arrow_schema::Schema;
 use async_trait::async_trait;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
@@ -36,17 +37,20 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
+use databend_storages_common_cache::LoadParams;
+use educe::Educe;
 use iceberg::arrow::arrow_schema_to_schema;
 use iceberg::spec::Schema as IcebergSchema;
 use iceberg::TableCreation;
 use iceberg::TableIdent;
 
-use crate::table::IcebergTable;
+use crate::cache;
 use crate::IcebergCatalog;
 
 const PARQUET_FIELD_ID_META_KEY: &str = "PARQUET:field_id";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Educe)]
+#[educe(Debug)]
 pub struct IcebergDatabase {
     ctl: IcebergCatalog,
 
@@ -84,15 +88,22 @@ impl Database for IcebergDatabase {
 
     #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
-        let tbl = IcebergTable::try_create_from_iceberg_catalog(
-            self.ctl.clone(),
-            self.info.name_ident.database_name(),
-            table_name,
-        )
-        .await?;
-        let tbl = Arc::new(tbl) as Arc<dyn Table>;
+        let params = LoadParams {
+            location: format!("{}{}{}", self.name(), cache::SEP_STR, table_name),
+            len_hint: None,
+            ver: 0,
+            put_cache: true,
+        };
+        let reader =
+            super::cache::iceberg_table_cache_reader(self.ctl.iceberg_catalog(), self.ctl.info());
+        reader.read(&params).await.map(|v| v.0.clone())
+    }
 
-        Ok(tbl)
+    // trigger use will refresh the table meta cache in current databases
+    #[async_backtrace::framed]
+    async fn trigger_use(&self) -> Result<()> {
+        let _ = self.list_tables().await?;
+        Ok(())
     }
 
     #[async_backtrace::framed]

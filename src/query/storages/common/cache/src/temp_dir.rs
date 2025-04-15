@@ -145,6 +145,7 @@ impl TempDirManager {
         Ok(false)
     }
 
+    #[allow(clippy::map_entry)]
     pub fn drop_disk_spill_dir_unknown(
         self: &Arc<TempDirManager>,
         limit: usize,

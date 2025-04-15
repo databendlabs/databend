@@ -164,7 +164,7 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                     .zip(metas.into_iter())
                     .map(|(data, meta)| {
                         let mut block = self.block_reader.deserialize_chunks_with_meta(
-                            &meta,
+                            &meta.as_ref().into(),
                             &self.storage_format,
                             data,
                         )?;

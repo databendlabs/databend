@@ -31,9 +31,9 @@ use crate::optimizer::ir::PatternExtractor;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
+use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
-use crate::optimizer::optimizers::cascades::Scheduler;
-use crate::optimizer::optimizers::cascades::SharedCounter;
 use crate::plans::RelOperator;
 use crate::IndexType;
 
@@ -117,7 +117,7 @@ impl OptimizeExprTask {
     pub fn execute(
         mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<Option<Task>> {
         if matches!(self.state, OptimizeExprState::Finished) {
             return Ok(None);
@@ -129,7 +129,7 @@ impl OptimizeExprTask {
     fn transition(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<()> {
         let event = match self.state {
             OptimizeExprState::Init => OptimizeExprEvent::OptimizingChildren,
@@ -181,7 +181,7 @@ impl OptimizeExprTask {
     fn optimize_children(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        scheduler: &mut Scheduler,
+        scheduler: &mut TaskManager,
     ) -> Result<OptimizeExprEvent> {
         let m_expr = optimizer
             .memo
@@ -268,7 +268,7 @@ impl OptimizeExprTask {
     fn optimize_self(
         &mut self,
         optimizer: &mut CascadesOptimizer,
-        _scheduler: &mut Scheduler,
+        _scheduler: &mut TaskManager,
     ) -> Result<OptimizeExprEvent> {
         let m_expr = optimizer
             .memo

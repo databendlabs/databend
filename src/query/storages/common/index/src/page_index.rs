@@ -12,18 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::expr::*;
 use databend_common_expression::types::DataType;
+use databend_common_expression::visit_expr;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Domain;
-use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
@@ -31,6 +34,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
+use super::eliminate_cast::*;
 use crate::range_index::statistics_to_domain;
 
 #[derive(Clone)]
@@ -79,17 +83,19 @@ impl PageIndex {
         }
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(self.expr, Expr::Constant {
-            scalar: Scalar::Boolean(false),
-            ..
-        }))
+        Ok(!matches!(
+            self.expr,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
     }
 
     #[fastrace::trace]
     pub fn apply(&self, stats: &Option<ClusterStatistics>) -> Result<(bool, Option<Range<usize>>)> {
-        let stats = match stats {
-            Some(stats) => stats,
-            None => return Ok((true, None)),
+        let Some(stats) = stats else {
+            return Ok((true, None));
         };
         let min_values: Vec<Scalar> = match stats.pages {
             Some(ref pages) => pages.clone(),
@@ -156,12 +162,8 @@ impl PageIndex {
 
         let mut input_domains = HashMap::with_capacity(self.cluster_key_fields.len());
         for (idx, (min, max)) in min_value.iter().zip(max_value.iter()).enumerate() {
-            if self
-                .column_refs
-                .contains_key(self.cluster_key_fields[idx].name())
-            {
-                let f = &self.cluster_key_fields[idx];
-
+            let f = &self.cluster_key_fields[idx];
+            if self.column_refs.contains_key(f.name()) {
                 let stat = ColumnStatistics::new(min.clone(), max.clone(), 1, 0, None);
                 let domain = statistics_to_domain(vec![&stat], f.data_type());
                 input_domains.insert(f.name().clone(), domain);
@@ -184,17 +186,31 @@ impl PageIndex {
             }
         }
 
+        let mut visitor = RewriteVisitor {
+            input_domains,
+            func_ctx: &self.func_ctx,
+            fn_registry: &BUILTIN_FUNCTIONS,
+        };
+
+        let expr = match visit_expr(&self.expr, &mut visitor).unwrap() {
+            Some(expr) => Cow::Owned(expr),
+            None => Cow::Borrowed(&self.expr),
+        };
+
         let (new_expr, _) = ConstantFolder::fold_with_domain(
-            &self.expr,
-            &input_domains,
+            &expr,
+            &visitor.input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(new_expr, Expr::Constant {
-            scalar: Scalar::Boolean(false),
-            ..
-        }))
+        Ok(!matches!(
+            new_expr,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
     }
 }

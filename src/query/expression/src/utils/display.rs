@@ -36,6 +36,7 @@ use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
 use crate::block::DataBlock;
+use crate::expr::*;
 use crate::expression::Expr;
 use crate::expression::RawExpr;
 use crate::function::Function;
@@ -695,21 +696,15 @@ impl std::fmt::Write for ExprFormatter<'_, '_> {
 impl<I: ColumnIndex> ExprVisitor<I> for ExprFormatter<'_, '_> {
     type Error = std::fmt::Error;
 
-    fn enter_constant(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
-        let Expr::Constant { scalar, .. } = expr else {
-            unreachable!()
-        };
-        write!(self, "{:?}", scalar.as_ref())?;
+    fn enter_constant(&mut self, expr: &Constant) -> Result<Option<Expr<I>>, Self::Error> {
+        write!(self, "{:?}", expr.scalar.as_ref())?;
         Ok(None)
     }
 
-    fn enter_column_ref(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
-        let Expr::ColumnRef {
+    fn enter_column_ref(&mut self, expr: &ColumnRef<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        let ColumnRef {
             display_name, id, ..
-        } = expr
-        else {
-            unreachable!()
-        };
+        } = expr;
         self.write_str(display_name)?;
         if self.with_id {
             self.write_str(" (#")?;
@@ -719,16 +714,13 @@ impl<I: ColumnIndex> ExprVisitor<I> for ExprFormatter<'_, '_> {
         Ok(None)
     }
 
-    fn enter_cast(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
-        let Expr::Cast {
+    fn enter_cast(&mut self, expr: &Cast<I>) -> Result<Option<Expr<I>>, Self::Error> {
+        let Cast {
             is_try,
             expr,
             dest_type,
             ..
-        } = expr
-        else {
-            unreachable!()
-        };
+        } = expr;
         if *is_try {
             self.write_str("TRY_")?;
         }
@@ -738,17 +730,17 @@ impl<I: ColumnIndex> ExprVisitor<I> for ExprFormatter<'_, '_> {
         Ok(None)
     }
 
-    fn enter_function_call(&mut self, expr: &Expr<I>) -> Result<Option<Expr<I>>, Self::Error> {
-        let Expr::FunctionCall {
+    fn enter_function_call(
+        &mut self,
+        expr: &FunctionCall<I>,
+    ) -> Result<Option<Expr<I>>, Self::Error> {
+        let FunctionCall {
             function,
             args,
             generics,
             id,
             ..
-        } = expr
-        else {
-            unreachable!()
-        };
+        } = expr;
         self.write_str(&function.signature.name)?;
         if !generics.is_empty() {
             self.write_char('<')?;
@@ -794,17 +786,14 @@ impl<I: ColumnIndex> ExprVisitor<I> for ExprFormatter<'_, '_> {
 
     fn enter_lambda_function_call(
         &mut self,
-        expr: &Expr<I>,
+        expr: &LambdaFunctionCall<I>,
     ) -> Result<Option<Expr<I>>, Self::Error> {
-        let Expr::LambdaFunctionCall {
+        let LambdaFunctionCall {
             name,
             args,
             lambda_display,
             ..
-        } = expr
-        else {
-            unreachable!()
-        };
+        } = expr;
         self.write_str(name)?;
         self.write_char('(')?;
         for (i, arg) in args.iter().enumerate() {
@@ -860,7 +849,7 @@ impl<Index: ColumnIndex> Expr<Index> {
         #[recursive::recursive]
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
-                Expr::Constant { scalar, .. } => match scalar {
+                Expr::Constant(Constant { scalar, .. }) => match scalar {
                     s @ Scalar::Binary(_) => format!("from_hex('{s}')::string"),
                     Scalar::Number(NumberScalar::Float32(f)) if f.is_nan() => {
                         "'nan'::Float32".to_string()
@@ -884,22 +873,22 @@ impl<Index: ColumnIndex> Expr<Index> {
                     }
                     other => other.as_ref().to_string(),
                 },
-                Expr::ColumnRef { display_name, .. } => display_name.clone(),
-                Expr::Cast {
+                Expr::ColumnRef(ColumnRef { display_name, .. }) => display_name.clone(),
+                Expr::Cast(Cast {
                     is_try,
                     expr,
                     dest_type,
                     ..
-                } => {
+                }) => {
                     if *is_try {
                         format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
                     } else {
                         format!("CAST({} AS {dest_type})", expr.sql_display())
                     }
                 }
-                Expr::FunctionCall {
+                Expr::FunctionCall(FunctionCall {
                     function, args, id, ..
-                } => match (function.signature.name.as_str(), args.as_slice()) {
+                }) => match (function.signature.name.as_str(), args.as_slice()) {
                     ("and", [ref lhs, ref rhs]) => {
                         write_binary_op("AND", lhs, rhs, 10, min_precedence)
                     }
@@ -972,12 +961,12 @@ impl<Index: ColumnIndex> Expr<Index> {
                         s
                     }
                 },
-                Expr::LambdaFunctionCall {
+                Expr::LambdaFunctionCall(LambdaFunctionCall {
                     name,
                     args,
                     lambda_display,
                     ..
-                } => {
+                }) => {
                     let mut s = String::new();
                     s += name;
                     s += "(";

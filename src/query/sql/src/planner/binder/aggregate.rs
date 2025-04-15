@@ -879,23 +879,24 @@ impl Binder {
                 self.metadata.clone(),
                 &[],
             );
+
             let (mut scalar_expr, _) = scalar_binder
                 .bind(expr)
                 .or_else(|e| self.resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
             let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
             analyzer.visit(&mut scalar_expr)?;
-
             if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_expr) {
                 grouping_sets.last_mut().unwrap().push(scalar_expr.clone());
             }
 
+            // Was add by previous
+            // The group key is duplicated
             if bind_context
                 .aggregate_info
                 .group_items_map
                 .contains_key(&scalar_expr)
             {
-                // The group key is duplicated
                 continue;
             }
 
@@ -974,6 +975,7 @@ impl Binder {
                 .insert(item.scalar.clone(), i);
         }
         bind_context.aggregate_info.group_items = results;
+
         Ok(())
     }
 
