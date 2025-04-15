@@ -117,6 +117,7 @@ where
 
 /// If there is only one sort field and its type is a primitive type,
 /// use this converter.
+#[derive(Debug)]
 pub struct SimpleRowConverter<T> {
     _t: PhantomData<T>,
 }
@@ -135,7 +136,7 @@ where
         Ok(Self { _t: PhantomData })
     }
 
-    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsAsc<T>> {
+    fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsAsc<T>> {
         self.convert_rows(columns, num_rows, true)
     }
 }
@@ -154,14 +155,14 @@ where
         Ok(Self { _t: PhantomData })
     }
 
-    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsDesc<T>> {
+    fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsDesc<T>> {
         self.convert_rows(columns, num_rows, false)
     }
 }
 
 impl<T: ArgType> SimpleRowConverter<T> {
     fn convert_rows<R: Rows>(
-        &mut self,
+        &self,
         columns: &[BlockEntry],
         num_rows: usize,
         asc: bool,

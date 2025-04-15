@@ -39,8 +39,8 @@ use log::debug;
 use log::info;
 
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
-use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::processors::TransformNullIf;
+use crate::pipelines::processors::transforms::TransformCastSchema;
+use crate::pipelines::processors::transforms::TransformNullIf;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 

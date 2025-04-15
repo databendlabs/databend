@@ -14,12 +14,13 @@
 
 use std::collections::BinaryHeap;
 
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SortColumnDescription;
+
+use super::order_field_type;
 
 pub const ORDER_COL_NAME: &str = "_order_col";
 
@@ -35,25 +36,6 @@ pub fn find_bigger_child_of_root<T: Ord>(heap: &BinaryHeap<T>) -> &T {
     }
 }
 
-#[inline(always)]
-fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> DataType {
-    debug_assert!(!desc.is_empty());
-    if desc.len() == 1 {
-        let order_by_field = schema.field(desc[0].offset);
-        if matches!(
-            order_by_field.data_type(),
-            DataType::Number(_)
-                | DataType::Date
-                | DataType::Timestamp
-                | DataType::Binary
-                | DataType::String
-        ) {
-            return order_by_field.data_type().clone();
-        }
-    }
-    DataType::Binary
-}
-
 pub fn has_order_field(schema: &DataSchema) -> bool {
     schema
         .fields
@@ -61,7 +43,6 @@ pub fn has_order_field(schema: &DataSchema) -> bool {
         .is_some_and(|f| f.name() == ORDER_COL_NAME)
 }
 
-#[inline(always)]
 pub fn add_order_field(schema: DataSchemaRef, desc: &[SortColumnDescription]) -> DataSchemaRef {
     if has_order_field(&schema) {
         schema

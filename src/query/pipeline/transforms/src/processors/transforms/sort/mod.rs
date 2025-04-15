@@ -19,7 +19,6 @@ mod list_domain;
 mod loser_tree;
 mod merger;
 mod rows;
-mod spill;
 pub mod utils;
 
 pub use cursor::*;
@@ -27,4 +26,3 @@ pub use k_way_merge_sort_partition::KWaySortPartitioner;
 pub use k_way_merge_sort_partition::SortTaskMeta;
 pub use merger::*;
 pub use rows::*;
-pub use spill::*;
