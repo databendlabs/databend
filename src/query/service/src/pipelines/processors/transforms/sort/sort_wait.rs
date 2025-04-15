@@ -23,21 +23,21 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
-use super::SortSimpleState;
+use super::SortSampleState;
 
-pub struct TransformSortSimpleWait {
+pub struct TransformSortSampleWait {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: VecDeque<DataBlock>,
     blocks: Vec<DataBlock>,
-    state: Arc<SortSimpleState>,
+    state: Arc<SortSampleState>,
 }
 
-impl TransformSortSimpleWait {
+impl TransformSortSampleWait {
     pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        state: Arc<SortSimpleState>,
+        state: Arc<SortSampleState>,
     ) -> Self {
         Self {
             input,
@@ -50,7 +50,7 @@ impl TransformSortSimpleWait {
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformSortSimpleWait {
+impl Processor for TransformSortSampleWait {
     fn name(&self) -> String {
         "TransformSortSimpleWait".to_string()
     }
