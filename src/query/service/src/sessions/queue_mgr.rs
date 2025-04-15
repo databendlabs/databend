@@ -37,7 +37,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::errors::AcquireError;
-use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_metrics::session::dec_session_running_acquired_queries;
@@ -155,18 +154,12 @@ impl<Data: QueueData> QueueManager<Data> {
             );
 
             let timeout = data.timeout();
-            let semaphore_acquire = match &self.meta_store {
-                MetaStore::L(_) => unreachable!(),
-                MetaStore::R(client) => {
-                    Semaphore::new_acquired(
-                        client.clone(),
-                        data.get_lock_key(),
-                        self.permits as u64,
-                        data.get_key(), // ID of this acquirer
-                        Duration::from_secs(3),
-                    )
-                }
-            };
+            let semaphore_acquire = self.meta_store.new_acquired(
+                data.get_lock_key(),
+                self.permits as u64,
+                data.get_key(), // ID of this acquirer
+                Duration::from_secs(3),
+            );
 
             let future = AcquireQueueFuture::create(
                 Arc::new(data),
