@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::future;
 use std::io;
 use std::sync::Arc;
@@ -32,6 +33,7 @@ use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::debug;
 use tokio::sync::Mutex;
+use tokio::sync::Semaphore;
 
 use crate::applier::Applier;
 use crate::mem_state_machine::MemStateMachine;
@@ -40,6 +42,7 @@ use crate::state_machine_api_ext::StateMachineApiExt;
 #[derive(Clone, Default)]
 pub struct MemMeta {
     sm: Arc<Mutex<MemStateMachine>>,
+    pub locks: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
 }
 
 impl MemMeta {
