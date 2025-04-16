@@ -206,10 +206,10 @@ pub fn lazy_prepare_data(lazy_dirs: &HashSet<LazyDir>, force_load: bool) -> Resu
                 });
             }
             LazyDir::Stage => {
-                PREPARE_STAGE.call_once(|| {
-                    println!("Calling the script prepare_stage.sh ...");
-                    run_script("prepare_stage.sh", &[]).unwrap();
-                });
+                // PREPARE_STAGE.call_once(|| {
+                //     println!("Calling the script prepare_stage.sh ...");
+                //     run_script("prepare_stage.sh", &[]).unwrap();
+                // });
             }
             LazyDir::UdfNative => {
                 println!("wasm context Calling the script prepare_stage.sh ...");
