@@ -5131,6 +5131,7 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-app-types",
+ "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-semaphore",
  "databend-common-meta-store",
