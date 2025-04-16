@@ -19,7 +19,7 @@ use std::time::Instant;
 use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
 
-use crate::cache_items::*;
+pub use crate::cache_items::*;
 use crate::manager::CacheManager;
 use crate::providers::HybridCache;
 use crate::CacheAccessor;
@@ -256,7 +256,7 @@ impl From<BloomIndexMeta> for CacheValue<BloomIndexMeta> {
 impl From<ColumnData> for CacheValue<ColumnData> {
     fn from(value: ColumnData) -> Self {
         CacheValue {
-            mem_bytes: value.0.len(),
+            mem_bytes: value.size(),
             inner: Arc::new(value),
         }
     }
