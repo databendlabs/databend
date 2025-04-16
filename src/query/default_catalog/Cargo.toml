@@ -29,5 +29,3 @@ databend-storages-common-table-meta = { workspace = true }
 
 [features]
 jemalloc = ["databend-common-storages-system/jemalloc"]
-
-
