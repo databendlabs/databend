@@ -1235,7 +1235,7 @@ fn test_expr() {
         r#"datepart(year, d)"#,
         r#"DATEDIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))"#,
         r#"date_sub(QUARTER, 1, to_date('2018-01-02'))"#,
-        r#"datesub(QUARTER, to_date('2018-01-02'), to_date('2018-04-02'))"#,
+        r#"datebetween(QUARTER, to_date('2018-01-02'), to_date('2018-04-02'))"#,
         r#"position('a' in str)"#,
         r#"substring(a from b for c)"#,
         r#"substring(a, b, c)"#,

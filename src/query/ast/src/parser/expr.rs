@@ -1272,7 +1272,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let date_sub = map(
         rule! {
-            DATE_SUB ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+            (DATESUB | DATE_SUB) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
         |(_, _, unit, _, interval, _, date, _)| ExprElement::DateSub {
             unit,
@@ -1281,9 +1281,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let datesub = map(
+    let date_between = map(
         rule! {
-            DATESUB ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+            (DATEBETWEEN | DATE_BETWEEN) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
         |(_, _, unit, _, date_start, _, date_end, _)| ExprElement::DateBetween {
             unit,
@@ -1410,7 +1410,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 #date_add : "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_diff : "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_sub : "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #datesub : "`DATESUB((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW), ..., ...,)`"
+                | #date_between : "`DATE_BETWEEN((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW), ..., ...,)`"
                 | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
                 | #last_day : "`LAST_DAY(..., (YEAR | QUARTER | MONTH | WEEK)))`"
                 | #previous_day : "`PREVIOUS_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"

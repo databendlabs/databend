@@ -1967,24 +1967,24 @@ DateSub {
 
 
 ---------- Input ----------
-datesub(QUARTER, to_date('2018-01-02'), to_date('2018-04-02'))
+datebetween(QUARTER, to_date('2018-01-02'), to_date('2018-04-02'))
 ---------- Output ---------
-DATESUB(QUARTER, to_date('2018-01-02'), to_date('2018-04-02'))
+DATE_BETWEEN(QUARTER, to_date('2018-01-02'), to_date('2018-04-02'))
 ---------- AST ------------
 DateBetween {
     span: Some(
-        0..62,
+        0..66,
     ),
     unit: Quarter,
     date_start: FunctionCall {
         span: Some(
-            17..38,
+            21..42,
         ),
         func: FunctionCall {
             distinct: false,
             name: Identifier {
                 span: Some(
-                    17..24,
+                    21..28,
                 ),
                 name: "to_date",
                 quote: None,
@@ -1993,7 +1993,7 @@ DateBetween {
             args: [
                 Literal {
                     span: Some(
-                        25..37,
+                        29..41,
                     ),
                     value: String(
                         "2018-01-02",
@@ -2008,13 +2008,13 @@ DateBetween {
     },
     date_end: FunctionCall {
         span: Some(
-            40..61,
+            44..65,
         ),
         func: FunctionCall {
             distinct: false,
             name: Identifier {
                 span: Some(
-                    40..47,
+                    44..51,
                 ),
                 name: "to_date",
                 quote: None,
@@ -2023,7 +2023,7 @@ DateBetween {
             args: [
                 Literal {
                     span: Some(
-                        48..60,
+                        52..64,
                     ),
                     value: String(
                         "2018-04-02",

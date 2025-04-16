@@ -461,7 +461,6 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             date_start,
             date_end,
         } => {
-            // TODO : need impl
             with_interval_mapped_name!(|INTERVAL| match unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
                     span,

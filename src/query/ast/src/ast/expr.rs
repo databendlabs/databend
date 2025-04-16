@@ -788,7 +788,7 @@ impl Display for Expr {
                     date_end,
                     ..
                 } => {
-                    write!(f, "DATESUB({unit}, {date_start}, {date_end})")?;
+                    write!(f, "DATE_BETWEEN({unit}, {date_start}, {date_end})")?;
                 }
                 Expr::DateSub {
                     unit,
