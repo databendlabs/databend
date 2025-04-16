@@ -85,7 +85,6 @@ databend-common-storages-factory = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-common-storages-hive = { workspace = true }
 databend-common-storages-iceberg = { workspace = true }
-databend-common-storages-information-schema = { workspace = true }
 databend-common-storages-memory = { workspace = true }
 databend-common-storages-null = { workspace = true }
 databend-common-storages-orc = { workspace = true }

@@ -5132,7 +5132,6 @@ dependencies = [
  "databend-common-storages-fuse",
  "databend-common-storages-hive",
  "databend-common-storages-iceberg",
- "databend-common-storages-information-schema",
  "databend-common-storages-memory",
  "databend-common-storages-null",
  "databend-common-storages-orc",
