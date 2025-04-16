@@ -17,9 +17,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use arrow::array::ArrayRef;
+use bytes::Bytes;
 use databend_common_cache::MemSized;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
+use databend_common_exception::ErrorCode;
 use databend_common_catalog::table::Table;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
@@ -40,6 +42,41 @@ use crate::InMemoryLruCache;
 
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
+
+// TODO move these out
+pub struct ColumnData(Bytes);
+
+impl ColumnData {
+    pub fn new(bytes: Bytes) -> Self {
+        // TODO review it, data may refer to a shared buffer, which is large.
+        ColumnData(bytes)
+    }
+
+    pub fn bytes(&self) -> Bytes {
+        self.0.clone()
+    }
+
+    pub fn size(&self) -> usize {
+        self.0.len()
+    }
+}
+
+pub type ColumnDataCache = HybridCache<ColumnData>;
+impl TryFrom<&ColumnData> for Vec<u8> {
+    type Error = ErrorCode;
+    fn try_from(value: &ColumnData) -> Result<Self, Self::Error> {
+        Ok(value.0.to_vec())
+    }
+}
+
+// copying should be avoided
+impl TryFrom<Bytes> for ColumnData {
+    type Error = ErrorCode;
+
+    fn try_from(value: Bytes) -> Result<Self, Self::Error> {
+        Ok(ColumnData(value))
+    }
+}
 
 /// In memory object cache of ColumnOrientedSegmentInfo
 pub type ColumnOrientedSegmentInfoCache = InMemoryLruCache<ColumnOrientedSegment>;
@@ -262,6 +299,15 @@ impl From<BloomIndexMeta> for CacheValue<BloomIndexMeta> {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,
+        }
+    }
+}
+
+impl From<ColumnData> for CacheValue<ColumnData> {
+    fn from(value: ColumnData) -> Self {
+        CacheValue {
+            mem_bytes: value.0.len(),
+            inner: Arc::new(value),
         }
     }
 }

@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
+use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
 use log::warn;
-use parquet::data_type::AsBytes;
 
 use crate::CacheAccessor;
 use crate::CacheValue;
@@ -26,6 +26,7 @@ use crate::InMemoryLruCache;
 
 pub struct HybridCache<V: Into<CacheValue<V>>> {
     name: String,
+    // TODO in-memory cache should allows to be None as well?
     memory_cache: InMemoryLruCache<V>,
     disk_cache: Option<DiskCacheAccessor>,
 }
@@ -86,7 +87,7 @@ impl<V: Into<CacheValue<V>>> HybridCache<V> {
 impl<T: Into<CacheValue<T>>> HybridCache<T>
 where
     Vec<u8>: for<'a> TryFrom<&'a T, Error = ErrorCode>,
-    T: for<'a> TryFrom<&'a [u8], Error = ErrorCode>,
+    T: TryFrom<Bytes, Error = ErrorCode>,
 {
     pub fn insert_to_disk_cache_if_necessary(&self, k: &str, v: &T) {
         // `None` is also a CacheAccessor, avoid serialization for it
@@ -110,7 +111,7 @@ impl<T> CacheAccessor for HybridCache<T>
 where
     CacheValue<T>: From<T>,
     Vec<u8>: for<'a> TryFrom<&'a T, Error = ErrorCode>,
-    T: for<'a> TryFrom<&'a [u8], Error = ErrorCode>,
+    T: TryFrom<Bytes, Error = ErrorCode>,
 {
     type V = T;
 
@@ -120,7 +121,7 @@ where
             self.insert_to_disk_cache_if_necessary(k.as_ref(), item.as_ref());
             Some(item)
         } else if let Some(bytes) = self.disk_cache.get(k.as_ref()) {
-            let bytes = bytes.as_bytes();
+            let bytes = bytes.as_ref().clone();
             match bytes.try_into() {
                 Ok(v) => Some(self.memory_cache.insert(k.as_ref().to_owned(), v)),
                 Err(e) => {
@@ -187,9 +188,11 @@ where
 
 #[cfg(test)]
 mod tests {
+    use bytes::Bytes;
     use databend_common_cache::MemSized;
     use databend_common_config::DiskCacheKeyReloadPolicy;
     use databend_common_exception::ErrorCode;
+    use parquet::data_type::AsBytes;
     use tempfile::TempDir;
 
     use crate::CacheAccessor;
@@ -217,9 +220,10 @@ mod tests {
     }
 
     // Implement TryFrom for deserialization
-    impl<'a> TryFrom<&'a [u8]> for TestData {
+    impl TryFrom<Bytes> for TestData {
         type Error = ErrorCode;
-        fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
+        fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
+            let bytes = bytes.as_bytes();
             if bytes.len() < 4 {
                 return Err(ErrorCode::BadBytes(
                     "Not enough bytes for TestData".to_string(),

@@ -3039,6 +3039,14 @@ pub struct CacheConfig {
     )]
     pub table_data_cache_population_queue_size: u32,
 
+    /// Bytes of data cache in-memory
+    #[clap(
+        long = "cache-data-cache-in-memory-bytes",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub data_cache_in_memory_bytes: u64,
+
     /// Storage that hold the data caches
     #[clap(flatten)]
     #[serde(rename = "disk")]
@@ -3300,6 +3308,7 @@ mod cache_config_converters {
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
+                data_cache_in_memory_bytes: value.data_cache_in_memory_bytes,
                 disk_cache_config: value.disk_cache_config.try_into()?,
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.try_into()?,
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
@@ -3335,6 +3344,7 @@ mod cache_config_converters {
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.into(),
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
+                data_cache_in_memory_bytes: value.data_cache_in_memory_bytes,
                 disk_cache_config: value.disk_cache_config.into(),
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
