@@ -35,17 +35,23 @@ pub struct TransformSortMergeLimit<R: Rows> {
     num_bytes: usize,
     num_rows: usize,
 
+    /// The index for the next input block.
+    next_index: usize,
+
     block_size: usize,
 }
 
 impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
     const NAME: &'static str = "TransformSortMergeLimit";
 
-    fn add_block(&mut self, block: DataBlock, init_rows: R, input_index: usize) -> Result<()> {
+    fn add_block(&mut self, block: DataBlock, init_rows: R) -> Result<()> {
         if unlikely(self.heap.cap() == 0 || block.is_empty()) {
             // limit is 0 or block is empty.
             return Ok(());
         }
+
+        let input_index = self.next_index;
+        self.next_index += 1;
 
         let mut cursor = Cursor::new(input_index, init_rows);
         self.num_bytes += block.memory_size();
@@ -131,6 +137,7 @@ impl<R: Rows> TransformSortMergeLimit<R> {
             heap: FixedHeap::new(limit),
             buffer: HashMap::with_capacity(limit),
             block_size,
+            next_index: 0,
             num_bytes: 0,
             num_rows: 0,
         }

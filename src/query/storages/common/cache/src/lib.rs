@@ -48,7 +48,7 @@ pub use read::CacheKey;
 pub use read::CachedReader;
 pub use read::HybridCacheReader;
 pub use read::InMemoryCacheReader;
-pub use read::InMemoryItemCacheReader;
+pub use read::InMemoryCacheTTLReader;
 pub use read::LoadParams;
 pub use read::Loader;
 pub use temp_dir::*;

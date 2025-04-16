@@ -16,39 +16,14 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::row::RowConverter as CommonConverter;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::DateType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use match_template::match_template;
 
-use super::sort::utils::ORDER_COL_NAME;
-use super::sort::CommonRows;
 use super::sort::RowConverter;
 use super::sort::Rows;
-use super::sort::SimpleRowConverter;
-use super::sort::SimpleRowsAsc;
-use super::sort::SimpleRowsDesc;
-use super::sort::SortSpillMeta;
-use super::sort::SortSpillMetaWithParams;
-use super::AccumulatingTransform;
-use super::AccumulatingTransformer;
-use super::TransformSortMerge;
-use super::TransformSortMergeLimit;
-use crate::processors::memory_settings::MemorySettings;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy)]
 pub struct SortSpillParams {
@@ -64,7 +39,7 @@ pub trait MergeSort<R: Rows> {
     /// Add a block to the merge sort processor.
     /// `block` is the input data block.
     /// `init_rows` is the initial sorting rows of this `block`.
-    fn add_block(&mut self, block: DataBlock, init_rows: R, input_index: usize) -> Result<()>;
+    fn add_block(&mut self, block: DataBlock, init_rows: R) -> Result<()>;
 
     /// Return buffered data size.
     fn num_bytes(&self) -> usize;
@@ -88,7 +63,7 @@ pub struct TransformSortMergeBase<M, R, Converter> {
     inner: M,
 
     row_converter: Converter,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
+    sort_desc: Arc<[SortColumnDescription]>,
     /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
     /// we can generate and output the order column to avoid the extra converting in the next transform.
     output_order_col: bool,
@@ -98,33 +73,23 @@ pub struct TransformSortMergeBase<M, R, Converter> {
     /// so we don't need to generate the order column again.
     order_col_generated: bool,
 
-    /// The index for the next input block.
-    next_index: usize,
-
-    memory_settings: MemorySettings,
-
-    // The spill_params will be passed to the spill processor.
-    // If spill_params is Some, it means we need to spill.
-    spill_params: Option<SortSpillParams>,
-
     _r: PhantomData<R>,
 }
 
-impl<M, R, Converter> TransformSortMergeBase<M, R, Converter>
+impl<M, R, C> TransformSortMergeBase<M, R, C>
 where
     M: MergeSort<R>,
     R: Rows,
-    Converter: RowConverter<R>,
+    C: RowConverter<R>,
 {
     pub fn try_create(
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
+        sort_desc: Arc<[SortColumnDescription]>,
         order_col_generated: bool,
         output_order_col: bool,
-        memory_settings: MemorySettings,
         inner: M,
     ) -> Result<Self> {
-        let row_converter = Converter::create(&sort_desc, schema)?;
+        let row_converter = C::create(&sort_desc, schema)?;
 
         Ok(Self {
             inner,
@@ -132,64 +97,11 @@ where
             sort_desc,
             output_order_col,
             order_col_generated,
-            next_index: 0,
-            memory_settings,
-            spill_params: None,
             _r: PhantomData,
         })
     }
 
-    fn prepare_spill(&mut self) -> Result<Vec<DataBlock>> {
-        let mut spill_params = if self.spill_params.is_none() {
-            // We use the first memory calculation to estimate the batch size and the number of merge.
-            let num_merge = self
-                .inner
-                .num_bytes()
-                .div_ceil(self.memory_settings.spill_unit_size)
-                .max(2);
-            let batch_rows = self.inner.num_rows().div_ceil(num_merge);
-            // The first block to spill will contain the parameters of spilling.
-            // Later blocks just contain a empty struct `SortSpillMeta` to save memory.
-            let params = SortSpillParams {
-                batch_rows,
-                num_merge,
-            };
-            self.spill_params = Some(params);
-            Some(params)
-        } else {
-            None
-        };
-
-        let mut blocks = self
-            .inner
-            .prepare_spill(self.spill_params.unwrap().batch_rows)?;
-
-        // Fill the spill meta.
-        for b in blocks.iter_mut() {
-            b.replace_meta(match spill_params.take() {
-                Some(params) => Box::new(SortSpillMetaWithParams(params)),
-                None => Box::new(SortSpillMeta {}),
-            });
-        }
-
-        debug_assert_eq!(self.inner.num_bytes(), 0);
-        debug_assert_eq!(self.inner.num_rows(), 0);
-        // Re-count the block index.
-        self.next_index = 0;
-
-        Ok(blocks)
-    }
-}
-
-impl<M, R, Converter> AccumulatingTransform for TransformSortMergeBase<M, R, Converter>
-where
-    M: MergeSort<R> + Send + Sync,
-    R: Rows + Sync,
-    Converter: RowConverter<R> + Send + Sync,
-{
-    const NAME: &'static str = M::NAME;
-
-    fn transform(&mut self, mut block: DataBlock) -> Result<Vec<DataBlock>> {
+    pub fn transform(&mut self, mut block: DataBlock) -> Result<()> {
         let rows = if self.order_col_generated {
             let rows = R::from_column(block.get_last_column())?;
             if !self.output_order_col {
@@ -217,207 +129,12 @@ where
             rows
         };
 
-        self.inner.add_block(block, rows, self.next_index)?;
-        self.next_index += 1;
+        self.inner.add_block(block, rows)?;
 
-        match self.memory_settings.check_spill() {
-            false => Ok(vec![]),
-            true => self.prepare_spill(),
-        }
+        Ok(())
     }
 
-    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
-        // If the processor has started to spill blocks,
-        // gather the final few data in one block.
-        self.inner.on_finish(self.spill_params.is_some())
-    }
-}
-
-pub struct TransformSortMergeBuilder {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    schema: DataSchemaRef,
-    block_size: usize,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
-    order_col_generated: bool,
-    output_order_col: bool,
-    memory_settings: MemorySettings,
-    enable_loser_tree: bool,
-    limit: Option<usize>,
-}
-
-impl TransformSortMergeBuilder {
-    pub fn create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
-        block_size: usize,
-    ) -> Self {
-        Self {
-            input,
-            output,
-            block_size,
-            schema,
-            sort_desc,
-            order_col_generated: false,
-            output_order_col: false,
-            enable_loser_tree: false,
-            limit: None,
-            memory_settings: MemorySettings::disable_spill(),
-        }
-    }
-
-    pub fn with_order_col_generated(mut self, order_col_generated: bool) -> Self {
-        self.order_col_generated = order_col_generated;
-        self
-    }
-
-    pub fn with_output_order_col(mut self, output_order_col: bool) -> Self {
-        self.output_order_col = output_order_col;
-        self
-    }
-
-    pub fn with_limit(mut self, limit: Option<usize>) -> Self {
-        self.limit = limit;
-        self
-    }
-
-    pub fn with_memory_settings(mut self, memory_settings: MemorySettings) -> Self {
-        self.memory_settings = memory_settings;
-        self
-    }
-
-    pub fn with_enable_loser_tree(mut self, enable_loser_tree: bool) -> Self {
-        self.enable_loser_tree = enable_loser_tree;
-        self
-    }
-
-    pub fn build(self) -> Result<Box<dyn Processor>> {
-        debug_assert!(if self.output_order_col {
-            self.schema.has_field(ORDER_COL_NAME)
-        } else {
-            !self.schema.has_field(ORDER_COL_NAME)
-        });
-
-        if self.limit.map(|limit| limit < 10000).unwrap_or_default() {
-            self.build_sort_limit()
-        } else {
-            self.build_sort()
-        }
-    }
-
-    fn build_sort(self) -> Result<Box<dyn Processor>> {
-        if self.sort_desc.len() == 1 {
-            let sort_type = self.schema.field(self.sort_desc[0].offset).data_type();
-            let asc = self.sort_desc[0].asc;
-
-            match_template! {
-                T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
-                match sort_type {
-                    DataType::T => self.build_sort_rows_simple::<T>(asc),
-                    DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                        NumberDataType::NUM_TYPE => {
-                            self.build_sort_rows_simple::<NumberType<NUM_TYPE>>(asc)
-                        }
-                    }),
-                    _ => self.build_sort_rows::<CommonRows, CommonConverter>(),
-                }
-            }
-        } else {
-            self.build_sort_rows::<CommonRows, CommonConverter>()
-        }
-    }
-
-    fn build_sort_rows_simple<T>(self, asc: bool) -> Result<Box<dyn Processor>>
-    where
-        T: ArgType + Send + Sync,
-        T::Column: Send + Sync,
-        for<'a> T::ScalarRef<'a>: Ord + Send,
-    {
-        if asc {
-            self.build_sort_rows::<SimpleRowsAsc<T>, SimpleRowConverter<T>>()
-        } else {
-            self.build_sort_rows::<SimpleRowsDesc<T>, SimpleRowConverter<T>>()
-        }
-    }
-
-    fn build_sort_rows<R, C>(self) -> Result<Box<dyn Processor>>
-    where
-        R: Rows + Sync + 'static,
-        C: RowConverter<R> + Send + Sync + 'static,
-    {
-        Ok(AccumulatingTransformer::create(
-            self.input,
-            self.output,
-            TransformSortMergeBase::<TransformSortMerge<R>, R, C>::try_create(
-                self.schema.clone(),
-                self.sort_desc.clone(),
-                self.order_col_generated,
-                self.output_order_col,
-                self.memory_settings,
-                TransformSortMerge::create(
-                    self.schema,
-                    self.sort_desc,
-                    self.block_size,
-                    self.enable_loser_tree,
-                    self.limit,
-                ),
-            )?,
-        ))
-    }
-
-    fn build_sort_limit(self) -> Result<Box<dyn Processor>> {
-        if self.sort_desc.len() == 1 {
-            let sort_type = self.schema.field(self.sort_desc[0].offset).data_type();
-            let asc = self.sort_desc[0].asc;
-
-            match_template! {
-                T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
-                match sort_type {
-                    DataType::T => self.build_sort_limit_simple::<T>(asc),
-                    DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                        NumberDataType::NUM_TYPE => {
-                            self.build_sort_limit_simple::<NumberType<NUM_TYPE>>(asc)
-                        }
-                    }),
-                    _ => self.build_sort_limit_rows::<CommonRows, CommonConverter>(),
-                }
-            }
-        } else {
-            self.build_sort_limit_rows::<CommonRows, CommonConverter>()
-        }
-    }
-
-    fn build_sort_limit_simple<T>(self, asc: bool) -> Result<Box<dyn Processor>>
-    where
-        T: ArgType + Send + Sync,
-        T::Column: Send + Sync,
-        for<'a> T::ScalarRef<'a>: Ord + Send,
-    {
-        if asc {
-            self.build_sort_limit_rows::<SimpleRowsAsc<T>, SimpleRowConverter<T>>()
-        } else {
-            self.build_sort_limit_rows::<SimpleRowsDesc<T>, SimpleRowConverter<T>>()
-        }
-    }
-
-    fn build_sort_limit_rows<R, C>(self) -> Result<Box<dyn Processor>>
-    where
-        R: Rows + Sync + 'static,
-        C: RowConverter<R> + Send + Sync + 'static,
-    {
-        Ok(AccumulatingTransformer::create(
-            self.input,
-            self.output,
-            TransformSortMergeBase::<TransformSortMergeLimit<R>, R, C>::try_create(
-                self.schema,
-                self.sort_desc,
-                self.order_col_generated,
-                self.output_order_col,
-                self.memory_settings,
-                TransformSortMergeLimit::create(self.block_size, self.limit.unwrap()),
-            )?,
-        ))
+    pub fn on_finish(&mut self) -> Result<Vec<DataBlock>> {
+        self.inner.on_finish(false)
     }
 }

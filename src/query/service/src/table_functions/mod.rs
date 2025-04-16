@@ -26,6 +26,7 @@ mod show_roles;
 mod show_variables;
 mod srf;
 mod sync_crash_me;
+mod system;
 mod table_function;
 mod table_function_factory;
 
@@ -35,5 +36,6 @@ pub use numbers::NumbersTable;
 pub use openai::GPT2SQLTable;
 pub use others::LicenseInfoTable;
 pub use others::TenantQuotaTable;
+pub use system::TableStatisticsFunc;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableFunctionFactory;

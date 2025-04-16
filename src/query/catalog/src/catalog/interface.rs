@@ -16,7 +16,6 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -106,7 +105,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_storages_common_session::SessionState;
@@ -127,12 +125,7 @@ pub struct StorageDescription {
 }
 
 pub trait CatalogCreator: Send + Sync + Debug {
-    fn try_create(
-        &self,
-        info: Arc<CatalogInfo>,
-        conf: InnerConfig,
-        meta: &MetaStore,
-    ) -> Result<Arc<dyn Catalog>>;
+    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>>;
 }
 
 #[async_trait::async_trait]
