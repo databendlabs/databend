@@ -14,21 +14,15 @@
 
 use std::io;
 
-use anyerror::AnyError;
 use tonic::Status;
 
+use crate::ConnectionError;
 use crate::MetaHandshakeError;
 use crate::MetaNetworkError;
 
 /// Error raised by meta service client.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum MetaClientError {
-    #[error("meta-client dedicated runtime error: {0}")]
-    ClientRuntimeError(AnyError),
-
-    #[error("meta-client config error: {0}")]
-    ConfigError(AnyError),
-
     #[error(transparent)]
     NetworkError(#[from] MetaNetworkError),
 
@@ -39,8 +33,6 @@ pub enum MetaClientError {
 impl MetaClientError {
     pub fn name(&self) -> &'static str {
         match self {
-            MetaClientError::ClientRuntimeError(_) => "ClientRuntimeError",
-            MetaClientError::ConfigError(_) => "ConfigError",
             MetaClientError::NetworkError(err) => err.name(),
             MetaClientError::HandshakeError(_) => "MetaHandshakeError",
         }
@@ -53,13 +45,15 @@ impl From<Status> for MetaClientError {
     }
 }
 
+impl From<ConnectionError> for MetaClientError {
+    fn from(e: ConnectionError) -> Self {
+        Self::NetworkError(e.into())
+    }
+}
+
 impl From<MetaClientError> for io::Error {
     fn from(e: MetaClientError) -> Self {
         match e {
-            MetaClientError::ClientRuntimeError(e) => io::Error::other(e.to_string()),
-            MetaClientError::ConfigError(e) => {
-                io::Error::new(io::ErrorKind::InvalidInput, e.to_string())
-            }
             MetaClientError::NetworkError(e) => e.into(),
             MetaClientError::HandshakeError(e) => {
                 io::Error::new(io::ErrorKind::NotConnected, e.to_string())

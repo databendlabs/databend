@@ -636,6 +636,9 @@ pub struct CacheConfig {
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
     pub table_data_deserialized_memory_ratio: u64,
+
+    /// Max number of cached table count of iceberg tables
+    pub iceberg_table_meta_count: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -733,6 +736,7 @@ impl Default for CacheConfig {
             data_cache_key_reload_policy: Default::default(),
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
+            iceberg_table_meta_count: 1024,
         }
     }
 }

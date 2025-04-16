@@ -77,7 +77,7 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
         CommonRowConverter::new(sort_fields)
     }
 
-    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<BinaryColumn> {
+    fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<BinaryColumn> {
         let columns = columns
             .iter()
             .map(|entry| match &entry.value {

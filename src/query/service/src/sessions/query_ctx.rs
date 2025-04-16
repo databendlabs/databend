@@ -41,12 +41,14 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::database::Database;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
@@ -256,22 +258,26 @@ impl QueryContext {
     }
 
     #[async_backtrace::framed]
-    pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
+    pub async fn set_current_database(
+        &self,
+        new_database_name: String,
+    ) -> Result<Arc<dyn Database>> {
         let tenant_id = self.get_tenant();
         let catalog = self
             .get_catalog(self.get_current_catalog().as_str())
             .await?;
         match catalog.get_database(&tenant_id, &new_database_name).await {
-            Ok(_) => self.shared.set_current_database(new_database_name),
+            Ok(db) => {
+                self.shared.set_current_database(new_database_name);
+                Ok(db)
+            }
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
                     "Cannot use database '{}': It does not exist.",
                     new_database_name
                 )));
             }
-        };
-
-        Ok(())
+        }
     }
 
     pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
@@ -1826,6 +1832,14 @@ impl TableContext for QueryContext {
 
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         self.shared.get_warehouse_clusters().await
+    }
+
+    fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+        self.shared.get_pruned_partitions_stats()
+    }
+
+    fn set_pruned_partitions_stats(&self, partitions: PartStatistics) {
+        self.shared.set_pruned_partitions_stats(partitions);
     }
 }
 

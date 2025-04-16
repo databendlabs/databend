@@ -109,6 +109,11 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
+    async fn trigger_use(&self) -> Result<()> {
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables_names(&self) -> Result<Vec<String>> {
         Ok(vec![])
     }

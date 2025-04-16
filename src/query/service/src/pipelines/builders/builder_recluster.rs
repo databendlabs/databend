@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
@@ -36,7 +34,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::builders::SortPipelineBuilder;
-use crate::pipelines::processors::TransformAddStreamColumns;
+use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -140,7 +138,7 @@ impl PipelineBuilder {
                 // construct output fields
                 let output_fields = cluster_stats_gen.out_fields.clone();
                 let schema = DataSchemaRefExt::create(output_fields);
-                let sort_descs = cluster_stats_gen
+                let sort_descs: Vec<_> = cluster_stats_gen
                     .cluster_key_index
                     .iter()
                     .map(|offset| SortColumnDescription {
@@ -158,7 +156,7 @@ impl PipelineBuilder {
                 );
 
                 let sort_pipeline_builder =
-                    SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))?
+                    SortPipelineBuilder::create(self.ctx.clone(), schema, sort_descs.into())?
                         .with_block_size_hit(sort_block_size)
                         .remove_order_col_at_last();
                 sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;

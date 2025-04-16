@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
@@ -171,7 +172,9 @@ impl MutableCatalog {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
-            provider.create_meta_store().await?
+            provider.create_meta_store().await.map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?
         };
 
         let tenant = conf.query.tenant_id.clone();

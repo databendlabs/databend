@@ -62,9 +62,7 @@ impl PipelineBuilder {
                             for (file_name, e) in error_map {
                                 error!(
                                     "copy(on_error={}): file {} encounter error {},",
-                                    on_error_mode,
-                                    file_name,
-                                    e.to_string()
+                                    on_error_mode, file_name, e
                                 );
                             }
                         }

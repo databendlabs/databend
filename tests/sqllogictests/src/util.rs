@@ -27,14 +27,12 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use testcontainers::core::client::docker_client_instance;
-use testcontainers::core::error::WaitContainerError;
 use testcontainers::core::IntoContainerPort;
 use testcontainers::core::WaitFor;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers::GenericImage;
 use testcontainers::ImageExt;
-use testcontainers::TestcontainersError;
 use testcontainers_modules::mysql::Mysql;
 use testcontainers_modules::redis::Redis;
 use testcontainers_modules::redis::REDIS_PORT;
@@ -46,7 +44,7 @@ use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
 const CONTAINER_RETRY_TIMES: usize = 3;
-const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 120;
+const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 180;
 const CONTAINER_TIMEOUT_SECONDS: u64 = 300;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -263,7 +261,7 @@ pub async fn run_ttc_container(
         .collect();
     let container_name = format!("databend-ttc-{}-{}", port, x);
     let start = Instant::now();
-    println!("Start container {container_name}");
+    println!("Starting container {container_name}");
 
     let mut i = 1;
     loop {
@@ -286,24 +284,23 @@ pub async fn run_ttc_container(
         match container_res {
             Ok(container) => {
                 println!(
-                    "Start container {container_name} {} using {duration} secs success",
+                    "Started container {container_name} {} using {duration} secs",
                     container.id(),
                 );
                 cs.push(container);
                 return Ok(());
             }
             Err(err) => {
-                println!("Start container {container_name} using {duration} secs failed: {err}");
-                if err.to_string().to_ascii_lowercase().contains("timeout")
-                    || err.to_string().to_ascii_lowercase().contains("conflict")
-                {
-                    println!("Start to stop container {container_name}");
-                    stop_container(docker, &container_name).await;
-                }
+                eprintln!(
+                    "Failed to start container {container_name} using {duration} secs: {err}"
+                );
+                stop_container(docker, &container_name).await;
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
                     break;
                 } else {
-                    println!("retry start container {container_name} after {duration} secs");
+                    println!(
+                        "Retrying to start container {container_name} {i} after {duration} secs",
+                    );
                     i += 1;
                 }
             }
@@ -370,14 +367,11 @@ async fn run_redis_server(docker: &Docker) -> Result<ContainerAsync<Redis>> {
                 return Ok(redis);
             }
             Err(err) => {
-                println!(
+                eprintln!(
                     "Start container {} using {} secs failed: {}",
                     container_name, duration, err
                 );
-                if let TestcontainersError::WaitContainer(WaitContainerError::StartupTimeout) = err
-                {
-                    stop_container(docker, &container_name).await;
-                }
+                stop_container(docker, &container_name).await;
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
                     break;
                 } else {
@@ -443,14 +437,11 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
                 return Ok(mysql);
             }
             Err(err) => {
-                println!(
+                eprintln!(
                     "Start container {} using {} secs failed: {}",
                     container_name, duration, err
                 );
-                if let TestcontainersError::WaitContainer(WaitContainerError::StartupTimeout) = err
-                {
-                    stop_container(docker, &container_name).await;
-                }
+                stop_container(docker, &container_name).await;
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
                     break;
                 } else {
@@ -464,15 +455,26 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
 
 // Stop the running container to avoid conflict
 async fn stop_container(docker: &Docker, container_name: &str) {
-    if let Err(err) = docker.stop_container(container_name, None).await {
-        println!("stop container {container_name} err: {err}");
+    let container = docker.inspect_container(container_name, None).await;
+    if let Ok(container) = container {
+        println!(
+            "Stopping previous container {container_name}: {:?}",
+            container.state
+        );
+        if let Err(err) = docker.stop_container(container_name, None).await {
+            eprintln!("Failed to stop container {container_name}: {err}");
+        }
+        let options = Some(RemoveContainerOptions {
+            force: true,
+            ..Default::default()
+        });
+        match docker.remove_container(container_name, options).await {
+            Ok(_) => {
+                println!("Removed container {container_name}");
+            }
+            Err(err) => {
+                eprintln!("Failed to remove container {container_name}: {err}");
+            }
+        }
     }
-    let options = Some(RemoveContainerOptions {
-        force: true,
-        ..Default::default()
-    });
-    if let Err(err) = docker.remove_container(container_name, options).await {
-        println!("remove container {container_name} err: {err}");
-    }
-    println!("Stopped container {container_name}");
 }

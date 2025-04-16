@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use std::thread_local;
 
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
@@ -25,7 +23,17 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
+use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::SExprVisitor;
+use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::Statistics;
+use databend_common_sql::BaseTableColumn;
+use databend_common_sql::ColumnEntry;
+use databend_common_sql::FormatOptions;
+use databend_common_sql::IndexType;
+use databend_common_sql::MetadataRef;
 use databend_common_storage::Datum;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
@@ -35,8 +43,6 @@ use serde::Serialize;
 use crate::sql::planner::optimizer::test_utils::execute_sql;
 use crate::sql::planner::optimizer::test_utils::optimize_plan;
 use crate::sql::planner::optimizer::test_utils::raw_plan;
-use crate::sql::planner::optimizer::test_utils::PlanStatisticsExt;
-use crate::sql::planner::optimizer::test_utils::TestCase;
 
 /// YAML representation of a test case
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,8 +50,12 @@ struct YamlTestCase {
     name: String,
     description: Option<String>,
     sql: String,
+    #[serde(default)]
     table_statistics: HashMap<String, YamlTableStatistics>,
+    #[serde(default)]
     column_statistics: HashMap<String, YamlColumnStatistics>,
+    #[serde(default)]
+    statistics_file: Option<String>,
     raw_plan: String,
     optimized_plan: String,
     good_plan: Option<String>,
@@ -71,12 +81,13 @@ struct YamlColumnStatistics {
     null_count: Option<u64>,
 }
 
-type TableStatsMap = HashMap<String, YamlTableStatistics>;
-type ColumnStatsMap = HashMap<String, YamlColumnStatistics>;
-
-// Thread-local storage for test case data
-thread_local! {
-    static TEST_CASE_DATA: RefCell<Option<(TableStatsMap, ColumnStatsMap)>> = const { RefCell::new(None) };
+struct TestCase {
+    pub name: &'static str,
+    pub sql: &'static str,
+    pub raw_plan: &'static str,      // Expected raw plan string
+    pub expected_plan: &'static str, // Expected optimized plan string
+    pub table_statistics: HashMap<String, YamlTableStatistics>,
+    pub column_statistics: HashMap<String, YamlColumnStatistics>,
 }
 
 /// Setup TPC-DS tables with required schema
@@ -115,63 +126,32 @@ async fn setup_tpcds_tables(ctx: &Arc<QueryContext>) -> Result<()> {
 }
 
 /// Convert a YAML test case to a TestCase
-fn create_test_case(yaml: YamlTestCase) -> Result<TestCase> {
-    // Store statistics data in thread-local storage
-    TEST_CASE_DATA.with(|data| {
-        *data.borrow_mut() = Some((
-            yaml.table_statistics.clone(),
-            yaml.column_statistics.clone(),
-        ));
-    });
+fn create_test_case(yaml: YamlTestCase, base_path: &Path) -> Result<TestCase> {
+    let mut table_statistics = yaml.table_statistics;
+    let mut column_statistics = yaml.column_statistics;
 
-    // Create a stats setup function that accesses the thread-local data
-    fn stats_setup(plan: &mut Plan) -> Result<()> {
-        TEST_CASE_DATA.with(|data_cell| {
-            if let Some((table_stats, column_stats)) = &*data_cell.borrow() {
-                // Set table statistics
-                for (table_name, stats) in table_stats {
-                    plan.set_table_statistics(
-                        table_name,
-                        Some(TableStatistics {
-                            num_rows: stats.num_rows,
-                            data_size: stats.data_size,
-                            data_size_compressed: stats.data_size_compressed,
-                            index_size: stats.index_size,
-                            number_of_blocks: stats.number_of_blocks,
-                            number_of_segments: stats.number_of_segments,
-                        }),
-                    )?;
-                }
+    // If there's a statistics file reference, load it and merge with inline statistics
+    if let Some(stats_file) = yaml.statistics_file {
+        let (file_table_stats, file_column_stats) = load_statistics_file(base_path, &stats_file)?;
 
-                // Set column statistics
-                for (key, stats) in column_stats {
-                    let parts: Vec<&str> = key.split('.').collect();
-                    if parts.len() == 2 {
-                        let (table, column) = (parts[0], parts[1]);
+        // Merge table statistics (file stats take precedence)
+        for (table_name, stats) in file_table_stats {
+            table_statistics.insert(table_name, stats);
+        }
 
-                        plan.set_column_statistics(
-                            table,
-                            column,
-                            Some(BasicColumnStatistics {
-                                min: convert_to_datum(&stats.min),
-                                max: convert_to_datum(&stats.max),
-                                ndv: stats.ndv,
-                                null_count: stats.null_count.unwrap_or(0),
-                            }),
-                        )?;
-                    }
-                }
-            }
-            Ok(())
-        })
+        // Merge column statistics (file stats take precedence)
+        for (column_name, stats) in file_column_stats {
+            column_statistics.insert(column_name, stats);
+        }
     }
 
     Ok(TestCase {
         name: Box::leak(yaml.name.into_boxed_str()),
         sql: Box::leak(yaml.sql.into_boxed_str()),
-        stats_setup,
         raw_plan: Box::leak(yaml.raw_plan.into_boxed_str()),
         expected_plan: Box::leak(yaml.optimized_plan.into_boxed_str()),
+        table_statistics,
+        column_statistics,
     })
 }
 
@@ -199,16 +179,46 @@ fn convert_to_datum(value: &Option<serde_json::Value>) -> Option<Datum> {
     None
 }
 
+/// Load statistics from an external YAML file
+fn load_statistics_file(
+    base_path: &Path,
+    file_name: &str,
+) -> Result<(
+    HashMap<String, YamlTableStatistics>,
+    HashMap<String, YamlColumnStatistics>,
+)> {
+    #[derive(Debug, Serialize, Deserialize)]
+    struct StatisticsFile {
+        table_statistics: HashMap<String, YamlTableStatistics>,
+        column_statistics: HashMap<String, YamlColumnStatistics>,
+    }
+
+    // Statistics files are located in the statistics directory
+    let stats_path = base_path.join("statistics").join(file_name);
+    if !stats_path.exists() {
+        return Err(ErrorCode::Internal(format!(
+            "Statistics file not found: {}",
+            stats_path.display()
+        )));
+    }
+
+    let content = fs::read_to_string(&stats_path)?;
+    let stats: StatisticsFile = serde_yaml::from_str(&content)
+        .map_err(|e| ErrorCode::Internal(format!("Failed to parse statistics YAML: {}", e)))?;
+
+    Ok((stats.table_statistics, stats.column_statistics))
+}
+
 /// Load test cases from YAML files
 fn load_test_cases(base_path: &Path) -> Result<Vec<TestCase>> {
-    let yaml_dir = base_path.join("yaml");
+    let cases_dir = base_path.join("cases");
     let mut test_cases = Vec::new();
 
-    if !yaml_dir.exists() {
+    if !cases_dir.exists() {
         return Ok(Vec::new());
     }
 
-    for entry in fs::read_dir(yaml_dir)? {
+    for entry in fs::read_dir(cases_dir)? {
         let entry = entry?;
         let path = entry.path();
 
@@ -220,12 +230,114 @@ fn load_test_cases(base_path: &Path) -> Result<Vec<TestCase>> {
             let content = fs::read_to_string(&path)?;
             let yaml_test_case: YamlTestCase = serde_yaml::from_str(&content)
                 .map_err(|e| ErrorCode::Internal(format!("Failed to parse YAML: {}", e)))?;
-            let test_case = create_test_case(yaml_test_case)?;
+            let test_case = create_test_case(yaml_test_case, base_path)?;
             test_cases.push(test_case);
         }
     }
 
     Ok(test_cases)
+}
+
+fn apply_scan_stats(
+    plan: &mut Plan,
+    table_statistics: HashMap<String, YamlTableStatistics>,
+    column_statistics: HashMap<String, YamlColumnStatistics>,
+) -> Result<()> {
+    if let Plan::Query {
+        s_expr, metadata, ..
+    } = plan
+    {
+        let mut visitor = ScanStatsVisitor {
+            metadata,
+            table_statistics: &table_statistics,
+            column_statistics: &column_statistics,
+        };
+
+        if let Some(new_s_expr) = s_expr.accept(&mut visitor)? {
+            *s_expr = Box::new(new_s_expr);
+        }
+    }
+
+    Ok(())
+}
+
+struct ScanStatsVisitor<'a> {
+    metadata: &'a MetadataRef,
+    table_statistics: &'a HashMap<String, YamlTableStatistics>,
+    column_statistics: &'a HashMap<String, YamlColumnStatistics>,
+}
+
+impl<'a> SExprVisitor for ScanStatsVisitor<'a> {
+    fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+        if let RelOperator::Scan(scan) = expr.plan() {
+            let table_index = scan.table_index;
+            let metadata_guard = self.metadata.read();
+            let table_entry = metadata_guard.table(table_index);
+            let table_name = table_entry.name();
+
+            if let Some(stats) = self.table_statistics.get(table_name) {
+                let mut column_stats = HashMap::new();
+                let columns = metadata_guard.columns_by_table_index(table_index);
+                for (column_idx, column) in columns.iter().enumerate() {
+                    if let ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =
+                        column
+                    {
+                        let column_name = format!("{}.{}", table_name, column_name);
+                        if let Some(col_stats_option) = self.column_statistics.get(&column_name) {
+                            let col_stats = BasicColumnStatistics {
+                                min: convert_to_datum(&col_stats_option.min),
+                                max: convert_to_datum(&col_stats_option.max),
+                                ndv: col_stats_option.ndv,
+                                null_count: col_stats_option.null_count.unwrap_or(0),
+                            };
+                            column_stats.insert(column_idx as IndexType, Some(col_stats));
+                        } else {
+                            println!(
+                                "Column statistics not found from yaml for column: {}",
+                                column_name
+                            );
+                        }
+                    }
+                }
+
+                let table_stats = TableStatistics {
+                    num_rows: stats.num_rows,
+                    data_size: stats.data_size,
+                    data_size_compressed: stats.data_size_compressed,
+                    index_size: stats.index_size,
+                    number_of_blocks: stats.number_of_blocks,
+                    number_of_segments: stats.number_of_segments,
+                };
+
+                let new_stats = Statistics {
+                    table_stats: Some(table_stats),
+                    column_stats,
+                    histograms: HashMap::new(),
+                };
+
+                let mut new_scan = scan.clone();
+                new_scan.statistics = Arc::new(new_stats.clone());
+
+                let new_plan = Arc::new(RelOperator::Scan(new_scan));
+                let new_expr = expr.replace_plan(new_plan);
+                println!(
+                    "Set statistics for table: {}, table_idx:{}, new stats: {:?}",
+                    table_name,
+                    table_index,
+                    new_stats.clone()
+                );
+
+                return Ok(VisitAction::Replace(new_expr));
+            } else {
+                println!(
+                    "Table statistics not found from yaml for table: {}, table_idx: {}",
+                    table_name, table_index
+                );
+            }
+        }
+
+        Ok(VisitAction::Continue)
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -256,10 +368,11 @@ async fn test_tpcds_optimizer() -> Result<()> {
         let mut raw_plan = raw_plan(&ctx, test.sql).await?;
 
         // Set statistics for the plan
-        (test.stats_setup)(&mut raw_plan)?;
+        apply_scan_stats(&mut raw_plan, test.table_statistics, test.column_statistics)?;
 
         // Print and verify raw plan
-        let raw_plan_str = raw_plan.format_indent(Default::default())?;
+        let format_option = FormatOptions { verbose: false };
+        let raw_plan_str = raw_plan.format_indent(format_option)?;
         println!("Raw plan:\n{}", raw_plan_str);
 
         // Verify raw plan matches expected

@@ -1568,3 +1568,125 @@ SELECT add_hours(to_timestamp(710455), 2147483647);
 
 statement error 1006
 SELECT CAST('2001-04-20 14:42:11.123000000000000000002001-04-20 14:42:11.12300000000000000000' AS TIMESTAMP);
+
+query T
+SELECT extract(isodow from '2025-04-13'::Date);
+----
+7
+
+query T
+SELECT extract(dow from '2025-04-13'::Date);
+----
+0
+
+query T
+select extract(yearweek from '1992-02-15'::Date);
+----
+199207
+
+query T
+select yearweek('1992-02-15'::Date);
+----
+199207
+
+query T
+select extract(yearweek from '1992-02-15'::Date);
+----
+199207
+
+query T
+select extract(millennium from '1992-02-15'::Date);
+----
+2
+
+query T
+select millennium('1992-02-15'::Date);
+----
+2
+
+
+query T
+select date_diff(isoyear, '2022-02-01'::Date, '2023-01-01'::Date); --0
+----
+0
+
+query T
+select date_diff(MILLENNIUM, '2022-02-01'::Date, '2023-01-01'::Date); --0
+----
+0
+
+query T
+select date_diff('yearweek', '2022-02-01'::Date, '2023-01-01'::Date); --47
+----
+47
+
+query T
+select date_diff('dow', '2022-02-01'::Date, '2023-01-01'::Date), date_diff('doy', '2022-02-01'::Date, '2023-01-01'::Date), date_diff('day', '2022-02-01'::Date, '2023-01-01'::Date); --334
+----
+334 334 334
+
+query T
+select date_diff('microsecond', '2022-02-01'::Date, '2023-01-01'::Date) -- 28857600000000
+----
+28857600000000
+
+query T
+select date_between('year','2019-02-28'::Date, '2020-02-28'::Date), date_between('year','2019-03-01'::Date, '2020-02-28'::Date), date_between('year','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('year','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+1 0 0 -1
+
+query T
+select date_between('isoyear','2019-02-28'::Date, '2020-02-28'::Date), date_between('isoyear','2019-03-01'::Date, '2020-02-28'::Date), date_between('isoyear','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('isoyear','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);----
+----
+1 0 0 -1
+
+query T
+select date_between('month','2019-02-28'::Date, '2020-02-28'::Date), date_between('month','2019-03-01'::Date, '2020-02-28'::Date), date_between('month','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('month','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+12 11 11 -12
+
+query T
+select date_between('MILLENNIUM','2019-02-28'::Date, '2020-02-28'::Date), date_between('MILLENNIUM','2019-03-01'::Date, '2020-02-28'::Date), date_between('MILLENNIUM','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('MILLENNIUM','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+0 0 0 0
+
+query T
+select date_between('quarter','2019-02-28'::Date, '2020-02-28'::Date), date_between('quarter','2019-03-01'::Date, '2020-02-28'::Date), date_between('quarter','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('quarter','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+4 3 3 -4
+
+query T
+select date_between('yearweek','2019-02-28'::Date, '2020-02-28'::Date), date_between('yearweek','2019-03-01'::Date, '2020-02-28'::Date), date_between('yearweek','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('yearweek','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+52 52 52 -52
+
+query T
+select date_between('week','2019-02-28'::Date, '2020-02-28'::Date), date_between('week','2019-03-01'::Date, '2020-02-28'::Date), date_between('week','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('week','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+52 52 52 -52
+
+query T
+select date_between('day','2019-02-28'::Date, '2020-02-28'::Date), date_between('day','2019-03-01'::Date, '2020-02-28'::Date), date_between('day','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('day','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+365 364 364 -365
+
+query T
+select date_between('hour','2019-02-28'::Date, '2020-02-28'::Date), date_between('hour','2019-03-01'::Date, '2020-02-28'::Date), date_between('hour','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('hour','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+8760 8736 8759 -8760
+
+query T
+select date_between('minute','2019-02-28'::Date, '2020-02-28'::Date), date_between('minute','2019-03-01'::Date, '2020-02-28'::Date), date_between('minute','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('minute','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+525600 524160 525599 -525600
+
+query T
+select date_between('second','2019-02-28'::Date, '2020-02-28'::Date), date_between('second','2019-03-01'::Date, '2020-02-28'::Date), date_between('second','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('second','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+31536000 31449600 31535999 -31536000
+
+
+query T
+select datebetween('microsecond','2019-02-28'::Date, '2020-02-28'::Date), date_between('microsecond','2019-03-01'::Date, '2020-02-28'::Date), date_between('microsecond','2019-02-28 22:00:01'::Timestamp, '2020-02-28 22:00:00'::Timestamp), date_between('microsecond','2020-02-28 22:00:01'::Timestamp, '2019-02-28 22:00:01'::Timestamp);
+----
+31536000000000 31449600000000 31535999000000 -31536000000000

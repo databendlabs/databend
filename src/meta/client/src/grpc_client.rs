@@ -43,6 +43,7 @@ use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_api::reply::reply_to_api_result;
+use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
@@ -54,6 +55,7 @@ use databend_common_meta_types::protobuf::HandshakeRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::ConnectionError;
@@ -91,6 +93,7 @@ use tonic::Request;
 use tonic::Status;
 
 use crate::endpoints::Endpoints;
+use crate::errors::CreationError;
 use crate::established_client::EstablishedClient;
 use crate::from_digit_ver;
 use crate::grpc_action::RequestFor;
@@ -101,6 +104,7 @@ use crate::to_digit_ver;
 use crate::ClientWorkerRequest;
 use crate::MetaGrpcReadReq;
 use crate::MetaGrpcReq;
+use crate::Streamed;
 use crate::METACLI_COMMIT_SEMVER;
 use crate::MIN_METASRV_SEMVER;
 
@@ -294,6 +298,16 @@ impl Drop for ClientHandle {
 }
 
 impl ClientHandle {
+    pub async fn list(&self, prefix: &str) -> Result<BoxStream<StreamItem>, MetaError> {
+        let strm = self
+            .request(Streamed(ListKVReq {
+                prefix: prefix.to_string(),
+            }))
+            .await?;
+
+        Ok(strm)
+    }
+
     /// Send a request to the internal worker task, which will be running in another runtime.
     #[fastrace::trace]
     #[async_backtrace::framed]
@@ -305,7 +319,10 @@ impl ClientHandle {
         <Result<Req::Reply, E> as TryFrom<Response>>::Error: std::fmt::Display,
         E: From<MetaClientError> + Debug,
     {
-        let rx = self.send_request_to_worker(req)?;
+        let rx = self
+            .send_request_to_worker(req)
+            .map_err(MetaClientError::from)?;
+
         UnlimitedFuture::create(async move {
             let _g = grpc_metrics::client_request_inflight.counter_guard();
             rx.await
@@ -326,7 +343,10 @@ impl ClientHandle {
     {
         let _g = grpc_metrics::client_request_inflight.counter_guard();
 
-        let rx = self.send_request_to_worker(req)?;
+        let rx = self
+            .send_request_to_worker(req)
+            .map_err(MetaClientError::from)?;
+
         let recv_res = rx.blocking_recv();
         Self::parse_worker_result(recv_res)
     }
@@ -335,7 +355,7 @@ impl ClientHandle {
     fn send_request_to_worker<Req>(
         &self,
         req: Req,
-    ) -> Result<oneshot::Receiver<Response>, MetaClientError>
+    ) -> Result<oneshot::Receiver<Response>, ConnectionError>
     where
         Req: Into<message::Request>,
     {
@@ -365,7 +385,7 @@ impl ClientHandle {
             ));
 
             error!("{}", err);
-            MetaClientError::ClientRuntimeError(err)
+            ConnectionError::new(err, "Meta ClientHandle failed to send request to worker")
         })?;
 
         Ok(rx)
@@ -381,13 +401,14 @@ impl ClientHandle {
         E: From<MetaClientError> + Debug,
     {
         let response = res.map_err(|e| {
+            let err = AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker");
             error!(
                 error :? =(&e);
                 "Meta ClientHandle recv response from meta client worker failed"
             );
-            MetaClientError::ClientRuntimeError(
-                AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
-            )
+            let conn_err =
+                ConnectionError::new(err, "Meta ClientHandle failed to receive from worker");
+            MetaClientError::from(conn_err)
         })?;
 
         let res: Result<Reply, E> = response
@@ -462,7 +483,7 @@ impl MetaGrpcClient {
     ///
     /// The worker is a singleton and the returned handle is cheap to clone.
     /// When all handles are dropped the worker will quit, then the runtime will be destroyed.
-    pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle>, MetaClientError> {
+    pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle>, CreationError> {
         Self::try_create(
             conf.get_endpoints(),
             &conf.username,
@@ -481,7 +502,7 @@ impl MetaGrpcClient {
         timeout: Option<Duration>,
         auto_sync_interval: Option<Duration>,
         tls_config: Option<RpcClientTlsConfig>,
-    ) -> Result<Arc<ClientHandle>, MetaClientError> {
+    ) -> Result<Arc<ClientHandle>, CreationError> {
         Self::endpoints_non_empty(&endpoints_str)?;
 
         let endpoints = Arc::new(Mutex::new(Endpoints::new(endpoints_str.clone())));
@@ -494,9 +515,7 @@ impl MetaGrpcClient {
             Some(format!("meta-client-rt-{}", endpoints_str.join(","))),
         )
         .map_err(|e| {
-            MetaClientError::ClientRuntimeError(
-                AnyError::new(&e).add_context(|| "when creating meta-client"),
-            )
+            CreationError::new_runtime_error(e.to_string()).context("when creating meta-client")
         })?;
         let rt = Arc::new(rt);
 
@@ -768,11 +787,9 @@ impl MetaGrpcClient {
         ))
     }
 
-    pub fn endpoints_non_empty(endpoints: &[String]) -> Result<(), MetaClientError> {
+    pub fn endpoints_non_empty(endpoints: &[String]) -> Result<(), CreationError> {
         if endpoints.is_empty() {
-            return Err(MetaClientError::ConfigError(AnyError::error(
-                "endpoints is empty",
-            )));
+            return Err(CreationError::new_config_error("endpoints is empty"));
         }
         Ok(())
     }
@@ -784,8 +801,8 @@ impl MetaGrpcClient {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    pub async fn set_endpoints(&self, endpoints: Vec<String>) -> Result<(), MetaError> {
-        Self::endpoints_non_empty(&endpoints)?;
+    pub fn set_endpoints(&self, endpoints: Vec<String>) {
+        debug_assert!(!endpoints.is_empty());
 
         // Older meta nodes may not store endpoint information and need to be filtered out.
         let distinct_cnt = endpoints.iter().filter(|n| !(*n).is_empty()).count();
@@ -798,12 +815,11 @@ impl MetaGrpcClient {
                 endpoints.len(),
                 endpoints
             );
-            return Ok(());
+            return;
         }
 
         let mut eps = self.endpoints.lock();
         eps.replace_nodes(endpoints);
-        Ok(())
     }
 
     #[fastrace::trace]
@@ -833,7 +849,12 @@ impl MetaGrpcClient {
         let result: Vec<String> = endpoints?.data;
         debug!("received meta endpoints: {:?}", result);
 
-        self.set_endpoints(result).await?;
+        if result.is_empty() {
+            error!("Can not update local endpoints, the returned result is empty");
+        } else {
+            self.set_endpoints(result);
+        }
+
         Ok(())
     }
 

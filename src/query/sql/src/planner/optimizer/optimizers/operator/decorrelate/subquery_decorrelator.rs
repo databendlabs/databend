@@ -171,7 +171,7 @@ impl SubqueryDecorrelatorOptimizer {
     #[recursive::recursive]
     pub fn optimize_sync(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         // If there is no subquery, return directly
-        if !s_expr.contain_subquery() {
+        if !s_expr.has_subquery() {
             return Ok(s_expr.clone());
         }
 

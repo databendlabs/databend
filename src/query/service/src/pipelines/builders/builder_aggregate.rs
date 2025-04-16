@@ -146,7 +146,7 @@ impl PipelineBuilder {
                     })
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let sort_desc = Arc::new(sort_desc);
+            let sort_desc: Arc<[_]> = sort_desc.into();
 
             self.main_pipeline.add_transformer(|| {
                 TransformSortPartial::new(LimitType::LimitRank(rank_limit.1), sort_desc.clone())

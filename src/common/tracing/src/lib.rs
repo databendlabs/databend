@@ -53,6 +53,7 @@ pub use crate::remote_log::LogMessage;
 pub use crate::remote_log::RemoteLog;
 pub use crate::remote_log::RemoteLogElement;
 pub use crate::remote_log::RemoteLogGuard;
+pub use crate::remote_log::PERSISTENT_LOG_SCHEMA_VERSION;
 pub use crate::structlog::DummyReporter;
 pub use crate::structlog::StructLogReporter;
 

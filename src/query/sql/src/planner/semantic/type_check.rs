@@ -1095,14 +1095,21 @@ impl<'a> TypeChecker<'a> {
                 interval,
                 date,
                 ..
-            } => self.resolve_date_arith(*span, unit, interval, date, false)?,
+            } => self.resolve_date_arith(*span, unit, interval, date, expr)?,
             Expr::DateDiff {
                 span,
                 unit,
                 date_start,
                 date_end,
                 ..
-            } => self.resolve_date_arith(*span, unit, date_start, date_end, true)?,
+            } => self.resolve_date_arith(*span, unit, date_start, date_end, expr)?,
+            Expr::DateBetween {
+                span,
+                unit,
+                date_start,
+                date_end,
+                ..
+            } => self.resolve_date_arith(*span, unit, date_start, date_end, expr)?,
             Expr::DateSub {
                 span,
                 unit,
@@ -1118,7 +1125,7 @@ impl<'a> TypeChecker<'a> {
                     expr: interval.clone(),
                 },
                 date,
-                false,
+                expr,
             )?,
             Expr::DateTrunc {
                 span, unit, date, ..
@@ -3116,11 +3123,20 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Minute => self.resolve_function(span, "to_minute", vec![], &[arg]),
             ASTIntervalKind::Second => self.resolve_function(span, "to_second", vec![], &[arg]),
             ASTIntervalKind::Doy => self.resolve_function(span, "to_day_of_year", vec![], &[arg]),
-            ASTIntervalKind::Dow => self.resolve_function(span, "to_day_of_week", vec![], &[arg]),
+            // Day of the week (Sunday = 0, Saturday = 6)
+            ASTIntervalKind::Dow => self.resolve_function(span, "dayofweek", vec![], &[arg]),
             ASTIntervalKind::Week => self.resolve_function(span, "to_week_of_year", vec![], &[arg]),
             ASTIntervalKind::Epoch => self.resolve_function(span, "epoch", vec![], &[arg]),
             ASTIntervalKind::MicroSecond => {
                 self.resolve_function(span, "to_microsecond", vec![], &[arg])
+            }
+            // ISO day of the week (Monday = 1, Sunday = 7)
+            ASTIntervalKind::ISODow => {
+                self.resolve_function(span, "to_day_of_week", vec![], &[arg])
+            }
+            ASTIntervalKind::YearWeek => self.resolve_function(span, "yearweek", vec![], &[arg]),
+            ASTIntervalKind::Millennium => {
+                self.resolve_function(span, "millennium", vec![], &[arg])
             }
         }
     }
@@ -3131,12 +3147,21 @@ impl<'a> TypeChecker<'a> {
         interval_kind: &ASTIntervalKind,
         date_rhs: &Expr,
         date_lhs: &Expr,
-        is_diff: bool,
+        is_diff: &Expr,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let func_name = if is_diff {
-            format!("diff_{}s", interval_kind.to_string().to_lowercase())
-        } else {
-            format!("add_{}s", interval_kind.to_string().to_lowercase())
+        let func_name = match is_diff {
+            Expr::DateDiff { .. } => format!("diff_{}s", interval_kind.to_string().to_lowercase()),
+            Expr::DateSub { .. } | Expr::DateAdd { .. } => {
+                format!("add_{}s", interval_kind.to_string().to_lowercase())
+            }
+            Expr::DateBetween { .. } => {
+                format!("between_{}s", interval_kind.to_string().to_lowercase())
+            }
+            _ => {
+                return Err(ErrorCode::Internal(
+                    "Only support resolve datesub, date_sub, date_diff, date_add",
+                ))
+            }
         };
         let mut args = vec![];
         let mut arg_types = vec![];

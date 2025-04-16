@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableField;
 use databend_common_storage::parquet_rs::read_metadata_async;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::InMemoryItemCacheReader;
+use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 use opendal::Operator;
@@ -270,7 +270,7 @@ fn check_memory_usage(max_memory_usage: u64) -> Result<()> {
 }
 
 pub struct LoaderWrapper<T>(T, usize);
-pub type ParquetMetaReader = InMemoryItemCacheReader<ParquetMetaData, LoaderWrapper<Operator>>;
+pub type ParquetMetaReader = InMemoryCacheReader<ParquetMetaData, LoaderWrapper<Operator>>;
 
 pub struct MetaReader;
 impl MetaReader {

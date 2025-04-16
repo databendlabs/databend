@@ -17,6 +17,7 @@
 extern crate core;
 
 pub mod endpoints;
+pub mod errors;
 pub(crate) mod established_client;
 mod grpc_action;
 mod grpc_client;
