@@ -211,6 +211,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         compressed_byte_size += b.file_size;
         index_size += b.bloom_filter_index_size;
         index_size += b.inverted_index_size.unwrap_or_default();
+        index_size += b.ngram_filter_index_size.unwrap_or_default();
         if thresholds.check_perfect_block(
             b.row_count as usize,
             b.block_size as usize,

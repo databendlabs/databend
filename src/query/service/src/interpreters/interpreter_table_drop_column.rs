@@ -95,12 +95,12 @@ impl Interpreter for DropTableColumnInterpreter {
                 self.plan.column.as_str(),
             )?;
         }
-        // If the column is inverted index column, the column can't be dropped.
+        // If the column is table index column, the column can't be dropped.
         if !table_info.meta.indexes.is_empty() {
             for (index_name, index) in &table_info.meta.indexes {
                 if index.column_ids.contains(&field.column_id) {
                     return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
-                        "column `{}` is referenced by inverted index, drop inverted index `{}` first",
+                        "column `{}` is referenced by inverted index, drop table index `{}` first",
                         field.name, index_name,
                     )));
                 }

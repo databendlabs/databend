@@ -850,6 +850,8 @@ pub enum TokenKind {
     DISABLED,
     #[token("NDJSON", ignore(ascii_case))]
     NDJSON,
+    #[token("NGRAM", ignore(ascii_case))]
+    NGRAM,
     #[token("NO_PASSWORD", ignore(ascii_case))]
     NO_PASSWORD,
     #[token("NONE", ignore(ascii_case))]

@@ -20,6 +20,7 @@ use databend_common_expression as ce;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::schema::TableIndexType;
 use fastrace::func_name;
 use maplit::btreemap;
 use maplit::btreeset;
@@ -91,6 +92,7 @@ fn test_decode_v85_table_meta() -> anyhow::Result<()> {
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         indexes: btreemap! {s("idx1") => mt::TableIndex {
+            index_type: TableIndexType::Inverted,
             name: "idx1".to_string(),
             column_ids: vec![1, 2],
             sync_creation: true,

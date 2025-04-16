@@ -192,6 +192,7 @@ databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
 databend-enterprise-hilbert-clustering = { path = "src/query/ee_features/hilbert_clustering" }
 databend-enterprise-inverted-index = { path = "src/query/ee_features/inverted_index" }
 databend-enterprise-meta = { path = "src/meta/ee" }
+databend-enterprise-ngram-index = { path = "src/query/ee_features/ngram_index" }
 databend-enterprise-query = { path = "src/query/ee" }
 databend-enterprise-resources-management = { path = "src/query/ee_features/resources_management" }
 databend-enterprise-storage-encryption = { path = "src/query/ee_features/storage_encryption" }

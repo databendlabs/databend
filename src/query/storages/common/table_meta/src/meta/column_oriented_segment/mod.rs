@@ -36,6 +36,7 @@ pub use schema::INVERTED_INDEX_SIZE;
 pub use schema::LOCATION;
 pub use schema::LOCATION_FORMAT_VERSION;
 pub use schema::LOCATION_PATH;
+pub use schema::NGRAM_FILTER_INDEX_SIZE;
 pub use schema::ROW_COUNT;
 pub use segment::deserialize_column_oriented_segment;
 pub use segment::AbstractSegment;
