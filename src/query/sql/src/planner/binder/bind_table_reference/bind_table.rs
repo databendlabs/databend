@@ -31,9 +31,7 @@ use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
-use databend_common_expression::VariantDataType;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
@@ -356,8 +354,6 @@ impl Binder {
             .table_indices
             .contains(&table_index)
         {
-            let number_of_blocks = table_meta.statistics.number_of_blocks;
-
             bind_context
                 .virtual_column_context
                 .table_indices
@@ -372,37 +368,10 @@ impl Binder {
                 let name = format!("{}{}", source_field.name, virtual_field.name);
                 let column_id = virtual_field.column_id;
 
-                // If all blocks contain virtual columns and are of the same type, we can be sure to use the primitive type.
-                // Otherwise, only variant types can be used, which may cause additional cast.
-                let data_type = if let Some(number_of_blocks) = number_of_blocks {
-                    if number_of_blocks == virtual_schema.number_of_blocks
-                        && virtual_field.data_types.len() == 1
-                    {
-                        match virtual_field.data_types[0] {
-                            VariantDataType::Boolean => {
-                                TableDataType::Nullable(Box::new(TableDataType::Boolean))
-                            }
-                            VariantDataType::UInt64 => TableDataType::Nullable(Box::new(
-                                TableDataType::Number(NumberDataType::UInt64),
-                            )),
-                            VariantDataType::Int64 => TableDataType::Nullable(Box::new(
-                                TableDataType::Number(NumberDataType::Int64),
-                            )),
-                            VariantDataType::Float64 => TableDataType::Nullable(Box::new(
-                                TableDataType::Number(NumberDataType::Float64),
-                            )),
-                            VariantDataType::String => {
-                                TableDataType::Nullable(Box::new(TableDataType::String))
-                            }
-                            _ => TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        }
-                    } else {
-                        TableDataType::Nullable(Box::new(TableDataType::Variant))
-                    }
-                } else {
-                    TableDataType::Nullable(Box::new(TableDataType::Variant))
-                };
-
+                // It's not possible to determine the actual type based on the type of generated virtual columns,
+                // as fields in non-leaf nodes are not generated with virtual columns,
+                // and these ungenerated nodes may have inconsistent types.
+                let data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
                 virtual_column_name_map.insert(name, (data_type, column_id));
             }
             bind_context

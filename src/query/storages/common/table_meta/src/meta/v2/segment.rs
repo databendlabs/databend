@@ -75,12 +75,12 @@ pub struct VirtualColumnMeta {
     pub num_values: u64,
     /// the type of virtual column in a block
     // To make BlockMeta more compatible, use numbers to represent variant types
-    // 1 => jsonb
-    // 2 => bool
-    // 3 => uint64
-    // 4 => int64
-    // 5 => float64
-    // 6 => string
+    // 0 => jsonb
+    // 1 => bool
+    // 2 => uint64
+    // 3 => int64
+    // 4 => float64
+    // 5 => string
     pub data_type: u8,
     /// virtual column statistics.
     pub column_stat: Option<ColumnStatistics>,
@@ -97,23 +97,23 @@ impl VirtualColumnMeta {
 
     pub fn data_type(&self) -> TableDataType {
         match self.data_type {
-            2 => TableDataType::Nullable(Box::new(TableDataType::Boolean)),
-            3 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            4 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
-            5 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Float64))),
-            6 => TableDataType::Nullable(Box::new(TableDataType::String)),
+            1 => TableDataType::Nullable(Box::new(TableDataType::Boolean)),
+            2 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            3 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
+            4 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Float64))),
+            5 => TableDataType::Nullable(Box::new(TableDataType::String)),
             _ => TableDataType::Nullable(Box::new(TableDataType::Variant)),
         }
     }
 
     pub fn data_type_code(variant_type: &VariantDataType) -> u8 {
         match variant_type {
-            VariantDataType::Jsonb => 1,
-            VariantDataType::Boolean => 2,
-            VariantDataType::UInt64 => 3,
-            VariantDataType::Int64 => 4,
-            VariantDataType::Float64 => 5,
-            VariantDataType::String => 6,
+            VariantDataType::Jsonb => 0,
+            VariantDataType::Boolean => 1,
+            VariantDataType::UInt64 => 2,
+            VariantDataType::Int64 => 3,
+            VariantDataType::Float64 => 4,
+            VariantDataType::String => 5,
             _ => unreachable!(),
         }
     }

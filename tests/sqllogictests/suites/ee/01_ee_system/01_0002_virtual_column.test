@@ -140,31 +140,31 @@ insert into t2 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"
 query ITIT
 select id, val['a'], val['b'], val['c'] from t2 order by id
 ----
-1 11 1 test
-2 22 2 data
+1 11 1 "test"
+2 22 2 "data"
 3 NULL NULL NULL
-4 44 4 value
-5 55 5 bend
+4 44 4 "value"
+5 55 5 "bend"
 6 NULL NULL NULL
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val from t2 order by id
 ----
-1 11 1 test {"a":11,"b":1,"c":"test"}
-2 22 2 data {"a":22,"b":2,"c":"data"}
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+2 22 2 "data" {"a":22,"b":2,"c":"data"}
 3 NULL NULL NULL 3
-4 44 4 value {"a":44,"b":4,"c":"value"}
-5 55 5 bend {"a":55,"b":5,"c":"bend"}
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
+5 55 5 "bend" {"a":55,"b":5,"c":"bend"}
 6 NULL NULL NULL 6
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val['d'] from t2 order by id
 ----
-1 11 1 test NULL
-2 22 2 data NULL
+1 11 1 "test" NULL
+2 22 2 "data" NULL
 3 NULL NULL NULL NULL
-4 44 4 value NULL
-5 55 5 bend NULL
+4 44 4 "value" NULL
+5 55 5 "bend" NULL
 6 NULL NULL NULL NULL
 
 query ITIT
@@ -182,14 +182,14 @@ select id, val['a'], val['b'], val from t2 where val=3 or val=6 order by id
 query ITIT
 select id, val['a'], val['b'], val['c'] from t2 where val['a']=11 or val['a']=44 order by id
 ----
-1 11 1 test
-4 44 4 value
+1 11 1 "test"
+4 44 4 "value"
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val from t2 where val['a']=11 or val['a']=44 order by id
 ----
-1 11 1 test {"a":11,"b":1,"c":"test"}
-4 44 4 value {"a":44,"b":4,"c":"value"}
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
 
 query IT
 select max(id), val:a from t2 group by val:a order by val:a
@@ -245,14 +245,14 @@ test_virtual_column tweets data 3000000005 ['user']['id'] UInt64
 query IITTIITF
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'] from tweets order by id;
 ----
-1 1 3/06 a 1 NULL NULL NULL
-2 2 3/07 b 3 NULL NULL NULL
-3 3 6/07 c 5 NULL NULL NULL
-4 4 1/08 a 1 9 NULL NULL
-5 5 1/10 b 7 3 {"lat":1.9} 1.9
-6 6 1/11 c 1 2 null NULL
-7 7 1/12 d 3 0 {"lat":2.7} 2.7
-8 8 1/13 x 3 1 {"lat":3.5} 3.5
+1 1 "3/06" "a" 1 NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL
+4 4 "1/08" "a" 1 9 NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9
+6 6 "1/11" "c" 1 2 null NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5
 
 statement ok
 INSERT INTO tweets (id, data) VALUES
@@ -274,16 +274,16 @@ test_virtual_column tweets data 3000000007 ['tags'] Jsonb
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
 ----
-1 1 3/06 a 1 NULL NULL NULL NULL NULL
-2 2 3/07 b 3 NULL NULL NULL NULL NULL
-3 3 6/07 c 5 NULL NULL NULL NULL NULL
-4 4 1/08 a 1 9 NULL NULL NULL NULL
-5 5 1/10 b 7 3 {"lat":1.9} 1.9 NULL NULL
-6 6 1/11 c 1 2 null NULL NULL NULL
-7 7 1/12 d 3 0 {"lat":2.7} 2.7 NULL NULL
-8 8 1/13 x 3 1 {"lat":3.5} 3.5 NULL NULL
-9 9 2/14 y 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
-10 10 2/15 z 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+1 1 "3/06" "a" 1 NULL NULL NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "a" 1 9 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
 
 statement ok
 UPDATE tweets SET data = '{"id":4, "create": "1/08", "text": "aa", "user": {"id": 1}, "replies": 10}' WHERE id = 4;
@@ -291,16 +291,16 @@ UPDATE tweets SET data = '{"id":4, "create": "1/08", "text": "aa", "user": {"id"
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
 ----
-1 1 3/06 a 1 NULL NULL NULL NULL NULL
-2 2 3/07 b 3 NULL NULL NULL NULL NULL
-3 3 6/07 c 5 NULL NULL NULL NULL NULL
-4 4 1/08 aa 1 10 NULL NULL NULL NULL
-5 5 1/10 b 7 3 {"lat":1.9} 1.9 NULL NULL
-6 6 1/11 c 1 2 null NULL NULL NULL
-7 7 1/12 d 3 0 {"lat":2.7} 2.7 NULL NULL
-8 8 1/13 x 3 1 {"lat":3.5} 3.5 NULL NULL
-9 9 2/14 y 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
-10 10 2/15 z 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+1 1 "3/06" "a" 1 NULL NULL NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
 
 statement ok
 UPDATE tweets SET data = '{"id":1, "create": "3/06", "text": "a", "user": {"id": 1}, "likes": 100}' WHERE id = 1;
@@ -308,16 +308,16 @@ UPDATE tweets SET data = '{"id":1, "create": "3/06", "text": "a", "user": {"id":
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
 ----
-1 1 3/06 a 1 NULL NULL NULL 100 NULL
-2 2 3/07 b 3 NULL NULL NULL NULL NULL
-3 3 6/07 c 5 NULL NULL NULL NULL NULL
-4 4 1/08 aa 1 10 NULL NULL NULL NULL
-5 5 1/10 b 7 3 {"lat":1.9} 1.9 NULL NULL
-6 6 1/11 c 1 2 null NULL NULL NULL
-7 7 1/12 d 3 0 {"lat":2.7} 2.7 NULL NULL
-8 8 1/13 x 3 1 {"lat":3.5} 3.5 NULL NULL
-9 9 2/14 y 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
-10 10 2/15 z 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
 
 statement ok
 DELETE FROM tweets WHERE id = 8;
@@ -325,15 +325,15 @@ DELETE FROM tweets WHERE id = 8;
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
 ----
-1 1 3/06 a 1 NULL NULL NULL 100 NULL
-2 2 3/07 b 3 NULL NULL NULL NULL NULL
-3 3 6/07 c 5 NULL NULL NULL NULL NULL
-4 4 1/08 aa 1 10 NULL NULL NULL NULL
-5 5 1/10 b 7 3 {"lat":1.9} 1.9 NULL NULL
-6 6 1/11 c 1 2 null NULL NULL NULL
-7 7 1/12 d 3 0 {"lat":2.7} 2.7 NULL NULL
-9 9 2/14 y 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
-10 10 2/15 z 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
 
 statement ok
 INSERT INTO tweets (id, data) VALUES
@@ -343,17 +343,17 @@ INSERT INTO tweets (id, data) VALUES
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
 ----
-1 1 3/06 a 1 NULL NULL NULL 100 NULL
-2 2 3/07 b 3 NULL NULL NULL NULL NULL
-3 3 6/07 c 5 NULL NULL NULL NULL NULL
-4 4 1/08 aa 1 10 NULL NULL NULL NULL
-5 5 1/10 b 7 3 {"lat":1.9} 1.9 NULL NULL
-6 6 1/11 c 1 2 null NULL NULL NULL
-7 7 1/12 d 3 0 {"lat":2.7} 2.7 NULL NULL
-9 9 2/14 y 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
-10 10 2/15 z 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
-11 11 3/16 w 9 2 {"lat":1.5} 1.5 NULL NULL
-12 12 3/17 v 11 4 {"lat":2.0} 2.0 NULL NULL
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/17" "v" 11 4 {"lat":2.0} 2.0 NULL NULL
 
 statement ok
 MERGE INTO tweets AS target
@@ -367,18 +367,18 @@ WHEN NOT MATCHED THEN
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
 ----
-1 1 3/06 a 1 NULL NULL NULL 100 NULL
-2 2 3/07 b 3 NULL NULL NULL NULL NULL
-3 3 6/07 c 5 NULL NULL NULL NULL NULL
-4 4 1/08 aa 1 10 NULL NULL NULL NULL
-5 5 1/10 b 7 3 {"lat":1.9} 1.9 NULL NULL
-6 6 1/11 c 1 2 null NULL NULL NULL
-7 7 1/12 d 3 0 {"lat":2.7} 2.7 NULL NULL
-9 9 2/14 y 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
-10 10 2/15 z 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
-11 11 3/16 w 9 2 {"lat":1.5} 1.5 NULL NULL
-12 12 3/17 v 11 4 {"lat":2.0} 2.0 NULL NULL
-13 13 4/18 u 13 6 {"lat":3.0} 3.0 NULL NULL
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/17" "v" 11 4 {"lat":2.0} 2.0 NULL NULL
+13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
 
 statement ok
 MERGE INTO tweets AS target
@@ -392,20 +392,19 @@ WHEN NOT MATCHED THEN
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
 ----
-1 1 3/06 a 1 NULL NULL NULL 100 NULL
-2 2 3/07 b 3 NULL NULL NULL NULL NULL
-3 3 6/07 c 5 NULL NULL NULL NULL NULL
-4 4 1/08 aa 1 10 NULL NULL NULL NULL
-5 5 1/10 b 7 3 {"lat":1.9} 1.9 NULL NULL
-6 6 1/11 c 1 2 null NULL NULL NULL
-7 7 1/12 d 3 0 {"lat":2.7} 2.7 NULL NULL
-9 9 2/14 y 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
-10 10 2/15 z 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
-11 11 3/16 w 9 2 {"lat":1.5} 1.5 NULL NULL
-12 12 3/19 vv 16 10 {"lat":4.0} 4.0 NULL NULL
-13 13 4/18 u 13 6 {"lat":3.0} 3.0 NULL NULL
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/19" "vv" 16 10 {"lat":4.0} 4.0 NULL NULL
+13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
 
 statement ok
 DROP DATABASE test_virtual_column
-
 

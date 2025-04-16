@@ -95,7 +95,7 @@ explain select a, v['a'] from t2 where v['b']['c'] = 10
 ----
 Filter
 ├── output columns: [t2.a (#0), t2.v['a'] (#2)]
-├── filters: [is_true(v['b']['c'] (#3) = 10)]
+├── filters: [is_true(TRY_CAST(v['b']['c'] (#3) AS UInt8 NULL) = 10)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.test_virtual_db.t2
@@ -105,7 +105,7 @@ Filter
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(v['b']['c'] (#3) = 10)], limit: NONE]
+    ├── push downs: [filters: [is_true(TRY_CAST(v['b']['c'] (#3) AS UInt8 NULL) = 10)], limit: NONE]
     ├── virtual columns: [v['a'], v['b']['c']]
     └── estimated rows: 1.00
 
@@ -122,7 +122,7 @@ EvalScalar
     ├── build keys: []
     ├── probe keys: []
     ├── keys is null equal: []
-    ├── filters: [CAST(v['b']['c'] (#4) AS Int64 NULL) = CAST(t1.a (#2) AS Int64 NULL)]
+    ├── filters: [TRY_CAST(v['b']['c'] (#4) AS Int32 NULL) = t1.a (#2)]
     ├── build join filters:
     ├── estimated rows: 1.00
     ├── TableScan(Build)
@@ -156,7 +156,7 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── keys is null equal: []
-├── filters: [CAST(v['b']['c'] (#4) AS Int64 NULL) = CAST(t1.a (#2) AS Int64 NULL)]
+├── filters: [TRY_CAST(v['b']['c'] (#4) AS Int32 NULL) = t1.a (#2)]
 ├── build join filters:
 ├── estimated rows: 0.20
 ├── Filter(Build)
@@ -199,7 +199,7 @@ HashJoin
 ├── estimated rows: 0.20
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.v (#3)]
-│   ├── filters: [is_true(CAST(v['b']['c'] (#4) AS Int64 NULL) = CAST(t2.a (#2) AS Int64 NULL))]
+│   ├── filters: [is_true(TRY_CAST(v['b']['c'] (#4) AS Int32 NULL) = t2.a (#2))]
 │   ├── estimated rows: 0.20
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
@@ -209,7 +209,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [is_true(CAST(v['b']['c'] (#4) AS Int64 NULL) = CAST(t2.a (#2) AS Int64 NULL))], limit: NONE]
+│       ├── push downs: [filters: [is_true(TRY_CAST(v['b']['c'] (#4) AS Int32 NULL) = t2.a (#2))], limit: NONE]
 │       ├── virtual columns: [v['b']['c']]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
@@ -237,7 +237,7 @@ HashJoin
 ├── estimated rows: 0.20
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.v (#3)]
-│   ├── filters: [is_true(CAST(v['b']['c'] (#4) AS Int64 NULL) > CAST(t2.a (#2) AS Int64 NULL))]
+│   ├── filters: [is_true(TRY_CAST(v['b']['c'] (#4) AS Int32 NULL) > t2.a (#2))]
 │   ├── estimated rows: 0.20
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
@@ -247,7 +247,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [is_true(CAST(v['b']['c'] (#4) AS Int64 NULL) > CAST(t2.a (#2) AS Int64 NULL))], limit: NONE]
+│       ├── push downs: [filters: [is_true(TRY_CAST(v['b']['c'] (#4) AS Int32 NULL) > t2.a (#2))], limit: NONE]
 │       ├── virtual columns: [v['b']['c']]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
@@ -276,8 +276,8 @@ AggregateFinal
     └── HashJoin
         ├── output columns: [t2.v['b']['c'] (#4), t1.a (#2)]
         ├── join type: INNER
-        ├── build keys: [CAST(t1.a (#2) AS Int64 NULL)]
-        ├── probe keys: [CAST(v['b']['c'] (#4) AS Int64 NULL)]
+        ├── build keys: [t1.a (#2)]
+        ├── probe keys: [CAST(v['b']['c'] (#4) AS Int32 NULL)]
         ├── keys is null equal: [false]
         ├── filters: []
         ├── build join filters:
