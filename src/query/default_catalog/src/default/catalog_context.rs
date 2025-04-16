@@ -14,22 +14,14 @@
 
 use std::sync::Arc;
 
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
+use databend_common_storages_factory::StorageFactory;
 
-use crate::storages::StorageFactory;
+use crate::databases::DatabaseFactory;
 
-/// Database Context.
 #[derive(Clone)]
-pub struct DatabaseContext {
+pub struct CatalogContext {
     pub meta: MetaStore,
     pub storage_factory: Arc<StorageFactory>,
-    pub tenant: Tenant,
-    pub disable_table_info_refresh: bool,
-}
-
-impl DatabaseContext {
-    pub fn tenant(&self) -> &Tenant {
-        &self.tenant
-    }
+    pub database_factory: Arc<DatabaseFactory>,
 }

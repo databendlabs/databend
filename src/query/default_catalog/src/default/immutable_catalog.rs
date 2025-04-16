@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table::Table;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -99,11 +100,10 @@ use databend_common_meta_types::SeqV;
 use databend_storages_common_table_meta::table_id_ranges::SYS_DB_ID_BEGIN;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_ID_BEGIN;
 
-use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
 use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;
-use crate::storages::Table;
+use crate::default::table_memory_meta::InMemoryMetas;
 
 /// System Catalog contains ... all the system databases (no surprise :)
 #[derive(Clone)]

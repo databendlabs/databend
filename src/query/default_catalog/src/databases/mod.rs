@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod catalog_context;
-mod database_catalog;
-mod immutable_catalog;
-mod mutable_catalog;
-mod session_catalog;
-pub mod table_memory_meta;
+mod database;
+mod database_context;
+mod database_factory;
+mod default;
+mod information_schema;
+mod system;
 
-pub use catalog_context::CatalogContext;
-pub use database_catalog::DatabaseCatalog;
-pub use immutable_catalog::ImmutableCatalog;
-pub use mutable_catalog::MutableCatalog;
-pub use session_catalog::SessionCatalog;
+pub use database::Database;
+pub use database_context::DatabaseContext;
+pub use database_factory::DatabaseFactory;
+pub use information_schema::InformationSchemaDatabase;
+pub use system::SystemDatabase;

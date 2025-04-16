@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+mod catalog_context;
+mod database_catalog;
+mod immutable_catalog;
+mod mutable_catalog;
+mod session_catalog;
+mod table_function_factory;
+mod table_memory_meta;
 
-use databend_common_meta_store::MetaStore;
-
-use crate::databases::DatabaseFactory;
-use crate::storages::StorageFactory;
-
-#[derive(Clone)]
-pub struct CatalogContext {
-    pub meta: MetaStore,
-    pub storage_factory: Arc<StorageFactory>,
-    pub database_factory: Arc<DatabaseFactory>,
-}
+pub use catalog_context::CatalogContext;
+pub use database_catalog::DatabaseCatalog;
+pub use immutable_catalog::ImmutableCatalog;
+pub use mutable_catalog::MutableCatalog;
+pub use session_catalog::SessionCatalog;
+pub use table_function_factory::TableFunctionFactory;
+pub use table_memory_meta::InMemoryMetas;

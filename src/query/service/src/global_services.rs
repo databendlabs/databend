@@ -53,6 +53,7 @@ use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
+use crate::table_functions::TableFunctionFactoryRegistry;
 
 pub struct GlobalServices;
 
@@ -101,7 +102,11 @@ impl GlobalServices {
         {
             // Init default catalog.
 
-            let default_catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
+            let default_catalog = DatabaseCatalog::try_create_with_config(
+                config.clone(),
+                Arc::new(TableFunctionFactoryRegistry::create()),
+            )
+            .await?;
 
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),

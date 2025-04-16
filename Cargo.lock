@@ -5153,6 +5153,7 @@ dependencies = [
  "databend-enterprise-stream-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
+ "databend-query-default-catalog",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-index",
@@ -5231,6 +5232,29 @@ dependencies = [
  "walkdir",
  "wiremock",
  "xorf",
+]
+
+[[package]]
+name = "databend-query-default-catalog"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "dashmap 6.1.0",
+ "databend-common-catalog",
+ "databend-common-config",
+ "databend-common-exception",
+ "databend-common-meta-api",
+ "databend-common-meta-app",
+ "databend-common-meta-store",
+ "databend-common-meta-types",
+ "databend-common-storages-factory",
+ "databend-common-storages-information-schema",
+ "databend-common-storages-system",
+ "databend-storages-common-session",
+ "databend-storages-common-table-meta",
+ "fastrace",
+ "log",
 ]
 
 [[package]]

@@ -12,4 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use databend_query_default_catalog::databases::*;
+#![allow(clippy::result_large_err)]
+pub mod databases;
+mod default;
+
+pub use default::*;

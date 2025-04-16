@@ -34,6 +34,7 @@ use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_iceberg::IcebergInspectTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
+use databend_query_default_catalog::TableFunctionFactory;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
@@ -90,11 +91,11 @@ where
 }
 
 #[derive(Default)]
-pub struct TableFunctionFactory {
+pub struct TableFunctionFactoryRegistry {
     creators: TableFunctionCreators,
 }
 
-impl TableFunctionFactory {
+impl TableFunctionFactoryRegistry {
     pub fn create() -> Self {
         let mut id = SYS_TBL_FUNC_ID_BEGIN;
         let mut next_id = || -> MetaId {
@@ -353,12 +354,14 @@ impl TableFunctionFactory {
             (next_id(), Arc::new(IcebergInspectTable::create)),
         );
 
-        TableFunctionFactory {
+        TableFunctionFactoryRegistry {
             creators: RwLock::new(creators),
         }
     }
+}
 
-    pub fn get(&self, func_name: &str, tbl_args: TableArgs) -> Result<Arc<dyn TableFunction>> {
+impl TableFunctionFactory for TableFunctionFactoryRegistry {
+    fn get(&self, func_name: &str, tbl_args: TableArgs) -> Result<Arc<dyn TableFunction>> {
         let lock = self.creators.read();
         let func_name = func_name.to_lowercase();
         let (id, factory) = lock.get(&func_name).ok_or_else(|| {
@@ -368,13 +371,13 @@ impl TableFunctionFactory {
         Ok(func)
     }
 
-    pub fn exists(&self, func_name: &str) -> bool {
+    fn exists(&self, func_name: &str) -> bool {
         let lock = self.creators.read();
         let func_name = func_name.to_lowercase();
         lock.contains_key(&func_name)
     }
 
-    pub fn list(&self) -> Vec<String> {
+    fn list(&self) -> Vec<String> {
         self.creators
             .read()
             .iter()

@@ -19,6 +19,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::table::Table;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -123,17 +125,15 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
+use databend_common_storages_factory::StorageFactory;
 use fastrace::func_name;
 use log::info;
 use log::warn;
 
-use crate::catalogs::default::catalog_context::CatalogContext;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
-use crate::storages::StorageDescription;
-use crate::storages::StorageFactory;
-use crate::storages::Table;
+use crate::default::CatalogContext;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included

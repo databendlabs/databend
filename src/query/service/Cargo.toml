@@ -12,7 +12,7 @@ default = ["simd"]
 simd = ["databend-common-column/simd"]
 python-udf = ["arrow-udf-runtime/python"]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
-jemalloc = ["databend-common-storages-system/jemalloc"]
+jemalloc = ["databend-common-storages-system/jemalloc", "databend-query-default-catalog/jemalloc"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
 storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
 io-uring = [
@@ -106,6 +106,7 @@ databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
+databend-query-default-catalog = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-index = { workspace = true }

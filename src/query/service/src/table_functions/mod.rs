@@ -36,4 +36,4 @@ pub use openai::GPT2SQLTable;
 pub use others::LicenseInfoTable;
 pub use others::TenantQuotaTable;
 pub use table_function::TableFunction;
-pub use table_function_factory::TableFunctionFactory;
+pub use table_function_factory::TableFunctionFactoryRegistry;

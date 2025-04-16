@@ -17,11 +17,10 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use dashmap::DashMap;
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::MetaId;
-
-use crate::storages::Table;
 
 pub struct DbTables {
     name_to_table: DashMap<String, Arc<dyn Table>>,

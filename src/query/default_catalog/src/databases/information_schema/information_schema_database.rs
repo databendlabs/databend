@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseInfo;
@@ -28,9 +29,8 @@ use databend_common_storages_information_schema::StatisticsTable;
 use databend_common_storages_information_schema::TablesTable;
 use databend_common_storages_information_schema::ViewsTable;
 
-use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
-use crate::storages::Table;
+use crate::default::InMemoryMetas;
 
 #[derive(Clone)]
 pub struct InformationSchemaDatabase {
