@@ -81,7 +81,8 @@ impl MemStatBuffer {
 
                 self.global_mem_stat
                     .record_memory::<false>(memory_usage, 0)?;
-                return Err(cause);
+
+                return mem_stat.try_exceeding_limit(cause);
             }
         }
 
@@ -244,10 +245,11 @@ mod tests {
     use crate::runtime::memory::stat_buffer_mem_stat::MemStatBuffer;
     use crate::runtime::GlobalStatBuffer;
     use crate::runtime::MemStat;
+    use crate::runtime::GLOBAL_QUERIES_MANAGER;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_alloc_with_same_allocator() -> Result<(), AllocError> {
-        static TEST_GLOBAL: MemStat = MemStat::global();
+        static TEST_GLOBAL: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
@@ -272,7 +274,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_alloc_with_diff_allocator() -> Result<(), AllocError> {
-        static TEST_GLOBAL: MemStat = MemStat::global();
+        static TEST_GLOBAL: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
@@ -297,7 +299,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_dealloc_with_same_allocator() -> Result<(), AllocError> {
-        static TEST_GLOBAL: MemStat = MemStat::global();
+        static TEST_GLOBAL: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
@@ -324,7 +326,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_dealloc_with_diff_allocator() -> Result<(), AllocError> {
-        static TEST_GLOBAL: MemStat = MemStat::global();
+        static TEST_GLOBAL: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
@@ -351,7 +353,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_dealloc_with_unique_allocator() -> Result<(), AllocError> {
-        static TEST_GLOBAL: MemStat = MemStat::global();
+        static TEST_GLOBAL: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 

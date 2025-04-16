@@ -40,6 +40,7 @@ pub use memory::MemStat;
 pub use memory::MemStatBuffer;
 pub use memory::OutOfLimit;
 pub use memory::GLOBAL_MEM_STAT;
+pub use memory::GLOBAL_QUERIES_MANAGER;
 pub use runtime::block_on;
 pub use runtime::execute_futures_in_parallel;
 pub use runtime::spawn;

@@ -18,6 +18,7 @@ use std::sync::atomic::AtomicI64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use bytesize::ByteSize;
 
@@ -55,9 +56,11 @@ pub struct MemStat {
     // 1. Memory limit exceeded, but no error is reported
     // 2. Memory limit exceeded, requires error reporting
     // 3. Memory limit exceeded, reported error.
-    exceeded_limit_mode: Arc<AtomicUsize>,
+    exceeded_limit_mode: OnceLock<Arc<AtomicUsize>>,
 
     queries_memory_manager: &'static QueriesMemoryManager,
+
+    priority: usize,
 
     parent_memory_stat: Option<Arc<MemStat>>,
 }
@@ -78,7 +81,8 @@ impl MemStat {
             limit: AtomicI64::new(0),
             parent_memory_stat: None,
             allow_exceeded_limit: false,
-            exceeded_limit_mode: Arc::new(AtomicUsize::new(0)),
+            exceeded_limit_mode: OnceLock::new(),
+            priority: 0,
         }
     }
 
@@ -100,8 +104,9 @@ impl MemStat {
             limit: AtomicI64::new(0),
             parent_memory_stat,
             allow_exceeded_limit: false,
-            exceeded_limit_mode: Arc::new(AtomicUsize::new(0)),
+            exceeded_limit_mode: OnceLock::new(),
             queries_memory_manager: &GLOBAL_QUERIES_MANAGER,
+            priority: 0,
         })
     }
 
@@ -163,49 +168,66 @@ impl MemStat {
     }
 
     fn try_wait_memory(&self, out_of_limit: OutOfLimit) -> Result<(), OutOfLimit> {
-        // TODO:
-        Err(out_of_limit)
+        self.queries_memory_manager
+            .wait_release_memory(self.id, out_of_limit)
     }
 
-    fn try_exceeding_limit(&self, out_of_limit: OutOfLimit) -> Result<(), OutOfLimit> {
+    pub fn try_exceeding_limit(&self, out_of_limit: OutOfLimit) -> Result<(), OutOfLimit> {
+        if !self.allow_exceeded_limit {
+            return Err(out_of_limit);
+        }
+
         let _guard = LimitMemGuard::enter_unlimited();
-        let exceeded_limit_mode = self.exceeded_limit_mode.load(Ordering::SeqCst);
+        let exceeded_limit_mode = self
+            .exceeded_limit_mode
+            .get_or_init(|| Arc::new(AtomicUsize::new(0)));
+
+        let mode = exceeded_limit_mode.load(Ordering::SeqCst);
 
         // Memory limit exceeded, but no error is reported
-        if exceeded_limit_mode == MEMORY_LIMIT_EXCEEDED_NO_ERROR {
+        if mode == MEMORY_LIMIT_EXCEEDED_NO_ERROR {
             return Ok(());
         }
 
         //
-        if exceeded_limit_mode == MEMORY_LIMIT_NOT_EXCEEDED {
-            let fetch_value = self.exceeded_limit_mode.compare_exchange(
+        if mode == MEMORY_LIMIT_NOT_EXCEEDED {
+            let fetch_value = exceeded_limit_mode.compare_exchange(
                 MEMORY_LIMIT_NOT_EXCEEDED,
                 MEMORY_LIMIT_EXCEEDED_NO_ERROR,
                 Ordering::SeqCst,
                 Ordering::SeqCst,
             );
 
-            if fetch_value.unwrap_or_else(|x| x) == MEMORY_LIMIT_NOT_EXCEEDED {
-                self.queries_memory_manager
-                    .request_exceeded_memory(self.exceeded_limit_mode.clone());
+            let fetch_value = fetch_value.unwrap_or_else(|x| x);
+
+            if fetch_value == MEMORY_LIMIT_NOT_EXCEEDED {
+                self.queries_memory_manager.request_exceeded_memory(
+                    self.id,
+                    self.priority,
+                    exceeded_limit_mode.clone(),
+                );
+
+                return Ok(());
+            } else if fetch_value == MEMORY_LIMIT_EXCEEDED_NO_ERROR {
+                // exceeded limit is safely
                 return Ok(());
             }
         }
 
         // notify release memory usage
-        if exceeded_limit_mode == MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR {
-            let fetch_value = self.exceeded_limit_mode.compare_exchange(
+        if mode == MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR {
+            let _fetch_value = exceeded_limit_mode.compare_exchange(
                 MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR,
                 MEMORY_LIMIT_EXCEEDED_REPORTED_ERROR,
                 Ordering::SeqCst,
                 Ordering::SeqCst,
             );
 
-            if fetch_value.unwrap_or_else(|x| x) == MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR {
-                let release_memory = std::cmp::max(0, out_of_limit.value - out_of_limit.limit);
-                self.queries_memory_manager
-                    .release_memory(release_memory as u64);
-            }
+            // if fetch_value.unwrap_or_else(|x| x) == MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR {
+            //     let release_memory = std::cmp::max(0, out_of_limit.value - out_of_limit.limit);
+            //     self.queries_memory_manager
+            //         .release_memory(release_memory as u64);
+            // }
         }
 
         Err(out_of_limit)
@@ -244,6 +266,14 @@ impl MemStat {
     #[inline]
     pub fn get_peek_memory_usage(&self) -> i64 {
         self.peak_used.load(Ordering::Relaxed)
+    }
+}
+
+impl Drop for MemStat {
+    fn drop(&mut self) {
+        if self.allow_exceeded_limit {
+            self.queries_memory_manager.release_memory(self.id);
+        }
     }
 }
 

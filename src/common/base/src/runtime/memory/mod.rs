@@ -22,5 +22,6 @@ pub use alloc_error_hook::set_alloc_error_hook;
 pub use mem_stat::MemStat;
 pub use mem_stat::OutOfLimit;
 pub use mem_stat::GLOBAL_MEM_STAT;
+pub use memory_manager::GLOBAL_QUERIES_MANAGER;
 pub use stat_buffer_global::GlobalStatBuffer;
 pub use stat_buffer_mem_stat::MemStatBuffer;
