@@ -508,7 +508,7 @@ impl FuseTable {
                     let snapshot_full_path = &hint.snapshot_full_path;
                     let operator_info = operator.info();
 
-                    assert!(snapshot_full_path.starts_with(operator_info.root()));
+                    assert!(snapshot_full_path.starts_with(&operator_info.root()));
                     let loc = snapshot_full_path[operator_info.root().len()..].to_string();
 
                     // refresh table schema by loading the snapshot
@@ -580,7 +580,7 @@ impl FuseTable {
                 let full_location = &hint.snapshot_full_path;
 
                 let operator_info = operator.info();
-                assert!(full_location.starts_with(operator_info.root()));
+                assert!(full_location.starts_with(&operator_info.root()));
                 let location = full_location[operator.info().root().len()..].to_string();
 
                 // update table meta options
