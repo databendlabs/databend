@@ -15,17 +15,21 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::atomic::AtomicI64;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bytesize::ByteSize;
 
 use crate::base::GlobalSequence;
+use crate::runtime::memory::memory_manager::QueriesMemoryManager;
+use crate::runtime::memory::memory_manager::GLOBAL_QUERIES_MANAGER;
+use crate::runtime::LimitMemGuard;
 
 /// The program mem stat
 ///
 /// Every alloc/dealloc stat will be fed to this mem stat.
-pub static GLOBAL_MEM_STAT: MemStat = MemStat::global();
+pub static GLOBAL_MEM_STAT: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
 const MINIMUM_MEMORY_LIMIT: i64 = 256 * 1024 * 1024;
 
@@ -46,19 +50,35 @@ pub struct MemStat {
     ///
     /// Set to 0 to disable the limit.
     limit: AtomicI64,
+    allow_exceeded_limit: bool,
+    // 0: Memory limit not exceeded.
+    // 1. Memory limit exceeded, but no error is reported
+    // 2. Memory limit exceeded, requires error reporting
+    // 3. Memory limit exceeded, reported error.
+    exceeded_limit_mode: Arc<AtomicUsize>,
+
+    queries_memory_manager: &'static QueriesMemoryManager,
 
     parent_memory_stat: Option<Arc<MemStat>>,
 }
 
+const MEMORY_LIMIT_NOT_EXCEEDED: usize = 0;
+const MEMORY_LIMIT_EXCEEDED_NO_ERROR: usize = 1;
+const MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR: usize = 2;
+const MEMORY_LIMIT_EXCEEDED_REPORTED_ERROR: usize = 3;
+
 impl MemStat {
-    pub const fn global() -> Self {
+    pub const fn global(queries_memory_manager: &'static QueriesMemoryManager) -> Self {
         Self {
             id: 0,
             name: None,
+            queries_memory_manager,
             used: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
             parent_memory_stat: None,
+            allow_exceeded_limit: false,
+            exceeded_limit_mode: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -79,6 +99,9 @@ impl MemStat {
             peak_used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
             parent_memory_stat,
+            allow_exceeded_limit: false,
+            exceeded_limit_mode: Arc::new(AtomicUsize::new(0)),
+            queries_memory_manager: &GLOBAL_QUERIES_MANAGER,
         })
     }
 
@@ -106,19 +129,27 @@ impl MemStat {
         self.peak_used.fetch_max(used, Ordering::Relaxed);
 
         if let Some(parent_memory_stat) = self.parent_memory_stat.as_ref() {
-            if let Err(cause) = parent_memory_stat
-                .record_memory::<NEED_ROLLBACK>(batch_memory_used, current_memory_alloc)
-            {
-                if NEED_ROLLBACK {
-                    // We only roll back the memory that alloc failed
-                    self.used.fetch_sub(current_memory_alloc, Ordering::Relaxed);
+            if let Err(cause) = parent_memory_stat.record_memory::<false>(batch_memory_used, 0) {
+                if let Err(_cause) = self.check_limit(used) {
+                    if NEED_ROLLBACK {
+                        // We only roll back the memory that alloc failed
+                        self.rollback(current_memory_alloc);
+                    }
+
+                    return Err(cause);
                 }
 
-                return Err(cause);
+                // neighbor may exceeded limit, wait release memory
+                return self.try_wait_memory(cause);
             }
         }
 
         if let Err(cause) = self.check_limit(used) {
+            // parent has memory free, try exceeding limit.
+            if self.allow_exceeded_limit {
+                return self.try_exceeding_limit(cause);
+            }
+
             if NEED_ROLLBACK {
                 // NOTE: we cannot rollback peak_used of parent mem stat in this case
                 // self.peak_used.store(peak_used, Ordering::Relaxed);
@@ -129,6 +160,55 @@ impl MemStat {
         }
 
         Ok(())
+    }
+
+    fn try_wait_memory(&self, out_of_limit: OutOfLimit) -> Result<(), OutOfLimit> {
+        // TODO:
+        Err(out_of_limit)
+    }
+
+    fn try_exceeding_limit(&self, out_of_limit: OutOfLimit) -> Result<(), OutOfLimit> {
+        let _guard = LimitMemGuard::enter_unlimited();
+        let exceeded_limit_mode = self.exceeded_limit_mode.load(Ordering::SeqCst);
+
+        // Memory limit exceeded, but no error is reported
+        if exceeded_limit_mode == MEMORY_LIMIT_EXCEEDED_NO_ERROR {
+            return Ok(());
+        }
+
+        //
+        if exceeded_limit_mode == MEMORY_LIMIT_NOT_EXCEEDED {
+            let fetch_value = self.exceeded_limit_mode.compare_exchange(
+                MEMORY_LIMIT_NOT_EXCEEDED,
+                MEMORY_LIMIT_EXCEEDED_NO_ERROR,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            );
+
+            if fetch_value.unwrap_or_else(|x| x) == MEMORY_LIMIT_NOT_EXCEEDED {
+                self.queries_memory_manager
+                    .request_exceeded_memory(self.exceeded_limit_mode.clone());
+                return Ok(());
+            }
+        }
+
+        // notify release memory usage
+        if exceeded_limit_mode == MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR {
+            let fetch_value = self.exceeded_limit_mode.compare_exchange(
+                MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR,
+                MEMORY_LIMIT_EXCEEDED_REPORTED_ERROR,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            );
+
+            if fetch_value.unwrap_or_else(|x| x) == MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR {
+                let release_memory = std::cmp::max(0, out_of_limit.value - out_of_limit.limit);
+                self.queries_memory_manager
+                    .release_memory(release_memory as u64);
+            }
+        }
+
+        Err(out_of_limit)
     }
 
     pub fn rollback(&self, memory_usage: i64) {

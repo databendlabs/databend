@@ -14,6 +14,7 @@
 
 mod alloc_error_hook;
 mod mem_stat;
+mod memory_manager;
 mod stat_buffer_global;
 mod stat_buffer_mem_stat;
 
