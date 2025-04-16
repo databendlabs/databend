@@ -54,3 +54,5 @@ pub use read::InMemoryCacheTTLReader;
 pub use read::LoadParams;
 pub use read::Loader;
 pub use temp_dir::*;
+
+mod cache_items;

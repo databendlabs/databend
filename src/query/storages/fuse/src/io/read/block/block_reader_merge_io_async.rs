@@ -114,8 +114,10 @@ impl BlockReader {
                     .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
                 let data = chunk_data.slice(range.clone());
 
-                // TODO review it, data may refer to a shared buffer, which is large.
-                column_data_cache.insert(column_cache_key.as_ref().to_owned(), ColumnData::new(data));
+                column_data_cache.insert(
+                    column_cache_key.as_ref().to_owned(),
+                    ColumnData::from_merge_io_read_result(data),
+                );
             }
         }
 

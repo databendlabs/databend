@@ -188,7 +188,6 @@ impl CacheManager {
             Self::new_bytes_cache_slot(MEMORY_CACHE_TABLE_DATA, memory_cache_capacity);
 
         let instance =
-        // TODO use default
         // setup in-memory table meta cache
         if !config.enable_table_meta_cache {
             Self {
