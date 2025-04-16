@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CatalogConfig;
 use databend_common_config::InnerConfig;
@@ -38,7 +39,6 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::anyerror::func_name;
 use databend_storages_common_session::SessionState;
-use parking_lot::RwLock;
 
 use super::Catalog;
 use super::CatalogCreator;
@@ -185,7 +185,7 @@ impl CatalogManager {
 
         let key = format!("{:?}_{}", info.catalog_name(), info.meta.created_on);
         {
-            let r = self.catalog_caches.read();
+            let r = self.catalog_caches.read().await;
             if let Some(v) = r.get(&key) {
                 return Ok(v.clone());
             }
@@ -194,7 +194,7 @@ impl CatalogManager {
         let v = self.build_catalog(info, session_state)?;
 
         {
-            let mut w = self.catalog_caches.write();
+            let mut w = self.catalog_caches.write().await;
             w.insert(key, v.clone());
         }
         Ok(v)
