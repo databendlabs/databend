@@ -90,6 +90,7 @@ runs:
     - name: Check Binary Info
       shell: bash
       run: |
+        grep 'compile result: cache miss' /workspace/target/sccache.log
         readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
         ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
 

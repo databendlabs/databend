@@ -86,8 +86,3 @@ impl CreditsTable {
         SyncOneBlockSystemTable::create(CreditsTable { table_info })
     }
 }
-
-#[test]
-fn test_ssss() {
-    println!("aaa")
-}
