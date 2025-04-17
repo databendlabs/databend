@@ -4592,7 +4592,6 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-storages-view",
  "databend-common-users",
- "databend-common-version",
  "databend-storages-common-cache",
  "futures",
  "itertools 0.13.0",

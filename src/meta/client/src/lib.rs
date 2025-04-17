@@ -28,6 +28,7 @@ mod message;
 use std::sync::LazyLock;
 
 pub use databend_common_meta_api::reply::reply_to_api_result;
+use databend_common_version::DATABEND_GIT_SEMVER;
 pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
@@ -39,9 +40,7 @@ pub use message::Streamed;
 use semver::Version;
 
 pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
-    let build_semver = databend_common_version::DATABEND_GIT_SEMVER;
-    let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
-
+    let semver = DATABEND_GIT_SEMVER.expect("DATABEND_GIT_SEMVER can not be None");
     let semver = semver.strip_prefix('v').unwrap_or(semver);
 
     Version::parse(semver).expect(

@@ -70,6 +70,12 @@ use databend_common_storages_system::UsersTable;
 use databend_common_storages_system::ViewsTableWithHistory;
 use databend_common_storages_system::ViewsTableWithoutHistory;
 use databend_common_storages_system::VirtualColumnsTable;
+use databend_common_version::DATABEND_CARGO_CFG_TARGET_FEATURE;
+use databend_common_version::DATABEND_COMMIT_AUTHORS;
+use databend_common_version::DATABEND_CREDITS_LICENSES;
+use databend_common_version::DATABEND_CREDITS_NAMES;
+use databend_common_version::DATABEND_CREDITS_VERSIONS;
+use databend_common_version::VERGEN_CARGO_FEATURES;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
@@ -96,8 +102,13 @@ impl SystemDatabase {
         let table_list: Vec<Arc<dyn Table>> = vec![
             OneTable::create(sys_db_meta.next_table_id()),
             FunctionsTable::create(sys_db_meta.next_table_id()),
-            ContributorsTable::create(sys_db_meta.next_table_id()),
-            CreditsTable::create(sys_db_meta.next_table_id()),
+            ContributorsTable::create(sys_db_meta.next_table_id(), DATABEND_COMMIT_AUTHORS),
+            CreditsTable::create(
+                sys_db_meta.next_table_id(),
+                DATABEND_CREDITS_NAMES,
+                DATABEND_CREDITS_VERSIONS,
+                DATABEND_CREDITS_LICENSES,
+            ),
             SettingsTable::create(sys_db_meta.next_table_id()),
             TablesTableWithoutHistory::create(sys_db_meta.next_table_id()),
             TablesTableWithHistory::create(sys_db_meta.next_table_id()),
@@ -126,7 +137,11 @@ impl SystemDatabase {
             EnginesTable::create(sys_db_meta.next_table_id()),
             RolesTable::create(sys_db_meta.next_table_id()),
             StagesTable::create(sys_db_meta.next_table_id()),
-            BuildOptionsTable::create(sys_db_meta.next_table_id()),
+            BuildOptionsTable::create(
+                sys_db_meta.next_table_id(),
+                VERGEN_CARGO_FEATURES,
+                DATABEND_CARGO_CFG_TARGET_FEATURE,
+            ),
             CatalogsTable::create(sys_db_meta.next_table_id()),
             QueryCacheTable::create(sys_db_meta.next_table_id()),
             TableFunctionsTable::create(sys_db_meta.next_table_id()),

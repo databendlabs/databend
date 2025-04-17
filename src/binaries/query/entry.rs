@@ -220,7 +220,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     {
         set_system_version(
             "query",
-            DATABEND_GIT_SEMVER.expect("DATABEND_GIT_SEMVER can not be None"),
+            DATABEND_GIT_SEMVER.unwrap_or("unknown"),
             DATABEND_GIT_SHA.as_str(),
         );
         let address = conf.query.metric_api_address.clone();

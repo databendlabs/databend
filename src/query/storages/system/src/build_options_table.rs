@@ -33,6 +33,7 @@ use crate::SyncSystemTable;
 
 pub struct BuildOptionsTable {
     table_info: TableInfo,
+    data: DataBlock,
 }
 
 impl SyncSystemTable for BuildOptionsTable {
@@ -43,37 +44,16 @@ impl SyncSystemTable for BuildOptionsTable {
     }
 
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let mut cargo_features: Vec<String>;
-
-        if let Some(features) = databend_common_version::VERGEN_CARGO_FEATURES {
-            cargo_features = features
-                .split_terminator(',')
-                .map(|x| x.trim().to_string())
-                .collect();
-        } else {
-            cargo_features = vec!["not available".to_string()];
-        }
-
-        let mut target_features: Vec<String> =
-            databend_common_version::DATABEND_CARGO_CFG_TARGET_FEATURE
-                .split_terminator(',')
-                .map(|x| x.trim().to_string())
-                .collect();
-
-        let length = max(cargo_features.len(), target_features.len());
-
-        cargo_features.resize(length, "".to_string());
-        target_features.resize(length, "".to_string());
-
-        Ok(DataBlock::new_from_columns(vec![
-            StringType::from_data(cargo_features),
-            StringType::from_data(target_features),
-        ]))
+        Ok(self.data.clone())
     }
 }
 
 impl BuildOptionsTable {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(
+        table_id: u64,
+        cargo_features: Option<&str>,
+        target_features: &str,
+    ) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("cargo_features", TableDataType::String),
             TableField::new("target_features", TableDataType::String),
@@ -91,6 +71,30 @@ impl BuildOptionsTable {
             ..Default::default()
         };
 
-        SyncOneBlockSystemTable::create(BuildOptionsTable { table_info })
+        let mut cargo_features = if let Some(features) = cargo_features {
+            features
+                .split_terminator(',')
+                .map(|x| x.trim().to_string())
+                .collect::<Vec<_>>()
+        } else {
+            vec!["not available".to_string()]
+        };
+
+        let mut target_features: Vec<String> = target_features
+            .split_terminator(',')
+            .map(|x| x.trim().to_string())
+            .collect();
+
+        let length = max(cargo_features.len(), target_features.len());
+
+        cargo_features.resize(length, "".to_string());
+        target_features.resize(length, "".to_string());
+
+        let data = DataBlock::new_from_columns(vec![
+            StringType::from_data(cargo_features),
+            StringType::from_data(target_features),
+        ]);
+
+        SyncOneBlockSystemTable::create(BuildOptionsTable { table_info, data })
     }
 }
