@@ -19,6 +19,7 @@
 
 mod config;
 mod crash_hook;
+mod filter;
 mod init;
 mod loggers;
 mod panic_hook;
