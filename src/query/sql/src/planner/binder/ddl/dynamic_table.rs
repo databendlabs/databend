@@ -31,6 +31,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TARGET_LAG;
 
+use crate::binder::ddl::table::AnalyzeCreateTableResult;
 use crate::plans::CreateDynamicTablePlan;
 use crate::plans::Plan;
 use crate::BindContext;
@@ -162,8 +163,11 @@ impl Binder {
 
         let (schema, field_comments) = match source {
             Some(source) => {
-                let (source_schema, source_comments, _, _) =
-                    self.analyze_create_table_schema(source).await?;
+                let AnalyzeCreateTableResult {
+                    schema: source_schema,
+                    field_comments: source_comments,
+                    ..
+                } = self.analyze_create_table_schema(source).await?;
                 if source_schema.fields().len() != query_fields.len() {
                     return Err(ErrorCode::BadArguments("Number of columns does not match"));
                 }

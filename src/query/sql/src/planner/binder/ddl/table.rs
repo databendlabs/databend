@@ -149,6 +149,13 @@ use crate::DefaultExprBinder;
 use crate::Planner;
 use crate::SelectBuilder;
 
+pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
+    pub(in crate::planner::binder) schema: TableSchemaRef,
+    pub(in crate::planner::binder) field_comments: Vec<String>,
+    pub(in crate::planner::binder) inverted_indexes: Option<BTreeMap<String, TableIndex>>,
+    pub(in crate::planner::binder) ngram_indexes: Option<BTreeMap<String, TableIndex>>,
+}
+
 impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_tables(
@@ -529,20 +536,19 @@ impl Binder {
         }
 
         // Build table schema
-        let (schema, field_comments, inverted_indexes, ngram_indexes, as_query_plan) = match (
-            &source, &as_query,
-        ) {
+        let (
+            AnalyzeCreateTableResult {
+                schema,
+                field_comments,
+                inverted_indexes,
+                ngram_indexes,
+            },
+            as_query_plan,
+        ) = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
-                let (schema, field_comments, inverted_indexes, ngram_indexes) =
-                    self.analyze_create_table_schema(source).await?;
-                (
-                    schema,
-                    field_comments,
-                    inverted_indexes,
-                    ngram_indexes,
-                    None,
-                )
+                let result = self.analyze_create_table_schema(source).await?;
+                (result, None)
             }
             (None, Some(query)) => {
                 // `CREATE TABLE AS SELECT ...` without column definitions
@@ -563,12 +569,19 @@ impl Binder {
                     .collect::<Result<Vec<_>>>()?;
                 let schema = TableSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
-                (schema, vec![], None, None, Some(Box::new(as_query_plan)))
+                (
+                    AnalyzeCreateTableResult {
+                        schema,
+                        field_comments: vec![],
+                        inverted_indexes: None,
+                        ngram_indexes: None,
+                    },
+                    Some(Box::new(as_query_plan)),
+                )
             }
             (Some(source), Some(query)) => {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns specified
-                let (source_schema, source_comments, inverted_indexes, ngram_indexes) =
-                    self.analyze_create_table_schema(source).await?;
+                let result = self.analyze_create_table_schema(source).await?;
                 let as_query_plan = self.as_query_plan(query).await?;
                 let bind_context = as_query_plan.bind_context().unwrap();
                 let query_fields: Vec<TableField> = bind_context
@@ -581,17 +594,11 @@ impl Binder {
                         ))
                     })
                     .collect::<Result<Vec<_>>>()?;
-                if source_schema.fields().len() != query_fields.len() {
+                if result.schema.fields().len() != query_fields.len() {
                     return Err(ErrorCode::BadArguments("Number of columns does not match"));
                 }
-                Self::validate_create_table_schema(&source_schema)?;
-                (
-                    source_schema,
-                    source_comments,
-                    inverted_indexes,
-                    ngram_indexes,
-                    Some(Box::new(as_query_plan)),
-                )
+                Self::validate_create_table_schema(&result.schema)?;
+                (result, Some(Box::new(as_query_plan)))
             }
             _ => {
                 let as_query_plan = if let Some(query) = as_query {
@@ -610,7 +617,12 @@ impl Binder {
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
-                        (Arc::new(table_schema), vec![], None, None, as_query_plan)
+                        (AnalyzeCreateTableResult {
+                            schema: Arc::new(table_schema),
+                            field_comments: vec![],
+                            inverted_indexes: None,
+                            ngram_indexes: None,
+                        }, as_query_plan)
                     }
                     Engine::Delta => {
                         let sp =
@@ -622,7 +634,12 @@ impl Binder {
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
                         engine_options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
-                        (Arc::new(table_schema), vec![], None, None, as_query_plan)
+                        (AnalyzeCreateTableResult {
+                            schema: Arc::new(table_schema),
+                            field_comments: vec![],
+                            inverted_indexes: None,
+                            ngram_indexes: None,
+                        }, as_query_plan)
                     }
                     _ => Err(ErrorCode::BadArguments(
                         "Incorrect CREATE query: required list of column descriptions or AS section or SELECT or ICEBERG/DELTA table engine",
@@ -1569,12 +1586,7 @@ impl Binder {
     pub(in crate::planner::binder) async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource,
-    ) -> Result<(
-        TableSchemaRef,
-        Vec<String>,
-        Option<BTreeMap<String, TableIndex>>,
-        Option<BTreeMap<String, TableIndex>>,
-    )> {
+    ) -> Result<AnalyzeCreateTableResult> {
         match source {
             CreateTableSource::Columns(columns, inverted_index_defs, ngram_index_defs) => {
                 let (schema, comments) =
@@ -1595,7 +1607,24 @@ impl Binder {
                 } else {
                     None
                 };
-                Ok((schema, comments, inverted_indexes, ngram_indexes))
+                if let (Some(inverted_indexes), Some(ngram_indexes)) =
+                    (&inverted_indexes, &ngram_indexes)
+                {
+                    for key in inverted_indexes.keys() {
+                        if ngram_indexes.contains_key(key) {
+                            return Err(ErrorCode::BadArguments(format!(
+                                "The index: {} exists between both inverted index and ngram index",
+                                key
+                            )));
+                        }
+                    }
+                }
+                Ok(AnalyzeCreateTableResult {
+                    schema,
+                    field_comments: comments,
+                    inverted_indexes,
+                    ngram_indexes,
+                })
             }
             CreateTableSource::Like {
                 catalog,
@@ -1610,14 +1639,24 @@ impl Binder {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
                         let mut planner = Planner::new(self.ctx.clone());
                         let (plan, _) = planner.plan_sql(query).await?;
-                        Ok((infer_table_schema(&plan.schema())?, vec![], None, None))
+                        Ok(AnalyzeCreateTableResult {
+                            schema: infer_table_schema(&plan.schema())?,
+                            field_comments: vec![],
+                            inverted_indexes: None,
+                            ngram_indexes: None,
+                        })
                     } else {
                         Err(ErrorCode::Internal(
                             "Logical error, View Table must have a SelectQuery inside.",
                         ))
                     }
                 } else {
-                    Ok((table.schema(), table.field_comments().clone(), None, None))
+                    Ok(AnalyzeCreateTableResult {
+                        schema: table.schema(),
+                        field_comments: table.field_comments().clone(),
+                        inverted_indexes: None,
+                        ngram_indexes: None,
+                    })
                 }
             }
         }

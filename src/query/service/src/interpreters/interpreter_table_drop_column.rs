@@ -100,8 +100,8 @@ impl Interpreter for DropTableColumnInterpreter {
             for (index_name, index) in &table_info.meta.indexes {
                 if index.column_ids.contains(&field.column_id) {
                     return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
-                        "column `{}` is referenced by inverted index, drop table index `{}` first",
-                        field.name, index_name,
+                        "column `{}` is referenced by inverted index, drop {} index `{}` first",
+                        index.index_type, field.name, index_name,
                     )));
                 }
             }

@@ -36,6 +36,9 @@ select name, type, original, definition from system.indexes;
 idx1 NGRAM (empty) t1(content)gram_size='5'
 idx2 NGRAM (empty) t2(content)gram_size='5'
 
+statement error
+CREATE INVERTED INDEX idx1 ON t1(content)
+
 statement ok
 DROP NGRAM INDEX idx2 ON t2
 
