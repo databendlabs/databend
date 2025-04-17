@@ -490,6 +490,17 @@ impl QueryVisitor {
                 date_start: Box::new(self.fuzz_expr(date_start)),
                 date_end: Box::new(self.fuzz_expr(date_end)),
             },
+            Expr::DateBetween {
+                span,
+                unit,
+                date_start,
+                date_end,
+            } => Expr::DateBetween {
+                span: *span,
+                unit: *unit,
+                date_start: Box::new(self.fuzz_expr(date_start)),
+                date_end: Box::new(self.fuzz_expr(date_end)),
+            },
             Expr::DateSub {
                 span,
                 unit,

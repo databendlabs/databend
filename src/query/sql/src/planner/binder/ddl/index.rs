@@ -19,8 +19,10 @@ use std::sync::LazyLock;
 
 use databend_common_ast::ast::CreateIndexStmt;
 use databend_common_ast::ast::CreateInvertedIndexStmt;
+use databend_common_ast::ast::CreateNgramIndexStmt;
 use databend_common_ast::ast::DropIndexStmt;
 use databend_common_ast::ast::DropInvertedIndexStmt;
+use databend_common_ast::ast::DropNgramIndexStmt;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
@@ -28,6 +30,7 @@ use databend_common_ast::ast::RefreshIndexStmt;
 use databend_common_ast::ast::RefreshInvertedIndexStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableIndexType;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -459,6 +462,7 @@ impl Binder {
         let index_options = self.validate_inverted_index_options(index_options).await?;
 
         let plan = CreateTableIndexPlan {
+            index_type: TableIndexType::Inverted,
             create_option: create_option.clone().into(),
             catalog,
             index_name,
@@ -468,6 +472,129 @@ impl Binder {
             index_options,
         };
         Ok(Plan::CreateTableIndex(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_create_ngram_index(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &CreateNgramIndexStmt,
+    ) -> Result<Plan> {
+        let CreateNgramIndexStmt {
+            create_option,
+            index_name,
+            catalog,
+            database,
+            table,
+            columns,
+            sync_creation,
+            index_options,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let table = self.ctx.get_table(&catalog, &database, &table).await?;
+
+        if table.is_read_only() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is read-only, creating ngram index not allowed",
+                table.name()
+            )));
+        }
+
+        if !table.support_index() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table engine {} does not support create ngram index",
+                table.engine()
+            )));
+        }
+        if table.is_temp() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is temporary table, creating ngram index not allowed",
+                table.name()
+            )));
+        }
+        let table_schema = table.schema();
+        let table_id = table.get_id();
+        let index_name = self.normalize_object_identifier(index_name);
+        let column_ids = self
+            .validate_ngram_index_columns(table_schema, columns)
+            .await?;
+        let index_options = self.validate_ngram_index_options(index_options).await?;
+
+        let plan = CreateTableIndexPlan {
+            index_type: TableIndexType::Ngram,
+            create_option: create_option.clone().into(),
+            catalog,
+            index_name,
+            column_ids,
+            table_id,
+            sync_creation: *sync_creation,
+            index_options,
+        };
+        Ok(Plan::CreateTableIndex(Box::new(plan)))
+    }
+
+    pub(in crate::planner::binder) async fn validate_ngram_index_columns(
+        &self,
+        table_schema: TableSchemaRef,
+        columns: &[Identifier],
+    ) -> Result<Vec<ColumnId>> {
+        let mut column_set = BTreeSet::new();
+        for column in columns {
+            match table_schema.field_with_name(&column.name) {
+                Ok(field) => {
+                    if field.data_type.remove_nullable() != TableDataType::String {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Ngram index currently only support String type, but the type of column {} is {}",
+                            column, field.data_type
+                        )));
+                    }
+                    if column_set.contains(&field.column_id) {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Ngram index column must be unique, but column {} is duplicate",
+                            column.name
+                        )));
+                    }
+                    column_set.insert(field.column_id);
+                }
+                Err(_) => {
+                    return Err(ErrorCode::UnsupportedIndex(format!(
+                        "Table does not have column {}",
+                        column
+                    )));
+                }
+            }
+        }
+        Ok(Vec::from_iter(column_set.into_iter()))
+    }
+
+    pub(in crate::planner::binder) async fn validate_ngram_index_options(
+        &self,
+        index_options: &BTreeMap<String, String>,
+    ) -> Result<BTreeMap<String, String>> {
+        let mut options = BTreeMap::new();
+        for (opt, val) in index_options.iter() {
+            let key = opt.to_lowercase();
+            let value = val.to_lowercase();
+            match key.as_str() {
+                "gram_size" => {
+                    if value.parse::<u32>().is_err() {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "value `{value}` is not a legal number",
+                        )));
+                    }
+                    options.insert("gram_size".to_string(), value);
+                }
+                _ => {
+                    return Err(ErrorCode::IndexOptionInvalid(format!(
+                        "index option `{key}` is invalid key for create ngram index statement",
+                    )));
+                }
+            }
+        }
+        Ok(options)
     }
 
     pub(in crate::planner::binder) async fn validate_inverted_index_columns(
@@ -586,6 +713,44 @@ impl Binder {
         let index_name = self.normalize_object_identifier(index_name);
 
         let plan = DropTableIndexPlan {
+            index_type: TableIndexType::Inverted,
+            if_exists: *if_exists,
+            catalog,
+            index_name,
+            table_id,
+        };
+        Ok(Plan::DropTableIndex(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_drop_ngram_index(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &DropNgramIndexStmt,
+    ) -> Result<Plan> {
+        let DropNgramIndexStmt {
+            if_exists,
+            index_name,
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let table = self.ctx.get_table(&catalog, &database, &table).await?;
+        if !table.support_index() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table engine {} does not support create ngram index",
+                table.engine()
+            )));
+        }
+        let table_id = table.get_id();
+        let index_name = self.normalize_object_identifier(index_name);
+
+        let plan = DropTableIndexPlan {
+            index_type: TableIndexType::Ngram,
             if_exists: *if_exists,
             catalog,
             index_name,

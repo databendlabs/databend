@@ -18,6 +18,8 @@ use databend_storages_common_table_meta::table::TableCompression;
 use crate::FuseStorageFormat;
 use crate::DEFAULT_ROW_PER_PAGE;
 
+pub const MAX_BLOCK_UNCOMPRESSED_SIZE: usize = 1024 * 1024 * 400;
+
 #[derive(Clone, Debug)]
 pub struct WriteSettings {
     pub storage_format: FuseStorageFormat,

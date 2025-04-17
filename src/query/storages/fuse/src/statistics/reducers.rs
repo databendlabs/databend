@@ -24,8 +24,6 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
-use crate::table_functions::cmp_with_null;
-
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
 ) -> StatisticsOfColumns {
@@ -49,37 +47,39 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     col_to_stats_lit
         .iter()
         .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-            let mut min_stats = Vec::with_capacity(stats.len());
-            let mut max_stats = Vec::with_capacity(stats.len());
-            let mut null_count = 0;
-            let mut in_memory_size = 0;
-
-            for col_stats in stats {
-                min_stats.push(col_stats.min().clone());
-                max_stats.push(col_stats.max().clone());
-
-                null_count += col_stats.null_count;
-                in_memory_size += col_stats.in_memory_size;
-            }
-
-            let min = min_stats
-                .into_iter()
-                .filter(|s| !s.is_null())
-                .min_by(|x, y| x.cmp(y))
-                .unwrap_or(Scalar::Null);
-
-            let max = max_stats
-                .into_iter()
-                .filter(|s| !s.is_null())
-                .max_by(|x, y| x.cmp(y))
-                .unwrap_or(Scalar::Null);
-
-            acc.insert(
-                *id,
-                ColumnStatistics::new(min, max, null_count, in_memory_size, None),
-            );
+            let col_stats = reduce_column_statistics(stats);
+            acc.insert(*id, col_stats);
             acc
         })
+}
+
+pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
+    let mut min_stats = Vec::with_capacity(stats.len());
+    let mut max_stats = Vec::with_capacity(stats.len());
+    let mut null_count = 0;
+    let mut in_memory_size = 0;
+
+    for col_stats in stats.iter() {
+        let col_stats = col_stats.borrow();
+        min_stats.push(col_stats.min().clone());
+        max_stats.push(col_stats.max().clone());
+
+        null_count += col_stats.null_count;
+        in_memory_size += col_stats.in_memory_size;
+    }
+
+    let min = min_stats
+        .into_iter()
+        .filter(|s| !s.is_null())
+        .min_by(|x, y| x.cmp(y))
+        .unwrap_or(Scalar::Null);
+
+    let max = max_stats
+        .into_iter()
+        .filter(|s| !s.is_null())
+        .max_by(|x, y| x.cmp(y))
+        .unwrap_or(Scalar::Null);
+    ColumnStatistics::new(min, max, null_count, in_memory_size, None)
 }
 
 pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
@@ -112,11 +112,19 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
 
     let min = min_stats
         .into_iter()
-        .min_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
+        .min_by(|x, y| {
+            x.iter()
+                .map(Scalar::as_ref)
+                .cmp(y.iter().map(Scalar::as_ref))
+        })
         .unwrap();
     let max = max_stats
         .into_iter()
-        .max_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
+        .max_by(|x, y| {
+            x.iter()
+                .map(Scalar::as_ref)
+                .cmp(y.iter().map(Scalar::as_ref))
+        })
         .unwrap();
     let level = levels.into_iter().max().unwrap_or(0);
 
@@ -211,6 +219,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         compressed_byte_size += b.file_size;
         index_size += b.bloom_filter_index_size;
         index_size += b.inverted_index_size.unwrap_or_default();
+        index_size += b.ngram_filter_index_size.unwrap_or_default();
         if thresholds.check_perfect_block(
             b.row_count as usize,
             b.block_size as usize,

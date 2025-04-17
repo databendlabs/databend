@@ -328,9 +328,8 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
 
     blocks.sort();
     indexes_0.sort();
-    let indexes_0 = collect_file_names(&agg_index_path_0)?;
 
-    let blocks_remove_prefix_g = blocks
+    let mut blocks_remove_prefix_g = blocks
         .iter()
         .map(|b| {
             b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
@@ -338,6 +337,7 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
                 .to_string()
         })
         .collect::<Vec<_>>();
+    blocks_remove_prefix_g.sort();
     assert_eq!(blocks_remove_prefix_g, indexes_0);
 
     // Check aggregating index_0 is correct after update.
@@ -489,8 +489,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 
     blocks.sort();
     indexes_0.sort();
-    let indexes_0 = collect_file_names(&agg_index_path_0)?;
-    let blocks_remove_prefix_g = blocks
+    let mut blocks_remove_prefix_g = blocks
         .iter()
         .map(|b| {
             b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
@@ -498,14 +497,14 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
                 .to_string()
         })
         .collect::<Vec<_>>();
+    blocks_remove_prefix_g.sort();
     assert_eq!(blocks_remove_prefix_g, indexes_0);
 
     // check index1
     let mut indexes_1 = collect_file_names(&agg_index_path_1)?;
 
     indexes_1.sort();
-    let indexes_1 = collect_file_names(&agg_index_path_1)?;
-    let blocks_remove_prefix_g = blocks
+    let mut blocks_remove_prefix_g = blocks
         .iter()
         .map(|b| {
             b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
@@ -513,6 +512,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
                 .to_string()
         })
         .collect::<Vec<_>>();
+    blocks_remove_prefix_g.sort();
     assert_eq!(blocks_remove_prefix_g, indexes_1);
 
     Ok(())

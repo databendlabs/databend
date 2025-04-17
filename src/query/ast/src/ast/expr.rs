@@ -235,6 +235,12 @@ pub enum Expr {
         date_start: Box<Expr>,
         date_end: Box<Expr>,
     },
+    DateBetween {
+        span: Span,
+        unit: IntervalKind,
+        date_start: Box<Expr>,
+        date_end: Box<Expr>,
+    },
     DateSub {
         span: Span,
         unit: IntervalKind,
@@ -302,6 +308,7 @@ impl Expr {
             | Expr::Interval { span, .. }
             | Expr::DateAdd { span, .. }
             | Expr::DateDiff { span, .. }
+            | Expr::DateBetween { span, .. }
             | Expr::DateSub { span, .. }
             | Expr::DateTrunc { span, .. }
             | Expr::LastDay { span, .. }
@@ -435,6 +442,15 @@ impl Expr {
                 ..
             } => merge_span(merge_span(*span, interval.whole_span()), date.whole_span()),
             Expr::DateDiff {
+                span,
+                date_start,
+                date_end,
+                ..
+            } => merge_span(
+                merge_span(*span, date_start.whole_span()),
+                date_end.whole_span(),
+            ),
+            Expr::DateBetween {
                 span,
                 date_start,
                 date_end,
@@ -765,6 +781,14 @@ impl Display for Expr {
                     ..
                 } => {
                     write!(f, "DATE_DIFF({unit}, {date_start}, {date_end})")?;
+                }
+                Expr::DateBetween {
+                    unit,
+                    date_start,
+                    date_end,
+                    ..
+                } => {
+                    write!(f, "DATE_BETWEEN({unit}, {date_start}, {date_end})")?;
                 }
                 Expr::DateSub {
                     unit,
@@ -2129,6 +2153,14 @@ impl ExprReplacer {
                 self.replace_expr(date);
             }
             Expr::DateDiff {
+                date_start,
+                date_end,
+                ..
+            } => {
+                self.replace_expr(date_start);
+                self.replace_expr(date_end);
+            }
+            Expr::DateBetween {
                 date_start,
                 date_end,
                 ..

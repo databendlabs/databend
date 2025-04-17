@@ -35,6 +35,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_sql::BloomIndexColumns;
@@ -122,6 +123,7 @@ async fn test_block_pruner() -> Result<()> {
         as_select: None,
         cluster_key: None,
         inverted_indexes: None,
+        ngram_indexes: None,
         attached_columns: None,
     };
 
@@ -518,6 +520,7 @@ async fn test_block_pruner() -> Result<()> {
         column_ids: vec![1, 2, 3],
         sync_creation: false,
         options: index_options.clone(),
+        index_type: TableIndexType::Inverted,
     };
 
     let res = handler.do_create_table_index(catalog.clone(), req).await;

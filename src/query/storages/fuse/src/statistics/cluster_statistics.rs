@@ -23,14 +23,10 @@ use databend_common_expression::Scalar;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 
-use crate::table_functions::cmp_with_null;
-
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
-
-    pub(crate) extra_key_num: usize,
-
+    extra_key_num: usize,
     max_page_size: Option<usize>,
 
     level: i32,
@@ -66,14 +62,6 @@ impl ClusterStatsGenerator {
             out_fields,
             func_ctx,
         }
-    }
-
-    pub fn is_cluster(&self) -> bool {
-        !self.cluster_key_index.is_empty()
-    }
-
-    pub fn block_thresholds(&self) -> BlockThresholds {
-        self.block_thresholds
     }
 
     // This can be used in block append.
@@ -187,10 +175,18 @@ pub fn sort_by_cluster_stats(
                 return Ordering::Equal;
             }
 
-            match a.min().iter().cmp_by(b.min().iter(), cmp_with_null) {
-                Ordering::Equal => a.max().iter().cmp_by(b.max().iter(), cmp_with_null),
-                ord => ord,
+            let ord_min = a
+                .min()
+                .iter()
+                .map(Scalar::as_ref)
+                .cmp(b.min().iter().map(Scalar::as_ref));
+            if ord_min != Ordering::Equal {
+                return ord_min;
             }
+            a.max()
+                .iter()
+                .map(Scalar::as_ref)
+                .cmp(b.max().iter().map(Scalar::as_ref))
         }
         _ => Ordering::Equal,
     }

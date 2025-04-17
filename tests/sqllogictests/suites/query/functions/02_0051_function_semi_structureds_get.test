@@ -383,7 +383,7 @@ statement ok
 CREATE TABLE IF NOT EXISTS t5(id Int null, obj Variant null) Engine = Fuse
 
 statement ok
-insert into t5 values(1, '{"car_no":10,"测试\\"\\uD83D\\uDC8E":"a"}'), (2, '{"car_no":20}')
+insert into t5 values(1, '{"car_no":10,"测试\\"\\uD83D\\uDC8E":"a","nums":[2,3,4],"obj":{"a":{"b":[1,2]},"c":1}}'), (2, '{"car_no":20,"nums":[-10,-11],"obj":{"x":"y"}}')
 
 query T
 select get(arr, 0) from t1
@@ -550,6 +550,11 @@ select id, json_path_query(arr, '$[*]?(@ > 1 && @ <= 3)') from t1
 1 3
 
 query IT
+select id, json_path_query(arr, '$[3][*]?(@ starts with "a")') from t1
+----
+1 "a"
+
+query IT
 select id, json_path_query(arr, '$[*][1]') from t1
 ----
 1 "b"
@@ -703,6 +708,85 @@ select json_path_query_first(obj, '$.测试\\"\\uD83D\\uDC8E') from t5
 ----
 "a"
 NULL
+
+query IT
+select id, json_path_query(obj, '$.obj.**') from t5
+----
+1 {"a":{"b":[1,2]},"c":1}
+1 {"b":[1,2]}
+1 [1,2]
+1 1
+1 2
+1 1
+2 {"x":"y"}
+2 "y"
+
+query IT
+select id, json_path_query(obj, '$.obj.**{2 to last}') from t5
+----
+1 [1,2]
+1 1
+1 2
+
+query IT
+select id, json_path_query(obj, '$.obj.**{1}') from t5
+----
+1 {"b":[1,2]}
+1 1
+2 "y"
+
+query IT
+select id, json_path_query(obj, '$.obj.**{1}.b') from t5
+----
+1 [1,2]
+
+query IT
+select id, json_path_query(obj, '+$.nums') from t5
+----
+1 2
+1 3
+1 4
+2 -10
+2 -11
+
+query IT
+select id, json_path_query(obj, '-$.nums') from t5
+----
+1 -2
+1 -3
+1 -4
+2 10
+2 11
+
+query IT
+select id, json_path_query(obj, '$.nums[0] + 3') from t5
+----
+1 5
+2 -7
+
+query IT
+select id, json_path_query(obj, '7 - $.nums[0]') from t5
+----
+1 5
+2 17
+
+query IT
+select id, json_path_query(obj, '2 * $.nums[1]') from t5
+----
+1 6
+2 -22
+
+query IT
+select id, json_path_query(obj, '$.nums[1] / 2') from t5
+----
+1 1.5
+2 -5.5
+
+query IT
+select id, json_path_query(obj, '$.nums[1] % 2') from t5
+----
+1 1
+2 -1
 
 statement ok
 set max_block_size = 65535;

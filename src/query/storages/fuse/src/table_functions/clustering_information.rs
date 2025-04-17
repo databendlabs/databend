@@ -52,7 +52,6 @@ use serde::Serialize;
 
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
-use crate::table_functions::cmp_with_null;
 use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::SimpleArgFunc;
@@ -239,7 +238,11 @@ impl<'a> ClusteringInformationImpl<'a> {
                     let (min, max) =
                         get_min_max_stats(&exprs, &block, schema.clone(), default_cluster_key_id);
                     assert_eq!(min.len(), max.len());
-                    let (min, max) = match min.iter().cmp_by(max.iter(), cmp_with_null) {
+                    let (min, max) = match min
+                        .iter()
+                        .map(Scalar::as_ref)
+                        .cmp(max.iter().map(Scalar::as_ref))
+                    {
                         Ordering::Equal => {
                             constant_block_count += 1;
                             (min, max)

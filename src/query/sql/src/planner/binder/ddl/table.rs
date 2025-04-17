@@ -35,6 +35,7 @@ use databend_common_ast::ast::ExistsTableStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::InvertedIndexDefinition;
 use databend_common_ast::ast::ModifyColumnAction;
+use databend_common_ast::ast::NgramIndexDefinition;
 use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::Query;
@@ -80,6 +81,7 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::check_operator;
 use databend_common_storage::init_operator;
@@ -146,6 +148,13 @@ use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::Planner;
 use crate::SelectBuilder;
+
+pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
+    pub(in crate::planner::binder) schema: TableSchemaRef,
+    pub(in crate::planner::binder) field_comments: Vec<String>,
+    pub(in crate::planner::binder) inverted_indexes: Option<BTreeMap<String, TableIndex>>,
+    pub(in crate::planner::binder) ngram_indexes: Option<BTreeMap<String, TableIndex>>,
+}
 
 impl Binder {
     #[async_backtrace::framed]
@@ -512,7 +521,7 @@ impl Binder {
         };
 
         // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns(cols, _)) = &source {
+        if let Some(CreateTableSource::Columns(cols, _, _)) = &source {
             if cols
                 .iter()
                 .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
@@ -527,12 +536,19 @@ impl Binder {
         }
 
         // Build table schema
-        let (schema, field_comments, inverted_indexes, as_query_plan) = match (&source, &as_query) {
+        let (
+            AnalyzeCreateTableResult {
+                schema,
+                field_comments,
+                inverted_indexes,
+                ngram_indexes,
+            },
+            as_query_plan,
+        ) = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
-                let (schema, field_comments, inverted_indexes) =
-                    self.analyze_create_table_schema(source).await?;
-                (schema, field_comments, inverted_indexes, None)
+                let result = self.analyze_create_table_schema(source).await?;
+                (result, None)
             }
             (None, Some(query)) => {
                 // `CREATE TABLE AS SELECT ...` without column definitions
@@ -553,12 +569,19 @@ impl Binder {
                     .collect::<Result<Vec<_>>>()?;
                 let schema = TableSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
-                (schema, vec![], None, Some(Box::new(as_query_plan)))
+                (
+                    AnalyzeCreateTableResult {
+                        schema,
+                        field_comments: vec![],
+                        inverted_indexes: None,
+                        ngram_indexes: None,
+                    },
+                    Some(Box::new(as_query_plan)),
+                )
             }
             (Some(source), Some(query)) => {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns specified
-                let (source_schema, source_comments, inverted_indexes) =
-                    self.analyze_create_table_schema(source).await?;
+                let result = self.analyze_create_table_schema(source).await?;
                 let as_query_plan = self.as_query_plan(query).await?;
                 let bind_context = as_query_plan.bind_context().unwrap();
                 let query_fields: Vec<TableField> = bind_context
@@ -571,16 +594,11 @@ impl Binder {
                         ))
                     })
                     .collect::<Result<Vec<_>>>()?;
-                if source_schema.fields().len() != query_fields.len() {
+                if result.schema.fields().len() != query_fields.len() {
                     return Err(ErrorCode::BadArguments("Number of columns does not match"));
                 }
-                Self::validate_create_table_schema(&source_schema)?;
-                (
-                    source_schema,
-                    source_comments,
-                    inverted_indexes,
-                    Some(Box::new(as_query_plan)),
-                )
+                Self::validate_create_table_schema(&result.schema)?;
+                (result, Some(Box::new(as_query_plan)))
             }
             _ => {
                 let as_query_plan = if let Some(query) = as_query {
@@ -599,7 +617,12 @@ impl Binder {
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
-                        (Arc::new(table_schema), vec![], None, as_query_plan)
+                        (AnalyzeCreateTableResult {
+                            schema: Arc::new(table_schema),
+                            field_comments: vec![],
+                            inverted_indexes: None,
+                            ngram_indexes: None,
+                        }, as_query_plan)
                     }
                     Engine::Delta => {
                         let sp =
@@ -611,7 +634,12 @@ impl Binder {
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
                         engine_options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
-                        (Arc::new(table_schema), vec![], None, as_query_plan)
+                        (AnalyzeCreateTableResult {
+                            schema: Arc::new(table_schema),
+                            field_comments: vec![],
+                            inverted_indexes: None,
+                            ngram_indexes: None,
+                        }, as_query_plan)
                     }
                     _ => Err(ErrorCode::BadArguments(
                         "Incorrect CREATE query: required list of column descriptions or AS section or SELECT or ICEBERG/DELTA table engine",
@@ -721,6 +749,7 @@ impl Binder {
             cluster_key,
             as_select: as_query_plan,
             inverted_indexes,
+            ngram_indexes,
             attached_columns: None,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
@@ -787,6 +816,7 @@ impl Binder {
             cluster_key: None,
             as_select: None,
             inverted_indexes: None,
+            ngram_indexes: None,
             attached_columns: stmt.columns_opt.clone(),
         })))
     }
@@ -1505,6 +1535,7 @@ impl Binder {
                 .await?;
 
             let inverted_index = TableIndex {
+                index_type: TableIndexType::Inverted,
                 name: name.clone(),
                 column_ids,
                 sync_creation: inverted_index_def.sync_creation,
@@ -1517,16 +1548,47 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    async fn analyze_ngram_indexes(
+        &self,
+        table_schema: TableSchemaRef,
+        ngram_index_defs: &[NgramIndexDefinition],
+    ) -> Result<BTreeMap<String, TableIndex>> {
+        let mut ngram_indexes = BTreeMap::new();
+        for ngram_index_def in ngram_index_defs {
+            let name = self.normalize_object_identifier(&ngram_index_def.index_name);
+            if ngram_indexes.contains_key(&name) {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Duplicated ngram index name: {}",
+                    name
+                )));
+            }
+            let column_ids = self
+                .validate_ngram_index_columns(table_schema.clone(), &ngram_index_def.columns)
+                .await?;
+            let options = self
+                .validate_ngram_index_options(&ngram_index_def.index_options)
+                .await?;
+
+            let ngram_index = TableIndex {
+                index_type: TableIndexType::Ngram,
+                name: name.clone(),
+                column_ids,
+                sync_creation: ngram_index_def.sync_creation,
+                version: Uuid::new_v4().simple().to_string(),
+                options,
+            };
+            ngram_indexes.insert(name, ngram_index);
+        }
+        Ok(ngram_indexes)
+    }
+
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource,
-    ) -> Result<(
-        TableSchemaRef,
-        Vec<String>,
-        Option<BTreeMap<String, TableIndex>>,
-    )> {
+    ) -> Result<AnalyzeCreateTableResult> {
         match source {
-            CreateTableSource::Columns(columns, inverted_index_defs) => {
+            CreateTableSource::Columns(columns, inverted_index_defs, ngram_index_defs) => {
                 let (schema, comments) =
                     self.analyze_create_table_schema_by_columns(columns).await?;
                 let inverted_indexes = if let Some(inverted_index_defs) = inverted_index_defs {
@@ -1537,7 +1599,32 @@ impl Binder {
                 } else {
                     None
                 };
-                Ok((schema, comments, inverted_indexes))
+                let ngram_indexes = if let Some(ngram_index_defs) = ngram_index_defs {
+                    let ngram_indexes = self
+                        .analyze_ngram_indexes(schema.clone(), ngram_index_defs)
+                        .await?;
+                    Some(ngram_indexes)
+                } else {
+                    None
+                };
+                if let (Some(inverted_indexes), Some(ngram_indexes)) =
+                    (&inverted_indexes, &ngram_indexes)
+                {
+                    for key in inverted_indexes.keys() {
+                        if ngram_indexes.contains_key(key) {
+                            return Err(ErrorCode::BadArguments(format!(
+                                "The index: {} exists between both inverted index and ngram index",
+                                key
+                            )));
+                        }
+                    }
+                }
+                Ok(AnalyzeCreateTableResult {
+                    schema,
+                    field_comments: comments,
+                    inverted_indexes,
+                    ngram_indexes,
+                })
             }
             CreateTableSource::Like {
                 catalog,
@@ -1552,14 +1639,24 @@ impl Binder {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
                         let mut planner = Planner::new(self.ctx.clone());
                         let (plan, _) = planner.plan_sql(query).await?;
-                        Ok((infer_table_schema(&plan.schema())?, vec![], None))
+                        Ok(AnalyzeCreateTableResult {
+                            schema: infer_table_schema(&plan.schema())?,
+                            field_comments: vec![],
+                            inverted_indexes: None,
+                            ngram_indexes: None,
+                        })
                     } else {
                         Err(ErrorCode::Internal(
                             "Logical error, View Table must have a SelectQuery inside.",
                         ))
                     }
                 } else {
-                    Ok((table.schema(), table.field_comments().clone(), None))
+                    Ok(AnalyzeCreateTableResult {
+                        schema: table.schema(),
+                        field_comments: table.field_comments().clone(),
+                        inverted_indexes: None,
+                        ngram_indexes: None,
+                    })
                 }
             }
         }
