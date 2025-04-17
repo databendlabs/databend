@@ -4243,6 +4243,7 @@ dependencies = [
  "itertools 0.13.0",
  "jsonb",
  "log",
+ "match-template",
  "opendal 0.53.0",
  "parking_lot 0.12.3",
  "parquet",

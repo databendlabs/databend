@@ -1059,7 +1059,7 @@ impl Table for FuseTable {
     fn get_block_thresholds(&self) -> BlockThresholds {
         let max_rows_per_block =
             self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT);
-        let max_bytes_per_block = self.get_option(
+        let bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,
         );
@@ -1068,7 +1068,7 @@ impl Table for FuseTable {
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
         BlockThresholds::new(
             max_rows_per_block,
-            max_bytes_per_block,
+            bytes_per_block,
             max_file_size,
             block_per_segment,
         )

@@ -71,7 +71,7 @@ use sha2::Digest;
 use sha2::Sha256;
 
 use crate::fuse_part::FuseBlockPartInfo;
-use crate::io::BloomIndexBuilder;
+use crate::io::BloomIndexRebuilder;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::table_sample;
 use crate::pruning::BlockPruner;
@@ -632,7 +632,7 @@ impl FuseTable {
                 .bloom_index_cols()
                 .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
 
-            Some(BloomIndexBuilder {
+            Some(BloomIndexRebuilder {
                 table_ctx: ctx.clone(),
                 table_schema: table_schema.clone(),
                 table_dal: dal.clone(),
