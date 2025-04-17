@@ -32,6 +32,7 @@ use crate::SyncSystemTable;
 
 pub struct ContributorsTable {
     table_info: TableInfo,
+    data: DataBlock,
 }
 
 impl SyncSystemTable for ContributorsTable {
@@ -42,19 +43,12 @@ impl SyncSystemTable for ContributorsTable {
     }
 
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let contributors: Vec<String> = env!("DATABEND_COMMIT_AUTHORS")
-            .split_terminator(',')
-            .map(|x| x.trim().to_string())
-            .collect();
-
-        Ok(DataBlock::new_from_columns(vec![StringType::from_data(
-            contributors,
-        )]))
+        Ok(self.data.clone())
     }
 }
 
 impl ContributorsTable {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(table_id: u64, contributors: &str) -> Arc<dyn Table> {
         let schema =
             TableSchemaRefExt::create(vec![TableField::new("name", TableDataType::String)]);
 
@@ -70,6 +64,12 @@ impl ContributorsTable {
             ..Default::default()
         };
 
-        SyncOneBlockSystemTable::create(ContributorsTable { table_info })
+        let contributors = contributors
+            .split_terminator(',')
+            .map(|x| x.trim().to_string())
+            .collect();
+
+        let data = DataBlock::new_from_columns(vec![StringType::from_data(contributors)]);
+        SyncOneBlockSystemTable::create(ContributorsTable { table_info, data })
     }
 }

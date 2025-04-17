@@ -60,7 +60,6 @@ use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
-use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -114,6 +113,8 @@ use databend_common_storages_stage::StageTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
+use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
@@ -1352,18 +1353,10 @@ impl TableContext for QueryContext {
     }
 
     fn get_license_key(&self) -> String {
-        let mut license = unsafe {
-            self.get_settings()
-                .get_enterprise_license()
-                .unwrap_or_default()
-        };
-
-        // Try load license from embedded env if failed to load from settings.
-        if license.is_empty() {
-            license = env!("DATABEND_ENTERPRISE_LICENSE_EMBEDDED").to_string();
-        }
-
-        license
+        unsafe { self.get_settings().get_enterprise_license() }.unwrap_or_else(|_| {
+            // Try load license from embedded env if failed to load from settings.
+            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string()
+        })
     }
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {

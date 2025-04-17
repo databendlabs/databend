@@ -99,6 +99,7 @@ databend-common-storages-system = { workspace = true }
 databend-common-storages-view = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
+databend-common-version = { workspace = true }
 databend-enterprise-aggregating-index = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
