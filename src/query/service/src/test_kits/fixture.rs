@@ -17,7 +17,6 @@ use std::str;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::version::DATABEND_COMMIT_VERSION;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::InnerConfig;
@@ -59,6 +58,7 @@ use databend_common_pipeline_sources::BlocksSource;
 use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_tracing::set_panic_hook;
+use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
 use jsonb::Number as JsonbNumber;

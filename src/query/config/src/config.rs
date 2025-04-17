@@ -55,6 +55,7 @@ use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig as InnerStructLogConfig;
 use databend_common_tracing::TracingConfig as InnerTracingConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
+use databend_common_version::DATABEND_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
@@ -73,7 +74,6 @@ use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
 use crate::toml::TomlIgnored;
-use crate::DATABEND_COMMIT_VERSION;
 
 const CATALOG_HIVE: &str = "hive";
 

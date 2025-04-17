@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-
 fn main() {
     databend_common_building::setup();
     databend_common_building::setup_commit_authors();

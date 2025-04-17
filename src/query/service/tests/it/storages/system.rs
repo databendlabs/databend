@@ -45,6 +45,12 @@ use databend_common_storages_system::MetricsTable;
 use databend_common_storages_system::RolesTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_users::UserApiProvider;
+use databend_common_version::DATABEND_CARGO_CFG_TARGET_FEATURE;
+use databend_common_version::DATABEND_COMMIT_AUTHORS;
+use databend_common_version::DATABEND_CREDITS_LICENSES;
+use databend_common_version::DATABEND_CREDITS_NAMES;
+use databend_common_version::DATABEND_CREDITS_VERSIONS;
+use databend_common_version::VERGEN_CARGO_FEATURES;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::stream::ReadDataBlockStream;
@@ -102,7 +108,8 @@ async fn test_build_options_table() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    let table = BuildOptionsTable::create(1);
+    let table =
+        BuildOptionsTable::create(1, VERGEN_CARGO_FEATURES, DATABEND_CARGO_CFG_TARGET_FEATURE);
     let source_plan = table
         .read_plan(ctx.clone(), None, None, false, true)
         .await?;
@@ -210,7 +217,7 @@ async fn test_contributors_table() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    let table = ContributorsTable::create(1);
+    let table = ContributorsTable::create(1, DATABEND_COMMIT_AUTHORS);
     let source_plan = table
         .read_plan(ctx.clone(), None, None, false, true)
         .await?;
@@ -228,7 +235,12 @@ async fn test_credits_table() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    let table = CreditsTable::create(1);
+    let table = CreditsTable::create(
+        1,
+        DATABEND_CREDITS_NAMES,
+        DATABEND_CREDITS_VERSIONS,
+        DATABEND_CREDITS_LICENSES,
+    );
     let source_plan = table
         .read_plan(ctx.clone(), None, None, false, true)
         .await?;

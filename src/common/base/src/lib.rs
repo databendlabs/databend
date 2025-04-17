@@ -40,7 +40,6 @@ pub mod obfuscator;
 pub mod rangemap;
 pub mod runtime;
 pub mod vec_ext;
-pub mod version;
 
 pub use runtime::dump_backtrace;
 pub use runtime::get_all_tasks;
