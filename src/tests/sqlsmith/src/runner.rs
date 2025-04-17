@@ -177,8 +177,6 @@ impl Runner {
         }
         generator.tables = new_tables.clone();
 
-        let enable_merge = "set enable_experimental_merge_into = 1".to_string();
-        let _ = self.run_sql(enable_merge, None).await;
         let dml_stmts = generator.gen_dml_stmt();
         for dml_stmt in dml_stmts.into_iter() {
             let dml_sql = dml_stmt.to_string();

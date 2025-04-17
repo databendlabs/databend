@@ -9,9 +9,6 @@ use db;
 
 ## test window,agg,join's correctess
 statement ok
-set enable_experimental_merge_into = 1;
-
-statement ok
 drop table if exists merge_target_0;
 
 statement ok
@@ -128,7 +125,3 @@ copy into copy_table_test0 from (select row_number() OVER (PARTITION BY b ORDER 
 ## it's `query as source of copy only allow projection on one stage table.`, because it always support only one table.
 statement error 1005
 copy into copy_table_test0 from (select t2.a,t3.b from @parquet_table0 as t ,@parquet_table0 as t3 where t2.a = t3.a);
-
-statement ok
-set enable_experimental_merge_into = 0;
-

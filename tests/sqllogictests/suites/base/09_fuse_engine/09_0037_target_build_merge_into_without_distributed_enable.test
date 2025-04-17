@@ -8,9 +8,6 @@ statement ok
 use db;
 
 statement ok
-set enable_experimental_merge_into = 1;
-
-statement ok
 drop table if exists target_build_table;
 
 statement ok
@@ -182,4 +179,29 @@ MERGE INTO orders_small as orders USING (
         UPDATE SET orders.quantity = agg_orders.total_quantity;
 
 statement ok
-set enable_experimental_merge_into = 0;
+CREATE OR REPLACE TABLE t_17800(a int , b int) row_per_block=10;
+
+query I
+insert into t_17800 select number, number%50 from numbers(100);
+----
+100
+
+statement ok
+CREATE OR REPLACE TABLE t1_17800(a int , b int)row_per_block=10;
+
+query I
+insert into t1_17800 select number, number % 25 from numbers(150) where number % 3 = 1;
+----
+50
+
+query II
+merge into t_17800 using t1_17800 on t_17800.a=t1_17800.a when matched then update set t_17800.b=t1_17800.b when not matched then insert *;
+----
+17 33
+
+query II
+select segment_count, row_count from fuse_snapshot('db','t_17800') limit 3;
+----
+1 117
+2 117
+1 100
