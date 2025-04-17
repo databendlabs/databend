@@ -53,7 +53,7 @@ use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
-use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_filter;
+use crate::pruning::ExprBloomFilter;
 
 pub struct DeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
@@ -165,7 +165,9 @@ impl DeserializeDataTransform {
             let probe_column = probe_block_entry
                 .value
                 .convert_to_full_column(&probe_block_entry.data_type, data_block.num_rows());
-            update_bitmap_with_bloom_filter(probe_column, filter, &mut bitmap)?;
+
+            // Apply bloom filter
+            ExprBloomFilter::new(filter.clone()).apply(probe_column, &mut bitmap)?;
             bitmaps.push(bitmap);
         }
         if !bitmaps.is_empty() {
