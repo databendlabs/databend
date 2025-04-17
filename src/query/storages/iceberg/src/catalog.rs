@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use databend_common_base::http_client::HttpClient;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::StorageDescription;
@@ -179,6 +180,7 @@ impl IcebergCatalog {
                 Arc::new(ctl)
             }
             IcebergCatalogOption::Rest(rest) => {
+                let client = HttpClient::default();
                 let cfg = RestCatalogConfig::builder()
                     .uri(rest.uri.clone())
                     .warehouse(rest.warehouse.clone())
@@ -189,6 +191,7 @@ impl IcebergCatalog {
                             .map(|(k, v)| (k.trim_matches('"').to_string(), v))
                             .collect(),
                     )
+                    .client(Some(client.inner()))
                     .build();
                 let ctl = RestCatalog::new(cfg);
                 Arc::new(ctl)

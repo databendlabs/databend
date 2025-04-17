@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CatalogConfig;
 use databend_common_config::InnerConfig;
@@ -54,6 +55,7 @@ pub struct CatalogManager {
 
     /// catalog_creators is the catalog creators that registered.
     pub catalog_creators: HashMap<CatalogType, Arc<dyn CatalogCreator>>,
+    pub catalog_caches: RwLock<HashMap<String, Arc<dyn Catalog>>>,
 }
 
 impl CatalogManager {
@@ -121,6 +123,7 @@ impl CatalogManager {
             default_catalog,
             external_catalogs,
             catalog_creators,
+            catalog_caches: Default::default(),
         };
 
         Ok(Arc::new(catalog_manager))
@@ -177,10 +180,24 @@ impl CatalogManager {
 
         let tenant = Tenant::new_or_err(tenant, func_name!())?;
         let ident = CatalogNameIdent::new(tenant, catalog_name);
-
         // Get catalog from metasrv.
         let info = self.meta.get_catalog(&ident).await?;
-        self.build_catalog(info, session_state)
+
+        let key = format!("{:?}_{}", info.catalog_name(), info.meta.created_on);
+        {
+            let r = self.catalog_caches.read().await;
+            if let Some(v) = r.get(&key) {
+                return Ok(v.clone());
+            }
+        }
+
+        let v = self.build_catalog(info, session_state)?;
+
+        {
+            let mut w = self.catalog_caches.write().await;
+            w.insert(key, v.clone());
+        }
+        Ok(v)
     }
 
     /// Create a new catalog.
