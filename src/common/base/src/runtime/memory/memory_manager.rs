@@ -210,7 +210,7 @@ mod tests {
         mem_stat.set_limit(1);
         mem_stat
             .used
-            .fetch_add(1 * 1024 * 1024 * 1024, Ordering::SeqCst);
+            .fetch_add(1024 * 1024 * 1024, Ordering::SeqCst);
 
         manager.request_exceeded_memory(0, 1, mode1);
         manager.request_exceeded_memory(mem_stat.id, 2, mode2.clone());
