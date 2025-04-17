@@ -12,4 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use databend_query_default_catalog::databases::*;
+use std::sync::Arc;
+
+use databend_common_meta_store::MetaStore;
+use databend_common_storages_factory::StorageFactory;
+
+use crate::databases::DatabaseFactory;
+
+#[derive(Clone)]
+pub struct CatalogContext {
+    pub meta: MetaStore,
+    pub storage_factory: Arc<StorageFactory>,
+    pub database_factory: Arc<DatabaseFactory>,
+}

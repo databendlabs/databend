@@ -12,24 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+mod database;
+mod database_context;
+mod database_factory;
+mod default;
+mod information_schema;
+mod system;
 
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_store::MetaStore;
-
-use crate::storages::StorageFactory;
-
-/// Database Context.
-#[derive(Clone)]
-pub struct DatabaseContext {
-    pub meta: MetaStore,
-    pub storage_factory: Arc<StorageFactory>,
-    pub tenant: Tenant,
-    pub disable_table_info_refresh: bool,
-}
-
-impl DatabaseContext {
-    pub fn tenant(&self) -> &Tenant {
-        &self.tenant
-    }
-}
+pub use database::Database;
+pub use database_context::DatabaseContext;
+pub use database_factory::DatabaseFactory;
+pub use information_schema::InformationSchemaDatabase;
+pub use system::SystemDatabase;

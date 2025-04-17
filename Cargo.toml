@@ -211,6 +211,7 @@ databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathe
 databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }
 databend-meta = { path = "src/meta/service" }
 databend-query = { path = "src/query/service" }
+databend-query-default-catalog = { path = "src/query/default_catalog" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
 databend-storages-common-cache = { path = "src/query/storages/common/cache" }

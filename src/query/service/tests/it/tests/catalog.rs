@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_query::catalogs::DatabaseCatalog;
+use databend_query::table_functions::TableFunctionFactoryRegistry;
 
 pub async fn create_catalog() -> Result<DatabaseCatalog> {
     let conf = databend_query::test_kits::ConfigBuilder::create().config();
-    DatabaseCatalog::try_create_with_config(conf).await
+    DatabaseCatalog::try_create_with_config(conf, Arc::new(TableFunctionFactoryRegistry::create()))
+        .await
 }

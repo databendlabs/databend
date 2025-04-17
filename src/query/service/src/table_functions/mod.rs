@@ -38,4 +38,4 @@ pub use others::LicenseInfoTable;
 pub use others::TenantQuotaTable;
 pub use system::TableStatisticsFunc;
 pub use table_function::TableFunction;
-pub use table_function_factory::TableFunctionFactory;
+pub use table_function_factory::TableFunctionFactoryRegistry;

@@ -14,14 +14,11 @@
 
 use std::sync::Arc;
 
-use databend_common_meta_store::MetaStore;
-
-use crate::databases::DatabaseFactory;
-use crate::storages::StorageFactory;
-
-#[derive(Clone)]
-pub struct CatalogContext {
-    pub meta: MetaStore,
-    pub storage_factory: Arc<StorageFactory>,
-    pub database_factory: Arc<DatabaseFactory>,
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_function::TableFunction;
+use databend_common_exception::Result;
+pub trait TableFunctionFactory {
+    fn get(&self, func_name: &str, tbl_args: TableArgs) -> Result<Arc<dyn TableFunction>>;
+    fn exists(&self, func_name: &str) -> bool;
+    fn list(&self) -> Vec<String>;
 }

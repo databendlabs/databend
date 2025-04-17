@@ -20,6 +20,7 @@ use std::sync::Arc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
@@ -113,11 +114,11 @@ use databend_common_meta_types::SeqV;
 use databend_storages_common_session::SessionState;
 use log::info;
 
-use crate::catalogs::default::ImmutableCatalog;
-use crate::catalogs::default::MutableCatalog;
-use crate::catalogs::default::SessionCatalog;
-use crate::storages::Table;
-use crate::table_functions::TableFunctionFactory;
+use crate::default::table_function_factory::TableFunctionFactory;
+use crate::default::ImmutableCatalog;
+use crate::default::MutableCatalog;
+use crate::default::SessionCatalog;
+
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
 ///   upper layer first, and bottom layer later(if necessary)
@@ -129,7 +130,7 @@ pub struct DatabaseCatalog {
     /// bottom layer, writing goes here
     mutable_catalog: Arc<SessionCatalog>,
     /// table function engine factories
-    table_function_factory: Arc<TableFunctionFactory>,
+    table_function_factory: Arc<dyn TableFunctionFactory + Send + Sync>,
 }
 
 impl Debug for DatabaseCatalog {
@@ -140,15 +141,17 @@ impl Debug for DatabaseCatalog {
 
 impl DatabaseCatalog {
     #[async_backtrace::framed]
-    pub async fn try_create_with_config(conf: InnerConfig) -> Result<DatabaseCatalog> {
+    pub async fn try_create_with_config(
+        conf: InnerConfig,
+        table_function_factory: Arc<dyn TableFunctionFactory + Send + Sync>,
+    ) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
         let session_catalog = SessionCatalog::create(mutable_catalog, SessionState::default());
-        let table_function_factory = TableFunctionFactory::create();
         let res = DatabaseCatalog {
             immutable_catalog: Arc::new(immutable_catalog),
             mutable_catalog: Arc::new(session_catalog),
-            table_function_factory: Arc::new(table_function_factory),
+            table_function_factory,
         };
         Ok(res)
     }

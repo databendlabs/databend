@@ -1,0 +1,31 @@
+[package]
+name = "databend-query-default-catalog"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+
+async-backtrace = { workspace = true }
+async-trait = { workspace = true }
+dashmap = { workspace = true }
+fastrace = { workspace = true }
+log = { workspace = true }
+
+databend-common-catalog = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-store = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-storages-factory = { workspace = true }
+databend-common-storages-information-schema = { workspace = true }
+databend-common-storages-system = { workspace = true }
+databend-storages-common-session = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
+
+[features]
+jemalloc = ["databend-common-storages-system/jemalloc"]

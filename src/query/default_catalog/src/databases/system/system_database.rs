@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
 use databend_common_config::InnerConfig;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseId;
@@ -71,9 +72,8 @@ use databend_common_storages_system::ViewsTableWithHistory;
 use databend_common_storages_system::ViewsTableWithoutHistory;
 use databend_common_storages_system::VirtualColumnsTable;
 
-use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
-use crate::storages::Table;
+use crate::default::InMemoryMetas;
 
 #[derive(Clone)]
 pub struct SystemDatabase {

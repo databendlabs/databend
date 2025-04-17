@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
@@ -114,8 +115,8 @@ use databend_storages_common_session::TxnState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
-use crate::catalogs::default::MutableCatalog;
-use crate::catalogs::Catalog;
+use crate::default::MutableCatalog;
+
 #[derive(Clone, Debug)]
 pub struct SessionCatalog {
     inner: MutableCatalog,
