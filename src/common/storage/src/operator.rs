@@ -124,6 +124,9 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         .layer(RuntimeLayer::new(GlobalIORuntime::instance()))
         .finish();
 
+    // Make sure the http client has been updated.
+    ob.update_http_client(|_| HttpClient::with(StorageHttpClient::default()));
+
     let mut op = ob
         .layer({
             let retry_timeout = env::var("_DATABEND_INTERNAL_RETRY_TIMEOUT")
@@ -185,8 +188,7 @@ pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Builder> {
         .root(&cfg.root)
         // Credential
         .account_name(&cfg.account_name)
-        .account_key(&cfg.account_key)
-        .http_client(HttpClient::with(StorageHttpClient::default()));
+        .account_key(&cfg.account_key);
 
     Ok(builder)
 }
@@ -210,8 +212,7 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Builder> {
         .endpoint(&cfg.endpoint_url)
         .bucket(&cfg.bucket)
         .root(&cfg.root)
-        .credential(&cfg.credential)
-        .http_client(HttpClient::with(StorageHttpClient::default()));
+        .credential(&cfg.credential);
 
     Ok(builder)
 }
@@ -311,8 +312,6 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.enable_virtual_host_style();
     }
 
-    builder = builder.http_client(HttpClient::with(StorageHttpClient::default()));
-
     Ok(builder)
 }
 
@@ -327,8 +326,7 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<impl Builder> {
         .root(&cfg.root)
         // Credential
         .access_key_id(&cfg.access_key_id)
-        .secret_access_key(&cfg.secret_access_key)
-        .http_client(HttpClient::with(StorageHttpClient::default()));
+        .secret_access_key(&cfg.secret_access_key);
 
     Ok(builder)
 }
@@ -343,8 +341,7 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
         .bucket(&cfg.bucket)
         .root(&cfg.root)
         .server_side_encryption(&cfg.server_side_encryption)
-        .server_side_encryption_key_id(&cfg.server_side_encryption_key_id)
-        .http_client(HttpClient::with(StorageHttpClient::default()));
+        .server_side_encryption_key_id(&cfg.server_side_encryption_key_id);
 
     Ok(builder)
 }
@@ -381,8 +378,7 @@ fn init_cos_operator(cfg: &StorageCosConfig) -> Result<impl Builder> {
         .secret_id(&cfg.secret_id)
         .secret_key(&cfg.secret_key)
         .bucket(&cfg.bucket)
-        .root(&cfg.root)
-        .http_client(HttpClient::with(StorageHttpClient::default()));
+        .root(&cfg.root);
 
     Ok(builder)
 }

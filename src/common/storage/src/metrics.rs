@@ -30,6 +30,7 @@ use opendal::raw::RpList;
 use opendal::raw::RpRead;
 use opendal::raw::RpWrite;
 use opendal::Buffer;
+use opendal::Metadata;
 use opendal::Result;
 
 /// StorageMetrics represents the metrics of storage (all bytes metrics are compressed size).
@@ -263,7 +264,7 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
         })
     }
 
-    async fn close(&mut self) -> Result<()> {
+    async fn close(&mut self) -> Result<Metadata> {
         self.inner.close().await
     }
 
@@ -284,7 +285,7 @@ impl<R: oio::BlockingWrite> oio::BlockingWrite for StorageMetricsWrapper<R> {
         })
     }
 
-    fn close(&mut self) -> Result<()> {
+    fn close(&mut self) -> Result<Metadata> {
         self.inner.close()
     }
 }
