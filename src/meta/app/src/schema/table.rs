@@ -283,8 +283,17 @@ pub struct TableMeta {
     pub indexes: BTreeMap<String, TableIndex>,
 }
 
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, num_derive::FromPrimitive,
+)]
+pub enum TableIndexType {
+    Inverted = 0,
+    Ngram = 1,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableIndex {
+    pub index_type: TableIndexType,
     pub name: String,
     pub column_ids: Vec<u32>,
     // if true, index will create after data written to databend,
@@ -468,6 +477,19 @@ impl Display for TableInfo {
             "DB.Table: {}, Table: {}-{}, Engine: {}",
             self.desc, self.name, self.ident, self.meta.engine
         )
+    }
+}
+
+impl Display for TableIndexType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            TableIndexType::Inverted => {
+                write!(f, "INVERTED")
+            }
+            TableIndexType::Ngram => {
+                write!(f, "NGRAM")
+            }
+        }
     }
 }
 
@@ -846,6 +868,7 @@ pub struct UpdateTableMetaReply {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexReq {
     pub create_option: CreateOption,
+    pub index_type: TableIndexType,
     pub tenant: Tenant,
     pub table_id: u64,
     pub name: String,
@@ -872,6 +895,7 @@ impl Display for CreateTableIndexReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableIndexReq {
+    pub index_type: TableIndexType,
     pub tenant: Tenant,
     pub if_exists: bool,
     pub table_id: u64,

@@ -58,9 +58,9 @@ impl AsyncSystemTable for IndexesTable {
             .list_indexes(ListIndexesReq::new(&tenant, None))
             .await?;
 
-        let inverted_index_tables = self.list_inverted_index_tables(ctx.clone()).await?;
+        let table_index_tables = self.list_table_index_tables(ctx.clone()).await?;
 
-        let len = indexes.len() + inverted_index_tables.len();
+        let len = indexes.len() + table_index_tables.len();
         let mut names = Vec::with_capacity(len);
         let mut types = Vec::with_capacity(len);
         let mut originals = Vec::with_capacity(len);
@@ -77,10 +77,10 @@ impl AsyncSystemTable for IndexesTable {
             updated_on.push(index.updated_on.map(|u| u.timestamp_micros()));
         }
 
-        for table in inverted_index_tables {
+        for table in table_index_tables {
             for (name, index) in &table.meta.indexes {
                 names.push(name.clone());
-                types.push("INVERTED".to_string());
+                types.push(index.index_type.to_string());
                 originals.push("".to_string());
 
                 let schema = table.schema();
@@ -149,10 +149,7 @@ impl IndexesTable {
         AsyncOneBlockSystemTable::create(Self { table_info })
     }
 
-    async fn list_inverted_index_tables(
-        &self,
-        ctx: Arc<dyn TableContext>,
-    ) -> Result<Vec<TableInfo>> {
+    async fn list_table_index_tables(&self, ctx: Arc<dyn TableContext>) -> Result<Vec<TableInfo>> {
         let tenant = ctx.get_tenant();
         let visibility_checker = ctx.get_visibility_checker(false).await?;
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;

@@ -23,6 +23,7 @@ use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::data_mask::RealDatamaskHandler;
 use crate::inverted_index::RealInvertedIndexHandler;
 use crate::license::RealLicenseManager;
+use crate::ngram_index::RealNgramIndexHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::stream::RealStreamHandler;
 use crate::virtual_column::RealVirtualColumnHandler;
@@ -39,6 +40,7 @@ impl MockServices {
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
         RealInvertedIndexHandler::init()?;
+        RealNgramIndexHandler::init()?;
         Ok(())
     }
 }

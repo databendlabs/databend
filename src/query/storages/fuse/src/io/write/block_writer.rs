@@ -31,6 +31,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
@@ -258,6 +259,9 @@ pub struct InvertedIndexBuilder {
 pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedIndexBuilder> {
     let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
     for index in table_meta.indexes.values() {
+        if !matches!(index.index_type, TableIndexType::Inverted) {
+            continue;
+        }
         if !index.sync_creation {
             continue;
         }
@@ -420,6 +424,8 @@ impl BlockBuilder {
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             create_on: Some(Utc::now()),
+            // TODO(kould): ngram index
+            ngram_filter_index_size: None,
         };
 
         let serialized = BlockSerialization {

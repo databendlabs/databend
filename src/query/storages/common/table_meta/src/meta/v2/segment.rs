@@ -78,6 +78,7 @@ pub struct BlockMeta {
     #[serde(default)]
     pub bloom_filter_index_size: u64,
     pub inverted_index_size: Option<u64>,
+    pub ngram_filter_index_size: Option<u64>,
     pub compression: Compression,
 
     // block create_on
@@ -97,6 +98,7 @@ impl BlockMeta {
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
         inverted_index_size: Option<u64>,
+        ngram_filter_index_size: Option<u64>,
         compression: Compression,
         create_on: Option<DateTime<Utc>>,
     ) -> Self {
@@ -111,6 +113,7 @@ impl BlockMeta {
             bloom_filter_index_location,
             bloom_filter_index_size,
             inverted_index_size,
+            ngram_filter_index_size,
             compression,
             create_on,
         }
@@ -254,6 +257,7 @@ impl BlockMeta {
             compression: Compression::Lz4,
             inverted_index_size: None,
             create_on: None,
+            ngram_filter_index_size: None,
         }
     }
 
@@ -278,6 +282,7 @@ impl BlockMeta {
             compression: s.compression,
             inverted_index_size: None,
             create_on: None,
+            ngram_filter_index_size: None,
         }
     }
 }

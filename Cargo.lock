@@ -4770,6 +4770,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-enterprise-ngram-index"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-meta-app",
+]
+
+[[package]]
 name = "databend-enterprise-query"
 version = "0.1.0"
 dependencies = [
@@ -4809,6 +4821,7 @@ dependencies = [
  "databend-enterprise-fail-safe",
  "databend-enterprise-hilbert-clustering",
  "databend-enterprise-inverted-index",
+ "databend-enterprise-ngram-index",
  "databend-enterprise-resources-management",
  "databend-enterprise-storage-encryption",
  "databend-enterprise-storage-quota",
@@ -5168,6 +5181,7 @@ dependencies = [
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-hilbert-clustering",
  "databend-enterprise-inverted-index",
+ "databend-enterprise-ngram-index",
  "databend-enterprise-resources-management",
  "databend-enterprise-stream-handler",
  "databend-enterprise-vacuum-handler",
