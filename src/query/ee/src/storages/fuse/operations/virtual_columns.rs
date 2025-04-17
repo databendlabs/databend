@@ -89,6 +89,13 @@ pub async fn do_refresh_virtual_column(
         // no source variant column
         return Ok(());
     }
+
+    let table_info = &fuse_table.get_table_info();
+    let Some(virtual_column_builder) = VirtualColumnBuilder::try_create(ctx.clone(), table_info)
+    else {
+        return Ok(());
+    };
+
     let projection = Projection::Columns(field_indices);
     let block_reader =
         fuse_table.create_block_reader(ctx.clone(), projection, false, false, false)?;
@@ -131,12 +138,6 @@ pub async fn do_refresh_virtual_column(
     if block_metas.is_empty() {
         return Ok(());
     }
-
-    let table_meta = &fuse_table.get_table_info().meta;
-    let Some(virtual_column_builder) = VirtualColumnBuilder::try_create(ctx.clone(), table_meta)
-    else {
-        return Ok(());
-    };
 
     let settings = ReadSettings::from_ctx(&ctx)?;
     pipeline.add_source(

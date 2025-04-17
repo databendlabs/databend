@@ -56,6 +56,7 @@ use crate::operations::set_backoff;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;
+use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
 use crate::FuseTable;
 enum State {
@@ -439,7 +440,14 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 // if table_id not match, update table meta will fail
                 let mut table_info = fuse_table.table_info.clone();
 
-                table_info.meta.virtual_schema = self.new_virtual_schema.clone();
+                // merge virtual schema
+                let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
+                let new_virtual_schema = std::mem::take(&mut self.new_virtual_schema);
+                let merged_virtual_schema = TransformMergeCommitMeta::merge_virtual_schema(
+                    old_virtual_schema,
+                    new_virtual_schema,
+                );
+                table_info.meta.virtual_schema = merged_virtual_schema;
 
                 // check if snapshot has been changed
                 let snapshot_has_changed = self.prev_snapshot_id.is_some_and(|prev_snapshot_id| {

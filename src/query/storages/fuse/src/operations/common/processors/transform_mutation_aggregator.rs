@@ -240,7 +240,6 @@ impl TableMutationAggregator {
                 segment_location,
                 format_version,
                 summary,
-                virtual_schema,
             } => {
                 merge_statistics_mut(
                     &mut self.appended_statistics,
@@ -250,7 +249,9 @@ impl TableMutationAggregator {
 
                 self.appended_segments
                     .push((segment_location, format_version));
-                self.virtual_schema = virtual_schema.clone();
+            }
+            MutationLogEntry::AppendVirtualSchema { virtual_schema } => {
+                self.virtual_schema = Some(virtual_schema.clone());
             }
             MutationLogEntry::CompactExtras { extras } => {
                 match self.mutations.entry(extras.segment_index) {

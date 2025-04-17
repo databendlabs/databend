@@ -44,7 +44,6 @@ async fn test_virtual_column_builder() -> Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
-    let table_meta = &table_info.meta;
 
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
@@ -54,7 +53,7 @@ async fn test_virtual_column_builder() -> Result<()> {
         0,
     ); // Dummy location
 
-    let builder = VirtualColumnBuilder::try_create(ctx, table_meta).unwrap();
+    let builder = VirtualColumnBuilder::try_create(ctx, table_info).unwrap();
 
     let block = DataBlock::new(
         vec![

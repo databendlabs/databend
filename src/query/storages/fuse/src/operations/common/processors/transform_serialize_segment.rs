@@ -237,6 +237,23 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
             }
+
+            let virtual_column_accumulator = std::mem::take(&mut self.virtual_column_accumulator);
+            if let Some(virtual_column_accumulator) = virtual_column_accumulator {
+                if let Some(virtual_schema) =
+                    virtual_column_accumulator.build_virtual_schema_with_block_number()
+                {
+                    // emit log entry.
+                    // for newly created virtual schema.
+                    let meta = MutationLogs {
+                        entries: vec![MutationLogEntry::AppendVirtualSchema { virtual_schema }],
+                    };
+                    let data_block = DataBlock::empty_with_meta(Box::new(meta));
+                    self.output.push_data(Ok(data_block));
+                    return Ok(Event::NeedConsume);
+                }
+            }
+
             self.output.finish();
             self.state = State::Finished;
             return Ok(Event::Finished);
@@ -251,7 +268,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 .cloned()
                 .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
             let extended_block_meta = ExtendedBlockMeta::downcast_ref_from(&input_meta)
-                .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?
+                .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?
                 .clone();
 
             if let Some(draft_virtual_block_meta) = extended_block_meta.draft_virtual_block_meta {
@@ -304,15 +321,6 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             State::PreCommitSegment { location, segment } => {
                 let format_version = SegmentInfo::VERSION;
 
-                let virtual_column_accumulator =
-                    std::mem::take(&mut self.virtual_column_accumulator);
-                let virtual_schema =
-                    if let Some(virtual_column_accumulator) = virtual_column_accumulator {
-                        virtual_column_accumulator.build_virtual_schema_with_block_number()
-                    } else {
-                        None
-                    };
-
                 // emit log entry.
                 // for newly created segment, always use the latest version
                 let meta = MutationLogs {
@@ -320,7 +328,6 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                         segment_location: location,
                         format_version,
                         summary: segment.summary().clone(),
-                        virtual_schema,
                     }],
                 };
 

@@ -39,7 +39,6 @@ pub enum MutationLogEntry {
         segment_location: String,
         format_version: FormatVersion,
         summary: Statistics,
-        virtual_schema: Option<VirtualDataSchema>,
     },
     ReclusterAppendBlock {
         block_meta: Arc<ExtendedBlockMeta>,
@@ -56,6 +55,9 @@ pub enum MutationLogEntry {
     },
     CompactExtras {
         extras: CompactExtraInfo,
+    },
+    AppendVirtualSchema {
+        virtual_schema: VirtualDataSchema,
     },
     DoNothing,
 }

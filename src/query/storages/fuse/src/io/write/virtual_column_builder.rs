@@ -43,7 +43,7 @@ use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
@@ -74,7 +74,7 @@ pub struct VirtualColumnBuilder {
 impl VirtualColumnBuilder {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        table_meta: &TableMeta,
+        table_info: &TableInfo,
     ) -> Option<VirtualColumnBuilder> {
         if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
@@ -82,7 +82,14 @@ impl VirtualColumnBuilder {
         {
             return None;
         }
+        // ignore persistent system tables {
+        if let Ok(database_name) = table_info.database_name() {
+            if database_name == "persistent_system" {
+                return None;
+            }
+        }
 
+        let table_meta = &table_info.meta;
         let mut variant_fields = Vec::new();
         for (i, field) in table_meta.schema.fields.iter().enumerate() {
             if field.data_type().remove_nullable() == TableDataType::Variant {
