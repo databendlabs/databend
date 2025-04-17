@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CatalogConfig;
 use databend_common_config::InnerConfig;
@@ -39,6 +38,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::anyerror::func_name;
 use databend_storages_common_session::SessionState;
+use parking_lot::RwLock;
 
 use super::Catalog;
 use super::CatalogCreator;
@@ -144,16 +144,34 @@ impl CatalogManager {
         session_state: SessionState,
     ) -> Result<Arc<dyn Catalog>> {
         let typ = info.meta.catalog_option.catalog_type();
-
         if typ == CatalogType::Default {
             return self.get_default_catalog(session_state);
         }
 
+        let tid = std::thread::current().id();
+        let key = format!(
+            "{:?}_{}_{:?}",
+            info.catalog_name(),
+            info.meta.created_on.timestamp(),
+            tid
+        );
+
+        {
+            let r = self.catalog_caches.read();
+            if let Some(v) = r.get(&key) {
+                return Ok(v.clone());
+            }
+        }
         let creator = self
             .catalog_creators
             .get(&typ)
             .ok_or_else(|| ErrorCode::BadArguments(format!("unknown catalog type: {:?}", typ)))?;
-        creator.try_create(info)
+
+        let v = creator.try_create(info)?;
+        println!("created new catalog {} with key {:?}", v.name(), key);
+        let mut w = self.catalog_caches.write();
+        w.insert(key, v.clone());
+        Ok(v)
     }
 
     /// Get a catalog from manager.
@@ -177,27 +195,11 @@ impl CatalogManager {
         if let Some(ctl) = self.external_catalogs.get(catalog_name) {
             return Ok(ctl.clone());
         }
-
         let tenant = Tenant::new_or_err(tenant, func_name!())?;
         let ident = CatalogNameIdent::new(tenant, catalog_name);
         // Get catalog from metasrv.
         let info = self.meta.get_catalog(&ident).await?;
-
-        let key = format!("{:?}_{}", info.catalog_name(), info.meta.created_on);
-        {
-            let r = self.catalog_caches.read().await;
-            if let Some(v) = r.get(&key) {
-                return Ok(v.clone());
-            }
-        }
-
-        let v = self.build_catalog(info, session_state)?;
-
-        {
-            let mut w = self.catalog_caches.write().await;
-            w.insert(key, v.clone());
-        }
-        Ok(v)
+        self.build_catalog(info, session_state)
     }
 
     /// Create a new catalog.
