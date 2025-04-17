@@ -20,6 +20,7 @@ pub mod fail_safe;
 pub mod hilbert_clustering;
 pub mod inverted_index;
 pub mod license;
+pub mod ngram_index;
 pub mod resource_management;
 pub mod storage_encryption;
 pub mod storage_quota;

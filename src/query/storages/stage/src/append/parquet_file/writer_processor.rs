@@ -132,6 +132,7 @@ impl ParquetFileWriter {
         let compression = match &compression {
             StageFileCompression::Zstd => Compression::ZSTD(ZstdLevel::default()),
             StageFileCompression::Snappy => Compression::SNAPPY,
+            StageFileCompression::None => Compression::UNCOMPRESSED,
             _ => {
                 return Err(ErrorCode::Internal(format!(
                     "unexpected compression {compression}"

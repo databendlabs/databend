@@ -369,6 +369,12 @@ impl<'a> Binder {
             Statement::RefreshInvertedIndex(stmt) => {
                 self.bind_refresh_inverted_index(bind_context, stmt).await?
             }
+            Statement::CreateNgramIndex(stmt) => {
+                self.bind_create_ngram_index(bind_context, stmt).await?
+            }
+            Statement::DropNgramIndex(stmt) => {
+                self.bind_drop_ngram_index(bind_context, stmt).await?
+            }
 
             // Virtual Columns
             Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,

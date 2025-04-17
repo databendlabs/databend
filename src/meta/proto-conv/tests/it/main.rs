@@ -119,3 +119,4 @@ mod v121_avro_format_params;
 mod v122_virtual_schema;
 mod v123_parquet_format_params;
 mod v124_udf_server_headers;
+mod v125_table_index;

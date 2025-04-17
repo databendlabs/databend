@@ -173,7 +173,7 @@ impl SnapshotHintWriter<'_> {
         if let Err(e) = hint.marshall(&mut bytes) {
             warn!("marshaling last snapshot hint failed. {}", e);
         } else {
-            dal.write(&hint_path, bytes).await.unwrap_or_else(|e| {
+            let _ = dal.write(&hint_path, bytes).await.inspect_err(|e| {
                 warn!("write last snapshot hint failure. {}", e);
             });
         }

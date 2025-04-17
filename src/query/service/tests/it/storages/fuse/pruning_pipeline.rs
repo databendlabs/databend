@@ -176,6 +176,7 @@ async fn test_snapshot_pruner() -> Result<()> {
         as_select: None,
         cluster_key: None,
         inverted_indexes: None,
+        ngram_indexes: None,
         attached_columns: None,
     };
 
