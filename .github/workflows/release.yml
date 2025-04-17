@@ -114,7 +114,7 @@ jobs:
           delete-branch: true
 
   build_default:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c32g, aws]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c64g, aws]
     needs: create_release
     strategy:
       fail-fast: false
@@ -147,7 +147,7 @@ jobs:
           bash ./scripts/ci/ci-run-sqllogic-tests.sh base
 
   build_docker:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c32g, aws]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c64g, aws]
     needs: create_release
     strategy:
       fail-fast: false
