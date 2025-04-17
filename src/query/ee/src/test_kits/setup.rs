@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::version::DATABEND_COMMIT_VERSION;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_tracing::set_panic_hook;
+use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
 use log::info;

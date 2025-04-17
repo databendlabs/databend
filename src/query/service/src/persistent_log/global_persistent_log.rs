@@ -186,15 +186,9 @@ impl GlobalPersistentLog {
             // alter the table if schema is changed
             if !prepared {
                 let prepare_guard = self.acquire(&meta_key, self.interval, 0).await?;
-                match self.prepare().await {
-                    Ok(_) => {
-                        info!("Persistent log prepared successfully");
-                        prepared = true;
-                    }
-                    Err(e) => {
-                        error!("Persistent log prepare failed: {:?}", e);
-                    }
-                }
+                self.prepare().await?;
+                info!("Persistent log prepared successfully");
+                prepared = true;
                 drop(prepare_guard);
             }
             let may_permit = self

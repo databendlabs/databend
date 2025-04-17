@@ -9,8 +9,5 @@ edition = { workspace = true }
 
 [dependencies]
 
-[build-dependencies]
-databend-common-building = { workspace = true }
-
 [lints]
 workspace = true

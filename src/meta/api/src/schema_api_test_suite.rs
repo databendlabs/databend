@@ -117,6 +117,7 @@ use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -6171,6 +6172,7 @@ impl SchemaApiTestSuite {
             info!("--- create table index 1");
             let req = CreateTableIndexReq {
                 create_option: CreateOption::Create,
+                index_type: TableIndexType::Inverted,
                 tenant: tenant.clone(),
                 table_id,
                 name: index_name_1.clone(),
@@ -6196,6 +6198,7 @@ impl SchemaApiTestSuite {
                 column_ids: index_column_ids_1.clone(),
                 sync_creation: true,
                 options: BTreeMap::new(),
+                index_type: TableIndexType::Inverted,
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_err());
@@ -6209,6 +6212,7 @@ impl SchemaApiTestSuite {
                 column_ids: index_column_ids_2.clone(),
                 sync_creation: true,
                 options: BTreeMap::new(),
+                index_type: TableIndexType::Inverted,
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
@@ -6230,6 +6234,7 @@ impl SchemaApiTestSuite {
                 column_ids: index_column_ids_1.clone(),
                 sync_creation: true,
                 options: BTreeMap::new(),
+                index_type: TableIndexType::Inverted,
             };
 
             let res = mt.create_table_index(req).await;
@@ -6250,6 +6255,7 @@ impl SchemaApiTestSuite {
                 column_ids: index_column_ids_1.clone(),
                 sync_creation: true,
                 options: BTreeMap::new(),
+                index_type: TableIndexType::Inverted,
             };
 
             let res = mt.create_table_index(req).await;
@@ -6266,6 +6272,7 @@ impl SchemaApiTestSuite {
                 column_ids: index_column_ids_3.clone(),
                 sync_creation: true,
                 options: BTreeMap::new(),
+                index_type: TableIndexType::Inverted,
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_err());
@@ -6291,6 +6298,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- drop table index");
             let req = DropTableIndexReq {
+                index_type: TableIndexType::Inverted,
                 tenant: tenant.clone(),
                 if_exists: false,
                 table_id,
@@ -6302,6 +6310,7 @@ impl SchemaApiTestSuite {
             assert!(res.is_ok());
 
             let req = DropTableIndexReq {
+                index_type: TableIndexType::Inverted,
                 tenant: tenant.clone(),
                 if_exists: false,
                 table_id,
@@ -6311,6 +6320,7 @@ impl SchemaApiTestSuite {
             assert!(res.is_err());
 
             let req = DropTableIndexReq {
+                index_type: TableIndexType::Inverted,
                 tenant: tenant.clone(),
                 if_exists: true,
                 table_id,
@@ -6369,6 +6379,7 @@ impl SchemaApiTestSuite {
                 column_ids: index_column_ids_1.clone(),
                 sync_creation: true,
                 options: BTreeMap::new(),
+                index_type: TableIndexType::Inverted,
             };
             index2_drop_start_time = Utc::now();
             let res = mt.create_table_index(req).await;

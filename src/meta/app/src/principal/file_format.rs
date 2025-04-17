@@ -782,14 +782,6 @@ impl ParquetFileFormatParams {
         missing_field_as: Option<&str>,
         null_if: Vec<String>,
     ) -> Result<Self> {
-        if !matches!(
-            compression,
-            StageFileCompression::Zstd | StageFileCompression::Snappy
-        ) {
-            return Err(ErrorCode::InvalidArgument(format!(
-                "compression algorithm {compression} not supported, only support Zstd and Snappy."
-            )));
-        }
         let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
         Ok(Self {
             compression,

@@ -35,12 +35,14 @@ databend-common-storage = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-tracing = { workspace = true }
+databend-common-version = { workspace = true }
 databend-enterprise-aggregating-index = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-fail-safe = { workspace = true }
 databend-enterprise-hilbert-clustering = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
+databend-enterprise-ngram-index = { workspace = true }
 databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
 databend-enterprise-storage-quota = { workspace = true }
@@ -64,9 +66,6 @@ uuid = { workspace = true }
 [dev-dependencies]
 jsonb = { workspace = true }
 tantivy = { workspace = true }
-
-[build-dependencies]
-databend-common-building = { workspace = true }
 
 [lints]
 workspace = true

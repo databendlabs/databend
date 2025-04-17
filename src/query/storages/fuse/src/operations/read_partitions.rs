@@ -59,6 +59,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::CREATE_O
 use databend_storages_common_table_meta::meta::column_oriented_segment::FILE_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::INVERTED_INDEX_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::LOCATION;
+use databend_storages_common_table_meta::meta::column_oriented_segment::NGRAM_FILTER_INDEX_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ROW_COUNT;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -70,7 +71,7 @@ use sha2::Digest;
 use sha2::Sha256;
 
 use crate::fuse_part::FuseBlockPartInfo;
-use crate::io::BloomIndexBuilder;
+use crate::io::BloomIndexRebuilder;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::table_sample;
 use crate::pruning::BlockPruner;
@@ -579,6 +580,7 @@ impl FuseTable {
         segment_column_projection.insert(LOCATION.to_string());
         segment_column_projection.insert(BLOOM_FILTER_INDEX_LOCATION.to_string());
         segment_column_projection.insert(BLOOM_FILTER_INDEX_SIZE.to_string());
+        segment_column_projection.insert(NGRAM_FILTER_INDEX_SIZE.to_string());
         segment_column_projection.insert(INVERTED_INDEX_SIZE.to_string());
         segment_column_projection.insert(COMPRESSION.to_string());
         segment_column_projection.insert(CREATE_ON.to_string());
@@ -630,7 +632,7 @@ impl FuseTable {
                 .bloom_index_cols()
                 .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
 
-            Some(BloomIndexBuilder {
+            Some(BloomIndexRebuilder {
                 table_ctx: ctx.clone(),
                 table_schema: table_schema.clone(),
                 table_dal: dal.clone(),

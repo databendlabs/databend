@@ -29,7 +29,6 @@ tokio = { workspace = true }
 tonic = { workspace = true }
 
 [build-dependencies]
-databend-common-building = { workspace = true }
 prost-build = { workspace = true }
 tonic-build = { workspace = true }
 

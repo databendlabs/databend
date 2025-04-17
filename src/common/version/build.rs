@@ -14,4 +14,5 @@
 
 fn main() {
     databend_common_building::setup();
+    databend_common_building::setup_commit_authors();
 }

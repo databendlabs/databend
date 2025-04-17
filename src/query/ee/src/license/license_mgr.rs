@@ -24,6 +24,7 @@ use databend_common_license::license::LicenseInfo;
 use databend_common_license::license::StorageQuota;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_version::DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY;
 use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
@@ -232,8 +233,7 @@ impl RealLicenseManager {
 }
 
 fn embedded_public_keys() -> Result<String> {
-    let pub_key = env!("DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY").to_string();
-
+    let pub_key = DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY.to_string();
     if pub_key.is_empty() {
         return Ok(pub_key);
     }

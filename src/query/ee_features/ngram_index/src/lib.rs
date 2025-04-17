@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-fn main() {
-    databend_common_building::setup();
-}
+mod ngram_index_handler;
+
+pub use ngram_index_handler::get_ngram_index_handler;
+pub use ngram_index_handler::NgramIndexHandler;
+pub use ngram_index_handler::NgramIndexHandlerWrapper;

@@ -19,6 +19,7 @@ use jiff::civil::Date;
 use jiff::civil::Weekday;
 use jiff::tz::TimeZone;
 use jiff::SignedDuration;
+use jiff::SpanRelativeTo;
 use jiff::Timestamp;
 use jiff::Unit;
 use jiff::Zoned;
@@ -170,10 +171,71 @@ impl EvalYearsImpl {
         (date_end.year() - date_start.year()) as i32
     }
 
+    pub fn eval_date_between(date_start: i32, date_end: i32, tz: TimeZone) -> i32 {
+        if date_start == date_end {
+            return 0;
+        }
+        if date_start > date_end {
+            return -Self::eval_date_between(date_end, date_start, tz);
+        }
+
+        let date_start = date_start.to_date(tz.clone());
+        let date_end = date_end.to_date(tz);
+
+        let mut years = date_end.year() - date_start.year();
+
+        // If the end month is less than the start month,
+        // or the months are equal but the end day is less than the start day,
+        // the last year is incomplete, minus 1
+        if (date_end.month() < date_start.month())
+            || (date_end.month() == date_start.month() && date_end.day() < date_start.day())
+        {
+            years -= 1;
+        }
+
+        years as i32
+    }
+
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
         let date_start = date_start.to_timestamp(tz.clone());
         let date_end = date_end.to_timestamp(tz);
         date_end.year() as i64 - date_start.year() as i64
+    }
+
+    pub fn eval_timestamp_between(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
+        if date_start == date_end {
+            return 0;
+        }
+        if date_start > date_end {
+            return -Self::eval_timestamp_between(date_end, date_start, tz);
+        }
+        let start = date_start.to_timestamp(tz.clone());
+        let end = date_end.to_timestamp(tz);
+
+        let mut years = end.year() - start.year();
+
+        // Handle special cases on February 29 in leap years:
+        // If the start date is February 29 and the end date is February 28, it is considered a full year (leap year to regular year).
+        // Otherwise, the end date, month day, must be >= the start date, month day, and the time must be reached
+        let start_month = start.month();
+        let start_day = start.day();
+
+        let end_month = end.month();
+        let end_day = end.day();
+
+        let start_is_feb_29 = start_month == 2 && start_day == 29;
+        let end_is_feb_28 = end_month == 2 && end_day == 28;
+
+        let end_before_start_date = (end_month < start_month)
+            || (end_month == start_month && end_day < start_day)
+            || (end_month == start_month && end_day == start_day && end.time() < start.time());
+
+        if start_is_feb_29 && end_is_feb_28 {
+        } else if end_before_start_date {
+            years -= 1;
+        }
+
+        years as i64
     }
 }
 
@@ -185,25 +247,77 @@ impl EvalISOYearsImpl {
         date_end.iso_week_date().year() as i32 - date_start.iso_week_date().year() as i32
     }
 
+    pub fn eval_date_between(date_start: i32, date_end: i32, tz: TimeZone) -> i32 {
+        if date_start == date_end {
+            return 0;
+        }
+        if date_start > date_end {
+            return -Self::eval_date_between(date_end, date_start, tz);
+        }
+        let date_start = date_start.to_date(tz.clone());
+        let date_end = date_end.to_date(tz);
+        let mut years = date_end.iso_week_date().year() - date_start.iso_week_date().year();
+        if (date_end.month() < date_start.month())
+            || (date_end.month() == date_start.month() && date_end.day() < date_start.day())
+        {
+            years -= 1;
+        }
+
+        years as i32
+    }
+
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
         let date_start = date_start.to_timestamp(tz.clone());
         let date_end = date_end.to_timestamp(tz);
         date_end.date().iso_week_date().year() as i64 - date_start.iso_week_date().year() as i64
     }
+
+    pub fn eval_timestamp_between(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
+        if date_start == date_end {
+            return 0;
+        }
+        if date_start > date_end {
+            return -Self::eval_timestamp_between(date_end, date_start, tz);
+        }
+
+        let start = date_start.to_timestamp(tz.clone());
+        let end = date_end.to_timestamp(tz);
+        let mut years =
+            end.date().iso_week_date().year() as i64 - start.date().iso_week_date().year() as i64;
+        let start_month = start.month();
+        let start_day = start.day();
+
+        let end_month = end.month();
+        let end_day = end.day();
+
+        let start_is_feb_29 = start_month == 2 && start_day == 29;
+        let end_is_feb_28 = end_month == 2 && end_day == 28;
+
+        let end_before_start_date = (end_month < start_month)
+            || (end_month == start_month && end_day < start_day)
+            || (end_month == start_month && end_day == start_day && end.time() < start.time());
+
+        if start_is_feb_29 && end_is_feb_28 {
+        } else if end_before_start_date {
+            years -= 1;
+        }
+
+        years
+    }
 }
 
 pub struct EvalYearWeeksImpl;
 impl EvalYearWeeksImpl {
+    fn yearweek(date: Date) -> i32 {
+        let iso_week = date.iso_week_date();
+        (iso_week.year() as i32 * 100) + iso_week.week() as i32
+    }
+
     pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TimeZone) -> i32 {
         let date_start = date_start.to_date(tz.clone());
         let date_end = date_end.to_date(tz);
-        let week_date = date_end.iso_week_date();
-        let year = week_date.year() as i32 * 100;
-        let end = year + date_end.iso_week_date().week() as i32;
-
-        let week_date = date_start.iso_week_date();
-        let year = week_date.year() as i32 * 100;
-        let start = year + date_start.iso_week_date().week() as i32;
+        let end = Self::yearweek(date_end);
+        let start = Self::yearweek(date_start);
 
         end - start
     }
@@ -211,16 +325,72 @@ impl EvalYearWeeksImpl {
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
         let date_start = date_start.to_timestamp(tz.clone());
         let date_end = date_end.to_timestamp(tz);
-        let week_date = date_end.date().iso_week_date();
-        let year = week_date.year() as i64 * 100;
-        let end = year + date_end.date().iso_week_date().week() as i64;
-
-        let week_date = date_start.date().iso_week_date();
-        let year = week_date.year() as i64 * 100;
-        let start = year + date_start.date().iso_week_date().week() as i64;
+        let end = Self::yearweek(date_end.date()) as i64;
+        let start = Self::yearweek(date_start.date()) as i64;
 
         end - start
     }
+
+    // In duckdb datesub(yearweek, ) is same as datesub(week, ) But we can contain these logic
+    // fn week_end(date: Date) -> Date {
+    // let weekday = date.weekday();
+    //
+    // let days_to_sunday = 7 - weekday.to_monday_one_offset(); // monday=1, sunday=7
+    // let dur = SignedDuration::from_hours(days_to_sunday as i64 * 24);
+    // date.checked_add(dur).unwrap()
+    // }
+    // pub fn eval_date_between(start: i32, end: i32, tz: TimeZone) -> i32 {
+    // if start == end {
+    // return 0;
+    // }
+    //
+    // let (earlier, later, sign) = if start <= end {
+    // (start, end, 1)
+    // } else {
+    // (end, start, -1)
+    // };
+    //
+    // let earlier = earlier.to_date(tz.clone());
+    // let later = later.to_date(tz);
+    //
+    // let start_yw = Self::yearweek(earlier);
+    // let end_yw = Self::yearweek(later);
+    //
+    // let mut diff = end_yw - start_yw;
+    //
+    // If the end week is incomplete, subtract 1
+    // if later < Self::week_end(later) {
+    // diff -= 1;
+    // }
+    //
+    // diff * sign
+    // }
+    // pub fn eval_timestamp_between(start: i64, end: i64, tz: TimeZone) -> i64 {
+    // if start == end {
+    // return 0;
+    // }
+    //
+    // let (earlier, later, sign) = if start <= end {
+    // (start, end, 1)
+    // } else {
+    // (end, start, -1)
+    // };
+    //
+    // let earlier = earlier.to_timestamp(tz.clone());
+    // let later = later.to_timestamp(tz);
+    //
+    // let start_yw = Self::yearweek(earlier.date());
+    // let end_yw = Self::yearweek(later.date());
+    //
+    // let mut diff = end_yw - start_yw;
+    //
+    // let week_end = EvalYearWeeksImpl::week_end(later.date());
+    // if later.datetime() < week_end.at(23, 59, 59, 999_999_999) {
+    // diff -= 1;
+    // }
+    //
+    // diff as i64 * sign
+    // }
 }
 
 pub struct EvalQuartersImpl;
@@ -240,6 +410,84 @@ impl EvalQuartersImpl {
         (date_end.year() - date_start.year()) as i64 * 4 + ToQuarter::to_number(&date_end) as i64
             - ToQuarter::to_number(&date_start) as i64
     }
+
+    // Return date corresponding to quarter number (1~4)
+    // fn quarter(month: i8) -> i32 {
+    // ((month - 1) / 3 + 1) as i32
+    // }
+    //
+    //
+    // fn quarter_start(year: i16, month: i8) -> (i16, i8) {
+    // let q = ((month - 1) / 3) + 1;
+    // let start_month = (q - 1) * 3 + 1;
+    // (year, start_month)
+    // }
+    //
+    // DuckDB directly calc month/3
+    // pub fn eval_date_between(start: i32, end: i32, tz: TimeZone) -> i32 {
+    // if start == end {
+    // return 0;
+    // }
+    // let (earlier, later, sign) = if start <= end {
+    // (start, end, 1)
+    // } else {
+    // (end, start, -1)
+    // };
+    //
+    // let earlier = earlier.to_date(tz.clone());
+    // let later = later.to_date(tz);
+    //
+    // let start_year = earlier.year();
+    // let start_quarter = Self::quarter(earlier.month());
+    // let end_year = later.year();
+    // let end_quarter = Self::quarter(later.month());
+    //
+    // let mut diff =
+    // (end_year - start_year) as i64 * 4 + (end_quarter as i64 - start_quarter as i64);
+    //
+    // let (last_quarter_start_year, last_quarter_start_month) =
+    // Self::quarter_start(end_year, later.month());
+    // let last_quarter_start_date = date(last_quarter_start_year, last_quarter_start_month, 1);
+    //
+    //
+    // if later < last_quarter_start_date {
+    // diff -= 1;
+    // }
+    //
+    // (diff * sign) as i32
+    // }
+    // pub fn eval_timestamp_between(start: i64, end: i64, tz: TimeZone) -> i64 {
+    // if start == end {
+    // return 0;
+    // }
+    //
+    // let (earlier, later, sign) = if start <= end {
+    // (start, end, 1)
+    // } else {
+    // (end, start, -1)
+    // };
+    //
+    // let earlier = earlier.to_timestamp(tz.clone());
+    // let later = later.to_timestamp(tz);
+    //
+    // let start_year = earlier.year();
+    // let start_quarter = Self::quarter(earlier.month());
+    // let end_year = later.year();
+    // let end_quarter = Self::quarter(later.month());
+    //
+    // let mut diff =
+    // (end_year - start_year) as i64 * 4 + (end_quarter as i64 - start_quarter as i64);
+    //
+    // let (last_quarter_start_year, last_quarter_start_month) =
+    // Self::quarter_start(later.year(), later.month());
+    // let last_quarter_start_date = date(last_quarter_start_year, last_quarter_start_month, 1);
+    // let last_quarter_start_datetime = last_quarter_start_date.to_datetime(earlier.time());
+    //
+    // if later.datetime() < last_quarter_start_datetime {
+    // diff -= 1;
+    // }
+    // diff * sign
+    // }
 }
 
 impl EvalMonthsImpl {
@@ -250,12 +498,56 @@ impl EvalMonthsImpl {
             - date_start.month() as i32
     }
 
+    pub fn eval_date_between(start: i32, end: i32, tz: TimeZone) -> i32 {
+        if start == end {
+            return 0;
+        }
+        if start > end {
+            return -Self::eval_date_between(end, start, tz);
+        }
+
+        let start = start.to_date(tz.clone());
+        let end = end.to_date(tz);
+
+        let year_diff = end.year() - start.year();
+        let month_diff = end.month() as i32 - start.month() as i32;
+        let mut months = year_diff as i32 * 12 + month_diff;
+
+        if end.day() < start.day() {
+            months -= 1;
+        }
+
+        months
+    }
+
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TimeZone) -> i64 {
         EvalMonthsImpl::eval_date_diff(
             (date_start / MICROSECS_PER_DAY) as i32,
             (date_end / MICROSECS_PER_DAY) as i32,
             tz,
         ) as i64
+    }
+
+    pub fn eval_timestamp_between(start: i64, end: i64, tz: TimeZone) -> i64 {
+        if start == end {
+            return 0;
+        }
+        if start > end {
+            return -Self::eval_timestamp_between(end, start, tz);
+        }
+
+        let start = start.to_timestamp(tz.clone());
+        let end = end.to_timestamp(tz);
+        let year_diff = end.year() - start.year();
+        let month_diff = end.month() as i64 - start.month() as i64;
+        let mut months = year_diff as i64 * 12 + month_diff;
+
+        // Determine the time sequence. If the end time is less than the start time, it is incomplete
+        if (end.day() < start.day()) || (end.day() == start.day() && end.time() < start.time()) {
+            months -= 1;
+        }
+
+        months
     }
 
     // current we don't consider tz here
@@ -315,6 +607,105 @@ impl EvalWeeksImpl {
             (date_end / MICROSECS_PER_DAY) as i32,
         ) as i64
     }
+
+    fn calculate_weeks_between_years(
+        start_year: i32,
+        end_year: i32,
+        start_week: u32,
+        end_week: u32,
+    ) -> i32 {
+        let mut weeks = 0;
+        let mut current_year = start_year + 1;
+
+        fn iso_weeks(year: i32) -> i32 {
+            // Get the first day of the year
+            let first_day = date(year as i16, 1, 1);
+
+            // Determine the weekday of the first day
+            let weekday = first_day.weekday();
+
+            // Check if the year starts on a Thursday.
+            if weekday == Weekday::Thursday {
+                return 53;
+            }
+
+            // Check if the year starts on a Wednesday and is a leap year.
+            if weekday == Weekday::Wednesday
+                && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))
+            {
+                return 53;
+            }
+            52
+        }
+        while current_year < end_year {
+            weeks += iso_weeks(current_year);
+            current_year += 1;
+        }
+
+        // add start_year weeks and end_year weeks
+        weeks += iso_weeks(start_year) - start_week as i32 + end_week as i32;
+        weeks
+    }
+
+    pub fn eval_date_between(start: i32, end: i32, tz: TimeZone) -> i32 {
+        if start == end {
+            return 0;
+        }
+        if start > end {
+            return -Self::eval_date_between(end, start, tz);
+        }
+
+        let earlier = start.to_date(tz.clone());
+        let later = end.to_date(tz);
+        let mut weeks = Self::calculate_weeks_between_years(
+            earlier.year() as i32,
+            later.year() as i32,
+            earlier.iso_week_date().week() as u32,
+            later.iso_week_date().week() as u32,
+        );
+        // Judge whether it is complete after the last week
+        let end_weekday = later.weekday();
+        let days_since_monday = end_weekday.to_monday_one_offset() - 1;
+        let dur = SignedDuration::from_hours(days_since_monday as i64 * 24);
+        let monday_of_end_week = later.checked_sub(dur).unwrap();
+
+        if later < monday_of_end_week {
+            weeks -= 1;
+        }
+
+        weeks
+    }
+
+    pub fn eval_timestamp_between(start: i64, end: i64, tz: TimeZone) -> i64 {
+        if start == end {
+            return 0;
+        }
+        if start > end {
+            return -Self::eval_timestamp_between(end, start, tz);
+        }
+
+        let earlier = start.to_timestamp(tz.clone());
+        let later = end.to_timestamp(tz);
+
+        let mut weeks = Self::calculate_weeks_between_years(
+            earlier.year() as i32,
+            later.year() as i32,
+            earlier.date().iso_week_date().week() as u32,
+            later.date().iso_week_date().week() as u32,
+        ) as i64;
+        // Judge whether it is complete after the last week
+        let end_date = later.date();
+        let end_weekday = end_date.weekday();
+        let days_since_monday = end_weekday.to_monday_one_offset() - 1;
+        let dur = SignedDuration::from_hours(days_since_monday as i64 * 24);
+        let monday_of_end_week = end_date.checked_sub(dur).unwrap();
+        let monday_of_end_week_datetime = monday_of_end_week.at(0, 0, 0, 0);
+
+        if later.datetime() < monday_of_end_week_datetime {
+            weeks -= 1;
+        }
+        weeks
+    }
 }
 
 pub struct EvalDaysImpl;
@@ -340,6 +731,29 @@ impl EvalDaysImpl {
             (date_end / MICROSECS_PER_DAY) as i32,
         ) as i64
     }
+
+    pub fn eval_timestamp_between(start: i64, end: i64, tz: TimeZone) -> i64 {
+        if start == end {
+            return 0;
+        }
+        if start > end {
+            return -Self::eval_timestamp_between(end, start, tz);
+        }
+
+        let start = start.to_timestamp(tz.clone());
+        let end = end.to_timestamp(tz);
+        let mut full_days = (end.date() - start.date())
+            .to_duration(SpanRelativeTo::days_are_24_hours())
+            .unwrap()
+            .as_hours()
+            / 24;
+        let end_time = end.time();
+        let start_time = start.time();
+        if end_time < start_time {
+            full_days -= 1;
+        }
+        full_days
+    }
 }
 
 pub struct EvalTimesImpl;
@@ -362,6 +776,24 @@ impl EvalTimesImpl {
         let date_start = date_start / (MICROS_PER_SEC * factor);
         let date_end = date_end / (MICROS_PER_SEC * factor);
         date_end - date_start
+    }
+
+    pub fn eval_timestamp_between(unit: &str, start: i64, end: i64) -> i64 {
+        if start == end {
+            return 0;
+        }
+        if start > end {
+            return -Self::eval_timestamp_between(unit, end, start);
+        }
+
+        let duration = SignedDuration::from_micros(end - start);
+
+        match unit {
+            "hours" => duration.as_hours(),
+            "minutes" => duration.as_mins(),
+            "seconds" => duration.as_secs(),
+            _ => unreachable!("Unsupported unit: {}", unit),
+        }
     }
 }
 

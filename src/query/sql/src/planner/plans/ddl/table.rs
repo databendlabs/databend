@@ -56,6 +56,7 @@ pub struct CreateTablePlan {
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
     pub inverted_indexes: Option<BTreeMap<String, TableIndex>>,
+    pub ngram_indexes: Option<BTreeMap<String, TableIndex>>,
 
     pub attached_columns: Option<Vec<Identifier>>,
 }

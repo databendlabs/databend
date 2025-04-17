@@ -32,6 +32,7 @@ use crate::SyncSystemTable;
 
 pub struct CreditsTable {
     table_info: TableInfo,
+    data: DataBlock,
 }
 
 impl SyncSystemTable for CreditsTable {
@@ -42,29 +43,17 @@ impl SyncSystemTable for CreditsTable {
     }
 
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let names: Vec<String> = env!("DATABEND_CREDITS_NAMES")
-            .split_terminator(',')
-            .map(|x| x.trim().to_string())
-            .collect();
-        let versions: Vec<String> = env!("DATABEND_CREDITS_VERSIONS")
-            .split_terminator(',')
-            .map(|x| x.trim().to_string())
-            .collect();
-        let licenses: Vec<String> = env!("DATABEND_CREDITS_LICENSES")
-            .split_terminator(',')
-            .map(|x| x.trim().to_string())
-            .collect();
-
-        Ok(DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
-            StringType::from_data(versions),
-            StringType::from_data(licenses),
-        ]))
+        Ok(self.data.clone())
     }
 }
 
 impl CreditsTable {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(
+        table_id: u64,
+        credits_names: &str,
+        credits_versions: &str,
+        credits_licenses: &str,
+    ) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
             TableField::new("version", TableDataType::String),
@@ -83,6 +72,27 @@ impl CreditsTable {
             ..Default::default()
         };
 
-        SyncOneBlockSystemTable::create(CreditsTable { table_info })
+        let names: Vec<String> = credits_names
+            .split_terminator(',')
+            .map(|x| x.trim().to_string())
+            .collect();
+        let versions: Vec<String> = credits_versions
+            .split_terminator(',')
+            .map(|x| x.trim().to_string())
+            .collect();
+        let licenses: Vec<String> = credits_licenses
+            .split_terminator(',')
+            .map(|x| x.trim().to_string())
+            .collect();
+        assert_eq!(names.len(), versions.len());
+        assert_eq!(names.len(), licenses.len());
+
+        let data = DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            StringType::from_data(versions),
+            StringType::from_data(licenses),
+        ]);
+
+        SyncOneBlockSystemTable::create(CreditsTable { table_info, data })
     }
 }

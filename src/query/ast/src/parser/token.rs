@@ -507,6 +507,10 @@ pub enum TokenKind {
     DATEPART,
     #[token("DATE_SUB", ignore(ascii_case))]
     DATE_SUB,
+    #[token("DATE_BETWEEN", ignore(ascii_case))]
+    DATE_BETWEEN,
+    #[token("DATEBETWEEN", ignore(ascii_case))]
+    DATEBETWEEN,
     #[token("DATESUB", ignore(ascii_case))]
     DATESUB,
     #[token("DATE_TRUNC", ignore(ascii_case))]
@@ -850,6 +854,8 @@ pub enum TokenKind {
     DISABLED,
     #[token("NDJSON", ignore(ascii_case))]
     NDJSON,
+    #[token("NGRAM", ignore(ascii_case))]
+    NGRAM,
     #[token("NO_PASSWORD", ignore(ascii_case))]
     NO_PASSWORD,
     #[token("NONE", ignore(ascii_case))]
@@ -1545,6 +1551,7 @@ impl TokenKind {
             | TokenKind::DATEPART
             | TokenKind::DATEDIFF
             | TokenKind::DATESUB
+            | TokenKind::DATEBETWEEN
             | TokenKind::FALSE
             | TokenKind::FLOAT
             // | TokenKind::FOREIGN
@@ -1653,6 +1660,7 @@ impl TokenKind {
             | TokenKind::DATE_ADD
             | TokenKind::DATE_DIFF
             | TokenKind::DATE_SUB
+            | TokenKind::DATE_BETWEEN
             | TokenKind::DATE_TRUNC
             | TokenKind::LAST_DAY
             | TokenKind::PREVIOUS_DAY

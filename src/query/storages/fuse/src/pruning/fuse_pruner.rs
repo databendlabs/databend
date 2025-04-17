@@ -54,7 +54,7 @@ use rand::distributions::Distribution;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
 
-use crate::io::BloomIndexBuilder;
+use crate::io::BloomIndexRebuilder;
 use crate::operations::DeletedSegmentInfo;
 use crate::pruning::segment_pruner::SegmentPruner;
 use crate::pruning::BlockPruner;
@@ -95,7 +95,7 @@ impl PruningContext {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         max_concurrency: usize,
-        bloom_index_builder: Option<BloomIndexBuilder>,
+        bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
 
@@ -219,7 +219,7 @@ impl FusePruner {
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
-        bloom_index_builder: Option<BloomIndexBuilder>,
+        bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
         Self::create_with_pages(
             ctx,
@@ -242,7 +242,7 @@ impl FusePruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
-        bloom_index_builder: Option<BloomIndexBuilder>,
+        bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;

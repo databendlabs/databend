@@ -65,6 +65,10 @@ impl TableMetaFunc for FuseBlock {
                 "inverted_index_size",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
+            TableField::new(
+                "ngram_index_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
         ])
     }
 
@@ -86,6 +90,7 @@ impl TableMetaFunc for FuseBlock {
         let mut bloom_filter_location = vec![];
         let mut bloom_filter_size = Vec::with_capacity(len);
         let mut inverted_index_size = Vec::with_capacity(len);
+        let mut ngram_index_size = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
@@ -113,6 +118,7 @@ impl TableMetaFunc for FuseBlock {
                     );
                     bloom_filter_size.push(block.bloom_filter_index_size);
                     inverted_index_size.push(block.inverted_index_size);
+                    ngram_index_size.push(block.ngram_filter_index_size);
 
                     row_num += 1;
                     if row_num >= limit {
@@ -156,6 +162,10 @@ impl TableMetaFunc for FuseBlock {
                 BlockEntry::new(
                     DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
                     Value::Column(UInt64Type::from_opt_data(inverted_index_size)),
+                ),
+                BlockEntry::new(
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                    Value::Column(UInt64Type::from_opt_data(ngram_index_size)),
                 ),
             ],
             row_num,

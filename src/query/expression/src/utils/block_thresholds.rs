@@ -36,7 +36,7 @@ impl Default for BlockThresholds {
         BlockThresholds {
             max_rows_per_block: DEFAULT_BLOCK_ROW_COUNT,
             min_rows_per_block: (DEFAULT_BLOCK_ROW_COUNT * 4).div_ceil(5),
-            max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE,
+            max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE * 2,
             min_bytes_per_block: (DEFAULT_BLOCK_BUFFER_SIZE * 4).div_ceil(5),
             max_compressed_per_block: DEFAULT_BLOCK_COMPRESSED_SIZE,
             min_compressed_per_block: (DEFAULT_BLOCK_COMPRESSED_SIZE * 4).div_ceil(5),
@@ -48,15 +48,15 @@ impl Default for BlockThresholds {
 impl BlockThresholds {
     pub fn new(
         max_rows_per_block: usize,
-        max_bytes_per_block: usize,
+        bytes_per_block: usize,
         max_compressed_per_block: usize,
         block_per_segment: usize,
     ) -> Self {
         BlockThresholds {
             max_rows_per_block,
             min_rows_per_block: (max_rows_per_block * 4).div_ceil(5),
-            max_bytes_per_block,
-            min_bytes_per_block: (max_bytes_per_block * 4).div_ceil(5),
+            max_bytes_per_block: bytes_per_block * 2,
+            min_bytes_per_block: (bytes_per_block * 4).div_ceil(5),
             max_compressed_per_block,
             min_compressed_per_block: (max_compressed_per_block * 4).div_ceil(5),
             block_per_segment,
