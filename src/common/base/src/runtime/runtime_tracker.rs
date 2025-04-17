@@ -103,6 +103,7 @@ pub struct TrackingPayload {
     pub profile: Option<Arc<Profile>>,
     pub mem_stat: Option<Arc<MemStat>>,
     pub metrics: Option<Arc<ScopedRegistry>>,
+    pub should_log: bool,
 }
 
 pub struct TrackingGuard {
@@ -163,6 +164,7 @@ impl ThreadTracker {
                 metrics: None,
                 mem_stat: None,
                 query_id: None,
+                should_log: true,
             },
         }
     }
@@ -242,6 +244,10 @@ impl ThreadTracker {
                 .as_ref()
                 .map(|query_id| unsafe { &*(query_id as *const String) })
         })
+    }
+
+    pub fn should_log() -> bool {
+        TRACKER.with(|tracker| tracker.borrow().payload.should_log)
     }
 }
 
