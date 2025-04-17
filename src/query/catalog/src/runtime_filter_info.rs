@@ -58,8 +58,16 @@ impl RuntimeFilterInfo {
         self.inlist
     }
 
+    pub fn inlists_ref(&self) -> &Vec<Expr<String>> {
+        &self.inlist
+    }
+
     pub fn min_maxs(self) -> Vec<Expr<String>> {
         self.min_max
+    }
+
+    pub fn min_maxs_ref(&self) -> &Vec<Expr<String>> {
+        &self.min_max
     }
 
     pub fn is_empty(&self) -> bool {

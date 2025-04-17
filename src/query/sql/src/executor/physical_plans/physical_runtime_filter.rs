@@ -12,21 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod explain;
-mod format;
-mod physical_plan;
-mod physical_plan_builder;
-mod physical_plan_visitor;
-pub mod physical_plans;
-mod util;
+use crate::executor::PhysicalPlan;
 
-pub mod table_read_plan;
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeFilterSource {
+    pub plan_id: u32,
+    pub join_id: u32,
+}
 
-pub use format::format_partial_tree;
-pub use physical_plan::PhysicalPlan;
-pub use physical_plan_builder::MutationBuildInfo;
-pub use physical_plan_builder::PhysicalPlanBuilder;
-pub use physical_plan_visitor::PhysicalPlanReplacer;
-pub use physical_plans::RemoteRuntimeFilterDesc;
-pub use physical_plans::RemoteRuntimeFiltersDesc;
-pub use util::*;
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeFilterSink {
+    pub plan_id: u32,
+    pub input: Box<PhysicalPlan>,
+}

@@ -20,8 +20,8 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::PhysicalRuntimeFilter;
-use databend_common_sql::executor::PhysicalRuntimeFilters;
+use databend_common_sql::executor::RemoteRuntimeFilterDesc;
+use databend_common_sql::executor::RemoteRuntimeFiltersDesc;
 use parking_lot::RwLock;
 
 use crate::sql::plans::JoinType;
@@ -67,16 +67,16 @@ pub struct RuntimeFiltersDesc {
     pub filters: Vec<RuntimeFilterDesc>,
 }
 
-impl From<&PhysicalRuntimeFilters> for RuntimeFiltersDesc {
-    fn from(runtime_filter: &PhysicalRuntimeFilters) -> Self {
+impl From<&RemoteRuntimeFiltersDesc> for RuntimeFiltersDesc {
+    fn from(runtime_filter: &RemoteRuntimeFiltersDesc) -> Self {
         Self {
             filters: runtime_filter.filters.iter().map(|rf| rf.into()).collect(),
         }
     }
 }
 
-impl From<&PhysicalRuntimeFilter> for RuntimeFilterDesc {
-    fn from(runtime_filter: &PhysicalRuntimeFilter) -> Self {
+impl From<&RemoteRuntimeFilterDesc> for RuntimeFilterDesc {
+    fn from(runtime_filter: &RemoteRuntimeFilterDesc) -> Self {
         Self {
             _id: runtime_filter.id,
             build_key: runtime_filter.build_key.as_expr(&BUILTIN_FUNCTIONS),
@@ -117,7 +117,7 @@ impl HashJoinDesc {
             from_correlated_subquery: join.from_correlated_subquery,
             broadcast: join.broadcast,
             single_to_inner: join.single_to_inner.clone(),
-            runtime_filter: (&join.runtime_filter).into(),
+            runtime_filter: (&join.runtime_filter_desc).into(),
         })
     }
 

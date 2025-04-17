@@ -23,6 +23,8 @@ use std::sync::Weak;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use async_channel::Receiver;
+use async_channel::Sender;
 use dashmap::DashMap;
 use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
@@ -67,6 +69,7 @@ use uuid::Uuid;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::transforms::RuntimeFilterMeta;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::storages::Table;
@@ -167,7 +170,15 @@ pub struct QueryContextShared {
 
     // Used by hilbert clustering when do recluster.
     pub(in crate::sessions) selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
+
+    // join_id -> (sender, receiver)
+    pub(in crate::sessions) rf_source: Arc<Mutex<HashMap<u32, RuntimeFilterChannel>>>,
 }
+
+type RuntimeFilterChannel = (
+    Option<Sender<RuntimeFilterMeta>>,
+    Option<Receiver<RuntimeFilterMeta>>,
+);
 
 impl QueryContextShared {
     pub fn try_create(
@@ -232,7 +243,31 @@ impl QueryContextShared {
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             selected_segment_locs: Default::default(),
+            rf_source: Arc::new(Mutex::new(HashMap::new())),
         }))
+    }
+
+    pub fn rf_src_recv(&self, join_id: u32) -> Receiver<RuntimeFilterMeta> {
+        let mut rf_source = self.rf_source.lock();
+        match rf_source.get_mut(&join_id).map(|(_, receiver)| receiver) {
+            Some(receiver) => receiver.take().unwrap(),
+            None => {
+                let (sender, receiver) = async_channel::unbounded();
+                rf_source.insert(join_id, (Some(sender), None));
+                receiver
+            }
+        }
+    }
+    pub fn rf_src_send(&self, join_id: u32) -> Sender<RuntimeFilterMeta> {
+        let mut rf_source = self.rf_source.lock();
+        match rf_source.get_mut(&join_id).map(|(sender, _)| sender) {
+            Some(sender) => sender.take().unwrap(),
+            None => {
+                let (sender, receiver) = async_channel::unbounded();
+                rf_source.insert(join_id, (None, Some(receiver)));
+                sender
+            }
+        }
     }
 
     pub fn set_error<C>(&self, err: ErrorCode<C>) {

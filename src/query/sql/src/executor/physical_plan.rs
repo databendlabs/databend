@@ -30,6 +30,8 @@ use super::physical_plans::MutationManipulate;
 use super::physical_plans::MutationOrganize;
 use super::physical_plans::MutationSource;
 use super::physical_plans::MutationSplit;
+use super::physical_plans::RuntimeFilterSink;
+use super::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -154,6 +156,10 @@ pub enum PhysicalPlan {
 
     // async function call
     AsyncFunction(AsyncFunction),
+
+    // runtime filter
+    RuntimeFilterSource(RuntimeFilterSource),
+    RuntimeFilterSink(RuntimeFilterSink),
 }
 
 impl PhysicalPlan {
@@ -406,6 +412,15 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
+            PhysicalPlan::RuntimeFilterSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::RuntimeFilterSink(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
         }
     }
 
@@ -462,6 +477,8 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkMerge(v) => v.plan_id,
             PhysicalPlan::ChunkCommitInsert(v) => v.plan_id,
             PhysicalPlan::RecursiveCteScan(v) => v.plan_id,
+            PhysicalPlan::RuntimeFilterSource(v) => v.plan_id,
+            PhysicalPlan::RuntimeFilterSink(v) => v.plan_id,
         }
     }
 
@@ -507,6 +524,8 @@ impl PhysicalPlan {
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
             | PhysicalPlan::Recluster(_)
+            | PhysicalPlan::RuntimeFilterSource(_)
+            | PhysicalPlan::RuntimeFilterSink(_)
             | PhysicalPlan::HilbertPartition(_) => Ok(DataSchemaRef::default()),
             PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
             PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
@@ -578,6 +597,8 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(_) => "WriteData".to_string(),
             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".to_string(),
             PhysicalPlan::ChunkCommitInsert(_) => "Commit".to_string(),
+            PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
+            PhysicalPlan::RuntimeFilterSink(_) => "RuntimeFilterSink".to_string(),
         }
     }
 
@@ -590,7 +611,8 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
-            | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
+            | PhysicalPlan::RecursiveCteScan(_)
+            | PhysicalPlan::RuntimeFilterSource(_) => Box::new(std::iter::empty()),
             PhysicalPlan::HilbertPartition(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -608,6 +630,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExpressionScan(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Exchange(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ExchangeSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::RuntimeFilterSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::UnionAll(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -705,7 +728,9 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkFillAndReorder(_)
             | PhysicalPlan::ChunkAppendData(_)
             | PhysicalPlan::ChunkMerge(_)
-            | PhysicalPlan::ChunkCommitInsert(_) => None,
+            | PhysicalPlan::ChunkCommitInsert(_)
+            | PhysicalPlan::RuntimeFilterSource(_)
+            | PhysicalPlan::RuntimeFilterSink(_) => None,
         }
     }
 

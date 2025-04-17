@@ -40,6 +40,7 @@ mod builder_recluster;
 mod builder_recursive_cte;
 mod builder_replace_into;
 mod builder_row_fetch;
+mod builder_runtime_filter;
 mod builder_scalar;
 mod builder_scan;
 mod builder_sort;

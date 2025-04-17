@@ -29,6 +29,7 @@ use databend_common_sql::executor::physical_plans::HashJoin;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
+use databend_common_sql::executor::physical_plans::RuntimeFilterSink;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlanReplacer;
@@ -210,6 +211,23 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
     }
 
+    fn replace_runtime_filter_sink(&mut self, plan: &RuntimeFilterSink) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        let sink = PhysicalPlan::RuntimeFilterSink(RuntimeFilterSink {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+        });
+        self.fragments.push(PlanFragment {
+            plan: sink.clone(),
+            fragment_type: FragmentType::Intermediate,
+            fragment_id: self.ctx.get_fragment_id(),
+            exchange: None,
+            query_id: self.query_id.clone(),
+            source_fragments: vec![self.fragments.last().unwrap().clone()],
+        });
+        Ok(sink)
+    }
+
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
         let mut fragments = vec![];
         let build_input = self.replace(plan.build.as_ref())?;
@@ -218,6 +236,11 @@ impl PhysicalPlanReplacer for Fragmenter {
         fragments.append(&mut self.fragments);
         let probe_input = self.replace(plan.probe.as_ref())?;
         fragments.append(&mut self.fragments);
+
+        let runtime_filter_plan = match &plan.runtime_filter_plan {
+            Some(runtime_filter_plan) => Some(Box::new(self.replace(runtime_filter_plan)?)),
+            None => None,
+        };
         self.fragments = fragments;
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
@@ -241,7 +264,9 @@ impl PhysicalPlanReplacer for Fragmenter {
             broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
             build_side_cache_info: plan.build_side_cache_info.clone(),
-            runtime_filter: plan.runtime_filter.clone(),
+            runtime_filter_desc: plan.runtime_filter_desc.clone(),
+            runtime_filter_plan,
+            join_id: plan.join_id,
         }))
     }
 

@@ -102,6 +102,7 @@ impl PipelineBuilder {
             self.hash_join_states
                 .insert(build_cache_index, state.clone());
         }
+
         self.expand_build_side_pipeline(&join.build, join, state.clone())?;
         self.build_join_probe(join, state)?;
 
@@ -153,6 +154,10 @@ impl PipelineBuilder {
             &hash_join_plan.build_projections,
             join_state.clone(),
             output_len,
+            hash_join_plan
+                .runtime_filter_plan
+                .as_ref()
+                .map(|_| self.ctx.rf_src_send(hash_join_plan.join_id)),
         )?;
         build_state.add_runtime_filter_ready();
 

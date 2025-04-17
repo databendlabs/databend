@@ -28,6 +28,8 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use async_channel::Receiver;
+use async_channel::Sender;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
@@ -132,6 +134,7 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::transforms::RuntimeFilterMeta;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
@@ -272,6 +275,14 @@ impl QueryContext {
         };
 
         Ok(())
+    }
+
+    pub fn rf_src_recv(&self, join_id: u32) -> Receiver<RuntimeFilterMeta> {
+        self.shared.rf_src_recv(join_id)
+    }
+
+    pub fn rf_src_send(&self, join_id: u32) -> Sender<RuntimeFilterMeta> {
+        self.shared.rf_src_send(join_id)
     }
 
     pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
