@@ -26,6 +26,7 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARQUET_ENCODING;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -77,6 +78,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_SEGMENT_FORMAT);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
+    r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_ENCODING);
     r
 });
 
@@ -198,10 +200,7 @@ pub fn is_valid_bloom_index_columns(
 pub fn is_valid_change_tracking(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
-    if let Some(value) = options.get(OPT_KEY_CHANGE_TRACKING) {
-        value.to_lowercase().parse::<bool>()?;
-    }
-    Ok(())
+    is_valid_bool_opt(OPT_KEY_CHANGE_TRACKING, options)
 }
 
 pub fn is_valid_random_seed(
@@ -209,6 +208,22 @@ pub fn is_valid_random_seed(
 ) -> databend_common_exception::Result<()> {
     if let Some(value) = options.get(OPT_KEY_RANDOM_SEED) {
         value.parse::<u64>()?;
+    }
+    Ok(())
+}
+
+pub fn is_valid_fuse_parquet_encoding_opt(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    is_valid_bool_opt(FUSE_OPT_KEY_ENABLE_PARQUET_ENCODING, options)
+}
+
+fn is_valid_bool_opt(
+    key: &str,
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(key) {
+        value.parse::<bool>()?;
     }
     Ok(())
 }

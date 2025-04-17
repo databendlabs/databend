@@ -73,8 +73,13 @@ pub fn serialize_block(
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result =
-                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
+            let result = blocks_to_parquet(
+                &schema,
+                vec![block],
+                buf,
+                write_settings.table_compression,
+                write_settings.enable_parquet_encoding,
+            )?;
             let meta = column_parquet_metas(&result, &schema)?;
             Ok(meta)
         }
@@ -218,6 +223,7 @@ impl BloomIndexState {
             vec![index_block],
             &mut data,
             TableCompression::None,
+            false,
         )?;
         let data_size = data.len() as u64;
         Ok(Self {

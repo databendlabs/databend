@@ -68,6 +68,7 @@ use crate::interpreters::common::table_option_validation::is_valid_bloom_index_c
 use crate::interpreters::common::table_option_validation::is_valid_change_tracking;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_encoding_opt;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
@@ -446,6 +447,8 @@ impl CreateTableInterpreter {
         is_valid_random_seed(&table_meta.options)?;
         // check table level data_retention_period_in_hours
         is_valid_data_retention_period(&table_meta.options)?;
+        // check enable_parquet_encoding
+        is_valid_fuse_parquet_encoding_opt(&table_meta.options)?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
