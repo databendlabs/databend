@@ -1916,18 +1916,18 @@ DateDiff {
 
 
 ---------- Input ----------
-datesub(QUARTER, 1, to_date('2018-01-02'))
+date_sub(QUARTER, 1, to_date('2018-01-02'))
 ---------- Output ---------
 DATE_SUB(QUARTER, 1, to_date('2018-01-02'))
 ---------- AST ------------
 DateSub {
     span: Some(
-        0..42,
+        0..43,
     ),
     unit: Quarter,
     interval: Literal {
         span: Some(
-            17..18,
+            18..19,
         ),
         value: UInt64(
             1,
@@ -1935,13 +1935,13 @@ DateSub {
     },
     date: FunctionCall {
         span: Some(
-            20..41,
+            21..42,
         ),
         func: FunctionCall {
             distinct: false,
             name: Identifier {
                 span: Some(
-                    20..27,
+                    21..28,
                 ),
                 name: "to_date",
                 quote: None,
@@ -1950,10 +1950,83 @@ DateSub {
             args: [
                 Literal {
                     span: Some(
-                        28..40,
+                        29..41,
                     ),
                     value: String(
                         "2018-01-02",
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+datebetween(QUARTER, to_date('2018-01-02'), to_date('2018-04-02'))
+---------- Output ---------
+DATE_BETWEEN(QUARTER, to_date('2018-01-02'), to_date('2018-04-02'))
+---------- AST ------------
+DateBetween {
+    span: Some(
+        0..66,
+    ),
+    unit: Quarter,
+    date_start: FunctionCall {
+        span: Some(
+            21..42,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    21..28,
+                ),
+                name: "to_date",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        29..41,
+                    ),
+                    value: String(
+                        "2018-01-02",
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+    date_end: FunctionCall {
+        span: Some(
+            44..65,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    44..51,
+                ),
+                name: "to_date",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        52..64,
+                    ),
+                    value: String(
+                        "2018-04-02",
                     ),
                 },
             ],

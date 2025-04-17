@@ -56,7 +56,7 @@ pub fn add_k_way_merge_sort(
     worker: usize,
     block_size: usize,
     limit: Option<usize>,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
+    sort_desc: Arc<[SortColumnDescription]>,
     remove_order_col: bool,
     enable_loser_tree: bool,
 ) -> Result<()> {

@@ -356,6 +356,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: Some("(id)".to_string()),
             inverted_indexes: None,
+            ngram_indexes: None,
             attached_columns: None,
         }
     }
@@ -381,6 +382,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
+            ngram_indexes: None,
             attached_columns: None,
         }
     }
@@ -417,6 +419,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
+            ngram_indexes: None,
             attached_columns: None,
         }
     }
@@ -453,6 +456,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
+            ngram_indexes: None,
             attached_columns: None,
         }
     }
@@ -498,6 +502,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
+            ngram_indexes: None,
             attached_columns: None,
         }
     }

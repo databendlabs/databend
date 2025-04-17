@@ -36,7 +36,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
-use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::{TableIndexType, TableMeta};
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
 use databend_storages_common_index::extract_component_fields;
 use databend_storages_common_index::extract_fsts;
@@ -88,6 +88,9 @@ impl InvertedIndexBuilder {
 pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedIndexBuilder> {
     let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
     for index in table_meta.indexes.values() {
+        if !matches!(index.index_type, TableIndexType::Inverted) {
+            continue;
+        }
         if !index.sync_creation {
             continue;
         }

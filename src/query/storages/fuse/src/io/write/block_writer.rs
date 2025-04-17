@@ -202,6 +202,8 @@ impl BlockBuilder {
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             create_on: Some(Utc::now()),
+            // TODO(kould): ngram index
+            ngram_filter_index_size: None,
         };
 
         let serialized = BlockSerialization {

@@ -224,7 +224,7 @@ impl PipelineBuilder {
                         nulls_first: false,
                     })
                     .collect();
-                let sort_desc = Arc::new(sort_desc);
+                let sort_desc: Arc<[_]> = sort_desc.into();
                 sort_builders.push(Box::new(
                     move |transform_input_port, transform_output_port| {
                         Ok(ProcessorPtr::create(TransformSortPartial::try_create(

@@ -114,6 +114,7 @@ macro_rules! impl_history_aware {
                         CatalogType::Iceberg => "Iceberg".to_string(),
                         CatalogType::Hive => "Hive".to_string(),
                     };
+
                     for name in names {
                         let t = TableInfo {
                             ident: TableIdent::new(0, 0),
@@ -1024,8 +1025,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let catalog = ctx.get_catalog(&catalog_name).await?;
         let db = catalog.get_database(&tenant, &db_name).await?;
         let all_table_names = db.list_tables_names().await?;
-        let rows = all_table_names.len();
 
+        let rows = all_table_names.len();
         Self::generate_tables_block(
             vec![catalog_name; rows],
             vec![db_name; rows],

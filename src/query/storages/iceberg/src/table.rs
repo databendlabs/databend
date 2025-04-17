@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
@@ -40,6 +39,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -54,7 +54,6 @@ use crate::predicate::PredicateBuilder;
 use crate::statistics;
 use crate::statistics::IcebergStatistics;
 use crate::table_source::IcebergTableSource;
-use crate::IcebergCatalog;
 
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
@@ -90,13 +89,12 @@ impl IcebergTable {
     }
 
     pub async fn load_iceberg_table(
-        ctl: &IcebergCatalog,
+        ctl: Arc<dyn iceberg::Catalog>,
         database: &str,
         table_name: &str,
     ) -> Result<iceberg::table::Table> {
         let db_ident = iceberg::NamespaceIdent::new(database.to_string());
         let table = ctl
-            .iceberg_catalog()
             .load_table(&iceberg::TableIdent::new(db_ident, table_name.to_string()))
             .await
             .map_err(|err| {
@@ -221,13 +219,15 @@ impl IcebergTable {
     }
 
     /// create a new table on the table directory
+    /// TODO ADD TTL CACHE
     #[async_backtrace::framed]
     pub async fn try_create_from_iceberg_catalog(
-        ctl: IcebergCatalog,
+        ctl: Arc<dyn iceberg::Catalog>,
+        catalog_info: Arc<CatalogInfo>,
         database_name: &str,
         table_name: &str,
     ) -> Result<IcebergTable> {
-        let table = Self::load_iceberg_table(&ctl, database_name, table_name).await?;
+        let table = Self::load_iceberg_table(ctl, database_name, table_name).await?;
         let table_schema = Self::get_schema(&table)?;
         let statistics = statistics::IcebergStatistics::parse(&table).await?;
 
@@ -245,7 +245,7 @@ impl IcebergTable {
                 created_on: Utc::now(),
                 ..Default::default()
             },
-            catalog_info: ctl.info(),
+            catalog_info,
             ..Default::default()
         };
 

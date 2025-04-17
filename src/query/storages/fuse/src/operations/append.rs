@@ -128,7 +128,7 @@ impl FuseTable {
                     nulls_first: false,
                 })
                 .collect();
-            let sort_desc = Arc::new(sort_desc);
+            let sort_desc: Arc<[_]> = sort_desc.into();
 
             let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 || {
@@ -177,7 +177,7 @@ impl FuseTable {
                     nulls_first: false,
                 })
                 .collect();
-            let sort_desc = Arc::new(sort_desc);
+            let sort_desc: Arc<[_]> = sort_desc.into();
             pipeline
                 .add_transformer(|| TransformSortPartial::new(LimitType::None, sort_desc.clone()));
         }

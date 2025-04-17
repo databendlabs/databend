@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use databend_common_proto_conv::VER;
@@ -308,6 +309,17 @@ fn new_udf_server() -> databend_common_meta_app::principal::UDFServer {
     }
 }
 
+fn new_table_index() -> databend_common_meta_app::schema::TableIndex {
+    databend_common_meta_app::schema::TableIndex {
+        index_type: TableIndexType::Ngram,
+        name: "idx1".to_string(),
+        column_ids: vec![1, 2],
+        sync_creation: true,
+        version: "f10b230153e14f2c84603958d7f864f8".to_string(),
+        options: btreemap! {s("tokenizer") => s("chinese")},
+    }
+}
+
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
@@ -525,6 +537,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("udf server:{:?}", buf);
+    }
+
+    // table index
+    {
+        let table_index = new_table_index();
+        let p = table_index.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("table index:{:?}", buf);
     }
 
     Ok(())

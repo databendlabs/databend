@@ -31,12 +31,12 @@ pub fn get_compression_alg_copy(
         StageFileCompression::Xz => Some(CompressAlgorithm::Xz),
         StageFileCompression::Lzo => {
             return Err(ErrorCode::Unimplemented(
-                "compress type lzo is unimplemented",
+                "compress type lzo is unimplemented for copy into",
             ));
         }
         StageFileCompression::Snappy => {
             return Err(ErrorCode::Unimplemented(
-                "compress type snappy is unimplemented",
+                "compress type snappy is unimplemented  for copy into",
             ));
         }
         StageFileCompression::None => None,

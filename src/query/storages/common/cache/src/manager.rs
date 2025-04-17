@@ -33,6 +33,7 @@ use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
 use crate::caches::ColumnOrientedSegmentInfoCache;
 use crate::caches::CompactSegmentInfoCache;
+use crate::caches::IcebergTableCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
 use crate::caches::ParquetMetaDataCache;
@@ -87,6 +88,9 @@ pub struct CacheManager {
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
     segment_block_metas_cache: CacheSlot<SegmentBlockMetasCache>,
     block_meta_cache: CacheSlot<BlockMetaCache>,
+
+    // icebergs
+    iceberg_table_meta_cache: CacheSlot<IcebergTableCache>,
 
     /// Determines whether disk caches can be used at runtime.
     ///
@@ -199,6 +203,7 @@ impl CacheManager {
                 in_memory_table_data_cache,
                 segment_block_metas_cache: CacheSlot::new(None),
                 block_meta_cache: CacheSlot::new(None),
+                iceberg_table_meta_cache: CacheSlot::new(None),
                 allows_on_disk_cache,
             }
         } else {
@@ -291,6 +296,12 @@ impl CacheManager {
                 config.block_meta_count as usize,
             );
 
+            // TODO ADD CONFIG
+            let iceberg_table_meta_cache = Self::new_items_cache_slot(
+                MEMORY_CACHE_ICEBERG_TABLE,
+                config.iceberg_table_meta_count as usize,
+            );
+
             Self {
                 table_snapshot_cache,
                 compact_segment_info_cache,
@@ -306,6 +317,7 @@ impl CacheManager {
                 segment_block_metas_cache,
                 parquet_meta_data_cache,
                 block_meta_cache,
+                iceberg_table_meta_cache,
                 allows_on_disk_cache,
             }
         };
@@ -466,6 +478,10 @@ impl CacheManager {
 
     pub fn get_block_meta_cache(&self) -> Option<BlockMetaCache> {
         self.block_meta_cache.get()
+    }
+
+    pub fn get_iceberg_table_cache(&self) -> Option<IcebergTableCache> {
+        self.iceberg_table_meta_cache.get()
     }
 
     pub fn get_table_snapshot_statistics_cache(&self) -> Option<TableSnapshotStatisticCache> {
@@ -658,6 +674,7 @@ const MEMORY_CACHE_COLUMN_ORIENTED_SEGMENT_INFO: &str = "memory_cache_column_ori
 const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
 const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
 const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas";
+const MEMORY_CACHE_ICEBERG_TABLE: &str = "memory_cache_iceberg_table";
 
 const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
 

@@ -67,7 +67,9 @@ databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-app-types = { workspace = true }
+databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-semaphore = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
@@ -102,6 +104,7 @@ databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-hilbert-clustering = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
+databend-enterprise-ngram-index = { workspace = true }
 databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -26,6 +27,7 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::InvertedIndex;
+use databend_common_license::license::Feature::NgramIndex;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -120,6 +122,10 @@ impl Interpreter for CreateTableInterpreter {
         if self.plan.inverted_indexes.is_some() {
             LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), InvertedIndex)?;
+        }
+        if self.plan.ngram_indexes.is_some() {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), NgramIndex)?;
         }
 
         let quota_api = UserApiProvider::instance().tenant_quota_api(tenant);
@@ -405,6 +411,16 @@ impl CreateTableInterpreter {
             FuseSegmentFormat::from_str(segment_format)?;
         }
         let comment = options.remove(OPT_KEY_COMMENT);
+        let indexes = match (&self.plan.inverted_indexes, &self.plan.ngram_indexes) {
+            (Some(inverted_indexes), Some(ngram_indexes)) => {
+                let mut table_indexes = inverted_indexes.clone();
+                table_indexes.extend(ngram_indexes.clone());
+                table_indexes
+            }
+            (Some(inverted_indexes), None) => inverted_indexes.clone(),
+            (None, Some(ngram_indexes)) => ngram_indexes.clone(),
+            (None, None) => BTreeMap::default(),
+        };
 
         let mut table_meta = TableMeta {
             schema: schema.clone(),
@@ -417,7 +433,7 @@ impl CreateTableInterpreter {
             drop_on: None,
             statistics: statistics.unwrap_or_default(),
             comment: comment.unwrap_or_default(),
-            indexes: self.plan.inverted_indexes.clone().unwrap_or_default(),
+            indexes,
             ..Default::default()
         };
 

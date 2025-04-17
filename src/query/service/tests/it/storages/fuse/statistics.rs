@@ -627,6 +627,7 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
             None,
             bloom_filter_index_size,
             None,
+            None,
             Compression::Lz4Raw,
             Some(Utc::now()),
         );
