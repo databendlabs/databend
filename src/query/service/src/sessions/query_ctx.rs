@@ -534,9 +534,10 @@ impl QueryContext {
         ));
         let joined_contents = remote_spill_files.join("\n");
 
-        if let Err(e) = GlobalIORuntime::instance()
-            .block_on::<(), (), _>(async move { Ok(op.write(&meta_path, joined_contents).await?) })
-        {
+        if let Err(e) = GlobalIORuntime::instance().block_on::<(), (), _>(async move {
+            let _ = op.write(&meta_path, joined_contents).await?;
+            Ok(())
+        }) {
             log::error!("create spill meta file error: {}", e);
         }
     }
