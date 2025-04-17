@@ -65,10 +65,10 @@ pub struct MemStat {
     parent_memory_stat: Option<Arc<MemStat>>,
 }
 
-const MEMORY_LIMIT_NOT_EXCEEDED: usize = 0;
-const MEMORY_LIMIT_EXCEEDED_NO_ERROR: usize = 1;
-const MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR: usize = 2;
-const MEMORY_LIMIT_EXCEEDED_REPORTED_ERROR: usize = 3;
+pub const MEMORY_LIMIT_NOT_EXCEEDED: usize = 0;
+pub const MEMORY_LIMIT_EXCEEDED_NO_ERROR: usize = 1;
+pub const MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR: usize = 2;
+pub const MEMORY_LIMIT_EXCEEDED_REPORTED_ERROR: usize = 3;
 
 impl MemStat {
     pub const fn global(queries_memory_manager: &'static QueriesMemoryManager) -> Self {
@@ -145,7 +145,15 @@ impl MemStat {
                 }
 
                 // neighbor may exceeded limit, wait release memory
-                return self.try_wait_memory(cause);
+                if let Err(cause) = self.try_wait_memory(cause) {
+                    if NEED_ROLLBACK {
+                        // We only roll back the memory that alloc failed
+                        self.rollback(current_memory_alloc);
+                    }
+
+                    return Err(cause);
+                }
+                return Ok(());
             }
         }
 
@@ -168,8 +176,8 @@ impl MemStat {
     }
 
     fn try_wait_memory(&self, out_of_limit: OutOfLimit) -> Result<(), OutOfLimit> {
-        self.queries_memory_manager
-            .wait_release_memory(self.id, out_of_limit)
+        let _guard = LimitMemGuard::enter_unlimited();
+        self.queries_memory_manager.wait_memory(self, out_of_limit)
     }
 
     pub fn try_exceeding_limit(&self, out_of_limit: OutOfLimit) -> Result<(), OutOfLimit> {
@@ -256,6 +264,10 @@ impl MemStat {
         }
 
         Err(OutOfLimit::new(used, limit))
+    }
+
+    pub(crate) fn recheck_limit(&self) -> Result<(), OutOfLimit> {
+        self.check_limit(self.used.load(Ordering::Relaxed))
     }
 
     #[inline]
