@@ -65,19 +65,25 @@ async fn test_virtual_column_builder() -> Result<()> {
                 DataType::Nullable(Box::new(DataType::Variant)),
                 Value::Column(VariantType::from_opt_data(vec![
                     Some(
-                        OwnedJsonb::from_str(r#"{"a": 1, "b": {"c": "x"}}"#)
-                            .unwrap()
-                            .to_vec(),
+                        OwnedJsonb::from_str(
+                            r#"{"a": 1, "b": {"c": "x"}, "e": [{"f": 100}, 200]}"#,
+                        )
+                        .unwrap()
+                        .to_vec(),
                     ),
                     Some(
-                        OwnedJsonb::from_str(r#"{"a": 2, "b": {"c": "y", "d": true}}"#)
-                            .unwrap()
-                            .to_vec(),
+                        OwnedJsonb::from_str(
+                            r#"{"a": 2, "b": {"c": "y", "d": true}, "e": [{"f": 300}, 400]}"#,
+                        )
+                        .unwrap()
+                        .to_vec(),
                     ),
                     Some(
-                        OwnedJsonb::from_str(r#"{"a": 3, "b": {"d": false}}"#)
-                            .unwrap()
-                            .to_vec(),
+                        OwnedJsonb::from_str(
+                            r#"{"a": 3, "b": {"d": false}, "e": [{"f": 500}, 600]}"#,
+                        )
+                        .unwrap()
+                        .to_vec(),
                     ), // 'c' is missing here
                 ])),
             ),
@@ -90,10 +96,10 @@ async fn test_virtual_column_builder() -> Result<()> {
     assert!(!result.data.is_empty());
     assert_eq!(
         result.draft_virtual_block_meta.virtual_column_metas.len(),
-        3
-    ); // Expect a, b.c, b.d
+        5
+    ); // Expect a, b.c, b.d, e[0].f, e[1]
 
-    // Check 'v'['a']
+    // Check v['a']
     let meta_a = find_virtual_col(
         &result.draft_virtual_block_meta.virtual_column_metas,
         1,
@@ -104,7 +110,7 @@ async fn test_virtual_column_builder() -> Result<()> {
     assert_eq!(meta_a.name, "['a']");
     assert_eq!(meta_a.data_type, VariantDataType::UInt64); // Inferred as UInt64 because numbers are small positive ints
 
-    // Check 'v'['b']['c']
+    // Check v['b']['c']
     let meta_bc = find_virtual_col(
         &result.draft_virtual_block_meta.virtual_column_metas,
         1,
@@ -115,7 +121,7 @@ async fn test_virtual_column_builder() -> Result<()> {
     assert_eq!(meta_bc.name, "['b']['c']");
     assert_eq!(meta_bc.data_type, VariantDataType::String);
 
-    // Check 'v'['b']['d']
+    // Check v['b']['d']
     let meta_bd = find_virtual_col(
         &result.draft_virtual_block_meta.virtual_column_metas,
         1,
@@ -125,6 +131,28 @@ async fn test_virtual_column_builder() -> Result<()> {
     assert_eq!(meta_bd.source_column_id, 1);
     assert_eq!(meta_bd.name, "['b']['d']");
     assert_eq!(meta_bd.data_type, VariantDataType::Boolean);
+
+    // Check v['e'][0]['f']
+    let meta_bd = find_virtual_col(
+        &result.draft_virtual_block_meta.virtual_column_metas,
+        1,
+        "['e'][0]['f']",
+    )
+    .expect("Virtual column ['e'][0]['f'] not found");
+    assert_eq!(meta_bd.source_column_id, 1);
+    assert_eq!(meta_bd.name, "['e'][0]['f']");
+    assert_eq!(meta_bd.data_type, VariantDataType::UInt64);
+
+    // Check v['e'][1]
+    let meta_bd = find_virtual_col(
+        &result.draft_virtual_block_meta.virtual_column_metas,
+        1,
+        "['e'][1]",
+    )
+    .expect("Virtual column ['e'][1] not found");
+    assert_eq!(meta_bd.source_column_id, 1);
+    assert_eq!(meta_bd.name, "['e'][1]");
+    assert_eq!(meta_bd.data_type, VariantDataType::UInt64);
 
     let block = DataBlock::new(
         vec![

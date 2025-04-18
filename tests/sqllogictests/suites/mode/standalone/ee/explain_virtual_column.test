@@ -31,11 +31,11 @@ statement ok
 insert into t1 values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'))
 
 query T
-explain select a, v['a'], v['b']['c'] from t1
+explain select a, v['a'][0], v['b']['c'] from t1
 ----
 EvalScalar
-├── output columns: [t1.a (#0), v['a'] (#2), v['b']['c'] (#3)]
-├── expressions: [get_by_keypath(t1.v (#1), '{"a"}'), get_by_keypath(t1.v (#1), '{"b","c"}')]
+├── output columns: [t1.a (#0), v['a'][0] (#2), v['b']['c'] (#3)]
+├── expressions: [get_by_keypath(t1.v (#1), '{"a",0}'), get_by_keypath(t1.v (#1), '{"b","c"}')]
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_virtual_db.t1
@@ -49,11 +49,11 @@ EvalScalar
     └── estimated rows: 1.00
 
 query T
-explain select a, v['a'] from t1 where v['b']['c'] = 10
+explain select a, v['a'][0] from t1 where v['b']['c'] = 10
 ----
 EvalScalar
-├── output columns: [t1.a (#0), v['a'] (#2)]
-├── expressions: [get_by_keypath(t1.v (#1), '{"a"}')]
+├── output columns: [t1.a (#0), v['a'][0] (#2)]
+├── expressions: [get_by_keypath(t1.v (#1), '{"a",0}')]
 ├── estimated rows: 0.20
 └── TableScan
     ├── table: default.test_virtual_db.t1
@@ -76,37 +76,37 @@ statement ok
 insert into t2 values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'))
 
 query T
-explain select a, v['a'], v['b']['c'] from t2
+explain select a, v['a'][0], v['b']['c'] from t2
 ----
 TableScan
 ├── table: default.test_virtual_db.t2
-├── output columns: [a (#0), v['a'] (#2), v['b']['c'] (#3)]
+├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#3)]
 ├── read rows: 1
 ├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 ├── push downs: [filters: [], limit: NONE]
-├── virtual columns: [v['a'], v['b']['c']]
+├── virtual columns: [v['a'][0], v['b']['c']]
 └── estimated rows: 1.00
 
 query T
-explain select a, v['a'] from t2 where v['b']['c'] = 10
+explain select a, v['a'][0] from t2 where v['b']['c'] = 10
 ----
 Filter
-├── output columns: [t2.a (#0), t2.v['a'] (#2)]
+├── output columns: [t2.a (#0), t2.v['a'][0] (#2)]
 ├── filters: [is_true(TRY_CAST(v['b']['c'] (#3) AS UInt8 NULL) = 10)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.test_virtual_db.t2
-    ├── output columns: [a (#0), v['a'] (#2), v['b']['c'] (#3)]
+    ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#3)]
     ├── read rows: 1
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [is_true(TRY_CAST(v['b']['c'] (#3) AS UInt8 NULL) = 10)], limit: NONE]
-    ├── virtual columns: [v['a'], v['b']['c']]
+    ├── virtual columns: [v['a'][0], v['b']['c']]
     └── estimated rows: 1.00
 
 query T
@@ -158,21 +158,21 @@ HashJoin
 ├── keys is null equal: []
 ├── filters: [TRY_CAST(v['b']['c'] (#4) AS Int32 NULL) = t1.a (#2)]
 ├── build join filters:
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#0), t2.v['b']['c'] (#4)]
-│   ├── filters: [is_true(TRY_CAST(get_by_keypath(t2.v (#1), '{"a",0}') AS UInt8 NULL) = 1)]
-│   ├── estimated rows: 0.20
+│   ├── filters: [is_true(TRY_CAST(v['a'][0] (#5) AS UInt8 NULL) = 1)]
+│   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
-│       ├── output columns: [a (#0), v (#1), v['b']['c'] (#4)]
+│       ├── output columns: [a (#0), v['b']['c'] (#4), v['a'][0] (#5)]
 │       ├── read rows: 1
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [is_true(TRY_CAST(get_by_keypath(t2.v (#1), '{"a",0}') AS UInt8 NULL) = 1)], limit: NONE]
-│       ├── virtual columns: [v['b']['c']]
+│       ├── push downs: [filters: [is_true(TRY_CAST(v['a'][0] (#5) AS UInt8 NULL) = 1)], limit: NONE]
+│       ├── virtual columns: [v['a'][0], v['b']['c']]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.test_virtual_db.t1

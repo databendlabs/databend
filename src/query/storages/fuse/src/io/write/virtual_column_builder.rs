@@ -194,9 +194,16 @@ impl VirtualColumnBuilder {
                 let mut key_name = String::new();
                 for path in key_paths {
                     key_name.push('[');
-                    key_name.push('\'');
-                    key_name.push_str(&path);
-                    key_name.push('\'');
+                    match path {
+                        KeyPath::Index(idx) => {
+                            key_name.push_str(&format!("{idx}"));
+                        }
+                        KeyPath::Name(name) => {
+                            key_name.push('\'');
+                            key_name.push_str(&name);
+                            key_name.push('\'');
+                        }
+                    }
                     key_name.push(']');
                 }
 
@@ -269,16 +276,27 @@ impl VirtualColumnBuilder {
     fn collect_virtual_values<'a>(
         val: &JsonbValue<'a>,
         row: usize,
-        paths: &mut VecDeque<String>,
-        virtual_values: &mut BTreeMap<Vec<String>, Vec<Option<JsonbValue<'a>>>>,
+        paths: &mut VecDeque<KeyPath>,
+        virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'a>>>>,
     ) {
-        if let JsonbValue::Object(obj) = val {
-            for (key, val) in obj {
-                paths.push_back(key.clone());
-                Self::collect_virtual_values(val, row, paths, virtual_values);
-                paths.pop_back();
+        match val {
+            JsonbValue::Object(obj) => {
+                for (key, val) in obj {
+                    paths.push_back(KeyPath::Name(key.clone()));
+                    Self::collect_virtual_values(val, row, paths, virtual_values);
+                    paths.pop_back();
+                }
+                return;
             }
-            return;
+            JsonbValue::Array(arr) => {
+                for (i, val) in arr.iter().enumerate() {
+                    paths.push_back(KeyPath::Index(i as u32));
+                    Self::collect_virtual_values(val, row, paths, virtual_values);
+                    paths.pop_back();
+                }
+                return;
+            }
+            _ => {}
         }
 
         // ignore root scalar values
@@ -287,9 +305,9 @@ impl VirtualColumnBuilder {
         }
 
         // only collect leaf node scalar values.
-        let name = paths.iter().cloned().collect();
+        let path_names = paths.iter().cloned().collect();
 
-        if let Some(vals) = virtual_values.get_mut(&name) {
+        if let Some(vals) = virtual_values.get_mut(&path_names) {
             while vals.len() < row {
                 vals.push(None);
             }
@@ -300,14 +318,14 @@ impl VirtualColumnBuilder {
                 vals.push(None);
             }
             vals.push(Some(val.clone()));
-            virtual_values.insert(name, vals);
+            virtual_values.insert(path_names, vals);
         }
     }
 
     fn discard_virtual_values(
         num_rows: usize,
         virtual_field_num: usize,
-        virtual_values: &mut BTreeMap<Vec<String>, Vec<Option<JsonbValue<'_>>>>,
+        virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'_>>>>,
     ) {
         // Fill in the NULL values, keeping each column the same length.
         for (_, vals) in virtual_values.iter_mut() {
@@ -335,7 +353,7 @@ impl VirtualColumnBuilder {
         // {"k1":100}
         // we should not create virtual column for `k1`.
         let mut keys_to_remove_prefix = Vec::new();
-        let mut keys: Vec<Vec<String>> = virtual_values.keys().cloned().collect();
+        let mut keys: Vec<Vec<KeyPath>> = virtual_values.keys().cloned().collect();
         keys.sort_by_key(|k| k.len());
 
         for i in 0..keys.len() {
@@ -365,7 +383,7 @@ impl VirtualColumnBuilder {
     }
 
     fn inference_data_type(
-        virtual_values: &BTreeMap<Vec<String>, Vec<Option<JsonbValue>>>,
+        virtual_values: &BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue>>>,
     ) -> Vec<VariantDataType> {
         let mut val_types = Vec::with_capacity(virtual_values.len());
         let mut val_type_set = BTreeSet::new();
@@ -481,4 +499,13 @@ impl VirtualColumnBuilder {
         }
         Ok(draft_virtual_column_metas)
     }
+}
+
+/// Represents a valid key path.
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+enum KeyPath {
+    /// represents the index of an Array
+    Index(u32),
+    /// represents the field name of an Object.
+    Name(String),
 }
