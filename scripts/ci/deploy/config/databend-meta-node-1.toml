@@ -11,6 +11,7 @@ grpc_api_advertise_host = "127.0.0.1"
 [log.stderr]
   on = false
 [log.file]
+  on = true
   level = "INFO"
   format = "json"
   dir = "./.databend/logs1"
