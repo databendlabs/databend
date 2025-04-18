@@ -47,7 +47,7 @@ use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
 const CONTAINER_RETRY_TIMES: usize = 3;
-const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 60;
+const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 30;
 const CONTAINER_TIMEOUT_SECONDS: u64 = 180;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -511,7 +511,9 @@ async fn pull_image(image: &str, tag: &str) -> Result<()> {
     while let Some(image_info) = image_info.next().await {
         let info = image_info.map_err(|e| DSqlLogicTestError::SelfError(e.to_string()))?;
         println!(
-            "Pulling image {image}:{tag} {:?}",
+            "Pulling image {image}:{tag}:{} ({}) {:?}",
+            info.status.unwrap_or_default(),
+            info.id.unwrap_or_default(),
             info.progress.unwrap_or_default()
         );
     }
