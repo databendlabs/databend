@@ -124,6 +124,7 @@ pub use table::TableIndexType;
 pub use table::TableInfo;
 pub use table::TableMeta;
 pub use table::TableNameIdent;
+pub use table::TablePartition;
 pub use table::TableStatistics;
 pub use table::TruncateTableReply;
 pub use table::TruncateTableReq;

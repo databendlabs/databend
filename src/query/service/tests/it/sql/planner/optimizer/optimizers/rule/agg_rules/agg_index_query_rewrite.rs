@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -86,6 +87,8 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
         inverted_indexes: None,
         ngram_indexes: None,
         attached_columns: None,
+        iceberg_partition: vec![],
+        iceberg_table_properties: BTreeMap::new(),
     }
 }
 

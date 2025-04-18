@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use databend_common_ast::ast::Engine;
 use databend_common_base::base::tokio;
 use databend_common_meta_app::schema::CreateOption;
@@ -55,6 +57,8 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         inverted_indexes: None,
         ngram_indexes: None,
         attached_columns: None,
+        iceberg_partition: vec![],
+        iceberg_table_properties: BTreeMap::new(),
     };
 
     // create test table
