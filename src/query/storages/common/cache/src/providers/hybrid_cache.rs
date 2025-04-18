@@ -26,8 +26,7 @@ use crate::InMemoryLruCache;
 
 pub struct HybridCache<V: Into<CacheValue<V>>> {
     name: String,
-    // TODO in-memory cache should allows to be None as well?
-    memory_cache: InMemoryLruCache<V>,
+    memory_cache: Option<InMemoryLruCache<V>>,
     disk_cache: Option<DiskCacheAccessor>,
 }
 
@@ -53,25 +52,21 @@ impl<V: Into<CacheValue<V>>> Clone for HybridCache<V> {
 impl<V: Into<CacheValue<V>>> HybridCache<V> {
     pub fn new(
         name: String,
-        memory_cache: InMemoryLruCache<V>,
+        memory_cache: Option<InMemoryLruCache<V>>,
         disk_cache: Option<DiskCacheAccessor>,
-    ) -> Self {
-        Self {
-            name,
-            memory_cache,
-            disk_cache,
+    ) -> Option<Self> {
+        if memory_cache.is_none() && disk_cache.is_none() {
+            None
+        } else {
+            Some(Self {
+                name,
+                memory_cache,
+                disk_cache,
+            })
         }
     }
 
-    pub fn in_memory_cache(&self) -> &InMemoryLruCache<V> {
-        &self.memory_cache
-    }
-
-    pub fn on_disk_cache(&self) -> &Option<DiskCacheAccessor> {
-        &self.disk_cache
-    }
-
-    pub fn toggle_off_disk_cache(self) -> Self {
+    fn toggle_off_disk_cache_impl(self) -> Self {
         if self.disk_cache.is_some() {
             Self {
                 name: self.name,
@@ -80,6 +75,46 @@ impl<V: Into<CacheValue<V>>> HybridCache<V> {
             }
         } else {
             self
+        }
+    }
+    pub fn in_memory_cache(&self) -> Option<&InMemoryLruCache<V>> {
+        self.memory_cache.as_ref()
+    }
+
+    pub fn on_disk_cache(&self) -> Option<&DiskCacheAccessor> {
+        self.disk_cache.as_ref()
+    }
+}
+
+// Crate internal helper methods
+pub trait HybridCacheExt<V: Into<CacheValue<V>>> {
+    fn toggle_off_disk_cache(self) -> Self;
+    fn in_memory_cache(&self) -> Option<&InMemoryLruCache<V>>;
+    fn on_disk_cache(&self) -> Option<&DiskCacheAccessor>;
+}
+
+impl<V: Into<CacheValue<V>>> HybridCacheExt<V> for Option<HybridCache<V>> {
+    fn toggle_off_disk_cache(self) -> Self {
+        self.map(|cache| cache.toggle_off_disk_cache_impl())
+    }
+
+    fn in_memory_cache(&self) -> Option<&InMemoryLruCache<V>> {
+        match self {
+            None => None,
+            Some(v) => match &v.memory_cache {
+                None => None,
+                Some(v) => Some(v),
+            },
+        }
+    }
+
+    fn on_disk_cache(&self) -> Option<&DiskCacheAccessor> {
+        match self {
+            None => None,
+            Some(v) => match &v.disk_cache {
+                None => None,
+                Some(v) => Some(v),
+            },
         }
     }
 }
@@ -195,6 +230,7 @@ mod tests {
     use parquet::data_type::AsBytes;
     use tempfile::TempDir;
 
+    use crate::providers::hybrid_cache::HybridCacheExt;
     use crate::CacheAccessor;
     use crate::CacheValue;
     use crate::DiskCacheBuilder;
@@ -261,7 +297,7 @@ mod tests {
             InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
 
         // Create hybrid cache without disk cache
-        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache.clone(), None);
+        let cache = HybridCache::new("test_hybrid".to_string(), Some(memory_cache.clone()), None);
 
         assert_eq!(cache.name(), "test_hybrid");
         assert_eq!(cache.len(), 0);
@@ -290,7 +326,11 @@ mod tests {
         .unwrap();
 
         // Create hybrid cache
-        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache, Some(table_cache));
+        let cache = HybridCache::new(
+            "test_hybrid".to_string(),
+            Some(memory_cache),
+            Some(table_cache),
+        );
 
         assert_eq!(cache.name(), "test_hybrid");
         assert!(cache.is_empty());
@@ -303,7 +343,7 @@ mod tests {
             InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
 
         // Create hybrid cache without disk cache
-        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache, None);
+        let cache = HybridCache::new("test_hybrid".to_string(), Some(memory_cache), None);
 
         // Insert data
         let test_data = TestData {
@@ -343,7 +383,11 @@ mod tests {
         .unwrap();
 
         // Create hybrid cache
-        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache, Some(table_cache));
+        let cache = HybridCache::new(
+            "test_hybrid".to_string(),
+            Some(memory_cache),
+            Some(table_cache),
+        );
 
         // Insert data
         let test_data1 = TestData {
@@ -364,9 +408,9 @@ mod tests {
 
         // This will cause key1 to be evicted from memory cache, but it should exist in disk cache
         cache.insert("key3".to_string(), test_data3.clone());
-        assert!(!cache.memory_cache.contains_key("key1"));
+        assert!(!cache.in_memory_cache().unwrap().contains_key("key1"));
 
-        let disk_cache = cache.disk_cache.as_ref().unwrap();
+        let disk_cache = cache.on_disk_cache().unwrap();
         // Since the on-disk cache is populated asynchronously, we need to
         // wait until the populate-queue is empty. At that time, at least
         // the first key `test_key` should be written into the on-disk cache.
@@ -409,7 +453,7 @@ mod tests {
         // Create hybrid cache
         let cache = HybridCache::new(
             "test_hybrid".to_string(),
-            memory_cache.clone(),
+            Some(memory_cache.clone()),
             Some(table_cache),
         );
 
@@ -429,7 +473,7 @@ mod tests {
         });
 
         // Verify the memory cache doesn't have our test key anymore
-        assert!(!cache.in_memory_cache().contains_key("test_key"));
+        assert!(!cache.in_memory_cache().unwrap().contains_key("test_key"));
 
         // Since the on-disk cache is populated asynchronously, we need to
         // wait until the populate-queue is empty. At that time, at least
@@ -447,7 +491,7 @@ mod tests {
         assert_eq!(first_access.as_ref().id, 42);
 
         // Verify it's now in memory cache after the first access
-        assert!(cache.in_memory_cache().contains_key("test_key"));
+        assert!(cache.in_memory_cache().unwrap().contains_key("test_key"));
 
         // Second access - should now hit memory cache
         let second_access = cache
@@ -478,7 +522,11 @@ mod tests {
         .unwrap();
 
         // Create hybrid cache
-        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache, Some(table_cache));
+        let cache = HybridCache::new(
+            "test_hybrid".to_string(),
+            Some(memory_cache),
+            Some(table_cache),
+        );
 
         // Insert data
         let test_data = TestData {
@@ -527,7 +575,7 @@ mod tests {
             InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
 
         // Create hybrid cache without disk cache
-        let cache = HybridCache::new("test_hybrid".to_string(), memory_cache, None);
+        let cache = HybridCache::new("test_hybrid".to_string(), Some(memory_cache), None);
 
         // Insert multiple items
         for i in 0..5 {
@@ -570,7 +618,7 @@ mod tests {
         // Create hybrid cache with disk cache
         let cache_with_disk = HybridCache::new(
             "test_hybrid_with_disk".to_string(),
-            memory_cache.clone(),
+            Some(memory_cache.clone()),
             Some(disk_cache),
         );
 
@@ -588,7 +636,8 @@ mod tests {
         // Case 2: Test when disk cache is already None
 
         // Create hybrid cache without disk cache
-        let cache_no_disk = HybridCache::new("test_hybrid_no_disk".to_string(), memory_cache, None);
+        let cache_no_disk =
+            HybridCache::new("test_hybrid_no_disk".to_string(), Some(memory_cache), None);
 
         // Verify disk cache is None
         assert!(cache_no_disk.on_disk_cache().is_none());

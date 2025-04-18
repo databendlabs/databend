@@ -229,25 +229,23 @@ impl CachesTable {
     }
 
     fn append_on_disk_cache_row(
-        cache: &Option<DiskCacheAccessor>,
+        cache: &DiskCacheAccessor,
         local_node: &str,
         columns: &mut CachesTableColumns,
     ) {
-        if let Some(cache) = cache {
-            let name = cache.name();
-            columns.nodes.push(local_node.to_owned());
-            columns.names.push(name.to_string());
-            columns.num_items.push(cache.len() as u64);
-            columns.size.push(cache.bytes_size());
-            columns.capacity.push(cache.bytes_capacity());
-            columns.unit.push(Unit::Bytes.to_string());
-            let access = get_cache_access_count(name);
-            let hit = get_cache_hit_count(name);
-            let miss = get_cache_miss_count(name);
-            columns.access.push(access);
-            columns.hit.push(hit);
-            columns.miss.push(miss);
-        }
+        let name = cache.name();
+        columns.nodes.push(local_node.to_owned());
+        columns.names.push(name.to_string());
+        columns.num_items.push(cache.len() as u64);
+        columns.size.push(cache.bytes_size());
+        columns.capacity.push(cache.bytes_capacity());
+        columns.unit.push(Unit::Bytes.to_string());
+        let access = get_cache_access_count(name);
+        let hit = get_cache_hit_count(name);
+        let miss = get_cache_miss_count(name);
+        columns.access.push(access);
+        columns.hit.push(hit);
+        columns.miss.push(miss);
     }
 
     fn append_rows_of_hybrid_cache<V: Into<CacheValue<V>>>(
@@ -255,9 +253,11 @@ impl CachesTable {
         local_node: &str,
         columns: &mut CachesTableColumns,
     ) {
-        let in_memory_cache = cache.in_memory_cache();
-        Self::append_row(in_memory_cache, local_node, columns);
-        let on_disk_cache = cache.on_disk_cache();
-        Self::append_on_disk_cache_row(on_disk_cache, local_node, columns);
+        if let Some(in_memory_cache) = cache.in_memory_cache() {
+            Self::append_row(in_memory_cache, local_node, columns);
+        }
+        if let Some(on_disk_cache) = cache.on_disk_cache() {
+            Self::append_on_disk_cache_row(on_disk_cache, local_node, columns);
+        }
     }
 }
