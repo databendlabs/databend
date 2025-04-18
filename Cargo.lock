@@ -3008,6 +3008,8 @@ dependencies = [
  "bytemuck",
  "bytes",
  "bytesize",
+ "chrono",
+ "concurrent-queue",
  "crc32fast",
  "ctrlc",
  "databend-common-exception",

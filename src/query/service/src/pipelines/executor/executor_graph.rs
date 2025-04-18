@@ -29,6 +29,7 @@ use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TimeSeriesProfile;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
@@ -40,6 +41,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
 use fastrace::prelude::*;
 use log::debug;
+use log::info;
 use log::trace;
 use log::warn;
 use parking_lot::Condvar;
@@ -98,6 +100,7 @@ impl Node {
         processor: &ProcessorPtr,
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
+        time_series_profile: Option<Arc<TimeSeriesProfile>>,
     ) -> Arc<Node> {
         let p_name = unsafe { processor.name() };
         let tracking_payload = {
@@ -119,6 +122,7 @@ impl Node {
                     .map(|x| x.labels.clone())
                     .unwrap_or(Arc::new(vec![])),
                 scope.as_ref().map(|x| x.metrics_registry.clone()),
+                time_series_profile,
             )));
 
             // Node tracking metrics
@@ -185,7 +189,7 @@ impl ExecutingGraph {
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
-        Self::init_graph(&mut pipeline, &mut graph);
+        Self::init_graph(&mut pipeline, &mut graph, &query_id);
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
@@ -208,7 +212,7 @@ impl ExecutingGraph {
         let mut graph = StableGraph::new();
 
         for pipeline in &mut pipelines {
-            Self::init_graph(pipeline, &mut graph);
+            Self::init_graph(pipeline, &mut graph, &query_id);
         }
 
         Ok(ExecutingGraph {
@@ -224,7 +228,11 @@ impl ExecutingGraph {
         })
     }
 
-    fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, EdgeInfo>) {
+    fn init_graph(
+        pipeline: &mut Pipeline,
+        graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
+        query_id: &str,
+    ) {
         #[derive(Debug)]
         struct Edge {
             source_port: usize,
@@ -234,6 +242,7 @@ impl ExecutingGraph {
         }
 
         let mut pipes_edges: Vec<Vec<Edge>> = Vec::new();
+        let mut plan_time_series_stats: HashMap<u32, Arc<TimeSeriesProfile>> = HashMap::new();
         for pipe in &pipeline.pipes {
             assert_eq!(
                 pipe.input_length,
@@ -245,12 +254,27 @@ impl ExecutingGraph {
 
             for item in &pipe.items {
                 let pid = graph.node_count();
+                let time_series_stats: Option<Arc<TimeSeriesProfile>> =
+                    if let Some(scope) = pipe.scope.as_ref() {
+                        let plan_id = scope.id;
+                        Some(
+                            plan_time_series_stats
+                                .entry(plan_id)
+                                .or_insert_with(|| {
+                                    TimeSeriesProfile::create(plan_id, query_id.to_string())
+                                })
+                                .clone(),
+                        )
+                    } else {
+                        None
+                    };
                 let node = Node::create(
                     pid,
                     pipe.scope.clone(),
                     &item.processor,
                     &item.inputs_port,
                     &item.outputs_port,
+                    time_series_stats,
                 );
 
                 let graph_node_index = graph.add_node(node.clone());

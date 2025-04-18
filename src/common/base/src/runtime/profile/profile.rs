@@ -22,6 +22,7 @@ use crate::runtime::error_info::NodeErrorType;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::ProfileStatisticsName;
 use crate::runtime::ThreadTracker;
+use crate::runtime::TimeSeriesProfile;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ProfileLabel {
@@ -50,6 +51,7 @@ pub struct Profile {
     pub statistics: [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()],
     pub metrics_registry: Option<Arc<ScopedRegistry>>,
     pub errors: Arc<Mutex<Vec<NodeErrorType>>>,
+    pub time_series: Option<Arc<TimeSeriesProfile>>,
 }
 
 impl Clone for Profile {
@@ -67,6 +69,7 @@ impl Clone for Profile {
                 AtomicUsize::new(self.statistics[idx].load(Ordering::SeqCst))
             }),
             errors: self.errors.clone(),
+            time_series: self.time_series.clone(),
         }
     }
 }
@@ -84,6 +87,7 @@ impl Profile {
         title: Arc<String>,
         labels: Arc<Vec<ProfileLabel>>,
         metrics_registry: Option<Arc<ScopedRegistry>>,
+        time_series: Option<Arc<TimeSeriesProfile>>,
     ) -> Profile {
         Profile {
             pid,
@@ -96,6 +100,7 @@ impl Profile {
             statistics: Self::create_items(),
             metrics_registry,
             errors: Arc::new(Mutex::new(vec![])),
+            time_series,
         }
     }
 
@@ -103,7 +108,22 @@ impl Profile {
         ThreadTracker::with(|x| match x.borrow().payload.profile.as_ref() {
             None => {}
             Some(profile) => {
-                profile.statistics[name as usize].fetch_add(value, Ordering::SeqCst);
+                let previous_value =
+                    profile.statistics[name.clone() as usize].fetch_add(value, Ordering::SeqCst);
+                if let Some(time_series_profile) = &profile.time_series {
+                    time_series_profile.record_point(name, previous_value + value);
+                }
+            }
+        });
+    }
+
+    pub fn finish() {
+        ThreadTracker::with(|x| match x.borrow().payload.profile.as_ref() {
+            None => {}
+            Some(profile) => {
+                if let Some(time_series_profile) = &profile.time_series {
+                    time_series_profile.finish();
+                }
             }
         });
     }
