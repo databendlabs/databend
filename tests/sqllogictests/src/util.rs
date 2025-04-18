@@ -254,6 +254,7 @@ pub async fn run_ttc_container(
     let mut images = image.split(":");
     let image = images.next().unwrap();
     let tag = images.next().unwrap_or("latest");
+    pull_image(image, tag).await?;
 
     use rand::distributions::Alphanumeric;
     use rand::Rng;
@@ -266,7 +267,6 @@ pub async fn run_ttc_container(
     let container_name = format!("databend-ttc-{}-{}", port, x);
     let start = Instant::now();
     println!("Starting container {container_name}");
-    pull_image(image, tag).await?;
 
     let mut i = 1;
     loop {
