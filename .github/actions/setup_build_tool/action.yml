@@ -108,6 +108,13 @@ runs:
       shell: bash
       run: df -h
 
+    - name: check system info
+      shell: bash
+      run: |
+        uname -a
+        cat /proc/cpuinfo
+        free -h
+
     # - uses: everpcpc/actions-cache@v1
     #   if: env.RUNNER_PROVIDER == 'aws'
     #   env:
