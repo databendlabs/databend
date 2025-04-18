@@ -1,5 +1,5 @@
 # Usage:
-# databend-meta -c databend-meta-node-1.toml
+# databend-meta -c databend-meta-node-for-bendsave.toml
 
 admin_api_address       = "0.0.0.0:28101"
 grpc_api_address        = "0.0.0.0:9191"
@@ -13,7 +13,7 @@ grpc_api_advertise_host = "127.0.0.1"
 [log.file]
   level = "INFO"
   format = "json"
-  dir = "./.databend/logs1"
+  dir = "./.databend/logs-bendsave"
 
 [raft_config]
 id            = 1
