@@ -57,3 +57,8 @@ runs:
         docker version
         docker ps -a
         docker images
+
+    - name: setup env
+      shell: bash
+      run: |
+        echo "RUST_LOG=info" >> $GITHUB_ENV
