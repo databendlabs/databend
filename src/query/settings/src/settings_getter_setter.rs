@@ -554,10 +554,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_copy_into")? != 0)
     }
 
-    pub fn get_enable_experimental_merge_into(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_merge_into")? != 0)
-    }
-
     pub fn get_enable_distributed_merge_into(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_merge_into")? != 0)
     }

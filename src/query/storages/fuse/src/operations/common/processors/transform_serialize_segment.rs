@@ -28,7 +28,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::PipeItem;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -112,17 +111,6 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             is_column_oriented: table.is_column_oriented(),
         }
     }
-
-    pub fn into_processor(self) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(self)))
-    }
-
-    pub fn into_pipe_item(self) -> PipeItem {
-        let input = self.input.clone();
-        let output = self.output.clone();
-        let processor_ptr = ProcessorPtr::create(Box::new(self));
-        PipeItem::create(processor_ptr, vec![input], vec![output])
-    }
 }
 
 pub fn new_serialize_segment_processor(
@@ -157,42 +145,6 @@ pub fn new_serialize_segment_processor(
                 table_meta_timestamps,
             );
             Ok(ProcessorPtr::create(Box::new(processor)))
-        }
-    }
-}
-
-pub fn new_serialize_segment_pipe_item(
-    ctx: Arc<dyn TableContext>,
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    table: &FuseTable,
-    thresholds: BlockThresholds,
-    table_meta_timestamps: TableMetaTimestamps,
-) -> Result<PipeItem> {
-    match table.segment_format {
-        FuseSegmentFormat::Row => {
-            let processor = TransformSerializeSegment::new(
-                ctx,
-                input,
-                output,
-                table,
-                thresholds,
-                RowOrientedSegmentBuilder::default(),
-                table_meta_timestamps,
-            );
-            Ok(processor.into_pipe_item())
-        }
-        FuseSegmentFormat::Column => {
-            let processor = TransformSerializeSegment::new(
-                ctx,
-                input,
-                output,
-                table,
-                thresholds,
-                ColumnOrientedSegmentBuilder::new(table.schema(), thresholds.block_per_segment),
-                table_meta_timestamps,
-            );
-            Ok(processor.into_pipe_item())
         }
     }
 }

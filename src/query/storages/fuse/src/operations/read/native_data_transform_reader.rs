@@ -37,7 +37,7 @@ use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
-use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
+use crate::pruning::ExprRuntimePruner;
 use crate::FuseBlockPartInfo;
 
 pub struct ReadNativeDataTransform<const BLOCKING_IO: bool> {
@@ -117,14 +117,12 @@ impl Transform for ReadNativeDataTransform<true> {
                     self.context
                         .get_min_max_runtime_filter_with_id(self.scan_id),
                 );
-                if runtime_filter_pruner(
-                    self.table_schema.clone(),
-                    &part,
-                    &filters,
-                    &self.func_ctx,
-                )? {
+
+                let runtime_filter = ExprRuntimePruner::new(filters.clone());
+                if runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)? {
                     return Ok(DataBlock::empty());
                 }
+
                 if let Some(index_reader) = self.index_reader.as_ref() {
                     let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                     let loc =
@@ -173,13 +171,9 @@ impl AsyncTransform for ReadNativeDataTransform<false> {
                             .get_min_max_runtime_filter_with_id(self.scan_id),
                     );
                     let mut native_part_infos = Vec::with_capacity(parts.len());
+                    let runtime_filter = ExprRuntimePruner::new(filters.clone());
                     for part in parts.into_iter() {
-                        if runtime_filter_pruner(
-                            self.table_schema.clone(),
-                            &part,
-                            &filters,
-                            &self.func_ctx,
-                        )? {
+                        if runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)? {
                             continue;
                         }
 

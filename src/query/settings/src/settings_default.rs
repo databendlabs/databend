@@ -680,7 +680,7 @@ impl DefaultSettings {
                 }),
                 ("enable_experimental_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enables the experimental feature for 'MERGE INTO'.",
+                    desc: "Deprecated setting",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
