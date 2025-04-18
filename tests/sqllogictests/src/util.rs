@@ -21,8 +21,10 @@ use std::time::Instant;
 
 use bollard::container::ListContainersOptions;
 use bollard::container::RemoveContainerOptions;
+use bollard::image::CreateImageOptions;
 use bollard::Docker;
 use clap::Parser;
+use futures_util::StreamExt;
 use redis::Commands;
 use serde::Deserialize;
 use serde::Serialize;
@@ -37,6 +39,7 @@ use testcontainers::ImageExt;
 use testcontainers_modules::mysql::Mysql;
 use testcontainers_modules::redis::Redis;
 use testcontainers_modules::redis::REDIS_PORT;
+use tokio_stream::stream_ext::StreamExt;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
@@ -263,6 +266,7 @@ pub async fn run_ttc_container(
     let container_name = format!("databend-ttc-{}-{}", port, x);
     let start = Instant::now();
     println!("Starting container {container_name}");
+    pull_image(image, tag).await?;
 
     let mut i = 1;
     loop {
@@ -495,4 +499,18 @@ async fn stop_container(docker: &Docker, container_name: &str) {
             }
         }
     }
+}
+
+async fn pull_image(image: &str, tag: &str) -> Result<()> {
+    let docker = &docker_client_instance().await?;
+    let options = Some(CreateImageOptions {
+        from_image: format!("{image}:{tag}"),
+        ..Default::default()
+    });
+    let mut image_info = docker.create_image(options, None, None);
+    while let Some(image_info) = image_info.next().await {
+        println!("Pulling image {image}:{tag} {:?}", image_info);
+    }
+    println!("Pulled image {image}:{tag}");
+    Ok(())
 }
