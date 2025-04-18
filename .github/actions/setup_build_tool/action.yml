@@ -66,6 +66,7 @@ runs:
         export SCCACHE_LOG=debug
         EOF
             cat <<EOF >>$HOME/.config/sccache/config
+        server_startup_timeout_ms = 10000
         [cache.gcs]
         bucket = "databend-ci"
         rw_mode = "READ_WRITE"
