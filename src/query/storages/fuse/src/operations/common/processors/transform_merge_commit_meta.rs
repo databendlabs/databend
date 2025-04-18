@@ -101,7 +101,12 @@ impl TransformMergeCommitMeta {
                 } else {
                     r_schema.next_column_id
                 };
-                let number_of_blocks = l_schema.number_of_blocks + r_schema.number_of_blocks;
+                // TODO: Calculate the correct `number_of_blocks`
+                let number_of_blocks = if l_schema.number_of_blocks > r_schema.number_of_blocks {
+                    l_schema.number_of_blocks
+                } else {
+                    r_schema.number_of_blocks
+                };
 
                 while l_cursor < l_schema.fields.len() || r_cursor < r_schema.fields.len() {
                     match (l_schema.fields.get(l_cursor), r_schema.fields.get(r_cursor)) {
