@@ -1,12 +1,20 @@
 # Usage:
 # databend-meta -c databend-meta-node-2.toml
 
-log_dir                 = "./.databend/logs2"
 admin_api_address       = "0.0.0.0:28201"
 grpc_api_address        = "0.0.0.0:28202"
 # databend-query fetch this address to update its databend-meta endpoints list,
 # in case databend-meta cluster changes.
 grpc_api_advertise_host = "127.0.0.1"
+
+
+[log]
+[log.stderr]
+  on = false
+[log.file]
+  level = "INFO"
+  format = "json"
+  dir = "./.databend/logs2"
 
 [raft_config]
 id            = 2
