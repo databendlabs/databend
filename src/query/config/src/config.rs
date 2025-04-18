@@ -3152,10 +3152,17 @@ pub struct DiskCacheConfig {
     )]
     pub path: String,
 
-    /// Whether sync data after write.
-    /// If the query node's memory is managed by cgroup (at least cgroup v1),
-    /// it's recommended to set this to true to prevent the container from
-    /// being killed due to high dirty page memory usage.
+    /// Controls whether to synchronize data to disk after write operations.
+    ///
+    /// When enabled, this option forces written data to be flushed to physical storage,
+    /// reducing the amount of dirty pages in memory. This is particularly important in
+    /// containerized environments where:
+    ///
+    /// 1. Memory limits are enforced by cgroups (v1, maybe v2 as well, though accounting differs)
+    /// 2. Dirty pages are counted against the memory limit, which increases the possibility of triggering OOM kills
+    ///
+    /// Setting this to true improves stability in memory-constrained / containerized environments at the cost
+    /// of potentially reduced write performance.
     #[clap(
         long = "cache-disk-sync-data",
         value_name = "VALUE",
