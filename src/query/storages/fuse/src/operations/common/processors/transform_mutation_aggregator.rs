@@ -306,16 +306,15 @@ impl TableMutationAggregator {
             return Ok(());
         }
 
+        let mut merged_blocks = self.accumulate_merged_blocks();
+
         if let Some(id) = self.default_cluster_key_id {
             // sort ascending.
-            self.merged_blocks
+            merged_blocks
                 .sort_by(|a, b| sort_by_cluster_stats(&a.cluster_stats, &b.cluster_stats, id));
         }
 
-        self.accumulate_reculster_virtual_schema();
-
         let mut tasks = Vec::new();
-        let merged_blocks = std::mem::take(&mut self.merged_blocks);
         let segments_num = (merged_blocks.len() / self.thresholds.block_per_segment).max(1);
         let chunk_size = merged_blocks.len().div_ceil(segments_num);
         let default_cluster_key = self.default_cluster_key_id;
@@ -366,8 +365,6 @@ impl TableMutationAggregator {
                 .push((location, SegmentInfo::VERSION));
         }
 
-        //self.update_virtual_schema_block_number(&merged_statistics);
-
         Ok(())
     }
 
@@ -378,7 +375,7 @@ impl TableMutationAggregator {
         let start = Instant::now();
         let mut count = 0;
 
-        self.accumulate_virtual_schema();
+        self.accumulate_extended_mutations();
 
         let appended_segments = std::mem::take(&mut self.appended_segments);
         let appended_statistics = std::mem::take(&mut self.appended_statistics);
@@ -553,7 +550,8 @@ impl TableMutationAggregator {
         .collect::<Result<Vec<_>>>()
     }
 
-    fn accumulate_virtual_schema(&mut self) {
+    // Assign columnId to the virtual column in the mutation blocks and generate a new virtual schema.
+    fn accumulate_extended_mutations(&mut self) {
         if self.extended_mutations.is_empty() {
             return;
         }
@@ -616,19 +614,16 @@ impl TableMutationAggregator {
         };
     }
 
-    fn accumulate_reculster_virtual_schema(&mut self) {
-        if self.recluster_merged_extended_blocks.is_empty() {
-            return;
-        }
-
+    // Assign columnId to the virtual column in the merged blocks and generate a new virtual schema.
+    fn accumulate_merged_blocks(&mut self) -> Vec<Arc<BlockMeta>> {
         let mut virtual_column_accumulator = VirtualColumnAccumulator::try_create(
             self.ctx.clone(),
             &self.schema,
             &self.virtual_schema,
         );
-        let recluster_merged_extended_blocks =
-            std::mem::take(&mut self.recluster_merged_extended_blocks);
-        for extended_block_meta in recluster_merged_extended_blocks.into_iter() {
+        let extended_merged_blocks = std::mem::take(&mut self.merged_blocks);
+        let mut new_merged_blocks = Vec::with_capacity(extended_merged_blocks.len());
+        for extended_block_meta in extended_merged_blocks.into_iter() {
             let new_block_meta = if let Some(draft_virtual_block_meta) =
                 &extended_block_meta.draft_virtual_block_meta
             {
@@ -650,14 +645,16 @@ impl TableMutationAggregator {
             } else {
                 Arc::new(extended_block_meta.block_meta.clone())
             };
-            self.recluster_merged_blocks.push(new_block_meta);
+            new_merged_blocks.push(new_block_meta);
         }
 
         self.virtual_schema = if let Some(virtual_column_accumulator) = virtual_column_accumulator {
-            virtual_column_accumulator.build_virtual_schema()
+            virtual_column_accumulator.build_virtual_schema_with_block_number()
         } else {
             None
         };
+
+        new_merged_blocks
     }
 
     fn update_virtual_schema_block_number(&mut self, merged_statistics: &Statistics) {
