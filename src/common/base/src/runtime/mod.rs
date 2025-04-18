@@ -24,6 +24,7 @@ pub mod profile;
 mod runtime;
 mod runtime_tracker;
 mod thread;
+mod time_series;
 
 pub use backtrace::dump_backtrace;
 pub use backtrace::get_all_tasks;
@@ -60,3 +61,4 @@ pub use runtime_tracker::TrackingPayload;
 pub use runtime_tracker::UnlimitedFuture;
 pub use thread::Thread;
 pub use thread::ThreadJoinHandle;
+pub use time_series::TimeSeriesProfile;

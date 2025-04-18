@@ -255,6 +255,7 @@ impl OutputPort {
                 UpdateTrigger::update_output(&self.update_trigger);
             }
         }
+        Profile::finish()
     }
 
     #[inline(always)]
