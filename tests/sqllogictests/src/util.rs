@@ -30,6 +30,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use testcontainers::core::client::docker_client_instance;
+use testcontainers::core::logs::consumer::logging_consumer::LoggingConsumer;
 use testcontainers::core::IntoContainerPort;
 use testcontainers::core::WaitFor;
 use testcontainers::runners::AsyncRunner;
@@ -269,6 +270,7 @@ pub async fn run_ttc_container(
 
     let mut i = 1;
     loop {
+        let log_consumer = LoggingConsumer::new();
         let container_res = GenericImage::new(image, tag)
             .with_exposed_port(port.tcp())
             .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
@@ -283,6 +285,7 @@ pub async fn run_ttc_container(
             )
             .with_env_var("TTC_PORT", format!("{port}"))
             .with_container_name(&container_name)
+            .with_log_consumer(log_consumer)
             .start()
             .await;
         let duration = start.elapsed().as_secs();
