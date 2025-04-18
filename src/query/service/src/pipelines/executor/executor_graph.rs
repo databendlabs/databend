@@ -41,7 +41,6 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
 use fastrace::prelude::*;
 use log::debug;
-use log::info;
 use log::trace;
 use log::warn;
 use parking_lot::Condvar;
