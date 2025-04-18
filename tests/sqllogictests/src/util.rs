@@ -254,7 +254,6 @@ pub async fn run_ttc_container(
     let mut images = image.split(":");
     let image = images.next().unwrap();
     let tag = images.next().unwrap_or("latest");
-    pull_image(image, tag).await?;
 
     use rand::distributions::Alphanumeric;
     use rand::Rng;
@@ -502,24 +501,4 @@ async fn stop_container(docker: &Docker, container_name: &str) {
             }
         }
     }
-}
-
-async fn pull_image(image: &str, tag: &str) -> Result<()> {
-    let docker = &docker_client_instance().await?;
-    let options = Some(CreateImageOptions {
-        from_image: format!("{image}:{tag}"),
-        ..Default::default()
-    });
-    let mut image_info = docker.create_image(options, None, None);
-    while let Some(image_info) = image_info.next().await {
-        let info = image_info.map_err(|e| DSqlLogicTestError::SelfError(e.to_string()))?;
-        println!(
-            "Pulling image {image}:{tag}:{} ({}) {:?}",
-            info.status.unwrap_or_default(),
-            info.id.unwrap_or_default(),
-            info.progress.unwrap_or_default()
-        );
-    }
-    println!("Pulled image {image}:{tag}");
-    Ok(())
 }
