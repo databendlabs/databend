@@ -300,6 +300,8 @@ async fn create_memory_table_for_cte_scan(
                 schema,
                 engine: Engine::Memory,
                 engine_options: Default::default(),
+                iceberg_table_properties: Default::default(),
+                iceberg_partition: vec![],
                 storage_params: None,
                 options: Default::default(),
                 field_comments: vec![],

@@ -896,6 +896,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( #uri_location )?
             ~ ( CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
+            ~ ( PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
+            ~ ( PROPERTIES ~  #connection_options )?
             ~ ( AS ~ ^#query )?
         },
         |(
@@ -910,6 +912,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             uri_location,
             opt_cluster_by,
             opt_table_options,
+            opt_iceberg_table_partition_by,
+            opt_iceberg_table_properties,
             opt_as_query,
         )| {
             let create_option =
@@ -933,6 +937,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     cluster_exprs: exprs,
                 }),
                 table_options: opt_table_options.unwrap_or_default(),
+                iceberg_table_partition: opt_iceberg_table_partition_by
+                    .map(|(_, _, _, cols, _)| cols),
+                iceberg_table_properties: opt_iceberg_table_properties
+                    .map(|(_, properties)| properties)
+                    .unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 table_type,
             }))

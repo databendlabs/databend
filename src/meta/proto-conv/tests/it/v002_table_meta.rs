@@ -143,6 +143,8 @@ fn test_decode_v2_table_meta() -> anyhow::Result<()> {
         shared_by: BTreeSet::new(),
         column_mask_policy: None,
         indexes: btreemap! {},
+        iceberg_table_properties: btreemap! {},
+        iceberg_partition: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

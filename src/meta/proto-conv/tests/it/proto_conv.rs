@@ -168,6 +168,8 @@ fn new_table_meta() -> mt::TableMeta {
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         indexes: btreemap! {},
+        iceberg_table_properties: btreemap! {},
+        iceberg_partition: None,
     }
 }
 

@@ -25,6 +25,8 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateOption;
@@ -35,12 +37,16 @@ use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_storages_common_cache::LoadParams;
 use educe::Educe;
 use iceberg::arrow::arrow_schema_to_schema;
+use iceberg::spec::PartitionSpec;
 use iceberg::spec::Schema as IcebergSchema;
+use iceberg::spec::Transform;
+use iceberg::spec::UnboundPartitionField;
 use iceberg::TableCreation;
 use iceberg::TableIdent;
 
@@ -180,15 +186,100 @@ impl Database for IcebergDatabase {
             }
         }
 
-        let table_create_option = TableCreation::builder()
-            .name(req.table_name().to_string())
-            .properties(HashMap::new())
-            .schema(convert_table_schema(
-                req.table_meta.schema.as_ref(),
-                req.db_name(),
-                req.table_name(),
-            )?)
-            .build();
+        let schema = convert_table_schema(
+            req.table_meta.schema.as_ref(),
+            req.db_name(),
+            req.table_name(),
+        )?;
+
+        let table_create_option = if let Some(ref partition) = req.table_meta.iceberg_partition {
+            match partition {
+                TablePartition::Identity { columns } => {
+                    if columns.is_empty() {
+                        TableCreation::builder()
+                            .name(req.table_name().to_string())
+                            .properties(
+                                req.table_meta
+                                    .iceberg_table_properties
+                                    .clone()
+                                    .into_iter()
+                                    .collect(),
+                            )
+                            .schema(schema)
+                            .build()
+                    } else {
+                        let mut fields = vec![];
+                        fn is_invalid_partition_type(ty: &TableDataType) -> bool {
+                            use NumberDataType::*;
+                            use TableDataType::*;
+
+                            match ty {
+                                Number(Float32) | Number(Float64) | Decimal(_) | Timestamp
+                                | Null => true,
+
+                                Nullable(inner_ty) => is_invalid_partition_type(inner_ty),
+
+                                _ => false,
+                            }
+                        }
+
+                        for (i, col) in columns.iter().enumerate() {
+                            let origin_ty = &req.table_meta.schema.field_with_name(col)?.data_type;
+                            if is_invalid_partition_type(origin_ty) {
+                                return Err(ErrorCode::Internal(format!(
+                                    "Partition key {} is {:?} type. Cannot set FLOAT, DOUBLE, DECIMAL, DATETIME as partition field", col, origin_ty
+                                )));
+                            }
+
+                            let field = schema.field_by_name(col.as_str());
+                            if let Some(field) = field {
+                                fields.push(UnboundPartitionField {
+                                    source_id: field.id,
+                                    name: field.name.to_string(),
+                                    field_id: Some(i as i32),
+                                    transform: Transform::Identity,
+                                });
+                            } else {
+                                return Err(ErrorCode::Internal(format!(
+                                    "Can not get partition by field {}",
+                                    col
+                                )));
+                            }
+                        }
+                        let spec = PartitionSpec::builder(schema.clone())
+                            .with_spec_id(1)
+                            .add_unbound_fields(fields)
+                            .unwrap()
+                            .build()
+                            .unwrap();
+                        TableCreation::builder()
+                            .name(req.table_name().to_string())
+                            .properties(
+                                req.table_meta
+                                    .iceberg_table_properties
+                                    .clone()
+                                    .into_iter()
+                                    .collect(),
+                            )
+                            .partition_spec(spec)
+                            .schema(schema)
+                            .build()
+                    }
+                }
+            }
+        } else {
+            TableCreation::builder()
+                .name(req.table_name().to_string())
+                .properties(
+                    req.table_meta
+                        .iceberg_table_properties
+                        .clone()
+                        .into_iter()
+                        .collect(),
+                )
+                .schema(schema)
+                .build()
+        };
 
         let _ = self
             .ctl

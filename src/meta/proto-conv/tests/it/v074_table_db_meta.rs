@@ -90,6 +90,8 @@ fn test_decode_v74_table_meta() -> anyhow::Result<()> {
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         indexes: btreemap! {},
+        iceberg_table_properties: btreemap! {},
+        iceberg_partition: None,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v74.as_slice(), 74, want())?;

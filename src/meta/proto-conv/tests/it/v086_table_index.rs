@@ -102,6 +102,8 @@ fn test_decode_v86_table_meta() -> anyhow::Result<()> {
             version: "f10b230153e14f2c84603958d7f864f8".to_string(),
             options: btreemap! {s("tokenizer") => s("chinese")},
         }},
+        iceberg_table_properties: btreemap! {},
+        iceberg_partition: None,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v86.as_slice(), 86, want())?;
