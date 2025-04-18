@@ -17,7 +17,6 @@ use std::mem::variant_count;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Duration;
 
 use concurrent_queue::ConcurrentQueue;
 use log::info;
@@ -146,7 +145,7 @@ impl TimeSeriesProfile {
             pub stats: Vec<(usize, usize)>,
         }
         info!(
-            target: "databend::log::time_series_stats",
+            target: "databend::log::time_series",
             "{}",
             serde_json::to_string(&TimeSeriesStatistics{
                 query_id: self.query_id.clone(),
@@ -164,39 +163,48 @@ impl TimeSeriesProfile {
     }
 }
 
-#[test]
-fn test_time_series_profile() {
-    let time_series_profile = TimeSeriesProfile::create(1, "test_query_id".to_string());
-    time_series_profile.record_point(ProfileStatisticsName::OutputRows, 100);
-    time_series_profile.record_point(ProfileStatisticsName::OutputRows, 200);
-    time_series_profile.record_point(ProfileStatisticsName::OutputBytes, 400);
-    let batch = Vec::from_iter(
-        time_series_profile.items[TimeSeriesProfileStatisticsName::OutputRows as usize]
-            .queue
-            .try_iter(),
-    );
-    assert_eq!(batch.len(), 1);
-    let batch = Vec::from_iter(
-        time_series_profile.items[TimeSeriesProfileStatisticsName::OutputBytes as usize]
-            .queue
-            .try_iter(),
-    );
-    assert_eq!(batch.len(), 1);
-    std::thread::sleep(Duration::from_millis(1100));
-    time_series_profile.record_point(ProfileStatisticsName::OutputRows, 300);
-    let batch = Vec::from_iter(
-        time_series_profile.items[TimeSeriesProfileStatisticsName::OutputRows as usize]
-            .queue
-            .try_iter(),
-    );
-    assert_eq!(batch.len(), 1);
-}
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
 
-#[test]
-fn test_time_series_enum() {
-    let len = variant_count::<TimeSeriesProfileStatisticsName>();
-    for i in 0..len {
-        let name = TimeSeriesProfileStatisticsName::from(i);
-        assert_eq!(name as usize, i);
+    use super::*;
+    #[test]
+    fn test_time_series_profile() {
+        let time_series_profile = TimeSeriesProfile::create(1, "test_query_id".to_string());
+        time_series_profile.record_point(ProfileStatisticsName::OutputRows, 100);
+        time_series_profile.record_point(ProfileStatisticsName::OutputRows, 200);
+        time_series_profile.record_point(ProfileStatisticsName::OutputBytes, 400);
+        let batch = Vec::from_iter(
+            time_series_profile.items[TimeSeriesProfileStatisticsName::OutputRows as usize]
+                .queue
+                .try_iter(),
+        );
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].1, 100);
+        let batch = Vec::from_iter(
+            time_series_profile.items[TimeSeriesProfileStatisticsName::OutputBytes as usize]
+                .queue
+                .try_iter(),
+        );
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].1, 400);
+        std::thread::sleep(Duration::from_millis(1100));
+        time_series_profile.record_point(ProfileStatisticsName::OutputRows, 300);
+        let batch = Vec::from_iter(
+            time_series_profile.items[TimeSeriesProfileStatisticsName::OutputRows as usize]
+                .queue
+                .try_iter(),
+        );
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].1, 300);
+    }
+
+    #[test]
+    fn test_time_series_enum() {
+        let len = variant_count::<TimeSeriesProfileStatisticsName>();
+        for i in 0..len {
+            let name = TimeSeriesProfileStatisticsName::from(i);
+            assert_eq!(name as usize, i);
+        }
     }
 }
