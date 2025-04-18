@@ -47,7 +47,7 @@ use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
 const CONTAINER_RETRY_TIMES: usize = 3;
-const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 180;
+const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 60;
 const CONTAINER_TIMEOUT_SECONDS: u64 = 300;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -272,6 +272,7 @@ pub async fn run_ttc_container(
         let container_res = GenericImage::new(image, tag)
             .with_exposed_port(port.tcp())
             .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
+            .with_startup_timeout(Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS))
             .with_network("host")
             .with_env_var(
                 "DATABEND_DSN",
@@ -508,7 +509,7 @@ async fn pull_image(image: &str, tag: &str) -> Result<()> {
     });
     let mut image_info = docker.create_image(options, None, None);
     while let Some(image_info) = image_info.next().await {
-        println!("Pulling image {image}:{tag} {:?}", image_info);
+        println!("Pulling image {image}:{tag} {:?}", image_info?.);
     }
     println!("Pulled image {image}:{tag}");
     Ok(())
