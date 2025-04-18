@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -269,13 +270,18 @@ pub async fn run_ttc_container(
         http_server_port
     );
 
+    let output = std::process::Command::new("bendsql")
+        .args(&["--dsn", &dsn, "--check"])
+        .output()
+        .expect("failed to execute bendsql --check");
+    println!("status: {}", output.status);
+    std::io::stdout().write_all(&output.stdout)?;
+    std::io::stderr().write_all(&output.stderr)?;
+
     let mut i = 1;
     loop {
         let log_consumer = LoggingConsumer::new();
-        let _ = std::process::Command::new("bendsql")
-            .args(&["--dsn", &dsn, "--check"])
-            .output()
-            .expect("failed to execute bendsql --check");
+
         let container_res = GenericImage::new(image, tag)
             .with_exposed_port(port.tcp())
             .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
