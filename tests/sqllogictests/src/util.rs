@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use bollard::container::ListContainersOptions;
 use bollard::container::RemoveContainerOptions;
 use bollard::Docker;
 use clap::Parser;
@@ -455,6 +456,23 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
 
 // Stop the running container to avoid conflict
 async fn stop_container(docker: &Docker, container_name: &str) {
+    let opts = Some(ListContainersOptions::<String> {
+        all: true,
+        ..Default::default()
+    });
+    println!("==> list containers");
+    let containers = docker.list_containers(opts).await;
+    if let Ok(containers) = containers {
+        for container in containers {
+            if let Some(names) = container.names {
+                println!(
+                    "--> container name: {:?}, status: {:?}",
+                    names, container.state
+                );
+            }
+        }
+    }
+
     let container = docker.inspect_container(container_name, None).await;
     if let Ok(container) = container {
         println!(
