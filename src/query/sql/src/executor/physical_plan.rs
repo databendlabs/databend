@@ -686,6 +686,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
+            | PhysicalPlan::RuntimeFilterSource(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::HilbertPartition(plan) => Box::new(std::iter::once(plan.input.as_mut())),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_mut())),
@@ -746,6 +747,7 @@ impl PhysicalPlan {
                 CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v.as_mut())),
                 CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v.as_mut())),
             },
+            PhysicalPlan::RuntimeFilterSink(plan) => Box::new(std::iter::once(plan.input.as_mut())),
         }
     }
 
