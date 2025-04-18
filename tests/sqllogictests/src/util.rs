@@ -271,7 +271,7 @@ pub async fn run_ttc_container(
     );
 
     let output = std::process::Command::new("bendsql")
-        .args(&["--dsn", &dsn, "--check"])
+        .args(["--dsn", &dsn, "--check"])
         .output()
         .expect("failed to execute bendsql --check");
     println!("status: {}", output.status);
