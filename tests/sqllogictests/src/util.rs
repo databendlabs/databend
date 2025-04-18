@@ -509,7 +509,11 @@ async fn pull_image(image: &str, tag: &str) -> Result<()> {
     });
     let mut image_info = docker.create_image(options, None, None);
     while let Some(image_info) = image_info.next().await {
-        println!("Pulling image {image}:{tag} {:?}", image_info?.);
+        let info = image_info.map_err(|e| DSqlLogicTestError::SelfError(e.to_string()))?;
+        println!(
+            "Pulling image {image}:{tag} {:?}",
+            info.progress.unwrap_or_default()
+        );
     }
     println!("Pulled image {image}:{tag}");
     Ok(())
