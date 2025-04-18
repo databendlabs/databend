@@ -446,6 +446,9 @@ where
                     Inner::Memory(_) => unreachable!(),
                 };
 
+                if let Some(block) = self.input.pull_data().transpose()? {
+                    self.collect_block(block)?
+                }
                 let input = self.input_rows();
                 let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
                     unreachable!()
