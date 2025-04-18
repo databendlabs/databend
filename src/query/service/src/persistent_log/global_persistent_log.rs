@@ -124,7 +124,13 @@ impl GlobalPersistentLog {
         GlobalInstance::set(instance);
         GlobalIORuntime::instance().try_spawn(
             async move {
-                if let Err(e) = GlobalPersistentLog::instance().work().await {
+                let mut tracking_payload = ThreadTracker::new_tracking_payload();
+                tracking_payload.should_log = false;
+                let _guard = ThreadTracker::tracking(tracking_payload);
+
+                if let Err(e) =
+                    ThreadTracker::tracking_future(GlobalPersistentLog::instance().work()).await
+                {
                     error!("persistent log exit {}", e);
                 }
             },
