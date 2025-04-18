@@ -251,6 +251,12 @@ pub struct TableStatistics {
     pub number_of_blocks: Option<u64>,
 }
 
+/// Iceberg table parition
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum TablePartition {
+    Identity { columns: Vec<String> },
+}
+
 /// The essential state that defines what a table is.
 ///
 /// It is what a meta store just needs to save.
@@ -262,6 +268,8 @@ pub struct TableMeta {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: BTreeMap<String, String>,
+    pub iceberg_table_properties: BTreeMap<String, String>,
+    pub iceberg_partition: Option<TablePartition>,
     pub cluster_key: Option<String>,
     /// A sequential number that uniquely identifies changes to the cluster key.
     /// This value increments by 1 each time the cluster key is created or modified,
@@ -428,6 +436,22 @@ impl TableInfo {
     }
 }
 
+impl Default for TablePartition {
+    fn default() -> Self {
+        TablePartition::Identity { columns: vec![] }
+    }
+}
+
+impl Display for TablePartition {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            TablePartition::Identity { columns } => {
+                write!(f, "Partition Transform Identity: {:?}", columns)
+            }
+        }
+    }
+}
+
 impl Default for TableMeta {
     fn default() -> Self {
         TableMeta {
@@ -437,6 +461,8 @@ impl Default for TableMeta {
             storage_params: None,
             part_prefix: "".to_string(),
             options: BTreeMap::new(),
+            iceberg_table_properties: BTreeMap::new(),
+            iceberg_partition: None,
             cluster_key: None,
             cluster_key_seq: 0,
             created_on: Utc::now(),

@@ -52,6 +52,8 @@ pub struct CreateTablePlan {
     pub engine_options: TableOptions,
     pub storage_params: Option<StorageParams>,
     pub options: TableOptions,
+    pub iceberg_table_properties: TableOptions,
+    pub iceberg_partition: Vec<String>,
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,

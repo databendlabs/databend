@@ -99,6 +99,8 @@ fn test_decode_v82_table_meta() -> anyhow::Result<()> {
             version: "".to_string(),
             options: btreemap! {},
         }},
+        iceberg_table_properties: btreemap! {},
+        iceberg_partition: None,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v82.as_slice(), 82, want())?;

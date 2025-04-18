@@ -116,6 +116,8 @@ async fn test_block_pruner() -> Result<()> {
         inverted_indexes: None,
         ngram_indexes: None,
         attached_columns: None,
+        iceberg_partition: vec![],
+        iceberg_table_properties: BTreeMap::new(),
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
