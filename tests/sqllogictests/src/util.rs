@@ -466,7 +466,7 @@ async fn stop_container(docker: &Docker, container_name: &str) {
         for container in containers {
             if let Some(names) = container.names {
                 println!(
-                    "--> container name: {:?}, status: {:?}",
+                    " -> container name: {:?}, status: {:?}",
                     names, container.state
                 );
             }
