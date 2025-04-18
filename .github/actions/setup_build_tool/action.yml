@@ -26,6 +26,7 @@ runs:
         echo "$BIN_LOCAL" >> $GITHUB_PATH
         mkdir -p target
         touch target/sccache.log
+        mkdir -p $HOME/.config/sccache
 
         cat <<EOF >$BIN_LOCAL/build-tool
         #!/bin/bash
