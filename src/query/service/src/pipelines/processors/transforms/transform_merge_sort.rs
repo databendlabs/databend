@@ -362,6 +362,7 @@ where
             return match self.state {
                 State::Collect => {
                     if self.check_spill() {
+                        // delay the handle of input until the next call.
                         Ok(Event::Async)
                     } else {
                         Ok(Event::Sync)
@@ -437,7 +438,7 @@ where
                         self.prepare_spill_limit()?;
                     }
                     Inner::Collect(input_data) => {
-                        debug_assert!(!finished);
+                        assert!(!finished);
                         let input_data = std::mem::take(input_data);
                         self.prepare_spill(input_data);
                     }
@@ -471,7 +472,7 @@ where
                 let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
                     unreachable!()
                 };
-                debug_assert!(input_data.is_empty());
+                assert!(input_data.is_empty());
                 let (block, finish) = spill_sort.on_restore().await?;
                 self.output_data.extend(block);
                 if finish {
