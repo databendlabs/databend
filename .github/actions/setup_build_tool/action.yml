@@ -49,7 +49,7 @@ runs:
         export SCCACHE_S3_KEY_PREFIX="cache/sccache/"
         export SCCACHE_S3_USE_SSL="true"
         export SCCACHE_ERROR_LOG=/workspace/target/sccache.log
-        export SCCACHE_LOG=info
+        export SCCACHE_LOG=debug
         EOF
             ;;
 
@@ -62,7 +62,7 @@ runs:
         export SCCACHE_GCS_BUCKET=databend-ci
         export SCCACHE_GCS_KEY_PREFIX="cache/sccache/"
         export SCCACHE_ERROR_LOG=/workspace/target/sccache.log
-        export SCCACHE_LOG=info
+        export SCCACHE_LOG=debug
         EOF
             ;;
 
