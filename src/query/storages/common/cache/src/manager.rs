@@ -724,21 +724,27 @@ mod tests {
     }
 
     fn all_disk_cache_disabled(cache_manager: &CacheManager) -> bool {
-        cache_manager
-            .get_column_data_cache()
+        assert!(
+            cache_manager.get_column_data_cache().is_none()
+                || cache_manager
+                    .get_column_data_cache()
+                    .unwrap()
+                    .on_disk_cache()
+                    .is_none(),
+            "case name"
+        );
+        assert!(cache_manager
+            .get_bloom_index_meta_cache()
             .unwrap()
             .on_disk_cache()
-            .is_some()
-            && cache_manager
-                .get_bloom_index_meta_cache()
-                .unwrap()
-                .on_disk_cache()
-                .is_none()
-            && cache_manager
-                .get_bloom_index_meta_cache()
-                .unwrap()
-                .on_disk_cache()
-                .is_none()
+            .is_none());
+        assert!(cache_manager
+            .get_bloom_index_meta_cache()
+            .unwrap()
+            .on_disk_cache()
+            .is_none());
+
+        true
     }
 
     #[test]
@@ -773,7 +779,7 @@ mod tests {
         cache_manager.set_allows_disk_cache(false);
         assert!(all_disk_cache_disabled(&cache_manager));
 
-        // All disk caches should be enabled, if toggled on disk caches
+        //  // All disk caches should be enabled, if toggled on disk caches
         cache_manager.set_allows_disk_cache(true);
         assert!(all_disk_cache_enabled(&cache_manager));
 
