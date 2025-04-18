@@ -264,22 +264,24 @@ pub async fn run_ttc_container(
     let container_name = format!("databend-ttc-{}-{}", port, x);
     let start = Instant::now();
     println!("Starting container {container_name}");
+    let dsn = format!(
+        "databend://root:@127.0.0.1:{}?sslmode=disable",
+        http_server_port
+    );
 
     let mut i = 1;
     loop {
         let log_consumer = LoggingConsumer::new();
+        let _ = std::process::Command::new("bendsql")
+            .args(&["--dsn", &dsn, "--check"])
+            .output()
+            .expect("failed to execute bendsql --check");
         let container_res = GenericImage::new(image, tag)
             .with_exposed_port(port.tcp())
             .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
             .with_startup_timeout(Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS))
             .with_network("host")
-            .with_env_var(
-                "DATABEND_DSN",
-                format!(
-                    "databend://root:@127.0.0.1:{}?sslmode=disable",
-                    http_server_port
-                ),
-            )
+            .with_env_var("DATABEND_DSN", &dsn)
             .with_env_var("TTC_PORT", format!("{port}"))
             .with_container_name(&container_name)
             .with_log_consumer(log_consumer)
