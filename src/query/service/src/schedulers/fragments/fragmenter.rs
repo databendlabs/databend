@@ -215,23 +215,6 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
     }
 
-    fn replace_runtime_filter_sink(&mut self, plan: &RuntimeFilterSink) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        let sink = PhysicalPlan::RuntimeFilterSink(RuntimeFilterSink {
-            plan_id: plan.plan_id,
-            input: Box::new(input),
-        });
-        self.fragments.push(PlanFragment {
-            plan: sink.clone(),
-            fragment_type: FragmentType::Intermediate,
-            fragment_id: self.ctx.get_fragment_id(),
-            exchange: None,
-            query_id: self.query_id.clone(),
-            source_fragments: vec![self.fragments.last().unwrap().clone()],
-        });
-        Ok(sink)
-    }
-
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
         let mut fragments = vec![];
         let build_input = self.replace(plan.build.as_ref())?;
