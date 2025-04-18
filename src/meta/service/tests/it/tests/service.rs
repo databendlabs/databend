@@ -23,12 +23,12 @@ use async_trait::async_trait;
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalSequence;
 use databend_common_base::base::Stoppable;
+use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::raft_types::NodeId;
-use databend_common_meta_types::MetaClientError;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
@@ -91,7 +91,7 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
     Ok(res)
 }
 
-pub fn make_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, MetaClientError> {
+pub fn make_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
     let client = MetaGrpcClient::try_create(
         addresses,
         "root",

@@ -20,6 +20,7 @@ databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
+databend-common-version = { workspace = true }
 derive_more = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
@@ -32,15 +33,13 @@ prost = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 databend-common-exception = { workspace = true }
 rand = { workspace = true }
-
-[build-dependencies]
-databend-common-building = { workspace = true }
 
 [lints]
 workspace = true

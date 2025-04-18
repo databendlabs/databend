@@ -42,6 +42,7 @@ pub enum TableIndexType {
     Aggregating,
     // Join
     Inverted,
+    Ngram,
 }
 
 impl Display for TableIndexType {
@@ -52,6 +53,9 @@ impl Display for TableIndexType {
             }
             TableIndexType::Inverted => {
                 write!(f, "INVERTED")
+            }
+            TableIndexType::Ngram => {
+                write!(f, "NGRAM")
             }
         }
     }
@@ -157,6 +161,86 @@ impl Display for CreateInvertedIndexStmt {
             write_space_separated_string_map(f, &self.index_options)?;
         }
 
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct CreateNgramIndexStmt {
+    pub create_option: CreateOption,
+
+    pub index_name: Identifier,
+
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+
+    pub columns: Vec<Identifier>,
+    pub sync_creation: bool,
+    pub index_options: BTreeMap<String, String>,
+}
+
+impl Display for CreateNgramIndexStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "CREATE ")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, "OR REPLACE ")?;
+        }
+        if !self.sync_creation {
+            write!(f, "ASYNC ")?;
+        }
+        write!(f, "NGRAM INDEX")?;
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, " IF NOT EXISTS")?;
+        }
+
+        write!(f, " {}", self.index_name)?;
+        write!(f, " ON ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        write!(f, " (")?;
+        write_comma_separated_list(f, &self.columns)?;
+        write!(f, ")")?;
+
+        if !self.index_options.is_empty() {
+            write!(f, " ")?;
+            write_space_separated_string_map(f, &self.index_options)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct DropNgramIndexStmt {
+    pub if_exists: bool,
+    pub index_name: Identifier,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+}
+
+impl Display for DropNgramIndexStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "DROP NGRAM INDEX")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+
+        write!(f, " {}", self.index_name)?;
+        write!(f, " ON ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
         Ok(())
     }
 }

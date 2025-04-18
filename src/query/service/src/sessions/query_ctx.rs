@@ -43,12 +43,14 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::database::Database;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
@@ -60,7 +62,6 @@ use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
-use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -114,6 +115,8 @@ use databend_common_storages_stage::StageTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
+use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
@@ -259,22 +262,26 @@ impl QueryContext {
     }
 
     #[async_backtrace::framed]
-    pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
+    pub async fn set_current_database(
+        &self,
+        new_database_name: String,
+    ) -> Result<Arc<dyn Database>> {
         let tenant_id = self.get_tenant();
         let catalog = self
             .get_catalog(self.get_current_catalog().as_str())
             .await?;
         match catalog.get_database(&tenant_id, &new_database_name).await {
-            Ok(_) => self.shared.set_current_database(new_database_name),
+            Ok(db) => {
+                self.shared.set_current_database(new_database_name);
+                Ok(db)
+            }
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
                     "Cannot use database '{}': It does not exist.",
                     new_database_name
                 )));
             }
-        };
-
-        Ok(())
+        }
     }
 
     pub fn rf_src_recv(&self, join_id: u32) -> Receiver<RuntimeFilterMeta> {
@@ -539,9 +546,10 @@ impl QueryContext {
         ));
         let joined_contents = remote_spill_files.join("\n");
 
-        if let Err(e) = GlobalIORuntime::instance()
-            .block_on::<(), (), _>(async move { Ok(op.write(&meta_path, joined_contents).await?) })
-        {
+        if let Err(e) = GlobalIORuntime::instance().block_on::<(), (), _>(async move {
+            let _ = op.write(&meta_path, joined_contents).await?;
+            Ok(())
+        }) {
             log::error!("create spill meta file error: {}", e);
         }
     }
@@ -1356,18 +1364,10 @@ impl TableContext for QueryContext {
     }
 
     fn get_license_key(&self) -> String {
-        let mut license = unsafe {
-            self.get_settings()
-                .get_enterprise_license()
-                .unwrap_or_default()
-        };
-
-        // Try load license from embedded env if failed to load from settings.
-        if license.is_empty() {
-            license = env!("DATABEND_ENTERPRISE_LICENSE_EMBEDDED").to_string();
-        }
-
-        license
+        unsafe { self.get_settings().get_enterprise_license() }.unwrap_or_else(|_| {
+            // Try load license from embedded env if failed to load from settings.
+            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string()
+        })
     }
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
@@ -1836,6 +1836,14 @@ impl TableContext for QueryContext {
 
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         self.shared.get_warehouse_clusters().await
+    }
+
+    fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+        self.shared.get_pruned_partitions_stats()
+    }
+
+    fn set_pruned_partitions_stats(&self, partitions: PartStatistics) {
+        self.shared.set_pruned_partitions_stats(partitions);
     }
 }
 

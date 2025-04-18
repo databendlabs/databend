@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::time::Instant;
 
 use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::table::Table;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
@@ -67,6 +70,8 @@ pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
 
 pub type PrunePartitionsCache = InMemoryLruCache<(PartStatistics, Partitions)>;
 
+pub type IcebergTableCache = InMemoryLruCache<(Arc<dyn Table>, AtomicBool, Instant)>;
+
 /// In memory object cache of table column array
 pub type ColumnArrayCache = InMemoryLruCache<SizedColumnArray>;
 pub type ArrayRawDataUncompressedSize = usize;
@@ -100,6 +105,13 @@ impl CachedObject<Vec<Arc<BlockMeta>>> for Vec<Arc<BlockMeta>> {
     type Cache = SegmentBlockMetasCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_segment_block_metas_cache()
+    }
+}
+
+impl CachedObject<(Arc<dyn Table>, AtomicBool, Instant)> for (Arc<dyn Table>, AtomicBool, Instant) {
+    type Cache = IcebergTableCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_iceberg_table_cache()
     }
 }
 
@@ -200,6 +212,17 @@ impl From<Vec<Arc<BlockMeta>>> for CacheValue<Vec<Arc<BlockMeta>>> {
 
 impl From<BlockMeta> for CacheValue<BlockMeta> {
     fn from(value: BlockMeta) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<(Arc<dyn Table>, AtomicBool, Instant)>
+    for CacheValue<(Arc<dyn Table>, AtomicBool, Instant)>
+{
+    fn from(value: (Arc<dyn Table>, AtomicBool, Instant)) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,

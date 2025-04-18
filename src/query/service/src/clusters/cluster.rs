@@ -40,7 +40,6 @@ pub use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
@@ -52,6 +51,7 @@ use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
 use databend_common_metrics::cluster::*;
+use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_enterprise_resources_management::ResourcesManagement;
 use futures::future::select;
 use futures::future::Either;
@@ -221,9 +221,10 @@ impl ClusterDiscovery {
         let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
-            Err(cause) => {
-                Err(ErrorCode::from(cause).add_message_back("(while create cluster api)."))
-            }
+            Err(cause) => Err(ErrorCode::MetaServiceError(format!(
+                "Failed to create meta store: {}",
+                cause
+            ))),
         }
     }
 

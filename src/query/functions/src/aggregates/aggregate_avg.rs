@@ -27,7 +27,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 
-use super::aggregate_sum::DecimalSumState;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -283,7 +282,7 @@ pub fn try_create_aggregate_avg_function(
                 Ok(Arc::new(func))
             } else {
                 let func = AggregateUnaryFunction::<
-                    DecimalSumState<false, Decimal256Type>,
+                    DecimalAvgState<false, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create(

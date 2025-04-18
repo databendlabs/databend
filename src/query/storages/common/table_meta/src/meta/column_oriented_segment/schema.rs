@@ -28,6 +28,7 @@ pub const CLUSTER_STATS: &str = "cluster_stats";
 pub const LOCATION: &str = "location";
 pub const BLOOM_FILTER_INDEX_LOCATION: &str = "bloom_filter_index_location";
 pub const BLOOM_FILTER_INDEX_SIZE: &str = "bloom_filter_index_size";
+pub const NGRAM_FILTER_INDEX_SIZE: &str = "ngram_filter_index_size";
 pub const INVERTED_INDEX_SIZE: &str = "inverted_index_size";
 pub const COMPRESSION: &str = "compression";
 pub const CREATE_ON: &str = "create_on";

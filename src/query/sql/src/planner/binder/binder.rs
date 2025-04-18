@@ -369,6 +369,12 @@ impl<'a> Binder {
             Statement::RefreshInvertedIndex(stmt) => {
                 self.bind_refresh_inverted_index(bind_context, stmt).await?
             }
+            Statement::CreateNgramIndex(stmt) => {
+                self.bind_create_ngram_index(bind_context, stmt).await?
+            }
+            Statement::DropNgramIndex(stmt) => {
+                self.bind_drop_ngram_index(bind_context, stmt).await?
+            }
 
             // Virtual Columns
             Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
@@ -1108,12 +1114,7 @@ impl<'a> Binder {
                 i.has_score = has_score;
                 i
             });
-            s_expr = SExpr::add_internal_column_index(
-                &s_expr,
-                *table_index,
-                *column_index,
-                &inverted_index,
-            );
+            s_expr = s_expr.add_column_index_to_scans(*table_index, *column_index, &inverted_index);
         }
         Ok(s_expr)
     }

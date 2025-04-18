@@ -75,6 +75,8 @@ pub enum Feature {
     SystemManagement,
     #[serde(alias = "hilbert_clustering", alias = "HILBERT_CLUSTERING")]
     HilbertClustering,
+    #[serde(alias = "ngram_index", alias = "NGRAM_INDEX")]
+    NgramIndex,
     #[serde(other)]
     Unknown,
 }
@@ -122,6 +124,7 @@ impl fmt::Display for Feature {
             Feature::AmendTable => write!(f, "amend_table"),
             Feature::SystemManagement => write!(f, "system_management"),
             Feature::HilbertClustering => write!(f, "hilbert_clustering"),
+            Feature::NgramIndex => write!(f, "ngram_index"),
             Feature::Unknown => write!(f, "unknown"),
         }
     }
@@ -169,13 +172,14 @@ impl Feature {
             | (Feature::VirtualColumn, Feature::VirtualColumn)
             | (Feature::AttacheTable, Feature::AttacheTable)
             | (Feature::StorageEncryption, Feature::StorageEncryption)
-            | (Feature::HilbertClustering, Feature::HilbertClustering) => Ok(true),
+            | (Feature::HilbertClustering, Feature::HilbertClustering)
+            | (Feature::NgramIndex, Feature::NgramIndex) => Ok(true),
             (_, _) => Ok(false),
         }
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct LicenseInfo {
     #[serde(rename = "type")]
     pub r#type: Option<String>,
@@ -339,6 +343,11 @@ mod tests {
         );
 
         assert_eq!(
+            Feature::NgramIndex,
+            serde_json::from_str::<Feature>("\"NgramIndex\"").unwrap()
+        );
+
+        assert_eq!(
             Feature::Unknown,
             serde_json::from_str::<Feature>("\"ssss\"").unwrap()
         );
@@ -371,11 +380,12 @@ mod tests {
                 }),
                 Feature::AmendTable,
                 Feature::HilbertClustering,
+                Feature::NgramIndex,
             ]),
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,storage_encryption,storage_quota(storage_usage: 1),stream,vacuum,virtual_column] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,storage_encryption,storage_quota(storage_usage: 1),stream,vacuum,virtual_column] }",
             license_info.to_string()
         );
     }

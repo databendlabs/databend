@@ -95,6 +95,8 @@ async fn apply_snapshot_pruning(
         segment_rx,
         res_tx,
         cache_key,
+        segment_locs.len(),
+        false,
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {
@@ -174,6 +176,7 @@ async fn test_snapshot_pruner() -> Result<()> {
         as_select: None,
         cluster_key: None,
         inverted_indexes: None,
+        ngram_indexes: None,
         attached_columns: None,
     };
 

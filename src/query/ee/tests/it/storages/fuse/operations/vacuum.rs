@@ -302,13 +302,15 @@ mod test_accessor {
         type BlockingDeleter = ();
 
         fn info(&self) -> Arc<AccessorInfo> {
-            let mut info = AccessorInfo::default();
-            let cap = info.full_capability_mut();
-            cap.stat = true;
-            cap.create_dir = true;
-            cap.delete = true;
-            cap.delete_max_size = Some(1000);
-            cap.list = true;
+            let info = AccessorInfo::default();
+            info.set_native_capability(opendal::Capability {
+                stat: true,
+                create_dir: true,
+                delete: true,
+                delete_max_size: Some(1000),
+                list: true,
+                ..Default::default()
+            });
             info.into()
         }
 

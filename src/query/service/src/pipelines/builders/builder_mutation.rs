@@ -34,13 +34,12 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::executor::physical_plans::Mutation;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_storages_fuse::operations::new_serialize_segment_pipe_item;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::UnMatchedExprs;
 use databend_common_storages_fuse::FuseTable;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
-use crate::pipelines::processors::TransformResortAddOnWithoutSourceSchema;
+use crate::pipelines::processors::transforms::TransformResortAddOnWithoutSourceSchema;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -60,14 +59,6 @@ impl PipelineBuilder {
 
         let io_request_semaphore =
             Arc::new(Semaphore::new(self.settings.get_max_threads()? as usize));
-
-        let serialize_segment_transform = new_serialize_segment_pipe_item(
-            InputPort::create(),
-            OutputPort::create(),
-            table,
-            block_thresholds,
-            merge_into.table_meta_timestamps,
-        )?;
 
         // For row_id port, create rowid_aggregate_mutator
         // For matched data port and unmatched port, do serialize
@@ -131,51 +122,6 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
-        // The complete pipeline:
-        // aggregate_mutator port               aggregate_mutator port
-        // serialize_block port0
-        // serialize_block port1     ======>    serialize_block port
-        // .......
-        let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
-        // row id port
-        let row_id_offset = if merge_into.need_match {
-            ranges.push(vec![0]);
-            1
-        } else {
-            0
-        };
-
-        // Resize data ports
-        debug_assert!(serialize_len > 0);
-        let mut vec = Vec::with_capacity(self.main_pipeline.output_len());
-        for idx in 0..serialize_len {
-            vec.push(idx + row_id_offset);
-        }
-        ranges.push(vec);
-        self.main_pipeline.resize_partial_one(ranges)?;
-
-        let pipe_items = {
-            let mut vec = Vec::with_capacity(2);
-            if merge_into.need_match {
-                // row_id port
-                vec.push(create_dummy_item());
-            }
-            // data port
-            vec.push(serialize_segment_transform);
-            vec
-        };
-
-        // The complete pipeline:
-        // output_port0: MutationLogs(row_id)
-        // output_port1: MutationLogs(data)
-        // 1. FullOperation and MatchedOnly: same as above
-        // 2. InsertOnly: no output_port0
-        let output_len = pipe_items.iter().map(|item| item.outputs_port.len()).sum();
-        self.main_pipeline.add_pipe(Pipe::create(
-            self.main_pipeline.output_len(),
-            output_len,
-            pipe_items,
-        ));
         Ok(())
     }
 

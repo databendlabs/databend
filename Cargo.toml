@@ -28,6 +28,7 @@ members = [
     "src/common/storage",
     "src/common/vector",
     "src/common/license",
+    "src/common/version",
     "src/query/ast",
     "src/query/codegen",
     "src/query/config",
@@ -92,20 +93,21 @@ members = [
     "src/meta/app",
     "src/meta/app-types",
     "src/meta/binaries",
+    "src/meta/cache",
     "src/meta/client",
     "src/meta/control",
+    "src/meta/ee",
     "src/meta/embedded",
     "src/meta/kvapi",
     "src/meta/process",
+    "src/meta/proto-conv",
+    "src/meta/protos",
     "src/meta/raft-store",
+    "src/meta/semaphore",
     "src/meta/sled-store",
     "src/meta/stoerr",
     "src/meta/store",
     "src/meta/types",
-    "src/meta/ee",
-    "src/meta/proto-conv",
-    "src/meta/protos",
-    "src/meta/semaphore",
     "src/meta/service",
     "tests/sqllogictests",
     "src/tests/sqlsmith",
@@ -141,6 +143,7 @@ databend-common-management = { path = "src/query/management" }
 databend-common-meta-api = { path = "src/meta/api" }
 databend-common-meta-app = { path = "src/meta/app" }
 databend-common-meta-app-types = { path = "src/meta/app-types" }
+databend-common-meta-cache = { path = "src/meta/cache" }
 databend-common-meta-client = { path = "src/meta/client" }
 databend-common-meta-control = { path = "src/meta/control" }
 databend-common-meta-embedded = { path = "src/meta/embedded" }
@@ -185,6 +188,7 @@ databend-common-storages-view = { path = "src/query/storages/view" }
 databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
+databend-common-version = { path = "src/common/version" }
 databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregating_index" }
 databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
@@ -192,6 +196,7 @@ databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
 databend-enterprise-hilbert-clustering = { path = "src/query/ee_features/hilbert_clustering" }
 databend-enterprise-inverted-index = { path = "src/query/ee_features/inverted_index" }
 databend-enterprise-meta = { path = "src/meta/ee" }
+databend-enterprise-ngram-index = { path = "src/query/ee_features/ngram_index" }
 databend-enterprise-query = { path = "src/query/ee" }
 databend-enterprise-resources-management = { path = "src/query/ee_features/resources_management" }
 databend-enterprise-storage-encryption = { path = "src/query/ee_features/storage_encryption" }
@@ -235,9 +240,7 @@ arrow-ipc = { version = "54" }
 arrow-ord = { version = "54" }
 arrow-schema = { version = "54", features = ["serde"] }
 arrow-select = { version = "54" }
-arrow-udf-js = { version = "0.6.0" }
-arrow-udf-python = { version = "0.4.0" }
-arrow-udf-wasm = { version = "0.5.0" }
+arrow-udf-runtime = { version = "0.8.0", default-features = false }
 async-backtrace = "0.2"
 async-channel = "1.7.1"
 async-compat = { version = "0.2" }
@@ -265,7 +268,7 @@ brotli = "3.3"
 bstr = "1"
 buf-list = "1.0.3"
 bumpalo = "3.12.0"
-byte-unit = "4.0.19"
+byte-unit = "5.1.6"
 bytemuck = { version = "1", features = ["derive"] }
 byteorder = "1.4.3"
 bytes = "1.5.0"
@@ -274,7 +277,7 @@ cbordata = { version = "0.6.0" }
 cfg-if = "1.0.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
-cidr = { version = "0.2.2" }
+cidr = { version = "0.3.1" }
 clap = { version = "4.4.2", features = ["derive"] }
 codeq = { version = "0.5.2" }
 comfy-table = "7"
@@ -348,7 +351,7 @@ jaq-interpret = "1.5.0"
 jaq-parse = "1.0.3"
 jaq-std = "1.6.0"
 jiff = { version = "0.2.1", features = ["serde", "tzdb-bundle-always"] }
-jsonb = "0.4.4"
+jsonb = "0.5.0"
 jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
 levenshtein_automata = "0.2.1"
@@ -375,14 +378,14 @@ naive-cityhash = "0.2.0"
 ndarray = "0.15.6"
 num = "0.4.0"
 num-bigint = "0.4.6"
-num-derive = "0.3.3"
+num-derive = "0.4.2"
 num-traits = "0.2.19"
 num_cpus = "1.13.1"
 object = "0.36.5"
-object_store_opendal = { version = "0.49.1" }
+object_store_opendal = { version = "0.51.0" }
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
-opendal = { version = "0.51.2", features = [
+opendal = { version = "0.53.0", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
@@ -406,7 +409,7 @@ openraft = { version = "0.10.0", features = [
 ] }
 opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", rev = "a1fb4da", features = ["tls"] }
 orc-rust = "0.5.0"
-ordered-float = { version = "4.5.0", default-features = false }
+ordered-float = { version = "5.0.0", default-features = false }
 ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
@@ -487,15 +490,15 @@ strength_reduce = "0.2.4"
 stringslice = "0.2.0"
 strum = "0.24.1"
 sys-info = "0.9"
-sysinfo = "0.30"
+sysinfo = "0.34.2"
 tantivy = "0.22.0"
 tantivy-common = "0.7.0"
 tantivy-fst = "0.5"
 tantivy-jieba = "0.11.0"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
-terminal_size = "0.2.6"
-test-harness = "0.1.1"
+terminal_size = "0.4.2"
+test-harness = "0.3.0"
 testcontainers = "0.23"
 testcontainers-modules = "0.11.5"
 thiserror = { version = "1" }
@@ -522,7 +525,7 @@ volo-thrift = "0.10"
 walkdir = "2.3.2"
 watcher = { version = "0.1.1" }
 wiremock = "0.6"
-wkt = "0.10.3"
+wkt = "0.11.1"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 xorfilter-rs = "0.5"
 zstd = "0.12.3"
@@ -547,7 +550,7 @@ vergen = { version = "8.3.1", default-features = false, features = ["build", "ca
 env_logger = "0.11"
 fastrace = { version = "0.7.4", features = ["enable"] }
 fastrace-opentelemetry = "0.7.4"
-log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
+log = { version = "0.4.27", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.9"
 opentelemetry = { version = "0.26.0", features = ["trace", "logs"] }
 opentelemetry-otlp = { version = "0.26.0", features = [
@@ -633,9 +636,6 @@ overflow-checks = true
 rpath = false
 
 [patch.crates-io]
-arrow-udf-js = { git = "https://github.com/arrow-udf/arrow-udf", rev = "d910692" }
-arrow-udf-python = { git = "https://github.com/arrow-udf/arrow-udf", rev = "d910692" }
-arrow-udf-wasm = { git = "https://github.com/arrow-udf/arrow-udf", rev = "d910692" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
@@ -643,7 +643,6 @@ color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
 display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.1.2" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
-jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "1a53512" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.3" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }

@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_config::DATABEND_SEMVER;
 use databend_common_storages_fuse::TableContext;
+use databend_common_version::DATABEND_SEMVER;
 use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;

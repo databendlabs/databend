@@ -5,9 +5,6 @@ statement ok
 use test_txn_merge_into;
 
 statement ok
-set enable_experimental_merge_into = 1;
-
-statement ok
 CREATE TABLE employees (
     employee_id INT,
     employee_name VARCHAR(255),
@@ -103,9 +100,6 @@ create or replace database test_txn_merge_into;
 
 statement ok
 use test_txn_merge_into;
-
-statement ok
-set enable_experimental_merge_into = 1;
 
 statement ok
 CREATE TABLE employees (

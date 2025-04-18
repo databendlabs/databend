@@ -165,7 +165,7 @@ where
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct DecimalSumState<const OVERFLOW: bool, T>
+pub struct DecimalSumState<const SHOULD_CHECK_OVERFLOW: bool, T>
 where
     T: ValueType,
     T::Scalar: Decimal,
@@ -174,7 +174,7 @@ where
     pub value: <T::Scalar as Decimal>::U64Array,
 }
 
-impl<const OVERFLOW: bool, T> Default for DecimalSumState<OVERFLOW, T>
+impl<const SHOULD_CHECK_OVERFLOW: bool, T> Default for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
 where
     T: ValueType,
     T::Scalar: Decimal + std::ops::AddAssign,
@@ -187,7 +187,8 @@ where
     }
 }
 
-impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalSumState<OVERFLOW, T>
+impl<const SHOULD_CHECK_OVERFLOW: bool, T> UnaryState<T, T>
+    for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
 where
     T: ValueType,
     T::Scalar: Decimal + std::ops::AddAssign,
@@ -201,7 +202,7 @@ where
         let mut value = T::Scalar::from_u64_array(self.value);
         value += T::to_owned_scalar(other);
 
-        if OVERFLOW && (value > T::Scalar::MAX || value < T::Scalar::MIN) {
+        if SHOULD_CHECK_OVERFLOW && (value > T::Scalar::MAX || value < T::Scalar::MIN) {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
                 self.value,
@@ -219,7 +220,7 @@ where
         validity: Option<&Bitmap>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        if !OVERFLOW {
+        if !SHOULD_CHECK_OVERFLOW {
             let mut sum = T::Scalar::from_u64_array(self.value);
             let col = T::upcast_column(other);
             let buffer = DecimalType::<T::Scalar>::try_downcast_column(&col).unwrap();
@@ -362,12 +363,12 @@ pub fn try_create_aggregate_sum_function(
             };
 
             // DecimalWidth<int64_t> = 18
-            let overflow = s.precision > 18;
+            let should_check_overflow = s.precision > 18;
             let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
 
-            if overflow {
+            if should_check_overflow {
                 AggregateUnaryFunction::<
-                    DecimalSumState<false, Decimal128Type>,
+                    DecimalSumState<true, Decimal128Type>,
                     Decimal128Type,
                     Decimal128Type,
                 >::try_create_unary(
@@ -375,7 +376,7 @@ pub fn try_create_aggregate_sum_function(
                 )
             } else {
                 AggregateUnaryFunction::<
-                    DecimalSumState<true, Decimal128Type>,
+                    DecimalSumState<false, Decimal128Type>,
                     Decimal128Type,
                     Decimal128Type,
                 >::try_create_unary(
@@ -399,12 +400,12 @@ pub fn try_create_aggregate_sum_function(
                 scale: s.scale,
             };
 
-            let overflow = s.precision > 18;
+            let should_check_overflow = s.precision > 18;
             let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
 
-            if overflow {
+            if should_check_overflow {
                 AggregateUnaryFunction::<
-                    DecimalSumState<false, Decimal256Type>,
+                    DecimalSumState<true, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create_unary(
@@ -412,7 +413,7 @@ pub fn try_create_aggregate_sum_function(
                 )
             } else {
                 AggregateUnaryFunction::<
-                    DecimalSumState<true, Decimal256Type>,
+                    DecimalSumState<false, Decimal256Type>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create_unary(

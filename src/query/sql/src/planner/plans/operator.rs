@@ -45,6 +45,7 @@ use crate::plans::Sort;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
+use crate::plans::WindowFuncType;
 
 pub trait Operator {
     /// Get relational operator kind
@@ -153,6 +154,61 @@ pub enum RelOperator {
     Mutation(Mutation),
     CompactBlock(OptimizeCompactBlock),
     MutationSource(MutationSource),
+}
+
+impl RelOperator {
+    pub fn has_subquery(&self) -> bool {
+        match self {
+            RelOperator::Scan(_)
+            | RelOperator::Limit(_)
+            | RelOperator::Exchange(_)
+            | RelOperator::UnionAll(_)
+            | RelOperator::Sort(_)
+            | RelOperator::DummyTableScan(_)
+            | RelOperator::ConstantTableScan(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::CacheScan(_)
+            | RelOperator::AsyncFunction(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::Mutation(_)
+            | RelOperator::CompactBlock(_) => false,
+            RelOperator::Join(op) => {
+                op.equi_conditions.iter().any(|condition| {
+                    condition.left.has_subquery() || condition.right.has_subquery()
+                }) || op
+                    .non_equi_conditions
+                    .iter()
+                    .any(|expr| expr.has_subquery())
+            }
+            RelOperator::EvalScalar(op) => op.items.iter().any(|expr| expr.scalar.has_subquery()),
+            RelOperator::Filter(op) => op.predicates.iter().any(|expr| expr.has_subquery()),
+            RelOperator::Aggregate(op) => {
+                op.group_items.iter().any(|expr| expr.scalar.has_subquery())
+                    || op
+                        .aggregate_functions
+                        .iter()
+                        .any(|expr| expr.scalar.has_subquery())
+            }
+            RelOperator::Window(op) => {
+                op.order_by
+                    .iter()
+                    .any(|o| o.order_by_item.scalar.has_subquery())
+                    || op
+                        .partition_by
+                        .iter()
+                        .any(|expr| expr.scalar.has_subquery())
+                    || match &op.function {
+                        WindowFuncType::Aggregate(agg) => {
+                            agg.exprs().any(|expr| expr.has_subquery())
+                        }
+                        _ => false,
+                    }
+            }
+            RelOperator::ProjectSet(op) => op.srfs.iter().any(|expr| expr.scalar.has_subquery()),
+            RelOperator::Udf(op) => op.items.iter().any(|expr| expr.scalar.has_subquery()),
+            RelOperator::MutationSource(_) => false,
+        }
+    }
 }
 
 impl Operator for RelOperator {

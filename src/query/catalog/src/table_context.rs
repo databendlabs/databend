@@ -71,6 +71,7 @@ use crate::lock::LockTableOption;
 use crate::merge_into_join::MergeIntoJoin;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
+use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
 use crate::runtime_filter_info::RuntimeFilterInfo;
@@ -406,6 +407,13 @@ pub trait TableContext: Send + Sync {
     }
 
     fn get_consume_streams(&self, _query: bool) -> Result<Vec<Arc<dyn Table>>> {
+        unimplemented!()
+    }
+
+    fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+        unimplemented!()
+    }
+    fn set_pruned_partitions_stats(&self, _partitions: PartStatistics) {
         unimplemented!()
     }
 }

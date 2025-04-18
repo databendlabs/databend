@@ -35,6 +35,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
@@ -173,6 +174,8 @@ pub struct QueryContextShared {
 
     // join_id -> (sender, receiver)
     pub(in crate::sessions) rf_source: Arc<Mutex<HashMap<u32, RuntimeFilterChannel>>>,
+
+    pub(in crate::sessions) pruned_partitions_stats: Arc<RwLock<Option<PartStatistics>>>,
 }
 
 type RuntimeFilterChannel = (
@@ -244,6 +247,7 @@ impl QueryContextShared {
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             selected_segment_locs: Default::default(),
             rf_source: Arc::new(Mutex::new(HashMap::new())),
+            pruned_partitions_stats: Arc::new(RwLock::new(None)),
         }))
     }
 
@@ -799,6 +803,15 @@ impl QueryContextShared {
 
     pub fn get_table_meta_timestamps(&self) -> Arc<Mutex<HashMap<u64, TableMetaTimestamps>>> {
         self.table_meta_timestamps.clone()
+    }
+
+    pub fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+        self.pruned_partitions_stats.read().clone()
+    }
+
+    pub fn set_pruned_partitions_stats(&self, stats: PartStatistics) {
+        let mut guard = self.pruned_partitions_stats.write();
+        *guard = Some(stats);
     }
 }
 

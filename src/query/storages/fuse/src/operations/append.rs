@@ -27,7 +27,7 @@ use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::build_compact_block_pipeline;
+use databend_common_pipeline_transforms::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
@@ -37,8 +37,10 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ClusterType;
 
-use crate::operations::common::TransformSerializeBlock;
+use crate::operations::TransformBlockWriter;
+use crate::operations::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -48,24 +50,39 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        let block_thresholds = self.get_block_thresholds();
-        build_compact_block_pipeline(pipeline, block_thresholds)?;
+        let enable_stream_block_write = ctx.get_settings().get_enable_block_stream_write()?
+            && matches!(self.storage_format, FuseStorageFormat::Parquet);
+        if enable_stream_block_write {
+            pipeline.add_transform(|input, output| {
+                TransformBlockWriter::try_create(
+                    ctx.clone(),
+                    input,
+                    output,
+                    self,
+                    table_meta_timestamps,
+                    false,
+                )
+            })?;
+        } else {
+            let block_thresholds = self.get_block_thresholds();
+            build_compact_block_pipeline(pipeline, block_thresholds)?;
 
-        let schema = DataSchema::from(self.schema()).into();
-        let cluster_stats_gen =
-            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, Some(schema))?;
-        pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeBlock::try_create(
-                ctx.clone(),
-                input,
-                output,
-                self,
-                cluster_stats_gen.clone(),
-                MutationKind::Insert,
-                table_meta_timestamps,
-            )?;
-            proc.into_processor()
-        })?;
+            let schema = DataSchema::from(self.schema()).into();
+            let cluster_stats_gen =
+                self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, Some(schema))?;
+            pipeline.add_transform(|input, output| {
+                let proc = TransformSerializeBlock::try_create(
+                    ctx.clone(),
+                    input,
+                    output,
+                    self,
+                    cluster_stats_gen.clone(),
+                    MutationKind::Insert,
+                    table_meta_timestamps,
+                )?;
+                proc.into_processor()
+            })?;
+        }
 
         Ok(())
     }
@@ -111,7 +128,7 @@ impl FuseTable {
                     nulls_first: false,
                 })
                 .collect();
-            let sort_desc = Arc::new(sort_desc);
+            let sort_desc: Arc<[_]> = sort_desc.into();
 
             let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 || {
@@ -160,7 +177,7 @@ impl FuseTable {
                     nulls_first: false,
                 })
                 .collect();
-            let sort_desc = Arc::new(sort_desc);
+            let sort_desc: Arc<[_]> = sort_desc.into();
             pipeline
                 .add_transformer(|| TransformSortPartial::new(LimitType::None, sort_desc.clone()));
         }

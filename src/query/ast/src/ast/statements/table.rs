@@ -284,7 +284,11 @@ impl Display for AttachTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CreateTableSource {
-    Columns(Vec<ColumnDefinition>, Option<Vec<InvertedIndexDefinition>>),
+    Columns(
+        Vec<ColumnDefinition>,
+        Option<Vec<InvertedIndexDefinition>>,
+        Option<Vec<NgramIndexDefinition>>,
+    ),
     Like {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
@@ -295,12 +299,16 @@ pub enum CreateTableSource {
 impl Display for CreateTableSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            CreateTableSource::Columns(columns, inverted_indexes) => {
+            CreateTableSource::Columns(columns, inverted_indexes, ngram_indexes) => {
                 write!(f, "(")?;
                 write_comma_separated_list(f, columns)?;
                 if let Some(inverted_indexes) = inverted_indexes {
                     write!(f, ", ")?;
                     write_comma_separated_list(f, inverted_indexes)?;
+                }
+                if let Some(ngram_indexes) = ngram_indexes {
+                    write!(f, ", ")?;
+                    write_comma_separated_list(f, ngram_indexes)?;
                 }
                 write!(f, ")")
             }
@@ -933,9 +941,38 @@ impl Display for InvertedIndexDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct NgramIndexDefinition {
+    pub index_name: Identifier,
+    pub columns: Vec<Identifier>,
+    pub sync_creation: bool,
+    pub index_options: BTreeMap<String, String>,
+}
+
+impl Display for NgramIndexDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if !self.sync_creation {
+            write!(f, "ASYNC ")?;
+        }
+        write!(f, "NGRAM INDEX")?;
+        write!(f, " {}", self.index_name)?;
+        write!(f, " (")?;
+        write_comma_separated_list(f, &self.columns)?;
+        write!(f, ")")?;
+
+        if !self.index_options.is_empty() {
+            write!(f, " ")?;
+            write_space_separated_string_map(f, &self.index_options)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CreateDefinition {
     Column(ColumnDefinition),
     InvertedIndex(InvertedIndexDefinition),
+    NgramIndex(NgramIndexDefinition),
 }
 
 impl Display for CreateDefinition {
@@ -946,6 +983,9 @@ impl Display for CreateDefinition {
             }
             CreateDefinition::InvertedIndex(inverted_index_def) => {
                 write!(f, "{}", inverted_index_def)?;
+            }
+            CreateDefinition::NgramIndex(ngram_index_def) => {
+                write!(f, "{}", ngram_index_def)?;
             }
         }
         Ok(())

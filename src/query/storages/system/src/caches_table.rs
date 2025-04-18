@@ -35,9 +35,9 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CacheValue;
+use databend_storages_common_cache::DiskCacheAccessor;
 use databend_storages_common_cache::HybridCache;
 use databend_storages_common_cache::InMemoryLruCache;
-use databend_storages_common_cache::TableDataCache;
 use databend_storages_common_cache::Unit;
 
 use crate::SyncOneBlockSystemTable;
@@ -88,6 +88,7 @@ impl SyncSystemTable for CachesTable {
         let parquet_meta_data_cache = cache_manager.get_parquet_meta_data_cache();
         let table_data_cache = cache_manager.get_table_data_cache();
         let table_column_array_cache = cache_manager.get_table_data_array_cache();
+        let iceberg_table_cache = cache_manager.get_iceberg_table_cache();
 
         let mut columns = CachesTableColumns::default();
 
@@ -146,6 +147,10 @@ impl SyncSystemTable for CachesTable {
 
         if let Some(table_column_array_cache) = table_column_array_cache {
             Self::append_row(&table_column_array_cache, &local_node, &mut columns);
+        }
+
+        if let Some(iceberg_table_cache) = iceberg_table_cache {
+            Self::append_row(&iceberg_table_cache, &local_node, &mut columns);
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -222,7 +227,7 @@ impl CachesTable {
     }
 
     fn append_on_disk_cache_row(
-        cache: &Option<TableDataCache>,
+        cache: &Option<DiskCacheAccessor>,
         local_node: &str,
         columns: &mut CachesTableColumns,
     ) {

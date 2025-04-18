@@ -14,6 +14,8 @@
 
 mod block_pruner;
 mod bloom_pruner;
+mod expr_bloom_filter;
+mod expr_runtime_pruner;
 mod fuse_pruner;
 mod inverted_index_pruner;
 mod pruner_location;
@@ -24,6 +26,8 @@ mod virtual_column_pruner;
 pub use block_pruner::BlockPruner;
 pub use bloom_pruner::BloomPruner;
 pub use bloom_pruner::BloomPrunerCreator;
+pub use expr_bloom_filter::ExprBloomFilter;
+pub use expr_runtime_pruner::ExprRuntimePruner;
 pub use fuse_pruner::table_sample;
 pub use fuse_pruner::FusePruner;
 pub use fuse_pruner::PruningContext;

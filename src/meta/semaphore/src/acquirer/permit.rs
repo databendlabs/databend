@@ -38,7 +38,7 @@ use crate::storage::PermitKey;
 /// the oneshot sender signals the lease extending task to stop,
 /// allowing for proper cleanup of the [`PermitEntry`] in the meta-service.
 pub struct Permit {
-    pub(crate) fu: BoxFuture<'static, Result<(), ConnectionClosed>>,
+    pub fu: BoxFuture<'static, Result<(), ConnectionClosed>>,
 }
 
 impl std::fmt::Debug for Permit {

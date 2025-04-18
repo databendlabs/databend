@@ -28,6 +28,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app_types::non_empty::NonEmptyString;
 use databend_common_protos::pb;
+use num::FromPrimitive;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -355,6 +356,8 @@ impl FromToProto for mt::TableIndex {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
+            index_type: FromPrimitive::from_i32(p.index_type)
+                .ok_or_else(|| Incompatible::new(format!("invalid IndexType: {}", p.index_type)))?,
             name: p.name,
             column_ids: p.column_ids,
             sync_creation: p.sync_creation,
@@ -373,6 +376,7 @@ impl FromToProto for mt::TableIndex {
             sync_creation: self.sync_creation,
             version: self.version.clone(),
             options: self.options.clone(),
+            index_type: self.index_type.clone() as i32,
         };
         Ok(p)
     }

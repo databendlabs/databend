@@ -11,6 +11,7 @@ SHOW TABLE_FUNCTIONS LIKE 'fuse%'
 fuse_amend
 fuse_block
 fuse_column
+fuse_dump_snapshots
 fuse_encoding
 fuse_segment
 fuse_snapshot

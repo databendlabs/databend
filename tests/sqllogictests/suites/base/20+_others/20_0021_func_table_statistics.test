@@ -1,0 +1,58 @@
+statement ok
+CREATE OR REPLACE DATABASE table_statistics;
+
+statement ok
+USE table_statistics;
+
+statement ok
+create table t1(c int);
+
+statement ok
+create table t2(c int);
+
+statement ok
+insert into t1 values (1);
+
+statement ok
+insert into t2 values (1);
+
+query I
+select count(*) from table_statistics('table_statistics', 't1');
+----
+1
+
+query I
+select count(*) from table_statistics('table_statistics', 't2');
+----
+1
+
+query I
+select count(*) from table_statistics('table_statistics');
+----
+2
+
+query T
+select engine from table_statistics('table_statistics', 't1');
+----
+FUSE
+
+query T
+select engine from table_statistics('table_statistics', 't2');
+----
+FUSE
+
+query T
+select engine from table_statistics('table_statistics');
+----
+FUSE
+FUSE
+
+query III
+select parse_json(statistics_json):summary:block_count from table_statistics('table_statistics');
+----
+1
+1
+
+
+statement error
+select * from table_statistics();

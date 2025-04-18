@@ -22,7 +22,6 @@ mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_data_transform_reader;
 mod parquet_rows_fetcher;
-mod runtime_filter_prunner;
 
 mod block_partition_meta;
 mod block_partition_receiver_source;

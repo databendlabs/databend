@@ -65,8 +65,8 @@ jobs:
           sha: ${{ needs.info.outputs.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: meta,query
-          category: full
-          features: python-udf,storage-hdfs
+          category: docker
+          features: python-udf
 
   docker:
     needs: [info, build]
@@ -82,7 +82,7 @@ jobs:
           sha: ${{ needs.info.outputs.sha }}
           target: x86_64-unknown-linux-gnu
           path: ./distro/linux/amd64/
-          category: full
+          category: docker
           artifacts: query
       - name: Download artifact for aarch64
         uses: ./.github/actions/artifact_download
@@ -90,7 +90,7 @@ jobs:
           sha: ${{ needs.info.outputs.sha }}
           target: aarch64-unknown-linux-gnu
           path: ./distro/linux/arm64/
-          category: full
+          category: docker
           artifacts: query
       - uses: ./.github/actions/setup_docker
         id: login

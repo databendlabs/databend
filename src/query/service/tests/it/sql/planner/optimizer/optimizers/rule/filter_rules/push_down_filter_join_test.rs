@@ -12,159 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::Scalar;
+use databend_common_expression::Scalar;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RulePushDownFilterJoin;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
-use databend_common_sql::planner::binder::ColumnBinding;
-use databend_common_sql::planner::binder::Visibility;
-use databend_common_sql::planner::plans::BoundColumnRef;
-use databend_common_sql::planner::plans::ComparisonOp;
-use databend_common_sql::planner::plans::ConstantExpr;
-use databend_common_sql::planner::plans::Filter;
-use databend_common_sql::planner::plans::FunctionCall;
-use databend_common_sql::planner::plans::Join;
 use databend_common_sql::planner::plans::JoinEquiCondition;
 use databend_common_sql::planner::plans::JoinType;
 use databend_common_sql::planner::plans::RelOperator;
-use databend_common_sql::planner::plans::ScalarExpr;
-use databend_common_sql::planner::plans::Scan;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::ScalarExpr;
 use pretty_assertions::assert_eq;
 
-/// Helper struct for building test expressions with visualization
-struct ExprBuilder {
-    columns: HashMap<String, ScalarExpr>,
-}
-
-impl ExprBuilder {
-    fn new() -> Self {
-        Self {
-            columns: HashMap::new(),
-        }
-    }
-
-    fn column(
-        &mut self,
-        key: &str,
-        index: IndexType,
-        name: &str,
-        data_type: DataType,
-        table_name: &str,
-        table_index: IndexType,
-    ) -> ScalarExpr {
-        let expr = self
-            .columns
-            .entry(key.to_string())
-            .or_insert_with(|| {
-                Self::create_column_ref(index, name, data_type, Some(table_name), Some(table_index))
-            })
-            .clone();
-
-        expr
-    }
-
-    fn constant_int32(&self, value: i32) -> ScalarExpr {
-        Self::create_constant_int32(value)
-    }
-
-    fn null(&self) -> ScalarExpr {
-        Self::create_constant(Scalar::Null)
-    }
-
-    fn comparison(&self, left: ScalarExpr, right: ScalarExpr, op: ComparisonOp) -> ScalarExpr {
-        Self::create_comparison(left, right, op)
-    }
-
-    fn and(&self, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-        Self::create_and(left, right)
-    }
-
-    fn or(&self, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-        Self::create_or(left, right)
-    }
-
-    fn if_expr(
-        &self,
-        condition: ScalarExpr,
-        then_expr: ScalarExpr,
-        else_expr: ScalarExpr,
-    ) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "if".to_string(),
-            arguments: vec![condition, then_expr, else_expr],
-            params: vec![],
-        })
-    }
-
-    // Static helper methods
-    fn create_column_ref(
-        index: IndexType,
-        name: &str,
-        data_type: DataType,
-        table_name: Option<&str>,
-        table_index: Option<IndexType>,
-    ) -> ScalarExpr {
-        let column = ColumnBinding {
-            index,
-            column_name: name.to_string(),
-            data_type: Box::new(data_type),
-            database_name: None,
-            table_name: table_name.map(|s| s.to_string()),
-            column_position: None,
-            table_index,
-            visibility: Visibility::Visible,
-            virtual_expr: None,
-        };
-        ScalarExpr::BoundColumnRef(BoundColumnRef { column, span: None })
-    }
-
-    fn create_constant(value: Scalar) -> ScalarExpr {
-        ScalarExpr::ConstantExpr(ConstantExpr { value, span: None })
-    }
-
-    fn create_constant_int32(value: i32) -> ScalarExpr {
-        Self::create_constant(Scalar::Number(NumberScalar::Int32(value)))
-    }
-
-    fn create_comparison(left: ScalarExpr, right: ScalarExpr, op: ComparisonOp) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: op.to_func_name().to_string(),
-            arguments: vec![left, right],
-            params: vec![],
-        })
-    }
-
-    fn create_and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "and".to_string(),
-            arguments: vec![left, right],
-            params: vec![],
-        })
-    }
-
-    fn create_or(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "or".to_string(),
-            arguments: vec![left, right],
-            params: vec![],
-        })
-    }
-}
+use crate::sql::planner::optimizer::test_utils::ExprBuilder;
 
 /// Test case definition for join filter pushdown tests
 struct JoinFilterTestCase {
@@ -176,40 +40,6 @@ struct JoinFilterTestCase {
     before_pattern: &'static str,
     after_pattern: &'static str,
     inspired_by: &'static str,
-}
-
-/// Helper functions for plan creation and verification
-fn create_table_scan(table_index: usize, column_indices: Option<ColumnSet>) -> SExpr {
-    let columns = column_indices.unwrap_or_default();
-    let scan = Scan {
-        table_index,
-        columns,
-        ..Default::default()
-    };
-    SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)))
-}
-
-fn create_join(
-    left: SExpr,
-    right: SExpr,
-    equi_conditions: Vec<JoinEquiCondition>,
-    join_type: JoinType,
-) -> SExpr {
-    let join = Join {
-        join_type,
-        equi_conditions,
-        ..Default::default()
-    };
-    SExpr::create_binary(
-        Arc::new(RelOperator::Join(join)),
-        Arc::new(left),
-        Arc::new(right),
-    )
-}
-
-fn create_filter(input: SExpr, predicates: Vec<ScalarExpr>) -> SExpr {
-    let filter = Filter { predicates };
-    SExpr::create_unary(Arc::new(RelOperator::Filter(filter)), Arc::new(input))
 }
 
 fn sexpr_to_string(s_expr: &SExpr) -> String {
@@ -382,32 +212,37 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
     println!("SQL Example: {}", test_case.sql_example);
     println!("Inspired by: {}", test_case.inspired_by);
 
+    // Create an ExprBuilder instance
+    let mut builder = ExprBuilder::new();
+
     // Create column references for join condition
-    let t1_id = ExprBuilder::create_column_ref(
+    let t1_id = builder.column(
+        "t1.id",
         0,
         "id",
         DataType::Number(NumberDataType::Int32),
-        Some("t1"),
-        Some(0),
+        "t1",
+        0,
     );
 
-    let t2_id = ExprBuilder::create_column_ref(
+    let t2_id = builder.column(
+        "t2.id",
         1,
         "id",
         DataType::Number(NumberDataType::Int32),
-        Some("t2"),
-        Some(1),
+        "t2",
+        1,
     );
 
     // Create join condition
     let join_condition = JoinEquiCondition::new(t1_id.clone(), t2_id.clone(), false);
 
     // Create table scans
-    let left_scan = create_table_scan(0, Some(ColumnSet::from([0, 2])));
-    let right_scan = create_table_scan(1, Some(ColumnSet::from([1, 3])));
+    let left_scan = builder.table_scan_with_columns(0, "t1", ColumnSet::from([0, 2]));
+    let right_scan = builder.table_scan_with_columns(1, "t2", ColumnSet::from([1, 3]));
 
     // Create join
-    let join = create_join(
+    let join = builder.join(
         left_scan,
         right_scan,
         vec![join_condition],
@@ -415,7 +250,7 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
     );
 
     // Create filter
-    let filter = create_filter(join, vec![test_case.filter_expr.clone()]);
+    let filter = builder.filter(join, vec![test_case.filter_expr.clone()]);
 
     // Apply rule
     let rule = RulePushDownFilterJoin::new(metadata.clone());
@@ -527,43 +362,32 @@ fn test_push_down_filter_left_join() -> Result<()> {
 
     // Create filter expressions
     // SQL: WHERE t2.id > 10
-    let right_id_filter =
-        builder.comparison(t2_id.clone(), builder.constant_int32(10), ComparisonOp::GT);
+    let right_id_filter = builder.gt(t2_id.clone(), builder.int(10));
+
     // SQL: WHERE t2.value < 100
-    let right_value_filter = builder.comparison(
-        t2_value.clone(),
-        builder.constant_int32(100),
-        ComparisonOp::LT,
-    );
+    let right_value_filter = builder.lt(t2_value.clone(), builder.int(100));
+
     // SQL: WHERE t2.id > 10 AND t2.value < 100
     let right_combined_filter = builder.and(right_id_filter.clone(), right_value_filter.clone());
 
     // Create NULL-related filters
     // SQL: WHERE t2.id IS NULL
-    let is_null_filter = builder.comparison(t2_id.clone(), builder.null(), ComparisonOp::Equal);
+    let is_null_filter = builder.eq(t2_id.clone(), builder.null());
+
     // SQL: WHERE t2.id IS NOT NULL
-    let is_not_null_filter =
-        builder.comparison(t2_id.clone(), builder.null(), ComparisonOp::NotEqual);
+    let is_not_null_filter = builder.neq(t2_id.clone(), builder.null());
 
     // Create complex OR filter
     // SQL: WHERE t2.id > 10 AND t2.value < 50
     let or_condition1 = builder.and(
-        builder.comparison(t2_id.clone(), builder.constant_int32(10), ComparisonOp::GT),
-        builder.comparison(
-            t2_value.clone(),
-            builder.constant_int32(50),
-            ComparisonOp::LT,
-        ),
+        builder.gt(t2_id.clone(), builder.int(10)),
+        builder.lt(t2_value.clone(), builder.int(50)),
     );
 
     // SQL: WHERE t2.id > 20 AND t2.qty < 100
     let or_condition2 = builder.and(
-        builder.comparison(t2_id.clone(), builder.constant_int32(20), ComparisonOp::GT),
-        builder.comparison(
-            t2_qty.clone(),
-            builder.constant_int32(100),
-            ComparisonOp::LT,
-        ),
+        builder.gt(t2_id.clone(), builder.int(20)),
+        builder.lt(t2_qty.clone(), builder.int(100)),
     );
 
     // SQL: WHERE (t2.id > 10 AND t2.value < 50) OR (t2.id > 20 AND t2.qty < 100)
@@ -571,30 +395,19 @@ fn test_push_down_filter_left_join() -> Result<()> {
 
     // Create complex AND-OR filter
     // SQL: WHERE t2.date > 200
-    let date_filter = builder.comparison(
-        t2_date.clone(),
-        builder.constant_int32(200),
-        ComparisonOp::GT,
-    );
+    let date_filter = builder.gt(t2_date.clone(), builder.int(200));
+
     // SQL: WHERE ((t2.id > 10 AND t2.value < 50) OR (t2.id > 20 AND t2.qty < 100)) AND t2.date > 200
     let complex_and_or_filter = builder.and(complex_or_filter.clone(), date_filter);
 
     // Create IF function filter
     // SQL: WHERE t2.id = 10
-    let equals_10 = builder.comparison(
-        t2_id.clone(),
-        builder.constant_int32(10),
-        ComparisonOp::Equal,
-    );
+    let equals_10 = builder.eq(t2_id.clone(), builder.int(10));
+
     // SQL: WHERE IF(t2.id = 10, 1, 0) > 0
-    let case_filter = builder.comparison(
-        builder.if_expr(
-            equals_10,
-            builder.constant_int32(1),
-            builder.constant_int32(0),
-        ),
-        builder.constant_int32(0),
-        ComparisonOp::GT,
+    let case_filter = builder.gt(
+        builder.if_expr(equals_10, builder.int(1), builder.int(0)),
+        builder.int(0),
     );
 
     // Define test cases
@@ -820,43 +633,32 @@ fn test_push_down_filter_right_join() -> Result<()> {
 
     // Create filter expressions
     // SQL: WHERE t1.a > 10
-    let left_a_filter =
-        builder.comparison(t1_a.clone(), builder.constant_int32(10), ComparisonOp::GT);
+    let left_a_filter = builder.gt(t1_a.clone(), builder.int(10));
+
     // SQL: WHERE t1.value < 100
-    let left_value_filter = builder.comparison(
-        t1_value.clone(),
-        builder.constant_int32(100),
-        ComparisonOp::LT,
-    );
+    let left_value_filter = builder.lt(t1_value.clone(), builder.int(100));
+
     // SQL: WHERE t1.a > 10 AND t1.value < 100
     let left_combined_filter = builder.and(left_a_filter.clone(), left_value_filter.clone());
 
     // Create NULL-related filters
     // SQL: WHERE t1.a IS NULL
-    let is_null_filter = builder.comparison(t1_a.clone(), builder.null(), ComparisonOp::Equal);
+    let is_null_filter = builder.eq(t1_a.clone(), builder.null());
+
     // SQL: WHERE t1.a IS NOT NULL
-    let is_not_null_filter =
-        builder.comparison(t1_a.clone(), builder.null(), ComparisonOp::NotEqual);
+    let is_not_null_filter = builder.neq(t1_a.clone(), builder.null());
 
     // Create complex OR filter
     // SQL: WHERE t1.a > 10 AND t1.value < 50
     let or_condition1 = builder.and(
-        builder.comparison(t1_a.clone(), builder.constant_int32(10), ComparisonOp::GT),
-        builder.comparison(
-            t1_value.clone(),
-            builder.constant_int32(50),
-            ComparisonOp::LT,
-        ),
+        builder.gt(t1_a.clone(), builder.int(10)),
+        builder.lt(t1_value.clone(), builder.int(50)),
     );
 
     // SQL: WHERE t1.a > 20 AND t1.qty < 100
     let or_condition2 = builder.and(
-        builder.comparison(t1_a.clone(), builder.constant_int32(20), ComparisonOp::GT),
-        builder.comparison(
-            t1_qty.clone(),
-            builder.constant_int32(100),
-            ComparisonOp::LT,
-        ),
+        builder.gt(t1_a.clone(), builder.int(20)),
+        builder.lt(t1_qty.clone(), builder.int(100)),
     );
 
     // SQL: WHERE (t1.a > 10 AND t1.value < 50) OR (t1.a > 20 AND t1.qty < 100)
@@ -864,30 +666,17 @@ fn test_push_down_filter_right_join() -> Result<()> {
 
     // Create complex AND-OR filter
     // SQL: WHERE t1.date > 200
-    let date_filter = builder.comparison(
-        t1_date.clone(),
-        builder.constant_int32(200),
-        ComparisonOp::GT,
-    );
+    let date_filter = builder.gt(t1_date.clone(), builder.int(200));
     // SQL: WHERE ((t1.a > 10 AND t1.value < 50) OR (t1.a > 20 AND t1.qty < 100)) AND t1.date > 200
     let complex_and_or_filter = builder.and(complex_or_filter.clone(), date_filter);
 
     // Create IF function filter
     // SQL: WHERE t1.a = 10
-    let equals_10 = builder.comparison(
-        t1_a.clone(),
-        builder.constant_int32(10),
-        ComparisonOp::Equal,
-    );
+    let equals_10 = builder.eq(t1_a.clone(), builder.int(10));
     // SQL: WHERE IF(t1.a = 10, 1, 0) > 0
-    let case_filter = builder.comparison(
-        builder.if_expr(
-            equals_10,
-            builder.constant_int32(1),
-            builder.constant_int32(0),
-        ),
-        builder.constant_int32(0),
-        ComparisonOp::GT,
+    let case_filter = builder.gt(
+        builder.if_expr(equals_10, builder.int(1), builder.int(0)),
+        builder.int(0),
     );
 
     // Define test cases
@@ -1100,55 +889,38 @@ fn test_push_down_filter_full_join() -> Result<()> {
 
     // Create filter expressions
     // SQL: WHERE t1.a > 10
-    let left_a_filter =
-        builder.comparison(t1_a.clone(), builder.constant_int32(10), ComparisonOp::GT);
+    let left_a_filter = builder.gt(t1_a.clone(), builder.int(10));
+
     // SQL: WHERE t1.value < 100
-    let left_value_filter = builder.comparison(
-        t1_value.clone(),
-        builder.constant_int32(100),
-        ComparisonOp::LT,
-    );
+    let left_value_filter = builder.lt(t1_value.clone(), builder.int(100));
+
     // SQL: WHERE t1.a > 10 AND t1.value < 100
     let left_combined_filter = builder.and(left_a_filter.clone(), left_value_filter.clone());
 
     // SQL: WHERE t2.b > 20
-    let right_b_filter =
-        builder.comparison(t2_b.clone(), builder.constant_int32(20), ComparisonOp::GT);
+    let right_b_filter = builder.gt(t2_b.clone(), builder.int(20));
     // SQL: WHERE t2.value < 50
-    let right_value_filter = builder.comparison(
-        t2_value.clone(),
-        builder.constant_int32(50),
-        ComparisonOp::LT,
-    );
+    let right_value_filter = builder.lt(t2_value.clone(), builder.int(50));
     // SQL: WHERE t2.b > 20 AND t2.value < 50
     let right_combined_filter = builder.and(right_b_filter.clone(), right_value_filter.clone());
 
     // Create NULL-related filters
     // SQL: WHERE t1.a IS NULL
-    let is_null_filter = builder.comparison(t1_a.clone(), builder.null(), ComparisonOp::Equal);
+    let is_null_filter = builder.eq(t1_a.clone(), builder.null());
     // SQL: WHERE t1.a IS NOT NULL
-    let is_not_null_filter =
-        builder.comparison(t1_a.clone(), builder.null(), ComparisonOp::NotEqual);
+    let is_not_null_filter = builder.neq(t1_a.clone(), builder.null());
 
     // Create complex OR filter
     // SQL: WHERE t1.a > 10 AND t1.value < 50
     let or_condition1 = builder.and(
-        builder.comparison(t1_a.clone(), builder.constant_int32(10), ComparisonOp::GT),
-        builder.comparison(
-            t1_value.clone(),
-            builder.constant_int32(50),
-            ComparisonOp::LT,
-        ),
+        builder.gt(t1_a.clone(), builder.int(10)),
+        builder.lt(t1_value.clone(), builder.int(50)),
     );
 
     // SQL: WHERE t1.a > 20 AND t1.qty < 100
     let or_condition2 = builder.and(
-        builder.comparison(t1_a.clone(), builder.constant_int32(20), ComparisonOp::GT),
-        builder.comparison(
-            t1_qty.clone(),
-            builder.constant_int32(100),
-            ComparisonOp::LT,
-        ),
+        builder.gt(t1_a.clone(), builder.int(20)),
+        builder.lt(t1_qty.clone(), builder.int(100)),
     );
 
     // SQL: WHERE (t1.a > 10 AND t1.value < 50) OR (t1.a > 20 AND t1.qty < 100)
@@ -1354,17 +1126,16 @@ fn test_push_down_complex_or_expressions() -> Result<()> {
 
     // Create predicates
     // SQL: WHERE t1.a = 1
-    let t1_a_eq_1 =
-        builder.comparison(t1_a.clone(), builder.constant_int32(1), ComparisonOp::Equal);
+    let t1_a_eq_1 = builder.eq(t1_a.clone(), builder.int(1));
+
     // SQL: WHERE t2.b = 2
-    let t2_b_eq_2 =
-        builder.comparison(t2_b.clone(), builder.constant_int32(2), ComparisonOp::Equal);
+    let t2_b_eq_2 = builder.eq(t2_b.clone(), builder.int(2));
+
     // SQL: WHERE t1.a = 2
-    let t1_a_eq_2 =
-        builder.comparison(t1_a.clone(), builder.constant_int32(2), ComparisonOp::Equal);
+    let t1_a_eq_2 = builder.eq(t1_a.clone(), builder.int(2));
+
     // SQL: WHERE t2.b = 1
-    let t2_b_eq_1 =
-        builder.comparison(t2_b.clone(), builder.constant_int32(1), ComparisonOp::Equal);
+    let t2_b_eq_1 = builder.eq(t2_b.clone(), builder.int(1));
 
     // Create complex OR expression
     // SQL: WHERE (t1.a = 1 AND t2.b = 2) OR (t1.a = 2 AND t2.b = 1)
@@ -1378,18 +1149,18 @@ fn test_push_down_complex_or_expressions() -> Result<()> {
 
     // Create table scans
     // SQL: FROM t1
-    let left_scan = create_table_scan(0, Some(ColumnSet::from([0, 2])));
+    let left_scan = builder.table_scan_with_columns(0, "t1", ColumnSet::from([0, 2]));
     // SQL: FROM t2
-    let right_scan = create_table_scan(1, Some(ColumnSet::from([1, 3])));
+    let right_scan = builder.table_scan_with_columns(1, "t2", ColumnSet::from([1, 3]));
 
     // Create join
     // SQL: FROM t1 INNER JOIN t2 ON t1.id = t2.id
-    let join = create_join(left_scan, right_scan, vec![join_condition], JoinType::Inner);
+    let join = builder.join(left_scan, right_scan, vec![join_condition], JoinType::Inner);
 
     // Create filter
     // SQL: SELECT * FROM t1 INNER JOIN t2 ON t1.id = t2.id
     //      WHERE (t1.a = 1 AND t2.b = 2) OR (t1.a = 2 AND t2.b = 1)
-    let filter = create_filter(join, vec![or_expr]);
+    let filter = builder.filter(join, vec![or_expr]);
 
     // Define expected patterns
     let before_pattern = r#"

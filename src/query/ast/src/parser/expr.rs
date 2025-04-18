@@ -304,6 +304,11 @@ pub enum ExprElement {
         date_start: Expr,
         date_end: Expr,
     },
+    DateBetween {
+        unit: IntervalKind,
+        date_start: Expr,
+        date_end: Expr,
+    },
     DateSub {
         unit: IntervalKind,
         interval: Expr,
@@ -430,6 +435,7 @@ impl ExprElement {
             ExprElement::Interval { .. } => Affix::Nilfix,
             ExprElement::DateAdd { .. } => Affix::Nilfix,
             ExprElement::DateDiff { .. } => Affix::Nilfix,
+            ExprElement::DateBetween { .. } => Affix::Nilfix,
             ExprElement::DateSub { .. } => Affix::Nilfix,
             ExprElement::DateTrunc { .. } => Affix::Nilfix,
             ExprElement::LastDay { .. } => Affix::Nilfix,
@@ -477,6 +483,7 @@ impl Expr {
             Expr::Interval { .. } => Affix::Nilfix,
             Expr::DateAdd { .. } => Affix::Nilfix,
             Expr::DateDiff { .. } => Affix::Nilfix,
+            Expr::DateBetween { .. } => Affix::Nilfix,
             Expr::DateSub { .. } => Affix::Nilfix,
             Expr::DateTrunc { .. } => Affix::Nilfix,
             Expr::LastDay { .. } => Affix::Nilfix,
@@ -663,6 +670,16 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 date_start,
                 date_end,
             } => Expr::DateDiff {
+                span: transform_span(elem.span.tokens),
+                unit,
+                date_start: Box::new(date_start),
+                date_end: Box::new(date_end),
+            },
+            ExprElement::DateBetween {
+                unit,
+                date_start,
+                date_end,
+            } => Expr::DateBetween {
                 span: transform_span(elem.span.tokens),
                 unit,
                 date_start: Box::new(date_start),
@@ -1255,7 +1272,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let date_sub = map(
         rule! {
-            (DATE_SUB | DATESUB) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+            (DATESUB | DATE_SUB) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
         },
         |(_, _, unit, _, interval, _, date, _)| ExprElement::DateSub {
             unit,
@@ -1263,6 +1280,18 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             date,
         },
     );
+
+    let date_between = map(
+        rule! {
+            (DATEBETWEEN | DATE_BETWEEN) ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+        },
+        |(_, _, unit, _, date_start, _, date_end, _)| ExprElement::DateBetween {
+            unit,
+            date_start,
+            date_end,
+        },
+    );
+
     let interval = map(
         rule! {
             INTERVAL ~ #subexpr(0) ~ #interval_kind
@@ -1381,6 +1410,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 #date_add : "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_diff : "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_sub : "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_between : "`DATE_BETWEEN((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW), ..., ...,)`"
                 | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
                 | #last_day : "`LAST_DAY(..., (YEAR | QUARTER | MONTH | WEEK)))`"
                 | #previous_day : "`PREVIOUS_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
@@ -1854,9 +1884,12 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     let second = value(IntervalKind::Second, rule! { SECOND });
     let doy = value(IntervalKind::Doy, rule! { DOY });
     let dow = value(IntervalKind::Dow, rule! { DOW });
+    let isodow = value(IntervalKind::ISODow, rule! { ISODOW });
     let week = value(IntervalKind::Week, rule! { WEEK });
     let epoch = value(IntervalKind::Epoch, rule! { EPOCH });
     let microsecond = value(IntervalKind::MicroSecond, rule! { MICROSECOND });
+    let millennium = value(IntervalKind::Millennium, rule! { MILLENNIUM });
+    let yearweek = value(IntervalKind::YearWeek, rule! { YEARWEEK });
 
     let iso_year_str = value(
         IntervalKind::ISOYear,
@@ -1892,15 +1925,19 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     );
     let doy_str = value(
         IntervalKind::Doy,
-        rule! { #literal_string_eq_ignore_case("DOY")  },
+        rule! { #literal_string_eq_ignore_case("DOY") | #literal_string_eq_ignore_case("DAYOFYEAR")  },
     );
     let dow_str = value(
         IntervalKind::Dow,
-        rule! { #literal_string_eq_ignore_case("DOW")  },
+        rule! { (#literal_string_eq_ignore_case("DOW") | #literal_string_eq_ignore_case("WEEKDAY") | #literal_string_eq_ignore_case("DAYOFWEEK") )  },
+    );
+    let isodow_str = value(
+        IntervalKind::ISODow,
+        rule! { #literal_string_eq_ignore_case("ISODOW")  },
     );
     let week_str = value(
         IntervalKind::Week,
-        rule! { #literal_string_eq_ignore_case("WEEK")  },
+        rule! { (#literal_string_eq_ignore_case("WEEK") | #literal_string_eq_ignore_case("WEEKS") | #literal_string_eq_ignore_case("W"))  },
     );
     let epoch_str = value(
         IntervalKind::Epoch,
@@ -1909,6 +1946,14 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     let microsecond_str = value(
         IntervalKind::MicroSecond,
         rule! { #literal_string_eq_ignore_case("MICROSECOND")  },
+    );
+    let yearweek_str = value(
+        IntervalKind::YearWeek,
+        rule! { #literal_string_eq_ignore_case("YEARWEEK")  },
+    );
+    let millennium_str = value(
+        IntervalKind::Millennium,
+        rule! { #literal_string_eq_ignore_case("MILLENNIUM")  },
     );
     alt((
         rule!(
@@ -1925,6 +1970,9 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #week
             | #epoch
             | #microsecond
+            | #isodow
+            | #millennium
+            | #yearweek
         ),
         rule!(
             #year_str
@@ -1940,6 +1988,9 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #week_str
             | #epoch_str
             | #microsecond_str
+            | #isodow_str
+            | #yearweek_str
+            | #millennium_str
         ),
     ))(i)
 }

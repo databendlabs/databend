@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod histogram;
+mod ir;
 mod optimizers;
 pub mod test_utils;
 mod tpcds_test;

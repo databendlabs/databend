@@ -1,7 +1,4 @@
 statement ok
-set enable_experimental_merge_into = 1;
-
-statement ok
 DROP TABLE IF EXISTS employees2;
 
 statement ok
@@ -370,9 +367,6 @@ CommitSink
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 0.00
-
-statement ok
-set enable_experimental_merge_into = 0;
 
 statement ok
 drop table employees2;

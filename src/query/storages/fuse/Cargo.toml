@@ -21,6 +21,7 @@ databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-native = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
+
 databend-common-pipeline-sinks = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
@@ -56,6 +57,7 @@ indexmap = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
+match-template = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
@@ -75,3 +77,6 @@ xorf = { workspace = true, default-features = false, features = ["binary-fuse"] 
 
 [lints]
 workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["match-template"]
