@@ -21,10 +21,8 @@ use std::time::Instant;
 
 use bollard::container::ListContainersOptions;
 use bollard::container::RemoveContainerOptions;
-use bollard::image::CreateImageOptions;
 use bollard::Docker;
 use clap::Parser;
-use futures_util::StreamExt;
 use redis::Commands;
 use serde::Deserialize;
 use serde::Serialize;
