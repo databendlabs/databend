@@ -26,7 +26,6 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
-use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -69,8 +68,7 @@ pub struct TableMutationAggregator {
 
     default_cluster_key_id: Option<u32>,
     base_segments: Vec<Location>,
-    // Used for recluster.
-    recluster_merged_blocks: Vec<Arc<BlockMeta>>,
+    merged_blocks: Vec<Arc<BlockMeta>>,
     set_hilbert_level: bool,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
@@ -103,6 +101,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
+        self.generate_append_segments().await?;
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
 
@@ -114,7 +113,35 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
                 },
                 self.schema.clone(),
             )),
-            MutationKind::Recluster => self.apply_recluster(&mut new_segment_locs).await?,
+            MutationKind::Recluster => {
+                let mut new_segments = std::mem::take(&mut self.appended_segments);
+                let new_segments_len = new_segments.len();
+                let removed_segments_len = self.removed_segment_indexes.len();
+                let replaced_segments_len = new_segments_len.min(removed_segments_len);
+                let mut appended_segments = Vec::new();
+                let mut replaced_segments = HashMap::with_capacity(replaced_segments_len);
+                if new_segments_len > removed_segments_len {
+                    // The remain new segments will be appended.
+                    let appended = new_segments.split_off(removed_segments_len);
+                    for location in appended.into_iter().rev() {
+                        appended_segments.push(location);
+                    }
+                }
+
+                for (i, location) in new_segments.into_iter().enumerate() {
+                    // The old segments will be replaced with the news.
+                    replaced_segments.insert(self.removed_segment_indexes[i], location);
+                }
+
+                ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
+                    appended_segments,
+                    removed_segment_indexes: self.removed_segment_indexes[replaced_segments_len..]
+                        .to_vec(),
+                    replaced_segments,
+                    removed_statistics: self.removed_statistics.clone(),
+                    merged_statistics: std::mem::take(&mut self.appended_statistics),
+                })
+            }
             _ => self.apply_mutation(&mut new_segment_locs).await?,
         };
 
@@ -131,7 +158,7 @@ impl TableMutationAggregator {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         base_segments: Vec<Location>,
-        recluster_merged_blocks: Vec<Arc<BlockMeta>>,
+        merged_blocks: Vec<Arc<BlockMeta>>,
         removed_segment_indexes: Vec<usize>,
         removed_statistics: Statistics,
         kind: MutationKind,
@@ -158,7 +185,7 @@ impl TableMutationAggregator {
             mutations: HashMap::new(),
             appended_segments: vec![],
             base_segments,
-            recluster_merged_blocks,
+            merged_blocks,
             appended_statistics: Statistics::default(),
             removed_segment_indexes,
             removed_statistics,
@@ -197,9 +224,8 @@ impl TableMutationAggregator {
                     }
                 }
             }
-            MutationLogEntry::ReclusterAppendBlock { block_meta } => {
-                metrics_inc_recluster_write_block_nums();
-                self.recluster_merged_blocks.push(block_meta);
+            MutationLogEntry::AppendBlock { block_meta } => {
+                self.merged_blocks.push(block_meta);
             }
             MutationLogEntry::DeletedBlock { index } => {
                 self.mutations
@@ -215,7 +241,6 @@ impl TableMutationAggregator {
                     self.default_cluster_key_id,
                 );
             }
-            MutationLogEntry::DoNothing => (),
             MutationLogEntry::AppendSegment {
                 segment_location,
                 format_version,
@@ -251,25 +276,26 @@ impl TableMutationAggregator {
                     self.default_cluster_key_id,
                 );
             }
+            MutationLogEntry::DoNothing => (),
         }
     }
 
-    async fn apply_recluster(
-        &mut self,
-        new_segment_locs: &mut Vec<Location>,
-    ) -> Result<ConflictResolveContext> {
-        // safe to unwrap.
-        let default_cluster_key_id = self.default_cluster_key_id.unwrap();
-        // sort ascending.
-        self.recluster_merged_blocks.sort_by(|a, b| {
-            sort_by_cluster_stats(&a.cluster_stats, &b.cluster_stats, default_cluster_key_id)
-        });
+    async fn generate_append_segments(&mut self) -> Result<()> {
+        if self.merged_blocks.is_empty() {
+            return Ok(());
+        }
+
+        if let Some(id) = self.default_cluster_key_id {
+            // sort ascending.
+            self.merged_blocks
+                .sort_by(|a, b| sort_by_cluster_stats(&a.cluster_stats, &b.cluster_stats, id));
+        }
 
         let mut tasks = Vec::new();
-        let merged_blocks = std::mem::take(&mut self.recluster_merged_blocks);
+        let merged_blocks = std::mem::take(&mut self.merged_blocks);
         let segments_num = (merged_blocks.len() / self.thresholds.block_per_segment).max(1);
         let chunk_size = merged_blocks.len().div_ceil(segments_num);
-        let default_cluster_key = Some(default_cluster_key_id);
+        let default_cluster_key = self.default_cluster_key_id;
         let thresholds = self.thresholds;
         let set_hilbert_level = self.set_hilbert_level;
         let kind = self.kind;
@@ -297,8 +323,7 @@ impl TableMutationAggregator {
         }
 
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-
-        let mut new_segments = execute_futures_in_parallel(
+        let new_segments = execute_futures_in_parallel(
             tasks,
             threads_nums,
             threads_nums * 2,
@@ -308,41 +333,16 @@ impl TableMutationAggregator {
         .into_iter()
         .collect::<Result<Vec<_>>>()?;
 
-        let new_segments_len = new_segments.len();
-        let removed_segments_len = self.removed_segment_indexes.len();
-        let replaced_segments_len = new_segments_len.min(removed_segments_len);
-        let mut merged_statistics = Statistics::default();
-        let mut appended_segments = Vec::new();
-        let mut replaced_segments = HashMap::with_capacity(replaced_segments_len);
-        if new_segments_len > removed_segments_len {
-            // The remain new segments will be appended.
-            let appended = new_segments.split_off(removed_segments_len);
-            for (location, stats) in appended.into_iter().rev() {
-                let segment_loc = (location, SegmentInfo::VERSION);
-                new_segment_locs.push(segment_loc.clone());
-                appended_segments.push(segment_loc);
-                merge_statistics_mut(&mut merged_statistics, &stats, self.default_cluster_key_id);
-            }
+        for (location, stats) in new_segments {
+            merge_statistics_mut(
+                &mut self.appended_statistics,
+                &stats,
+                self.default_cluster_key_id,
+            );
+            self.appended_segments
+                .push((location, SegmentInfo::VERSION));
         }
-
-        for (i, (location, stats)) in new_segments.into_iter().enumerate() {
-            // The old segments will be replaced with the news.
-            let segment_loc = (location, SegmentInfo::VERSION);
-            new_segment_locs.push(segment_loc.clone());
-            replaced_segments.insert(self.removed_segment_indexes[i], segment_loc);
-            merge_statistics_mut(&mut merged_statistics, &stats, self.default_cluster_key_id);
-        }
-
-        let conflict_resolve_context =
-            ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
-                appended_segments,
-                removed_segment_indexes: self.removed_segment_indexes[replaced_segments_len..]
-                    .to_vec(),
-                replaced_segments,
-                removed_statistics: self.removed_statistics.clone(),
-                merged_statistics,
-            });
-        Ok(conflict_resolve_context)
+        Ok(())
     }
 
     async fn apply_mutation(

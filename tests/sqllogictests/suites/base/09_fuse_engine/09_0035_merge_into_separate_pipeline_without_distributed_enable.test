@@ -8,9 +8,6 @@ statement ok
 use db;
 
 statement ok
-set enable_experimental_merge_into = 1;
-
-statement ok
 drop table if exists t1_separate;
 
 statement ok
@@ -163,6 +160,3 @@ select * from t1_separate;
 7 a7 b7
 8 a8 b8
 9 a9 b9
-
-statement ok
-set enable_experimental_merge_into = 0;

@@ -24,6 +24,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
+use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -359,12 +360,15 @@ impl Processor for TransformSerializeBlock {
                         }
                     }
 
-                    if matches!(self.kind, MutationKind::Recluster) {
-                        Self::mutation_logs(MutationLogEntry::ReclusterAppendBlock {
+                    if matches!(self.kind, MutationKind::Insert) {
+                        DataBlock::empty_with_meta(Box::new(block_meta))
+                    } else {
+                        if matches!(self.kind, MutationKind::Recluster) {
+                            metrics_inc_recluster_write_block_nums();
+                        }
+                        Self::mutation_logs(MutationLogEntry::AppendBlock {
                             block_meta: Arc::new(block_meta),
                         })
-                    } else {
-                        DataBlock::empty_with_meta(Box::new(block_meta))
                     }
                 };
                 self.output_data = Some(mutation_log_data_block);

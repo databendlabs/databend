@@ -1,7 +1,4 @@
 statement ok
-set enable_experimental_merge_into = 1;
-
-statement ok
 set enable_distributed_merge_into = 1;
 
 statement ok
@@ -297,9 +294,6 @@ select * from t1 order by a;
 6
 9
 10
-
-statement ok
-set enable_experimental_merge_into = 0;
 
 statement ok
 set enable_distributed_merge_into = 0;
