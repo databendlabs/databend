@@ -295,7 +295,7 @@ impl SortPipelineBuilder {
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
             let op = DataOperator::instance().spill_operator();
-            Arc::new(Spiller::create(self.ctx.clone(), op, config.clone())?)
+            Arc::new(Spiller::create(self.ctx.clone(), op, config)?)
         };
 
         pipeline.add_transform(|input, output| {
