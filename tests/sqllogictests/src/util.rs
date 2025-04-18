@@ -39,7 +39,6 @@ use testcontainers::ImageExt;
 use testcontainers_modules::mysql::Mysql;
 use testcontainers_modules::redis::Redis;
 use testcontainers_modules::redis::REDIS_PORT;
-use tokio_stream::stream_ext::StreamExt;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
