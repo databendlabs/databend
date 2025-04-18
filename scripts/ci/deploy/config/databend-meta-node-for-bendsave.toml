@@ -17,7 +17,7 @@ grpc_api_advertise_host = "127.0.0.1"
 
 [raft_config]
 id            = 1
-raft_dir      = "/tmp/databend/meta1"
+raft_dir      = "/tmp/databend/meta-bendsave"
 raft_api_port = 28103
 
 # Assign raft_{listen|advertise}_host in test config.
