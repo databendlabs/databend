@@ -56,3 +56,4 @@ runs:
         docker info
         docker version
         docker ps -a
+        docker images
