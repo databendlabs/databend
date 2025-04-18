@@ -102,8 +102,10 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 uri_location: None,
                 cluster_by: None,
                 table_options: table_options.clone(),
+                iceberg_table_partition: None,
                 as_query: None,
                 table_type: TableType::Normal,
+                iceberg_table_properties: Default::default(),
             };
             tables.push((drop_table, create_table));
         }

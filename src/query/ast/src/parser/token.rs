@@ -906,6 +906,8 @@ pub enum TokenKind {
     OVERWRITE,
     #[token("PARTITION", ignore(ascii_case))]
     PARTITION,
+    #[token("PROPERTIES", ignore(ascii_case))]
+    PROPERTIES,
     #[token("PARQUET", ignore(ascii_case))]
     PARQUET,
     #[token("PASSWORD", ignore(ascii_case))]
@@ -1778,6 +1780,7 @@ impl TokenKind {
             | TokenKind::ORDER
             | TokenKind::OVER
             | TokenKind::PARTITION
+            | TokenKind::PROPERTIES
             | TokenKind::QUALIFY
             | TokenKind::ROWS
             | TokenKind::RANGE

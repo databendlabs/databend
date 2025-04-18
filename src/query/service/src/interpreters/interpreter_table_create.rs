@@ -38,6 +38,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::always_callback;
@@ -427,6 +428,10 @@ impl CreateTableInterpreter {
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
             options,
+            iceberg_table_properties: self.plan.iceberg_table_properties.clone(),
+            iceberg_partition: Some(TablePartition::Identity {
+                columns: self.plan.iceberg_partition.clone(),
+            }),
             engine_options: self.plan.engine_options.clone(),
             cluster_key: None,
             field_comments,
