@@ -26,7 +26,6 @@ runs:
         echo "$BIN_LOCAL" >> $GITHUB_PATH
         mkdir -p target
         touch target/sccache.log
-        mkdir -p $HOME/.config/sccache
 
         cat <<EOF >$BIN_LOCAL/build-tool
         #!/bin/bash
@@ -45,16 +44,12 @@ runs:
             cat <<EOF >>$BIN_LOCAL/build-tool
         export ENABLE_SCCACHE=true
         export SCCACHE_IDLE_TIMEOUT=0
+        export SCCACHE_BUCKET=databend-ci
+        export SCCACHE_REGION=us-east-2
+        export SCCACHE_S3_KEY_PREFIX="cache/sccache/"
+        export SCCACHE_S3_USE_SSL="true"
         export SCCACHE_ERROR_LOG=/workspace/target/sccache.log
         export SCCACHE_LOG=debug
-        EOF
-            cat <<EOF >>$HOME/.config/sccache/config
-        server_startup_timeout_ms = 10000
-        [cache.s3]
-        bucket = "databend-ci"
-        region = "us-east-2"
-        use_ssl = true
-        key_prefix = "cache/sccache/"
         EOF
             ;;
 
@@ -63,15 +58,11 @@ runs:
             cat <<EOF >>$BIN_LOCAL/build-tool
         export ENABLE_SCCACHE=true
         export SCCACHE_IDLE_TIMEOUT=0
+        export SCCACHE_GCS_RW_MODE=READ_WRITE
+        export SCCACHE_GCS_BUCKET=databend-ci
+        export SCCACHE_GCS_KEY_PREFIX="cache/sccache/"
         export SCCACHE_ERROR_LOG=/workspace/target/sccache.log
         export SCCACHE_LOG=debug
-        EOF
-            cat <<EOF >>$HOME/.config/sccache/config
-        server_startup_timeout_ms = 10000
-        [cache.gcs]
-        bucket = "databend-ci"
-        rw_mode = "READ_WRITE"
-        key_prefix = "cache/sccache/"
         EOF
             ;;
 
