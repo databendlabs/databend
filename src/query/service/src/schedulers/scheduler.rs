@@ -20,7 +20,6 @@ use databend_common_expression::DataBlock;
 use databend_common_sql::planner::QueryExecutor;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
-use log::info;
 
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::executor::ExecutorSettings;
@@ -100,13 +99,15 @@ pub async fn build_distributed_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
-    let runtime_filter_broadcast_plans = collect_runtime_filter_broadcast_plans(plan)?;
-    start_runtime_filter_broadcast(ctx, &runtime_filter_broadcast_plans).await?;
-    let fragmenter = Fragmenter::try_create(ctx.clone())?;
-
-    let root_fragment = fragmenter.build_fragment(plan)?;
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
-    root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+    for plan in collect_runtime_filter_broadcast_plans(plan)?
+        .iter()
+        .chain(std::iter::once(plan))
+    {
+        let fragmenter = Fragmenter::try_create(ctx.clone())?;
+        let root_fragment = fragmenter.build_fragment(plan)?;
+        root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+    }
 
     let exchange_manager = ctx.get_exchange_manager();
 
@@ -126,28 +127,6 @@ pub async fn build_distributed_pipeline(
     }
 }
 
-async fn start_runtime_filter_broadcast(
-    ctx: &Arc<QueryContext>,
-    runtime_filter_broadcast_plans: &[PhysicalPlan],
-) -> Result<()> {
-    if runtime_filter_broadcast_plans.is_empty() {
-        return Ok(());
-    }
-
-    for plan in runtime_filter_broadcast_plans {
-        let fragmenter = Fragmenter::try_create(ctx.clone())?;
-        let root_fragment = fragmenter.build_fragment(plan)?;
-        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
-        root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
-
-        let exchange_manager = ctx.get_exchange_manager();
-        exchange_manager
-            .commit_actions_without_return_pipeline(ctx.clone(), fragments_actions)
-            .await?;
-    }
-    Ok(())
-}
-
 fn collect_runtime_filter_broadcast_plans(plan: &PhysicalPlan) -> Result<Vec<PhysicalPlan>> {
     let mut runtime_filter_broadcast_plans = Vec::new();
 
@@ -160,7 +139,7 @@ fn collect_runtime_filter_broadcast_plans(plan: &PhysicalPlan) -> Result<Vec<Phy
     };
 
     PhysicalPlan::traverse(
-        &plan,
+        plan,
         &mut |_| true,
         &mut collect_runtime_filter_broadcast_plans,
         &mut |_| {},

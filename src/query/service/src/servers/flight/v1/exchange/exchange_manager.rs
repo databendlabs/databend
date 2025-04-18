@@ -411,49 +411,6 @@ impl DataExchangeManager {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn commit_actions_without_return_pipeline(
-        &self,
-        ctx: Arc<QueryContext>,
-        actions: QueryFragmentsActions,
-    ) -> Result<()> {
-        let settings = ctx.get_settings();
-        let flight_params = FlightParams {
-            timeout: settings.get_flight_client_timeout()?,
-            retry_times: settings.get_flight_max_retry_times()?,
-            retry_interval: settings.get_flight_retry_interval()?,
-        };
-        let root_actions = actions.get_root_actions()?;
-        let conf = GlobalConfig::instance();
-
-        // Initialize query env between cluster nodes
-        let query_env = actions.get_query_env()?;
-        query_env.init(&ctx, flight_params).await?;
-
-        // Submit distributed tasks to all nodes.
-        let cluster = ctx.get_cluster();
-        let mut query_fragments = actions.get_query_fragments()?;
-
-        let local_fragments = query_fragments.remove(&conf.query.node_id);
-
-        let _: HashMap<String, ()> = cluster
-            .do_action(INIT_QUERY_FRAGMENTS, query_fragments, flight_params)
-            .await?;
-
-        self.set_ctx(&ctx.get_id(), ctx.clone())?;
-        if let Some(query_fragments) = local_fragments {
-            init_query_fragments(query_fragments).await?;
-        }
-
-        let prepared_query = actions.prepared_query()?;
-        let _: HashMap<String, ()> = cluster
-            .do_action(START_PREPARED_QUERY, prepared_query, flight_params)
-            .await?;
-
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,
