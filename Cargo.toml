@@ -298,6 +298,7 @@ deltalake = "0.25"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = { version = "1.0.0", features = ["full"] }
 display-more = { version = "0.1.0" }
+divan = "0.1.21"
 dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "30e28ca" }
 dyn-clone = "1.0.9"
 educe = { version = "1.0.0", features = ["default", "full"], package = "databend_educe" }
@@ -625,6 +626,7 @@ databend-common-exception = { opt-level = 3 }
 [profile.bench]
 debug = true
 overflow-checks = false
+debug-assertions = true
 
 [profile.test]
 opt-level = 0
