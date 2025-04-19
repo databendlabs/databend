@@ -278,6 +278,8 @@ pub async fn run_ttc_container(
     std::io::stdout().write_all(&output.stdout)?;
     std::io::stderr().write_all(&output.stderr)?;
 
+    pull_image(format!("{image}:{tag}").as_str())?;
+
     // spawn a thread and run docker ps -a every 10 seconds, and max 10 times
     let _ = databend_common_base::runtime::Thread::spawn(move || {
         let mut i = 0;
@@ -525,4 +527,14 @@ async fn stop_container(docker: &Docker, container_name: &str) {
             }
         }
     }
+}
+
+fn pull_image(image: &str) -> Result<()> {
+    let output = std::process::Command::new("docker")
+        .args(["pull", image])
+        .output()
+        .expect("failed to execute docker pull");
+    std::io::stdout().write_all(&output.stdout).unwrap();
+    std::io::stderr().write_all(&output.stderr).unwrap();
+    Ok(())
 }
