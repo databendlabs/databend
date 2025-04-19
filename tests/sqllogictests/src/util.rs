@@ -278,6 +278,24 @@ pub async fn run_ttc_container(
     std::io::stdout().write_all(&output.stdout)?;
     std::io::stderr().write_all(&output.stderr)?;
 
+    // spawn a thread and run docker ps -a every 10 seconds, and max 10 times
+    let docker_ps_thread = std::thread::spawn(move || {
+        let mut i = 0;
+        loop {
+            let output = std::process::Command::new("docker")
+                .args(&["ps", "-a"])
+                .output()
+                .expect("failed to execute docker ps -a");
+            std::io::stdout().write_all(&output.stdout).unwrap();
+            std::io::stderr().write_all(&output.stderr).unwrap();
+            std::thread::sleep(std::time::Duration::from_secs(10));
+            i += 1;
+            if i >= 10 {
+                break;
+            }
+        }
+    });
+
     let mut i = 1;
     loop {
         let log_consumer = LoggingConsumer::new();
