@@ -49,7 +49,6 @@ replace_with = { workspace = true }
 reqwest = { workspace = true }
 reqwest-hickory-resolver = { workspace = true }
 rustix = { workspace = true }
-semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 state = { workspace = true }
@@ -68,9 +67,6 @@ anyhow = { workspace = true }
 quickcheck = { workspace = true }
 rand = { workspace = true }
 serde_test = { workspace = true }
-
-[build-dependencies]
-databend-common-building = { workspace = true }
 
 [lints]
 workspace = true

@@ -191,9 +191,6 @@ select * from t_virtual2 order by b
 statement error 1301
 create table t_virtual3(a json null, b uint32 null as (a['id']::uint32) virtual, c string null as (a['name']::string) virtual) bloom_index_columns = 'b, c'
 
-statement ok
-set enable_experimental_merge_into = 1;
-
 ## test computed columns
 statement ok
 drop table if exists t_stored_merge;
@@ -293,9 +290,6 @@ a1 a1-c1 c1
 a2 a2-c2 c2
 a3 a3-c c
 aa aa-cc cc
-
-statement ok
-set enable_experimental_merge_into = 0;
 
 statement ok
 DROP DATABASE test_computed_column

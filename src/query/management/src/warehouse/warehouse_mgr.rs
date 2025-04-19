@@ -21,7 +21,6 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::unescape_for_key;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::vec_ext::VecExt;
-use databend_common_base::version::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -42,6 +41,7 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_version::DATABEND_COMMIT_VERSION;
 use log::error;
 use log::info;
 

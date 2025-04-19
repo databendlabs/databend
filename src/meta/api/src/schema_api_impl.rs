@@ -2590,6 +2590,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let version = old_version.unwrap_or(Uuid::new_v4().simple().to_string());
 
             let index = TableIndex {
+                index_type: req.index_type.clone(),
                 name: req.name.clone(),
                 column_ids: req.column_ids.clone(),
                 sync_creation: req.sync_creation,

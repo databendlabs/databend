@@ -70,7 +70,7 @@ use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
-use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_filter;
+use crate::pruning::ExprBloomFilter;
 use crate::DEFAULT_ROW_PER_PAGE;
 
 /// A helper struct to store the intermediate state while reading a native partition.
@@ -857,7 +857,9 @@ impl NativeDeserializeDataTransform {
                 let probe_block = self.block_reader.build_block(&[column], None)?;
                 let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
                 let probe_column = probe_block.get_last_column().clone();
-                update_bitmap_with_bloom_filter(probe_column, filter, &mut bitmap)?;
+                // Apply the filter to the probe column.
+                ExprBloomFilter::new(filter.clone()).apply(probe_column, &mut bitmap)?;
+
                 let unset_bits = bitmap.null_count();
                 if unset_bits == bitmap.len() {
                     // skip current page.

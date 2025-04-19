@@ -84,8 +84,8 @@ fn test_ft_stats_block_stats() -> databend_common_exception::Result<()> {
 #[test]
 fn test_ft_stats_block_stats_with_column_distinct_count() -> databend_common_exception::Result<()> {
     let schema = Arc::new(TableSchema::new(vec![
-        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
-        TableField::new("b", TableDataType::String),
+        TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::Int32), 0),
+        TableField::new_from_column_id("b", TableDataType::String, 1),
     ]));
 
     let block = DataBlock::new_from_columns(vec![
@@ -626,6 +626,7 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
             location.clone(),
             None,
             bloom_filter_index_size,
+            None,
             None,
             Compression::Lz4Raw,
             Some(Utc::now()),

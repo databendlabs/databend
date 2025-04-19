@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
 
 use arrow_ipc::writer::write_message;
 use arrow_ipc::writer::IpcDataGenerator;
@@ -26,14 +27,21 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
+use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
 use databend_storages_common_index::extract_component_fields;
 use databend_storages_common_index::extract_fsts;
+use databend_storages_common_table_meta::meta::Location;
 use jsonb::from_raw_jsonb;
 use jsonb::RawJsonb;
 use tantivy::indexer::UserOperation;
@@ -57,6 +65,108 @@ use tantivy::IndexSettings;
 use tantivy::IndexWriter;
 use tantivy::SegmentComponent;
 use tantivy_jieba::JiebaTokenizer;
+
+use crate::io::TableMetaLocationGenerator;
+
+#[derive(Clone)]
+pub struct InvertedIndexBuilder {
+    pub(crate) name: String,
+    pub(crate) version: String,
+    pub(crate) schema: DataSchema,
+    pub(crate) options: BTreeMap<String, String>,
+}
+
+impl InvertedIndexBuilder {
+    pub fn gen_inverted_index_location(&self, block_location: &Location) -> String {
+        TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+            &block_location.0,
+            &self.name,
+            &self.version,
+        )
+    }
+}
+
+pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedIndexBuilder> {
+    let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
+    for index in table_meta.indexes.values() {
+        if !matches!(index.index_type, TableIndexType::Inverted) {
+            continue;
+        }
+        if !index.sync_creation {
+            continue;
+        }
+        let mut index_fields = Vec::with_capacity(index.column_ids.len());
+        for column_id in &index.column_ids {
+            for field in &table_meta.schema.fields {
+                if field.column_id() == *column_id {
+                    index_fields.push(DataField::from(field));
+                    break;
+                }
+            }
+        }
+        // ignore invalid index
+        if index_fields.len() != index.column_ids.len() {
+            continue;
+        }
+        let index_schema = DataSchema::new(index_fields);
+
+        let inverted_index_builder = InvertedIndexBuilder {
+            name: index.name.clone(),
+            version: index.version.clone(),
+            schema: index_schema,
+            options: index.options.clone(),
+        };
+        inverted_index_builders.push(inverted_index_builder);
+    }
+    inverted_index_builders
+}
+
+pub struct InvertedIndexState {
+    pub(crate) data: Vec<u8>,
+    pub(crate) size: u64,
+    pub(crate) location: Location,
+}
+
+impl InvertedIndexState {
+    pub fn try_create(data: Vec<u8>, location: String) -> Result<Self> {
+        let size = data.len() as u64;
+        Ok(Self {
+            data,
+            size,
+            location: (location, 0),
+        })
+    }
+
+    pub fn from_data_block(
+        source_schema: &TableSchemaRef,
+        block: &DataBlock,
+        block_location: &Location,
+        inverted_index_builder: &InvertedIndexBuilder,
+    ) -> Result<Self> {
+        let start = Instant::now();
+        let mut writer = InvertedIndexWriter::try_create(
+            Arc::new(inverted_index_builder.schema.clone()),
+            &inverted_index_builder.options,
+        )?;
+        writer.add_block(source_schema, block)?;
+        let data = writer.finalize()?;
+
+        // Perf.
+        {
+            metrics_inc_block_inverted_index_generate_milliseconds(
+                start.elapsed().as_millis() as u64
+            );
+        }
+
+        let inverted_index_location =
+            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+                &block_location.0,
+                &inverted_index_builder.name,
+                &inverted_index_builder.version,
+            );
+        Self::try_create(data, inverted_index_location)
+    }
+}
 
 pub struct InvertedIndexWriter {
     schema: DataSchemaRef,
@@ -140,7 +250,7 @@ impl InvertedIndexWriter {
     }
 
     #[async_backtrace::framed]
-    pub fn finalize(mut self) -> Result<(TableSchema, DataBlock)> {
+    pub fn finalize(mut self) -> Result<Vec<u8>> {
         let _ = self.index_writer.run(self.operations);
         let _ = self.index_writer.commit()?;
         let index = self.index_writer.index();
@@ -172,7 +282,9 @@ impl InvertedIndexWriter {
         }
         let inverted_index_block = DataBlock::new(index_columns, 1);
 
-        Ok((inverted_index_schema, inverted_index_block))
+        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        block_to_inverted_index(&inverted_index_schema, inverted_index_block, &mut data)?;
+        Ok(data)
     }
 }
 
@@ -192,7 +304,7 @@ impl InvertedIndexWriter {
 // write the value of columns first,
 // and then the offsets of columns,
 // finally the number of columns.
-pub(crate) fn block_to_inverted_index(
+fn block_to_inverted_index(
     table_schema: &TableSchema,
     block: DataBlock,
     write_buffer: &mut Vec<u8>,
