@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::create_resize_item;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
@@ -27,7 +27,7 @@ use super::exchange_source::via_exchange_source;
 use super::exchange_source_reader::create_reader_item;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use crate::clusters::ClusterHelper;
-use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeTransform;
@@ -37,11 +37,10 @@ impl ExchangeTransform {
         ctx: &Arc<QueryContext>,
         params: &ExchangeParams,
         pipeline: &mut Pipeline,
-        injector: Arc<dyn ExchangeInjector>,
     ) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => {
-                via_exchange_source(ctx.clone(), params, injector, pipeline)
+                via_exchange_source(ctx.clone(), params, pipeline)
             }
             ExchangeParams::ShuffleExchange(params) => {
                 exchange_shuffle(ctx, params, pipeline)?;
@@ -58,8 +57,7 @@ impl ExchangeTransform {
                 let senders = flight_senders.into_iter();
                 for (destination_id, sender) in params.destination_ids.iter().zip(senders) {
                     items.push(match destination_id == &params.executor_id {
-                        true if max_threads == 1 => create_dummy_item(),
-                        true => create_resize_item(1, max_threads),
+                        true => create_dummy_item(),
                         false => create_writer_item(
                             sender,
                             false,
@@ -70,28 +68,52 @@ impl ExchangeTransform {
                     });
                 }
 
-                let mut nodes_source = 0;
                 let receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
+                let nodes_source = receivers.len();
+
+                let mut lookup = params
+                    .destination_ids
+                    .iter()
+                    .cloned()
+                    .enumerate()
+                    .map(|(x, y)| (y, x))
+                    .collect::<HashMap<_, _>>();
+
+                let mut nodes = Vec::with_capacity(nodes_source);
+                let mut reorder = Vec::with_capacity(nodes_source);
+                nodes.push(params.executor_id.clone());
+                reorder.push(lookup.remove(&params.executor_id).unwrap());
+
                 for (destination_id, receiver) in receivers {
-                    if destination_id != params.executor_id {
-                        nodes_source += 1;
-                        items.push(create_reader_item(
-                            receiver,
-                            &destination_id,
-                            &params.executor_id,
-                            params.fragment_id,
-                        ));
+                    if destination_id == params.executor_id {
+                        continue;
                     }
+
+                    nodes.push(destination_id.clone());
+                    reorder.push(lookup.remove(&destination_id).unwrap());
+
+                    items.push(create_reader_item(
+                        receiver,
+                        &destination_id,
+                        &params.executor_id,
+                        params.fragment_id,
+                    ));
                 }
 
-                let new_outputs = max_threads + nodes_source;
-                pipeline.add_pipe(Pipe::create(len, new_outputs, items));
+                pipeline.add_pipe(Pipe::create(len, nodes_source, items));
 
-                if params.exchange_injector.exchange_sorting().is_none() {
-                    pipeline.try_resize(max_threads)?;
-                }
+                match params.enable_multiway_sort {
+                    true => pipeline.reorder_inputs(reorder),
+                    false => pipeline.try_resize(max_threads)?,
+                };
 
-                injector.apply_shuffle_deserializer(params, pipeline)
+                pipeline.add_transform(|input, output| {
+                    TransformAggregateDeserializer::try_create(
+                        input.clone(),
+                        output.clone(),
+                        &params.schema,
+                    )
+                })
             }
         }
     }
