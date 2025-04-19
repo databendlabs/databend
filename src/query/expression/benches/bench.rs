@@ -157,7 +157,7 @@ fn function_iterator_iterator_v1(bencher: divan::Bencher, length: usize) {
 
         let _c = left
             .into_iter()
-            .zip(right.into_iter())
+            .zip(right)
             .map(|(a, b)| a + b)
             .collect::<Vec<i32>>();
     });

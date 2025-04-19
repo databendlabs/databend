@@ -70,8 +70,8 @@ unicase = { workspace = true }
 
 [dev-dependencies]
 comfy-table = { workspace = true }
-divan = { workspace = true }
 databend-common-ast = { workspace = true }
+divan = { workspace = true }
 goldenfile = { workspace = true }
 
 [[bench]]
