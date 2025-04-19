@@ -268,7 +268,7 @@ pub struct TableMeta {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: BTreeMap<String, String>,
-    pub iceberg_table_properties: BTreeMap<String, String>,
+    pub iceberg_table_properties: Option<BTreeMap<String, String>>,
     pub iceberg_partition: Option<TablePartition>,
     pub cluster_key: Option<String>,
     /// A sequential number that uniquely identifies changes to the cluster key.
@@ -461,7 +461,7 @@ impl Default for TableMeta {
             storage_params: None,
             part_prefix: "".to_string(),
             options: BTreeMap::new(),
-            iceberg_table_properties: BTreeMap::new(),
+            iceberg_table_properties: None,
             iceberg_partition: None,
             cluster_key: None,
             cluster_key_seq: 0,

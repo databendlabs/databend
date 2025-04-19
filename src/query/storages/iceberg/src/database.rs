@@ -192,19 +192,20 @@ impl Database for IcebergDatabase {
             req.table_name(),
         )?;
 
+        let properties =
+            if let Some(iceberg_table_properties) = &req.table_meta.iceberg_table_properties {
+                iceberg_table_properties.clone().into_iter().collect()
+            } else {
+                HashMap::new()
+            };
+
         let table_create_option = if let Some(ref partition) = req.table_meta.iceberg_partition {
             match partition {
                 TablePartition::Identity { columns } => {
                     if columns.is_empty() {
                         TableCreation::builder()
                             .name(req.table_name().to_string())
-                            .properties(
-                                req.table_meta
-                                    .iceberg_table_properties
-                                    .clone()
-                                    .into_iter()
-                                    .collect(),
-                            )
+                            .properties(properties)
                             .schema(schema)
                             .build()
                     } else {
@@ -252,15 +253,10 @@ impl Database for IcebergDatabase {
                             .unwrap()
                             .build()
                             .unwrap();
+
                         TableCreation::builder()
                             .name(req.table_name().to_string())
-                            .properties(
-                                req.table_meta
-                                    .iceberg_table_properties
-                                    .clone()
-                                    .into_iter()
-                                    .collect(),
-                            )
+                            .properties(properties)
                             .partition_spec(spec)
                             .schema(schema)
                             .build()
@@ -270,13 +266,7 @@ impl Database for IcebergDatabase {
         } else {
             TableCreation::builder()
                 .name(req.table_name().to_string())
-                .properties(
-                    req.table_meta
-                        .iceberg_table_properties
-                        .clone()
-                        .into_iter()
-                        .collect(),
-                )
+                .properties(properties)
                 .schema(schema)
                 .build()
         };

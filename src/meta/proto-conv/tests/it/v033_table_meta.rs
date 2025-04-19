@@ -149,7 +149,7 @@ fn test_decode_v33_table_meta() -> anyhow::Result<()> {
         shared_by: btreeset! {1},
         column_mask_policy: None,
         indexes: btreemap! {},
-        iceberg_table_properties: btreemap! {},
+        iceberg_table_properties: None,
         iceberg_partition: None,
     };
 
