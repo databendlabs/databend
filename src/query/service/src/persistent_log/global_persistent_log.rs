@@ -47,6 +47,7 @@ use log::error;
 use log::info;
 use rand::random;
 use tokio::time::sleep;
+use uuid::Uuid;
 
 use crate::interpreters::InterpreterFactory;
 use crate::persistent_log::session::create_session;
@@ -54,7 +55,6 @@ use crate::persistent_log::table_schemas::PersistentLogTable;
 use crate::persistent_log::table_schemas::QueryDetailsTable;
 use crate::persistent_log::table_schemas::QueryLogTable;
 use crate::persistent_log::table_schemas::QueryProfileTable;
-use crate::sessions::QueryContext;
 
 pub struct GlobalPersistentLog {
     meta_store: MetaStore,
@@ -277,18 +277,20 @@ impl GlobalPersistentLog {
     }
 
     async fn execute_sql(&self, sql: &str) -> Result<()> {
-        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
-        let context = session.create_query_context().await?;
-        let query_id = context.get_id();
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        let query_id = Uuid::new_v4().to_string();
         tracking_payload.query_id = Some(query_id.clone());
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
+        tracking_payload.should_log = false;
         let _guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(self.do_execute(context, sql)).await?;
+        ThreadTracker::tracking_future(self.do_execute(sql, query_id)).await?;
         Ok(())
     }
 
-    async fn do_execute(&self, context: Arc<QueryContext>, sql: &str) -> Result<()> {
+    async fn do_execute(&self, sql: &str, query_id: String) -> Result<()> {
+        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
+        let context = session.create_query_context().await?;
+        context.update_init_query_id(query_id);
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
         let executor = InterpreterFactory::get(context.clone(), &plan).await?;
@@ -378,7 +380,9 @@ impl GlobalPersistentLog {
     async fn clean_work(&self) -> Result<()> {
         loop {
             let meta_key = format!("{}/persistent_log_clean", self.tenant_id);
-            let may_permit = self.acquire(&meta_key, 60, 60 * 60).await?;
+            let may_permit = self
+                .acquire(&meta_key, 60, Duration::from_hours(self.interval).as_secs())
+                .await?;
             if let Some(guard) = may_permit {
                 if let Err(e) = self.do_clean().await {
                     error!("persistent log clean failed: {}", e);
