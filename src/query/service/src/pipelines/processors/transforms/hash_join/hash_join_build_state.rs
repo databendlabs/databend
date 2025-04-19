@@ -20,6 +20,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use async_channel::Sender;
 use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
@@ -78,6 +79,7 @@ use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTab
 use crate::pipelines::processors::transforms::hash_join::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHashTable;
+use crate::pipelines::processors::transforms::RuntimeFilterMeta;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
@@ -117,6 +119,7 @@ pub struct HashJoinBuildState {
 
     /// Spill related states.
     pub(crate) memory_settings: MemorySettings,
+    pub(crate) runtime_filter_sender: Option<Sender<RuntimeFilterMeta>>,
 }
 
 impl HashJoinBuildState {
@@ -128,6 +131,7 @@ impl HashJoinBuildState {
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
         num_threads: usize,
+        rf_src_send: Option<Sender<RuntimeFilterMeta>>,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -164,6 +168,7 @@ impl HashJoinBuildState {
             build_hash_table_tasks: Default::default(),
             mutex: Default::default(),
             memory_settings,
+            runtime_filter_sender: rf_src_send,
         }))
     }
 
@@ -865,6 +870,7 @@ impl HashJoinBuildState {
             }
             if !runtime_filter.is_empty() {
                 bloom_filter_ready |= !runtime_filter.is_blooms_empty();
+                self.send_runtime_filter_meta(&runtime_filter)?;
                 self.ctx.set_runtime_filter((rf.scan_id, runtime_filter));
             }
         }
@@ -1067,5 +1073,13 @@ impl HashJoinBuildState {
             .filters
             .iter()
             .any(|rf| rf.enable_min_max_runtime_filter)
+    }
+
+    fn send_runtime_filter_meta(&self, runtime_filter_info: &RuntimeFilterInfo) -> Result<()> {
+        if let Some(sender) = self.runtime_filter_sender.as_ref() {
+            sender.send_blocking(runtime_filter_info.into()).unwrap();
+            sender.close();
+        }
+        Ok(())
     }
 }

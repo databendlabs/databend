@@ -26,7 +26,7 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
 use super::physical_plans::AddStreamColumn;
-use super::PhysicalRuntimeFilter;
+use super::RemoteRuntimeFilterDesc;
 use crate::binder::MutationType;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
@@ -340,7 +340,7 @@ pub fn format_partial_tree(
 }
 
 struct FormatContext {
-    scan_id_to_runtime_filters: HashMap<IndexType, Vec<PhysicalRuntimeFilter>>,
+    scan_id_to_runtime_filters: HashMap<IndexType, Vec<RemoteRuntimeFilterDesc>>,
 }
 
 #[recursive::recursive]
@@ -520,6 +520,12 @@ fn to_format_tree(
         }
         PhysicalPlan::AsyncFunction(plan) => {
             async_function_to_format_tree(plan, metadata, profs, context)
+        }
+        PhysicalPlan::RuntimeFilterSource(_plan) => {
+            Ok(FormatTreeNode::new("RuntimeFilterSource".to_string()))
+        }
+        PhysicalPlan::RuntimeFilterSink(_plan) => {
+            Ok(FormatTreeNode::new("RuntimeFilterSink".to_string()))
         }
     }
 }
@@ -1537,7 +1543,7 @@ fn hash_join_to_format_tree(
     profs: &HashMap<u32, PlanProfile>,
     context: &mut FormatContext,
 ) -> Result<FormatTreeNode<String>> {
-    for rf in plan.runtime_filter.filters.iter() {
+    for rf in plan.runtime_filter_desc.filters.iter() {
         context
             .scan_id_to_runtime_filters
             .entry(rf.scan_id)
@@ -1571,7 +1577,7 @@ fn hash_join_to_format_tree(
     probe_child.payload = format!("{}(Probe)", probe_child.payload);
 
     let mut build_runtime_filters = vec![];
-    for rf in plan.runtime_filter.filters.iter() {
+    for rf in plan.runtime_filter_desc.filters.iter() {
         let mut s = format!(
             "filter id:{}, build key:{}, probe key:{}, filter type:",
             rf.id,

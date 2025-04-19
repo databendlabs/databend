@@ -258,6 +258,8 @@ impl PipelineBuilder {
             PhysicalPlan::ColumnMutation(column_mutation) => {
                 self.build_column_mutation(column_mutation)
             }
+            PhysicalPlan::RuntimeFilterSource(source) => self.build_runtime_filter_source(source),
+            PhysicalPlan::RuntimeFilterSink(sink) => self.build_runtime_filter_sink(sink),
         }?;
 
         self.is_exchange_neighbor = is_exchange_neighbor;

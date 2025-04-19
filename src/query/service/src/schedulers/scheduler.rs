@@ -99,11 +99,15 @@ pub async fn build_distributed_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
-    let fragmenter = Fragmenter::try_create(ctx.clone())?;
-
-    let root_fragment = fragmenter.build_fragment(plan)?;
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
-    root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+    for plan in collect_runtime_filter_broadcast_plans(plan)?
+        .iter()
+        .chain(std::iter::once(plan))
+    {
+        let fragmenter = Fragmenter::try_create(ctx.clone())?;
+        let root_fragment = fragmenter.build_fragment(plan)?;
+        root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+    }
 
     let exchange_manager = ctx.get_exchange_manager();
 
@@ -121,6 +125,27 @@ pub async fn build_distributed_pipeline(
             Err(error)
         }
     }
+}
+
+fn collect_runtime_filter_broadcast_plans(plan: &PhysicalPlan) -> Result<Vec<PhysicalPlan>> {
+    let mut runtime_filter_broadcast_plans = Vec::new();
+
+    let mut collect_runtime_filter_broadcast_plans = |plan: &PhysicalPlan| {
+        if let PhysicalPlan::HashJoin(hash_join) = plan {
+            if let Some(runtime_filter_plan) = &hash_join.runtime_filter_plan {
+                runtime_filter_broadcast_plans.push(runtime_filter_plan.as_ref().clone());
+            }
+        }
+    };
+
+    PhysicalPlan::traverse(
+        plan,
+        &mut |_| true,
+        &mut collect_runtime_filter_broadcast_plans,
+        &mut |_| {},
+    );
+
+    Ok(runtime_filter_broadcast_plans)
 }
 
 pub struct ServiceQueryExecutor {

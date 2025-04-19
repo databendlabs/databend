@@ -30,6 +30,8 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::table::get_change_type;
 
+use super::RuntimeFilterSink;
+use super::RuntimeFilterSource;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
@@ -88,16 +90,19 @@ pub struct HashJoin {
     // a HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
     pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
 
-    pub runtime_filter: PhysicalRuntimeFilters,
+    pub runtime_filter_desc: RemoteRuntimeFiltersDesc,
+    pub runtime_filter_plan: Option<Box<PhysicalPlan>>,
+    pub join_id: u32,
 }
 
+/// Runtime filter description with `RemoteExpr`
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Default)]
-pub struct PhysicalRuntimeFilters {
-    pub filters: Vec<PhysicalRuntimeFilter>,
+pub struct RemoteRuntimeFiltersDesc {
+    pub filters: Vec<RemoteRuntimeFilterDesc>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct PhysicalRuntimeFilter {
+pub struct RemoteRuntimeFilterDesc {
     pub id: usize,
     pub build_key: RemoteExpr,
     pub probe_key: RemoteExpr<String>,
@@ -519,7 +524,7 @@ impl PhysicalPlanBuilder {
         let output_schema = DataSchemaRefExt::create(output_fields);
 
         let runtime_filter = self
-            .build_runtime_filter(
+            .build_runtime_filter_desc(
                 join,
                 s_expr,
                 is_broadcast,
@@ -527,6 +532,19 @@ impl PhysicalPlanBuilder {
                 left_join_conditions_rt,
             )
             .await?;
+
+        let join_id = self.next_hash_join_id;
+        self.next_hash_join_id += 1;
+
+        let runtime_filter_plan = if !runtime_filter.filters.is_empty()
+            && !self.ctx.get_cluster().is_empty()
+            && !is_broadcast
+        {
+            Some(Self::build_runtime_filter_plan(join_id)?)
+        } else {
+            None
+        };
+
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: 0,
             projections,
@@ -560,25 +578,42 @@ impl PhysicalPlanBuilder {
             broadcast: is_broadcast,
             single_to_inner: join.single_to_inner.clone(),
             build_side_cache_info,
-            runtime_filter,
+            runtime_filter_desc: runtime_filter,
+            runtime_filter_plan,
+            join_id,
         }))
     }
 
-    async fn build_runtime_filter(
+    fn build_runtime_filter_plan(join_id: u32) -> Result<Box<PhysicalPlan>> {
+        let runtime_filter_source =
+            Box::new(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
+                plan_id: 0,
+                join_id,
+            }));
+        let exchange = Box::new(PhysicalPlan::Exchange(Exchange {
+            plan_id: 0,
+            input: runtime_filter_source,
+            kind: FragmentKind::Expansive,
+            keys: vec![],
+            allow_adjust_parallelism: true,
+            ignore_exchange: false,
+        }));
+        let runtime_filter_sink = Box::new(PhysicalPlan::RuntimeFilterSink(RuntimeFilterSink {
+            plan_id: 0,
+            input: exchange,
+        }));
+        Ok(runtime_filter_sink)
+    }
+
+    async fn build_runtime_filter_desc(
         &self,
         join: &Join,
         s_expr: &SExpr,
         is_broadcast: bool,
         build_keys: &[RemoteExpr],
         probe_keys: Vec<Option<(RemoteExpr<String>, usize, usize)>>,
-    ) -> Result<PhysicalRuntimeFilters> {
+    ) -> Result<RemoteRuntimeFiltersDesc> {
         if !supported_join_type_for_runtime_filter(&join.join_type) {
-            return Ok(Default::default());
-        }
-
-        let is_cluster = !self.ctx.get_cluster().is_empty();
-        if is_cluster && !is_broadcast {
-            // For cluster, only support runtime filter for broadcast join.
             return Ok(Default::default());
         }
 
@@ -599,6 +634,8 @@ impl PhysicalPlanBuilder {
             let id = self.metadata.write().next_runtime_filter_id();
 
             let enable_bloom_runtime_filter = {
+                // shuffle join does not support bloom runtime filter for now
+                let is_shuffle = self.ctx.get_cluster().is_empty() && !is_broadcast;
                 let is_supported_type = data_type.is_number() || data_type.is_string();
                 let enable_bloom_runtime_filter_based_on_stats = adjust_bloom_runtime_filter(
                     self.ctx.clone(),
@@ -607,11 +644,11 @@ impl PhysicalPlanBuilder {
                     s_expr,
                 )
                 .await?;
-                is_supported_type && enable_bloom_runtime_filter_based_on_stats
+                !is_shuffle && is_supported_type && enable_bloom_runtime_filter_based_on_stats
             };
             let enable_min_max_runtime_filter =
                 data_type.is_number() || data_type.is_date() || data_type.is_string();
-            let runtime_filter = PhysicalRuntimeFilter {
+            let runtime_filter = RemoteRuntimeFilterDesc {
                 id,
                 build_key: build_key.clone(),
                 probe_key,
@@ -622,7 +659,7 @@ impl PhysicalPlanBuilder {
             };
             filters.push(runtime_filter);
         }
-        Ok(PhysicalRuntimeFilters { filters })
+        Ok(RemoteRuntimeFiltersDesc { filters })
     }
 }
 

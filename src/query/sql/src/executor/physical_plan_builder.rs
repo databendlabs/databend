@@ -39,6 +39,7 @@ pub struct PhysicalPlanBuilder {
     pub(crate) dry_run: bool,
     // DataMutation info, used to build MergeInto physical plan
     pub(crate) mutation_build_info: Option<MutationBuildInfo>,
+    pub(crate) next_hash_join_id: u32,
 }
 
 impl PhysicalPlanBuilder {
@@ -50,6 +51,7 @@ impl PhysicalPlanBuilder {
             func_ctx,
             dry_run,
             mutation_build_info: None,
+            next_hash_join_id: 0,
         }
     }
 
