@@ -222,7 +222,7 @@ fn test_decode_v107_table_meta() -> anyhow::Result<()> {
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         indexes: btreemap! {},
-        iceberg_table_properties: btreemap! {},
+        iceberg_table_properties: None,
         iceberg_partition: None,
     };
     common::test_pb_from_to(func_name!(), want())?;
