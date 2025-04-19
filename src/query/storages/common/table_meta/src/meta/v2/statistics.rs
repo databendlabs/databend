@@ -82,6 +82,7 @@ pub struct Statistics {
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub cluster_stats: Option<ClusterStatistics>,
+    pub virtual_block_count: Option<u64>,
 }
 
 // conversions from old meta data
@@ -238,6 +239,7 @@ impl Statistics {
             index_size: v0.index_size,
             col_stats,
             cluster_stats: None,
+            virtual_block_count: None,
         }
     }
 }

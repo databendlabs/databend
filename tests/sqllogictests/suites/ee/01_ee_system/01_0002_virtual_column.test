@@ -30,16 +30,9 @@ create table t1(id int, val json) storage_format = 'native'
 statement ok
 insert into t1 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'), (3, '3')
 
-statement ok
-create virtual column (val['a'], val['b']::int, val['c']::string) for t1
-
-statement ok
-refresh virtual column for t1
-
 query TTT
 show virtual columns from t1
 ----
-test_virtual_column t1 val['a'], val['b']::Int32, val['c']::String
 
 statement ok
 insert into t1 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
@@ -47,31 +40,31 @@ insert into t1 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"
 query ITIT
 select id, val['a'], val['b'], val['c'] from t1 order by id
 ----
-1 11 1 test
-2 22 2 data
+1 11 1 "test"
+2 22 2 "data"
 3 NULL NULL NULL
-4 44 4 value
-5 55 5 bend
+4 44 4 "value"
+5 55 5 "bend"
 6 NULL NULL NULL
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val from t1 order by id
 ----
-1 11 1 test {"a":11,"b":1,"c":"test"}
-2 22 2 data {"a":22,"b":2,"c":"data"}
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+2 22 2 "data" {"a":22,"b":2,"c":"data"}
 3 NULL NULL NULL 3
-4 44 4 value {"a":44,"b":4,"c":"value"}
-5 55 5 bend {"a":55,"b":5,"c":"bend"}
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
+5 55 5 "bend" {"a":55,"b":5,"c":"bend"}
 6 NULL NULL NULL 6
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val['d'] from t1 order by id
 ----
-1 11 1 test NULL
-2 22 2 data NULL
+1 11 1 "test" NULL
+2 22 2 "data" NULL
 3 NULL NULL NULL NULL
-4 44 4 value NULL
-5 55 5 bend NULL
+4 44 4 "value" NULL
+5 55 5 "bend" NULL
 6 NULL NULL NULL NULL
 
 query ITIT
@@ -89,14 +82,14 @@ select id, val['a'], val['b'], val from t1 where val=3 or val=6 order by id
 query ITIT
 select id, val['a'], val['b'], val['c'] from t1 where val['a']=11 or val['a']=44 order by id
 ----
-1 11 1 test
-4 44 4 value
+1 11 1 "test"
+4 44 4 "value"
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val from t1 where val['a']=11 or val['a']=44 order by id
 ----
-1 11 1 test {"a":11,"b":1,"c":"test"}
-4 44 4 value {"a":44,"b":4,"c":"value"}
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
 
 query IT
 select max(id), val:a from t1 group by val:a order by val:a
@@ -134,16 +127,12 @@ create table t2(id int, val json) storage_format = 'parquet'
 statement ok
 insert into t2 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'), (3, '3')
 
-statement ok
-create virtual column (val['a'], val['b']::int, val['c']::string) for t2
-
-statement ok
-refresh virtual column for t2
-
-query TTT
+query TTTTTT
 show virtual columns from t2
 ----
-test_virtual_column t2 val['a'], val['b']::Int32, val['c']::String
+test_virtual_column t2 val 3000000000 ['a'] UInt64
+test_virtual_column t2 val 3000000001 ['b'] UInt64
+test_virtual_column t2 val 3000000002 ['c'] String
 
 statement ok
 insert into t2 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
@@ -151,31 +140,31 @@ insert into t2 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"
 query ITIT
 select id, val['a'], val['b'], val['c'] from t2 order by id
 ----
-1 11 1 test
-2 22 2 data
+1 11 1 "test"
+2 22 2 "data"
 3 NULL NULL NULL
-4 44 4 value
-5 55 5 bend
+4 44 4 "value"
+5 55 5 "bend"
 6 NULL NULL NULL
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val from t2 order by id
 ----
-1 11 1 test {"a":11,"b":1,"c":"test"}
-2 22 2 data {"a":22,"b":2,"c":"data"}
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+2 22 2 "data" {"a":22,"b":2,"c":"data"}
 3 NULL NULL NULL 3
-4 44 4 value {"a":44,"b":4,"c":"value"}
-5 55 5 bend {"a":55,"b":5,"c":"bend"}
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
+5 55 5 "bend" {"a":55,"b":5,"c":"bend"}
 6 NULL NULL NULL 6
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val['d'] from t2 order by id
 ----
-1 11 1 test NULL
-2 22 2 data NULL
+1 11 1 "test" NULL
+2 22 2 "data" NULL
 3 NULL NULL NULL NULL
-4 44 4 value NULL
-5 55 5 bend NULL
+4 44 4 "value" NULL
+5 55 5 "bend" NULL
 6 NULL NULL NULL NULL
 
 query ITIT
@@ -193,14 +182,14 @@ select id, val['a'], val['b'], val from t2 where val=3 or val=6 order by id
 query ITIT
 select id, val['a'], val['b'], val['c'] from t2 where val['a']=11 or val['a']=44 order by id
 ----
-1 11 1 test
-4 44 4 value
+1 11 1 "test"
+4 44 4 "value"
 
 query ITITT
 select id, val['a'], val['b'], val['c'], val from t2 where val['a']=11 or val['a']=44 order by id
 ----
-1 11 1 test {"a":11,"b":1,"c":"test"}
-4 44 4 value {"a":44,"b":4,"c":"value"}
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
 
 query IT
 select max(id), val:a from t2 group by val:a order by val:a
@@ -230,12 +219,192 @@ SELECT r.id, r.val['a'], r.val['b'], r.nval:a, r.nval:b FROM ( SELECT r.id, r.va
 6 NULL NULL NULL NULL
 
 statement ok
-create or replace virtual column (val['a']) for t1;
+create or replace table tweets (id int, data json);
 
-query TT
-show virtual columns from t1
+statement ok
+INSERT INTO tweets (id, data) VALUES
+(1, '{"id":1, "create": "3/06", "text": "a", "user": {"id": 1}}'),
+(2, '{"id":2, "create": "3/07", "text": "b", "user": {"id": 3}}'),
+(3, '{"id":3, "create": "6/07", "text": "c", "user": {"id": 5}}'),
+(4, '{"id":4, "create": "1/08", "text": "a", "user": {"id": 1}, "replies": 9}'),
+(5, '{"id":5, "create": "1/10", "text": "b", "user": {"id": 7}, "replies": 3, "geo": {"lat": 1.9}}'),
+(6, '{"id":6, "create": "1/11", "text": "c", "user": {"id": 1}, "replies": 2, "geo": null}'),
+(7, '{"id":7, "create": "1/12", "text": "d", "user": {"id": 3}, "replies": 0, "geo": {"lat": 2.7}}'),
+(8, '{"id":8, "create": "1/13", "text": "x", "user": {"id": 3}, "replies": 1, "geo": {"lat": 3.5}}');
+
+query TTTITT
+show virtual columns where table='tweets';
 ----
-test_virtual_column t1 val['a']
+test_virtual_column tweets data 3000000000 ['create'] String
+test_virtual_column tweets data 3000000001 ['geo']['lat'] Float64
+test_virtual_column tweets data 3000000002 ['id'] UInt64
+test_virtual_column tweets data 3000000003 ['replies'] UInt64
+test_virtual_column tweets data 3000000004 ['text'] String
+test_virtual_column tweets data 3000000005 ['user']['id'] UInt64
+
+query IITTIITF
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL
+4 4 "1/08" "a" 1 9 NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9
+6 6 "1/11" "c" 1 2 null NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5
+
+statement ok
+INSERT INTO tweets (id, data) VALUES
+(9, '{"id":9, "create": "2/14", "text": "y", "user": {"id": 5}, "replies": 5, "geo": {"lat": 4.2}, "likes": 25, "tags": ["good", "popular"]}'),
+(10, '{"id":10, "create": "2/15", "text": "z", "user": {"id": 7}, "replies": 7, "geo": {"lat": 5.0}, "likes": 10, "tags": ["new", "interesting"]}');
+
+query TTTITT
+show virtual columns where table='tweets';
+----
+test_virtual_column tweets data 3000000000 ['create'] String
+test_virtual_column tweets data 3000000001 ['geo']['lat'] Float64
+test_virtual_column tweets data 3000000002 ['id'] UInt64
+test_virtual_column tweets data 3000000003 ['replies'] UInt64
+test_virtual_column tweets data 3000000004 ['text'] String
+test_virtual_column tweets data 3000000005 ['user']['id'] UInt64
+test_virtual_column tweets data 3000000006 ['likes'] UInt64
+test_virtual_column tweets data 3000000007 ['tags'][0] String
+test_virtual_column tweets data 3000000008 ['tags'][1] String
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "a" 1 9 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+
+statement ok
+UPDATE tweets SET data = '{"id":4, "create": "1/08", "text": "aa", "user": {"id": 1}, "replies": 10}' WHERE id = 4;
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+
+statement ok
+UPDATE tweets SET data = '{"id":1, "create": "3/06", "text": "a", "user": {"id": 1}, "likes": 100}' WHERE id = 1;
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+
+statement ok
+DELETE FROM tweets WHERE id = 8;
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+
+statement ok
+INSERT INTO tweets (id, data) VALUES
+(11, '{"id":11, "create": "3/16", "text": "w", "user": {"id": 9}, "replies": 2, "geo": {"lat": 1.5}}'),
+(12, '{"id":12, "create": "3/17", "text": "v", "user": {"id": 11}, "replies": 4, "geo": {"lat": 2.0}}');
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/17" "v" 11 4 {"lat":2.0} 2.0 NULL NULL
+
+statement ok
+MERGE INTO tweets AS target
+USING (SELECT 13 AS id, parse_json('{"id":13, "create": "4/18", "text": "u", "user": {"id": 13}, "replies": 6, "geo": {"lat": 3.0}}') AS data) AS source
+ON target.id = source.id
+WHEN MATCHED THEN
+  UPDATE SET target.data = source.data
+WHEN NOT MATCHED THEN
+  INSERT (id, data) VALUES (source.id, source.data);
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/17" "v" 11 4 {"lat":2.0} 2.0 NULL NULL
+13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
+
+statement ok
+MERGE INTO tweets AS target
+USING (SELECT 12 AS id, parse_json('{"id":12, "create": "3/19", "text": "vv", "user": {"id": 16}, "replies": 10, "geo": {"lat": 4.0}}') AS data) AS source
+ON target.id = source.id
+WHEN MATCHED THEN
+  UPDATE SET target.data = source.data
+WHEN NOT MATCHED THEN
+  INSERT (id, data) VALUES (source.id, source.data);
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/19" "vv" 16 10 {"lat":4.0} 4.0 NULL NULL
+13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
 
 statement ok
 DROP DATABASE test_virtual_column

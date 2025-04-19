@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::VariantDataType;
+use databend_common_expression::VirtualDataField;
+use databend_common_expression::VirtualDataSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 
 use crate::operations::CommitMeta;
@@ -80,6 +86,86 @@ impl TransformMergeCommitMeta {
         }
     }
 
+    pub(crate) fn merge_virtual_schema(
+        l_virtual_schema: Option<VirtualDataSchema>,
+        r_virtual_schema: Option<VirtualDataSchema>,
+    ) -> Option<VirtualDataSchema> {
+        match (l_virtual_schema, r_virtual_schema) {
+            (Some(l_schema), Some(r_schema)) => {
+                let mut merged_fields: Vec<VirtualDataField> = Vec::new();
+                let mut l_cursor = 0;
+                let mut r_cursor = 0;
+
+                let next_column_id = if l_schema.next_column_id > r_schema.next_column_id {
+                    l_schema.next_column_id
+                } else {
+                    r_schema.next_column_id
+                };
+                // TODO: Calculate the correct `number_of_blocks`
+                let number_of_blocks = if l_schema.number_of_blocks > r_schema.number_of_blocks {
+                    l_schema.number_of_blocks
+                } else {
+                    r_schema.number_of_blocks
+                };
+
+                while l_cursor < l_schema.fields.len() || r_cursor < r_schema.fields.len() {
+                    match (l_schema.fields.get(l_cursor), r_schema.fields.get(r_cursor)) {
+                        (Some(l_field), Some(r_field)) => {
+                            if l_field.column_id < r_field.column_id {
+                                merged_fields.push(l_field.clone());
+                                l_cursor += 1;
+                            } else if l_field.column_id > r_field.column_id {
+                                merged_fields.push(r_field.clone());
+                                r_cursor += 1;
+                            } else {
+                                // If column_id, source_column_id and name are same, we can merge the field,
+                                // otherwise there is a conflict in the column_id and we need to remove the field.
+                                if l_field.source_column_id == r_field.source_column_id
+                                    && l_field.name == r_field.name
+                                {
+                                    let mut combined_data_types: BTreeSet<VariantDataType> =
+                                        BTreeSet::new();
+                                    for dt in &l_field.data_types {
+                                        combined_data_types.insert(dt.clone());
+                                    }
+                                    for dt in &r_field.data_types {
+                                        combined_data_types.insert(dt.clone());
+                                    }
+                                    let mut merged_field = l_field.clone();
+                                    merged_field.data_types =
+                                        combined_data_types.into_iter().collect();
+                                    merged_fields.push(merged_field);
+                                }
+                                l_cursor += 1;
+                                r_cursor += 1;
+                            }
+                        }
+                        (Some(l_field), None) => {
+                            merged_fields.push(l_field.clone());
+                            l_cursor += 1;
+                        }
+                        (None, Some(r_field)) => {
+                            merged_fields.push(r_field.clone());
+                            r_cursor += 1;
+                        }
+                        (None, None) => break,
+                    }
+                }
+
+                let merged_virtual_schema = VirtualDataSchema {
+                    fields: merged_fields,
+                    metadata: BTreeMap::new(),
+                    next_column_id,
+                    number_of_blocks,
+                };
+                Some(merged_virtual_schema)
+            }
+            (Some(l_virtual_schema), None) => Some(l_virtual_schema),
+            (None, Some(r_virtual_schema)) => Some(r_virtual_schema),
+            (None, None) => None,
+        }
+    }
+
     pub fn merge_commit_meta(
         l: CommitMeta,
         r: CommitMeta,
@@ -98,6 +184,7 @@ impl TransformMergeCommitMeta {
                 .chain(r.new_segment_locs)
                 .collect(),
             table_id: l.table_id,
+            virtual_schema: Self::merge_virtual_schema(l.virtual_schema, r.virtual_schema),
         }
     }
 }

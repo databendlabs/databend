@@ -16,6 +16,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::VirtualDataSchema;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::operations::common::ConflictResolveContext;
@@ -26,6 +27,7 @@ pub struct CommitMeta {
     pub conflict_resolve_context: ConflictResolveContext,
     pub new_segment_locs: Vec<Location>,
     pub table_id: u64,
+    pub virtual_schema: Option<VirtualDataSchema>,
 }
 
 impl CommitMeta {
@@ -36,6 +38,7 @@ impl CommitMeta {
             ),
             new_segment_locs: vec![],
             table_id,
+            virtual_schema: None,
         }
     }
 
@@ -43,11 +46,13 @@ impl CommitMeta {
         conflict_resolve_context: ConflictResolveContext,
         new_segment_locs: Vec<Location>,
         table_id: u64,
+        virtual_schema: Option<VirtualDataSchema>,
     ) -> Self {
         CommitMeta {
             conflict_resolve_context,
             new_segment_locs,
             table_id,
+            virtual_schema,
         }
     }
 }

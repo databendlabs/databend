@@ -12,30 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt32Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::VirtualColumnMeta;
-use databend_common_meta_types::MetaId;
 use databend_common_storages_fuse::TableContext;
 use itertools::Itertools;
 
-use crate::columns_table::dump_tables;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
@@ -54,60 +50,51 @@ impl AsyncSystemTable for VirtualColumnsTable {
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
+        _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
-        let req = ListVirtualColumnsReq::new(tenant, None);
-        let virtual_column_metas = catalog.list_virtual_columns(req).await?;
+        let session_state = ctx.session_state();
 
-        let mut database_names = Vec::with_capacity(virtual_column_metas.len());
-        let mut table_names: Vec<String> = Vec::with_capacity(virtual_column_metas.len());
-        let mut virtual_columns = Vec::with_capacity(virtual_column_metas.len());
-        let mut created_on_columns = Vec::with_capacity(virtual_column_metas.len());
-        let mut updated_on_columns = Vec::with_capacity(virtual_column_metas.len());
-        if !virtual_column_metas.is_empty() {
-            let mut virtual_column_meta_map: HashMap<MetaId, VirtualColumnMeta> =
-                virtual_column_metas
-                    .into_iter()
-                    .map(|v| (v.table_id, v))
-                    .collect();
+        let catalog_mgr = CatalogManager::instance();
+        let catalog = catalog_mgr.get_default_catalog(session_state)?;
 
-            let database_and_tables = dump_tables(&ctx, push_downs).await?;
-            for (database, tables) in database_and_tables {
-                for table in tables {
-                    let table_id = table.get_id();
-                    if let Some(virtual_column_meta) = virtual_column_meta_map.remove(&table_id) {
-                        database_names.push(database.clone());
-                        table_names.push(table.name().to_string());
-                        virtual_columns.push(
-                            virtual_column_meta
-                                .virtual_columns
-                                .iter()
-                                .map(|virtual_field| {
-                                    let virtual_expr = if virtual_field.data_type.remove_nullable()
-                                        == TableDataType::Variant
-                                    {
-                                        virtual_field.expr.to_string()
-                                    } else {
-                                        format!(
-                                            "{}::{}",
-                                            virtual_field.expr,
-                                            virtual_field.data_type.remove_nullable()
-                                        )
-                                    };
-                                    if let Some(alias_name) = &virtual_field.alias_name {
-                                        format!("{} AS {}", virtual_expr, alias_name)
-                                    } else {
-                                        virtual_expr
-                                    }
-                                })
-                                .join(", "),
-                        );
-                        created_on_columns.push(virtual_column_meta.created_on.timestamp_micros());
-                        updated_on_columns
-                            .push(virtual_column_meta.updated_on.map(|u| u.timestamp_micros()));
-                    }
+        let mut database_names = Vec::new();
+        let mut table_names = Vec::new();
+        let mut source_column_names = Vec::new();
+        let mut virtual_column_ids = Vec::new();
+        let mut virtual_column_names = Vec::new();
+        let mut virtual_column_types = Vec::new();
+
+        let dbs = catalog.list_databases(&tenant).await?;
+        for db in dbs {
+            let tables = catalog.list_tables(&tenant, db.name()).await?;
+            for table in tables {
+                if !table.support_virtual_columns() {
+                    continue;
+                }
+                let table_info = table.get_table_info();
+                let Some(ref virtual_schema) = table_info.meta.virtual_schema else {
+                    continue;
+                };
+                let table_schema = table.schema();
+                for virtual_field in &virtual_schema.fields {
+                    let Ok(source_field) =
+                        table_schema.field_of_column_id(virtual_field.source_column_id)
+                    else {
+                        continue;
+                    };
+                    database_names.push(db.name().to_owned());
+                    table_names.push(table.name().to_owned());
+                    source_column_names.push(source_field.name().clone());
+                    virtual_column_ids.push(virtual_field.column_id);
+                    virtual_column_names.push(virtual_field.name.clone());
+
+                    let data_types_str = virtual_field
+                        .data_types
+                        .iter()
+                        .map(|ty| format!("{}", ty))
+                        .join(", ");
+                    virtual_column_types.push(data_types_str);
                 }
             }
         }
@@ -115,9 +102,10 @@ impl AsyncSystemTable for VirtualColumnsTable {
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(database_names),
             StringType::from_data(table_names),
-            StringType::from_data(virtual_columns),
-            TimestampType::from_data(created_on_columns),
-            TimestampType::from_opt_data(updated_on_columns),
+            StringType::from_data(source_column_names),
+            UInt32Type::from_data(virtual_column_ids),
+            StringType::from_data(virtual_column_names),
+            StringType::from_data(virtual_column_types),
         ]))
     }
 }
@@ -127,12 +115,13 @@ impl VirtualColumnsTable {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("database", TableDataType::String),
             TableField::new("table", TableDataType::String),
-            TableField::new("virtual_columns", TableDataType::String),
-            TableField::new("created_on", TableDataType::Timestamp),
+            TableField::new("source_column", TableDataType::String),
             TableField::new(
-                "updated_on",
-                TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
+                "virtual_column_id",
+                TableDataType::Number(NumberDataType::UInt32),
             ),
+            TableField::new("virtual_column_name", TableDataType::String),
+            TableField::new("virtual_column_type", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

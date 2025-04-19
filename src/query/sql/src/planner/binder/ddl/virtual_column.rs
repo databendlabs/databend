@@ -33,7 +33,6 @@ use databend_common_expression::type_check::get_simple_cast_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::VirtualField;
 use log::debug;
 
@@ -180,24 +179,11 @@ impl Binder {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
-        let table_info = self.ctx.get_table(&catalog, &database, &table).await?;
-
-        let catalog_info = self.ctx.get_catalog(&catalog).await?;
-        let req = ListVirtualColumnsReq::new(self.ctx.get_tenant(), Some(table_info.get_id()));
-        let res = catalog_info.list_virtual_columns(req).await?;
-
-        let virtual_columns = if res.is_empty() {
-            vec![]
-        } else {
-            res[0].virtual_columns.clone()
-        };
-
         Ok(Plan::RefreshVirtualColumn(Box::new(
             RefreshVirtualColumnPlan {
                 catalog,
                 database,
                 table,
-                virtual_columns,
                 segment_locs: None,
             },
         )))
@@ -389,7 +375,10 @@ impl Binder {
         select_builder
             .with_column("database")
             .with_column("table")
-            .with_column("virtual_columns");
+            .with_column("source_column")
+            .with_column("virtual_column_id")
+            .with_column("virtual_column_name")
+            .with_column("virtual_column_type");
 
         select_builder.with_filter(format!("database = '{database}'"));
         if let Some(table) = table {
@@ -400,7 +389,7 @@ impl Binder {
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("virtual_columns LIKE '{pattern}'"));
+                select_builder.with_filter(format!("virtual_column_name LIKE '{pattern}'"));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {

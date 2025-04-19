@@ -12,14 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::ColumnId;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::VirtualDataField;
+use databend_common_expression::VirtualDataSchema;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 
 #[derive(Default)]
 pub struct RowOrientedSegmentBuilder {
@@ -50,5 +62,116 @@ impl SegmentBuilder for RowOrientedSegmentBuilder {
 
     fn new(_table_schema: TableSchemaRef, _block_per_segment: usize) -> Self {
         Self::default()
+    }
+}
+
+#[derive(Default)]
+pub struct VirtualColumnAccumulator {
+    virtual_fields: BTreeMap<(ColumnId, String), usize>,
+    virtual_schema: VirtualDataSchema,
+    number_of_blocks: u64,
+}
+
+impl VirtualColumnAccumulator {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        schema: &Arc<TableSchema>,
+        virtual_schema: &Option<VirtualDataSchema>,
+    ) -> Option<VirtualColumnAccumulator> {
+        if LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
+            .is_err()
+        {
+            return None;
+        }
+
+        let has_variant = schema
+            .fields
+            .iter()
+            .any(|f| matches!(f.data_type.remove_nullable(), TableDataType::Variant));
+        if !has_variant {
+            return None;
+        }
+
+        let mut virtual_fields = BTreeMap::new();
+        let virtual_schema = if let Some(virtual_schema) = virtual_schema {
+            for (i, virtual_field) in virtual_schema.fields.iter().enumerate() {
+                let key = (virtual_field.source_column_id, virtual_field.name.clone());
+                virtual_fields.insert(key, i);
+            }
+            virtual_schema.clone()
+        } else {
+            VirtualDataSchema::empty()
+        };
+
+        Some(VirtualColumnAccumulator {
+            virtual_fields,
+            virtual_schema,
+            number_of_blocks: 0,
+        })
+    }
+
+    pub fn add_virtual_column_metas(
+        &mut self,
+        draft_virtual_column_metas: &Vec<DraftVirtualColumnMeta>,
+    ) -> HashMap<ColumnId, VirtualColumnMeta> {
+        let mut virtual_column_metas = HashMap::new();
+
+        for draft_virtual_column_meta in draft_virtual_column_metas {
+            let key = (
+                draft_virtual_column_meta.source_column_id,
+                draft_virtual_column_meta.name.clone(),
+            );
+
+            let column_id = if let Some(field_idx) = self.virtual_fields.get(&key) {
+                let virtual_field =
+                    unsafe { self.virtual_schema.fields.get_unchecked_mut(*field_idx) };
+                if !virtual_field
+                    .data_types
+                    .contains(&draft_virtual_column_meta.data_type)
+                {
+                    virtual_field
+                        .data_types
+                        .push(draft_virtual_column_meta.data_type.clone());
+                }
+                virtual_field.column_id
+            } else {
+                if self.virtual_schema.is_full() {
+                    continue;
+                }
+                self.virtual_fields
+                    .insert(key, self.virtual_schema.num_fields());
+
+                let new_virtual_field = VirtualDataField {
+                    name: draft_virtual_column_meta.name.clone(),
+                    data_types: vec![draft_virtual_column_meta.data_type.clone()],
+                    source_column_id: draft_virtual_column_meta.source_column_id,
+                    column_id: 0,
+                };
+                self.virtual_schema.add_field(new_virtual_field).unwrap()
+            };
+
+            virtual_column_metas.insert(column_id, draft_virtual_column_meta.column_meta.clone());
+        }
+        self.number_of_blocks += 1;
+
+        virtual_column_metas
+    }
+
+    pub fn build_virtual_schema(self) -> Option<VirtualDataSchema> {
+        if self.virtual_schema.num_fields() > 0 {
+            Some(self.virtual_schema)
+        } else {
+            None
+        }
+    }
+
+    pub fn build_virtual_schema_with_block_number(mut self) -> Option<VirtualDataSchema> {
+        if self.virtual_schema.num_fields() > 0 {
+            self.virtual_schema.number_of_blocks += self.number_of_blocks;
+            Some(self.virtual_schema)
+        } else {
+            None
+        }
     }
 }

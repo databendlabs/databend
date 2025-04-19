@@ -240,30 +240,40 @@ impl Processor for TransformBlockWriter {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Write(serialized) => {
-                let block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
+                let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
+
+                let bytes = if let Some(draft_virtual_block_meta) =
+                    &extended_block_meta.draft_virtual_block_meta
+                {
+                    (extended_block_meta.block_meta.block_size
+                        + draft_virtual_block_meta.virtual_column_size) as usize
+                } else {
+                    extended_block_meta.block_meta.block_size as usize
+                };
 
                 self.properties
                     .ctx
                     .get_write_progress()
                     .incr(&ProgressValues {
-                        rows: block_meta.row_count as usize,
-                        bytes: block_meta.block_size as usize,
+                        rows: extended_block_meta.block_meta.row_count as usize,
+                        bytes,
                     });
 
                 // appending new data block
                 if let Some(tid) = self.table_id {
-                    self.properties
-                        .ctx
-                        .update_multi_table_insert_status(tid, block_meta.row_count);
+                    self.properties.ctx.update_multi_table_insert_status(
+                        tid,
+                        extended_block_meta.block_meta.row_count,
+                    );
                 } else {
                     self.properties.ctx.add_mutation_status(MutationStatus {
-                        insert_rows: block_meta.row_count,
+                        insert_rows: extended_block_meta.block_meta.row_count,
                         update_rows: 0,
                         deleted_rows: 0,
                     });
                 }
 
-                self.output_data = Some(DataBlock::empty_with_meta(Box::new(block_meta)));
+                self.output_data = Some(DataBlock::empty_with_meta(Box::new(extended_block_meta)));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

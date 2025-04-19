@@ -109,6 +109,7 @@ impl<'a> BlockWriter<'a> {
             bloom_filter_index_size,
             None,
             None,
+            None,
             Compression::Lz4Raw,
             Some(Utc::now()),
         );
