@@ -23,14 +23,13 @@ use crate::caches::CacheValue;
 use crate::CacheAccessor;
 use crate::Loader;
 
-// TODO rename this
 /// A cache-aware reader
-pub struct CachedReader<L, C> {
+pub struct CacheReader<L, C> {
     cache: Option<C>,
     loader: L,
 }
 // InMemoryLruCache<V>
-impl<V: Into<CacheValue<V>>, L, C> CachedReader<L, C>
+impl<V: Into<CacheValue<V>>, L, C> CacheReader<L, C>
 where
     L: Loader<V> + Sync,
     C: CacheAccessor<V = V>,

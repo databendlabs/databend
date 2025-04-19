@@ -16,11 +16,13 @@ use std::fmt::Display;
 use std::hash::Hash;
 
 use anyerror::AnyError;
+use bytes::Bytes;
 use cbordata::Cbor;
 use cbordata::FromCbor;
 use cbordata::IntoCbor;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::types::DataType;
+use parquet::data_type::AsBytes;
 use xorfilter::Xor8;
 
 use crate::filters::Filter;
@@ -47,11 +49,11 @@ impl TryFrom<&Xor8Filter> for Vec<u8> {
     }
 }
 
-impl TryFrom<&[u8]> for Xor8Filter {
+impl TryFrom<Bytes> for Xor8Filter {
     type Error = ErrorCode;
 
-    fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
-        Xor8Filter::from_bytes(value)
+    fn try_from(value: Bytes) -> std::result::Result<Self, Self::Error> {
+        Xor8Filter::from_bytes(value.as_bytes())
             .map(|(v, len)| {
                 // TODO
                 assert_eq!(len, value.len());
