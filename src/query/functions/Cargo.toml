@@ -70,7 +70,7 @@ unicase = { workspace = true }
 
 [dev-dependencies]
 comfy-table = { workspace = true }
-criterion = { workspace = true }
+divan = { workspace = true }
 databend-common-ast = { workspace = true }
 goldenfile = { workspace = true }
 

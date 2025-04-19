@@ -35,7 +35,7 @@ thiserror = { workspace = true }
 xorfilter-rs = { workspace = true, features = ["cbordata"] }
 
 [dev-dependencies]
-criterion = { workspace = true }
+divan = { workspace = true }
 
 rand = { workspace = true }
 
