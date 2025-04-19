@@ -49,3 +49,16 @@ runs:
       shell: bash
       run: |
         echo "LD_LIBRARY_PATH=${{ env.JAVA_HOME }}/lib/server:${{ env.LD_LIBRARY_PATH }}" >> $GITHUB_ENV
+
+    - name: check docker info
+      shell: bash
+      run: |
+        docker info
+        docker version
+        docker ps -a
+        docker images
+
+    - name: setup env
+      shell: bash
+      run: |
+        echo "RUST_LOG=info" >> $GITHUB_ENV

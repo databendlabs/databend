@@ -809,10 +809,8 @@ impl Default for StderrLogConfig {
 impl Into<InnerStderrLogConfig> for StderrLogConfig {
     fn into(self) -> InnerStderrLogConfig {
         InnerStderrLogConfig {
-            on: std::env::var("LOG_STDERR_ON").as_deref() == Ok("true")
-                || std::env::var("RUST_LOG").is_ok()
-                || self.stderr_on,
-            level: std::env::var("RUST_LOG").unwrap_or(self.stderr_level),
+            on: self.stderr_on,
+            level: self.stderr_level,
             format: self.stderr_format,
         }
     }

@@ -14,11 +14,13 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use bollard::container::ListContainersOptions;
 use bollard::container::RemoveContainerOptions;
 use bollard::Docker;
 use clap::Parser;
@@ -27,6 +29,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use testcontainers::core::client::docker_client_instance;
+use testcontainers::core::logs::consumer::logging_consumer::LoggingConsumer;
 use testcontainers::core::IntoContainerPort;
 use testcontainers::core::WaitFor;
 use testcontainers::runners::AsyncRunner;
@@ -44,8 +47,8 @@ use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
 const CONTAINER_RETRY_TIMES: usize = 3;
-const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 180;
-const CONTAINER_TIMEOUT_SECONDS: u64 = 300;
+const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 30;
+const CONTAINER_TIMEOUT_SECONDS: u64 = 180;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct ServerInfo {
@@ -262,22 +265,52 @@ pub async fn run_ttc_container(
     let container_name = format!("databend-ttc-{}-{}", port, x);
     let start = Instant::now();
     println!("Starting container {container_name}");
+    let dsn = format!(
+        "databend://root:@127.0.0.1:{}?sslmode=disable",
+        http_server_port
+    );
+
+    let output = std::process::Command::new("bendsql")
+        .args(["--dsn", &dsn, "--check"])
+        .output()
+        .expect("failed to execute bendsql --check");
+    println!("status: {}", output.status);
+    std::io::stdout().write_all(&output.stdout)?;
+    std::io::stderr().write_all(&output.stderr)?;
+
+    pull_image(format!("{image}:{tag}").as_str())?;
+
+    // spawn a thread and run docker ps -a every 10 seconds, and max 10 times
+    let _ = databend_common_base::runtime::Thread::spawn(move || {
+        let mut i = 0;
+        loop {
+            let output = std::process::Command::new("docker")
+                .args(["ps", "-a"])
+                .output()
+                .expect("failed to execute docker ps -a");
+            std::io::stdout().write_all(&output.stdout).unwrap();
+            std::io::stderr().write_all(&output.stderr).unwrap();
+            std::thread::sleep(std::time::Duration::from_secs(10));
+            i += 1;
+            if i >= 10 {
+                break;
+            }
+        }
+    });
 
     let mut i = 1;
     loop {
+        let log_consumer = LoggingConsumer::new();
+
         let container_res = GenericImage::new(image, tag)
             .with_exposed_port(port.tcp())
             .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
+            .with_startup_timeout(Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS))
             .with_network("host")
-            .with_env_var(
-                "DATABEND_DSN",
-                format!(
-                    "databend://root:@127.0.0.1:{}?sslmode=disable",
-                    http_server_port
-                ),
-            )
+            .with_env_var("DATABEND_DSN", &dsn)
             .with_env_var("TTC_PORT", format!("{port}"))
             .with_container_name(&container_name)
+            .with_log_consumer(log_consumer)
             .start()
             .await;
         let duration = start.elapsed().as_secs();
@@ -455,6 +488,23 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
 
 // Stop the running container to avoid conflict
 async fn stop_container(docker: &Docker, container_name: &str) {
+    let opts = Some(ListContainersOptions::<String> {
+        all: true,
+        ..Default::default()
+    });
+    println!("==> list containers");
+    let containers = docker.list_containers(opts).await;
+    if let Ok(containers) = containers {
+        for container in containers {
+            if let Some(names) = container.names {
+                println!(
+                    " -> container name: {:?}, status: {:?}",
+                    names, container.state
+                );
+            }
+        }
+    }
+
     let container = docker.inspect_container(container_name, None).await;
     if let Ok(container) = container {
         println!(
@@ -477,4 +527,14 @@ async fn stop_container(docker: &Docker, container_name: &str) {
             }
         }
     }
+}
+
+fn pull_image(image: &str) -> Result<()> {
+    let output = std::process::Command::new("docker")
+        .args(["pull", image])
+        .output()
+        .expect("failed to execute docker pull");
+    std::io::stdout().write_all(&output.stdout).unwrap();
+    std::io::stderr().write_all(&output.stderr).unwrap();
+    Ok(())
 }
