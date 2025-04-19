@@ -114,7 +114,7 @@ impl RowGroupReaderForCopy {
         };
         let mut reader_builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx,
-            op,
+            Arc::new(op),
             parquet_table_schema,
             schema_descr,
             Some(arrow_schema),

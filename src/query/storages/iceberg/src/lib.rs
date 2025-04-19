@@ -27,7 +27,6 @@ mod partition;
 mod predicate;
 mod statistics;
 mod table;
-mod table_source;
 
 pub use catalog::IcebergCatalog;
 pub use catalog::IcebergCreator;

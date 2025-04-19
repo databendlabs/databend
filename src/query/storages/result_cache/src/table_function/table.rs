@@ -149,7 +149,7 @@ impl Table for ResultScan {
         let op = DataOperator::instance().operator();
         let mut builder = ParquetRSReaderBuilder::create(
             ctx.clone(),
-            op,
+            Arc::new(op),
             self.table_info.schema(),
             self.schema.clone(),
         )?

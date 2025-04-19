@@ -21,6 +21,8 @@ use async_trait::async_trait;
 use chrono::Utc;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::InternalColumnType;
+use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -37,23 +39,23 @@ use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_common_storages_parquet::ParquetSource;
 use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use iceberg::arrow::schema_to_arrow_schema;
 use iceberg::io::FileIOBuilder;
 
-use crate::partition::IcebergPartInfo;
+use crate::partition::convert_file_scan_task;
 use crate::predicate::PredicateBuilder;
 use crate::statistics;
 use crate::statistics::IcebergStatistics;
-use crate::table_source::IcebergTableSource;
 
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
@@ -232,6 +234,7 @@ impl IcebergTable {
         let statistics = statistics::IcebergStatistics::parse(&table).await?;
 
         let engine_options = Self::build_engine_options(&table, &statistics)?;
+        // Let's prepare the parquet schema for the table
 
         // construct table info
         let info = TableInfo {
@@ -263,16 +266,59 @@ impl IcebergTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let parts_len = plan.parts.len();
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_threads = std::cmp::min(parts_len, max_threads);
+        let internal_columns = plan
+            .internal_columns
+            .as_ref()
+            .map(|m| {
+                m.values()
+                    .map(|i| i.column_type.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
+        let table_schema = self.info.schema();
+        let arrow_schema = table_schema.as_ref().into();
 
-        let output_schema = Arc::new(DataSchema::from(plan.schema()));
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let topk = plan
+            .push_downs
+            .as_ref()
+            .and_then(|p| p.top_k(&self.schema()));
+
+        let read_options = ParquetReadOptions::default()
+            .with_prune_row_groups(true)
+            .with_prune_pages(false);
+
+        let op = self.table.file_io().clone();
+        let mut builder = ParquetRSReaderBuilder::create(
+            ctx.clone(),
+            Arc::new(op),
+            table_schema.clone(),
+            arrow_schema,
+        )?
+        .with_options(read_options)
+        .with_push_downs(plan.push_downs.as_ref());
+
+        if !need_row_number {
+            builder = builder.with_topk(topk.as_ref());
+        }
+
+        let row_group_reader = Arc::new(builder.build_row_group_reader(need_row_number)?);
+        let full_file_reader = Some(Arc::new(builder.build_full_reader(need_row_number)?));
+
+        let topk = Arc::new(topk);
         pipeline.add_source(
             |output| {
-                IcebergTableSource::create(ctx.clone(), output, output_schema.clone(), self.clone())
+                ParquetSource::create(
+                    ctx.clone(),
+                    output,
+                    row_group_reader.clone(),
+                    full_file_reader.clone(),
+                    topk.clone(),
+                    internal_columns.clone(),
+                )
             },
-            max_threads.max(1),
+            max_threads,
         )
     }
 
@@ -325,7 +371,8 @@ impl IcebergTable {
             .map(|v: iceberg::scan::FileScanTask| {
                 read_rows += v.record_count.unwrap_or_default() as usize;
                 read_bytes += v.length as usize;
-                Arc::new(Box::new(IcebergPartInfo::new(v)) as Box<dyn PartInfo>)
+                let part = convert_file_scan_task(v);
+                Arc::new(Box::new(part) as Box<dyn PartInfo>)
             })
             .collect();
 

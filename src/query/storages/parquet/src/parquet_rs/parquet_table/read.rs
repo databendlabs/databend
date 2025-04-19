@@ -81,7 +81,7 @@ impl ParquetRSTable {
 
         let mut builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx.clone(),
-            self.operator.clone(),
+            Arc::new(self.operator.clone()),
             table_schema.clone(),
             self.schema_descr.clone(),
             Some(self.arrow_schema.clone()),

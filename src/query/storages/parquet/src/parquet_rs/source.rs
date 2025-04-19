@@ -239,12 +239,11 @@ impl Processor for ParquetSource {
                         ParquetPart::ParquetFiles(parts) => {
                             let mut handlers = Vec::with_capacity(parts.files.len());
                             for (path, _) in parts.files.iter() {
-                                let op = self.row_group_reader.operator();
-                                let path = path.clone();
+                                let (op, path) = self.row_group_reader.operator(path.as_str())?;
                                 handlers.push(async move {
                                     // TODO: we can use opendal::Buffer to reduce memory alloc.
-                                    let data = op.read(&path).await?.to_vec();
-                                    Ok::<_, ErrorCode>((path, data))
+                                    let data = op.read(path).await?.to_vec();
+                                    Ok::<_, ErrorCode>((path.to_owned(), data))
                                 });
                             }
                             let buffers = futures::future::try_join_all(handlers).await?;

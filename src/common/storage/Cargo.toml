@@ -29,6 +29,7 @@ http = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
+iceberg = { workspace = true }
 prometheus-client = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }

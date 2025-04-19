@@ -535,3 +535,30 @@ pub async fn check_operator(
             ))
         })
 }
+
+pub trait OperatorRegistry: Send + Sync {
+    fn get_operator_path<'a>(&self, _location: &'a str) -> Result<(Operator, &'a str)>;
+}
+
+impl OperatorRegistry for Operator {
+    fn get_operator_path<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
+        Ok((self.clone(), location))
+    }
+}
+
+impl OperatorRegistry for DataOperator {
+    fn get_operator_path<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
+        Ok((self.operator.clone(), location))
+    }
+}
+
+impl OperatorRegistry for iceberg::io::FileIO {
+    fn get_operator_path<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
+        let file_io = self
+            .new_input(location)
+            .map_err(|err| std::io::Error::new(ErrorKind::Unsupported, err.message()))?;
+
+        let pos = file_io.relative_path_pos();
+        Ok((file_io.get_operator().clone(), &location[pos..]))
+    }
+}

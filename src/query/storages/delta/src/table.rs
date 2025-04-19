@@ -248,7 +248,7 @@ impl DeltaTable {
             None
         };
         let mut builder =
-            ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, arrow_schema)?
+            ParquetRSReaderBuilder::create(ctx.clone(), Arc::new(op), table_schema, arrow_schema)?
                 .with_options(read_options)
                 .with_push_downs(push_downs.as_ref())
                 .with_pruner(Some(pruner))

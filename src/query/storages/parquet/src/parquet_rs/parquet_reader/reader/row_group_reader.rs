@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_expression::TopKSorter;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
+use databend_common_storage::OperatorRegistry;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
@@ -31,7 +34,7 @@ use crate::ReadSettings;
 
 /// The reader to read a row group.
 pub struct ParquetRSRowGroupReader {
-    pub(super) op: Operator,
+    pub(super) op_registry: Arc<dyn OperatorRegistry>,
 
     pub(super) default_policy: PolicyType,
     pub(super) policy_builders: PolicyBuilders,
@@ -41,8 +44,8 @@ pub struct ParquetRSRowGroupReader {
 }
 
 impl ParquetRSRowGroupReader {
-    pub fn operator(&self) -> Operator {
-        self.op.clone()
+    pub fn operator<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
+        Ok(self.op_registry.get_operator_path(location)?)
     }
 
     /// Read a row group and return a reader with certain policy.
@@ -63,9 +66,10 @@ impl ParquetRSRowGroupReader {
                 .map(|x| x.iter().map(PageLocation::from).collect())
                 .collect::<Vec<Vec<_>>>()
         });
+        let (op, path) = self.operator(&part.location)?;
         let row_group = InMemoryRowGroup::new(
-            &part.location,
-            self.op.clone(),
+            path,
+            op,
             &part.meta,
             page_locations.as_deref(),
             read_settings.max_gap_size,
