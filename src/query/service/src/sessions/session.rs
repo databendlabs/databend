@@ -172,6 +172,7 @@ impl Session {
             if query_max_memory_usage != 0
                 && matches!(out_of_memory_behavior, OutofMemoryBehavior::Throw)
             {
+                mem_stat.set_allow_exceeded_limit();
                 mem_stat.set_limit(query_max_memory_usage as i64);
             }
 

@@ -29,6 +29,8 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
     let out_of_memory_behavior = env.settings.get_query_out_of_memory_behavior()?;
 
     if query_max_memory_usage != 0 && matches!(out_of_memory_behavior, OutofMemoryBehavior::Throw) {
+        // query_mem_stat
+        query_mem_stat.set_allow_exceeded_limit();
         query_mem_stat.set_limit(query_max_memory_usage as i64);
     }
 

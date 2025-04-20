@@ -14,6 +14,7 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -51,7 +52,7 @@ pub struct MemStat {
     ///
     /// Set to 0 to disable the limit.
     limit: AtomicI64,
-    allow_exceeded_limit: bool,
+    allow_exceeded_limit: AtomicBool,
     // 0: Memory limit not exceeded.
     // 1. Memory limit exceeded, but no error is reported
     // 2. Memory limit exceeded, requires error reporting
@@ -60,9 +61,10 @@ pub struct MemStat {
 
     queries_memory_manager: &'static QueriesMemoryManager,
 
+    #[allow(dead_code)]
     priority: usize,
 
-    parent_memory_stat: Option<Arc<MemStat>>,
+    pub(crate) parent_memory_stat: Option<Arc<MemStat>>,
 }
 
 pub const MEMORY_LIMIT_NOT_EXCEEDED: usize = 0;
@@ -80,17 +82,22 @@ impl MemStat {
             peak_used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
             parent_memory_stat: None,
-            allow_exceeded_limit: false,
+            allow_exceeded_limit: AtomicBool::new(false),
             exceeded_limit_mode: OnceLock::new(),
             priority: 0,
         }
     }
 
     pub fn create(name: String) -> Arc<MemStat> {
-        MemStat::create_child(name, None)
+        MemStat::create_child(name, None, 0, AtomicBool::new(false))
     }
 
-    pub fn create_child(name: String, parent_memory_stat: Option<Arc<MemStat>>) -> Arc<MemStat> {
+    pub fn create_child(
+        name: String,
+        parent_memory_stat: Option<Arc<MemStat>>,
+        priority: usize,
+        allow_exceeded_limit: AtomicBool,
+    ) -> Arc<MemStat> {
         let id = match GlobalSequence::next() {
             0 => GlobalSequence::next(),
             id => id,
@@ -103,11 +110,15 @@ impl MemStat {
             peak_used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
             parent_memory_stat,
-            allow_exceeded_limit: false,
+            allow_exceeded_limit,
             exceeded_limit_mode: OnceLock::new(),
             queries_memory_manager: &GLOBAL_QUERIES_MANAGER,
-            priority: 0,
+            priority,
         })
+    }
+
+    pub fn set_allow_exceeded_limit(&self) {
+        self.allow_exceeded_limit.store(true, Ordering::Relaxed);
     }
 
     pub fn set_limit(&self, mut size: i64) {
@@ -135,15 +146,6 @@ impl MemStat {
 
         if let Some(parent_memory_stat) = self.parent_memory_stat.as_ref() {
             if let Err(cause) = parent_memory_stat.record_memory::<false>(batch_memory_used, 0) {
-                if let Err(_cause) = self.check_limit(used) {
-                    if NEED_ROLLBACK {
-                        // We only roll back the memory that alloc failed
-                        self.rollback(current_memory_alloc);
-                    }
-
-                    return Err(cause);
-                }
-
                 // neighbor may exceeded limit, wait release memory
                 if let Err(cause) = self.try_wait_memory(cause) {
                     if NEED_ROLLBACK {
@@ -153,13 +155,12 @@ impl MemStat {
 
                     return Err(cause);
                 }
-                return Ok(());
             }
         }
 
         if let Err(cause) = self.check_limit(used) {
             // parent has memory free, try exceeding limit.
-            if self.allow_exceeded_limit {
+            if self.allow_exceeded_limit.load(Ordering::Relaxed) {
                 return self.try_exceeding_limit(cause);
             }
 
@@ -175,13 +176,13 @@ impl MemStat {
         Ok(())
     }
 
-    fn try_wait_memory(&self, out_of_limit: OutOfLimit) -> Result<(), OutOfLimit> {
+    pub fn try_wait_memory(&self, out_of_limit: OutOfLimit) -> Result<(), OutOfLimit> {
         let _guard = LimitMemGuard::enter_unlimited();
         self.queries_memory_manager.wait_memory(self, out_of_limit)
     }
 
     pub fn try_exceeding_limit(&self, out_of_limit: OutOfLimit) -> Result<(), OutOfLimit> {
-        if !self.allow_exceeded_limit {
+        if !self.allow_exceeded_limit.load(Ordering::Relaxed) {
             return Err(out_of_limit);
         }
 
@@ -209,11 +210,8 @@ impl MemStat {
             let fetch_value = fetch_value.unwrap_or_else(|x| x);
 
             if fetch_value == MEMORY_LIMIT_NOT_EXCEEDED {
-                self.queries_memory_manager.request_exceeded_memory(
-                    self.id,
-                    self.priority,
-                    exceeded_limit_mode.clone(),
-                );
+                self.queries_memory_manager
+                    .request_exceeded_memory(self, exceeded_limit_mode.clone());
 
                 return Ok(());
             } else if fetch_value == MEMORY_LIMIT_EXCEEDED_NO_ERROR {
@@ -230,12 +228,6 @@ impl MemStat {
                 Ordering::SeqCst,
                 Ordering::SeqCst,
             );
-
-            // if fetch_value.unwrap_or_else(|x| x) == MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR {
-            //     let release_memory = std::cmp::max(0, out_of_limit.value - out_of_limit.limit);
-            //     self.queries_memory_manager
-            //         .release_memory(release_memory as u64);
-            // }
         }
 
         Err(out_of_limit)
@@ -276,16 +268,26 @@ impl MemStat {
     }
 
     #[inline]
-    pub fn get_peek_memory_usage(&self) -> i64 {
+    pub fn get_peak_memory_usage(&self) -> i64 {
         self.peak_used.load(Ordering::Relaxed)
+    }
+
+    pub fn release_memory(&self) {
+        let exceeded_limit_mode = self
+            .exceeded_limit_mode
+            .get_or_init(|| Arc::new(AtomicUsize::new(0)));
+
+        if self.allow_exceeded_limit.load(Ordering::Relaxed)
+            && exceeded_limit_mode.load(Ordering::SeqCst) != MEMORY_LIMIT_NOT_EXCEEDED
+        {
+            self.queries_memory_manager.release_memory(self);
+        }
     }
 }
 
 impl Drop for MemStat {
     fn drop(&mut self) {
-        if self.allow_exceeded_limit {
-            self.queries_memory_manager.release_memory(self.id);
-        }
+        self.release_memory();
     }
 }
 
@@ -317,6 +319,7 @@ impl Debug for OutOfLimit<i64> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
 
     use databend_common_exception::Result;
@@ -381,8 +384,12 @@ mod tests {
     #[test]
     fn test_multiple_level_mem_stat() -> Result<()> {
         let mem_stat = MemStat::create("TEST".to_string());
-        let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), Some(mem_stat.clone()));
+        let child_mem_stat = MemStat::create_child(
+            "TEST_CHILD".to_string(),
+            Some(mem_stat.clone()),
+            0,
+            AtomicBool::new(false),
+        );
 
         mem_stat.record_memory::<false>(1, 1).unwrap();
         mem_stat.record_memory::<false>(2, 2).unwrap();
@@ -405,8 +412,12 @@ mod tests {
     fn test_multiple_level_mem_stat_with_check_limit() -> Result<()> {
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2);
-        let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), Some(mem_stat.clone()));
+        let child_mem_stat = MemStat::create_child(
+            "TEST_CHILD".to_string(),
+            Some(mem_stat.clone()),
+            0,
+            AtomicBool::new(false),
+        );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
 
         mem_stat.record_memory::<false>(1, 1).unwrap();
@@ -435,8 +446,12 @@ mod tests {
         // parent failure
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
-        let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), Some(mem_stat.clone()));
+        let child_mem_stat = MemStat::create_child(
+            "TEST_CHILD".to_string(),
+            Some(mem_stat.clone()),
+            0,
+            AtomicBool::new(false),
+        );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2);
 
         assert!(child_mem_stat
@@ -448,8 +463,12 @@ mod tests {
         // child failure
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2);
-        let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), Some(mem_stat.clone()));
+        let child_mem_stat = MemStat::create_child(
+            "TEST_CHILD".to_string(),
+            Some(mem_stat.clone()),
+            0,
+            AtomicBool::new(false),
+        );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
 
         assert!(child_mem_stat

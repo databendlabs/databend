@@ -81,13 +81,18 @@ impl MemStatBuffer {
 
                 self.global_mem_stat
                     .record_memory::<false>(memory_usage, 0)?;
-
-                return mem_stat.try_exceeding_limit(cause);
+                return Err(cause);
             }
         }
 
-        self.global_mem_stat
+        if let Err(cause) = self
+            .global_mem_stat
             .record_memory::<FALLBACK>(memory_usage, alloc)
+        {
+            return self.global_mem_stat.try_wait_memory(cause);
+        }
+
+        Ok(())
     }
 
     pub fn alloc(&mut self, mem_stat: &Arc<MemStat>, usage: i64) -> Result<(), AllocError> {
