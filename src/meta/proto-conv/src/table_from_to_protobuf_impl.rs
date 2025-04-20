@@ -256,12 +256,12 @@ impl FromToProto for mt::TableMeta {
             },
             part_prefix: p.part_prefix.unwrap_or("".to_string()),
             options: p.options,
-            iceberg_table_properties: if p.iceberg_table_properties.is_empty() {
+            table_properties: if p.table_properties.is_empty() {
                 None
             } else {
-                Some(p.iceberg_table_properties)
+                Some(p.table_properties)
             },
-            iceberg_partition: match p.iceberg_partition {
+            table_partition: match p.table_partition {
                 Some(ip) => Some(TablePartition::from_pb(ip)?),
                 None => None,
             },
@@ -313,8 +313,8 @@ impl FromToProto for mt::TableMeta {
                 Some(self.part_prefix.clone())
             },
             options: self.options.clone(),
-            iceberg_table_properties: self.iceberg_table_properties.clone().unwrap_or_default(),
-            iceberg_partition: match self.iceberg_partition.clone() {
+            table_properties: self.table_properties.clone().unwrap_or_default(),
+            table_partition: match self.table_partition.clone() {
                 Some(ip) => Some(ip.to_pb()?),
                 None => None,
             },

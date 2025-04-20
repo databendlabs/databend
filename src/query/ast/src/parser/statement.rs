@@ -913,7 +913,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             opt_cluster_by,
             opt_table_options,
             opt_iceberg_table_partition_by,
-            opt_iceberg_table_properties,
+            opt_table_properties,
             opt_as_query,
         )| {
             let create_option =
@@ -939,7 +939,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 table_options: opt_table_options.unwrap_or_default(),
                 iceberg_table_partition: opt_iceberg_table_partition_by
                     .map(|(_, _, _, cols, _)| cols),
-                iceberg_table_properties: opt_iceberg_table_properties
+                table_properties: opt_table_properties
                     .map(|(_, properties)| properties)
                     .unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),

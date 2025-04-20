@@ -454,7 +454,7 @@ impl Binder {
             engine,
             uri_location,
             iceberg_table_partition,
-            iceberg_table_properties,
+            table_properties,
         } = stmt;
 
         let (catalog, database, table) =
@@ -473,7 +473,7 @@ impl Binder {
         }
 
         let mut iceberg_table_options: BTreeMap<String, String> = BTreeMap::new();
-        for property in iceberg_table_properties.iter() {
+        for property in table_properties.iter() {
             self.insert_table_option_with_validation(
                 &mut iceberg_table_options,
                 property.0.to_lowercase(),
@@ -481,10 +481,10 @@ impl Binder {
             )?;
         }
 
-        let mut iceberg_partition: Vec<String> = Vec::new();
+        let mut table_partition: Vec<String> = Vec::new();
         if let Some(iceberg_table_partition) = iceberg_table_partition {
             for iceberg_table_partition in iceberg_table_partition {
-                iceberg_partition.push(iceberg_table_partition.to_string());
+                table_partition.push(iceberg_table_partition.to_string());
             }
         }
 
@@ -763,8 +763,8 @@ impl Binder {
             engine_options,
             storage_params,
             options,
-            iceberg_table_properties: iceberg_table_properties.clone(),
-            iceberg_partition,
+            table_properties: table_properties.clone(),
+            table_partition,
             field_comments,
             cluster_key,
             as_select: as_query_plan,
@@ -832,8 +832,8 @@ impl Binder {
             engine_options: BTreeMap::new(),
             storage_params: Some(sp),
             options,
-            iceberg_table_properties: BTreeMap::new(),
-            iceberg_partition: vec![],
+            table_properties: BTreeMap::new(),
+            table_partition: vec![],
             field_comments: vec![],
             cluster_key: None,
             as_select: None,
