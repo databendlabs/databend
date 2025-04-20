@@ -192,14 +192,13 @@ impl Database for IcebergDatabase {
             req.table_name(),
         )?;
 
-        let properties =
-            if let Some(iceberg_table_properties) = &req.table_meta.iceberg_table_properties {
-                iceberg_table_properties.clone().into_iter().collect()
-            } else {
-                HashMap::new()
-            };
+        let properties = if let Some(table_properties) = &req.table_meta.table_properties {
+            table_properties.clone().into_iter().collect()
+        } else {
+            HashMap::new()
+        };
 
-        let table_create_option = if let Some(ref partition) = req.table_meta.iceberg_partition {
+        let table_create_option = if let Some(ref partition) = req.table_meta.table_partition {
             match partition {
                 TablePartition::Identity { columns } => {
                     if columns.is_empty() {
