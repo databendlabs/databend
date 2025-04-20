@@ -2914,7 +2914,7 @@ dependencies = [
  "http 1.1.0",
  "log",
  "logforth",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "tokio",
  "toml 0.8.19",
 ]
@@ -2938,7 +2938,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "limits-rs",
  "log",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "serde",
  "serde_json",
  "serfig",
@@ -3219,7 +3219,7 @@ dependencies = [
  "libc",
  "object",
  "once_cell",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "parquet",
  "paste",
  "prost",
@@ -3573,7 +3573,7 @@ dependencies = [
  "maplit",
  "num-derive",
  "num-traits",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "paste",
  "prost",
  "serde",
@@ -3885,7 +3885,7 @@ dependencies = [
  "lz4",
  "match-template",
  "num",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "rand 0.8.5",
  "ringbuffer",
  "roaring",
@@ -4096,7 +4096,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "parking_lot 0.12.3",
  "pretty_assertions",
  "prqlc",
@@ -4134,7 +4134,7 @@ dependencies = [
  "futures",
  "http 1.1.0",
  "log",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "parquet",
  "prometheus-client 0.22.3",
  "regex",
@@ -4245,7 +4245,7 @@ dependencies = [
  "jsonb",
  "log",
  "match-template",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "parking_lot 0.12.3",
  "parquet",
  "rand 0.8.5",
@@ -4290,7 +4290,7 @@ dependencies = [
  "futures",
  "hive_metastore",
  "log",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "parquet",
  "recursive",
  "serde",
@@ -4405,7 +4405,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "orc-rust",
  "serde",
  "serde_json",
@@ -4441,7 +4441,7 @@ dependencies = [
  "ethnum",
  "futures",
  "log",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "parquet",
  "rand 0.8.5",
  "serde",
@@ -4486,7 +4486,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "parquet",
  "serde",
  "serde_json",
@@ -4535,7 +4535,7 @@ dependencies = [
  "match-template",
  "num-bigint",
  "num-traits",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "parquet",
  "serde",
  "serde_json",
@@ -4599,7 +4599,7 @@ dependencies = [
  "jsonb",
  "log",
  "once_cell",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "parking_lot 0.12.3",
  "regex",
  "serde",
@@ -4640,7 +4640,7 @@ dependencies = [
  "libc",
  "log",
  "logforth",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
@@ -4845,7 +4845,7 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "log",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "tantivy",
  "tempfile",
  "uuid",
@@ -5227,7 +5227,7 @@ dependencies = [
  "mysql_async",
  "naive-cityhash",
  "num_cpus",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "opensrv-mysql",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -5418,7 +5418,7 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
- "opendal 0.53.0",
+ "opendal 0.53.1",
 ]
 
 [[package]]
@@ -9510,7 +9510,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -10580,7 +10580,7 @@ dependencies = [
  "futures",
  "futures-util",
  "object_store",
- "opendal 0.53.0",
+ "opendal 0.53.1",
  "pin-project",
  "tokio",
 ]
@@ -10655,9 +10655,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.53.0"
+version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5ebd1183902124c6b3ee0a9383683513dd8cca3d25a5d065593f969a44f979e"
+checksum = "c0f407ca2797ca6c010720aa3cedfa0187430e4f70b729c75c33142d44021f59"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -10672,13 +10672,14 @@ dependencies = [
  "getrandom 0.2.15",
  "hdrs",
  "http 1.1.0",
+ "http-body 1.0.1",
  "log",
  "md-5",
  "moka",
  "percent-encoding",
  "prometheus-client 0.23.1",
  "prost",
- "quick-xml 0.36.1",
+ "quick-xml 0.37.2",
  "reqsign",
  "reqwest",
  "serde",
@@ -12071,16 +12072,6 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.35.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86e446ed58cef1bbfe847bc2fda0e2e4ea9f0e57b90c507d4781292590d72a4e"
-dependencies = [
- "memchr",
- "serde",
-]
-
-[[package]]
-name = "quick-xml"
 version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96a05e2e8efddfa51a84ca47cec303fac86c8541b686d37cac5efc0e094417bc"
@@ -12511,9 +12502,9 @@ checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
 
 [[package]]
 name = "reqsign"
-version = "0.16.1"
+version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb0075a66c8bfbf4cc8b70dca166e722e1f55a3ea9250ecbb85f4d92a5f64149"
+checksum = "9323c0afb30e54f793f4705b10c890395bccc87c6e6ea62c4e7e82d09a380dc6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12529,7 +12520,7 @@ dependencies = [
  "log",
  "once_cell",
  "percent-encoding",
- "quick-xml 0.35.0",
+ "quick-xml 0.37.2",
  "rand 0.8.5",
  "reqwest",
  "rsa",
