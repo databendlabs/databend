@@ -26,6 +26,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -83,6 +84,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         column_ids: vec![0, 1],
         sync_creation: false,
         options: options.clone(),
+        index_type: TableIndexType::Inverted,
     };
 
     let res = handler.do_create_table_index(catalog.clone(), req).await;

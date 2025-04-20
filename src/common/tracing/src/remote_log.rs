@@ -53,6 +53,8 @@ use serde_json::Map;
 use crate::Config;
 use crate::GlobalLogger;
 
+pub const PERSISTENT_LOG_SCHEMA_VERSION: usize = 1;
+
 /// An appender that sends log records to persistent storage
 #[derive(Debug)]
 pub struct RemoteLog {
@@ -178,8 +180,9 @@ impl RemoteLog {
         op.as_ref()?;
 
         let path = format!(
-            "stage/internal/{}/{}.parquet",
+            "stage/internal/{}_v{}/{}.parquet",
             stage_name,
+            PERSISTENT_LOG_SCHEMA_VERSION,
             uuid::Uuid::new_v4()
         );
 

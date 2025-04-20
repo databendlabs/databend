@@ -154,6 +154,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (122, "2025-03-11: Add: table_meta and virtual_data_schema"),
     (123, "2025-03-27: Add: add compression in user.proto/ParquetFileFormatParam"),
     (124, "2025-04-01: Add: add headers in udf.proto/UDFServer"),
+    (125, "2025-04-16: Add: add index_type in table.proto/TableIndex"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

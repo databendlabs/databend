@@ -1811,6 +1811,56 @@ CreateInvertedIndex(
 
 
 ---------- Input ----------
+CREATE OR REPLACE NGRAM INDEX idx2 ON t1 (a, b);
+---------- Output ---------
+CREATE OR REPLACE NGRAM INDEX idx2 ON t1 (a, b)
+---------- AST ------------
+CreateNgramIndex(
+    CreateNgramIndexStmt {
+        create_option: CreateOrReplace,
+        index_name: Identifier {
+            span: Some(
+                30..34,
+            ),
+            name: "idx2",
+            quote: None,
+            ident_type: None,
+        },
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                38..40,
+            ),
+            name: "t1",
+            quote: None,
+            ident_type: None,
+        },
+        columns: [
+            Identifier {
+                span: Some(
+                    42..43,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+            Identifier {
+                span: Some(
+                    45..46,
+                ),
+                name: "b",
+                quote: None,
+                ident_type: None,
+            },
+        ],
+        sync_creation: true,
+        index_options: {},
+    },
+)
+
+
+---------- Input ----------
 create table a (c decimal(38, 0))
 ---------- Output ---------
 CREATE TABLE a (c Decimal(38, 0))
@@ -1848,6 +1898,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
                 None,
             ),
         ),
@@ -1900,6 +1951,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -1951,6 +2003,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -1998,6 +2051,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
                 None,
             ),
         ),
@@ -2082,6 +2136,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -2164,6 +2219,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
                 None,
             ),
         ),
@@ -2327,6 +2383,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -2403,6 +2460,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
                 None,
             ),
         ),
@@ -2558,6 +2616,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -2688,6 +2747,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -2789,6 +2849,113 @@ CreateTable(
                             sync_creation: true,
                             index_options: {
                                 "tokenizer": "chinese",
+                            },
+                        },
+                    ],
+                ),
+                None,
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a string, b string, ngram index idx1 (a,b) gram_size=5);
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a STRING, b STRING, NGRAM INDEX idx1 (a, b) gram_size = '5')
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: CreateIfNotExists,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    27..28,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                29..30,
+            ),
+            name: "b",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                32..33,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                42..43,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+                None,
+                Some(
+                    [
+                        NgramIndexDefinition {
+                            index_name: Identifier {
+                                span: Some(
+                                    64..68,
+                                ),
+                                name: "idx1",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            columns: [
+                                Identifier {
+                                    span: Some(
+                                        70..71,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                Identifier {
+                                    span: Some(
+                                        72..73,
+                                    ),
+                                    name: "b",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ],
+                            sync_creation: true,
+                            index_options: {
+                                "gram_size": "5",
                             },
                         },
                     ],
@@ -2953,6 +3120,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
                 None,
             ),
         ),
@@ -3364,6 +3532,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -3506,6 +3675,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
                 None,
             ),
         ),
@@ -4916,6 +5086,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -4996,6 +5167,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -5057,6 +5229,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -5115,6 +5288,7 @@ CreateTable(
                         comment: None,
                     },
                 ],
+                None,
                 None,
             ),
         ),
@@ -13531,6 +13705,7 @@ CreateTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         engine: None,
@@ -13582,6 +13757,7 @@ CreateTable(
                         ),
                     },
                 ],
+                None,
                 None,
             ),
         ),
@@ -20389,6 +20565,7 @@ CreateDynamicTable(
                     },
                 ],
                 None,
+                None,
             ),
         ),
         cluster_by: None,
@@ -20534,6 +20711,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
                 None,
             ),
         ),
@@ -20726,6 +20904,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
                 None,
             ),
         ),
@@ -20962,6 +21141,7 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
+                None,
                 None,
             ),
         ),

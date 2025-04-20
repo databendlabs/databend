@@ -114,7 +114,7 @@ jobs:
           delete-branch: true
 
   build_default:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c32g, aws]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c64g, aws]
     needs: create_release
     strategy:
       fail-fast: false
@@ -146,8 +146,8 @@ jobs:
           cp ./target/${{ matrix.target }}/${{ env.BUILD_PROFILE }}/databend-* ./target/${{ env.BUILD_PROFILE }}/
           bash ./scripts/ci/ci-run-sqllogic-tests.sh base
 
-  build_full:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c32g, aws]
+  build_docker:
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c64g, aws]
     needs: create_release
     strategy:
       fail-fast: false
@@ -170,8 +170,8 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           artifacts: sqllogictests,sqlsmith,metactl,meta,query,bendsave
-          features: python-udf,storage-hdfs
-          category: full
+          features: python-udf
+          category: docker
 
   publish:
     runs-on: [self-hosted, X64, Linux, 2c8g, aws]
@@ -329,7 +329,7 @@ jobs:
 
   docker_service:
     runs-on: [self-hosted, X64, Linux, 2c8g, aws]
-    needs: [create_release, build_full]
+    needs: [create_release, build_docker]
     strategy:
       fail-fast: false
       matrix:
@@ -346,7 +346,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
-          category: full
+          category: docker
           artifacts: ${{ matrix.service }},metactl
           path: distro/linux/amd64
       - name: Download artifacts for aarch64
@@ -354,7 +354,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: aarch64-unknown-linux-gnu
-          category: full
+          category: docker
           artifacts: ${{ matrix.service }},metactl
           path: distro/linux/arm64
       - name: Set up QEMU
@@ -430,7 +430,7 @@ jobs:
     needs:
       - create_release
       - build_default
-      - build_full
+      - build_docker
       - publish
       - docker_all_in_one
       - docker_service

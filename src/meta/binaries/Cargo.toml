@@ -35,6 +35,7 @@ databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
+databend-common-version = { workspace = true }
 databend-meta = { workspace = true }
 
 anyerror = { workspace = true }

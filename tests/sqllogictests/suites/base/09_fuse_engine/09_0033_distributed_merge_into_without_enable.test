@@ -8,9 +8,6 @@ statement ok
 use db;
 
 ## we need to test without enable_distributed_merge_into in cluster environment.
-statement ok
-set enable_experimental_merge_into = 1;
-
 ## distributed test
 statement ok
 drop table if exists distributed_target_test;
@@ -236,6 +233,3 @@ select * from orders2 order by a,b,c;
 2 a1 b1
 3 a2 b2
 4 a3 b3
-
-statement ok
-set enable_experimental_merge_into = 0;

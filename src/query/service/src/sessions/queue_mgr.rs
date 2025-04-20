@@ -28,11 +28,17 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_base::base::escape_for_key;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_semaphore::acquirer::Permit;
+use databend_common_meta_semaphore::errors::AcquireError;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_store::MetaStoreProvider;
 use databend_common_metrics::session::dec_session_running_acquired_queries;
 use databend_common_metrics::session::inc_session_running_acquired_queries;
 use databend_common_metrics::session::incr_session_queue_abort_count;
@@ -47,17 +53,16 @@ use databend_common_sql::PlanExtras;
 use log::info;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
-use tokio::sync::AcquireError;
-use tokio::sync::OwnedSemaphorePermit;
-use tokio::sync::Semaphore;
 use tokio::time::error::Elapsed;
 
 use crate::sessions::QueryContext;
 
 pub trait QueueData: Send + Sync + 'static {
-    type Key: Send + Sync + Eq + Hash + Display + Clone + 'static;
+    type Key: Send + Sync + Eq + Hash + Display + Clone + ToString + 'static;
 
     fn get_key(&self) -> Self::Key;
+
+    fn get_lock_key(&self) -> String;
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode;
 
@@ -78,14 +83,23 @@ pub(crate) struct Inner<Data: QueueData> {
 }
 
 pub struct QueueManager<Data: QueueData> {
-    semaphore: Arc<Semaphore>,
+    permits: usize,
+    meta_store: MetaStore,
     queue: Mutex<HashMap<Data::Key, Inner<Data>>>,
 }
 
 impl<Data: QueueData> QueueManager<Data> {
-    pub fn init(permits: usize) -> Result<()> {
+    pub async fn init(permits: usize, conf: &InnerConfig) -> Result<()> {
+        let metastore = {
+            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
+
+            provider.create_meta_store().await.map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?
+        };
+
         info!("queue manager permits: {:?}", permits);
-        GlobalInstance::set(Self::create(permits));
+        GlobalInstance::set(Self::create(permits, metastore));
         Ok(())
     }
 
@@ -93,14 +107,15 @@ impl<Data: QueueData> QueueManager<Data> {
         GlobalInstance::get::<Arc<Self>>()
     }
 
-    pub fn create(mut permits: usize) -> Arc<QueueManager<Data>> {
+    pub fn create(mut permits: usize, meta_store: MetaStore) -> Arc<QueueManager<Data>> {
         if permits == 0 {
             permits = usize::MAX >> 4;
         }
 
         Arc::new(QueueManager {
+            permits,
+            meta_store,
             queue: Mutex::new(HashMap::new()),
-            semaphore: Arc::new(Semaphore::new(permits)),
         })
     }
 
@@ -139,9 +154,16 @@ impl<Data: QueueData> QueueManager<Data> {
             );
 
             let timeout = data.timeout();
+            let semaphore_acquire = self.meta_store.new_acquired(
+                data.get_lock_key(),
+                self.permits as u64,
+                data.get_key(), // ID of this acquirer
+                Duration::from_secs(3),
+            );
+
             let future = AcquireQueueFuture::create(
                 Arc::new(data),
-                tokio::time::timeout(timeout, self.semaphore.clone().acquire_owned()),
+                tokio::time::timeout(timeout, semaphore_acquire),
                 self.clone(),
             );
             let start_time = SystemTime::now();
@@ -209,8 +231,11 @@ impl<Data: QueueData> QueueManager<Data> {
 
 pub struct AcquireQueueGuard {
     #[allow(dead_code)]
-    permit: Option<OwnedSemaphorePermit>,
+    permit: Option<Permit>,
 }
+
+unsafe impl Send for AcquireQueueGuard {}
+unsafe impl Sync for AcquireQueueGuard {}
 
 impl Drop for AcquireQueueGuard {
     fn drop(&mut self) {
@@ -221,14 +246,14 @@ impl Drop for AcquireQueueGuard {
 }
 
 impl AcquireQueueGuard {
-    pub fn create(permit: Option<OwnedSemaphorePermit>) -> Self {
+    pub fn create(permit: Option<Permit>) -> Self {
         AcquireQueueGuard { permit }
     }
 }
 
 pin_project! {
     pub struct AcquireQueueFuture<Data: QueueData, T>
-where T: Future<Output =  std::result::Result< std::result::Result<OwnedSemaphorePermit, AcquireError>, Elapsed>>
+where T: Future<Output =  std::result::Result<std::result::Result<Permit, AcquireError>, Elapsed>>
 {
     #[pin]
     inner: T,
@@ -243,12 +268,7 @@ where T: Future<Output =  std::result::Result< std::result::Result<OwnedSemaphor
 }
 
 impl<Data: QueueData, T> AcquireQueueFuture<Data, T>
-where T: Future<
-        Output = std::result::Result<
-            std::result::Result<OwnedSemaphorePermit, AcquireError>,
-            Elapsed,
-        >,
-    >
+where T: Future<Output = std::result::Result<std::result::Result<Permit, AcquireError>, Elapsed>>
 {
     pub fn create(data: Arc<Data>, inner: T, mgr: Arc<QueueManager<Data>>) -> Self {
         AcquireQueueFuture {
@@ -263,12 +283,7 @@ where T: Future<
 }
 
 impl<Data: QueueData, T> Future for AcquireQueueFuture<Data, T>
-where T: Future<
-        Output = std::result::Result<
-            std::result::Result<OwnedSemaphorePermit, AcquireError>,
-            Elapsed,
-        >,
-    >
+where T: Future<Output = std::result::Result<std::result::Result<Permit, AcquireError>, Elapsed>>
 {
     type Output = Result<AcquireQueueGuard>;
 
@@ -441,6 +456,22 @@ impl QueueData for QueryEntry {
 
     fn get_key(&self) -> Self::Key {
         self.query_id.clone()
+    }
+
+    fn get_lock_key(&self) -> String {
+        let cluster = self.ctx.get_cluster();
+        let local_id = escape_for_key(&cluster.local_id).unwrap();
+        let mut lock_key = format!("__fd_queries_queue/lost_contact/{}", local_id);
+
+        for node in &cluster.nodes {
+            if node.id == cluster.local_id {
+                let cluster_id = escape_for_key(&node.cluster_id).unwrap();
+                let warehouse_id = escape_for_key(&node.warehouse_id).unwrap();
+                lock_key = format!("__fd_queries_queue/queue/{}/{}", warehouse_id, cluster_id);
+            }
+        }
+
+        lock_key
     }
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {

@@ -3,12 +3,10 @@
 set -e
 
 ARCH=x86_64
-glibc=`getconf GNU_LIBC_VERSION|awk '{print $2}'`
+glibc=$(getconf GNU_LIBC_VERSION | awk '{print $2}')
 TARGET=${ARCH}-linux-glib$glibc
 MUSL_RUST_TARGET=${ARCH}-unknown-linux-musl
 BENSQL_VERSION=0.26.1
-
-
 
 RUSTFLAGS="-C target-feature=+sse4.2 -C link-arg=-Wl,--compress-debug-sections=zlib"
 
@@ -21,13 +19,12 @@ mkdir -p distro/{pkg,bin,configs,systemd,scripts}
 BENSQL_PKG=bendsql-${MUSL_RUST_TARGET}.tar.gz
 
 if [ ! -f distro/pkg/${BENSQL_PKG} ]; then
-  echo "==> downloading ${BENSQL_PKG} ..."
-  curl -L https://github.com/databendlabs/bendsql/releases/download/v${BENSQL_VERSION}/${BENSQL_PKG} -o distro/pkg/${BENSQL_PKG}
+	echo "==> downloading ${BENSQL_PKG} ..."
+	curl -L https://github.com/databendlabs/bendsql/releases/download/v${BENSQL_VERSION}/${BENSQL_PKG} -o distro/pkg/${BENSQL_PKG}
 fi
 
 tar -xzvf distro/pkg/${BENSQL_PKG} -C distro/bin
 distro/bin/bendsql --version
-
 
 rustup show
 
@@ -38,9 +35,9 @@ echo "==> building databend ${DATABEND_VERSION} for ${TARGET} ..."
 #cargo clean
 
 cargo build --release \
-  --bin=databend-query \
-  --bin=databend-meta \
-  --bin=databend-metactl
+	--bin=databend-query \
+	--bin=databend-meta \
+	--bin=databend-metactl
 
 #  --bin=table-meta-inspector
 

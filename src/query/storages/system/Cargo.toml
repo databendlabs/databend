@@ -52,8 +52,5 @@ snailquote = { workspace = true }
 tikv-jemalloc-ctl = { workspace = true, optional = true }
 typetag = { workspace = true }
 
-[build-dependencies]
-databend-common-building = { workspace = true }
-
 [lints]
 workspace = true

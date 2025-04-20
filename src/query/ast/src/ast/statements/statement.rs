@@ -208,6 +208,8 @@ pub enum Statement {
     CreateInvertedIndex(CreateInvertedIndexStmt),
     DropInvertedIndex(DropInvertedIndexStmt),
     RefreshInvertedIndex(RefreshInvertedIndexStmt),
+    CreateNgramIndex(CreateNgramIndexStmt),
+    DropNgramIndex(DropNgramIndexStmt),
 
     // VirtualColumns
     CreateVirtualColumn(CreateVirtualColumnStmt),
@@ -529,6 +531,8 @@ impl Statement {
             | Statement::DropStream(..)
             | Statement::CreateInvertedIndex(..)
             | Statement::DropInvertedIndex(..)
+            | Statement::CreateNgramIndex(..)
+            | Statement::DropNgramIndex(..)
             | Statement::CreateVirtualColumn(..)
             | Statement::AlterVirtualColumn(..)
             | Statement::DropVirtualColumn(..)
@@ -807,6 +811,8 @@ impl Display for Statement {
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateInvertedIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropInvertedIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateNgramIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::DropNgramIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshInvertedIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::AlterVirtualColumn(stmt) => write!(f, "{stmt}")?,

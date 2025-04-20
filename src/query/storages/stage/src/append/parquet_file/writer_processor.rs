@@ -20,7 +20,6 @@ use std::sync::Arc;
 use arrow_schema::Schema;
 use async_trait::async_trait;
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -31,6 +30,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_version::DATABEND_SEMVER;
 use opendal::Operator;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
@@ -132,6 +132,7 @@ impl ParquetFileWriter {
         let compression = match &compression {
             StageFileCompression::Zstd => Compression::ZSTD(ZstdLevel::default()),
             StageFileCompression::Snappy => Compression::SNAPPY,
+            StageFileCompression::None => Compression::UNCOMPRESSED,
             _ => {
                 return Err(ErrorCode::Internal(format!(
                     "unexpected compression {compression}"

@@ -680,7 +680,7 @@ impl DefaultSettings {
                 }),
                 ("enable_experimental_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enables the experimental feature for 'MERGE INTO'.",
+                    desc: "Deprecated setting",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1250,14 +1250,20 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 // Add this to the HashMap in DefaultSettings::instance()
-   ("optimizer_skip_list", DefaultSettingValue {
-                value: UserSettingValue::String(String::new()),
-                desc: "Comma-separated(,) list of optimizer names to skip during query optimization",
-                mode: SettingMode::Both,
-                scope: SettingScope::Both,
-                range: None,
-            }),
-
+                ("optimizer_skip_list", DefaultSettingValue {
+                    value: UserSettingValue::String(String::new()),
+                    desc: "Comma-separated(,) list of optimizer names to skip during query optimization",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: None,
+                }),
+                ("enable_block_stream_write", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables block stream write",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

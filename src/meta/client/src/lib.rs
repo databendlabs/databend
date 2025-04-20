@@ -16,6 +16,8 @@
 
 extern crate core;
 
+mod channel_manager;
+mod client_handle;
 pub mod endpoints;
 pub mod errors;
 pub(crate) mod established_client;
@@ -24,24 +26,26 @@ mod grpc_client;
 mod grpc_metrics;
 mod kv_api_impl;
 mod message;
+pub mod required;
 
 use std::sync::LazyLock;
 
+pub use channel_manager::MetaChannelManager;
+pub use client_handle::ClientHandle;
 pub use databend_common_meta_api::reply::reply_to_api_result;
+use databend_common_version::DATABEND_GIT_SEMVER;
 pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
-pub use grpc_client::ClientHandle;
-pub use grpc_client::MetaChannelManager;
 pub use grpc_client::MetaGrpcClient;
 pub use message::ClientWorkerRequest;
 pub use message::Streamed;
+pub use required::FeatureSpec;
+pub use required::VersionTuple;
 use semver::Version;
 
 pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
-    let build_semver = option_env!("DATABEND_GIT_SEMVER");
-    let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
-
+    let semver = DATABEND_GIT_SEMVER.expect("DATABEND_GIT_SEMVER can not be None");
     let semver = semver.strip_prefix('v').unwrap_or(semver);
 
     Version::parse(semver).expect(
@@ -126,9 +130,13 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///   🖥 server: add `WatchRequest::initial_flush`,
 ///   to let watch stream flush all keys in a range at the beginning.
 ///
-/// - 2025-03-28: since TODO: add version when merged.
+/// - 2025-03-30: since 1.2.715
 ///   👥 client: semaphore(watch) requires `WatchRequest::initial_flush`(`1,2.677`),
 ///   other RPC does not require `1.2.677`, requires only `1.2.259`.
+///
+/// - 2025-04-15: since TODO: add version when merged.
+///   👥 client: requires `1,2.677`.
+///
 ///
 /// Server feature set:
 /// ```yaml
@@ -146,7 +154,7 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 // Version: v1.2.257-nightly-188426e3e6-simd(1.75.0-nightly-2023-12-17T22:09:06.675156000Z)
 // ```
 // Skip 1.2.258 use the next 1.2.259
-pub static MIN_METASRV_SEMVER: Version = Version::new(1, 2, 259);
+pub static MIN_METASRV_SEMVER: Version = Version::new(1, 2, 677);
 
 pub fn to_digit_ver(v: &Version) -> u64 {
     v.major * 1_000_000 + v.minor * 1_000 + v.patch

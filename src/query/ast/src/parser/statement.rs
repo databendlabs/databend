@@ -1399,6 +1399,22 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let drop_ngram_index = map(
+        rule! {
+            DROP ~ NGRAM ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
+            ~ ON ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, opt_if_exists, index_name, _, (catalog, database, table))| {
+            Statement::DropNgramIndex(DropNgramIndexStmt {
+                if_exists: opt_if_exists.is_some(),
+                index_name,
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
     let refresh_inverted_index = map(
         rule! {
             REFRESH ~ INVERTED ~ INDEX ~ #ident ~ ON ~ #dot_separated_idents_1_to_3 ~ ( LIMIT ~ #literal_u64 )?
@@ -1411,6 +1427,48 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 table,
                 limit: opt_limit.map(|(_, limit)| limit),
             })
+        },
+    );
+
+    let create_ngram_index = map_res(
+        rule! {
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ ASYNC?
+            ~ NGRAM ~ INDEX
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ ON ~ #dot_separated_idents_1_to_3
+            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+            ~ ( #table_option )?
+        },
+        |(
+            _,
+            opt_or_replace,
+            opt_async,
+            _,
+            _,
+            opt_if_not_exists,
+            index_name,
+            _,
+            (catalog, database, table),
+            _,
+            columns,
+            _,
+            opt_index_options,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateNgramIndex(CreateNgramIndexStmt {
+                create_option,
+                index_name,
+                catalog,
+                database,
+                table,
+                columns,
+                sync_creation: opt_async.is_none(),
+                index_options: opt_index_options.unwrap_or_default(),
+            }))
         },
     );
 
@@ -2561,6 +2619,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #create_inverted_index: "`CREATE [OR REPLACE] INVERTED INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             | #drop_inverted_index: "`DROP INVERTED INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
             | #refresh_inverted_index: "`REFRESH INVERTED INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
+            | #create_ngram_index: "`CREATE [OR REPLACE] NGRAM INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
+            | #drop_ngram_index: "`DROP NGRAM INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
         ),
         rule!(
             #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
@@ -3178,6 +3238,26 @@ pub fn inverted_index_def(i: Input) -> IResult<InvertedIndexDefinition> {
     )(i)
 }
 
+pub fn ngram_index_def(i: Input) -> IResult<NgramIndexDefinition> {
+    map_res(
+        rule! {
+            ASYNC?
+            ~ NGRAM ~ ^INDEX
+            ~ #ident
+            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+            ~ ( #table_option )?
+        },
+        |(opt_async, _, _, index_name, _, columns, _, opt_index_options)| {
+            Ok(NgramIndexDefinition {
+                index_name,
+                columns,
+                sync_creation: opt_async.is_none(),
+                index_options: opt_index_options.unwrap_or_default(),
+            })
+        },
+    )(i)
+}
+
 pub fn create_def(i: Input) -> IResult<CreateDefinition> {
     alt((
         map(rule! { #column_def }, CreateDefinition::Column),
@@ -3185,6 +3265,7 @@ pub fn create_def(i: Input) -> IResult<CreateDefinition> {
             rule! { #inverted_index_def },
             CreateDefinition::InvertedIndex,
         ),
+        map(rule! { #ngram_index_def }, CreateDefinition::NgramIndex),
     ))(i)
 }
 
@@ -3569,6 +3650,7 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
         |(_, create_defs, _)| {
             let mut columns = Vec::with_capacity(create_defs.len());
             let mut inverted_indexes = Vec::new();
+            let mut ngram_indexes = Vec::new();
             for create_def in create_defs {
                 match create_def {
                     CreateDefinition::Column(column) => {
@@ -3577,6 +3659,9 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
                     CreateDefinition::InvertedIndex(inverted_index) => {
                         inverted_indexes.push(inverted_index);
                     }
+                    CreateDefinition::NgramIndex(ngram_index) => {
+                        ngram_indexes.push(ngram_index);
+                    }
                 }
             }
             let opt_inverted_indexes = if !inverted_indexes.is_empty() {
@@ -3584,7 +3669,12 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
             } else {
                 None
             };
-            CreateTableSource::Columns(columns, opt_inverted_indexes)
+            let opt_ngram_indexes = if !ngram_indexes.is_empty() {
+                Some(ngram_indexes)
+            } else {
+                None
+            };
+            CreateTableSource::Columns(columns, opt_inverted_indexes, opt_ngram_indexes)
         },
     );
     let like = map(

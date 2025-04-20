@@ -56,6 +56,7 @@ pub struct RefreshIndexPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexPlan {
+    pub index_type: TableIndexType,
     pub create_option: CreateOption,
     pub catalog: String,
     pub index_name: String,
@@ -68,6 +69,7 @@ pub struct CreateTableIndexPlan {
 /// Drop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableIndexPlan {
+    pub index_type: TableIndexType,
     pub if_exists: bool,
     pub catalog: String,
     pub index_name: String,

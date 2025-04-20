@@ -14,8 +14,9 @@
 
 use crate::providers::HybridCache;
 use crate::read::cached_reader::CachedReader;
+use crate::read::cached_ttl_reader::CachedTTLReader;
 use crate::InMemoryLruCache;
 
 pub type HybridCacheReader<T, L> = CachedReader<L, HybridCache<T>>;
-pub type InMemoryItemCacheReader<T, L> = CachedReader<L, InMemoryLruCache<T>>;
 pub type InMemoryCacheReader<T, L> = CachedReader<L, InMemoryLruCache<T>>;
+pub type InMemoryCacheTTLReader<T, L> = CachedTTLReader<L, InMemoryLruCache<T>>;

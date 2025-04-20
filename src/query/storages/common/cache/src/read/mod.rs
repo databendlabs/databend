@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod cached_reader;
+mod cached_ttl_reader;
 mod loader;
 mod readers;
 
@@ -22,4 +23,4 @@ pub use loader::LoadParams;
 pub use loader::Loader;
 pub use readers::HybridCacheReader;
 pub use readers::InMemoryCacheReader;
-pub use readers::InMemoryItemCacheReader;
+pub use readers::InMemoryCacheTTLReader;

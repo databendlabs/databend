@@ -50,8 +50,12 @@ struct YamlTestCase {
     name: String,
     description: Option<String>,
     sql: String,
+    #[serde(default)]
     table_statistics: HashMap<String, YamlTableStatistics>,
+    #[serde(default)]
     column_statistics: HashMap<String, YamlColumnStatistics>,
+    #[serde(default)]
+    statistics_file: Option<String>,
     raw_plan: String,
     optimized_plan: String,
     good_plan: Option<String>,
@@ -122,14 +126,32 @@ async fn setup_tpcds_tables(ctx: &Arc<QueryContext>) -> Result<()> {
 }
 
 /// Convert a YAML test case to a TestCase
-fn create_test_case(yaml: YamlTestCase) -> Result<TestCase> {
+fn create_test_case(yaml: YamlTestCase, base_path: &Path) -> Result<TestCase> {
+    let mut table_statistics = yaml.table_statistics;
+    let mut column_statistics = yaml.column_statistics;
+
+    // If there's a statistics file reference, load it and merge with inline statistics
+    if let Some(stats_file) = yaml.statistics_file {
+        let (file_table_stats, file_column_stats) = load_statistics_file(base_path, &stats_file)?;
+
+        // Merge table statistics (file stats take precedence)
+        for (table_name, stats) in file_table_stats {
+            table_statistics.insert(table_name, stats);
+        }
+
+        // Merge column statistics (file stats take precedence)
+        for (column_name, stats) in file_column_stats {
+            column_statistics.insert(column_name, stats);
+        }
+    }
+
     Ok(TestCase {
         name: Box::leak(yaml.name.into_boxed_str()),
         sql: Box::leak(yaml.sql.into_boxed_str()),
         raw_plan: Box::leak(yaml.raw_plan.into_boxed_str()),
         expected_plan: Box::leak(yaml.optimized_plan.into_boxed_str()),
-        table_statistics: yaml.table_statistics,
-        column_statistics: yaml.column_statistics,
+        table_statistics,
+        column_statistics,
     })
 }
 
@@ -157,16 +179,46 @@ fn convert_to_datum(value: &Option<serde_json::Value>) -> Option<Datum> {
     None
 }
 
+/// Load statistics from an external YAML file
+fn load_statistics_file(
+    base_path: &Path,
+    file_name: &str,
+) -> Result<(
+    HashMap<String, YamlTableStatistics>,
+    HashMap<String, YamlColumnStatistics>,
+)> {
+    #[derive(Debug, Serialize, Deserialize)]
+    struct StatisticsFile {
+        table_statistics: HashMap<String, YamlTableStatistics>,
+        column_statistics: HashMap<String, YamlColumnStatistics>,
+    }
+
+    // Statistics files are located in the statistics directory
+    let stats_path = base_path.join("statistics").join(file_name);
+    if !stats_path.exists() {
+        return Err(ErrorCode::Internal(format!(
+            "Statistics file not found: {}",
+            stats_path.display()
+        )));
+    }
+
+    let content = fs::read_to_string(&stats_path)?;
+    let stats: StatisticsFile = serde_yaml::from_str(&content)
+        .map_err(|e| ErrorCode::Internal(format!("Failed to parse statistics YAML: {}", e)))?;
+
+    Ok((stats.table_statistics, stats.column_statistics))
+}
+
 /// Load test cases from YAML files
 fn load_test_cases(base_path: &Path) -> Result<Vec<TestCase>> {
-    let yaml_dir = base_path.join("yaml");
+    let cases_dir = base_path.join("cases");
     let mut test_cases = Vec::new();
 
-    if !yaml_dir.exists() {
+    if !cases_dir.exists() {
         return Ok(Vec::new());
     }
 
-    for entry in fs::read_dir(yaml_dir)? {
+    for entry in fs::read_dir(cases_dir)? {
         let entry = entry?;
         let path = entry.path();
 
@@ -178,7 +230,7 @@ fn load_test_cases(base_path: &Path) -> Result<Vec<TestCase>> {
             let content = fs::read_to_string(&path)?;
             let yaml_test_case: YamlTestCase = serde_yaml::from_str(&content)
                 .map_err(|e| ErrorCode::Internal(format!("Failed to parse YAML: {}", e)))?;
-            let test_case = create_test_case(yaml_test_case)?;
+            let test_case = create_test_case(yaml_test_case, base_path)?;
             test_cases.push(test_case);
         }
     }
