@@ -62,9 +62,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         let min_client_ver = &MIN_METACLI_SEMVER;
         let cli_ver = smaller_ver(min_client_ver);
 
-        let res =
-            MetaGrpcClient::handshake(&mut client, &cli_ver, &MIN_METASRV_SEMVER, "root", "xxx")
-                .await;
+        let res = MetaGrpcClient::handshake(&mut client, &cli_ver, &[], "root", "xxx").await;
 
         debug!("handshake res: {:?}", res);
         let e = res.unwrap_err();
@@ -85,7 +83,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         let res = MetaGrpcClient::handshake(
             &mut client,
             &METACLI_COMMIT_SEMVER,
-            &min_srv_ver,
+            &[("foo", (500, 500, 500))],
             "root",
             "xxx",
         )
@@ -94,11 +92,14 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         debug!("handshake res: {:?}", res);
         let e = res.unwrap_err();
 
+        let server_ver = from_digit_ver(to_digit_ver(METACLI_COMMIT_SEMVER.deref()));
+        let server_ver = (server_ver.major, server_ver.minor, server_ver.patch);
+
         let want = format!(
-            "Invalid: server protocol_version({}) < client min-compatible({})",
+            "Invalid: server protocol_version({:?}) < client required({:?})",
             // strip `nightly` from 0.7.57-nightly
-            from_digit_ver(to_digit_ver(METACLI_COMMIT_SEMVER.deref(),)),
-            min_srv_ver,
+            server_ver,
+            (500, 500, 500),
         );
         assert!(
             e.to_string().contains(&want),
@@ -112,8 +113,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
     {
         let zero = Version::new(0, 0, 0);
 
-        let res =
-            MetaGrpcClient::handshake(&mut client, &zero, &MIN_METASRV_SEMVER, "root", "xxx").await;
+        let res = MetaGrpcClient::handshake(&mut client, &zero, &[], "root", "xxx").await;
 
         debug!("handshake res: {:?}", res);
         assert!(res.is_ok());
