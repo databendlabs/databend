@@ -117,24 +117,48 @@ impl VirtualColumnBuilder {
         // use a tmp column id to generate statistics for virtual columns.
         let mut tmp_column_id = 0;
         let mut paths = VecDeque::new();
+        // use first 10 rows as sample to check whether the block is suitable for generating virtual columns
+        let sample_rows = num_rows.min(10);
         for (offset, source_field) in &self.variant_fields {
             let source_column_id = source_field.column_id;
             let column = block.get_by_offset(*offset);
 
             let mut virtual_values = BTreeMap::new();
-            for row in 0..num_rows {
+            for row in 0..sample_rows {
                 let val = unsafe { column.value.index_unchecked(row) };
                 if let ScalarRef::Variant(jsonb_bytes) = val {
                     let val = from_slice(jsonb_bytes).unwrap();
                     paths.clear();
-                    Self::collect_virtual_values(&val, row, &mut paths, &mut virtual_values);
+                    Self::collect_virtual_values(
+                        &val,
+                        row,
+                        virtual_fields.len(),
+                        &mut paths,
+                        &mut virtual_values,
+                    );
                 }
             }
+            if Self::check_sample_virtual_values(sample_rows, &mut virtual_values) {
+                continue;
+            }
+            for row in sample_rows..num_rows {
+                let val = unsafe { column.value.index_unchecked(row) };
+                if let ScalarRef::Variant(jsonb_bytes) = val {
+                    let val = from_slice(jsonb_bytes).unwrap();
+                    paths.clear();
+                    Self::collect_virtual_values(
+                        &val,
+                        row,
+                        virtual_fields.len(),
+                        &mut paths,
+                        &mut virtual_values,
+                    );
+                }
+            }
+            Self::discard_virtual_values(num_rows, virtual_fields.len(), &mut virtual_values);
             if virtual_values.is_empty() {
                 continue;
             }
-
-            Self::discard_virtual_values(num_rows, virtual_fields.len(), &mut virtual_values);
 
             let value_types = Self::inference_data_type(&virtual_values);
             for ((key_paths, vals), val_type) in
@@ -276,14 +300,24 @@ impl VirtualColumnBuilder {
     fn collect_virtual_values<'a>(
         val: &JsonbValue<'a>,
         row: usize,
+        virtual_field_num: usize,
         paths: &mut VecDeque<KeyPath>,
         virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'a>>>>,
     ) {
+        if virtual_values.len() + virtual_field_num > VIRTUAL_COLUMNS_LIMIT {
+            return;
+        }
         match val {
             JsonbValue::Object(obj) => {
                 for (key, val) in obj {
                     paths.push_back(KeyPath::Name(key.clone()));
-                    Self::collect_virtual_values(val, row, paths, virtual_values);
+                    Self::collect_virtual_values(
+                        val,
+                        row,
+                        virtual_field_num,
+                        paths,
+                        virtual_values,
+                    );
                     paths.pop_back();
                 }
                 return;
@@ -291,7 +325,13 @@ impl VirtualColumnBuilder {
             JsonbValue::Array(arr) => {
                 for (i, val) in arr.iter().enumerate() {
                     paths.push_back(KeyPath::Index(i as u32));
-                    Self::collect_virtual_values(val, row, paths, virtual_values);
+                    Self::collect_virtual_values(
+                        val,
+                        row,
+                        virtual_field_num,
+                        paths,
+                        virtual_values,
+                    );
                     paths.pop_back();
                 }
                 return;
@@ -322,11 +362,41 @@ impl VirtualColumnBuilder {
         }
     }
 
+    fn check_sample_virtual_values(
+        sample_rows: usize,
+        virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'_>>>>,
+    ) -> bool {
+        // All values are NULL or scalar Variant value.
+        if virtual_values.is_empty() {
+            return true;
+        }
+        // Fill in the NULL values, keeping each column the same length.
+        for (_, vals) in virtual_values.iter_mut() {
+            while vals.len() < sample_rows {
+                vals.push(None);
+            }
+        }
+
+        let mut most_null_count = 0;
+        for (_, value) in virtual_values.iter() {
+            let null_count = value.iter().filter(|x| x.is_none()).count();
+            let null_percentage = null_count as f64 / value.len() as f64;
+            if null_percentage > 0.7 {
+                most_null_count += 1;
+            }
+        }
+        let most_null_percentage = most_null_count as f64 / virtual_values.len() as f64;
+        most_null_percentage > 0.5
+    }
+
     fn discard_virtual_values(
         num_rows: usize,
         virtual_field_num: usize,
         virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'_>>>>,
     ) {
+        if virtual_values.is_empty() {
+            return;
+        }
         // Fill in the NULL values, keeping each column the same length.
         for (_, vals) in virtual_values.iter_mut() {
             while vals.len() < num_rows {
@@ -337,9 +407,9 @@ impl VirtualColumnBuilder {
         // 1. Discard virtual columns with most values are Null values.
         let mut keys_to_remove_none = Vec::new();
         for (key, value) in virtual_values.iter() {
-            let none_count = value.iter().filter(|x| x.is_none()).count();
-            let none_percentage = none_count as f64 / value.len() as f64;
-            if none_percentage > 0.7 {
+            let null_count = value.iter().filter(|x| x.is_none()).count();
+            let null_percentage = null_count as f64 / value.len() as f64;
+            if null_percentage > 0.7 {
                 keys_to_remove_none.push(key.clone());
             }
         }
