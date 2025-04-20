@@ -105,7 +105,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 iceberg_table_partition: None,
                 as_query: None,
                 table_type: TableType::Normal,
-                iceberg_table_properties: Default::default(),
+                table_properties: Default::default(),
             };
             tables.push((drop_table, create_table));
         }

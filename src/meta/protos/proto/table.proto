@@ -141,9 +141,9 @@ message TableMeta {
   VirtualDataSchema virtual_schema = 32;
 
   // ICEBERG TABLE PROPERTIES.
-  map<string, string> iceberg_table_properties = 33;
+  map<string, string> table_properties = 33;
   // ICEBERG TABLE PARITION
-  TablePartition iceberg_partition = 34;
+  TablePartition table_partition = 34;
 }
 
 message TableIndex {

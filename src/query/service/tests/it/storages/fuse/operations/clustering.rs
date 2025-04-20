@@ -57,8 +57,8 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         inverted_indexes: None,
         ngram_indexes: None,
         attached_columns: None,
-        iceberg_partition: vec![],
-        iceberg_table_properties: BTreeMap::new(),
+        table_partition: vec![],
+        table_properties: BTreeMap::new(),
     };
 
     // create test table

@@ -31,7 +31,6 @@ use databend_common_license::license::Feature::NgramIndex;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
-use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -349,15 +348,13 @@ impl CreateTableInterpreter {
             self.build_request(stat)
         }?;
 
-        let catalog_type = catalog.info().catalog_type();
-
-        if matches!(catalog_type, CatalogType::Default | CatalogType::Hive)
-            && (req.table_meta.iceberg_table_properties.is_some()
-                || req.table_meta.iceberg_partition.is_some())
+        if catalog.support_partition()
+            && (req.table_meta.table_properties.is_some()
+                || req.table_meta.table_partition.is_some())
         {
             return Err(ErrorCode::TableOptionInvalid(format!(
                  "Current Catalog Type is {:?}, only Iceberg Catalog supports CREATE TABLE with PARTITION BY or PROPERTIES",
-                 catalog_type
+                 catalog.info().catalog_type()
              )));
         }
 
@@ -441,16 +438,16 @@ impl CreateTableInterpreter {
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
             options,
-            iceberg_table_properties: if self.plan.iceberg_table_properties.is_empty() {
+            table_properties: if self.plan.table_properties.is_empty() {
                 None
             } else {
-                Some(self.plan.iceberg_table_properties.clone())
+                Some(self.plan.table_properties.clone())
             },
-            iceberg_partition: if self.plan.iceberg_partition.is_empty() {
+            table_partition: if self.plan.table_partition.is_empty() {
                 None
             } else {
                 Some(TablePartition::Identity {
-                    columns: self.plan.iceberg_partition.clone(),
+                    columns: self.plan.table_partition.clone(),
                 })
             },
             engine_options: self.plan.engine_options.clone(),
