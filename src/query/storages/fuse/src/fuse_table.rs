@@ -1120,7 +1120,7 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        true
+        matches!(self.storage_format, FuseStorageFormat::Parquet)
     }
 
     fn result_can_be_cached(&self) -> bool {
