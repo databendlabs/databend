@@ -170,8 +170,8 @@ fn test_decode_v122_table_meta() -> anyhow::Result<()> {
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         indexes: btreemap! {},
-        iceberg_table_properties: None,
-        iceberg_partition: None,
+        table_properties: None,
+        table_partition: None,
     };
     common::test_load_old(func_name!(), table_meta_v122.as_slice(), 122, want())?;
     common::test_pb_from_to(func_name!(), want())?;

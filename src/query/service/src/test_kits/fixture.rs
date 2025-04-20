@@ -358,8 +358,8 @@ impl TestFixture {
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
-            iceberg_table_properties: Default::default(),
-            iceberg_partition: vec![],
+            table_properties: Default::default(),
+            table_partition: vec![],
         }
     }
 
@@ -386,8 +386,8 @@ impl TestFixture {
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
-            iceberg_table_properties: Default::default(),
-            iceberg_partition: vec![],
+            table_properties: Default::default(),
+            table_partition: vec![],
         }
     }
 
@@ -413,7 +413,7 @@ impl TestFixture {
             schema: TestFixture::variant_table_schema(),
             engine: Engine::Fuse,
             engine_options: Default::default(),
-            iceberg_table_properties: Default::default(),
+            table_properties: Default::default(),
             storage_params: None,
             options: [
                 // database id is required for FUSE
@@ -426,7 +426,7 @@ impl TestFixture {
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
-            iceberg_partition: vec![],
+            table_partition: vec![],
         }
     }
 
@@ -459,13 +459,13 @@ impl TestFixture {
             ]
             .into(),
             field_comments: vec![],
-            iceberg_partition: vec![],
+            table_partition: vec![],
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
-            iceberg_table_properties: Default::default(),
+            table_properties: Default::default(),
         }
     }
 
@@ -512,8 +512,8 @@ impl TestFixture {
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
-            iceberg_table_properties: Default::default(),
-            iceberg_partition: vec![],
+            table_properties: Default::default(),
+            table_partition: vec![],
         }
     }
 

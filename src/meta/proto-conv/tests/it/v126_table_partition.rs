@@ -150,10 +150,10 @@ fn test_decode_v126_table_meta() -> anyhow::Result<()> {
         shared_by: BTreeSet::new(),
         column_mask_policy: None,
         indexes: btreemap! {},
-        iceberg_partition: Some(TablePartition::Identity {
+        table_partition: Some(TablePartition::Identity {
             columns: vec!["col1".to_string(), "col2".to_string()],
         }),
-        iceberg_table_properties: Some(btreemap! {s("xyz") => s("foo")}),
+        table_properties: Some(btreemap! {s("xyz") => s("foo")}),
     };
 
     common::test_pb_from_to(func_name!(), want())?;
