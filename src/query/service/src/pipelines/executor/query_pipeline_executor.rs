@@ -458,16 +458,11 @@ impl Drop for QueryPipelineExecutor {
 
             // untracking for on finished
             let tracking_payload = ThreadTracker::new_tracking_payload();
-            let query_memory_stat = tracking_payload.mem_stat.clone();
             let _guard = ThreadTracker::tracking(tracking_payload);
             let profiling = self.fetch_plans_profile(true);
             let info = ExecutionInfo::create(Err(cause), profiling);
             if let Err(cause) = on_finished_chain.apply(info) {
                 warn!("Pipeline executor shutdown failure, {:?}", cause);
-            }
-
-            if let Some(query_memory_stat) = query_memory_stat {
-                query_memory_stat.release_memory();
             }
         })
     }
