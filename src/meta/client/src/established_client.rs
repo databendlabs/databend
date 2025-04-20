@@ -43,6 +43,7 @@ use tonic::Status;
 use crate::endpoints::Endpoints;
 use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
+use crate::required::Features;
 
 /// Update the client state according to the result of an RPC.
 trait HandleRPCResult<T> {
@@ -96,6 +97,8 @@ pub struct EstablishedClient {
 
     server_protocol_version: u64,
 
+    features: Features,
+
     /// The target endpoint this client connected to.
     ///
     /// Note that `target_endpoint` may be different from the `self.endpoints.current()`,
@@ -115,12 +118,14 @@ impl EstablishedClient {
     pub(crate) fn new(
         client: MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>,
         server_protocol_version: u64,
+        features: Features,
         target_endpoint: impl ToString,
         endpoints: Arc<Mutex<Endpoints>>,
     ) -> Self {
         Self {
             client,
             server_protocol_version,
+            features,
             target_endpoint: target_endpoint.to_string(),
             endpoints,
             error: Arc::new(Mutex::new(None)),
@@ -137,6 +142,21 @@ impl EstablishedClient {
 
     pub fn server_protocol_version(&self) -> u64 {
         self.server_protocol_version
+    }
+
+    pub fn has_feature(&self, feature: &str) -> bool {
+        self.features.contains_key(feature)
+    }
+
+    pub fn ensure_feature(&self, feature: &str) -> Result<(), Status> {
+        if self.has_feature(feature) {
+            Ok(())
+        } else {
+            Err(Status::failed_precondition(format!(
+                "Feature {} is not supported by the server; server:{{version: {}, features: {:?}}}",
+                feature, self.server_protocol_version, self.features
+            )))
+        }
     }
 
     pub(crate) fn set_error(&self, error: Status) {
