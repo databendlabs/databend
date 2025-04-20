@@ -57,6 +57,7 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
@@ -167,6 +168,10 @@ impl Catalog for FakedCatalog {
 
     fn info(&self) -> Arc<CatalogInfo> {
         self.cat.info()
+    }
+
+    fn support_partition(&self) -> bool {
+        matches!(self.cat.info().catalog_type(), CatalogType::Iceberg)
     }
 
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {

@@ -268,6 +268,10 @@ impl Catalog for HiveCatalog {
         self.info.clone()
     }
 
+    fn support_partition(&self) -> bool {
+        false
+    }
+
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
         Ok(self)
     }

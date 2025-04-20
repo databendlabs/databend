@@ -120,3 +120,4 @@ mod v122_virtual_schema;
 mod v123_parquet_format_params;
 mod v124_udf_server_headers;
 mod v125_table_index;
+mod v126_table_partition;

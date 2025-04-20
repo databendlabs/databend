@@ -658,3 +658,6 @@ unset ddl_column_type_nullable;
 
 statement ok
 drop table if exists b;
+
+statement error 1301
+create table a (c1 decimal(38), c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"='33554432');

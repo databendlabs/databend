@@ -153,6 +153,10 @@ impl Catalog for ImmutableCatalog {
         CatalogInfo::default().into()
     }
 
+    fn support_partition(&self) -> bool {
+        false
+    }
+
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
         let me = self.as_ref().clone();
         Ok(Arc::new(me))

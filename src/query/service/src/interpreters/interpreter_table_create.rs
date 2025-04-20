@@ -38,6 +38,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::always_callback;
@@ -347,6 +348,16 @@ impl CreateTableInterpreter {
             self.build_request(stat)
         }?;
 
+        if catalog.support_partition()
+            && (req.table_meta.table_properties.is_some()
+                || req.table_meta.table_partition.is_some())
+        {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                 "Current Catalog Type is {:?}, only Iceberg Catalog supports CREATE TABLE with PARTITION BY or PROPERTIES",
+                 catalog.info().catalog_type()
+             )));
+        }
+
         let reply = catalog.create_table(req.clone()).await?;
 
         if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
@@ -427,6 +438,18 @@ impl CreateTableInterpreter {
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
             options,
+            table_properties: if self.plan.table_properties.is_empty() {
+                None
+            } else {
+                Some(self.plan.table_properties.clone())
+            },
+            table_partition: if self.plan.table_partition.is_empty() {
+                None
+            } else {
+                Some(TablePartition::Identity {
+                    columns: self.plan.table_partition.clone(),
+                })
+            },
             engine_options: self.plan.engine_options.clone(),
             cluster_key: None,
             field_comments,

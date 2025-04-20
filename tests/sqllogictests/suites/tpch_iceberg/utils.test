@@ -105,8 +105,11 @@ id INT YES NULL (empty)
 statement ok
 create or replace table abc.t1(c1 int, c2 string);
 
+statement error 1001
+create or replace table abc.t1(c1 datetime, c2 string) partition by (c1, c2);
+
 statement ok
-create or replace table abc.t1(c1 date, c2 string);
+create or replace table abc.t1(c1 date, c2 string) partition by (c2) properties ("read.split.target-size"='134217728', "read.split.metadata-target-size"='33554432');
 
 query T
 desc abc.t1;
