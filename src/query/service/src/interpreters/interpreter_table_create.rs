@@ -483,18 +483,12 @@ impl CreateTableInterpreter {
             },
             table_meta,
             as_dropped: false,
-            table_properties: if self.plan.table_properties.is_empty() {
-                None
-            } else {
-                Some(self.plan.table_properties.clone())
-            },
-            table_partition: if self.plan.table_partition.is_empty() {
-                None
-            } else {
-                Some(TablePartition::Identity {
-                    columns: self.plan.table_partition.clone(),
-                })
-            },
+            table_properties: self.plan.table_properties.clone(),
+            table_partition: self.plan.table_partition.as_ref().map(|table_partition| {
+                TablePartition::Identity {
+                    columns: table_partition.clone(),
+                }
+            }),
         };
 
         Ok(req)

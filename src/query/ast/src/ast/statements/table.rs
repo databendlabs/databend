@@ -186,7 +186,7 @@ pub struct CreateTableStmt {
     pub cluster_by: Option<ClusterOption>,
     pub table_options: BTreeMap<String, String>,
     pub iceberg_table_partition: Option<Vec<Identifier>>,
-    pub table_properties: BTreeMap<String, String>,
+    pub table_properties: Option<BTreeMap<String, String>>,
     pub as_query: Option<Box<Query>>,
     pub table_type: TableType,
 }
@@ -250,10 +250,12 @@ impl Display for CreateTableStmt {
             write!(f, ")")?;
         }
 
-        if !self.table_properties.is_empty() {
-            write!(f, " PROPERTIES(")?;
-            write_space_separated_string_map(f, &self.table_properties)?;
-            write!(f, ")")?;
+        if let Some(table_properties) = &self.table_properties {
+            if !table_properties.is_empty() {
+                write!(f, " PROPERTIES(")?;
+                write_space_separated_string_map(f, table_properties)?;
+                write!(f, ")")?;
+            }
         }
 
         if let Some(as_query) = &self.as_query {

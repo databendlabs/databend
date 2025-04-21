@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -177,8 +176,8 @@ async fn test_snapshot_pruner() -> Result<()> {
         inverted_indexes: None,
         ngram_indexes: None,
         attached_columns: None,
-        table_partition: vec![],
-        table_properties: BTreeMap::new(),
+        table_partition: None,
+        table_properties: None,
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
