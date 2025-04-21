@@ -13,17 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::VecDeque;
-use std::intrinsics::unlikely;
 use std::sync::atomic;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
@@ -39,69 +34,26 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::MergeSort;
 use databend_common_pipeline_transforms::SortSpillParams;
 use databend_common_pipeline_transforms::TransformSortMergeLimit;
-use sort_spill::SpillableBlock;
 
+use super::sort_spill::SortSpill;
+use super::Base;
 use crate::spillers::Spiller;
-
-mod sort_spill;
-use sort_spill::create_memory_merger;
-use sort_spill::MemoryMerger;
-use sort_spill::SortSpill;
-
-mod builder;
-pub use builder::TransformSortBuilder;
-
-mod collect;
-
-#[derive(Debug)]
-enum State {
-    /// This state means the processor will collect incoming blocks.
-    Collect,
-    /// This state means the processor is sorting collected blocks.
-    Sort,
-    /// Finish the process.
-    Finish,
-}
-
-#[derive(Clone)]
-struct Base {
-    schema: DataSchemaRef,
-    spiller: Arc<Spiller>,
-    sort_row_offset: usize,
-    limit: Option<usize>,
-}
-
-#[derive(Debug)]
-pub struct SortCollectedMeta {
-    batch_rows: usize,
-    bounds: Vec<Column>,
-    blocks: Vec<Box<[SpillableBlock]>>,
-}
-
-local_block_meta_serde!(SortCollectedMeta);
-
-#[typetag::serde(name = "sort_collected")]
-impl BlockMetaInfo for SortCollectedMeta {}
 
 enum Inner<A: SortAlgorithm> {
     Collect(Vec<DataBlock>),
     Limit(TransformSortMergeLimit<A::Rows>),
-    Memory(MemoryMerger<A>),
     Spill(Vec<DataBlock>, SortSpill<A>),
+    None,
 }
 
-pub struct TransformSort<A: SortAlgorithm, C> {
+pub struct TransformSortCollect<A: SortAlgorithm, C> {
     name: &'static str,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: VecDeque<DataBlock>,
-    state: State,
+    output_data: Option<DataBlock>,
 
     row_converter: C,
     sort_desc: Arc<[SortColumnDescription]>,
-    /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
-    /// we can generate and output the order column to avoid the extra converting in the next transform.
-    remove_order_col: bool,
     /// If this transform is after an Exchange transform,
     /// it means it will compact the data from cluster nodes.
     /// And the order column is already generated in each cluster node,
@@ -113,11 +65,10 @@ pub struct TransformSort<A: SortAlgorithm, C> {
 
     aborting: AtomicBool,
 
-    max_block_size: usize,
     memory_settings: MemorySettings,
 }
 
-impl<A, C> TransformSort<A, C>
+impl<A, C> TransformSortCollect<A, C>
 where
     A: SortAlgorithm,
     C: RowConverter<A::Rows>,
@@ -128,10 +79,8 @@ where
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
-        max_block_size: usize,
         limit: Option<(usize, bool)>,
         spiller: Arc<Spiller>,
-        output_order_col: bool,
         order_col_generated: bool,
         memory_settings: MemorySettings,
     ) -> Result<Self> {
@@ -139,22 +88,24 @@ where
         let row_converter = C::create(&sort_desc, schema.clone())?;
         let (name, inner, limit) = match limit {
             Some((limit, true)) => (
-                "TransformSortMergeLimit",
+                "TransformSortMergeCollectLimit",
                 Inner::Limit(TransformSortMergeLimit::create(max_block_size, limit)),
                 Some(limit),
             ),
-            Some((limit, false)) => ("TransformSortMerge", Inner::Collect(vec![]), Some(limit)),
-            None => ("TransformSortMerge", Inner::Collect(vec![]), None),
+            Some((limit, false)) => (
+                "TransformSortMergeCollect",
+                Inner::Collect(vec![]),
+                Some(limit),
+            ),
+            None => ("TransformSortMergeCollect", Inner::Collect(vec![]), None),
         };
         Ok(Self {
             input,
             output,
             name,
-            state: State::Collect,
             row_converter,
-            output_data: VecDeque::new(),
+            output_data: None,
             sort_desc,
-            remove_order_col: !output_order_col,
             order_col_generated,
             base: Base {
                 schema,
@@ -163,7 +114,6 @@ where
                 limit,
             },
             inner,
-            max_block_size,
             aborting: AtomicBool::new(false),
             memory_settings,
         })
@@ -186,10 +136,11 @@ where
         Ok((rows, block))
     }
 
-    fn prepare_spill_limit(&mut self) -> Result<()> {
+    fn limit_trans_to_spill(&mut self) -> Result<()> {
         let Inner::Limit(merger) = &self.inner else {
             unreachable!()
         };
+        assert!(merger.num_rows() > 0);
         let params = self.determine_params(merger.num_bytes(), merger.num_rows());
         let Inner::Limit(merger) = &mut self.inner else {
             unreachable!()
@@ -200,16 +151,30 @@ where
         Ok(())
     }
 
-    fn prepare_spill(&mut self, input_data: Vec<DataBlock>) {
+    fn collect_trans_to_spill(&mut self, input_data: Vec<DataBlock>) {
         let (num_rows, num_bytes) = input_data
             .iter()
             .map(|block| (block.num_rows(), block.memory_size()))
             .fold((0, 0), |(acc_rows, acc_bytes), (rows, bytes)| {
                 (acc_rows + rows, acc_bytes + bytes)
             });
+        assert!(num_rows > 0);
         let params = self.determine_params(num_bytes, num_rows);
         let spill_sort = SortSpill::new(self.base.clone(), params);
         self.inner = Inner::Spill(input_data, spill_sort);
+    }
+
+    fn trans_to_spill(&mut self) -> Result<()> {
+        match &mut self.inner {
+            Inner::Limit(_) => self.limit_trans_to_spill(),
+            Inner::Collect(input_data) => {
+                let input_data = std::mem::take(input_data);
+                self.collect_trans_to_spill(input_data);
+                Ok(())
+            }
+            Inner::Spill(_, _) => Ok(()),
+            Inner::None => unreachable!(),
+        }
     }
 
     fn determine_params(&self, bytes: usize, rows: usize) -> SortSpillParams {
@@ -250,53 +215,6 @@ where
         }
     }
 
-    fn sort_block_sync(&mut self) -> Result<()> {
-        match &mut self.inner {
-            Inner::Limit(limit_sort) => {
-                self.output_data.extend(limit_sort.on_finish(false)?);
-                self.state = State::Finish;
-            }
-            Inner::Collect(input_data) => {
-                let input_data = std::mem::take(input_data);
-                if input_data.len() == 1 {
-                    self.output_data.extend(input_data);
-                    self.state = State::Finish;
-                    return Ok(());
-                }
-                let mut merger = create_memory_merger::<A>(
-                    input_data,
-                    self.base.schema.clone(),
-                    self.base.sort_row_offset,
-                    self.base.limit,
-                    self.max_block_size,
-                );
-
-                if let Some(block) = merger.next_block()? {
-                    self.output_data.push_back(block);
-                } else {
-                    self.state = State::Finish
-                }
-                self.inner = Inner::Memory(merger)
-            }
-            Inner::Memory(merger) => {
-                if let Some(block) = merger.next_block()? {
-                    self.output_data.push_back(block);
-                } else {
-                    self.state = State::Finish
-                }
-            }
-            _ => unreachable!(),
-        }
-        Ok(())
-    }
-
-    fn output_block(&self, mut block: DataBlock) {
-        if self.remove_order_col {
-            block.pop_columns(1);
-        }
-        self.output.push_data(Ok(block));
-    }
-
     fn input_rows(&self) -> usize {
         match &self.inner {
             Inner::Collect(input_data) | Inner::Spill(input_data, _) => input_data.in_memory_rows(),
@@ -323,6 +241,18 @@ where
             _ => unreachable!(),
         }
     }
+
+    fn create_output(&mut self) -> Result<()> {
+        let Inner::Spill(input_data, spill_sort) = std::mem::replace(&mut self.inner, Inner::None)
+        else {
+            unreachable!()
+        };
+        assert!(input_data.is_empty());
+
+        let meta = spill_sort.dump_collect()?;
+        self.output_data = Some(DataBlock::empty_with_meta(Box::new(meta)));
+        Ok(())
+    }
 }
 
 trait MemoryRows {
@@ -336,7 +266,7 @@ impl MemoryRows for Vec<DataBlock> {
 }
 
 #[async_trait::async_trait]
-impl<A, C> Processor for TransformSort<A, C>
+impl<A, C> Processor for TransformSortCollect<A, C>
 where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
@@ -361,70 +291,42 @@ where
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(block) = self.output_data.pop_front() {
-            match self.state {
-                State::Sort | State::Finish => {
-                    self.output_block(block);
-                    return Ok(Event::NeedConsume);
-                }
-                _ => unreachable!(),
-            }
-        }
-
-        if matches!(self.state, State::Finish) {
+        if let Some(block) = self.output_data.take() {
             assert!(self.input.is_finished());
+            self.output.push_data(Ok(block));
             self.output.finish();
             return Ok(Event::Finished);
         }
 
         if self.input.has_data() {
-            return match self.state {
-                State::Collect => {
-                    if self.check_spill() {
-                        // delay the handle of input until the next call.
-                        Ok(Event::Async)
-                    } else {
-                        Ok(Event::Sync)
-                    }
-                }
-                _ => unreachable!(),
+            return if self.check_spill() {
+                // delay the handle of input until the next call.
+                Ok(Event::Async)
+            } else {
+                Ok(Event::Sync)
             };
         }
 
         if self.input.is_finished() {
-            return match &self.state {
-                State::Finish => {
-                    self.output.finish();
-                    Ok(Event::Finished)
-                }
-                State::Collect => match &self.inner {
-                    Inner::Limit(_) => {
-                        self.state = State::Sort;
-                        Ok(Event::Sync)
-                    }
-                    Inner::Collect(input_data) => {
-                        if input_data.is_empty() {
-                            self.state = State::Finish;
-                            self.output.finish();
-                            Ok(Event::Finished)
-                        } else {
-                            self.state = State::Sort;
-                            Ok(Event::Sync)
-                        }
-                    }
-                    Inner::Spill(input_data, _) => {
-                        if input_data.is_empty() {
-                            self.state = State::Sort;
-                        }
+            return match &self.inner {
+                Inner::Limit(merger) => {
+                    if merger.num_rows() == 0 {
+                        self.output.finish();
+                        Ok(Event::Finished)
+                    } else {
                         Ok(Event::Async)
                     }
-                    Inner::Memory(_) => unreachable!(),
-                },
-                State::Sort => match &self.inner {
-                    Inner::Limit(_) | Inner::Memory(_) => Ok(Event::Sync),
-                    Inner::Spill(_, _) => Ok(Event::Async),
-                    _ => unreachable!(),
-                },
+                }
+                Inner::Collect(input_data) => {
+                    if input_data.is_empty() {
+                        self.output.finish();
+                        Ok(Event::Finished)
+                    } else {
+                        Ok(Event::Async)
+                    }
+                }
+                Inner::Spill(_, _) => Ok(Event::Async),
+                Inner::None => unreachable!(),
             };
         }
 
@@ -433,71 +335,39 @@ where
     }
 
     fn process(&mut self) -> Result<()> {
-        match self.state {
-            State::Collect => {
-                let block = self.input.pull_data().unwrap()?;
-                self.input.set_need_data();
-                if unlikely(block.is_empty()) {
-                    return Ok(());
-                }
-                self.collect_block(block)
+        if let Some(block) = self.input.pull_data().transpose()? {
+            self.input.set_need_data();
+            if !block.is_empty() {
+                self.collect_block(block)?;
             }
-            State::Sort => self.sort_block_sync(),
-            State::Finish => unreachable!(),
         }
+        Ok(())
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        match &self.state {
-            State::Collect => {
-                let finished = self.input.is_finished();
-                match &mut self.inner {
-                    Inner::Limit(_) => {
-                        self.prepare_spill_limit()?;
-                    }
-                    Inner::Collect(input_data) => {
-                        assert!(!finished);
-                        let input_data = std::mem::take(input_data);
-                        self.prepare_spill(input_data);
-                    }
-                    Inner::Spill(_, _) => (),
-                    Inner::Memory(_) => unreachable!(),
-                };
+        let finished = self.input.is_finished();
+        self.trans_to_spill()?;
 
-                let input = self.input_rows();
-                let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
-                    unreachable!()
-                };
-                let memory_rows = spill_sort.collect_memory_rows();
-                let max = spill_sort.max_rows();
+        let input = self.input_rows();
+        let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
+            unreachable!()
+        };
+        let memory_rows = spill_sort.collect_memory_rows();
+        let max = spill_sort.max_rows();
 
-                if memory_rows > 0 && memory_rows + input > max {
-                    spill_sort
-                        .subsequent_spill_last(memory_rows + input - max)
-                        .await?;
-                }
-                if input > max || finished && input > 0 {
-                    spill_sort.sort_input_data(std::mem::take(input_data), &self.aborting)?;
-                }
-                if finished {
-                    self.state = State::Sort;
-                }
-                Ok(())
-            }
-            State::Sort => {
-                let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
-                    unreachable!()
-                };
-                assert!(input_data.is_empty());
-                let (block, finish) = spill_sort.on_restore().await?;
-                self.output_data.extend(block);
-                if finish {
-                    self.state = State::Finish
-                }
-                Ok(())
-            }
-            _ => unreachable!(),
+        if memory_rows > 0 && memory_rows + input > max {
+            spill_sort
+                .subsequent_spill_last(memory_rows + input - max)
+                .await?;
+        }
+        if input > max || finished && input > 0 {
+            spill_sort.sort_input_data(std::mem::take(input_data), &self.aborting)?;
+        }
+        if finished {
+            self.create_output()
+        } else {
+            Ok(())
         }
     }
 
