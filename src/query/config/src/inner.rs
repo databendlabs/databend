@@ -615,6 +615,9 @@ pub struct CacheConfig {
     ///   increase this value.
     pub table_data_cache_population_queue_size: u32,
 
+    /// Bytes of data cache in-memory
+    pub data_cache_in_memory_bytes: u64,
+
     /// Storage that hold the raw data caches
     pub disk_cache_config: DiskCacheConfig,
 
@@ -732,6 +735,7 @@ impl Default for CacheConfig {
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,
+            data_cache_in_memory_bytes: 0,
             disk_cache_config: Default::default(),
             data_cache_key_reload_policy: Default::default(),
             table_data_deserialized_data_bytes: 0,
