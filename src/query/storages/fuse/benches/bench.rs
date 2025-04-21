@@ -19,7 +19,6 @@ fn main() {
 #[divan::bench_group(max_time = 3)]
 mod dummy {
     use std::sync::Arc;
-    use std::usize;
 
     use arrow_array::RecordBatch;
     use bytes::Bytes;
@@ -33,7 +32,6 @@ mod dummy {
     use databend_common_storages_fuse::FuseStorageFormat;
     use databend_storages_common_table_meta::table::TableCompression;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
-    use parquet::arrow::ProjectionMask;
 
     const NUM_ROWS: usize = 6001215;
 
