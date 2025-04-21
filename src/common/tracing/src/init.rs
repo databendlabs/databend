@@ -107,6 +107,7 @@ fn env_filter(level: &str) -> EnvFilter {
             .filter(Some("databend::log::query"), LevelFilter::Off)
             .filter(Some("databend::log::profile"), LevelFilter::Off)
             .filter(Some("databend::log::structlog"), LevelFilter::Off)
+            .filter(Some("databend::log::time_series"), LevelFilter::Off)
             .parse(level),
     )
 }
