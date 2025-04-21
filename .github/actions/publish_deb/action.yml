@@ -33,6 +33,7 @@ runs:
         for asset in $assets; do
           wget -q $asset
           asset_name=$(basename $asset)
+          echo "--> including deb stable ${asset_name}"
           reprepro includedeb stable ${asset_name}
         done
 
@@ -46,6 +47,7 @@ runs:
         for asset in $assets; do
           wget -q $asset
           asset_name=$(basename $asset)
+          echo "--> including deb stable ${asset_name}"
           reprepro includedeb stable ${asset_name}
         done
 
