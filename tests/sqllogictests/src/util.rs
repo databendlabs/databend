@@ -47,8 +47,8 @@ use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
 const CONTAINER_RETRY_TIMES: usize = 3;
-const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 30;
-const CONTAINER_TIMEOUT_SECONDS: u64 = 180;
+const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 60;
+const CONTAINER_TIMEOUT_SECONDS: u64 = 240;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct ServerInfo {
