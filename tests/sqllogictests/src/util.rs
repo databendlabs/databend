@@ -48,7 +48,7 @@ use crate::error::Result;
 
 const CONTAINER_RETRY_TIMES: usize = 3;
 const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 60;
-const CONTAINER_TIMEOUT_SECONDS: u64 = 240;
+const CONTAINER_TIMEOUT_SECONDS: u64 = 300;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct ServerInfo {
