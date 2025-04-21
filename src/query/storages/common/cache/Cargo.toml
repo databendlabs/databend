@@ -31,7 +31,7 @@ rustix = { workspace = true }
 siphasher = { workspace = true }
 
 [dev-dependencies]
-criterion = { workspace = true }
+divan = { workspace = true }
 mockall = { workspace = true }
 tempfile = { workspace = true }
 
