@@ -268,7 +268,7 @@ impl VirtualColumnDataPaster {
                         None,
                         &cast_func_name,
                         [(value, orig_type)],
-                        &func_ctx,
+                        func_ctx,
                         data_block.num_rows(),
                         &BUILTIN_FUNCTIONS,
                     )?;
@@ -294,7 +294,7 @@ impl VirtualColumnDataPaster {
                 None,
                 "get_by_keypath",
                 [src_arg, path_arg],
-                &func_ctx,
+                func_ctx,
                 data_block.num_rows(),
                 &BUILTIN_FUNCTIONS,
             )?;
@@ -304,7 +304,7 @@ impl VirtualColumnDataPaster {
                     None,
                     cast_func_name,
                     [(value, data_type)],
-                    &func_ctx,
+                    func_ctx,
                     data_block.num_rows(),
                     &BUILTIN_FUNCTIONS,
                 )?;
