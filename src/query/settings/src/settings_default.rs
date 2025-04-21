@@ -1018,6 +1018,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("statement_queue_ttl_in_seconds", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(3),
+                    desc: "This parameter specifies the interval, in seconds, between lease renewal operations with the meta service to maintain active communication.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=3600)),
+                }),
                 ("geometry_output_format", DefaultSettingValue {
                     value: UserSettingValue::String("GeoJSON".to_owned()),
                     desc: "Display format for GEOMETRY values.",
