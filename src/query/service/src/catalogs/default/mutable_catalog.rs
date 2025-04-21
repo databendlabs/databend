@@ -239,10 +239,6 @@ impl Catalog for MutableCatalog {
         CatalogInfo::default().into()
     }
 
-    fn support_partition(&self) -> bool {
-        false
-    }
-
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
         Ok(self)
     }

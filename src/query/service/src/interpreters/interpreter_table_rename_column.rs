@@ -74,7 +74,10 @@ impl Interpreter for RenameTableColumnInterpreter {
 
             let table_info = table.get_table_info();
             let engine = table.engine();
-            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE | ICEBERG_ENGINE) {
+            if matches!(
+                engine.to_uppercase().as_str(),
+                VIEW_ENGINE | STREAM_ENGINE | ICEBERG_ENGINE
+            ) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {} that doesn't support rename column name",
                     &self.plan.database, &self.plan.table, engine

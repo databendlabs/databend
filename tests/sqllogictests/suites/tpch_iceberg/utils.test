@@ -95,7 +95,7 @@ abc
 tpch
 
 statement ok
-create table if not exists abc.t(id int);
+create table if not exists abc.t(id int) engine=ICEBERG;
 
 query T
 desc abc.t;

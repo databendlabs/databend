@@ -168,10 +168,6 @@ impl Catalog for DatabaseCatalog {
         Arc::default()
     }
 
-    fn support_partition(&self) -> bool {
-        false
-    }
-
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
         let mut me = self.as_ref().clone();
         let mut session_catalog = me.mutable_catalog.as_ref().clone();
