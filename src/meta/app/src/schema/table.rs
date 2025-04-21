@@ -268,8 +268,6 @@ pub struct TableMeta {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: BTreeMap<String, String>,
-    pub table_properties: Option<BTreeMap<String, String>>,
-    pub table_partition: Option<TablePartition>,
     pub cluster_key: Option<String>,
     /// A sequential number that uniquely identifies changes to the cluster key.
     /// This value increments by 1 each time the cluster key is created or modified,
@@ -461,8 +459,6 @@ impl Default for TableMeta {
             storage_params: None,
             part_prefix: "".to_string(),
             options: BTreeMap::new(),
-            table_properties: None,
-            table_partition: None,
             cluster_key: None,
             cluster_key_seq: 0,
             created_on: Utc::now(),
@@ -580,6 +576,11 @@ pub struct CreateTableReq {
     ///
     /// currently used in atomic CTAS.
     pub as_dropped: bool,
+
+    /// Iceberg table properties
+    pub table_properties: Option<BTreeMap<String, String>>,
+    /// Iceberg table partition
+    pub table_partition: Option<TablePartition>,
 }
 
 impl CreateTableReq {

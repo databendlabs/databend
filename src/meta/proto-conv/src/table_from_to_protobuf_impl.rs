@@ -24,7 +24,6 @@ use chrono::Utc;
 use databend_common_expression as ex;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app_types::non_empty::NonEmptyString;
@@ -178,45 +177,6 @@ impl FromToProto for mt::TableIdent {
     }
 }
 
-impl FromToProto for mt::TablePartition {
-    type PB = pb::TablePartition;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: pb::TablePartition) -> Result<Self, Incompatible>
-    where Self: Sized {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        let Some(partition) = p.partition else {
-            return Err(Incompatible::new(
-                "TablePartition cannot be None".to_string(),
-            ));
-        };
-        match partition {
-            pb::table_partition::Partition::Identity(pb::table_partition::Identity { columns }) => {
-                Ok(mt::TablePartition::Identity { columns })
-            }
-        }
-    }
-
-    fn to_pb(&self) -> Result<pb::TablePartition, Incompatible> {
-        let partition = match self {
-            mt::TablePartition::Identity { columns } => Some(
-                pb::table_partition::Partition::Identity(pb::table_partition::Identity {
-                    columns: columns.to_vec(),
-                }),
-            ),
-        };
-
-        let p = pb::TablePartition {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            partition,
-        };
-        Ok(p)
-    }
-}
-
 impl FromToProto for mt::TableMeta {
     type PB = pb::TableMeta;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -256,15 +216,6 @@ impl FromToProto for mt::TableMeta {
             },
             part_prefix: p.part_prefix.unwrap_or("".to_string()),
             options: p.options,
-            table_properties: if p.table_properties.is_empty() {
-                None
-            } else {
-                Some(p.table_properties)
-            },
-            table_partition: match p.table_partition {
-                Some(ip) => Some(TablePartition::from_pb(ip)?),
-                None => None,
-            },
             cluster_key: p.cluster_key,
             cluster_key_seq,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
@@ -313,11 +264,6 @@ impl FromToProto for mt::TableMeta {
                 Some(self.part_prefix.clone())
             },
             options: self.options.clone(),
-            table_properties: self.table_properties.clone().unwrap_or_default(),
-            table_partition: match self.table_partition.clone() {
-                Some(ip) => Some(ip.to_pb()?),
-                None => None,
-            },
             cluster_key: self.cluster_key.clone(),
             // cluster_keys is deprecated.
             cluster_keys: vec![],
