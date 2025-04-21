@@ -47,6 +47,7 @@ use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
 use crate::meta::MetaEncoding;
 use crate::meta::Statistics;
+use crate::meta::VirtualBlockMeta;
 
 pub trait SegmentBuilder: Send + Sync + 'static {
     type Segment: AbstractSegment;
@@ -69,6 +70,7 @@ pub struct ColumnOrientedSegmentBuilder {
     bloom_filter_index_location: (Vec<String>, Vec<u64>, MutableBitmap),
     bloom_filter_index_size: Vec<u64>,
     inverted_index_size: Vec<Option<u64>>,
+    virtual_block_meta: Vec<Option<VirtualBlockMeta>>,
     compression: Vec<u8>,
     create_on: Vec<Option<i64>>,
     column_stats: HashMap<ColumnId, ColStatBuilder>,
@@ -146,6 +148,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             .push(block_meta.bloom_filter_index_size);
         self.inverted_index_size
             .push(block_meta.inverted_index_size);
+        self.virtual_block_meta.push(block_meta.virtual_block_meta);
         self.compression.push(block_meta.compression.to_u8());
         self.create_on
             .push(block_meta.create_on.map(|t| t.timestamp()));
@@ -268,6 +271,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             ),
             bloom_filter_index_size: Vec::with_capacity(block_per_segment),
             inverted_index_size: Vec::with_capacity(block_per_segment),
+            virtual_block_meta: Vec::with_capacity(block_per_segment),
             compression: Vec::with_capacity(block_per_segment),
             create_on: Vec::with_capacity(block_per_segment),
             column_stats,
@@ -302,12 +306,18 @@ impl ColumnOrientedSegmentBuilder {
         let uncompressed_byte_size = self.block_size.iter().sum();
         let compressed_byte_size = self.file_size.iter().sum();
 
-        let index_size = self.bloom_filter_index_size.iter().sum::<u64>()
+        let mut index_size = self.bloom_filter_index_size.iter().sum::<u64>()
             + self
                 .inverted_index_size
                 .iter()
                 .map(|v| v.unwrap_or_default())
                 .sum::<u64>();
+
+        let mut virtual_block_count = 0;
+        for virtual_block_meta in self.virtual_block_meta.iter().flatten() {
+            virtual_block_count += 1;
+            index_size += virtual_block_meta.virtual_column_size;
+        }
 
         let mut col_stats = HashMap::new();
         let mut self_column_stats = HashMap::new();
@@ -350,6 +360,7 @@ impl ColumnOrientedSegmentBuilder {
             index_size,
             col_stats,
             cluster_stats,
+            virtual_block_count: Some(virtual_block_count),
         })
     }
 }

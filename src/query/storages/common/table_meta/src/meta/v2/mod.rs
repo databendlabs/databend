@@ -19,7 +19,12 @@ mod table_snapshot_statistics;
 
 pub use segment::BlockMeta;
 pub use segment::ColumnMeta;
+pub use segment::DraftVirtualBlockMeta;
+pub use segment::DraftVirtualColumnMeta;
+pub use segment::ExtendedBlockMeta;
 pub use segment::SegmentInfo;
+pub use segment::VirtualBlockMeta;
+pub use segment::VirtualColumnMeta;
 pub use snapshot::TableSnapshot;
 pub use statistics::ClusterStatistics;
 pub use statistics::ColumnStatistics;

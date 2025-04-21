@@ -652,7 +652,6 @@ impl FuseTable {
                     &push_downs,
                     self.bloom_index_cols(),
                     bloom_index_builder,
-                    self.get_storage_format(),
                 )?
             } else {
                 let cluster_keys = self.linear_cluster_keys(ctx.clone());
@@ -666,7 +665,6 @@ impl FuseTable {
                     cluster_keys,
                     self.bloom_index_cols(),
                     bloom_index_builder,
-                    self.get_storage_format(),
                 )?
             };
         Ok(pruner)

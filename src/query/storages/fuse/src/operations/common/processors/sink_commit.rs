@@ -26,6 +26,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::VirtualDataSchema;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
@@ -55,6 +56,7 @@ use crate::operations::set_backoff;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;
+use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
 use crate::FuseTable;
 enum State {
@@ -94,6 +96,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     backoff: ExponentialBackoff,
 
     new_segment_locs: Vec<Location>,
+    new_virtual_schema: Option<VirtualDataSchema>,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
 
@@ -152,6 +155,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             max_retry_elapsed,
             input,
             new_segment_locs: vec![],
+            new_virtual_schema: None,
             start_time: Instant::now(),
             prev_snapshot_id,
             change_tracking: table.change_tracking_enabled(),
@@ -201,6 +205,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?;
 
         self.new_segment_locs = meta.new_segment_locs;
+
+        self.new_virtual_schema = meta.virtual_schema;
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
 
@@ -432,7 +438,17 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 })?;
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
-                let table_info = fuse_table.table_info.clone();
+                let mut table_info = fuse_table.table_info.clone();
+
+                // merge virtual schema
+                let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
+                let new_virtual_schema = std::mem::take(&mut self.new_virtual_schema);
+                let merged_virtual_schema = TransformMergeCommitMeta::merge_virtual_schema(
+                    old_virtual_schema,
+                    new_virtual_schema,
+                );
+                table_info.meta.virtual_schema = merged_virtual_schema;
+
                 // check if snapshot has been changed
                 let snapshot_has_changed = self.prev_snapshot_id.is_some_and(|prev_snapshot_id| {
                     previous

@@ -296,7 +296,6 @@ impl FuseTable {
                 top_k,
                 max_io_requests,
                 index_reader,
-                virtual_reader,
                 receiver,
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
