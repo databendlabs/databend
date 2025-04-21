@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -270,16 +269,6 @@ pub async fn run_ttc_container(
         http_server_port
     );
 
-    let output = std::process::Command::new("bendsql")
-        .args(["--dsn", &dsn, "--check"])
-        .output()
-        .expect("failed to execute bendsql --check");
-    println!("status: {}", output.status);
-    std::io::stdout().write_all(&output.stdout)?;
-    std::io::stderr().write_all(&output.stderr)?;
-
-    pull_image(format!("{image}:{tag}").as_str())?;
-
     let mut i = 1;
     loop {
         let log_consumer = LoggingConsumer::new();
@@ -511,14 +500,4 @@ async fn stop_container(docker: &Docker, container_name: &str) {
             }
         }
     }
-}
-
-fn pull_image(image: &str) -> Result<()> {
-    let output = std::process::Command::new("docker")
-        .args(["pull", image])
-        .output()
-        .expect("failed to execute docker pull");
-    std::io::stdout().write_all(&output.stdout).unwrap();
-    std::io::stderr().write_all(&output.stderr).unwrap();
-    Ok(())
 }
