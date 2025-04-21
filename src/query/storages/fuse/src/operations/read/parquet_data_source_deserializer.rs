@@ -301,11 +301,15 @@ impl Processor for DeserializeDataTransform {
                         self.batch_size_hint,
                     )?;
 
+                    // Initialize virtual column paster if needed: which will add virtual columns to
+                    // each DataBlock. The paster is created from the VirtualColumnReader and maintains
+                    // internal state to track which record batch of virtual column data to use for each DataBlock.
                     let mut virtual_columns_paster =
                         if let Some(virtual_column_reader) = self.virtual_reader.as_ref() {
-                            let record_batches = virtual_column_reader
-                                .try_create_paster(virtual_data, self.batch_size_hint)?;
-                            Some(record_batches)
+                            Some(virtual_column_reader.try_create_virtual_column_paster(
+                                virtual_data,
+                                self.batch_size_hint,
+                            )?)
                         } else {
                             None
                         };
@@ -331,7 +335,11 @@ impl Processor for DeserializeDataTransform {
                             }
                         }
 
-                        // Add optional virtual columns
+                        // Process virtual columns if available: This step enriches the DataBlock
+                        // with virtual columns that were not originally present.
+                        // The paster was created earlier from the VirtualColumnReader and maintains
+                        // the state necessary to merge virtual columns into each data block in
+                        // sequence, ensuring each block gets the correct corresponding virtual data.
                         if let Some(virtual_columns_paster) = &mut virtual_columns_paster {
                             data_block = virtual_columns_paster.paste_virtual_column(data_block)?;
                         }
