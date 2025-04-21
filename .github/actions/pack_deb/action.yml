@@ -64,7 +64,7 @@ runs:
         export deb_version="${{ steps.info.outputs.deb_version }}"
         export deb_arch="${{ steps.info.outputs.deb_arch }}"
         pkg_name="databend-query_${deb_version}_${deb_arch}.deb"
-        nfpm pkg --packager deb -t "${path}/${pkg_name}" -f <(envsubst '${version} ${path} ${arch}' < scripts/distribution/nfpm-query.yaml)
+        nfpm pkg --packager deb -t "${path}/${pkg_name}" -f <(envsubst '${deb_arch} ${deb_version} ${path}' < scripts/distribution/nfpm-query.yaml)
 
     - name: Build Databend Meta Package
       shell: bash
@@ -74,7 +74,7 @@ runs:
         export deb_version="${{ steps.info.outputs.deb_version }}"
         export deb_arch="${{ steps.info.outputs.deb_arch }}"
         pkg_name="databend-meta_${deb_version}_${deb_arch}.deb"
-        nfpm pkg --packager deb -t "${path}/${pkg_name}" -f <(envsubst '${version} ${path} ${arch}' < scripts/distribution/nfpm-meta.yaml)
+        nfpm pkg --packager deb -t "${path}/${pkg_name}" -f <(envsubst '${deb_arch} ${deb_version} ${path}' < scripts/distribution/nfpm-meta.yaml)
 
     - name: Build Databend Debug Package
       shell: bash
@@ -84,7 +84,7 @@ runs:
         export deb_version="${{ steps.info.outputs.deb_version }}"
         export deb_arch="${{ steps.info.outputs.deb_arch }}"
         pkg_name="databend-query-dbg_${deb_version}_${deb_arch}.deb"
-        nfpm pkg --packager deb -t "${path}/${pkg_name}" -f <(envsubst '${version} ${path} ${arch}' < scripts/distribution/nfpm-query-dbg.yaml)
+        nfpm pkg --packager deb -t "${path}/${pkg_name}" -f <(envsubst '${deb_arch} ${deb_version} ${path}' < scripts/distribution/nfpm-query-dbg.yaml)
 
     - name: Update release to github
       shell: bash
