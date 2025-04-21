@@ -52,6 +52,7 @@ mod builder;
 pub use builder::TransformSortBuilder;
 
 mod collect;
+mod execute;
 
 #[derive(Debug)]
 enum State {
@@ -73,7 +74,7 @@ struct Base {
 
 #[derive(Debug)]
 pub struct SortCollectedMeta {
-    batch_rows: usize,
+    params: SortSpillParams,
     bounds: Vec<Column>,
     blocks: Vec<Box<[SpillableBlock]>>,
 }
