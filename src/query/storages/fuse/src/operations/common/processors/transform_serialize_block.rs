@@ -24,6 +24,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
+use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -40,6 +41,7 @@ use crate::io::create_inverted_index_builders;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
+use crate::io::VirtualColumnBuilder;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -151,6 +153,15 @@ impl TransformSerializeBlock {
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let virtual_column_builder = if ctx
+            .get_settings()
+            .get_enable_refresh_virtual_column_after_write()
+            .unwrap_or_default()
+        {
+            VirtualColumnBuilder::try_create(ctx.clone(), &table.table_info)
+        } else {
+            None
+        };
 
         let block_builder = BlockBuilder {
             ctx,
@@ -160,6 +171,7 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             bloom_columns_map,
             inverted_index_builders,
+            virtual_column_builder,
             table_meta_timestamps,
         };
         Ok(TransformSerializeBlock {
@@ -327,10 +339,19 @@ impl Processor for TransformSerializeBlock {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized { serialized, index } => {
-                let block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
+                let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
+
+                let bytes = if let Some(draft_virtual_block_meta) =
+                    &extended_block_meta.draft_virtual_block_meta
+                {
+                    (extended_block_meta.block_meta.block_size
+                        + draft_virtual_block_meta.virtual_column_size) as usize
+                } else {
+                    extended_block_meta.block_meta.block_size as usize
+                };
                 let progress_values = ProgressValues {
-                    rows: block_meta.row_count as usize,
-                    bytes: block_meta.block_size as usize,
+                    rows: extended_block_meta.block_meta.row_count as usize,
+                    bytes,
                 };
                 self.block_builder
                     .ctx
@@ -341,30 +362,34 @@ impl Processor for TransformSerializeBlock {
                     // we are replacing the block represented by the `index`
                     Self::mutation_logs(MutationLogEntry::ReplacedBlock {
                         index,
-                        block_meta: Arc::new(block_meta),
+                        block_meta: Arc::new(extended_block_meta),
                     })
                 } else {
                     // appending new data block
                     if matches!(self.kind, MutationKind::Insert) {
                         if let Some(tid) = self.table_id {
-                            self.block_builder
-                                .ctx
-                                .update_multi_table_insert_status(tid, block_meta.row_count);
+                            self.block_builder.ctx.update_multi_table_insert_status(
+                                tid,
+                                extended_block_meta.block_meta.row_count,
+                            );
                         } else {
                             self.block_builder.ctx.add_mutation_status(MutationStatus {
-                                insert_rows: block_meta.row_count,
+                                insert_rows: extended_block_meta.block_meta.row_count,
                                 update_rows: 0,
                                 deleted_rows: 0,
                             });
                         }
                     }
 
-                    if matches!(self.kind, MutationKind::Recluster) {
-                        Self::mutation_logs(MutationLogEntry::ReclusterAppendBlock {
-                            block_meta: Arc::new(block_meta),
-                        })
+                    if matches!(self.kind, MutationKind::Insert) {
+                        DataBlock::empty_with_meta(Box::new(extended_block_meta))
                     } else {
-                        DataBlock::empty_with_meta(Box::new(block_meta))
+                        if matches!(self.kind, MutationKind::Recluster) {
+                            metrics_inc_recluster_write_block_nums();
+                        }
+                        Self::mutation_logs(MutationLogEntry::AppendBlock {
+                            block_meta: Arc::new(extended_block_meta),
+                        })
                     }
                 };
                 self.output_data = Some(mutation_log_data_block);

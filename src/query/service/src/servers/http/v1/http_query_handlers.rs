@@ -21,11 +21,11 @@ use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::execute_futures_in_parallel;
-use databend_common_base::version::DATABEND_SEMVER;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
+use databend_common_version::DATABEND_SEMVER;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use highway::HighwayHash;
@@ -273,7 +273,6 @@ async fn query_final_handler(
             Some(query) => {
                 let mut response = query
                     .get_response_state_only()
-                    .await
                     .map_err(HttpErrorCode::server_error)?;
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
@@ -338,7 +337,6 @@ async fn query_state_handler(
                 } else {
                     let response = query
                         .get_response_state_only()
-                        .await
                         .map_err(HttpErrorCode::server_error)?;
                     Ok(QueryResponse::from_internal(query_id, response, false))
                 }

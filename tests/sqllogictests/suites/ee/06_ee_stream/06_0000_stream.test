@@ -104,9 +104,6 @@ select * from t1 order by a
 3
 4
 
-statement ok
-set enable_experimental_merge_into = 1
-
 query I
 merge into t1 using (select a from s1) as t2 on t1.a = t2.a when matched then delete
 ----
@@ -707,9 +704,6 @@ select a from replace_s;
 2
 
 statement ok
-set enable_experimental_merge_into = 0;
-
-statement ok
 drop table replace_t1;
 
 statement ok
@@ -733,9 +727,6 @@ statement ok
 drop stream replace_s;
 
 ## test explain and target build optimization
-statement ok
-set enable_experimental_merge_into = 1;
-
 statement ok
 set join_spilling_memory_ratio = 0;
 
@@ -776,9 +767,6 @@ query TT
 merge into t1 using t2 on t1.a=t2.a when matched then update set t1.b=t2.b when not matched then insert *;
 ----
 1 2
-
-statement ok
-set enable_experimental_merge_into = 0;
 
 statement ok
 alter table t1 rename to t1_1

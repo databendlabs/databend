@@ -208,9 +208,6 @@ b
 
 # merge into use materialized cte.
 statement ok
-set enable_experimental_merge_into = 1;
-
-statement ok
 drop table if exists target_table;
 
 statement ok
@@ -234,9 +231,6 @@ select a, b from target_table order by a;
 
 statement ok
 drop table target_table all;
-
-statement ok
-set enable_experimental_merge_into = 0;
 
 statement ok
 drop table test

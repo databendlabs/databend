@@ -61,7 +61,6 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
         table.check_mutable()?;
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let virtual_columns = self.plan.virtual_columns.clone();
         let segment_locs = self.plan.segment_locs.clone();
 
         let mut build_res = PipelineBuildResult::create();
@@ -70,7 +69,6 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
             .do_refresh_virtual_column(
                 self.ctx.clone(),
                 fuse_table,
-                virtual_columns,
                 segment_locs,
                 &mut build_res.main_pipeline,
             )

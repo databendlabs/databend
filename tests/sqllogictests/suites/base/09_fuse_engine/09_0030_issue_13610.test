@@ -30,9 +30,6 @@ statement ok
 insert into t values(4);
 
 statement ok
-set enable_experimental_merge_into = 1;
-
-statement ok
 merge into t using (select * from t) as s on (s.a = t.a) when matched then update * when not matched then insert *;
 
 # after merge-into, auto compaction should be triggered, and succeed

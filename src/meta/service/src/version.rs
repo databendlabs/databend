@@ -18,10 +18,10 @@ use feature_set::FeatureSet;
 use semver::Version;
 
 pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
-    let build_semver = option_env!("DATABEND_GIT_SEMVER");
-    let git_sha = option_env!("VERGEN_GIT_SHA");
-    let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
-    let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
+    let build_semver = databend_common_version::DATABEND_GIT_SEMVER;
+    let git_sha = databend_common_version::VERGEN_GIT_SHA;
+    let rustc_semver = databend_common_version::VERGEN_RUSTC_SEMVER;
+    let timestamp = databend_common_version::VERGEN_BUILD_TIMESTAMP;
 
     // simd is enabled by default now
     match (build_semver, git_sha, rustc_semver, timestamp) {
@@ -33,19 +33,19 @@ pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
 });
 
 pub static METASRV_GIT_SEMVER: LazyLock<String> =
-    LazyLock::new(|| match option_env!("DATABEND_GIT_SEMVER") {
+    LazyLock::new(|| match databend_common_version::DATABEND_GIT_SEMVER {
         Some(v) => v.to_string(),
         None => "unknown".to_string(),
     });
 
 pub static METASRV_GIT_SHA: LazyLock<String> =
-    LazyLock::new(|| match option_env!("VERGEN_GIT_SHA") {
+    LazyLock::new(|| match databend_common_version::VERGEN_GIT_SHA {
         Some(sha) => sha.to_string(),
         None => "unknown".to_string(),
     });
 
 pub static METASRV_SEMVER: LazyLock<Version> = LazyLock::new(|| {
-    let build_semver = option_env!("DATABEND_GIT_SEMVER");
+    let build_semver = databend_common_version::DATABEND_GIT_SEMVER;
     let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
 
     let semver = semver.strip_prefix('v').unwrap_or(semver);

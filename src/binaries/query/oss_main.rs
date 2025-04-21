@@ -28,6 +28,7 @@ use databend_common_license::license_manager::OssLicenseManager;
 use databend_common_tracing::pipe_file;
 use databend_common_tracing::set_crash_hook;
 use databend_common_tracing::SignalListener;
+use databend_common_version::DATABEND_COMMIT_VERSION;
 use entry::MainError;
 
 use crate::entry::init_services;
@@ -38,12 +39,10 @@ use crate::entry::start_services;
 pub static GLOBAL_ALLOCATOR: TrackingGlobalAllocator = TrackingGlobalAllocator::create();
 
 fn main() {
-    let binary_version = (*databend_common_config::DATABEND_COMMIT_VERSION).clone();
-
     // Crash tracker
     let (input, output) = pipe_file().unwrap();
     set_crash_hook(output);
-    SignalListener::spawn(input, binary_version);
+    SignalListener::spawn(input, DATABEND_COMMIT_VERSION.to_string());
 
     // Thread tracker
     ThreadTracker::init();

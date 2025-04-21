@@ -23,7 +23,6 @@ databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }
@@ -51,9 +50,6 @@ serde_repr = { workspace = true }
 snailquote = { workspace = true }
 tikv-jemalloc-ctl = { workspace = true, optional = true }
 typetag = { workspace = true }
-
-[build-dependencies]
-databend-common-building = { workspace = true }
 
 [lints]
 workspace = true

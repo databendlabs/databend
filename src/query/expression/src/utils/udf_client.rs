@@ -26,7 +26,6 @@ use databend_common_base::headers::HEADER_FUNCTION;
 use databend_common_base::headers::HEADER_FUNCTION_HANDLER;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_TENANT;
-use databend_common_base::version::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::DNSService;
@@ -65,13 +64,14 @@ impl UDFFlightClient {
         addr: &str,
         conn_timeout: u64,
         request_timeout: u64,
+        user_agent: &str,
     ) -> Result<Arc<Endpoint>> {
         let tls_config = ClientTlsConfig::new().with_native_roots();
         let endpoint = Endpoint::from_shared(addr.to_string())
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!("Invalid UDF Server address: {err}"))
             })?
-            .user_agent(format!("databend-query/{}", *DATABEND_SEMVER))
+            .user_agent(user_agent)
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!("Invalid UDF Client User Agent: {err}"))
             })?

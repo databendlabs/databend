@@ -18,12 +18,12 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_config::GlobalConfig;
-use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_system::LogType;
 use databend_common_storages_system::QueryLogElement;
 use databend_common_storages_system::QueryLogQueue;
+use databend_common_version::DATABEND_COMMIT_VERSION;
 use log::error;
 use log::info;
 use serde_json;

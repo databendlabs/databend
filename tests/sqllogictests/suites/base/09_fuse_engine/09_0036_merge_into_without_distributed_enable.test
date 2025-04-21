@@ -1,7 +1,4 @@
 statement ok
-set enable_experimental_merge_into = 1;
-
-statement ok
 drop database if exists db;
 
 statement ok
@@ -1393,6 +1390,3 @@ when matched then update *
 when not matched then insert *;
 ----
 0 40000
-
-statement ok
-set enable_experimental_merge_into = 0;

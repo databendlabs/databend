@@ -160,12 +160,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anes"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
-
-[[package]]
 name = "ansi_term"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1917,12 +1911,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cast"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
-
-[[package]]
 name = "cbc"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1988,7 +1976,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fac387a98bb7c37292057cffc56d62ecb629900026402633ae9160df93a8766"
 dependencies = [
- "nom",
+ "nom 7.1.3",
 ]
 
 [[package]]
@@ -2076,33 +2064,6 @@ checksum = "8eebd66744a15ded14960ab4ccdbfb51ad3b81f51f3f04a80adac98c985396c9"
 dependencies = [
  "hashbrown 0.14.5",
  "stacker",
-]
-
-[[package]]
-name = "ciborium"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
-dependencies = [
- "ciborium-io",
- "ciborium-ll",
- "serde",
-]
-
-[[package]]
-name = "ciborium-io"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
-
-[[package]]
-name = "ciborium-ll"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
-dependencies = [
- "ciborium-io",
- "half",
 ]
 
 [[package]]
@@ -2373,6 +2334,12 @@ checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
 dependencies = [
  "crossbeam-utils",
 ]
+
+[[package]]
+name = "condtype"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf0a07a401f374238ab8e2f11a104d2851bf9ce711ec69804834de8af45c7af"
 
 [[package]]
 name = "console"
@@ -2680,42 +2647,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "criterion"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b12d017a929603d80db1831cd3a24082f8137ce19c69e6447f54f5fc8d692f"
-dependencies = [
- "anes",
- "cast",
- "ciborium",
- "clap",
- "criterion-plot",
- "is-terminal",
- "itertools 0.10.5",
- "num-traits",
- "once_cell",
- "oorandom",
- "plotters",
- "rayon",
- "regex",
- "serde",
- "serde_derive",
- "serde_json",
- "tinytemplate",
- "walkdir",
-]
-
-[[package]]
-name = "criterion-plot"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
-dependencies = [
- "cast",
- "itertools 0.10.5",
-]
-
-[[package]]
 name = "critical-section"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2728,7 +2659,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f8c3e73077b4b4a6ab1ea5047c37c57aee77657bc8ecd6f29b0af082d0b0c07"
 dependencies = [
  "chrono",
- "nom",
+ "nom 7.1.3",
  "once_cell",
 ]
 
@@ -3017,6 +2948,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-storage",
  "databend-common-tracing",
+ "databend-common-version",
  "databend-enterprise-query",
  "databend-query",
  "databend-storages-common-table-meta",
@@ -3041,9 +2973,9 @@ dependencies = [
 name = "databend-common-ast"
 version = "0.2.1"
 dependencies = [
- "criterion",
  "databend_educe",
  "derive-visitor",
+ "divan",
  "enum-as-inner",
  "ethnum",
  "fast-float2",
@@ -3052,7 +2984,7 @@ dependencies = [
  "indent",
  "itertools 0.13.0",
  "logos",
- "nom",
+ "nom 7.1.3",
  "nom-rule",
  "ordered-float 5.0.0",
  "percent-encoding",
@@ -3094,7 +3026,6 @@ dependencies = [
  "bytesize",
  "crc32fast",
  "ctrlc",
- "databend-common-building",
  "databend-common-exception",
  "enquote",
  "fastrace",
@@ -3120,7 +3051,6 @@ dependencies = [
  "reqwest",
  "reqwest-hickory-resolver",
  "rustix 0.38.44",
- "semver",
  "serde",
  "serde_json",
  "serde_test",
@@ -3261,12 +3191,12 @@ dependencies = [
  "anyhow",
  "clap",
  "databend-common-base",
- "databend-common-building",
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-app",
  "databend-common-storage",
  "databend-common-tracing",
+ "databend-common-version",
  "log",
  "pretty_assertions",
  "serde",
@@ -3338,7 +3268,6 @@ dependencies = [
  "borsh",
  "bumpalo",
  "comfy-table",
- "criterion",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-column",
@@ -3348,6 +3277,7 @@ dependencies = [
  "databend-common-hashtable",
  "databend-common-io",
  "databend_educe",
+ "divan",
  "either",
  "enum-as-inner",
  "ethnum",
@@ -3429,7 +3359,6 @@ dependencies = [
  "bumpalo",
  "comfy-table",
  "crc32fast",
- "criterion",
  "ctor",
  "databend-common-ast",
  "databend-common-base",
@@ -3447,6 +3376,7 @@ dependencies = [
  "databend-functions-scalar-integer-basic-arithmetic",
  "databend-functions-scalar-math",
  "databend-functions-scalar-numeric-basic-arithmetic",
+ "divan",
  "ethnum",
  "geo",
  "geohash",
@@ -3592,6 +3522,7 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-proto-conv",
+ "databend-common-version",
  "enumflags2",
  "fastrace",
  "futures",
@@ -3703,7 +3634,6 @@ dependencies = [
  "arrow-flight",
  "async-backtrace",
  "databend-common-base",
- "databend-common-building",
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-api",
@@ -3711,6 +3641,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-tracing",
+ "databend-common-version",
  "derive_more",
  "fastrace",
  "futures",
@@ -3819,6 +3750,7 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
+ "databend-common-version",
  "deepsize",
  "derive_more",
  "display-more",
@@ -3918,7 +3850,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "databend-common-building",
  "databend-common-exception",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
@@ -4164,6 +4095,7 @@ dependencies = [
  "databend-common-storages-result-cache",
  "databend-common-storages-view",
  "databend-common-users",
+ "databend-common-version",
  "databend-enterprise-data-mask-feature",
  "databend-storages-common-cache",
  "databend-storages-common-io",
@@ -4321,6 +4253,7 @@ dependencies = [
  "databend-storages-common-pruner",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
+ "divan",
  "enum-as-inner",
  "fastrace",
  "futures",
@@ -4342,6 +4275,7 @@ dependencies = [
  "tantivy-common",
  "tantivy-fst",
  "tantivy-jieba",
+ "tempfile",
  "thrift",
  "typetag",
  "uuid",
@@ -4596,7 +4530,6 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-column",
  "databend-common-compress",
- "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",
@@ -4610,6 +4543,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
+ "databend-common-version",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "enum-as-inner",
@@ -4658,7 +4592,6 @@ dependencies = [
  "chrono",
  "databend-common-ast",
  "databend-common-base",
- "databend-common-building",
  "databend-common-catalog",
  "databend-common-cloud-control",
  "databend-common-config",
@@ -4667,7 +4600,6 @@ dependencies = [
  "databend-common-functions",
  "databend-common-management",
  "databend-common-meta-app",
- "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
@@ -4781,6 +4713,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-version"
+version = "0.1.0"
+dependencies = [
+ "databend-common-building",
+ "semver",
+]
+
+[[package]]
 name = "databend-enterprise-aggregating-index"
 version = "0.1.0"
 dependencies = [
@@ -4853,9 +4793,6 @@ dependencies = [
 [[package]]
 name = "databend-enterprise-meta"
 version = "0.1.0"
-dependencies = [
- "databend-common-building",
-]
 
 [[package]]
 name = "databend-enterprise-ngram-index"
@@ -4880,12 +4817,10 @@ dependencies = [
  "dashmap 6.1.0",
  "databend-common-ast",
  "databend-common-base",
- "databend-common-building",
  "databend-common-catalog",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
- "databend-common-functions",
  "databend-common-io",
  "databend-common-license",
  "databend-common-management",
@@ -4895,7 +4830,6 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-pipeline-core",
- "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
  "databend-common-sql",
@@ -4903,6 +4837,7 @@ dependencies = [
  "databend-common-storages-fuse",
  "databend-common-storages-stream",
  "databend-common-tracing",
+ "databend-common-version",
  "databend-enterprise-aggregating-index",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
@@ -5101,7 +5036,6 @@ dependencies = [
  "backon",
  "clap",
  "databend-common-base",
- "databend-common-building",
  "databend-common-grpc",
  "databend-common-http",
  "databend-common-meta-api",
@@ -5115,6 +5049,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-tracing",
+ "databend-common-version",
  "deepsize",
  "derive_more",
  "display-more",
@@ -5170,6 +5105,7 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-tracing",
+ "databend-common-version",
  "databend-meta",
  "display-more",
  "fastrace",
@@ -5264,6 +5200,7 @@ dependencies = [
  "databend-common-storages-view",
  "databend-common-tracing",
  "databend-common-users",
+ "databend-common-version",
  "databend-enterprise-aggregating-index",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
@@ -5432,7 +5369,6 @@ dependencies = [
  "async-trait",
  "bytes",
  "crc32fast",
- "criterion",
  "crossbeam-channel",
  "databend-common-base",
  "databend-common-cache",
@@ -5442,6 +5378,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
+ "divan",
  "hex",
  "libc",
  "log",
@@ -5460,13 +5397,14 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "bincode 2.0.1",
+ "bytes",
  "cbordata",
- "criterion",
  "databend-common-ast",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
  "databend-storages-common-table-meta",
+ "divan",
  "fastrace",
  "goldenfile",
  "jsonb",
@@ -5936,6 +5874,31 @@ name = "displaydoc"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
+name = "divan"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a405457ec78b8fe08b0e32b4a3570ab5dff6dd16eb9e76a5ee0a9d9cbd898933"
+dependencies = [
+ "cfg-if",
+ "clap",
+ "condtype",
+ "divan-macros",
+ "libc",
+ "regex-lite",
+]
+
+[[package]]
+name = "divan-macros"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9556bc800956545d6420a640173e5ba7dfa82f38d3ea5a167eb555bc69ac3323"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9378,14 +9341,14 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5d739a885794aaffc2f9b559155888784908954eb74860d5adb4a598a5457e7"
+checksum = "e7e7eadf220028b2482ef22189ee7ce946665874dcc1040d82c827ff06963fbe"
 dependencies = [
  "byteorder",
  "fast-float2",
  "itoa",
- "nom",
+ "nom 8.0.0",
  "num-traits",
  "ordered-float 5.0.0",
  "rand 0.9.0",
@@ -10486,12 +10449,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "nom"
+version = "8.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "nom-rule"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c72951bd83c76b88d820f03b38b124f981dc2520070d62170da7012d1ce964ab"
 dependencies = [
- "nom",
+ "nom 7.1.3",
  "pratt",
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -10795,12 +10767,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4ce411919553d3f9fa53a0880544cda985a112117a0444d5ff1e870a893d6ea"
 
 [[package]]
-name = "oorandom"
-version = "11.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
-
-[[package]]
 name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10819,9 +10785,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.53.0"
+version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5ebd1183902124c6b3ee0a9383683513dd8cca3d25a5d065593f969a44f979e"
+checksum = "c0f407ca2797ca6c010720aa3cedfa0187430e4f70b729c75c33142d44021f59"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -10836,13 +10802,14 @@ dependencies = [
  "getrandom 0.2.15",
  "hdrs",
  "http 1.3.1",
+ "http-body 1.0.1",
  "log",
  "md-5",
  "moka",
  "percent-encoding",
  "prometheus-client 0.23.1",
  "prost",
- "quick-xml 0.36.2",
+ "quick-xml 0.37.4",
  "reqsign",
  "reqwest",
  "serde",
@@ -10896,7 +10863,7 @@ dependencies = [
  "bytes",
  "chrono",
  "mysql_common",
- "nom",
+ "nom 7.1.3",
  "pin-project-lite",
  "tokio",
  "tokio-rustls 0.26.2",
@@ -11507,34 +11474,6 @@ name = "pkg-config"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
-
-[[package]]
-name = "plotters"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aeb6f403d7a4911efb1e33402027fc44f29b5bf6def3effcc22d7bb75f2b747"
-dependencies = [
- "num-traits",
- "plotters-backend",
- "plotters-svg",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "plotters-backend"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df42e13c12958a16b3f7f4386b9ab1f3e7933914ecea48da7139435263a4172a"
-
-[[package]]
-name = "plotters-svg"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51bae2ac328883f7acdfea3d66a7c35751187f870bc81f94563733a154d7a670"
-dependencies = [
- "plotters-backend",
-]
 
 [[package]]
 name = "poem"
@@ -12245,16 +12184,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f50b1c63b38611e7d4d7f68b82d3ad0cc71a2ad2e7f61fc10f1328d917c93cd"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "quick-xml"
-version = "0.36.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7649a7b4df05aed9ea7ec6f628c67c9953a43869b8bc50929569b2999d443fe"
-dependencies = [
- "memchr",
- "serde",
 ]
 
 [[package]]
@@ -14073,7 +14002,7 @@ version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bba3a93db0cc4f7bdece8bb09e77e2e785c20bfebf79eb8340ed80708048790"
 dependencies = [
- "nom",
+ "nom 7.1.3",
  "unicode_categories",
 ]
 
@@ -14831,7 +14760,7 @@ name = "tantivy-query-grammar"
 version = "0.22.0"
 source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
- "nom",
+ "nom 7.1.3",
 ]
 
 [[package]]
@@ -15120,16 +15049,6 @@ checksum = "9117f5d4db391c1cf6927e7bea3db74b9a1c1add8f7eda9ffd5364f40f57b82f"
 dependencies = [
  "displaydoc",
  "zerovec",
-]
-
-[[package]]
-name = "tinytemplate"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]

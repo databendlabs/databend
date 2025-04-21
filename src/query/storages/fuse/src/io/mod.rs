@@ -52,5 +52,6 @@ pub use write::InvertedIndexWriter;
 pub use write::MetaWriter;
 pub(crate) use write::StreamBlockBuilder;
 pub(crate) use write::StreamBlockProperties;
+pub use write::VirtualColumnBuilder;
 pub use write::WriteSettings;
 pub use write::MAX_BLOCK_UNCOMPRESSED_SIZE;
