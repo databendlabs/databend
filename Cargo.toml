@@ -584,19 +584,19 @@ map_entry = "allow"
 ## Test SQL:
 ## select sum(number) from numbers_mt(10000000000); ~ 3x performance
 ## select max(number) from numbers_mt(10000000000); ~ 3x performance
-# [profile.release]
-# debug = 1
-# lto = "thin"
-# overflow-checks = false
-# incremental = false
-# codegen-units = 1
-
 [profile.release]
 debug = 1
 lto = "thin"
 overflow-checks = false
-opt-level = "s"         # defaults to be 3
-incremental = true
+incremental = false
+codegen-units = 1
+
+## [profile.release]
+## debug = 1
+## lto = "thin"
+## overflow-checks = false
+## opt-level = "s"         # defaults to be 3
+## incremental = true
 
 [profile.ci]
 inherits = "release"
