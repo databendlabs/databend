@@ -118,7 +118,7 @@ impl TimeSeriesProfile {
                     item.queue
                         .push((now, value))
                         .expect("Failed to push to queue");
-                    if item.queue.len() > DEFAULT_BATCH_SIZE {
+                    if item.queue.len() >= DEFAULT_BATCH_SIZE {
                         self.flush(item);
                     }
                     break;
