@@ -234,9 +234,6 @@ pub struct AcquireQueueGuard {
     permit: Option<Permit>,
 }
 
-unsafe impl Send for AcquireQueueGuard {}
-unsafe impl Sync for AcquireQueueGuard {}
-
 impl Drop for AcquireQueueGuard {
     fn drop(&mut self) {
         if self.permit.is_some() {
