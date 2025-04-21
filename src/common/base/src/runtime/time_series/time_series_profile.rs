@@ -75,19 +75,23 @@ pub struct TimeSeriesProfileItem {
 }
 
 pub struct TimeSeriesProfile {
-    pub items: [TimeSeriesProfileItem; variant_count::<TimeSeriesProfileStatisticsName>()],
+    pub items: Vec<TimeSeriesProfileItem>,
     pub plan_id: u32,
     pub query_id: String,
 }
 
 impl TimeSeriesProfile {
-    fn create_items() -> [TimeSeriesProfileItem; variant_count::<TimeSeriesProfileStatisticsName>()]
-    {
-        std::array::from_fn(|i| TimeSeriesProfileItem {
-            queue: ConcurrentQueue::unbounded(),
-            last_record_timestamp: AtomicUsize::new(0),
-            name: TimeSeriesProfileStatisticsName::from(i),
-        })
+    fn create_items() -> Vec<TimeSeriesProfileItem> {
+        let len = variant_count::<TimeSeriesProfileStatisticsName>();
+        let mut items = Vec::with_capacity(len);
+        for i in 0..len {
+            items.push(TimeSeriesProfileItem {
+                queue: ConcurrentQueue::unbounded(),
+                last_record_timestamp: AtomicUsize::new(0),
+                name: TimeSeriesProfileStatisticsName::from(i),
+            });
+        }
+        items
     }
 
     pub fn create(plan_id: u32, query_id: String) -> Arc<Self> {

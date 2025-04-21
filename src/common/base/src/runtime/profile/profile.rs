@@ -118,7 +118,7 @@ impl Profile {
     }
 
     pub fn finish() {
-        ThreadTracker::with(|x| match x.borrow().payload.profile.as_ref() {
+        let _ = ThreadTracker::try_with(|x| match x.borrow().payload.profile.as_ref() {
             None => {}
             Some(profile) => {
                 if let Some(time_series_profile) = &profile.time_series {

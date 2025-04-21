@@ -49,6 +49,7 @@ use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
+use databend_common_exception::ErrorCode;
 use pin_project_lite::pin_project;
 
 use crate::runtime::memory::GlobalStatBuffer;
@@ -178,6 +179,13 @@ impl ThreadTracker {
     pub(crate) fn with<F, R>(f: F) -> R
     where F: FnOnce(&RefCell<ThreadTracker>) -> R {
         TRACKER.with(f)
+    }
+
+    pub(crate) fn try_with<F, R>(f: F) -> Result<R, ErrorCode>
+    where F: FnOnce(&RefCell<ThreadTracker>) -> R {
+        TRACKER
+            .try_with(f)
+            .map_err(|_| ErrorCode::Internal("ThreadTracker key has been destroyed"))
     }
 
     pub fn tracking(tracking_payload: TrackingPayload) -> TrackingGuard {
