@@ -75,6 +75,14 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 xorf = { workspace = true, default-features = false, features = ["binary-fuse"] }
 
+[dev-dependencies]
+divan = { workspace = true }
+tempfile = { workspace = true }
+
+[[bench]]
+name = "bench"
+harness = false
+
 [lints]
 workspace = true
 

@@ -62,7 +62,7 @@ unicode-segmentation = { workspace = true }
 
 [dev-dependencies]
 arrow-ord = { workspace = true }
-criterion = { workspace = true }
+divan = { workspace = true }
 goldenfile = { workspace = true }
 pretty_assertions = { workspace = true }
 proptest = { workspace = true }

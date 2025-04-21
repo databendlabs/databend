@@ -27,7 +27,6 @@ mod temp_dir;
 pub use cache::*;
 pub use caches::*;
 pub use manager::CacheManager;
-// Unfortunately, criterion benchmarks need it to be pub
 pub use providers::disk_cache::disk_cache_lru::read_cache_content;
 pub use providers::DiskCacheAccessor;
 pub use providers::DiskCacheBuilder;
