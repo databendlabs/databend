@@ -94,6 +94,31 @@ where A: SortAlgorithm
         Self { base, step }
     }
 
+    pub fn from_meta(base: Base, meta: SortCollectedMeta) -> Self {
+        let SortCollectedMeta {
+            params,
+            bounds,
+            blocks,
+        } = meta;
+
+        let subsequent = blocks
+            .into_iter()
+            .map(|list| base.new_stream(Vec::from(list).into(), None))
+            .collect();
+
+        Self {
+            base,
+            step: Step::Sort(StepSort {
+                params,
+                bounds,
+                cur_bound: None,
+                subsequent,
+                current: vec![],
+                output_merger: None,
+            }),
+        }
+    }
+
     pub async fn sort_input_data(
         &mut self,
         input_data: Vec<DataBlock>,
@@ -178,11 +203,14 @@ where A: SortAlgorithm
 
         let blocks = subsequent
             .into_iter()
-            .map(|stream| Vec::from(stream.blocks).into_boxed_slice())
+            .map(|stream| {
+                assert!(stream.bound.is_none());
+                Vec::from(stream.blocks).into_boxed_slice()
+            })
             .collect();
 
         Ok(SortCollectedMeta {
-            batch_rows: params.batch_rows,
+            params,
             blocks,
             bounds,
         })
@@ -651,7 +679,7 @@ fn sort_column(data: &DataBlock, sort_row_offset: usize) -> &Column {
 #[async_trait::async_trait]
 pub trait Spill: Send {
     async fn spill(&self, data_block: DataBlock) -> Result<Location>;
-    async fn resotre(&self, location: &Location) -> Result<DataBlock>;
+    async fn restore(&self, location: &Location) -> Result<DataBlock>;
 }
 
 #[async_trait::async_trait]
@@ -660,7 +688,7 @@ impl Spill for Arc<Spiller> {
         self.as_ref().spill(vec![data_block]).await
     }
 
-    async fn resotre(&self, location: &Location) -> Result<DataBlock> {
+    async fn restore(&self, location: &Location) -> Result<DataBlock> {
         self.read_spilled_file(location).await
     }
 }
@@ -753,7 +781,7 @@ impl<R: Rows, S: Spill> BoundBlockStream<R, S> {
         }
 
         let location = block.location.as_ref().unwrap();
-        let data = self.spiller.resotre(location).await?;
+        let data = self.spiller.restore(location).await?;
         block.data = Some(if block.processed != 0 {
             debug_assert_eq!(block.rows + block.processed, data.num_rows());
             data.slice(block.processed..data.num_rows())
@@ -999,7 +1027,7 @@ mod tests {
             Ok(Location::Remote(name))
         }
 
-        async fn resotre(&self, location: &Location) -> Result<DataBlock> {
+        async fn restore(&self, location: &Location) -> Result<DataBlock> {
             match location {
                 Location::Remote(name) => Ok(self.map.lock().unwrap().get(name).unwrap().clone()),
                 _ => unreachable!(),

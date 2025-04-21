@@ -31,8 +31,16 @@ use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::sort::RowsTypeVisitor;
 use databend_common_pipeline_transforms::MemorySettings;
 
+use super::collect::TransformSortCollect;
+use super::execute::TransformSortExecute;
 use super::TransformSort;
 use crate::spillers::Spiller;
+
+enum SortType {
+    Sort,
+    Collect,
+    Execute,
+}
 
 pub struct TransformSortBuilder {
     input: Arc<InputPort>,
@@ -47,6 +55,7 @@ pub struct TransformSortBuilder {
     enable_loser_tree: bool,
     limit: Option<usize>,
     processor: Option<Result<Box<dyn Processor>>>,
+    typ: SortType,
 }
 
 impl TransformSortBuilder {
@@ -71,6 +80,7 @@ impl TransformSortBuilder {
             limit: None,
             memory_settings: MemorySettings::disable_spill(),
             processor: None,
+            typ: SortType::Sort,
         }
     }
 
@@ -149,6 +159,83 @@ impl TransformSortBuilder {
             self.memory_settings.clone(),
         )?))
     }
+
+    pub fn build_collect(mut self) -> Result<Box<dyn Processor>> {
+        debug_assert!(if self.output_order_col {
+            self.schema.has_field(ORDER_COL_NAME)
+        } else {
+            !self.schema.has_field(ORDER_COL_NAME)
+        });
+        self.typ = SortType::Collect;
+
+        select_row_type(&mut self);
+        self.processor.unwrap()
+    }
+
+    fn build_sort_collect<A, C>(&mut self) -> Result<Box<dyn Processor>>
+    where
+        A: SortAlgorithm + 'static,
+        C: RowConverter<A::Rows> + Send + 'static,
+    {
+        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
+
+        Ok(Box::new(TransformSortCollect::<A, C>::new(
+            self.input.clone(),
+            self.output.clone(),
+            schema,
+            self.sort_desc.clone(),
+            self.block_size,
+            self.limit.map(|limit| (limit, false)),
+            self.spiller.clone(),
+            self.order_col_generated,
+            self.memory_settings.clone(),
+        )?))
+    }
+
+    fn build_sort_limit_collect<A, C>(&mut self) -> Result<Box<dyn Processor>>
+    where
+        A: SortAlgorithm + 'static,
+        C: RowConverter<A::Rows> + Send + 'static,
+    {
+        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
+        Ok(Box::new(TransformSortCollect::<A, C>::new(
+            self.input.clone(),
+            self.output.clone(),
+            schema,
+            self.sort_desc.clone(),
+            self.block_size,
+            Some((self.limit.unwrap(), true)),
+            self.spiller.clone(),
+            self.order_col_generated,
+            self.memory_settings.clone(),
+        )?))
+    }
+
+    pub fn build_exec(mut self) -> Result<Box<dyn Processor>> {
+        debug_assert!(if self.output_order_col {
+            self.schema.has_field(ORDER_COL_NAME)
+        } else {
+            !self.schema.has_field(ORDER_COL_NAME)
+        });
+        self.typ = SortType::Execute;
+
+        select_row_type(&mut self);
+        self.processor.unwrap()
+    }
+
+    fn build_sort_exec<A>(&mut self) -> Result<Box<dyn Processor>>
+    where A: SortAlgorithm + 'static {
+        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
+
+        Ok(Box::new(TransformSortExecute::<A>::new(
+            self.input.clone(),
+            self.output.clone(),
+            schema,
+            self.limit,
+            self.spiller.clone(),
+            self.output_order_col,
+        )?))
+    }
 }
 
 impl RowsTypeVisitor for TransformSortBuilder {
@@ -165,14 +252,29 @@ impl RowsTypeVisitor for TransformSortBuilder {
         R: Rows + 'static,
         C: RowConverter<R> + Send + 'static,
     {
-        let processor = match (
-            self.limit.map(|limit| limit < 10000).unwrap_or_default(),
-            self.enable_loser_tree,
-        ) {
-            (true, true) => self.build_sort_limit::<LoserTreeSort<R>, C>(),
-            (true, false) => self.build_sort_limit::<HeapSort<R>, C>(),
-            (false, true) => self.build_sort::<LoserTreeSort<R>, C>(),
-            (false, false) => self.build_sort::<HeapSort<R>, C>(),
+        let processor = match self.typ {
+            SortType::Sort => match (
+                self.limit.map(|limit| limit < 10000).unwrap_or_default(),
+                self.enable_loser_tree,
+            ) {
+                (true, true) => self.build_sort_limit::<LoserTreeSort<R>, C>(),
+                (true, false) => self.build_sort_limit::<HeapSort<R>, C>(),
+                (false, true) => self.build_sort::<LoserTreeSort<R>, C>(),
+                (false, false) => self.build_sort::<HeapSort<R>, C>(),
+            },
+            SortType::Collect => match (
+                self.limit.map(|limit| limit < 10000).unwrap_or_default(),
+                self.enable_loser_tree,
+            ) {
+                (true, true) => self.build_sort_limit_collect::<LoserTreeSort<R>, C>(),
+                (true, false) => self.build_sort_limit_collect::<HeapSort<R>, C>(),
+                (false, true) => self.build_sort_collect::<LoserTreeSort<R>, C>(),
+                (false, false) => self.build_sort_collect::<HeapSort<R>, C>(),
+            },
+            SortType::Execute => match self.enable_loser_tree {
+                true => self.build_sort_exec::<LoserTreeSort<R>>(),
+                false => self.build_sort_exec::<HeapSort<R>>(),
+            },
         };
         self.processor = Some(processor)
     }

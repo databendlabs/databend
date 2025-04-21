@@ -72,11 +72,12 @@ where
     C: RowConverter<A::Rows>,
 {
     #[allow(clippy::too_many_arguments)]
-    fn new(
+    pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
+        max_block_size: usize,
         limit: Option<(usize, bool)>,
         spiller: Arc<Spiller>,
         order_col_generated: bool,
