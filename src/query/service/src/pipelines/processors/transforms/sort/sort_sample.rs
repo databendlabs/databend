@@ -92,7 +92,7 @@ impl StateInner {
         let mut sort_compare = SortCompare::with_force_equality(self.sort_desc.clone(), rows);
 
         for desc in &self.sort_desc {
-            let array = candidates.get_by_offset(desc.offset).value.clone();
+            let array = candidates.get_by_offset(desc.offset).value();
             sort_compare.visit_value(array)?;
             sort_compare.increment_column_index();
         }

@@ -40,6 +40,7 @@ use rand::SeedableRng;
 
 use super::Base;
 use super::MemoryRows;
+use super::SortCollectedMeta;
 use crate::spillers::Location;
 use crate::spillers::Spiller;
 
@@ -56,7 +57,7 @@ enum Step<A: SortAlgorithm> {
 struct StepCollect<A: SortAlgorithm> {
     params: SortSpillParams,
     sampler: FixedRateSampler<StdRng>,
-    streams: Vec<BoundBlockStream<A::Rows>>,
+    streams: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
 }
 
 struct StepSort<A: SortAlgorithm> {
@@ -66,10 +67,11 @@ struct StepSort<A: SortAlgorithm> {
     bounds: Vec<Column>,
     cur_bound: Option<A::Rows>,
 
-    subsequent: Vec<BoundBlockStream<A::Rows>>,
-    current: Vec<BoundBlockStream<A::Rows>>,
+    subsequent: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
+    current: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
 
-    output_merger: Option<Merger<A, BoundBlockStream<A::Rows>>>,
+    #[allow(clippy::type_complexity)]
+    output_merger: Option<Merger<A, BoundBlockStream<A::Rows, Arc<Spiller>>>>,
 }
 
 impl<A> SortSpill<A>
@@ -156,6 +158,34 @@ where A: SortAlgorithm
     #[allow(unused)]
     pub fn format_memory_usage(&self) -> FmtMemoryUsage<'_, A> {
         FmtMemoryUsage(self)
+    }
+
+    pub fn dump_collect(self) -> Result<SortCollectedMeta> {
+        let Self {
+            base,
+            step: Step::Collect(mut collect),
+        } = self
+        else {
+            unreachable!()
+        };
+
+        let StepSort {
+            params,
+            bounds,
+            subsequent,
+            ..
+        } = collect.next_step(&base)?;
+
+        let blocks = subsequent
+            .into_iter()
+            .map(|stream| Vec::from(stream.blocks).into_boxed_slice())
+            .collect();
+
+        Ok(SortCollectedMeta {
+            batch_rows: params.batch_rows,
+            blocks,
+            bounds,
+        })
     }
 }
 
@@ -449,8 +479,8 @@ impl Base {
         &self,
         blocks: VecDeque<SpillableBlock>,
         bound: Option<R>,
-    ) -> BoundBlockStream<R> {
-        BoundBlockStream::<R> {
+    ) -> BoundBlockStream<R, Arc<Spiller>> {
+        BoundBlockStream {
             blocks,
             bound,
             sort_row_offset: self.sort_row_offset,
@@ -517,7 +547,7 @@ impl Base {
     }
 }
 
-impl<R: Rows> MemoryRows for Vec<BoundBlockStream<R>> {
+impl<R: Rows, S> MemoryRows for Vec<BoundBlockStream<R, S>> {
     fn in_memory_rows(&self) -> usize {
         self.iter().map(|s| s.in_memory_rows()).sum::<usize>()
     }
@@ -554,7 +584,7 @@ impl<A: SortAlgorithm> fmt::Debug for FmtMemoryUsage<'_, A> {
     }
 }
 
-struct SpillableBlock {
+pub struct SpillableBlock {
     data: Option<DataBlock>,
     rows: usize,
     location: Option<Location>,
@@ -592,10 +622,10 @@ impl SpillableBlock {
         R::from_column(&self.domain).unwrap()
     }
 
-    async fn spill(&mut self, spiller: &Spiller) -> Result<()> {
+    async fn spill(&mut self, spiller: &impl Spill) -> Result<()> {
         let data = self.data.take().unwrap();
         if self.location.is_none() {
-            let location = spiller.spill(vec![data]).await?;
+            let location = spiller.spill(data).await?;
             self.location = Some(location);
         }
         Ok(())
@@ -618,15 +648,32 @@ fn sort_column(data: &DataBlock, sort_row_offset: usize) -> &Column {
     data.get_by_offset(sort_row_offset).as_column().unwrap()
 }
 
+#[async_trait::async_trait]
+pub trait Spill: Send {
+    async fn spill(&self, data_block: DataBlock) -> Result<Location>;
+    async fn resotre(&self, location: &Location) -> Result<DataBlock>;
+}
+
+#[async_trait::async_trait]
+impl Spill for Arc<Spiller> {
+    async fn spill(&self, data_block: DataBlock) -> Result<Location> {
+        self.as_ref().spill(vec![data_block]).await
+    }
+
+    async fn resotre(&self, location: &Location) -> Result<DataBlock> {
+        self.read_spilled_file(location).await
+    }
+}
+
 /// BoundBlockStream is a stream of blocks that are cutoff less or equal than bound.
-struct BoundBlockStream<R: Rows> {
+struct BoundBlockStream<R: Rows, S> {
     blocks: VecDeque<SpillableBlock>,
     bound: Option<R>,
     sort_row_offset: usize,
-    spiller: Arc<Spiller>,
+    spiller: S,
 }
 
-impl<R: Rows> Debug for BoundBlockStream<R> {
+impl<R: Rows, S> Debug for BoundBlockStream<R, S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("BoundBlockStream")
             .field("blocks", &self.blocks)
@@ -637,7 +684,7 @@ impl<R: Rows> Debug for BoundBlockStream<R> {
 }
 
 #[async_trait::async_trait]
-impl<R: Rows> SortedStream for BoundBlockStream<R> {
+impl<R: Rows, S: Spill> SortedStream for BoundBlockStream<R, S> {
     async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         if self.should_include_first() {
             self.restore_first().await?;
@@ -650,7 +697,7 @@ impl<R: Rows> SortedStream for BoundBlockStream<R> {
     }
 }
 
-impl<R: Rows> BoundBlockStream<R> {
+impl<R: Rows, S> BoundBlockStream<R, S> {
     fn should_include_first(&self) -> bool {
         let Some(block) = self.blocks.front() else {
             return false;
@@ -682,6 +729,23 @@ impl<R: Rows> BoundBlockStream<R> {
         block.data.take().unwrap()
     }
 
+    fn len(&self) -> usize {
+        self.blocks.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn in_memory_rows(&self) -> usize {
+        self.blocks
+            .iter()
+            .map(|b| if b.data.is_some() { b.rows } else { 0 })
+            .sum()
+    }
+}
+
+impl<R: Rows, S: Spill> BoundBlockStream<R, S> {
     async fn restore_first(&mut self) -> Result<()> {
         let block = self.blocks.front_mut().unwrap();
         if block.data.is_some() {
@@ -689,7 +753,7 @@ impl<R: Rows> BoundBlockStream<R> {
         }
 
         let location = block.location.as_ref().unwrap();
-        let data = self.spiller.read_spilled_file(location).await?;
+        let data = self.spiller.resotre(location).await?;
         block.data = Some(if block.processed != 0 {
             debug_assert_eq!(block.rows + block.processed, data.num_rows());
             data.slice(block.processed..data.num_rows())
@@ -704,21 +768,6 @@ impl<R: Rows> BoundBlockStream<R> {
             ))
         );
         Ok(())
-    }
-
-    fn len(&self) -> usize {
-        self.blocks.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    fn in_memory_rows(&self) -> usize {
-        self.blocks
-            .iter()
-            .map(|b| if b.data.is_some() { b.rows } else { 0 })
-            .sum()
     }
 
     async fn spill(&mut self, skip: usize) -> Result<()> {
@@ -815,6 +864,10 @@ fn get_domain(col: &Column) -> Column {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    use databend_common_base::base::GlobalUniqName;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
@@ -826,12 +879,8 @@ mod tests {
     use databend_common_pipeline_transforms::processors::sort::convert_rows;
     use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
     use databend_common_pipeline_transforms::sort::SimpleRowsDesc;
-    use databend_common_storage::DataOperator;
 
     use super::*;
-    use crate::spillers::SpillerConfig;
-    use crate::spillers::SpillerType;
-    use crate::test_kits::*;
 
     fn test_data() -> (DataSchemaRef, DataBlock) {
         let col1 = Int32Type::from_data(vec![7, 7, 8, 11, 3, 5, 10, 11]);
@@ -848,7 +897,7 @@ mod tests {
     }
 
     async fn run_bound_block_stream<R: Rows>(
-        spiller: Arc<Spiller>,
+        spiller: impl Spill + Clone,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         bound: Column,
         block_part: usize,
@@ -871,7 +920,7 @@ mod tests {
         })
         .collect::<VecDeque<_>>();
 
-        let mut stream = BoundBlockStream::<R> {
+        let mut stream = BoundBlockStream::<R, _> {
             blocks,
             bound,
             sort_row_offset,
@@ -887,17 +936,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_bound_block_stream() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
-
-        let op = DataOperator::instance().spill_operator();
-        let spill_config = SpillerConfig {
-            spiller_type: SpillerType::OrderBy,
-            location_prefix: "_spill_test".to_string(),
-            disk_spill: None,
-            use_parquet: true,
+        let spiller = MockSpiller {
+            map: Arc::new(Mutex::new(HashMap::new())),
         };
-        let spiller = Arc::new(Spiller::create(ctx.clone(), op, spill_config)?);
 
         {
             let sort_desc = Arc::new(vec![SortColumnDescription {
@@ -943,5 +984,26 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[derive(Clone)]
+    struct MockSpiller {
+        map: Arc<Mutex<HashMap<String, DataBlock>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl Spill for MockSpiller {
+        async fn spill(&self, data_block: DataBlock) -> Result<Location> {
+            let name = GlobalUniqName::unique();
+            self.map.lock().unwrap().insert(name.clone(), data_block);
+            Ok(Location::Remote(name))
+        }
+
+        async fn resotre(&self, location: &Location) -> Result<DataBlock> {
+            match location {
+                Location::Remote(name) => Ok(self.map.lock().unwrap().get(name).unwrap().clone()),
+                _ => unreachable!(),
+            }
+        }
     }
 }
