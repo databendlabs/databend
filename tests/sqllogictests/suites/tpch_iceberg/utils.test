@@ -103,7 +103,7 @@ desc abc.t;
 id INT YES NULL (empty)
 
 statement error 1302
-ALTER TABLE abc.t rename column a to b
+ALTER TABLE abc.t rename column id to b
 
 statement ok
 create or replace table abc.t1(c1 int, c2 string);
