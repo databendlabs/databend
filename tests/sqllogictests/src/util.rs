@@ -474,9 +474,11 @@ async fn stop_container(docker: &Docker, container_name: &str) {
         all: true,
         ..Default::default()
     });
-    println!("==> list containers");
     let containers = docker.list_containers(opts).await;
     if let Ok(containers) = containers {
+        if containers.len() > 0 {
+            println!("==> list containers");
+        }
         for container in containers {
             if let Some(names) = container.names {
                 println!(
