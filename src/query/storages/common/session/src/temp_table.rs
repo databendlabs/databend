@@ -89,6 +89,7 @@ impl TempTblMgr {
             name_ident,
             table_meta,
             as_dropped,
+            ..
         } = req;
         let orphan_table_name = as_dropped.then(|| format!("orphan@{}", name_ident.table_name));
 

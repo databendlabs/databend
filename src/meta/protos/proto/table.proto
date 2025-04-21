@@ -60,19 +60,6 @@ message TableIdent {
   uint64 seq = 2;
 }
 
-message TablePartition {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  message Identity {
-   repeated string columns = 1;
-  }
-
-  oneof partition {
-      Identity identity = 1;
-    }
- }
-
 
 // TableMeta is a container of all non-identity information.
 message TableMeta {
@@ -139,11 +126,6 @@ message TableMeta {
   map<string, TableIndex> indexes = 31;
   // The schema of virtual columns.
   VirtualDataSchema virtual_schema = 32;
-
-  // ICEBERG TABLE PROPERTIES.
-  map<string, string> table_properties = 33;
-  // ICEBERG TABLE PARITION
-  TablePartition table_partition = 34;
 }
 
 message TableIndex {

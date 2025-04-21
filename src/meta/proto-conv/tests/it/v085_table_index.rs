@@ -99,8 +99,6 @@ fn test_decode_v85_table_meta() -> anyhow::Result<()> {
             version: "".to_string(),
             options: btreemap! {},
         }},
-        table_properties: None,
-        table_partition: None,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v85.as_slice(), 85, want())?;

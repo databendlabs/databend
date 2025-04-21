@@ -349,8 +349,7 @@ impl CreateTableInterpreter {
         }?;
 
         if !catalog.support_partition()
-            && (req.table_meta.table_properties.is_some()
-                || req.table_meta.table_partition.is_some())
+            && (req.table_properties.is_some() || req.table_partition.is_some())
         {
             return Err(ErrorCode::TableOptionInvalid(format!(
                  "Current Catalog Type is {:?}, only Iceberg Catalog supports CREATE TABLE with PARTITION BY or PROPERTIES",
@@ -438,18 +437,6 @@ impl CreateTableInterpreter {
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
             options,
-            table_properties: if self.plan.table_properties.is_empty() {
-                None
-            } else {
-                Some(self.plan.table_properties.clone())
-            },
-            table_partition: if self.plan.table_partition.is_empty() {
-                None
-            } else {
-                Some(TablePartition::Identity {
-                    columns: self.plan.table_partition.clone(),
-                })
-            },
             engine_options: self.plan.engine_options.clone(),
             cluster_key: None,
             field_comments,
@@ -496,6 +483,18 @@ impl CreateTableInterpreter {
             },
             table_meta,
             as_dropped: false,
+            table_properties: if self.plan.table_properties.is_empty() {
+                None
+            } else {
+                Some(self.plan.table_properties.clone())
+            },
+            table_partition: if self.plan.table_partition.is_empty() {
+                None
+            } else {
+                Some(TablePartition::Identity {
+                    columns: self.plan.table_partition.clone(),
+                })
+            },
         };
 
         Ok(req)
