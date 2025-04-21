@@ -5377,6 +5377,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "bincode 2.0.0-rc.3",
+ "bytes",
  "cbordata",
  "criterion",
  "databend-common-ast",

@@ -20,6 +20,7 @@ use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
@@ -44,7 +45,7 @@ impl BlockReader {
 
         let mut ranges = vec![];
         // for async read, try using table data cache (if enabled in settings)
-        let column_data_cache = CacheManager::instance().get_table_data_cache();
+        let column_data_cache = CacheManager::instance().get_column_data_cache();
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
         let mut cached_column_data = vec![];
         let mut cached_column_array = vec![];
@@ -112,7 +113,11 @@ impl BlockReader {
                     .owner_memory
                     .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
                 let data = chunk_data.slice(range.clone());
-                column_data_cache.insert(column_cache_key.as_ref().to_owned(), data);
+
+                column_data_cache.insert(
+                    column_cache_key.as_ref().to_owned(),
+                    ColumnData::from_merge_io_read_result(data),
+                );
             }
         }
 
