@@ -469,7 +469,14 @@ impl DataExchangeManager {
         match queries_coordinator.get_mut(&query_id) {
             None => Err(ErrorCode::Internal("Query not exists.")),
             Some(query_coordinator) => {
-                assert!(query_coordinator.fragment_exchanges.is_empty());
+                assert!(
+                    query_coordinator.fragment_exchanges.is_empty(),
+                    "query_coordinator.fragment_exchanges is not empty: {:?}",
+                    query_coordinator
+                        .fragment_exchanges
+                        .keys()
+                        .collect::<Vec<_>>()
+                );
                 let injector = DefaultExchangeInjector::create();
                 let mut build_res =
                     query_coordinator.subscribe_fragment(&ctx, fragment_id, injector)?;
