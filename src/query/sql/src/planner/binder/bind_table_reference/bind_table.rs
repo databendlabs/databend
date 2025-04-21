@@ -31,10 +31,7 @@ use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
-use databend_common_meta_app::schema::VirtualField;
-use databend_common_meta_types::MetaId;
+use databend_common_expression::TableDataType;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
@@ -42,9 +39,7 @@ use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 use crate::BindContext;
-use crate::ColumnBindingBuilder;
 use crate::IndexType;
-use crate::Visibility;
 
 impl Binder {
     /// Bind a base table.
@@ -303,14 +298,7 @@ impl Binder {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
 
-                self.bind_table_virtual_column(
-                    &mut bind_context,
-                    table_meta.clone(),
-                    table_index,
-                    catalog.as_str(),
-                    database.as_str(),
-                    table_name.as_str(),
-                )?;
+                self.bind_table_virtual_column(&mut bind_context, table_meta.clone(), table_index)?;
 
                 Ok((s_expr, bind_context))
             }
@@ -343,92 +331,55 @@ impl Binder {
     fn bind_table_virtual_column(
         &mut self,
         bind_context: &mut BindContext,
-        table_meta: Arc<dyn Table>,
+        table: Arc<dyn Table>,
         table_index: IndexType,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
     ) -> Result<()> {
         if !bind_context.virtual_column_context.allow_pushdown {
             return Ok(());
         }
+
         // Ignore tables that do not support virtual columns
-        if !table_meta.support_virtual_columns() {
+        if !table.support_virtual_columns() {
             return Ok(());
         }
 
-        // If the table creates virtual columns, add the information to the context,
-        // the matched variant path expression will be converted to a virtual column
-        // and pushed down to the storage layer for reading to speed up the query.
-        let schema = table_meta.schema();
+        let source_schema = table.schema();
+        let table_meta = &table.get_table_info().meta;
+        let Some(ref virtual_schema) = table_meta.virtual_schema else {
+            return Ok(());
+        };
+
         if !bind_context
             .virtual_column_context
             .table_indices
             .contains(&table_index)
         {
-            let table_id = table_meta.get_id();
-            let virtual_column_fields = databend_common_base::runtime::block_on(
-                self.get_virtual_columns(catalog_name, table_id),
-            )?;
             bind_context
                 .virtual_column_context
                 .table_indices
                 .insert(table_index);
-            if let Some(virtual_column_fields) = virtual_column_fields {
-                let mut virtual_column_name_map =
-                    HashMap::with_capacity(virtual_column_fields.len());
-                for virtual_field in virtual_column_fields.into_iter() {
-                    // Add optional virtual column alias names.
-                    // Don't need to set the column index, as the virtual expr
-                    // will be parsed as an expression and then bind to virtual column.
-                    if let Some(alias_name) = virtual_field.alias_name {
-                        let virtual_column_binding = ColumnBindingBuilder::new(
-                            alias_name.clone(),
-                            0,
-                            Box::new(DataType::from(&virtual_field.data_type)),
-                            Visibility::InVisible,
-                        )
-                        .database_name(Some(database_name.to_string()))
-                        .table_name(Some(table_name.to_string()))
-                        .table_index(Some(table_index))
-                        .virtual_expr(Some(virtual_field.expr.clone()))
-                        .build();
+            let mut virtual_column_name_map = HashMap::with_capacity(virtual_schema.fields.len());
+            for virtual_field in virtual_schema.fields.iter() {
+                let Ok(source_field) =
+                    source_schema.field_of_column_id(virtual_field.source_column_id)
+                else {
+                    continue;
+                };
+                let name = format!("{}{}", source_field.name, virtual_field.name);
+                let column_id = virtual_field.column_id;
 
-                        bind_context
-                            .virtual_column_context
-                            .virtual_columns
-                            .push(virtual_column_binding);
-                    }
-                    virtual_column_name_map.insert(virtual_field.expr, virtual_field.data_type);
-                }
-                bind_context
-                    .virtual_column_context
-                    .virtual_column_names
-                    .insert(table_index, virtual_column_name_map);
-                bind_context
-                    .virtual_column_context
-                    .next_column_ids
-                    .insert(table_index, schema.next_column_id);
+                // It's not possible to determine the actual type based on the type of generated virtual columns,
+                // as fields in non-leaf nodes are not generated with virtual columns,
+                // and these ungenerated nodes may have inconsistent types.
+                let data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
+                virtual_column_name_map.insert(name, (data_type, column_id));
             }
+            bind_context
+                .virtual_column_context
+                .virtual_column_names
+                .insert(table_index, virtual_column_name_map);
         }
 
         Ok(())
-    }
-
-    async fn get_virtual_columns(
-        &self,
-        catalog_name: &str,
-        table_id: MetaId,
-    ) -> Result<Option<Vec<VirtualField>>> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let req = ListVirtualColumnsReq::new(tenant, Some(table_id));
-
-        if let Ok(virtual_column_metas) = catalog.list_virtual_columns(req).await {
-            if !virtual_column_metas.is_empty() {
-                return Ok(Some(virtual_column_metas[0].virtual_columns.clone()));
-            }
-        }
-        Ok(None)
     }
 }

@@ -73,14 +73,8 @@ async fn test_grpc_client_handshake_timeout() {
 
         let (mut client, _once) = MetaChannelManager::new_real_client(c);
 
-        let res = MetaGrpcClient::handshake(
-            &mut client,
-            &MIN_METASRV_SEMVER,
-            &MIN_METASRV_SEMVER,
-            "root",
-            "xxx",
-        )
-        .await;
+        let res =
+            MetaGrpcClient::handshake(&mut client, &MIN_METASRV_SEMVER, &[], "root", "xxx").await;
 
         let got = res.unwrap_err();
         let expect =
@@ -98,14 +92,8 @@ async fn test_grpc_client_handshake_timeout() {
 
         let (mut client, _once) = MetaChannelManager::new_real_client(c);
 
-        let res = MetaGrpcClient::handshake(
-            &mut client,
-            &MIN_METASRV_SEMVER,
-            &MIN_METASRV_SEMVER,
-            "root",
-            "xxx",
-        )
-        .await;
+        let res =
+            MetaGrpcClient::handshake(&mut client, &MIN_METASRV_SEMVER, &[], "root", "xxx").await;
 
         assert!(res.is_ok());
     }

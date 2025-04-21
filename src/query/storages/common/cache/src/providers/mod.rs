@@ -27,4 +27,5 @@ pub use disk_cache_builder::DiskCacheAccessor;
 pub use disk_cache_builder::DiskCacheBuilder;
 pub use disk_cache_builder::TableDataCacheKey;
 pub use hybrid_cache::HybridCache;
+pub use hybrid_cache::HybridCacheExt;
 pub use memory_cache::InMemoryLruCache;

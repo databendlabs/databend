@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use crate::providers::HybridCache;
-use crate::read::cached_reader::CachedReader;
-use crate::read::cached_ttl_reader::CachedTTLReader;
+use crate::read::cached_reader::CacheReader;
+use crate::read::cached_ttl_reader::CacheTTLReader;
 use crate::InMemoryLruCache;
 
-pub type HybridCacheReader<T, L> = CachedReader<L, HybridCache<T>>;
-pub type InMemoryCacheReader<T, L> = CachedReader<L, InMemoryLruCache<T>>;
-pub type InMemoryCacheTTLReader<T, L> = CachedTTLReader<L, InMemoryLruCache<T>>;
+pub type HybridCacheReader<T, L> = CacheReader<L, HybridCache<T>>;
+pub type InMemoryCacheReader<T, L> = CacheReader<L, InMemoryLruCache<T>>;
+pub type InMemoryCacheTTLReader<T, L> = CacheTTLReader<L, InMemoryLruCache<T>>;

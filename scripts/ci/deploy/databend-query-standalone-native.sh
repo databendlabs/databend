@@ -23,7 +23,7 @@ done
 sleep 1
 
 echo 'Start databend-meta...'
-nohup target/${BUILD_PROFILE}/databend-meta --single --log-level=INFO &
+nohup target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-1.toml &
 echo "Waiting on databend-meta 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9191
 

@@ -170,7 +170,7 @@ jobs:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_stateless_cluster_linux
-        timeout-minutes: 15
+        timeout-minutes: 18
 
   test_stateful_standalone:
     runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]

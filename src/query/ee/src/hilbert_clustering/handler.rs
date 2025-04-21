@@ -85,7 +85,6 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
                 fuse_table.schema_with_stream(),
                 fuse_table.get_operator(),
                 &push_downs,
-                fuse_table.get_storage_format(),
                 chunk.to_vec(),
             )
             .await?;

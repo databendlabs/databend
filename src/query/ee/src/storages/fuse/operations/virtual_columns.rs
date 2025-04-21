@@ -13,57 +13,35 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
-use async_trait::async_trait;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::infer_schema_type;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::Cast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
-use databend_common_expression::Evaluator;
-use databend_common_expression::Expr;
 use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
-use databend_common_expression::TableSchema;
-use databend_common_expression::TableSchemaRef;
-use databend_common_expression::TableSchemaRefExt;
-use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use databend_common_meta_app::schema::VirtualField;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sinks::AsyncSink;
-use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::parse_computed_expr;
-use databend_common_storage::read_parquet_schema_async_rs;
-use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::io::write_data;
 use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::io::VirtualColumnBuilder;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
 
@@ -73,9 +51,9 @@ use opendal::Operator;
 //                             ┌────> │ VirtualColumnTransform1 │ ────┐
 //                             │      └─────────────────────────┘     │
 //                             │                  ...                 │
-// ┌─────────────────────┐     │      ┌─────────────────────────┐     │      ┌───────────────────┐
-// │ VirtualColumnSource │ ────┼────> │ VirtualColumnTransformN │ ────┼────> │ VirtualColumnSink │
-// └─────────────────────┘     │      └─────────────────────────┘     │      └───────────────────┘
+// ┌─────────────────────┐     │      ┌─────────────────────────┐     │      ┌───────────────────────────┐       ┌─────────────────────────┐       ┌────────────┐
+// │ VirtualColumnSource │ ────┼────> │ VirtualColumnTransformN │ ────┼────> │ TransformSerializeSegment │ ────> │ TableMutationAggregator │ ────> │ CommitSink │
+// └─────────────────────┘     │      └─────────────────────────┘     │      └───────────────────────────┘       └─────────────────────────┘       └────────────┘
 //                             │                  ...                 │
 //                             │      ┌─────────────────────────┐     │
 //                             └────> │ VirtualColumnTransformZ │ ────┘
@@ -85,14 +63,9 @@ use opendal::Operator;
 pub async fn do_refresh_virtual_column(
     ctx: Arc<dyn TableContext>,
     fuse_table: &FuseTable,
-    virtual_columns: Vec<VirtualField>,
     segment_locs: Option<Vec<Location>>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
-    if virtual_columns.is_empty() {
-        return Ok(());
-    }
-
     let snapshot_opt = fuse_table.read_table_snapshot().await?;
     let snapshot = if let Some(val) = snapshot_opt {
         val
@@ -109,18 +82,19 @@ pub async fn do_refresh_virtual_column(
         if f.data_type().remove_nullable() != TableDataType::Variant {
             continue;
         }
-        let is_src_field = virtual_columns.iter().any(|v| v.expr.starts_with(f.name()));
-        if is_src_field {
-            field_indices.push(i);
-        }
+        field_indices.push(i);
     }
 
     if field_indices.is_empty() {
         // no source variant column
         return Ok(());
     }
-    let projected_schema = table_schema.project(&field_indices);
-    let source_schema = Arc::new(DataSchema::from(&projected_schema));
+
+    let table_info = &fuse_table.get_table_info();
+    let Some(virtual_column_builder) = VirtualColumnBuilder::try_create(ctx.clone(), table_info)
+    else {
+        return Ok(());
+    };
 
     let projection = Projection::Columns(field_indices);
     let block_reader =
@@ -154,38 +128,9 @@ pub async fn do_refresh_virtual_column(
             .await?;
 
         for block_meta in segment_info.block_metas()? {
-            let virtual_loc =
-                TableMetaLocationGenerator::gen_virtual_block_location(&block_meta.location.0);
-
-            let arrow_schema = match storage_format {
-                FuseStorageFormat::Parquet => {
-                    read_parquet_schema_async_rs(operator, &virtual_loc, None)
-                        .await
-                        .ok()
-                }
-                FuseStorageFormat::Native => {
-                    BlockReader::async_read_native_schema(operator, &virtual_loc)
-                        .await
-                        .map(|(_, schema)| schema)
-                }
-            };
-
-            // if all virtual columns has be generated, we can ignore this block
-            let all_generated = if let Some(arrow_schema) = arrow_schema {
-                let virtual_table_schema = TableSchema::try_from(&arrow_schema)?;
-                virtual_columns.iter().all(|v| {
-                    virtual_table_schema
-                        .fields
-                        .iter()
-                        .any(|f| *f.name() == v.expr && *f.data_type() == v.data_type)
-                })
-            } else {
-                false
-            };
-            if all_generated {
+            if block_meta.virtual_block_meta.is_some() {
                 continue;
             }
-
             block_metas.push_back(block_meta);
         }
     }
@@ -208,49 +153,31 @@ pub async fn do_refresh_virtual_column(
         1,
     )?;
 
-    let mut virtual_fields = Vec::with_capacity(virtual_columns.len());
-    let mut virtual_exprs = Vec::with_capacity(virtual_columns.len());
-    for virtual_column_field in virtual_columns {
-        let mut virtual_expr = parse_computed_expr(
-            ctx.clone(),
-            source_schema.clone(),
-            &virtual_column_field.expr,
-        )?;
-
-        if virtual_column_field.data_type.remove_nullable() != TableDataType::Variant {
-            virtual_expr = Cast {
-                span: None,
-                is_try: true,
-                expr: Box::new(virtual_expr),
-                dest_type: (&virtual_column_field.data_type).into(),
-            }
-            .into();
-        }
-        let virtual_field = TableField::new(
-            &virtual_column_field.expr,
-            infer_schema_type(virtual_expr.data_type())?,
-        );
-        virtual_exprs.push(virtual_expr);
-        virtual_fields.push(virtual_field);
-    }
-    let virtual_schema = TableSchemaRefExt::create(virtual_fields);
-
     let block_nums = block_metas.len();
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_threads = std::cmp::min(block_nums, max_threads);
     pipeline.try_resize(max_threads)?;
     pipeline.add_async_transformer(|| {
         VirtualColumnTransform::new(
-            ctx.clone(),
             write_settings.clone(),
-            virtual_exprs.clone(),
-            virtual_schema.clone(),
+            virtual_column_builder.clone(),
             operator.clone(),
         )
     });
 
-    pipeline.try_resize(1)?;
-    pipeline.add_sink(|input| VirtualColumnSink::try_create(input, block_nums))?;
+    let base_snapshot = fuse_table.read_table_snapshot().await?;
+    let table_meta_timestamps = ctx.get_table_meta_timestamps(fuse_table, base_snapshot.clone())?;
+
+    fuse_table.do_commit(
+        ctx,
+        pipeline,
+        None,
+        vec![],
+        false,
+        None,
+        None,
+        table_meta_timestamps,
+    )?;
 
     Ok(())
 }
@@ -297,7 +224,8 @@ impl AsyncSource for VirtualColumnSource {
                     .block_reader
                     .read_by_meta(&self.settings, &block_meta, &self.storage_format)
                     .await?;
-                let block = block.add_meta(Some(Box::new(Arc::unwrap_or_clone(block_meta))))?;
+                let block =
+                    block.add_meta(Some(<BlockMeta as Clone>::clone(&block_meta).boxed()))?;
                 Ok(Some(block))
             }
             None => {
@@ -310,26 +238,20 @@ impl AsyncSource for VirtualColumnSource {
 
 /// `VirtualColumnTransform` is used to generate virtual columns for each blocks.
 pub struct VirtualColumnTransform {
-    ctx: Arc<dyn TableContext>,
     write_settings: WriteSettings,
-    virtual_exprs: Vec<Expr>,
-    virtual_schema: TableSchemaRef,
+    virtual_column_builder: VirtualColumnBuilder,
     operator: Operator,
 }
 
 impl VirtualColumnTransform {
     pub fn new(
-        ctx: Arc<dyn TableContext>,
         write_settings: WriteSettings,
-        virtual_exprs: Vec<Expr>,
-        virtual_schema: TableSchemaRef,
+        virtual_column_builder: VirtualColumnBuilder,
         operator: Operator,
     ) -> Self {
         Self {
-            ctx,
             write_settings,
-            virtual_exprs,
-            virtual_schema,
+            virtual_column_builder,
             operator,
         }
     }
@@ -346,71 +268,46 @@ impl AsyncTransform for VirtualColumnTransform {
             .and_then(BlockMeta::downcast_ref_from)
             .unwrap();
 
-        let virtual_location =
-            TableMetaLocationGenerator::gen_virtual_block_location(&block_meta.location.0);
-
-        let start = Instant::now();
-
-        let len = data_block.num_rows();
-        let func_ctx = self.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
-        let mut virtual_entries = Vec::with_capacity(self.virtual_exprs.len());
-        for virtual_expr in &self.virtual_exprs {
-            let value = evaluator.run(virtual_expr)?;
-            let virtual_entry = BlockEntry::new(virtual_expr.data_type().clone(), value);
-            virtual_entries.push(virtual_entry);
-        }
-        let virtual_block = DataBlock::new(virtual_entries, len);
-
-        let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-
-        let _ = serialize_block(
+        let virtual_column_state = self.virtual_column_builder.add_block(
+            &data_block,
             &self.write_settings,
-            &self.virtual_schema,
-            virtual_block,
-            &mut buffer,
+            &block_meta.location,
         )?;
 
-        let virtual_column_size = buffer.len() as u64;
-        write_data(buffer, &self.operator, &virtual_location).await?;
-
-        // Perf.
+        if virtual_column_state
+            .draft_virtual_block_meta
+            .virtual_column_size
+            > 0
         {
-            metrics_inc_block_virtual_column_write_nums(1);
-            metrics_inc_block_virtual_column_write_bytes(virtual_column_size);
-            metrics_inc_block_virtual_column_write_milliseconds(start.elapsed().as_millis() as u64);
+            let start = Instant::now();
+
+            let virtual_column_size = virtual_column_state
+                .draft_virtual_block_meta
+                .virtual_column_size;
+            let location = &virtual_column_state
+                .draft_virtual_block_meta
+                .virtual_location
+                .0;
+
+            write_data(virtual_column_state.data, &self.operator, location).await?;
+
+            // Perf.
+            {
+                metrics_inc_block_virtual_column_write_nums(1);
+                metrics_inc_block_virtual_column_write_bytes(virtual_column_size);
+                metrics_inc_block_virtual_column_write_milliseconds(
+                    start.elapsed().as_millis() as u64
+                );
+            }
         }
+
+        let extended_block_meta = ExtendedBlockMeta {
+            block_meta: block_meta.clone(),
+            draft_virtual_block_meta: Some(virtual_column_state.draft_virtual_block_meta),
+        };
 
         let new_block = DataBlock::new(vec![], 0);
+        let new_block = new_block.add_meta(Some(extended_block_meta.boxed()))?;
         Ok(new_block)
-    }
-}
-
-/// `VirtualColumnSink` is used to finish build virtual column pipeline.
-pub struct VirtualColumnSink {
-    block_nums: AtomicUsize,
-}
-
-impl VirtualColumnSink {
-    pub fn try_create(input: Arc<InputPort>, block_nums: usize) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, VirtualColumnSink {
-            block_nums: AtomicUsize::new(block_nums),
-        });
-        Ok(ProcessorPtr::create(sinker))
-    }
-}
-
-#[async_trait]
-impl AsyncSink for VirtualColumnSink {
-    const NAME: &'static str = "VirtualColumnSink";
-
-    #[async_backtrace::framed]
-    async fn consume(&mut self, _data_block: DataBlock) -> Result<bool> {
-        let num = self.block_nums.fetch_sub(1, Ordering::SeqCst);
-        if num > 1 {
-            return Ok(false);
-        }
-
-        Ok(true)
     }
 }

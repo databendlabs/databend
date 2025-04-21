@@ -21,7 +21,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
@@ -29,7 +28,6 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RefreshIndexPlan;
 use databend_common_sql::plans::RefreshTableIndexPlan;
-use databend_common_sql::plans::RefreshVirtualColumnPlan;
 use databend_common_sql::BindContext;
 use databend_common_sql::Binder;
 use databend_common_sql::Metadata;
@@ -44,7 +42,6 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::RefreshIndexInterpreter;
 use crate::interpreters::RefreshTableIndexInterpreter;
-use crate::interpreters::RefreshVirtualColumnInterpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
@@ -100,17 +97,6 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
     let inverted_index_plans =
         generate_refresh_inverted_index_plan(ctx.clone(), &desc, table).await?;
     plans.extend_from_slice(&inverted_index_plans);
-
-    // Generate virtual columns.
-    if ctx
-        .get_settings()
-        .get_enable_refresh_virtual_column_after_write()?
-    {
-        let virtual_column_plan = generate_refresh_virtual_column_plan(ctx.clone(), &desc).await?;
-        if let Some(virtual_column_plan) = virtual_column_plan {
-            plans.push(virtual_column_plan);
-        }
-    }
 
     let mut tasks = Vec::with_capacity(std::cmp::min(
         ctx.get_settings().get_max_threads()? as usize,
@@ -174,43 +160,6 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                         let query_ctx = ctx_cloned.clone();
                         build_res.main_pipeline.set_on_finished(always_callback(
                             move |_info: &ExecutionInfo| {
-                                hook_clear_m_cte_temp_table(&query_ctx)?;
-                                hook_vacuum_temp_files(&query_ctx)?;
-                                hook_disk_temp_dir(&query_ctx)?;
-                                Ok(())
-                            },
-                        ));
-
-                        let mut pipelines = build_res.sources_pipelines;
-                        pipelines.push(build_res.main_pipeline);
-
-                        let complete_executor =
-                            PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-                        ctx_cloned.set_executor(complete_executor.get_inner())?;
-                        complete_executor.execute()
-                    } else {
-                        Ok(())
-                    }
-                }
-                Plan::RefreshVirtualColumn(virtual_column_plan) => {
-                    let refresh_virtual_column_interpreter =
-                        RefreshVirtualColumnInterpreter::try_create(
-                            ctx_cloned.clone(),
-                            *virtual_column_plan,
-                        )?;
-                    let mut build_res = refresh_virtual_column_interpreter.execute2().await?;
-                    if build_res.main_pipeline.is_empty() {
-                        return Ok(());
-                    }
-
-                    let settings = ctx_cloned.get_settings();
-                    build_res.set_max_threads(settings.get_max_threads()? as usize);
-                    let settings = ExecutorSettings::try_create(ctx_cloned.clone())?;
-
-                    if build_res.main_pipeline.is_complete_pipeline()? {
-                        let query_ctx = ctx_cloned.clone();
-                        build_res.main_pipeline.set_on_finished(always_callback(
-                            move |_: &ExecutionInfo| {
                                 hook_clear_m_cte_temp_table(&query_ctx)?;
                                 hook_vacuum_temp_files(&query_ctx)?;
                                 hook_disk_temp_dir(&query_ctx)?;
@@ -324,31 +273,4 @@ async fn generate_refresh_inverted_index_plan(
         plans.push(Plan::RefreshTableIndex(Box::new(plan)));
     }
     Ok(plans)
-}
-
-async fn generate_refresh_virtual_column_plan(
-    ctx: Arc<QueryContext>,
-    desc: &RefreshDesc,
-) -> Result<Option<Plan>> {
-    let segment_locs = ctx.get_written_segment_locations()?;
-
-    let table_info = ctx
-        .get_table(&desc.catalog, &desc.database, &desc.table)
-        .await?;
-    let catalog = ctx.get_catalog(&desc.catalog).await?;
-    let req = ListVirtualColumnsReq::new(ctx.get_tenant(), Some(table_info.get_id()));
-    let res = catalog.list_virtual_columns(req).await?;
-
-    if res.is_empty() || res[0].virtual_columns.is_empty() {
-        return Ok(None);
-    }
-    let plan = RefreshVirtualColumnPlan {
-        catalog: desc.catalog.clone(),
-        database: desc.database.clone(),
-        table: desc.table.clone(),
-        virtual_columns: res[0].virtual_columns.clone(),
-        segment_locs: Some(segment_locs),
-    };
-
-    Ok(Some(Plan::RefreshVirtualColumn(Box::new(plan))))
 }
