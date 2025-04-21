@@ -17,5 +17,48 @@ mod sort_merge;
 mod sort_sample;
 mod sort_wait;
 
+use std::sync::Arc;
+
+use databend_common_expression::local_block_meta_serde;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::Column;
+use databend_common_expression::DataSchemaRef;
+use databend_common_pipeline_transforms::SortSpillParams;
 pub use sort_merge::*;
 pub use sort_sample::*;
+
+mod builder;
+pub use builder::TransformSortBuilder;
+
+mod collect;
+mod execute;
+mod merge_sort;
+mod sort_spill;
+
+use sort_spill::SpillableBlock;
+
+use crate::spillers::Spiller;
+
+#[derive(Clone)]
+struct Base {
+    schema: DataSchemaRef,
+    spiller: Arc<Spiller>,
+    sort_row_offset: usize,
+    limit: Option<usize>,
+}
+
+#[derive(Debug)]
+pub struct SortCollectedMeta {
+    params: SortSpillParams,
+    bounds: Vec<Column>,
+    blocks: Vec<Box<[SpillableBlock]>>,
+}
+
+local_block_meta_serde!(SortCollectedMeta);
+
+#[typetag::serde(name = "sort_collected")]
+impl BlockMetaInfo for SortCollectedMeta {}
+
+trait MemoryRows {
+    fn in_memory_rows(&self) -> usize;
+}

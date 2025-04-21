@@ -35,6 +35,7 @@ use databend_common_pipeline_transforms::TransformSortMergeLimit;
 
 use super::sort_spill::SortSpill;
 use super::Base;
+use super::MemoryRows;
 use crate::spillers::Spiller;
 
 enum Inner<A: SortAlgorithm> {
@@ -248,10 +249,6 @@ where
         self.output_data = Some(DataBlock::empty_with_meta(Box::new(meta)));
         Ok(())
     }
-}
-
-trait MemoryRows {
-    fn in_memory_rows(&self) -> usize;
 }
 
 impl MemoryRows for Vec<DataBlock> {

@@ -20,9 +20,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::local_block_meta_serde;
-use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
@@ -37,20 +34,12 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::MergeSort;
 use databend_common_pipeline_transforms::SortSpillParams;
 use databend_common_pipeline_transforms::TransformSortMergeLimit;
-use sort_spill::SpillableBlock;
 
+use super::sort_spill::create_memory_merger;
+use super::sort_spill::MemoryMerger;
+use super::sort_spill::SortSpill;
+use super::Base;
 use crate::spillers::Spiller;
-
-mod sort_spill;
-use sort_spill::create_memory_merger;
-use sort_spill::MemoryMerger;
-use sort_spill::SortSpill;
-
-mod builder;
-pub use builder::TransformSortBuilder;
-
-mod collect;
-mod execute;
 
 #[derive(Debug)]
 enum State {
@@ -61,26 +50,6 @@ enum State {
     /// Finish the process.
     Finish,
 }
-
-#[derive(Clone)]
-struct Base {
-    schema: DataSchemaRef,
-    spiller: Arc<Spiller>,
-    sort_row_offset: usize,
-    limit: Option<usize>,
-}
-
-#[derive(Debug)]
-pub struct SortCollectedMeta {
-    params: SortSpillParams,
-    bounds: Vec<Column>,
-    blocks: Vec<Box<[SpillableBlock]>>,
-}
-
-local_block_meta_serde!(SortCollectedMeta);
-
-#[typetag::serde(name = "sort_collected")]
-impl BlockMetaInfo for SortCollectedMeta {}
 
 enum Inner<A: SortAlgorithm> {
     Collect(Vec<DataBlock>),
@@ -122,7 +91,7 @@ where
     C: RowConverter<A::Rows>,
 {
     #[allow(clippy::too_many_arguments)]
-    fn new(
+    pub(super) fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
