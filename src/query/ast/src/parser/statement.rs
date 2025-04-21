@@ -939,9 +939,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 table_options: opt_table_options.unwrap_or_default(),
                 iceberg_table_partition: opt_iceberg_table_partition_by
                     .map(|(_, _, _, cols, _)| cols),
-                table_properties: opt_table_properties
-                    .map(|(_, properties)| properties)
-                    .unwrap_or_default(),
+                table_properties: opt_table_properties.map(|(_, properties)| properties),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 table_type,
             }))

@@ -359,7 +359,7 @@ impl TestFixture {
             ngram_indexes: None,
             attached_columns: None,
             table_properties: Default::default(),
-            table_partition: vec![],
+            table_partition: None,
         }
     }
 
@@ -387,7 +387,7 @@ impl TestFixture {
             ngram_indexes: None,
             attached_columns: None,
             table_properties: Default::default(),
-            table_partition: vec![],
+            table_partition: None,
         }
     }
 
@@ -426,7 +426,7 @@ impl TestFixture {
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
-            table_partition: vec![],
+            table_partition: None,
         }
     }
 
@@ -459,7 +459,7 @@ impl TestFixture {
             ]
             .into(),
             field_comments: vec![],
-            table_partition: vec![],
+            table_partition: None,
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
@@ -513,7 +513,7 @@ impl TestFixture {
             ngram_indexes: None,
             attached_columns: None,
             table_properties: Default::default(),
-            table_partition: vec![],
+            table_partition: None,
         }
     }
 

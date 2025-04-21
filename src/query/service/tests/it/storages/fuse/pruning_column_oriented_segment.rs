@@ -180,8 +180,8 @@ async fn test_snapshot_pruner() -> Result<()> {
         inverted_indexes: None,
         ngram_indexes: None,
         attached_columns: None,
-        table_partition: vec![],
-        table_properties: BTreeMap::new(),
+        table_partition: None,
+        table_properties: None,
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
