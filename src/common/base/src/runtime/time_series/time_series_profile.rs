@@ -121,6 +121,7 @@ impl TimeSeriesProfile {
                     if item.queue.len() > DEFAULT_BATCH_SIZE {
                         self.flush(item);
                     }
+                    break;
                 }
                 Err(last_record) => {
                     if now - DEFAULT_INTERVAL < last_record {
