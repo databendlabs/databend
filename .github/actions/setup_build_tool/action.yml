@@ -105,7 +105,7 @@ runs:
       shell: bash
       run: |
         uname -a
-        grep "^model" /proc/cpuinfo
+        cat /proc/cpuinfo
         free -h
 
     # - uses: everpcpc/actions-cache@v1
