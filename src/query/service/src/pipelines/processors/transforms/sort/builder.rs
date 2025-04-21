@@ -33,7 +33,7 @@ use databend_common_pipeline_transforms::MemorySettings;
 
 use super::collect::TransformSortCollect;
 use super::execute::TransformSortExecute;
-use super::TransformSort;
+use super::merge_sort::TransformSort;
 use crate::spillers::Spiller;
 
 enum SortType {
