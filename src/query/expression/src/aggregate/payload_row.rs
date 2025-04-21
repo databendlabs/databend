@@ -421,7 +421,7 @@ unsafe fn row_match_binary_column(
         }
     }
 
-    select_vector.clone_from_slice(temp_vector);
+    select_vector.clone_from_slice(temp_vector.as_slice());
 
     *count = match_count;
 }
@@ -502,7 +502,7 @@ unsafe fn row_match_string_column(
         }
     }
 
-    select_vector.clone_from_slice(temp_vector);
+    select_vector.clone_from_slice(temp_vector.as_slice());
 
     *count = match_count;
 }
@@ -567,7 +567,7 @@ unsafe fn row_match_column_type<T: ArgType>(
         }
     }
 
-    select_vector.clone_from_slice(temp_vector);
+    select_vector.clone_from_slice(temp_vector.as_slice());
     *count = match_count;
 }
 
@@ -604,6 +604,6 @@ unsafe fn row_match_generic_column(
             *no_match_count += 1;
         }
     }
-    select_vector.clone_from_slice(temp_vector);
+    select_vector.clone_from_slice(temp_vector.as_slice());
     *count = match_count;
 }

@@ -63,12 +63,12 @@ use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
 use crate::servers::flight::v1::exchange::DataExchange;
-use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
-use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::packets::Edge;
 use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
+use crate::servers::flight::v1::scatter::BroadcastFlightScatter;
+use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::servers::flight::FlightClient;
 use crate::servers::flight::FlightExchange;
 use crate::servers::flight::FlightReceiver;
@@ -470,9 +470,7 @@ impl DataExchangeManager {
             None => Err(ErrorCode::Internal("Query not exists.")),
             Some(query_coordinator) => {
                 assert!(query_coordinator.fragment_exchanges.is_empty());
-                let injector = DefaultExchangeInjector::create();
-                let mut build_res =
-                    query_coordinator.subscribe_fragment(&ctx, fragment_id, injector)?;
+                let mut build_res = query_coordinator.subscribe_fragment(&ctx, fragment_id)?;
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
                 let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
@@ -533,7 +531,6 @@ impl DataExchangeManager {
         &self,
         query_id: &str,
         fragment_id: usize,
-        injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -548,7 +545,7 @@ impl DataExchangeManager {
                     .query_ctx
                     .clone();
 
-                query_coordinator.subscribe_fragment(&query_ctx, fragment_id, injector)
+                query_coordinator.subscribe_fragment(&query_ctx, fragment_id)
             }
         }
     }
@@ -735,7 +732,6 @@ impl QueryCoordinator {
         &mut self,
         ctx: &Arc<QueryContext>,
         fragment_id: usize,
-        injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
@@ -759,21 +755,14 @@ impl QueryCoordinator {
                 fragment_coordinator
                     .pipeline_build_res
                     .as_ref()
-                    .map(|x| x.exchange_injector.clone())
-                    .ok_or_else(|| {
-                        ErrorCode::Internal("Pipeline build result is none, It's a bug")
-                    })?,
+                    .map(|x| x.enable_multiway_sort)
+                    .unwrap_or(false),
             )?;
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
             // Add exchange data transform.
 
-            ExchangeTransform::via(
-                ctx,
-                &exchange_params,
-                &mut build_res.main_pipeline,
-                injector,
-            )?;
+            ExchangeTransform::via(ctx, &exchange_params, &mut build_res.main_pipeline)?;
 
             return Ok(build_res);
         }
@@ -821,10 +810,8 @@ impl QueryCoordinator {
                     coordinator
                         .pipeline_build_res
                         .as_ref()
-                        .map(|x| x.exchange_injector.clone())
-                        .ok_or_else(|| {
-                            ErrorCode::Internal("Pipeline build result is none, It's a bug")
-                        })?,
+                        .map(|x| x.enable_multiway_sort)
+                        .unwrap_or(false),
                 )?,
             );
         }
@@ -916,13 +903,13 @@ impl FragmentCoordinator {
     pub fn create_exchange_params(
         &self,
         info: &QueryInfo,
-        exchange_injector: Arc<dyn ExchangeInjector>,
+        enable_multiway_sort: bool,
     ) -> Result<ExchangeParams> {
         if let Some(data_exchange) = &self.data_exchange {
             return match data_exchange {
                 DataExchange::Merge(exchange) => {
                     Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
-                        exchange_injector: exchange_injector.clone(),
+                        enable_multiway_sort,
                         schema: self.physical_plan.output_schema()?,
                         fragment_id: self.fragment_id,
                         query_id: info.query_id.to_string(),
@@ -933,26 +920,30 @@ impl FragmentCoordinator {
                 }
                 DataExchange::Broadcast(exchange) => {
                     Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                        exchange_injector: exchange_injector.clone(),
+                        enable_multiway_sort,
                         schema: self.physical_plan.output_schema()?,
                         fragment_id: self.fragment_id,
                         query_id: info.query_id.to_string(),
                         executor_id: info.current_executor.to_string(),
                         destination_ids: exchange.destination_ids.to_owned(),
-                        shuffle_scatter: exchange_injector
-                            .flight_scatter(&info.query_ctx, data_exchange)?,
+                        shuffle_scatter: Arc::new(Box::new(BroadcastFlightScatter::try_create(
+                            exchange.destination_ids.len(),
+                        )?)),
                     }))
                 }
                 DataExchange::ShuffleDataExchange(exchange) => {
                     Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                        exchange_injector: exchange_injector.clone(),
+                        enable_multiway_sort,
                         schema: self.physical_plan.output_schema()?,
                         fragment_id: self.fragment_id,
                         query_id: info.query_id.to_string(),
                         executor_id: info.current_executor.to_string(),
                         destination_ids: exchange.destination_ids.to_owned(),
-                        shuffle_scatter: exchange_injector
-                            .flight_scatter(&info.query_ctx, data_exchange)?,
+                        shuffle_scatter: Arc::new(HashFlightScatter::try_create(
+                            &info.query_ctx,
+                            exchange.shuffle_keys.clone(),
+                            &exchange.destination_ids,
+                        )?),
                     }))
                 }
             };

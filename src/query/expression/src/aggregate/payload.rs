@@ -46,7 +46,7 @@ use crate::MAX_PAGE_SIZE;
 // [HASH] is the hash data of the groups
 // [STATE_ADDRS] is the state_addrs of the aggregate functions, 8 bytes each
 pub struct Payload {
-    pub arena: Arc<Bump>,
+    pub arena: Vec<Arc<Bump>>,
     // if true, the states are moved out of the payload into other payload, and will not be dropped
     pub state_move_out: bool,
     pub group_types: Vec<DataType>,
@@ -94,7 +94,7 @@ pub type Pages = Vec<Page>;
 
 impl Payload {
     pub fn new(
-        arena: Arc<Bump>,
+        arena: Vec<Arc<Bump>>,
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
         states_layout: Option<StatesLayout>,
@@ -267,7 +267,7 @@ impl Payload {
 
             unsafe {
                 serialize_column_to_rowformat(
-                    &self.arena,
+                    &self.arena[0],
                     col,
                     select_vector,
                     new_group_rows,
@@ -297,7 +297,7 @@ impl Payload {
             // write states
             let (array_layout, padded_size) = layout.repeat(new_group_rows).unwrap();
             // Bump only allocates but does not drop, so there is no use after free for any item.
-            let place = self.arena.alloc_layout(array_layout);
+            let place = self.arena[0].alloc_layout(array_layout);
             for (idx, place) in select_vector
                 .iter()
                 .take(new_group_rows)
@@ -385,7 +385,11 @@ impl Payload {
         );
     }
 
-    pub fn scatter(&self, state: &mut PayloadFlushState, partition_count: usize) -> bool {
+    pub fn scatter_with_seed<const SEED: u64>(
+        &self,
+        state: &mut PayloadFlushState,
+        partitions: usize,
+    ) -> bool {
         if state.flush_page >= self.pages.len() {
             return false;
         }
@@ -397,29 +401,37 @@ impl Payload {
             state.flush_page += 1;
             state.flush_page_row = 0;
             state.row_count = 0;
-            return self.scatter(state, partition_count);
+            return self.scatter_with_seed::<SEED>(state, partitions);
         }
 
         let end = (state.flush_page_row + BATCH_SIZE).min(page.rows);
         let rows = end - state.flush_page_row;
         state.row_count = rows;
 
-        state.probe_state.reset_partitions(partition_count);
+        state.probe_state.reset_partitions(partitions);
 
-        let mods: StrengthReducedU64 = StrengthReducedU64::new(partition_count as u64);
+        let mods: StrengthReducedU64 = StrengthReducedU64::new(partitions as u64);
+
         for idx in 0..rows {
             state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
 
-            let hash = unsafe { read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
+            let mut hash = unsafe { read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
+
+            if SEED != 0 {
+                hash = Self::combine_hash(hash, SEED);
+            }
 
             let partition_idx = (hash % mods) as usize;
-
             let sel = &mut state.probe_state.partition_entries[partition_idx];
             sel[state.probe_state.partition_count[partition_idx]] = idx;
             state.probe_state.partition_count[partition_idx] += 1;
         }
         state.flush_page_row = end;
         true
+    }
+
+    pub fn scatter(&self, state: &mut PayloadFlushState, partitions: usize) -> bool {
+        self.scatter_with_seed::<0>(state, partitions)
     }
 
     pub fn empty_block(&self, fake_rows: Option<usize>) -> DataBlock {
@@ -433,6 +445,18 @@ impl Payload {
             )
             .collect_vec();
         DataBlock::new_from_columns(columns)
+    }
+
+    #[allow(unused_parens)]
+    fn combine_hash(hash: u64, seed: u64) -> u64 {
+        static KMUL: u64 = 0x9ddfea08eb382d69;
+
+        let mut a = (seed ^ hash).wrapping_mul(KMUL);
+        a ^= (a >> 47);
+
+        let mut b = (hash ^ a).wrapping_mul(KMUL);
+        b ^= (b >> 47);
+        b.wrapping_mul(KMUL)
     }
 }
 

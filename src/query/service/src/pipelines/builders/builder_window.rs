@@ -184,12 +184,12 @@ impl PipelineBuilder {
                     top_n.func,
                     num_partitions as u64,
                 ),
-            )
+            )?
         } else {
             self.main_pipeline.exchange(
                 num_processors,
                 WindowPartitionExchange::create(partition_by.clone(), num_partitions),
-            );
+            )?;
         }
 
         let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;

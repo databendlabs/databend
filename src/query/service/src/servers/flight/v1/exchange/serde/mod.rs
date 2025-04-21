@@ -20,5 +20,3 @@ pub use exchange_deserializer::ExchangeDeserializeMeta;
 pub use exchange_deserializer::TransformExchangeDeserializer;
 pub use exchange_serializer::serialize_block;
 pub use exchange_serializer::ExchangeSerializeMeta;
-pub use exchange_serializer::TransformExchangeSerializer;
-pub use exchange_serializer::TransformScatterExchangeSerializer;

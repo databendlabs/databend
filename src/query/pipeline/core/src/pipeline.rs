@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_base::runtime::defer;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
@@ -32,10 +33,14 @@ use crate::finished_chain::ExecutionInfo;
 use crate::finished_chain::FinishedCallbackChain;
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
+use crate::processors::BatchExchangeProcessor;
+use crate::processors::BatchMergePartitionProcessor;
+use crate::processors::BatchPartitionProcessor;
 use crate::processors::DuplicateProcessor;
 use crate::processors::Exchange;
 use crate::processors::InputPort;
 use crate::processors::MergePartitionProcessor;
+use crate::processors::OnePartitionProcessor;
 use crate::processors::OutputPort;
 use crate::processors::PartitionProcessor;
 use crate::processors::PlanScope;
@@ -447,23 +452,43 @@ impl Pipeline {
         }
     }
 
-    pub fn exchange<T: Exchange>(&mut self, n: usize, exchange: Arc<T>) {
+    pub fn exchange<T: Exchange>(&mut self, n: usize, exchange: Arc<T>) -> Result<()> {
+        debug_assert_ne!(n, 0);
+
+        if !T::MULTIWAY_SORT {
+            return self.batch_exchange(n, exchange);
+        }
+
         if let Some(pipe) = self.pipes.last() {
             if pipe.output_length < 1 {
-                return;
+                return Ok(());
             }
 
             let input_len = pipe.output_length;
+            let barrier = Arc::new(Barrier::new(input_len));
             let mut items = Vec::with_capacity(input_len);
 
-            for _index in 0..input_len {
+            for index in 0..input_len {
                 let input = InputPort::create();
-                let outputs: Vec<_> = (0..n).map(|_| OutputPort::create()).collect();
-                items.push(PipeItem::create(
-                    PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
-                    vec![input],
-                    outputs,
-                ));
+                let outputs = (0..n).map(|_| OutputPort::create()).collect::<Vec<_>>();
+                let partition_processor = match n {
+                    1 => OnePartitionProcessor::create(
+                        input.clone(),
+                        outputs[0].clone(),
+                        exchange.clone(),
+                        index,
+                        barrier.clone(),
+                    ),
+                    _ => PartitionProcessor::create(
+                        input.clone(),
+                        outputs.clone(),
+                        exchange.clone(),
+                        index,
+                        barrier.clone(),
+                    ),
+                };
+
+                items.push(PipeItem::create(partition_processor, vec![input], outputs));
             }
 
             // partition data block
@@ -481,7 +506,7 @@ impl Pipeline {
                 let output = OutputPort::create();
                 let inputs: Vec<_> = (0..input_len).map(|_| InputPort::create()).collect();
                 items.push(PipeItem::create(
-                    MergePartitionProcessor::create(
+                    MergePartitionProcessor::<T>::create(
                         inputs.clone(),
                         output.clone(),
                         exchange.clone(),
@@ -492,8 +517,43 @@ impl Pipeline {
             }
 
             // merge partition
-            self.add_pipe(Pipe::create(input_len * n, n, items))
+            self.add_pipe(Pipe::create(input_len * n, n, items));
         }
+
+        Ok(())
+    }
+
+    fn batch_exchange<T: Exchange>(&mut self, n: usize, exchange: Arc<T>) -> Result<()> {
+        self.add_transform(|input, output| {
+            Ok(BatchPartitionProcessor::create(
+                input,
+                output,
+                n,
+                exchange.clone(),
+            ))
+        })?;
+
+        let input_len = self.output_len();
+        let inputs = (0..input_len)
+            .map(|_| InputPort::create())
+            .collect::<Vec<_>>();
+        let outputs = (0..n).map(|_| OutputPort::create()).collect::<Vec<_>>();
+
+        self.add_pipe(Pipe::create(input_len, n, vec![PipeItem::create(
+            BatchExchangeProcessor::create(inputs.clone(), outputs.clone(), exchange.clone()),
+            inputs,
+            outputs,
+        )]));
+
+        self.add_transform(|input, output| {
+            Ok(BatchMergePartitionProcessor::create(
+                input,
+                output,
+                exchange.clone(),
+            ))
+        })?;
+
+        Ok(())
     }
 
     #[track_caller]
