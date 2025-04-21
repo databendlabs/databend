@@ -36,7 +36,7 @@ struct CacheItem {
     value: Bytes,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct TableDataCacheKey {
     cache_key: String,
 }

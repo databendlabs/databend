@@ -932,4 +932,8 @@ impl Settings {
     pub fn get_enable_block_stream_write(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_block_stream_write")? == 1)
     }
+
+    pub fn get_fuse_parquet_read_batch_size(&self) -> Result<usize> {
+        Ok(self.try_get_u64("fuse_parquet_read_batch_size")? as usize)
+    }
 }

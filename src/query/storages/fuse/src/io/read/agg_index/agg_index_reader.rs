@@ -97,7 +97,7 @@ impl AggIndexReader {
         self.index_id
     }
 
-    pub(super) fn apply_agg_info(&self, block: DataBlock) -> Result<DataBlock> {
+    pub(super) fn apply_agg_info_to_block(&self, block: DataBlock) -> Result<DataBlock> {
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         // 1. Filter the block if there is a filter.
@@ -144,5 +144,12 @@ impl AggIndexReader {
                 self.num_agg_funcs,
             )),
         ))
+    }
+
+    pub(super) fn apply_agg_info(&self, block: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        block
+            .into_iter()
+            .map(|block| self.apply_agg_info_to_block(block))
+            .collect::<Result<_>>()
     }
 }
