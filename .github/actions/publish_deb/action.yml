@@ -31,10 +31,8 @@ runs:
         # FIXME: tmp disable dbg package
         assets=$(gh release view --repo databendlabs/databend --json assets | jq -r '.assets[] | select(.contentType == "application/x-debian-package") | .url' | grep -v 'dbg')
         for asset in $assets; do
+          echo "--> downloading $asset"
           wget -q $asset
-          asset_name=$(basename $asset)
-          echo "--> including deb stable ${asset_name}"
-          reprepro includedeb stable ${asset_name}
         done
 
     - name: Add BendSQL Packages
@@ -45,11 +43,16 @@ runs:
         echo "version: $version"
         assets=$(gh release view --repo databendlabs/bendsql --json assets | jq -r '.assets[] | select(.contentType == "application/x-debian-package") | .url')
         for asset in $assets; do
+          echo "--> downloading $asset"
           wget -q $asset
-          asset_name=$(basename $asset)
-          echo "--> including deb stable ${asset_name}"
-          reprepro includedeb stable ${asset_name}
         done
+
+    - name: Include DEB Packages
+      shell: bash
+      working-directory: scripts/distribution/deb
+      run: |
+        ls -lh
+        reprepro includedeb stable *.deb
 
     - name: Publish to S3
       shell: bash
