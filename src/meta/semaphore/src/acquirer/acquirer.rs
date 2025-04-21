@@ -227,8 +227,7 @@ impl Acquirer {
             val_bytes,
             self.lease,
             cancel_rx.map(|_| ()),
-            t
-            elf.ctx.clone(),
+            self.ctx.clone(),
         );
 
         let task_name = format!("{}/(seq={})", self.ctx, sem_key.seq);
