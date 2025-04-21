@@ -1019,7 +1019,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("statement_queue_ttl_in_seconds", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(3),
+                    value: UserSettingValue::UInt64(15),
                     desc: "This parameter specifies the interval, in seconds, between lease renewal operations with the meta service to maintain active communication.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
