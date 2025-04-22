@@ -25,8 +25,11 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberDataType::Float32;
+use databend_common_expression::types::NumberDataType::Float64;
 use databend_common_expression::TableDataType;
+use databend_common_expression::TableDataType::Null;
+use databend_common_expression::TableDataType::Timestamp;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateOption;
@@ -281,76 +284,85 @@ fn convert_table_schema(
     Ok(schema) // Return the converted Iceberg schema
 }
 
+fn is_invalid_partition_type(ty: &TableDataType) -> bool {
+    match ty {
+        TableDataType::Number(Float32)
+        | TableDataType::Number(Float64)
+        | TableDataType::Decimal(_)
+        | Timestamp
+        | Null => true,
+        TableDataType::Nullable(inner_ty) => is_invalid_partition_type(inner_ty),
+        _ => false,
+    }
+}
+
+fn build_identity_partition_spec(
+    columns: &[String],
+    req_schema: &TableSchema,
+    ice_schema: &IceSchema,
+) -> Result<PartitionSpec> {
+    if columns.is_empty() {
+        return Err(ErrorCode::Internal(
+            "Partition key can not empty.".to_string(),
+        ));
+    }
+
+    let mut fields = vec![];
+
+    for (i, col) in columns.iter().enumerate() {
+        // Use req_schema for type validation
+        let origin_ty = &req_schema.field_with_name(col)?.data_type;
+        if is_invalid_partition_type(origin_ty) {
+            return Err(ErrorCode::Internal(format!(
+                "Partition key {} is {:?} type. Cannot set FLOAT, DOUBLE, DECIMAL, DATETIME as partition field", col, origin_ty
+            )));
+        }
+
+        let field = ice_schema.field_by_name(col.as_str());
+        if let Some(field) = field {
+            fields.push(UnboundPartitionField {
+                source_id: field.id,
+                name: field.name.to_string(),
+                field_id: Some(i as i32),
+                transform: Transform::Identity,
+            });
+        } else {
+            return Err(ErrorCode::Internal(format!(
+                "Can not get partition field '{}' in Iceberg schema.",
+                col
+            )));
+        }
+    }
+
+    Ok(PartitionSpec::builder(ice_schema.clone())
+        .with_spec_id(1)
+        .add_unbound_fields(fields)
+        .unwrap()
+        .build()
+        .unwrap())
+}
+
 fn build_table_creation_option(
     req: &CreateTableReq,
     properties: HashMap<String, String>,
     schema: IceSchema,
 ) -> Result<TableCreation> {
+    let builder = TableCreation::builder()
+        .name(req.table_name().to_string())
+        .properties(properties)
+        .schema(schema.clone());
+
     if let Some(ref partition) = req.table_partition {
         match partition {
             TablePartition::Identity { columns } => {
                 if columns.is_empty() {
-                    return Ok(TableCreation::builder()
-                        .name(req.table_name().to_string())
-                        .properties(properties)
-                        .schema(schema)
-                        .build());
+                    return Ok(builder.build());
                 }
-
-                let mut fields = vec![];
-
-                fn is_invalid_partition_type(ty: &TableDataType) -> bool {
-                    use NumberDataType::*;
-                    use TableDataType::*;
-                    match ty {
-                        Number(Float32) | Number(Float64) | Decimal(_) | Timestamp | Null => true,
-                        Nullable(inner_ty) => is_invalid_partition_type(inner_ty),
-                        _ => false,
-                    }
-                }
-
-                for (i, col) in columns.iter().enumerate() {
-                    let origin_ty = &req.table_meta.schema.field_with_name(col)?.data_type;
-                    if is_invalid_partition_type(origin_ty) {
-                        return Err(ErrorCode::Internal(format!(
-                                "Partition key {} is {:?} type. Cannot set FLOAT, DOUBLE, DECIMAL, DATETIME as partition field", col, origin_ty
-                            )));
-                    }
-                    let field = schema.field_by_name(col.as_str());
-                    if let Some(field) = field {
-                        fields.push(UnboundPartitionField {
-                            source_id: field.id,
-                            name: field.name.to_string(),
-                            field_id: Some(i as i32),
-                            transform: Transform::Identity,
-                        });
-                    } else {
-                        return Err(ErrorCode::Internal(format!(
-                            "Can not get partition by field {}",
-                            col
-                        )));
-                    }
-                }
-
-                let spec = PartitionSpec::builder(schema.clone())
-                    .with_spec_id(1)
-                    .add_unbound_fields(fields)
-                    .unwrap()
-                    .build()
-                    .unwrap();
-
-                return Ok(TableCreation::builder()
-                    .name(req.table_name().to_string())
-                    .properties(properties)
-                    .partition_spec(spec)
-                    .schema(schema)
-                    .build());
+                let spec = build_identity_partition_spec(columns, &req.table_meta.schema, &schema)?;
+                Ok(builder.partition_spec(spec).build())
             }
         }
+    } else {
+        Ok(builder.build())
     }
-    Ok(TableCreation::builder()
-        .name(req.table_name().to_string())
-        .properties(properties)
-        .schema(schema)
-        .build())
 }

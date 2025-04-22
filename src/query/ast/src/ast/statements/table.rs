@@ -251,11 +251,9 @@ impl Display for CreateTableStmt {
         }
 
         if let Some(table_properties) = &self.table_properties {
-            if !table_properties.is_empty() {
-                write!(f, " PROPERTIES(")?;
-                write_space_separated_string_map(f, table_properties)?;
-                write!(f, ")")?;
-            }
+            write!(f, " PROPERTIES(")?;
+            write_space_separated_string_map(f, table_properties)?;
+            write!(f, ")")?;
         }
 
         if let Some(as_query) = &self.as_query {
