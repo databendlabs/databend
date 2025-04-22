@@ -842,10 +842,19 @@ impl QueryCoordinator {
             if let Some(mut build_res) = coordinator.pipeline_build_res.take() {
                 build_res.set_max_threads(max_threads as usize);
 
-                if let Some(params) = params {
+                if build_res.main_pipeline.is_pulling_pipeline()? {
+                    let Some(params) = params else {
+                        return Err(ErrorCode::Internal(
+                            "pipeline is pulling pipeline, but exchange params is none",
+                        ));
+                    };
                     // Add exchange data publisher.
                     ExchangeSink::via(&info.query_ctx, &params, &mut build_res.main_pipeline)?;
-                }
+                } else if build_res.main_pipeline.is_complete_pipeline()? && params.is_some() {
+                    return Err(ErrorCode::Internal(
+                        "pipeline is complete pipeline, but exchange params is some",
+                    ));
+                };
 
                 if !build_res.main_pipeline.is_complete_pipeline()? {
                     return Err(ErrorCode::Internal("Logical error, It's a bug"));
