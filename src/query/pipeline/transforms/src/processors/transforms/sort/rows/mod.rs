@@ -25,6 +25,7 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 pub use simple::*;
@@ -39,6 +40,18 @@ where Self: Sized + Debug
         output_schema: DataSchemaRef,
     ) -> Result<Self>;
     fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<T>;
+
+    fn convert_data_block(
+        &self,
+        sort_desc: &[SortColumnDescription],
+        data_block: &DataBlock,
+    ) -> Result<T> {
+        let order_by_cols = sort_desc
+            .iter()
+            .map(|desc| block.get_by_offset(desc.offset).clone())
+            .collect::<Vec<_>>();
+        self.convert(&order_by_cols, block.num_rows())
+    }
 }
 
 /// Rows can be compared.
