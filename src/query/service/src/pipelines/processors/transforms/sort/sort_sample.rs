@@ -206,14 +206,14 @@ impl Transform for TransformSortSample {
 
     fn on_finish(&mut self) -> Result<()> {
         self.sampler.compact_blocks();
-        let mut simple = self.sampler.take_blocks();
-        assert!(simple.len() <= 1); // Unlikely to sample rows greater than 65536
+        let mut sample = self.sampler.take_blocks();
+        assert!(sample.len() <= 1); // Unlikely to sample rows greater than 65536
         self.state.commit_sample(
             self.id,
-            if simple.is_empty() {
+            if sample.is_empty() {
                 None
             } else {
-                Some(simple.remove(0))
+                Some(sample.remove(0))
             },
         )?;
         Ok(())
