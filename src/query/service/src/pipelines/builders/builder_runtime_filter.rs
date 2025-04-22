@@ -34,7 +34,8 @@ impl PipelineBuilder {
         )
     }
 
-    pub(crate) fn build_runtime_filter_sink(&mut self, _sink: &RuntimeFilterSink) -> Result<()> {
+    pub(crate) fn build_runtime_filter_sink(&mut self, sink: &RuntimeFilterSink) -> Result<()> {
+        self.build_pipeline(&sink.input)?;
         self.main_pipeline
             .add_sink(RuntimeFilterSinkProcessor::create)
     }
