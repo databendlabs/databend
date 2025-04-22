@@ -44,7 +44,7 @@ use super::SortCollectedMeta;
 use crate::spillers::Location;
 use crate::spillers::Spiller;
 
-pub struct SortSpill<A: SortAlgorithm> {
+pub(super) struct SortSpill<A: SortAlgorithm> {
     base: Base,
     step: Step<A>,
 }

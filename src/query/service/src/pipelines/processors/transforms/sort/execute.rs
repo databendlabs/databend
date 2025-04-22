@@ -46,7 +46,7 @@ impl<A> TransformSortExecute<A>
 where A: SortAlgorithm
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(super) fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
