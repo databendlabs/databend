@@ -65,6 +65,7 @@ impl FuseTable {
                     conflict_resolve_context: ConflictResolveContext::None,
                     new_segment_locs: vec![],
                     table_id: self.get_id(),
+                    virtual_schema: None,
                 };
                 let block = DataBlock::empty_with_meta(Box::new(meta));
                 OneBlockSource::create(output, block)

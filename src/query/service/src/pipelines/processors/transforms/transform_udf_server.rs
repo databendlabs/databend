@@ -41,6 +41,7 @@ use databend_common_metrics::external_server::record_running_requests_external_f
 use databend_common_metrics::external_server::record_running_requests_external_start;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
+use databend_common_version::UDF_CLIENT_USER_AGENT;
 use tokio::sync::Semaphore;
 use tonic::transport::Endpoint;
 
@@ -81,8 +82,12 @@ impl TransformUdfServer {
             if endpoints.contains_key(server_addr) {
                 continue;
             }
-            let endpoint =
-                UDFFlightClient::build_endpoint(server_addr, connect_timeout, request_timeout)?;
+            let endpoint = UDFFlightClient::build_endpoint(
+                server_addr,
+                connect_timeout,
+                request_timeout,
+                UDF_CLIENT_USER_AGENT.as_str(),
+            )?;
             endpoints.insert(server_addr.clone(), endpoint);
         }
         Ok(endpoints)

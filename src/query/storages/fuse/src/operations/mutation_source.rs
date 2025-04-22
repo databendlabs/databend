@@ -191,7 +191,6 @@ impl FuseTable {
             &push_down,
             self.bloom_index_cols(),
             None,
-            self.get_storage_format(),
         )?;
 
         if let Some(inverse) = filters.map(|f| f.inverted_filter) {

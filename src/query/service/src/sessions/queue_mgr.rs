@@ -66,6 +66,8 @@ pub trait QueueData: Send + Sync + 'static {
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode;
 
+    fn lock_ttl(&self) -> Duration;
+
     fn timeout(&self) -> Duration;
 
     fn need_acquire_to_queue(&self) -> bool;
@@ -158,7 +160,7 @@ impl<Data: QueueData> QueueManager<Data> {
                 data.get_lock_key(),
                 self.permits as u64,
                 data.get_key(), // ID of this acquirer
-                Duration::from_secs(3),
+                data.lock_ttl(),
             );
 
             let future = AcquireQueueFuture::create(
@@ -233,9 +235,6 @@ pub struct AcquireQueueGuard {
     #[allow(dead_code)]
     permit: Option<Permit>,
 }
-
-unsafe impl Send for AcquireQueueGuard {}
-unsafe impl Sync for AcquireQueueGuard {}
 
 impl Drop for AcquireQueueGuard {
     fn drop(&mut self) {
@@ -336,6 +335,7 @@ pub struct QueryEntry {
     pub sql: String,
     pub user_info: UserInfo,
     pub timeout: Duration,
+    pub lock_ttl: Duration,
     pub need_acquire_to_queue: bool,
 }
 
@@ -357,6 +357,7 @@ impl QueryEntry {
                 0 => Duration::from_secs(60 * 60 * 24 * 365 * 35),
                 timeout => Duration::from_secs(timeout),
             },
+            lock_ttl: Duration::from_secs(settings.get_statement_queue_ttl_in_seconds()?),
         })
     }
 
@@ -482,6 +483,10 @@ impl QueueData for QueryEntry {
                 key
             )),
         }
+    }
+
+    fn lock_ttl(&self) -> Duration {
+        self.lock_ttl
     }
 
     fn timeout(&self) -> Duration {

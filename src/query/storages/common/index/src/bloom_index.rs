@@ -18,6 +18,7 @@ use std::ops::ControlFlow;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use bytes::Bytes;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -90,11 +91,11 @@ impl TryFrom<&BloomIndexMeta> for Vec<u8> {
     }
 }
 
-impl TryFrom<&[u8]> for BloomIndexMeta {
+impl TryFrom<Bytes> for BloomIndexMeta {
     type Error = ErrorCode;
 
-    fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
-        bincode::serde::decode_from_slice(value, bincode::config::standard())
+    fn try_from(value: Bytes) -> std::result::Result<Self, Self::Error> {
+        bincode::serde::decode_from_slice(value.as_ref(), bincode::config::standard())
             .map(|(v, len)| {
                 // TODO return error?
                 assert_eq!(len, value.len());
