@@ -22,6 +22,7 @@ use std::sync::Arc;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_transforms::SortSpillParams;
 pub use sort_merge::*;
@@ -48,7 +49,7 @@ struct Base {
 }
 
 #[derive(Debug)]
-pub struct SortCollectedMeta {
+struct SortCollectedMeta {
     params: SortSpillParams,
     bounds: Vec<Column>,
     blocks: Vec<Box<[SpillableBlock]>>,
@@ -61,4 +62,10 @@ impl BlockMetaInfo for SortCollectedMeta {}
 
 trait MemoryRows {
     fn in_memory_rows(&self) -> usize;
+}
+
+impl MemoryRows for Vec<DataBlock> {
+    fn in_memory_rows(&self) -> usize {
+        self.iter().map(|s| s.num_rows()).sum::<usize>()
+    }
 }

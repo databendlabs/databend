@@ -39,6 +39,7 @@ use super::sort_spill::create_memory_merger;
 use super::sort_spill::MemoryMerger;
 use super::sort_spill::SortSpill;
 use super::Base;
+use super::MemoryRows;
 use crate::spillers::Spiller;
 
 #[derive(Debug)]
@@ -138,20 +139,15 @@ where
     }
 
     fn generate_order_column(&self, mut block: DataBlock) -> Result<(A::Rows, DataBlock)> {
-        let order_by_cols = self
-            .sort_desc
-            .iter()
-            .map(|desc| block.get_by_offset(desc.offset).clone())
-            .collect::<Vec<_>>();
         let rows = self
             .row_converter
-            .convert(&order_by_cols, block.num_rows())?;
+            .convert_data_block(&self.sort_desc, &block);
         let order_col = rows.to_column();
         block.add_column(order_col);
         Ok((rows, block))
     }
 
-    fn prepare_spill_limit(&mut self) -> Result<()> {
+    fn limit_trans_to_spill(&mut self) -> Result<()> {
         let Inner::Limit(merger) = &self.inner else {
             unreachable!()
         };
@@ -165,7 +161,7 @@ where
         Ok(())
     }
 
-    fn prepare_spill(&mut self, input_data: Vec<DataBlock>) {
+    fn collect_trans_to_spill(&mut self, input_data: Vec<DataBlock>) {
         let (num_rows, num_bytes) = input_data
             .iter()
             .map(|block| (block.num_rows(), block.memory_size()))
@@ -175,6 +171,19 @@ where
         let params = self.determine_params(num_bytes, num_rows);
         let spill_sort = SortSpill::new(self.base.clone(), params);
         self.inner = Inner::Spill(input_data, spill_sort);
+    }
+
+    fn trans_to_spill(&mut self) -> Result<()> {
+        match &mut self.inner {
+            Inner::Limit(_) => self.limit_trans_to_spill(),
+            Inner::Collect(input_data) => {
+                let input_data = std::mem::take(input_data);
+                self.collect_trans_to_spill(input_data);
+                Ok(())
+            }
+            Inner::Spill(_, _) => Ok(()),
+            Inner::Memory(_) => unreachable!(),
+        }
     }
 
     fn determine_params(&self, bytes: usize, rows: usize) -> SortSpillParams {
@@ -291,16 +300,6 @@ where
             }
             _ => unreachable!(),
         }
-    }
-}
-
-trait MemoryRows {
-    fn in_memory_rows(&self) -> usize;
-}
-
-impl MemoryRows for Vec<DataBlock> {
-    fn in_memory_rows(&self) -> usize {
-        self.iter().map(|s| s.num_rows()).sum::<usize>()
     }
 }
 
@@ -421,18 +420,7 @@ where
         match &self.state {
             State::Collect => {
                 let finished = self.input.is_finished();
-                match &mut self.inner {
-                    Inner::Limit(_) => {
-                        self.prepare_spill_limit()?;
-                    }
-                    Inner::Collect(input_data) => {
-                        assert!(!finished);
-                        let input_data = std::mem::take(input_data);
-                        self.prepare_spill(input_data);
-                    }
-                    Inner::Spill(_, _) => (),
-                    Inner::Memory(_) => unreachable!(),
-                };
+                self.trans_to_spill();
 
                 let input = self.input_rows();
                 let Inner::Spill(input_data, spill_sort) = &mut self.inner else {

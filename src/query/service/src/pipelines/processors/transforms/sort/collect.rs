@@ -73,7 +73,7 @@ where
     C: RowConverter<A::Rows>,
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(super) fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
@@ -120,14 +120,9 @@ where
     }
 
     fn generate_order_column(&self, mut block: DataBlock) -> Result<(A::Rows, DataBlock)> {
-        let order_by_cols = self
-            .sort_desc
-            .iter()
-            .map(|desc| block.get_by_offset(desc.offset).clone())
-            .collect::<Vec<_>>();
         let rows = self
             .row_converter
-            .convert(&order_by_cols, block.num_rows())?;
+            .convert_data_block(&self.sort_desc, &block);
         block.add_column(rows.to_column());
         Ok((rows, block))
     }
@@ -248,12 +243,6 @@ where
         let meta = spill_sort.dump_collect()?;
         self.output_data = Some(DataBlock::empty_with_meta(Box::new(meta)));
         Ok(())
-    }
-}
-
-impl MemoryRows for Vec<DataBlock> {
-    fn in_memory_rows(&self) -> usize {
-        self.iter().map(|s| s.num_rows()).sum::<usize>()
     }
 }
 
