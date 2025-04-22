@@ -45,7 +45,6 @@ pub struct TransformSortExecute<A: SortAlgorithm> {
 impl<A> TransformSortExecute<A>
 where A: SortAlgorithm
 {
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,

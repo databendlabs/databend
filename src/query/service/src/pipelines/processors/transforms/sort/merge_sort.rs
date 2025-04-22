@@ -91,7 +91,6 @@ where
     A: SortAlgorithm,
     C: RowConverter<A::Rows>,
 {
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -141,7 +140,7 @@ where
     fn generate_order_column(&self, mut block: DataBlock) -> Result<(A::Rows, DataBlock)> {
         let rows = self
             .row_converter
-            .convert_data_block(&self.sort_desc, &block);
+            .convert_data_block(&self.sort_desc, &block)?;
         let order_col = rows.to_column();
         block.add_column(order_col);
         Ok((rows, block))
@@ -420,7 +419,7 @@ where
         match &self.state {
             State::Collect => {
                 let finished = self.input.is_finished();
-                self.trans_to_spill();
+                self.trans_to_spill()?;
 
                 let input = self.input_rows();
                 let Inner::Spill(input_data, spill_sort) = &mut self.inner else {

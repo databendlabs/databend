@@ -19,9 +19,9 @@ mod sort_wait;
 
 use std::sync::Arc;
 
+use bounds::Bounds;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_transforms::SortSpillParams;
@@ -31,6 +31,7 @@ pub use sort_sample::*;
 mod builder;
 pub use builder::TransformSortBuilder;
 
+mod bounds;
 mod collect;
 mod execute;
 mod merge_sort;
@@ -51,7 +52,7 @@ struct Base {
 #[derive(Debug)]
 struct SortCollectedMeta {
     params: SortSpillParams,
-    bounds: Vec<Column>,
+    bounds: Bounds,
     blocks: Vec<Box<[SpillableBlock]>>,
 }
 

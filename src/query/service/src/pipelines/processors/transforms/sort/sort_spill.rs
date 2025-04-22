@@ -29,7 +29,6 @@ use databend_common_expression::sampler::FixedRateSampler;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::Rows;
@@ -38,6 +37,7 @@ use databend_common_pipeline_transforms::processors::SortSpillParams;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+use super::bounds::Bounds;
 use super::Base;
 use super::MemoryRows;
 use super::SortCollectedMeta;
@@ -62,15 +62,15 @@ struct StepCollect<A: SortAlgorithm> {
 
 struct StepSort<A: SortAlgorithm> {
     params: SortSpillParams,
-    /// Partition boundaries for restoring and sorting blocks, stored in reverse order of Column.
+    /// Partition boundaries for restoring and sorting blocks.
     /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
-    bounds: Vec<Column>,
+    bounds: Bounds,
     cur_bound: Option<A::Rows>,
 
     subsequent: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
     current: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
 
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     output_merger: Option<Merger<A, BoundBlockStream<A::Rows, Arc<Spiller>>>>,
 }
 
@@ -180,7 +180,7 @@ where A: SortAlgorithm
         params.num_merge * params.batch_rows
     }
 
-    #[allow(unused)]
+    #[expect(unused)]
     pub fn format_memory_usage(&self) -> FmtMemoryUsage<'_, A> {
         FmtMemoryUsage(self)
     }
@@ -303,20 +303,10 @@ impl<A: SortAlgorithm> StepCollect<A> {
 
 impl<A: SortAlgorithm> StepSort<A> {
     fn next_bound(&mut self) {
-        let Some(last) = self.bounds.last_mut() else {
-            self.cur_bound = None;
-            return;
-        };
-        let bound = match last.len() {
-            0 => unreachable!(),
-            1 => self.bounds.pop().unwrap(),
-            _ => {
-                let bound = last.slice(0..1).maybe_gc();
-                *last = last.slice(1..last.len());
-                bound
-            }
-        };
-        self.cur_bound = Some(A::Rows::from_column(&bound).unwrap());
+        match self.bounds.next_bound() {
+            Some(bound) => self.cur_bound = Some(A::Rows::from_column(&bound).unwrap()),
+            None => self.cur_bound = None,
+        }
     }
 
     async fn merge_current(&mut self, base: &Base) -> Result<()> {
@@ -524,52 +514,19 @@ impl Base {
         &self,
         sampled_rows: Vec<DataBlock>,
         batch_rows: usize,
-    ) -> Result<Vec<Column>> {
+    ) -> Result<Bounds> {
         match sampled_rows.len() {
-            0 => Ok(vec![]),
-            1 => Ok(vec![DataBlock::sort(
-                &sampled_rows[0],
-                &[SortColumnDescription {
-                    offset: 0,
-                    asc: A::Rows::IS_ASC_COLUMN,
-                    nulls_first: false,
-                }],
-                None,
-            )?
-            .get_last_column()
-            .clone()]),
+            0 => Ok(Bounds::default()),
+            1 => Bounds::from_column::<A::Rows>(sampled_rows[0].get_last_column().clone()),
             _ => {
-                let streams = sampled_rows
+                let ls = sampled_rows
                     .into_iter()
                     .map(|data| {
-                        let data = DataBlock::sort(
-                            &data,
-                            &[SortColumnDescription {
-                                offset: 0,
-                                asc: A::Rows::IS_ASC_COLUMN,
-                                nulls_first: false,
-                            }],
-                            None,
-                        )
-                        .unwrap();
-                        DataBlockStream::new(data, 0)
+                        let col = data.get_last_column().clone();
+                        Bounds::from_column::<A::Rows>(col)
                     })
-                    .collect::<Vec<_>>();
-
-                let schema = self.schema.project(&[self.sort_row_offset]);
-                let mut merger = Merger::<A, _>::create(schema.into(), streams, batch_rows, None);
-
-                let mut blocks = Vec::new();
-                while let Some(block) = merger.next_block()? {
-                    blocks.push(block)
-                }
-                debug_assert!(merger.is_finished());
-
-                Ok(blocks
-                    .iter()
-                    .rev()
-                    .map(|b| b.get_last_column().clone())
-                    .collect::<Vec<_>>())
+                    .collect::<Result<Vec<_>>>()?;
+                Bounds::merge::<A::Rows>(ls, batch_rows)
             }
         }
     }
@@ -853,7 +810,7 @@ impl SortedStream for DataBlockStream {
 }
 
 impl DataBlockStream {
-    fn new(data: DataBlock, sort_row_offset: usize) -> Self {
+    pub(super) fn new(data: DataBlock, sort_row_offset: usize) -> Self {
         let col = sort_column(&data, sort_row_offset).clone();
         Self(Some((data, col)))
     }
@@ -904,6 +861,7 @@ mod tests {
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
+    use databend_common_expression::SortColumnDescription;
     use databend_common_pipeline_transforms::processors::sort::convert_rows;
     use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
     use databend_common_pipeline_transforms::sort::SimpleRowsDesc;
