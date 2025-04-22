@@ -231,6 +231,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
             NumberScalar::Float64(n) => n.0.into(),
         },
         ScalarRef::Decimal(x) => {
+            /**
             match x {
                 DecimalScalar::Decimal128(value, size) => {
                     let dec = jsonb::Decimal128 {
@@ -247,17 +248,19 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
                     jsonb::Value::Number(jsonb::Number::Decimal256(dec))
                 }
             }
+            */
+            todo!()
         }
         ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
         ScalarRef::Binary(s) => jsonb::Value::Binary(s),
         ScalarRef::String(s) => jsonb::Value::String(s.into()),
         ScalarRef::Timestamp(ts) => jsonb::Value::Timestamp(jsonb::Timestamp {offset:0, value: ts}),
-        ScalarRef::Date(d) => jsonb::Value::Timestamp(jsonb::Date {offset:0, value: d}),,
+        ScalarRef::Date(d) => jsonb::Value::Date(jsonb::Date {offset:0, value: d}),
         ScalarRef::Interval(i) => {
             let interval = jsonb::Interval {
                 months: i.months(),
                 days: i.days(),
-                microseconds: i.microseconds(),
+                micros: i.microseconds(),
             };
             jsonb::Value::Interval(interval)
         }
