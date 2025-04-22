@@ -48,9 +48,9 @@ where Self: Sized + Debug
     ) -> Result<T> {
         let order_by_cols = sort_desc
             .iter()
-            .map(|desc| block.get_by_offset(desc.offset).clone())
+            .map(|desc| data_block.get_by_offset(desc.offset).clone())
             .collect::<Vec<_>>();
-        self.convert(&order_by_cols, block.num_rows())
+        self.convert(&order_by_cols, data_block.num_rows())
     }
 }
 
