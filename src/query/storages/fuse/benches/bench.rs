@@ -16,7 +16,7 @@ fn main() {
     divan::main()
 }
 
-#[divan::bench_group(max_time = 3)]
+#[divan::bench_group(max_time = 1)]
 mod dummy {
     use std::sync::Arc;
 
@@ -31,6 +31,7 @@ mod dummy {
     use databend_common_storages_fuse::io::WriteSettings;
     use databend_common_storages_fuse::FuseStorageFormat;
     use databend_storages_common_table_meta::table::TableCompression;
+    use divan::counter::BytesCount;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
     const NUM_ROWS: usize = 6001215;
@@ -66,6 +67,10 @@ mod dummy {
         // use deserialize_chunk to read back into block
         bencher
             .with_inputs(|| prepare_format_file(FuseStorageFormat::Parquet, compression))
+            .input_counter(|(a, _)| {
+                // Changes based on input.
+                BytesCount::usize(a.len())
+            })
             .bench_refs(|(a, _)| {
                 let reader = ParquetRecordBatchReaderBuilder::try_new(a.clone())
                     .unwrap()
@@ -86,6 +91,10 @@ mod dummy {
         // use deserialize_chunk to read back into block
         bencher
             .with_inputs(|| prepare_format_file(FuseStorageFormat::Native, compression))
+            .input_counter(|(a, _)| {
+                // Changes based on input.
+                BytesCount::usize(a.len())
+            })
             .bench_refs(|(a, schema)| {
                 let mut seek_a = std::io::Cursor::new(a.clone());
                 let metas = databend_common_native::read::reader::read_meta(&mut seek_a).unwrap();
@@ -128,6 +137,7 @@ mod dummy {
         let schema = Arc::new(schema);
         let mut buffer = Vec::new();
         let _ = serialize_block(&write_settings, &schema, datablock, &mut buffer).unwrap();
+
         (buffer.into(), schema)
     }
 }

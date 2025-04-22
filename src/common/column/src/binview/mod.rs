@@ -18,6 +18,7 @@ pub(crate) mod fmt;
 mod iterator;
 mod view;
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -57,7 +58,6 @@ pub trait ViewType: Sealed + 'static + PartialEq + AsRef<Self> {
     /// # Safety
     /// The caller must ensure `index < self.len()`.
     unsafe fn from_bytes_unchecked(slice: &[u8]) -> &Self;
-
     fn to_bytes(&self) -> &[u8];
 
     #[allow(clippy::wrong_self_convention)]
@@ -340,6 +340,44 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
 
         for view in self.views.as_ref() {
             unsafe { mutable.push_view_unchecked(*view, buffers) }
+        }
+        mutable.freeze()
+    }
+
+    /// Garbage collect with dict compressed
+    pub fn gc_with_dict(&self, validity: Option<Bitmap>) -> Self {
+        if self.buffers.is_empty() {
+            return self.clone();
+        }
+        let mut map = HashMap::new();
+        let mut mutable = BinaryViewColumnBuilder::with_capacity(self.len());
+        let buffers = self.buffers.as_ref();
+
+        for (idx, (val, view)) in self.iter().zip(self.views.iter()).enumerate() {
+            // if it's null
+            if validity.as_ref().map(|v| !v.get_bit(idx)).unwrap_or(false) {
+                let default_v = View::new_inline(&[]);
+                mutable.views.push(default_v);
+                continue;
+            }
+
+            // did not care about buffer for small values
+            if view.length <= View::MAX_INLINE_SIZE as u32 {
+                mutable.total_bytes_len += view.length as usize;
+                mutable.views.push(*view);
+                continue;
+            }
+
+            match map.entry(val.to_bytes()) {
+                std::collections::hash_map::Entry::Occupied(v) => {
+                    unsafe { mutable.push_duplicated_view_unchecked(*v.get()) };
+                }
+                std::collections::hash_map::Entry::Vacant(vacant_entry) => {
+                    unsafe { mutable.push_view_unchecked(*view, buffers) };
+                    let last_view = mutable.views.last().unwrap();
+                    vacant_entry.insert(*last_view);
+                }
+            }
         }
         mutable.freeze()
     }
