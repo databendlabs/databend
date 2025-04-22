@@ -52,6 +52,10 @@ impl<const PASSED: bool> QueueData for TestData<PASSED> {
         ErrorCode::Internal(format!("{:?}", key))
     }
 
+    fn lock_ttl(&self) -> Duration {
+        Duration::from_secs(3)
+    }
+
     fn timeout(&self) -> Duration {
         Duration::from_secs(1000)
     }
