@@ -1,7 +1,7 @@
 name: "databend-query-dbg"
-arch: "${deb_arch}"
+arch: "${arch}"
 platform: "linux"
-version: "${deb_version}"
+version: "${version}"
 section: "database"
 priority: "extra"
 maintainer: "Databend Labs <opensource@databend.com>"
@@ -14,5 +14,5 @@ depends:
   - databend-query
 contents:
   # Binaries
-  - src: ${path}/bin/databend-query.debug
+  - src: distro/bin/databend-query.debug
     dst: /usr/bin/databend-query.debug

@@ -47,6 +47,10 @@ runs:
           aarch64)
             echo "deb_arch=arm64" >> $GITHUB_OUTPUT
             ;;
+          *)
+            echo "Unsupported arch: ${{ inputs.arch }}"
+            exit 1
+            ;;
         esac
         deb_version=${version/-/.}
         echo "deb_version=${deb_version/v/}" >> $GITHUB_OUTPUT
@@ -59,32 +63,26 @@ runs:
     - name: Build Databend Query Package
       shell: bash
       run: |
-        export path="distro"
-        export version="${{ inputs.version }}"
-        export deb_version="${{ steps.info.outputs.deb_version }}"
-        export deb_arch="${{ steps.info.outputs.deb_arch }}"
-        pkg_name="databend-query_${deb_version}_${deb_arch}.deb"
-        nfpm pkg --packager deb -t "${path}/${pkg_name}" -f <(envsubst '${deb_arch} ${deb_version} ${path}' < scripts/distribution/nfpm-query.yaml)
+        yq -i '.arch = "${{ steps.info.outputs.deb_arch }}"' scripts/distribution/nfpm-query.yaml
+        yq -i '.version = "${{ steps.info.outputs.deb_version }}"' scripts/distribution/nfpm-query.yaml
+        pkg_name="databend-query_${{ steps.info.outputs.deb_version }}_${{ steps.info.outputs.deb_arch }}.deb"
+        nfpm pkg --packager deb -t "distro/${pkg_name}" -f scripts/distribution/nfpm-query.yaml
 
     - name: Build Databend Meta Package
       shell: bash
       run: |
-        export path="distro"
-        export version="${{ inputs.version }}"
-        export deb_version="${{ steps.info.outputs.deb_version }}"
-        export deb_arch="${{ steps.info.outputs.deb_arch }}"
-        pkg_name="databend-meta_${deb_version}_${deb_arch}.deb"
-        nfpm pkg --packager deb -t "${path}/${pkg_name}" -f <(envsubst '${deb_arch} ${deb_version} ${path}' < scripts/distribution/nfpm-meta.yaml)
+        yq -i '.arch = "${{ steps.info.outputs.deb_arch }}"' scripts/distribution/nfpm-meta.yaml
+        yq -i '.version = "${{ steps.info.outputs.deb_version }}"' scripts/distribution/nfpm-meta.yaml
+        pkg_name="databend-meta_${{ steps.info.outputs.deb_version }}_${{ steps.info.outputs.deb_arch }}.deb"
+        nfpm pkg --packager deb -t "distro/${pkg_name}" -f scripts/distribution/nfpm-meta.yaml
 
     - name: Build Databend Debug Package
       shell: bash
       run: |
-        export path="distro"
-        export version="${{ inputs.version }}"
-        export deb_version="${{ steps.info.outputs.deb_version }}"
-        export deb_arch="${{ steps.info.outputs.deb_arch }}"
-        pkg_name="databend-query-dbg_${deb_version}_${deb_arch}.deb"
-        nfpm pkg --packager deb -t "${path}/${pkg_name}" -f <(envsubst '${deb_arch} ${deb_version} ${path}' < scripts/distribution/nfpm-query-dbg.yaml)
+        yq -i '.arch = "${{ steps.info.outputs.deb_arch }}"' scripts/distribution/nfpm-query-dbg.yaml
+        yq -i '.version = "${{ steps.info.outputs.deb_version }}"' scripts/distribution/nfpm-query-dbg.yaml
+        pkg_name="databend-query-dbg_${{ steps.info.outputs.deb_version }}_${{ steps.info.outputs.deb_arch }}.deb"
+        nfpm pkg --packager deb -t "distro/${pkg_name}" -f scripts/distribution/nfpm-query-dbg.yaml
 
     - name: Update release to github
       shell: bash
