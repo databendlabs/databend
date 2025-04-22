@@ -761,16 +761,18 @@ impl QueryCoordinator {
                 return Ok(fragment_coordinator.pipeline_build_res.unwrap());
             }
 
-            let exchange_params = fragment_coordinator.create_exchange_params(
-                info,
-                fragment_coordinator
-                    .pipeline_build_res
-                    .as_ref()
-                    .map(|x| x.exchange_injector.clone())
-                    .ok_or_else(|| {
-                        ErrorCode::Internal("Pipeline build result is none, It's a bug")
-                    })?,
-            )?;
+            let exchange_params = fragment_coordinator
+                .create_exchange_params(
+                    info,
+                    fragment_coordinator
+                        .pipeline_build_res
+                        .as_ref()
+                        .map(|x| x.exchange_injector.clone())
+                        .ok_or_else(|| {
+                            ErrorCode::Internal("Pipeline build result is none, It's a bug")
+                        })?,
+                )?
+                .unwrap();
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
             // Add exchange data transform.
@@ -840,12 +842,10 @@ impl QueryCoordinator {
             if let Some(mut build_res) = coordinator.pipeline_build_res.take() {
                 build_res.set_max_threads(max_threads as usize);
 
-                if !build_res.main_pipeline.is_pulling_pipeline()? {
-                    return Err(ErrorCode::Internal("Logical error, It's a bug"));
+                if let Some(params) = params {
+                    // Add exchange data publisher.
+                    ExchangeSink::via(&info.query_ctx, &params, &mut build_res.main_pipeline)?;
                 }
-
-                // Add exchange data publisher.
-                ExchangeSink::via(&info.query_ctx, &params, &mut build_res.main_pipeline)?;
 
                 if !build_res.main_pipeline.is_complete_pipeline()? {
                     return Err(ErrorCode::Internal("Logical error, It's a bug"));
@@ -924,48 +924,47 @@ impl FragmentCoordinator {
         &self,
         info: &QueryInfo,
         exchange_injector: Arc<dyn ExchangeInjector>,
-    ) -> Result<ExchangeParams> {
-        if let Some(data_exchange) = &self.data_exchange {
-            return match data_exchange {
-                DataExchange::Merge(exchange) => {
-                    Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
-                        exchange_injector: exchange_injector.clone(),
-                        schema: self.physical_plan.output_schema()?,
-                        fragment_id: self.fragment_id,
-                        query_id: info.query_id.to_string(),
-                        destination_id: exchange.destination_id.clone(),
-                        allow_adjust_parallelism: exchange.allow_adjust_parallelism,
-                        ignore_exchange: exchange.ignore_exchange,
-                    }))
-                }
-                DataExchange::Broadcast(exchange) => {
-                    Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                        exchange_injector: exchange_injector.clone(),
-                        schema: self.physical_plan.output_schema()?,
-                        fragment_id: self.fragment_id,
-                        query_id: info.query_id.to_string(),
-                        executor_id: info.current_executor.to_string(),
-                        destination_ids: exchange.destination_ids.to_owned(),
-                        shuffle_scatter: exchange_injector
-                            .flight_scatter(&info.query_ctx, data_exchange)?,
-                    }))
-                }
-                DataExchange::ShuffleDataExchange(exchange) => {
-                    Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                        exchange_injector: exchange_injector.clone(),
-                        schema: self.physical_plan.output_schema()?,
-                        fragment_id: self.fragment_id,
-                        query_id: info.query_id.to_string(),
-                        executor_id: info.current_executor.to_string(),
-                        destination_ids: exchange.destination_ids.to_owned(),
-                        shuffle_scatter: exchange_injector
-                            .flight_scatter(&info.query_ctx, data_exchange)?,
-                    }))
-                }
-            };
+    ) -> Result<Option<ExchangeParams>> {
+        let Some(data_exchange) = &self.data_exchange else {
+            return Ok(None);
+        };
+        match data_exchange {
+            DataExchange::Merge(exchange) => {
+                Ok(Some(ExchangeParams::MergeExchange(MergeExchangeParams {
+                    exchange_injector: exchange_injector.clone(),
+                    schema: self.physical_plan.output_schema()?,
+                    fragment_id: self.fragment_id,
+                    query_id: info.query_id.to_string(),
+                    destination_id: exchange.destination_id.clone(),
+                    allow_adjust_parallelism: exchange.allow_adjust_parallelism,
+                    ignore_exchange: exchange.ignore_exchange,
+                })))
+            }
+            DataExchange::Broadcast(exchange) => Ok(Some(ExchangeParams::ShuffleExchange(
+                ShuffleExchangeParams {
+                    exchange_injector: exchange_injector.clone(),
+                    schema: self.physical_plan.output_schema()?,
+                    fragment_id: self.fragment_id,
+                    query_id: info.query_id.to_string(),
+                    executor_id: info.current_executor.to_string(),
+                    destination_ids: exchange.destination_ids.to_owned(),
+                    shuffle_scatter: exchange_injector
+                        .flight_scatter(&info.query_ctx, data_exchange)?,
+                },
+            ))),
+            DataExchange::ShuffleDataExchange(exchange) => Ok(Some(
+                ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                    exchange_injector: exchange_injector.clone(),
+                    schema: self.physical_plan.output_schema()?,
+                    fragment_id: self.fragment_id,
+                    query_id: info.query_id.to_string(),
+                    executor_id: info.current_executor.to_string(),
+                    destination_ids: exchange.destination_ids.to_owned(),
+                    shuffle_scatter: exchange_injector
+                        .flight_scatter(&info.query_ctx, data_exchange)?,
+                }),
+            )),
         }
-
-        Err(ErrorCode::Internal("Cannot find data exchange."))
     }
 
     pub fn prepare_pipeline(&mut self, ctx: Arc<QueryContext>) -> Result<()> {
