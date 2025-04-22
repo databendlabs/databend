@@ -729,6 +729,57 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_combine_nullable_1_arg::<VariantType, BinaryType, _, _>(
+        "as_binary",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<BinaryType>>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push_null();
+                    return;
+                }
+            }
+            match RawJsonb::new(v).as_binary() {
+                Ok(Some(res)) => output.push(&res),
+                _ => output.push_null(),
+            }
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, DateType, _, _>(
+        "as_date",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push_null();
+                    return;
+                }
+            }
+            match RawJsonb::new(v).as_date() {
+                Ok(Some(res)) => output.push(res.value),
+                _ => output.push_null(),
+            }
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
+        "as_timestamp",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push_null();
+                    return;
+                }
+            }
+            match RawJsonb::new(v).as_timestamp() {
+                Ok(Some(res)) => output.push(res.value),
+                _ => output.push_null(),
+            }
+        }),
+    );
+
     registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
         "as_array",
         |_, _| FunctionDomain::Full,
