@@ -36,6 +36,7 @@ mod collect;
 mod execute;
 mod merge_sort;
 mod sort_spill;
+mod wait;
 
 use sort_spill::SpillableBlock;
 
