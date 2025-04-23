@@ -5,13 +5,13 @@ module.exports = async ({ github, context, core }) => {
   fs.mkdirSync("docs/release-stable", { recursive: true });
   const df = `docs/release-stable/${DATE}_${VERSION}.md`;
 
-  const release = await github.rest.repos.getRelease({
+  const releases = await github.rest.repos.listReleases({
     owner: "databendlabs",
     repo: "databend",
-    release_id: VERSION,
   });
+  const release = releases.data.find((r) => r.name === VERSION);
 
-  let body = release.data.body;
+  let body = release.body;
 
   body = "---\n" + body;
   body = body.replace(/^--$/gm, "---");
