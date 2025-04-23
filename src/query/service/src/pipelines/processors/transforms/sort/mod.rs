@@ -33,6 +33,7 @@ pub use builder::TransformSortBuilder;
 
 mod bounds;
 mod collect;
+mod exchange;
 mod execute;
 mod merge_sort;
 mod sort_spill;
