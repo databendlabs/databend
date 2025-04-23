@@ -1,7 +1,7 @@
 const fs = require("fs");
 
 module.exports = async ({ github, context, core }) => {
-  const { VERSION, DATE } = context.payload.inputs;
+  const { VERSION, DATE } = process.env;
   fs.mkdirSync("docs/release-stable", { recursive: true });
   const df = `docs/release-stable/${DATE}_${VERSION}.md`;
 
