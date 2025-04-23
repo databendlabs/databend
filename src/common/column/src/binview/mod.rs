@@ -362,7 +362,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
             }
 
             // did not care about buffer for small values
-            if view.length <= View::MAX_INLINE_SIZE as u32 {
+            if view.length <= View::MAX_INLINE_SIZE {
                 mutable.total_bytes_len += view.length as usize;
                 mutable.views.push(*view);
                 continue;
