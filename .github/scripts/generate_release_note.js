@@ -1,5 +1,16 @@
 const fs = require("fs");
 
+function escapeHtml(text) {
+  const map = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  };
+  return text.replace(/[&<>"']/g, (m) => map[m]);
+}
+
 module.exports = async ({ github, context, core }) => {
   const { VERSION, DATE } = process.env;
   fs.mkdirSync("docs/release-stable", { recursive: true });
@@ -24,6 +35,7 @@ module.exports = async ({ github, context, core }) => {
     /https:\/\/github\.com\/databendlabs\/databend\/pull\/([0-9]+)/g,
     "[#$1](https://github.com/databendlabs/databend/pull/$1)"
   );
+  body = escapeHtml(body);
 
   fs.writeFileSync(df, body);
 };
