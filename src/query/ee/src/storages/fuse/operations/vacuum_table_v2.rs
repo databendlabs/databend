@@ -16,8 +16,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
-use chrono::Days;
 use chrono::Duration;
+use chrono::TimeDelta;
 use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::table::Table;
@@ -32,6 +32,7 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::RetentionPolicy;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
@@ -89,57 +90,91 @@ pub async fn do_vacuum2(
     let fuse_table = FuseTable::try_from_table(table)?;
     let start = std::time::Instant::now();
 
-    let retention_period_in_days = if fuse_table.is_transient() {
-        0
-    } else {
-        ctx.get_settings().get_data_retention_time_in_days()?
-    };
+    let retention_policy = fuse_table.get_data_retention_policy(ctx.as_ref())?;
 
-    let is_vacuum_all = retention_period_in_days == 0;
+    // Indicates whether to use the current table snapshot as gc root,
+    // true means vacuum all the historical snapshots.
+    let mut is_vacuum_all = false;
+    let mut respect_flash_back_with_lvt = None;
 
-    let Some(lvt) = set_lvt(fuse_table, ctx.as_ref(), retention_period_in_days).await? else {
-        return Ok(vec![]);
-    };
+    let snapshots_before_lvt = match retention_policy {
+        RetentionPolicy::ByTimePeriod(delta_duration) => {
+            info!("using by ByTimePeriod policy {:?}", delta_duration);
+            let retention_period = if fuse_table.is_transient() {
+                // For transient table, keep no history data
+                TimeDelta::zero()
+            } else {
+                delta_duration
+            };
 
-    ctx.set_status_info(&format!(
-        "set lvt for table {} takes {:?}, lvt: {:?}",
-        fuse_table.get_table_info().desc,
-        start.elapsed(),
-        lvt
-    ));
+            is_vacuum_all = retention_period.is_zero();
 
-    let start = std::time::Instant::now();
-    let snapshots_before_lvt = if is_vacuum_all {
-        list_until_prefix(
-            fuse_table,
-            fuse_table
-                .meta_location_generator()
-                .snapshot_location_prefix(),
-            fuse_table.snapshot_loc().unwrap().as_str(),
-            true,
-            None,
-        )
-        .await?
-    } else {
-        list_until_timestamp(
-            fuse_table,
-            fuse_table
-                .meta_location_generator()
-                .snapshot_location_prefix(),
-            lvt,
-            true,
-            None,
-        )
-        .await?
+            let Some(lvt) = set_lvt(fuse_table, ctx.as_ref(), retention_period).await? else {
+                return Ok(vec![]);
+            };
+
+            if respect_flash_back {
+                respect_flash_back_with_lvt = Some(lvt);
+            }
+
+            ctx.set_status_info(&format!(
+                "set lvt for table {} takes {:?}, lvt: {:?}",
+                fuse_table.get_table_info().desc,
+                start.elapsed(),
+                lvt
+            ));
+
+            let snapshots_before_lvt =
+                collect_gc_candidate_by_retention_period(fuse_table, lvt, is_vacuum_all).await?;
+            snapshots_before_lvt
+        }
+        RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots_to_keep) => {
+            info!(
+                "using by ByNumOfSnapshotsToKeep policy {:?}",
+                num_snapshots_to_keep
+            );
+            // List the snapshot order by timestamp asc, till the current snapshot(inclusively).
+            let need_one_more = true;
+            let mut snapshots = list_until_prefix(
+                fuse_table,
+                fuse_table
+                    .meta_location_generator()
+                    .snapshot_location_prefix(),
+                fuse_table.snapshot_loc().unwrap().as_str(),
+                need_one_more,
+                None,
+            )
+            .await?;
+
+            let len = snapshots.len();
+            if len <= num_snapshots_to_keep {
+                // Only the current snapshot is there, done
+                return Ok(vec![]);
+            }
+            if num_snapshots_to_keep == 1 {
+                // Expecting only one snapshot left, which means that we can use the current snapshot
+                // as gc root, this flag will be propagated to the select_gc_root func later.
+                is_vacuum_all = true;
+            }
+
+            // When selecting the GC root later, the last snapshot in `snapshots` is a candidate,
+            // but its commit status is uncertain, its previous snapshot is typically used as the GC root, except in the is_vacuum_all case.
+            //
+            // Therefore, during snapshot truncation, we keep 2 extra snapshots; see `select_gc_root` for details.
+            let num_candidates = len - num_snapshots_to_keep + 2;
+            snapshots.truncate(num_candidates);
+            snapshots
+        }
     };
 
     let elapsed = start.elapsed();
     ctx.set_status_info(&format!(
-        "list snapshots before lvt for table {} takes {:?}, snapshots_dir: {:?}, lvt: {:?}, snapshots: {:?}",
+        "list snapshots for table {} takes {:?}, snapshots_dir: {:?}, snapshots: {:?}",
         fuse_table.get_table_info().desc,
         elapsed,
-        fuse_table.meta_location_generator().snapshot_location_prefix(),
-        lvt,
+        fuse_table
+            .meta_location_generator()
+            .snapshot_location_prefix(),
         slice_summary(&snapshots_before_lvt)
     ));
 
@@ -148,9 +183,8 @@ pub async fn do_vacuum2(
         fuse_table,
         &snapshots_before_lvt,
         is_vacuum_all,
-        respect_flash_back,
+        respect_flash_back_with_lvt,
         ctx.clone().get_abort_checker(),
-        lvt,
     )
     .await?
     else {
@@ -341,13 +375,45 @@ pub async fn do_vacuum2(
     Ok(files_to_gc)
 }
 
+async fn collect_gc_candidate_by_retention_period(
+    fuse_table: &FuseTable,
+    lvt: DateTime<Utc>,
+    is_vacuum_all: bool,
+) -> Result<Vec<Entry>> {
+    let snapshots_before_lvt = if is_vacuum_all {
+        list_until_prefix(
+            fuse_table,
+            fuse_table
+                .meta_location_generator()
+                .snapshot_location_prefix(),
+            fuse_table.snapshot_loc().unwrap().as_str(),
+            true,
+            None,
+        )
+        .await?
+    } else {
+        list_until_timestamp(
+            fuse_table,
+            fuse_table
+                .meta_location_generator()
+                .snapshot_location_prefix(),
+            lvt,
+            true,
+            None,
+        )
+        .await?
+    };
+
+    Ok(snapshots_before_lvt)
+}
+
 /// Try set lvt as min(latest_snapshot.timestamp, now - retention_time).
 ///
 /// Return `None` means we stop vacuumming, but don't want to report error to user.
 async fn set_lvt(
     fuse_table: &FuseTable,
     ctx: &dyn TableContext,
-    retention: u64,
+    retention_period: TimeDelta,
 ) -> Result<Option<DateTime<Utc>>> {
     let Some(latest_snapshot) = fuse_table.read_table_snapshot().await? else {
         info!(
@@ -366,7 +432,7 @@ async fn set_lvt(
     let cat = ctx.get_default_catalog()?;
     // safe to unwrap, as we have checked the version is v5
     let latest_ts = latest_snapshot.timestamp.unwrap();
-    let lvt_point_candidate = std::cmp::min(Utc::now() - Days::new(retention), latest_ts);
+    let lvt_point_candidate = std::cmp::min(Utc::now() - retention_period, latest_ts);
 
     let lvt_point = cat
         .set_table_lvt(
@@ -391,6 +457,7 @@ async fn list_until_prefix(
     gc_root_meta_ts: Option<DateTime<Utc>>,
 ) -> Result<Vec<Entry>> {
     info!("list until prefix: {}", until);
+    eprintln!("list until prefix inside: {}", until);
     let dal = fuse_table.get_operator_ref();
 
     match dal.info().scheme() {
@@ -457,8 +524,10 @@ async fn fs_list_until_prefix(
     let mut res = Vec::new();
     for entry in entries {
         if entry.path() >= until {
+            eprintln!("entry path: {} >= until: {}", entry.path(), until);
             info!("entry path: {} >= until: {}", entry.path(), until);
             if need_one_more {
+                eprintln!("kept");
                 res.push(entry);
             }
             break;
@@ -538,14 +607,13 @@ async fn select_gc_root(
     fuse_table: &FuseTable,
     snapshots_before_lvt: &[Entry],
     is_vacuum_all: bool,
-    respect_flash_back: bool,
+    respect_flash_back: Option<DateTime<Utc>>,
     abort_checker: AbortChecker,
-    lvt: DateTime<Utc>,
 ) -> Result<Option<(Arc<TableSnapshot>, Vec<String>, DateTime<Utc>)>> {
     let gc_root_path = if is_vacuum_all {
         // safe to unwrap, or we should have stopped vacuuming in set_lvt()
         fuse_table.snapshot_loc().unwrap()
-    } else if respect_flash_back {
+    } else if let Some(lvt) = respect_flash_back {
         let latest_location = fuse_table.snapshot_loc().unwrap();
         let gc_root = fuse_table
             .find(latest_location, abort_checker, |snapshot| {
@@ -579,6 +647,8 @@ async fn select_gc_root(
         }
         gc_root_path
     };
+
+    eprintln!("gc root path {}", gc_root_path);
 
     let dal = fuse_table.get_operator_ref();
     let gc_root = read_snapshot_from_location(fuse_table, &gc_root_path).await;
@@ -636,6 +706,8 @@ async fn select_gc_root(
                 ))
             })?;
             let snapshots_to_gc = gc_candidates[..gc_root_idx].to_vec();
+
+            eprintln!("snapshots to gc {:?}", snapshots_to_gc);
 
             Ok(Some((gc_root, snapshots_to_gc, gc_root_meta_ts)))
         }

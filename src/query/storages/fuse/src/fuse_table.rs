@@ -125,6 +125,7 @@ use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -468,7 +469,22 @@ impl FuseTable {
         }
     }
 
-    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<TimeDelta> {
+    pub fn get_data_retention_policy(&self, ctx: &dyn TableContext) -> Result<RetentionPolicy> {
+        let table_options = &self.table_info.meta.options;
+
+        let policy =
+            if let Some(v) = table_options.get(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP) {
+                let num_snapshot_keep = v.parse::<usize>()?;
+                RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshot_keep)
+            } else {
+                let duration = self.get_data_retention_period(ctx)?;
+                RetentionPolicy::ByTimePeriod(duration)
+            };
+
+        Ok(policy)
+    }
+
+    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<Duration> {
         let retention_period = if let Some(v) = self
             .table_info
             .meta
@@ -1186,4 +1202,9 @@ impl Table for FuseTable {
         op.remove_file_in_batch(files).await?;
         Ok(len)
     }
+}
+
+pub enum RetentionPolicy {
+    ByTimePeriod(TimeDelta),
+    ByNumOfSnapshotsToKeep(usize),
 }

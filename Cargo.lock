@@ -4832,7 +4832,6 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait",
- "chrono",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",

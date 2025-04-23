@@ -29,8 +29,10 @@ use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
+use log::info;
 use opendal::EntryMode;
 
+use crate::fuse_table::RetentionPolicy;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotsIO;
@@ -103,6 +105,20 @@ impl FuseTable {
             } else {
                 false
             }
+        })
+        .await
+    }
+
+    pub async fn navigate_back_with_limit(
+        &self,
+        location: String,
+        limit: usize,
+        aborting: AbortChecker,
+    ) -> Result<Arc<FuseTable>> {
+        let mut counter = 0;
+        self.find(location, aborting, |_snapshot| {
+            counter += 1;
+            counter >= limit
         })
         .await
     }
@@ -218,9 +234,9 @@ impl FuseTable {
     pub async fn navigate_for_purge(
         &self,
         ctx: &Arc<dyn TableContext>,
-        instant: Option<NavigationPoint>,
+        navigation_point: Option<NavigationPoint>,
     ) -> Result<(Arc<FuseTable>, Vec<String>)> {
-        let retention = self.get_data_retention_period(ctx.as_ref())?;
+        let retention_policy = self.get_data_retention_policy(ctx.as_ref())?;
         let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot
         } else {
@@ -230,26 +246,60 @@ impl FuseTable {
         };
 
         assert!(root_snapshot.timestamp.is_some());
-        let mut time_point = root_snapshot.timestamp.unwrap() - retention;
 
-        let (location, files) = match instant {
-            Some(NavigationPoint::TimePoint(point)) => {
-                time_point = std::cmp::min(point, time_point);
-                self.list_by_time_point(time_point).await
+        match retention_policy {
+            RetentionPolicy::ByTimePeriod(time_delta) => {
+                info!("navigate by time period, {:?}", time_delta);
+                let mut time_point = root_snapshot.timestamp.unwrap() - time_delta;
+                let (candidate_snapshot_path, files) = match navigation_point {
+                    Some(NavigationPoint::TimePoint(point)) => {
+                        time_point = std::cmp::min(point, time_point);
+                        self.list_by_time_point(time_point).await
+                    }
+                    Some(NavigationPoint::SnapshotID(snapshot_id)) => {
+                        self.list_by_snapshot_id(snapshot_id.as_str(), time_point)
+                            .await
+                    }
+                    Some(NavigationPoint::StreamInfo(info)) => {
+                        self.list_by_stream(info, time_point).await
+                    }
+                    None => self.list_by_time_point(time_point).await,
+                }?;
+
+                let table = self
+                    .navigate_to_time_point(
+                        candidate_snapshot_path,
+                        time_point,
+                        ctx.clone().get_abort_checker(),
+                    )
+                    .await?;
+
+                Ok((table, files))
             }
-            Some(NavigationPoint::SnapshotID(snapshot_id)) => {
-                self.list_by_snapshot_id(snapshot_id.as_str(), time_point)
-                    .await
+            RetentionPolicy::ByNumOfSnapshotsToKeep(num) => {
+                assert!(num > 0);
+                info!("navigate by number of snapshots, {:?}", num);
+                let table = self
+                    .navigate_back_with_limit(
+                        self.snapshot_loc().unwrap(),
+                        num,
+                        ctx.clone().get_abort_checker(),
+                    )
+                    .await?;
+
+                // TODO
+                let timestamp = table
+                    .read_table_snapshot()
+                    .await?
+                    .unwrap()
+                    .timestamp
+                    .unwrap();
+
+                let (_candidate_snapshot_path, files) = self.list_by_time_point(timestamp).await?;
+
+                Ok((table, files))
             }
-            Some(NavigationPoint::StreamInfo(info)) => self.list_by_stream(info, time_point).await,
-            None => self.list_by_time_point(time_point).await,
-        }?;
-
-        let table = self
-            .navigate_to_time_point(location, time_point, ctx.clone().get_abort_checker())
-            .await?;
-
-        Ok((table, files))
+        }
     }
 
     #[async_backtrace::framed]
@@ -257,6 +307,10 @@ impl FuseTable {
         &self,
         time_point: DateTime<Utc>,
     ) -> Result<(String, Vec<String>)> {
+        let Some(location) = self.snapshot_loc() else {
+            return Err(ErrorCode::TableHistoricalDataNotFound("No historical data"));
+        };
+
         let prefix = format!(
             "{}/{}/",
             self.meta_location_generator().prefix(),
@@ -271,10 +325,6 @@ impl FuseTable {
                 "No historical data found at given point",
             ));
         }
-
-        let Some(location) = self.snapshot_loc() else {
-            return Err(ErrorCode::TableHistoricalDataNotFound("No historical data"));
-        };
 
         Ok((location, files))
     }
