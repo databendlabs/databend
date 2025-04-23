@@ -462,20 +462,7 @@ impl Binder {
 
         let catalog = self.ctx.get_catalog(&catalog).await?;
 
-        // Take FUSE engine AS default engine
-        let engine = engine.unwrap_or_else(|| {
-            if catalog.is_external() {
-                if catalog.support_partition() {
-                    Engine::Iceberg
-                } else {
-                    // Catalog Type is Hive,  maybe should not Fuse engine but contain old logic
-                    Engine::Fuse
-                }
-            } else {
-                Engine::Fuse
-            }
-        });
-
+        let engine = engine.unwrap_or(catalog.default_table_engine());
         if catalog.support_partition() != (engine == Engine::Iceberg) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
                 "Catalog '{}' engine type is {:?} but table {} engine type is {}",

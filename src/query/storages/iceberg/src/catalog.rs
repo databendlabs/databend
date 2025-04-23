@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use databend_common_ast::ast::Engine;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::StorageDescription;
@@ -663,6 +664,10 @@ impl Catalog for IcebergCatalog {
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         vec![]
+    }
+
+    fn default_table_engine(&self) -> Engine {
+        Engine::Iceberg
     }
 
     async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
