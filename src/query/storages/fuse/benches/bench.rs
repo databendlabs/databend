@@ -19,7 +19,7 @@ fn main() {
 // Timer precision: 10 ns
 // bench                fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ╰─ dummy                           │               │               │               │         │
-//    ├─ arrow_ipc_desc                 │               │               │               │         │
+//    ├─ native_deser                 │               │               │               │         │
 //    │  ├─ LZ4         588.9 ms      │ 588.9 ms      │ 588.9 ms      │ 588.9 ms      │ 1       │ 1
 //    │  │              3.873 GB/s    │ 3.873 GB/s    │ 3.873 GB/s    │ 3.873 GB/s    │         │
 //    │  ╰─ Zstd        832.1 ms      │ 832.1 ms      │ 832.1 ms      │ 832.1 ms      │ 1       │ 1
@@ -98,7 +98,7 @@ mod dummy {
     }
 
     #[divan::bench(args = [TableCompression::LZ4, TableCompression::Zstd])]
-    fn arrow_ipc_desc(bencher: divan::Bencher, compression: TableCompression) {
+    fn native_deser(bencher: divan::Bencher, compression: TableCompression) {
         // write the block into temp memory buffers
         // prepare the metas
         // use deserialize_chunk to read back into block
