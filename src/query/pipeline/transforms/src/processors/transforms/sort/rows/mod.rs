@@ -17,6 +17,7 @@ mod simple;
 mod utils;
 
 use std::fmt::Debug;
+use std::ops::Range;
 
 pub use common::*;
 use databend_common_exception::ErrorCode;
@@ -27,6 +28,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 pub use simple::*;
 pub use utils::*;
@@ -95,5 +97,9 @@ where Self: Sized + Clone + Debug + Send
         self.row(self.len() - 1)
     }
 
-    fn slice(&self, range: std::ops::Range<usize>) -> Self;
+    fn slice(&self, range: Range<usize>) -> Self;
+
+    fn scalar_as_item<'a>(s: &'a Scalar) -> Self::Item<'a>;
+
+    fn owned_item(item: Self::Item<'_>) -> Scalar;
 }

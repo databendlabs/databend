@@ -124,25 +124,69 @@ impl Processor for TransformSortSampleWait {
             .map(|meta| meta.bounds.clone())
             .unwrap_or_default();
 
-        let mut commit = CommitSample {
-            inner: self,
-            bounds: Some(bounds),
-            result: Ok(false),
-        };
-        select_row_type(&mut commit);
-        commit.result?;
+        self.state.commit_sample(self.id, bounds)?;
         self.state.done.notified().await;
         Ok(())
     }
 }
 
-struct CommitSample<'a> {
-    inner: &'a TransformSortSampleWait,
-    bounds: Option<Bounds>,
-    result: Result<bool>,
+pub struct SortSampleState {
+    inner: RwLock<StateInner>,
+    pub(super) done: WatchNotify,
 }
 
-impl<'a> RowsTypeVisitor for CommitSample<'a> {
+impl SortSampleState {
+    pub fn commit_sample(&self, id: usize, bounds: Bounds) -> Result<bool> {
+        let mut inner = self.inner.write().unwrap();
+
+        let x = inner.partial[id].replace(bounds);
+        assert!(x.is_none());
+        let done = inner.partial.iter().all(Option::is_some);
+        if done {
+            let mut visitor = DetermineBounds {
+                inner: &mut inner,
+                result: Ok(()),
+            };
+            select_row_type(&mut visitor);
+            visitor.result?;
+            self.done.notify_waiters();
+        }
+        Ok(done)
+    }
+}
+
+struct StateInner {
+    // target partitions
+    partitions: usize,
+    // schema for bounds DataBlock
+    schema: DataSchemaRef,
+    // sort_desc for bounds DataBlock
+    sort_desc: Arc<[SortColumnDescription]>,
+    partial: Vec<Option<Bounds>>,
+    bounds: Option<Bounds>,
+    batch_rows: usize,
+}
+
+impl StateInner {
+    fn determine_bounds<R: Rows>(&mut self) -> Result<()> {
+        let v = self.partial.drain(..).map(Option::unwrap).collect();
+        let bounds = Bounds::merge::<R>(v, self.batch_rows)?;
+        let bounds = bounds
+            .reduce(self.partitions - 1, R::data_type())
+            .unwrap_or(bounds);
+        assert!(bounds.len() < self.partitions);
+
+        self.bounds = Some(bounds);
+        Ok(())
+    }
+}
+
+struct DetermineBounds<'a> {
+    inner: &'a mut StateInner,
+    result: Result<()>,
+}
+
+impl<'a> RowsTypeVisitor for DetermineBounds<'a> {
     fn schema(&self) -> DataSchemaRef {
         self.inner.schema.clone()
     }
@@ -156,55 +200,6 @@ impl<'a> RowsTypeVisitor for CommitSample<'a> {
         R: Rows + 'static,
         C: RowConverter<R> + Send + 'static,
     {
-        self.result = self
-            .inner
-            .state
-            .commit_sample::<R>(self.inner.id, self.bounds.take().unwrap());
-    }
-}
-
-pub struct SortSampleState {
-    inner: RwLock<StateInner>,
-    pub(super) done: WatchNotify,
-}
-
-impl SortSampleState {
-    pub fn commit_sample<R: Rows>(&self, id: usize, bounds: Bounds) -> Result<bool> {
-        let mut inner = self.inner.write().unwrap();
-
-        let x = inner.partial[id].replace(bounds);
-        assert!(x.is_none());
-        let done = inner.partial.iter().all(Option::is_some);
-        if done {
-            inner.determine_bounds::<R>()?;
-            self.done.notify_waiters();
-        }
-        Ok(done)
-    }
-}
-
-struct StateInner {
-    // target partitions
-    partitions: usize,
-    // schema for bounds DataBlock
-    // schema: DataSchemaRef,
-    // sort_desc for bounds DataBlock
-    // sort_desc: Vec<SortColumnDescription>,
-    partial: Vec<Option<Bounds>>,
-    bounds: Option<Bounds>,
-    batch_rows: usize,
-}
-
-impl StateInner {
-    fn determine_bounds<R: Rows>(&mut self) -> Result<()> {
-        let v = self.partial.drain(..).map(Option::unwrap).collect();
-        let bounds = Bounds::merge::<R>(v, self.batch_rows)?;
-        let bounds = bounds
-            .reduce(self.partitions - 1, R::data_type())
-            .unwrap_or(bounds);
-        assert!(bounds.len() <= self.partitions - 1);
-
-        self.bounds = Some(bounds);
-        Ok(())
+        self.result = self.inner.determine_bounds::<R>();
     }
 }

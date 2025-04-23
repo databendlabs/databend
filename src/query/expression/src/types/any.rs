@@ -48,7 +48,7 @@ impl ValueType for AnyType {
         scalar.as_ref()
     }
 
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         Some(scalar.clone())
     }
 

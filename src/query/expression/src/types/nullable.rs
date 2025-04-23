@@ -60,7 +60,7 @@ impl<T: ValueType> ValueType for NullableType<T> {
         scalar.as_ref().map(T::to_scalar_ref)
     }
 
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         match scalar {
             ScalarRef::Null => Some(None),
             scalar => Some(Some(T::try_downcast_scalar(scalar)?)),

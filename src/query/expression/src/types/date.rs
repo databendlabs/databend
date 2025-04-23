@@ -83,7 +83,7 @@ impl ValueType for DateType {
         *scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         match scalar {
             ScalarRef::Date(scalar) => Some(*scalar),
             _ => None,

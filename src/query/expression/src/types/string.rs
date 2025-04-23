@@ -56,7 +56,7 @@ impl ValueType for StringType {
         scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         scalar.as_string().cloned()
     }
 
