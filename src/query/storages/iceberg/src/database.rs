@@ -301,19 +301,13 @@ fn build_identity_partition_spec(
     req_schema: &TableSchema,
     ice_schema: &IceSchema,
 ) -> Result<PartitionSpec> {
-    if columns.is_empty() {
-        return Err(ErrorCode::Internal(
-            "Partition key can not empty.".to_string(),
-        ));
-    }
-
     let mut fields = vec![];
 
     for (i, col) in columns.iter().enumerate() {
         // Use req_schema for type validation
         let origin_ty = &req_schema.field_with_name(col)?.data_type;
         if is_invalid_partition_type(origin_ty) {
-            return Err(ErrorCode::Internal(format!(
+            return Err(ErrorCode::TableOptionInvalid(format!(
                 "Partition key {} is {:?} type. Cannot set FLOAT, DOUBLE, DECIMAL, DATETIME as partition field", col, origin_ty
             )));
         }
@@ -355,9 +349,6 @@ fn build_table_creation_option(
     if let Some(ref partition) = req.table_partition {
         match partition {
             TablePartition::Identity { columns } => {
-                if columns.is_empty() {
-                    return Ok(builder.build());
-                }
                 let spec = build_identity_partition_spec(columns, &req.table_meta.schema, &schema)?;
                 Ok(builder.partition_spec(spec).build())
             }

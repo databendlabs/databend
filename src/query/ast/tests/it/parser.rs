@@ -935,6 +935,7 @@ fn test_statement_error() {
         r#"create table a (c decimal)"#,
         r#"create table a (b tuple(c int, uint64));"#,
         r#"CREATE TABLE t(c1 NULLABLE(int) NOT NULL);"#,
+        r#"create table a (c1 decimal(38), c2 int) partition by ();"#,
         r#"CREATE TABLE t(c1 int, c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"=33554432);"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
