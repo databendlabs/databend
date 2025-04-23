@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -21,7 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Exchange;
 use databend_common_pipeline_transforms::processors::sort::Rows;
 
-use super::sort_sample::SortSampleState;
+use super::wait::SortSampleState;
 
 pub struct SortRangeExchange<R: Rows> {
     state: Arc<SortSampleState>,
@@ -35,38 +34,40 @@ unsafe impl<R: Rows> Sync for SortRangeExchange<R> {}
 impl<R: Rows + 'static> Exchange for SortRangeExchange<R> {
     const NAME: &'static str = "SortRange";
     fn partition(&self, data: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
-        let bounds = self.state.bounds().unwrap();
-        debug_assert_eq!(n, self.state.partitions());
-        debug_assert!(bounds.len() < n);
-
         if data.is_empty() {
             return Ok(vec![]);
         }
 
-        if bounds.len() == 0 {
+        let bounds = self.state.bounds();
+        // debug_assert_eq!(n, self.state.partitions());
+        debug_assert!(bounds.len() < n);
+
+        if bounds.is_empty() {
             return Ok(vec![data]);
         }
 
-        let bounds = R::from_column(&bounds)?;
-        let rows = R::from_column(data.get_last_column())?;
+        todo!()
 
-        let mut i = 0;
-        let mut j = 0;
-        let mut bound = bounds.row(j);
-        let mut indices = Vec::new();
-        while i < rows.len() {
-            match rows.row(i).cmp(&bound) {
-                Ordering::Less => indices.push(j as u32),
-                Ordering::Greater if j + 1 < bounds.len() => {
-                    j += 1;
-                    bound = bounds.row(j);
-                    continue;
-                }
-                _ => indices.push(j as u32 + 1),
-            }
-            i += 1;
-        }
+        // let bounds = R::from_column(&bounds.0)?;
+        // let rows = R::from_column(data.get_last_column())?;
 
-        DataBlock::scatter(&data, &indices, n)
+        // let mut i = 0;
+        // let mut j = 0;
+        // let mut bound = bounds.row(j);
+        // let mut indices = Vec::new();
+        // while i < rows.len() {
+        //     match rows.row(i).cmp(&bound) {
+        //         Ordering::Less => indices.push(j as u32),
+        //         Ordering::Greater if j + 1 < bounds.len() => {
+        //             j += 1;
+        //             bound = bounds.row(j);
+        //             continue;
+        //         }
+        //         _ => indices.push(j as u32 + 1),
+        //     }
+        //     i += 1;
+        // }
+
+        // DataBlock::scatter(&data, &indices, n)
     }
 }
