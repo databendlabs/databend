@@ -1,7 +1,7 @@
 name: "databend-meta"
-arch: "${deb_arch}"
+arch: "${arch}"
 platform: "linux"
-version: "${deb_version}"
+version: "${version}"
 section: "database"
 priority: "extra"
 maintainer: "Databend Labs <opensource@databend.com>"
@@ -15,20 +15,20 @@ depends:
   - libc6 (>= 2.31)
 contents:
   # Binaries
-  - src: ${path}/bin/databend-meta
+  - src: distro/bin/databend-meta
     dst: /usr/bin/databend-meta
-  - src: ${path}/bin/databend-metactl
+  - src: distro/bin/databend-metactl
     dst: /usr/bin/databend-metactl
 
   # Configs
-  - src: ${path}/configs/databend-meta.toml
+  - src: distro/configs/databend-meta.toml
     dst: /etc/databend/databend-meta.toml
     type: config
 
   # Systemd
-  - src: ${path}/systemd/databend-meta.service
+  - src: distro/systemd/databend-meta.service
     dst: /lib/systemd/system/databend-meta.service
-  - src: ${path}/systemd/databend-meta.default
+  - src: distro/systemd/databend-meta.default
     dst: /etc/default/databend-meta
 
   - dst: /var/lib/databend
@@ -41,5 +41,5 @@ contents:
       mode: 0755
 
 scripts:
-  preinstall: ${path}/scripts/preinstall.sh
-  postinstall: ${path}/scripts/postinstall.sh
+  preinstall: distro/scripts/preinstall.sh
+  postinstall: distro/scripts/postinstall.sh
