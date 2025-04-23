@@ -18,6 +18,7 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::sort::LoserTreeMerger;
 use databend_common_pipeline_transforms::sort::Rows;
@@ -70,13 +71,17 @@ impl Bounds {
         }
     }
 
-    pub fn next_bound(&mut self) -> Option<Column> {
+    pub fn next_bound(&mut self) -> Option<Scalar> {
         let last = self.0.last_mut()?;
         match last.len() {
             0 => unreachable!(),
-            1 => Some(self.0.pop().unwrap()),
+            1 => {
+                let bound = last.index(0).unwrap().to_owned();
+                self.0.pop();
+                Some(bound)
+            }
             _ => {
-                let bound = last.slice(0..1).maybe_gc();
+                let bound = last.index(0).unwrap().to_owned();
                 *last = last.slice(1..last.len());
                 Some(bound)
             }
