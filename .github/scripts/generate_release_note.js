@@ -10,6 +10,10 @@ module.exports = async ({ github, context, core }) => {
     repo: "databend",
   });
   const release = releases.data.find((r) => r.name === VERSION);
+  if (!release) {
+    core.setFailed(`Release ${VERSION} not found`);
+    return;
+  }
 
   let body = release.body;
 
