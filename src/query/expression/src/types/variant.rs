@@ -31,11 +31,11 @@ use super::date::date_to_string;
 use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
 use crate::property::Domain;
-use crate::types::interval::interval_to_string;
 use crate::types::map::KvPair;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::DataType;
+use crate::types::DecimalScalar;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ValueType;
@@ -230,32 +230,34 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
             NumberScalar::Float32(n) => n.0.into(),
             NumberScalar::Float64(n) => n.0.into(),
         },
-        ScalarRef::Decimal(x) => {
-            /**
-            match x {
-                DecimalScalar::Decimal128(value, size) => {
-                    let dec = jsonb::Decimal128 {
-                        scale: size.scale,
-                        value,
-                    };
-                    jsonb::Value::Number(jsonb::Number::Decimal128(dec))
-                }
-                DecimalScalar::Decimal256(value, size) => {
-                    let dec = jsonb::Decimal256 {
-                        scale: size.scale,
-                        value,
-                    };
-                    jsonb::Value::Number(jsonb::Number::Decimal256(dec))
-                }
+        ScalarRef::Decimal(x) => match x {
+            DecimalScalar::Decimal128(value, size) => {
+                let dec = jsonb::Decimal128 {
+                    scale: size.scale,
+                    value,
+                };
+                jsonb::Value::Number(jsonb::Number::Decimal128(dec))
             }
-            */
-            todo!()
-        }
+            DecimalScalar::Decimal256(_value, _size) => {
+                // let dec = jsonb::Decimal256 {
+                //    scale: size.scale,
+                //    value,
+                //};
+                // jsonb::Value::Number(jsonb::Number::Decimal256(dec))
+                todo!()
+            }
+        },
         ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
         ScalarRef::Binary(s) => jsonb::Value::Binary(s),
         ScalarRef::String(s) => jsonb::Value::String(s.into()),
-        ScalarRef::Timestamp(ts) => jsonb::Value::Timestamp(jsonb::Timestamp {offset:0, value: ts}),
-        ScalarRef::Date(d) => jsonb::Value::Date(jsonb::Date {offset:0, value: d}),
+        ScalarRef::Timestamp(ts) => jsonb::Value::Timestamp(jsonb::Timestamp {
+            offset: 0,
+            value: ts,
+        }),
+        ScalarRef::Date(d) => jsonb::Value::Date(jsonb::Date {
+            offset: 0,
+            value: d,
+        }),
         ScalarRef::Interval(i) => {
             let interval = jsonb::Interval {
                 months: i.months(),

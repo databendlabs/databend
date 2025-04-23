@@ -18,8 +18,8 @@ use std::collections::HashSet;
 use std::iter::once;
 use std::sync::Arc;
 
-use databend_common_expression::types::BinaryType;
 use bstr::ByteSlice;
+use databend_common_column::types::months_days_micros;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::string_to_date;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -32,11 +32,13 @@ use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::variant::cast_scalars_to_variants;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::GenericType;
+use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
@@ -767,37 +769,41 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
         "as_timestamp",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
+        vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
+            |v, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
                 }
-            }
-            match RawJsonb::new(v).as_timestamp() {
-                Ok(Some(res)) => output.push(res.value),
-                _ => output.push_null(),
-            }
-        }),
+                match RawJsonb::new(v).as_timestamp() {
+                    Ok(Some(res)) => output.push(res.value),
+                    _ => output.push_null(),
+                }
+            },
+        ),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, IntervalType, _, _>(
         "as_interval",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<IntervalType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
+        vectorize_with_builder_1_arg::<VariantType, NullableType<IntervalType>>(
+            |v, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
                 }
-            }
-            match RawJsonb::new(v).as_interval() {
-                Ok(Some(res)) => {
-                    todo!()
+                match RawJsonb::new(v).as_interval() {
+                    Ok(Some(res)) => {
+                        output.push(months_days_micros::new(res.months, res.days, res.micros))
+                    }
+                    _ => output.push_null(),
                 }
-                _ => output.push_null(),
-            }
-        }),
+            },
+        ),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(

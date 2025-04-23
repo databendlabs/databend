@@ -201,16 +201,24 @@ Functions overloads:
 0 arrays_zip FACTORY
 0 as_array(Variant) :: Variant NULL
 1 as_array(Variant NULL) :: Variant NULL
+0 as_binary(Variant) :: Binary NULL
+1 as_binary(Variant NULL) :: Binary NULL
 0 as_boolean(Variant) :: Boolean NULL
 1 as_boolean(Variant NULL) :: Boolean NULL
+0 as_date(Variant) :: Date NULL
+1 as_date(Variant NULL) :: Date NULL
 0 as_float(Variant) :: Float64 NULL
 1 as_float(Variant NULL) :: Float64 NULL
 0 as_integer(Variant) :: Int64 NULL
 1 as_integer(Variant NULL) :: Int64 NULL
+0 as_interval(Variant) :: Interval NULL
+1 as_interval(Variant NULL) :: Interval NULL
 0 as_object(Variant) :: Variant NULL
 1 as_object(Variant NULL) :: Variant NULL
 0 as_string(Variant) :: String NULL
 1 as_string(Variant NULL) :: String NULL
+0 as_timestamp(Variant) :: Timestamp NULL
+1 as_timestamp(Variant NULL) :: Timestamp NULL
 0 ascii(String) :: UInt8
 1 ascii(String NULL) :: UInt8 NULL
 0 asin(Float64) :: Float64
