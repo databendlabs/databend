@@ -20,6 +20,7 @@ use log::debug;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
+use crate::acquirer::SharedAcquirerStat;
 use crate::errors::ConnectionClosed;
 use crate::queue::PermitEvent;
 use crate::storage::PermitEntry;
@@ -38,6 +39,7 @@ use crate::storage::PermitKey;
 /// the oneshot sender signals the lease extending task to stop,
 /// allowing for proper cleanup of the [`PermitEntry`] in the meta-service.
 pub struct Permit {
+    pub stat: SharedAcquirerStat,
     pub fu: BoxFuture<'static, Result<(), ConnectionClosed>>,
 }
 
@@ -67,6 +69,7 @@ impl Permit {
         permit_event_rx: mpsc::Receiver<PermitEvent>,
         permit_key: PermitKey,
         permit_entry: PermitEntry,
+        stat: SharedAcquirerStat,
         subscriber_cancel_tx: oneshot::Sender<()>,
         leaser_cancel_tx: oneshot::Sender<()>,
     ) -> Self {
@@ -78,7 +81,14 @@ impl Permit {
             leaser_cancel_tx,
         );
 
-        Permit { fu: Box::pin(fu) }
+        Permit {
+            stat,
+            fu: Box::pin(fu),
+        }
+    }
+
+    pub fn stat(&self) -> &SharedAcquirerStat {
+        &self.stat
     }
 
     /// Waits for the [`PermitEntry`] to be removed.

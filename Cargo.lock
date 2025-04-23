@@ -3706,6 +3706,7 @@ dependencies = [
  "databend-common-meta-types",
  "display-more",
  "futures",
+ "itertools 0.13.0",
  "log",
  "pretty_assertions",
  "thiserror 1.0.65",
@@ -5008,6 +5009,7 @@ dependencies = [
  "databend-common-meta-control",
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
+ "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
  "databend-common-meta-store",
  "databend-common-meta-types",
@@ -5769,8 +5771,8 @@ dependencies = [
 
 [[package]]
 name = "display-more"
-version = "0.1.2"
-source = "git+https://github.com/databendlabs/display-more?tag=v0.1.2#723acc184363f9509364ca9d652adac92e4fcfc1"
+version = "0.1.3"
+source = "git+https://github.com/databendlabs/display-more?tag=v0.1.3#c4390e0a5136617e49da28141403204e01edc4c9"
 dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
@@ -16158,8 +16160,8 @@ dependencies = [
 
 [[package]]
 name = "watcher"
-version = "0.1.1"
-source = "git+https://github.com/databendlabs/watcher?tag=v0.1.1#de30194284b8382f4a2727ebdb7fbd4dd53e39b1"
+version = "0.2.0"
+source = "git+https://github.com/databendlabs/watcher?tag=v0.2.0#7bff8b42604a95ddda90fe42f329f1b72a526f06"
 dependencies = [
  "futures",
  "log",

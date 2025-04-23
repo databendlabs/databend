@@ -15,6 +15,7 @@
 use std::fmt;
 use std::time::Duration;
 
+use display_more::DisplayOptionExt;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -45,8 +46,11 @@ impl fmt::Display for UpsertKV {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{}({:?}) = {:?} ({:?})",
-            self.key, self.seq, self.value, self.value_meta
+            "{}({:?}) = {:?} ({})",
+            self.key,
+            self.seq,
+            self.value,
+            self.value_meta.display()
         )
     }
 }

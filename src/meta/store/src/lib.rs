@@ -29,6 +29,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_semaphore::acquirer::Permit;
+use databend_common_meta_semaphore::acquirer::SharedAcquirerStat;
 use databend_common_meta_semaphore::errors::AcquireError;
 use databend_common_meta_semaphore::errors::ConnectionClosed;
 use databend_common_meta_semaphore::Semaphore;
@@ -108,6 +109,7 @@ impl MetaStore {
 
                 match acquire_res.acquire_owned().await {
                     Ok(guard) => Ok(Permit {
+                        stat: SharedAcquirerStat::new(),
                         fu: Box::pin(async move {
                             let _guard = guard;
                             Ok(())
