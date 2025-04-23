@@ -44,11 +44,6 @@ impl ValueType for GeometryType {
     type ColumnIterator<'a> = BinaryColumnIter<'a>;
     type ColumnBuilder = BinaryColumnBuilder;
 
-    #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {
-        long
-    }
-
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_vec()
     }
@@ -57,7 +52,7 @@ impl ValueType for GeometryType {
         scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         scalar.as_geometry().cloned()
     }
 
