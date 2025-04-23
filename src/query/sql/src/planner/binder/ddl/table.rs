@@ -453,6 +453,8 @@ impl Binder {
             table_type,
             engine,
             uri_location,
+            iceberg_table_partition,
+            table_properties,
         } = stmt;
 
         let (catalog, database, table) =
@@ -469,6 +471,28 @@ impl Binder {
                 table_option.1.to_string(),
             )?;
         }
+
+        let table_properties = match &table_properties {
+            Some(props) => {
+                let mut iceberg_table_options = BTreeMap::new();
+                props.iter().try_for_each(|(k, v)| {
+                    self.insert_table_option_with_validation(
+                        &mut iceberg_table_options,
+                        k.to_lowercase(),
+                        v.to_string(),
+                    )
+                })?;
+                Some(iceberg_table_options)
+            }
+            None => None,
+        };
+
+        let table_partition = iceberg_table_partition.as_ref().map(|partitions| {
+            partitions
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<String>>()
+        });
 
         let mut storage_params = match (uri_location, engine) {
             (Some(uri), Engine::Fuse) => {
@@ -745,6 +769,8 @@ impl Binder {
             engine_options,
             storage_params,
             options,
+            table_properties,
+            table_partition,
             field_comments,
             cluster_key,
             as_select: as_query_plan,
@@ -812,6 +838,8 @@ impl Binder {
             engine_options: BTreeMap::new(),
             storage_params: Some(sp),
             options,
+            table_properties: None,
+            table_partition: None,
             field_comments: vec![],
             cluster_key: None,
             as_select: None,

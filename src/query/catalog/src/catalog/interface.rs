@@ -135,6 +135,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get the info of the catalog.
     fn info(&self) -> Arc<CatalogInfo>;
 
+    // Return catalog tables support partition or properties.
+    fn support_partition(&self) -> bool {
+        false
+    }
+
     // This is used to return a new catalog; in the new catalog, the table info is not refreshed
     // This is used for attached table, if we attach many tables each is to read from s3, query system.tables it will be very slow.
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>>;

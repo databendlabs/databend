@@ -26,7 +26,7 @@ mod iceberg_inspect;
 mod partition;
 mod predicate;
 mod statistics;
-mod table;
+pub mod table;
 mod table_source;
 
 pub use catalog::IcebergCatalog;

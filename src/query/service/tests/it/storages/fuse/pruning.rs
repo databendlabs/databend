@@ -109,6 +109,8 @@ async fn test_block_pruner() -> Result<()> {
         inverted_indexes: None,
         ngram_indexes: None,
         attached_columns: None,
+        table_partition: None,
+        table_properties: None,
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
