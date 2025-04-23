@@ -1030,6 +1030,300 @@ mod tests {
         Ok(())
     }
 
+    // Create test data with multiple blocks, including spilled and sliced blocks
+    async fn run_take_next_bounded_spillable<R: Rows>(
+        spiller: impl Spill + Clone,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
+        bound: Option<Scalar>,
+        expected_blocks: Vec<Column>,
+        // Flag to test with spilled blocks
+        with_spilled: bool,
+        // Flag to test with sliced blocks
+        with_sliced: bool,
+    ) -> Result<()> {
+        let (schema, block) = test_data();
+        let block = DataBlock::sort(&block, &sort_desc, None)?;
+        let sort_row_offset = schema.fields().len();
+
+        // Create multiple blocks with different splits
+        let mut blocks = VecDeque::new();
+
+        // First block: 0..2
+        let mut block1 = block.slice(0..2);
+        let col1 = convert_rows(schema.clone(), &sort_desc, block1.clone()).unwrap();
+        block1.add_column(BlockEntry::new(col1.data_type(), Value::Column(col1)));
+        blocks.push_back(SpillableBlock::new(block1, sort_row_offset));
+
+        // Second block: 2..5
+        let mut block2 = block.slice(2..5);
+        let col2 = convert_rows(schema.clone(), &sort_desc, block2.clone()).unwrap();
+        block2.add_column(BlockEntry::new(col2.data_type(), Value::Column(col2)));
+        blocks.push_back(SpillableBlock::new(block2, sort_row_offset));
+
+        // We'll add the third block only if we're not using sliced blocks
+        // This is to avoid duplicating the data with additional_block
+        if !with_sliced {
+            // Third block: 5..8
+            let mut block3 = block.slice(5..8);
+            let col3 = convert_rows(schema.clone(), &sort_desc, block3.clone()).unwrap();
+            block3.add_column(BlockEntry::new(col3.data_type(), Value::Column(col3)));
+            blocks.push_back(SpillableBlock::new(block3, sort_row_offset));
+        }
+
+        // Spill some blocks if requested
+        if with_spilled {
+            // Spill the second block
+            blocks[1].spill(&spiller).await?;
+        }
+
+        // Create a sliced block if requested
+        if with_sliced {
+            // Create a block for values 8..11 (the last part of the sorted data)
+            let mut additional_block = block.slice(5..8);
+            let col = convert_rows(schema.clone(), &sort_desc, additional_block.clone()).unwrap();
+            additional_block.add_column(BlockEntry::new(col.data_type(), Value::Column(col)));
+            let mut spillable_block = SpillableBlock::new(additional_block, sort_row_offset);
+
+            // Use SpillableBlock::slice to create a sliced block
+            // This tests the SpillableBlock::slice functionality by slicing at position 1
+            // For ascending Int32: [8, 10, 11] -> [8] and [10, 11]
+            // For descending String: ["d", "e", "f"] -> ["d"] and ["e", "f"]
+            let sliced_data = spillable_block.slice(1, sort_row_offset);
+            let sliced_block = SpillableBlock::new(sliced_data, sort_row_offset);
+
+            // Add both blocks to maintain the order
+            blocks.push_back(sliced_block);
+            blocks.push_back(spillable_block);
+        }
+
+        let mut stream = BoundBlockStream::<R, _> {
+            blocks,
+            bound,
+            sort_row_offset,
+            spiller: spiller.clone(),
+            _r: Default::default(),
+        };
+
+        // Take blocks one by one and compare with expected
+        let mut result_blocks = Vec::new();
+        while let Some(mut block) = stream.take_next_bounded_spillable().await? {
+            // If the block data is None (spilled), restore it first
+            if block.data.is_none() {
+                block.data = Some(spiller.restore(block.location.as_ref().unwrap()).await?);
+            }
+
+            let data = block.data.unwrap();
+            let col = sort_column(&data, sort_row_offset).clone();
+            result_blocks.push(col);
+        }
+
+        assert_eq!(
+            expected_blocks.len(),
+            result_blocks.len(),
+            "Number of blocks doesn't match"
+        );
+        for (expected, actual) in expected_blocks.iter().zip(result_blocks.iter()) {
+            assert_eq!(expected, actual, "Block content doesn't match");
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_take_next_bounded_spillable() -> Result<()> {
+        let spiller = MockSpiller {
+            map: Arc::new(Mutex::new(HashMap::new())),
+        };
+
+        // Test with ascending Int32 type
+        {
+            let sort_desc = Arc::new(vec![SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+            }]);
+
+            // Test 1: Basic test with bound = 5 (should return blocks with values <= 5)
+            // No spilled blocks, no sliced blocks
+            run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::Number(NumberScalar::Int32(5))),
+                vec![Int32Type::from_data(vec![3, 5])],
+                false, // no spilled blocks
+                false, // no sliced blocks
+            )
+            .await?;
+
+            // Test 2: With spilled blocks, bound = 8 (should return blocks with values <= 8)
+            run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::Number(NumberScalar::Int32(8))),
+                vec![
+                    Int32Type::from_data(vec![3, 5]),
+                    Int32Type::from_data(vec![7, 7, 8]),
+                ],
+                true,  // with spilled blocks
+                false, // no sliced blocks
+            )
+            .await?;
+
+            // Test 3: With sliced blocks, bound = 7 (should return blocks with values <= 7)
+            run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::Number(NumberScalar::Int32(7))),
+                vec![
+                    Int32Type::from_data(vec![3, 5]),
+                    Int32Type::from_data(vec![7, 7]),
+                ],
+                false, // no spilled blocks
+                true,  // with sliced blocks
+            )
+            .await?;
+
+            // Test 4: With both spilled and sliced blocks, bound = 10
+            run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::Number(NumberScalar::Int32(10))),
+                vec![
+                    Int32Type::from_data(vec![3, 5]),
+                    Int32Type::from_data(vec![7, 7, 8]),
+                    Int32Type::from_data(vec![10]),
+                ],
+                true, // with spilled blocks
+                true, // with sliced blocks
+            )
+            .await?;
+
+            // Test 5: With bound = 2 (should return no blocks as all values > 2)
+            run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::Number(NumberScalar::Int32(2))),
+                vec![],
+                true, // with spilled blocks
+                true, // with sliced blocks
+            )
+            .await?;
+
+            // Test 6: With bound = 12 (should return all blocks as all values <= 12)
+            run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::Number(NumberScalar::Int32(12))),
+                vec![
+                    Int32Type::from_data(vec![3, 5]),
+                    Int32Type::from_data(vec![7, 7, 8]),
+                    Int32Type::from_data(vec![10, 11, 11]),
+                ],
+                true,  // with spilled blocks
+                false, // no sliced blocks
+            )
+            .await?;
+
+            // Test 7: With no bound (should return all blocks)
+            run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                None,
+                vec![
+                    Int32Type::from_data(vec![3, 5]),
+                    Int32Type::from_data(vec![7, 7, 8]),
+                    Int32Type::from_data(vec![10, 11, 11]),
+                ],
+                true,  // with spilled blocks
+                false, // no sliced blocks
+            )
+            .await?;
+        }
+
+        // Test with descending String type
+        {
+            let sort_desc = Arc::new(vec![SortColumnDescription {
+                offset: 1,
+                asc: false,
+                nulls_first: false,
+            }]);
+
+            // Test 8: With bound = "f" (should return blocks with values >= "f")
+            run_take_next_bounded_spillable::<SimpleRowsDesc<StringType>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::String("f".to_string())),
+                vec![
+                    StringType::from_data(vec!["w", "h"]),
+                    StringType::from_data(vec!["g", "f"]),
+                ],
+                false, // no spilled blocks
+                false, // no sliced blocks
+            )
+            .await?;
+
+            // Test 9: With spilled blocks, bound = "e" (should return blocks with values >= "e")
+            run_take_next_bounded_spillable::<SimpleRowsDesc<StringType>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::String("e".to_string())),
+                vec![
+                    StringType::from_data(vec!["w", "h"]),
+                    StringType::from_data(vec!["g", "f", "e"]),
+                    StringType::from_data(vec!["e"]),
+                ],
+                true,  // with spilled blocks
+                false, // no sliced blocks
+            )
+            .await?;
+
+            // Test 10: With sliced blocks, bound = "d" (should return blocks with values >= "d")
+            run_take_next_bounded_spillable::<SimpleRowsDesc<StringType>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::String("d".to_string())),
+                vec![
+                    StringType::from_data(vec!["w", "h"]),
+                    StringType::from_data(vec!["g", "f", "e"]),
+                    StringType::from_data(vec!["e"]),
+                    StringType::from_data(vec!["d", "d"]),
+                ],
+                false, // no spilled blocks
+                true,  // with sliced blocks
+            )
+            .await?;
+
+            // Test 11: With both spilled and sliced blocks, bound = "c" (should return all blocks)
+            run_take_next_bounded_spillable::<SimpleRowsDesc<StringType>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::String("c".to_string())),
+                vec![
+                    StringType::from_data(vec!["w", "h"]),
+                    StringType::from_data(vec!["g", "f", "e"]),
+                    StringType::from_data(vec!["e"]),
+                    StringType::from_data(vec!["d", "d"]),
+                ],
+                true, // with spilled blocks
+                true, // with sliced blocks
+            )
+            .await?;
+
+            // Test 12: With bound = "z" (should return no blocks as all values < "z")
+            run_take_next_bounded_spillable::<SimpleRowsDesc<StringType>>(
+                spiller.clone(),
+                sort_desc.clone(),
+                Some(Scalar::String("z".to_string())),
+                vec![],
+                true, // with spilled blocks
+                true, // with sliced blocks
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
     #[derive(Clone)]
     struct MockSpiller {
         map: Arc<Mutex<HashMap<String, DataBlock>>>,
