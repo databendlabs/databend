@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -137,6 +138,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     // Return catalog tables support partition or properties.
     fn support_partition(&self) -> bool {
+        false
+    }
+
+    fn is_external(&self) -> bool {
         false
     }
 
@@ -531,6 +536,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         unimplemented!()
+    }
+
+    // Get default table engine
+    fn default_table_engine(&self) -> Engine {
+        Engine::Fuse
     }
 
     fn get_stream_source_table(
