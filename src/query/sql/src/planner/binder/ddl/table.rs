@@ -460,8 +460,32 @@ impl Binder {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
+        let catalog = self.ctx.get_catalog(&catalog).await?;
+
         // Take FUSE engine AS default engine
-        let engine = engine.unwrap_or(Engine::Fuse);
+        let engine = engine.unwrap_or_else(|| {
+            if catalog.is_external() {
+                if catalog.support_partition() {
+                    Engine::Iceberg
+                } else {
+                    // Catalog Type is Hive,  maybe should not Fuse engine but contain old logic
+                    Engine::Fuse
+                }
+            } else {
+                Engine::Fuse
+            }
+        });
+
+        if catalog.support_partition() != (engine == Engine::Iceberg) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Catalog '{}' engine type is {:?} but table {} engine type is {}",
+                catalog.name(),
+                catalog.info().catalog_type(),
+                table,
+                engine
+            )));
+        }
+
         let mut options: BTreeMap<String, String> = BTreeMap::new();
         let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
         for table_option in table_options.iter() {
@@ -673,7 +697,6 @@ impl Binder {
         };
 
         if engine == Engine::Memory {
-            let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
@@ -690,7 +713,6 @@ impl Binder {
             //
             // Later, when database id is kept, let say in `TableInfo`, we can
             // safely eliminate this "FUSE" constant and the table meta option entry.
-            let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
@@ -761,7 +783,7 @@ impl Binder {
         let plan = CreateTablePlan {
             create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
-            catalog: catalog.clone(),
+            catalog: catalog.name().clone(),
             database: database.clone(),
             table,
             schema: schema.clone(),

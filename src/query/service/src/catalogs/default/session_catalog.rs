@@ -150,7 +150,11 @@ impl Catalog for SessionCatalog {
     }
 
     fn support_partition(&self) -> bool {
-        matches!(self.inner.info().catalog_type(), CatalogType::Iceberg)
+        self.inner.support_partition()
+    }
+
+    fn is_external(&self) -> bool {
+        self.inner.is_external()
     }
 
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {

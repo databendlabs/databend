@@ -140,6 +140,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         false
     }
 
+    fn is_external(&self) -> bool {
+        false
+    }
+
     // This is used to return a new catalog; in the new catalog, the table info is not refreshed
     // This is used for attached table, if we attach many tables each is to read from s3, query system.tables it will be very slow.
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>>;
