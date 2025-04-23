@@ -17,6 +17,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::intrinsics::unlikely;
+use std::marker::PhantomData;
 use std::mem;
 use std::sync::atomic;
 use std::sync::atomic::AtomicBool;
@@ -29,6 +30,7 @@ use databend_common_expression::sampler::FixedRateSampler;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::Rows;
@@ -65,7 +67,7 @@ struct StepSort<A: SortAlgorithm> {
     /// Partition boundaries for restoring and sorting blocks.
     /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
     bounds: Bounds,
-    cur_bound: Option<A::Rows>,
+    cur_bound: Option<Scalar>,
 
     subsequent: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
     current: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
@@ -304,7 +306,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
 impl<A: SortAlgorithm> StepSort<A> {
     fn next_bound(&mut self) {
         match self.bounds.next_bound() {
-            Some(bound) => self.cur_bound = Some(A::Rows::from_column(&bound).unwrap()),
+            Some(bound) => self.cur_bound = Some(bound),
             None => self.cur_bound = None,
         }
     }
@@ -496,13 +498,14 @@ impl Base {
     fn new_stream<R: Rows>(
         &self,
         blocks: VecDeque<SpillableBlock>,
-        bound: Option<R>,
+        bound: Option<Scalar>,
     ) -> BoundBlockStream<R, Arc<Spiller>> {
         BoundBlockStream {
             blocks,
             bound,
             sort_row_offset: self.sort_row_offset,
             spiller: self.spiller.clone(),
+            _r: Default::default(),
         }
     }
 
@@ -653,9 +656,10 @@ impl Spill for Arc<Spiller> {
 /// BoundBlockStream is a stream of blocks that are cutoff less or equal than bound.
 struct BoundBlockStream<R: Rows, S> {
     blocks: VecDeque<SpillableBlock>,
-    bound: Option<R>,
+    bound: Option<Scalar>,
     sort_row_offset: usize,
     spiller: S,
+    _r: PhantomData<R>,
 }
 
 impl<R: Rows, S> Debug for BoundBlockStream<R, S> {
@@ -689,7 +693,7 @@ impl<R: Rows, S> BoundBlockStream<R, S> {
         };
 
         match &self.bound {
-            Some(bound) => block.domain::<R>().first() <= bound.row(0),
+            Some(bound) => block.domain::<R>().first() <= R::scalar_as_item(bound),
             None => true,
         }
     }
@@ -701,7 +705,7 @@ impl<R: Rows, S> BoundBlockStream<R, S> {
 
         let block = self.blocks.front_mut().unwrap();
         if let Some(pos) =
-            block_split_off_position(block.data.as_ref().unwrap(), bound, self.sort_row_offset)
+            block_split_off_position::<R>(block.data.as_ref().unwrap(), bound, self.sort_row_offset)
         {
             block.slice(pos, self.sort_row_offset)
         } else {
@@ -770,13 +774,12 @@ impl<R: Rows, S: Spill> BoundBlockStream<R, S> {
 
 fn block_split_off_position<R: Rows>(
     data: &DataBlock,
-    bound: &R,
+    bound: &Scalar,
     sort_row_offset: usize,
 ) -> Option<usize> {
     let rows = R::from_column(sort_column(data, sort_row_offset)).unwrap();
     debug_assert!(rows.len() > 0);
-    debug_assert!(bound.len() == 1);
-    let bound = bound.row(0);
+    let bound = R::scalar_as_item(bound);
     partition_point(&rows, &bound)
 }
 
@@ -856,6 +859,7 @@ mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::StringType;
     use databend_common_expression::Column;
     use databend_common_expression::DataField;
@@ -885,13 +889,13 @@ mod tests {
     async fn run_bound_block_stream<R: Rows>(
         spiller: impl Spill + Clone,
         sort_desc: Arc<Vec<SortColumnDescription>>,
-        bound: Column,
+        bound: Scalar,
         block_part: usize,
         want: Column,
     ) -> Result<()> {
         let (schema, block) = test_data();
         let block = DataBlock::sort(&block, &sort_desc, None)?;
-        let bound = Some(R::from_column(&bound)?);
+        let bound = Some(bound);
         let sort_row_offset = schema.fields().len();
 
         let blocks = vec![
@@ -911,6 +915,7 @@ mod tests {
             bound,
             sort_row_offset,
             spiller: spiller.clone(),
+            _r: Default::default(),
         };
 
         let data = stream.take_next_bounded_block();
@@ -936,7 +941,7 @@ mod tests {
             run_bound_block_stream::<SimpleRowsAsc<Int32Type>>(
                 spiller.clone(),
                 sort_desc.clone(),
-                Int32Type::from_data(vec![5]),
+                Scalar::Number(NumberScalar::Int32(5)),
                 4,
                 Int32Type::from_data(vec![3, 5]),
             )
@@ -945,7 +950,7 @@ mod tests {
             run_bound_block_stream::<SimpleRowsAsc<Int32Type>>(
                 spiller.clone(),
                 sort_desc.clone(),
-                Int32Type::from_data(vec![8]),
+                Scalar::Number(NumberScalar::Int32(8)),
                 4,
                 Int32Type::from_data(vec![3, 5, 7, 7]),
             )
@@ -962,7 +967,7 @@ mod tests {
             run_bound_block_stream::<SimpleRowsDesc<StringType>>(
                 spiller.clone(),
                 sort_desc.clone(),
-                StringType::from_data(vec!["f"]),
+                Scalar::String("f".to_string()),
                 4,
                 StringType::from_data(vec!["w", "h", "g", "f"]),
             )
