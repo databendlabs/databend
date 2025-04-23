@@ -533,6 +533,27 @@ impl Base {
             }
         }
     }
+
+    pub async fn scatter_stream<R: Rows>(
+        &self,
+        mut blocks: VecDeque<SpillableBlock>,
+        mut bounds: Bounds,
+    ) -> Result<Vec<Vec<SpillableBlock>>> {
+        let mut scattered = Vec::with_capacity(bounds.len() + 1);
+        while !blocks.is_empty() {
+            let bound = bounds.next_bound();
+            let mut stream = self.new_stream::<R>(blocks, bound);
+
+            let mut part = Vec::new();
+            while let Some(block) = stream.take_next_bounded_spillable().await? {
+                part.push(block);
+            }
+
+            scattered.push(part);
+            blocks = stream.blocks;
+        }
+        Ok(scattered)
+    }
 }
 
 impl<R: Rows, S> MemoryRows for Vec<BoundBlockStream<R, S>> {
@@ -693,8 +714,8 @@ impl<R: Rows, S> BoundBlockStream<R, S> {
         };
 
         match &self.bound {
-            Some(bound) => block.domain::<R>().first() <= R::scalar_as_item(bound),
             None => true,
+            Some(bound) => block.domain::<R>().first() <= R::scalar_as_item(bound),
         }
     }
 
@@ -769,6 +790,38 @@ impl<R: Rows, S: Spill> BoundBlockStream<R, S> {
             b.spill(&self.spiller).await?;
         }
         Ok(())
+    }
+
+    async fn take_next_bounded_spillable(&mut self) -> Result<Option<SpillableBlock>> {
+        let Some(bound) = &self.bound else {
+            return Ok(self.blocks.pop_front());
+        };
+        let Some(block) = self.blocks.front() else {
+            return Ok(None);
+        };
+        {
+            let domain = block.domain::<R>();
+            let bound_item = R::scalar_as_item(bound);
+            if domain.first() > bound_item {
+                return Ok(None);
+            }
+            if domain.last() <= bound_item {
+                return Ok(self.blocks.pop_front());
+            }
+        }
+        self.restore_first().await?;
+
+        let block = self.blocks.front_mut().unwrap();
+        if let Some(pos) = block_split_off_position::<R>(
+            block.data.as_ref().unwrap(),
+            self.bound.as_ref().unwrap(),
+            self.sort_row_offset,
+        ) {
+            let data = block.slice(pos, self.sort_row_offset);
+            Ok(Some(SpillableBlock::new(data, self.sort_row_offset)))
+        } else {
+            Ok(self.blocks.pop_front())
+        }
     }
 }
 

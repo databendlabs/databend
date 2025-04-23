@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::assert_matches::assert_matches;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -21,54 +23,108 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_transforms::processors::sort::select_row_type;
 use databend_common_pipeline_transforms::processors::sort::Rows;
-use databend_common_pipeline_transforms::processors::sort::RowsTypeVisitor;
-use databend_common_pipeline_transforms::sort::RowConverter;
 
 use super::bounds::Bounds;
+use super::Base;
 use super::SortCollectedMeta;
+use super::SortScatteredMeta;
 use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
+use crate::spillers::Spiller;
 
-pub struct TransformSortSampleWait {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    schema: DataSchemaRef,
-    sort_desc: Arc<[SortColumnDescription]>,
-    id: usize,
-    meta: Option<Box<SortCollectedMeta>>,
-    state: Arc<SortSampleState>,
+#[derive(Debug)]
+enum Step {
+    None,
+    Meta(Box<SortCollectedMeta>),
+    Scattered(Vec<SortCollectedMeta>),
 }
 
-impl TransformSortSampleWait {
-    pub fn new(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        id: usize,
-        schema: DataSchemaRef,
-        sort_desc: Arc<[SortColumnDescription]>,
-        state: Arc<SortSampleState>,
-    ) -> Self {
-        Self {
-            input,
-            output,
-            id,
-            state,
-            schema,
-            sort_desc,
-            meta: None,
+pub struct TransformSortWait<R: Rows> {
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    id: usize,
+    step: Step,
+    state: Arc<SortSampleState>,
+    spiller: Arc<Spiller>,
+    _r: PhantomData<R>,
+}
+
+impl<R: Rows> TransformSortWait<R> {
+    // pub fn new(
+    //     input: Arc<InputPort>,
+    //     output: Arc<OutputPort>,
+    //     id: usize,
+    //     state: Arc<SortSampleState>,
+    // ) -> Self {
+    //     Self {
+    //         input,
+    //         output,
+    //         id,
+    //         state,
+    //         meta: None,
+    //         _r: Default::default(),
+    //     }
+    // }
+
+    async fn scatter(&mut self) -> Result<()> {
+        let scatter_bounds = self.state.bounds();
+
+        let Step::Meta(box SortCollectedMeta {
+            params,
+            bounds,
+            blocks,
+        }) = std::mem::replace(&mut self.step, Step::None)
+        else {
+            unreachable!()
+        };
+
+        if scatter_bounds.is_empty() {
+            Step::Scattered(vec![SortCollectedMeta {
+                params,
+                bounds,
+                blocks,
+            }]);
+            return Ok(());
         }
+
+        let base = {
+            let inner = self.state.inner.read().unwrap();
+            Base {
+                schema: inner.schema.clone(),
+                spiller: self.spiller.clone(),
+                sort_row_offset: inner.schema.fields.len() - 1,
+                limit: None,
+            }
+        };
+
+        let mut scattered_meta = std::iter::repeat_with(|| SortCollectedMeta {
+            params,
+            bounds: bounds.clone(),
+            blocks: vec![],
+        })
+        .take(scatter_bounds.len() + 1)
+        .collect::<Vec<_>>();
+        for blocks in blocks {
+            let scattered = base
+                .scatter_stream::<R>(Vec::from(blocks).into(), scatter_bounds.clone())
+                .await?;
+            for (i, part) in scattered.into_iter().enumerate() {
+                scattered_meta[i].blocks.push(part.into_boxed_slice());
+            }
+        }
+        self.step = Step::Scattered(scattered_meta);
+
+        Ok(())
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformSortSampleWait {
+impl<R: Rows + 'static> Processor for TransformSortWait<R> {
     fn name(&self) -> String {
-        "TransformSortSimpleWait".to_string()
+        "TransformSortWait".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -86,20 +142,25 @@ impl Processor for TransformSortSampleWait {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(meta) = self.meta.take() {
-            self.output.push_data(Ok(DataBlock::empty_with_meta(meta)));
+        if matches!(self.step, Step::Scattered(_)) {
+            let Step::Scattered(scattered) = std::mem::replace(&mut self.step, Step::None) else {
+                unreachable!()
+            };
+
+            let data = DataBlock::empty_with_meta(Box::new(SortScatteredMeta(scattered)));
+            self.output.push_data(Ok(data));
             self.output.finish();
             return Ok(Event::Finished);
         }
 
         if let Some(mut block) = self.input.pull_data().transpose()? {
-            assert!(self.meta.is_none());
+            assert_matches!(self.step, Step::None);
             let meta = block
                 .take_meta()
                 .and_then(SortCollectedMeta::downcast_from)
                 .expect("require a SortCollectedMeta");
 
-            self.meta = Some(Box::new(meta));
+            self.step = Step::Meta(Box::new(meta));
             return Ok(Event::Async);
         }
 
@@ -118,15 +179,13 @@ impl Processor for TransformSortSampleWait {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        let bounds = self
-            .meta
-            .as_ref()
-            .map(|meta| meta.bounds.clone())
-            .unwrap_or_default();
-
-        self.state.commit_sample(self.id, bounds)?;
+        let bounds = match &self.step {
+            Step::Meta(meta) => meta.bounds.clone(),
+            _ => unreachable!(),
+        };
+        self.state.commit_sample::<R>(self.id, bounds)?;
         self.state.done.notified().await;
-        Ok(())
+        self.scatter().await
     }
 }
 
@@ -136,22 +195,26 @@ pub struct SortSampleState {
 }
 
 impl SortSampleState {
-    pub fn commit_sample(&self, id: usize, bounds: Bounds) -> Result<bool> {
+    pub fn commit_sample<R: Rows>(&self, id: usize, bounds: Bounds) -> Result<bool> {
         let mut inner = self.inner.write().unwrap();
 
         let x = inner.partial[id].replace(bounds);
         assert!(x.is_none());
         let done = inner.partial.iter().all(Option::is_some);
         if done {
-            let mut visitor = DetermineBounds {
-                inner: &mut inner,
-                result: Ok(()),
-            };
-            select_row_type(&mut visitor);
-            visitor.result?;
+            inner.determine_bounds::<R>()?;
             self.done.notify_waiters();
         }
         Ok(done)
+    }
+
+    pub fn bounds(&self) -> Bounds {
+        self.inner
+            .read()
+            .unwrap()
+            .bounds
+            .clone()
+            .unwrap_or_default()
     }
 }
 
@@ -160,8 +223,6 @@ struct StateInner {
     partitions: usize,
     // schema for bounds DataBlock
     schema: DataSchemaRef,
-    // sort_desc for bounds DataBlock
-    sort_desc: Arc<[SortColumnDescription]>,
     partial: Vec<Option<Bounds>>,
     bounds: Option<Bounds>,
     batch_rows: usize,
@@ -178,28 +239,5 @@ impl StateInner {
 
         self.bounds = Some(bounds);
         Ok(())
-    }
-}
-
-struct DetermineBounds<'a> {
-    inner: &'a mut StateInner,
-    result: Result<()>,
-}
-
-impl<'a> RowsTypeVisitor for DetermineBounds<'a> {
-    fn schema(&self) -> DataSchemaRef {
-        self.inner.schema.clone()
-    }
-
-    fn sort_desc(&self) -> &[SortColumnDescription] {
-        &self.inner.sort_desc
-    }
-
-    fn visit_type<R, C>(&mut self)
-    where
-        R: Rows + 'static,
-        C: RowConverter<R> + Send + 'static,
-    {
-        self.result = self.inner.determine_bounds::<R>();
     }
 }

@@ -63,6 +63,14 @@ local_block_meta_serde!(SortCollectedMeta);
 #[typetag::serde(name = "sort_collected")]
 impl BlockMetaInfo for SortCollectedMeta {}
 
+#[derive(Debug)]
+struct SortScatteredMeta(pub Vec<SortCollectedMeta>);
+
+local_block_meta_serde!(SortScatteredMeta);
+
+#[typetag::serde(name = "sort_scattered")]
+impl BlockMetaInfo for SortScatteredMeta {}
+
 trait MemoryRows {
     fn in_memory_rows(&self) -> usize;
 }

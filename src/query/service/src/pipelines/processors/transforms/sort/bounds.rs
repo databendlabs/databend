@@ -92,7 +92,6 @@ impl Bounds {
         self.0.iter().map(Column::len).sum()
     }
 
-    #[expect(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.0.iter().all(|col| col.len() == 0)
     }
