@@ -120,6 +120,9 @@ show tables from abc;
 t
 t1
 
+statement error 1302
+CREATE TABLE IF NOT EXISTS abc.t2(c1 int) ENGINE = fuse
+
 statement ok
 drop table abc.t
 

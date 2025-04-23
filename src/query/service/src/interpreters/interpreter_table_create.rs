@@ -349,7 +349,8 @@ impl CreateTableInterpreter {
 
         let reply = catalog.create_table(req.clone()).await?;
 
-        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {
+            // iceberg table do not need to generate ownership.
             // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
             if let Some(current_role) = self.ctx.get_current_role() {
                 let tenant = self.ctx.get_tenant();

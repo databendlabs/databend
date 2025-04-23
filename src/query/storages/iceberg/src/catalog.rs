@@ -235,6 +235,14 @@ impl Catalog for IcebergCatalog {
         self.info.clone()
     }
 
+    fn support_partition(&self) -> bool {
+        true
+    }
+
+    fn is_external(&self) -> bool {
+        true
+    }
+
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
         Ok(self)
     }

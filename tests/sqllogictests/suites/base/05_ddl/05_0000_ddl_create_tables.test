@@ -10,6 +10,9 @@ DROP TABLE IF EXISTS t3
 statement ok
 DROP TABLE IF EXISTS t4
 
+statement error 1302
+CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = iceberg
+
 statement ok
 CREATE TABLE t(c1 int) ENGINE = Null
 
