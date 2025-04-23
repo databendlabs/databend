@@ -143,7 +143,7 @@ fn read_view_col<R: NativeReadBuf>(
 
     let col = unsafe {
         Column::String(Utf8ViewColumn::new_unchecked_unknown_md(
-            views.into(),
+            views,
             buffers.into(),
             None,
         ))

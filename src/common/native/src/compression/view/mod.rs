@@ -43,7 +43,7 @@ fn compress_buffers(
     buf.extend_from_slice(&(array.data_buffers().len() as u32).to_le_bytes());
     // let's encode the buffers
     for buffer in array.data_buffers().iter() {
-        buf.extend_from_slice(&[codec as u8]);
+        buf.extend_from_slice(&[codec]);
         let pos = buf.len();
         buf.extend_from_slice(&[0u8; 8]);
 
