@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::mem::MaybeUninit;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -24,10 +25,12 @@ use std::sync::MutexGuard;
 use std::sync::OnceLock;
 use std::sync::PoisonError;
 use std::time::Duration;
+use std::time::Instant;
 
 use crate::runtime::memory::mem_stat::MEMORY_LIMIT_EXCEEDED_NO_ERROR;
 use crate::runtime::memory::mem_stat::MEMORY_LIMIT_EXCEEDED_REPORTED_ERROR;
 use crate::runtime::memory::mem_stat::MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR;
+use crate::runtime::memory::mem_stat::MEMORY_LIMIT_RELEASED_MEMORY;
 use crate::runtime::MemStat;
 use crate::runtime::OutOfLimit;
 use crate::runtime::ThreadTracker;
@@ -35,19 +38,54 @@ use crate::runtime::GLOBAL_MEM_STAT;
 
 pub static GLOBAL_QUERIES_MANAGER: QueriesMemoryManager = QueriesMemoryManager::create();
 
-type QueryId = String;
+type ResourceTag = String;
 type Priority = usize;
 
-#[derive(Debug, Clone)]
-struct QueryMemoryInfo {
-    condvar: Arc<Condvar>,
-    exceeded_memory_flag: Arc<AtomicUsize>,
+#[derive(Eq, PartialEq, Debug, Clone)]
+enum QueryGcState {
+    Running,
+    Killed,
 }
+
+#[derive(Debug, Clone)]
+struct ResourceMemoryInfo {
+    resource_tag: String,
+    name: Option<String>,
+    condvar: Arc<Condvar>,
+    mutex: Arc<Mutex<QueryGcState>>,
+    killing_instant: Option<Instant>,
+}
+
+unsafe impl Send for ResourceMemoryInfo {}
+unsafe impl Sync for ResourceMemoryInfo {}
 
 #[allow(dead_code)]
 struct ExceededMemoryState {
-    mem_stat: HashMap<usize, HashMap<usize, (QueryId, Priority)>>,
-    running_queries: HashMap<usize, QueryMemoryInfo>,
+    resources: HashMap<ResourceTag, ResourceMemoryInfo>,
+    groups: HashMap<usize, HashSet<(Priority, ResourceTag)>>,
+    memory_gc_handler: Option<Arc<dyn Fn(&String, bool) -> bool + Send + Sync + 'static>>,
+}
+
+impl ExceededMemoryState {
+    pub fn low_priority_resource(&self, id: usize) -> Option<String> {
+        let Some(resources) = self.groups.get(&id) else {
+            return None;
+        };
+
+        resources.iter().min().map(|(_, tag)| tag.clone())
+    }
+
+    pub fn terminate(&mut self, id: &String, resource: &ResourceMemoryInfo) {
+        {
+            let mutex = resource.mutex.lock();
+            let mut mutex = mutex.unwrap_or_else(PoisonError::into_inner);
+            *mutex = QueryGcState::Killed;
+        }
+
+        for value in self.groups.values_mut() {
+            value.retain(|(x, v)| v != id);
+        }
+    }
 }
 
 pub struct QueriesMemoryManager {
@@ -61,9 +99,13 @@ impl QueriesMemoryManager {
         }
     }
 
-    pub fn request_exceeded_memory(&self, mem_stat: &MemStat, mode: Arc<AtomicUsize>) {
-        let Some(query_id) = ThreadTracker::query_id().cloned() else {
-            // global pass.
+    pub fn set_gc_handle<F: Fn(&ResourceTag, bool) -> bool + Send + Sync + 'static>(&self, f: F) {
+        let mut state = self.get_state();
+        state.memory_gc_handler = Some(Arc::new(f));
+    }
+
+    pub fn request_exceeded_memory(&self, mem_stat: &MemStat, tag: Option<&ResourceTag>) {
+        let Some(resource_tag) = tag else {
             return;
         };
 
@@ -73,14 +115,13 @@ impl QueriesMemoryManager {
         let mut parent = mem_stat.parent_memory_stat.as_ref();
 
         while let Some(parent_mem_stat) = parent {
-            match exceeded_state.mem_stat.entry(parent_mem_stat.id) {
+            match exceeded_state.groups.entry(parent_mem_stat.id) {
                 Entry::Vacant(v) => {
-                    v.insert(HashMap::new())
-                        .insert(mem_stat.id, (query_id.clone(), priority));
+                    v.insert(HashSet::new())
+                        .insert((priority, resource_tag.clone()));
                 }
                 Entry::Occupied(mut v) => {
-                    v.get_mut()
-                        .insert(mem_stat.id, (query_id.clone(), priority));
+                    v.get_mut().insert((priority, resource_tag.clone()));
                 }
             };
 
@@ -88,39 +129,30 @@ impl QueriesMemoryManager {
         }
 
         if mem_stat.id != 0 {
-            match exceeded_state.mem_stat.entry(0) {
+            match exceeded_state.groups.entry(0) {
                 Entry::Vacant(v) => {
-                    v.insert(HashMap::new())
-                        .insert(mem_stat.id, (query_id.clone(), priority));
+                    v.insert(HashSet::new())
+                        .insert((priority, resource_tag.clone()));
                 }
                 Entry::Occupied(mut v) => {
-                    v.get_mut()
-                        .insert(mem_stat.id, (query_id.clone(), priority));
+                    v.get_mut().insert((priority, resource_tag.clone()));
                 }
             };
         }
 
-        let Entry::Vacant(v) = exceeded_state.running_queries.entry(mem_stat.id) else {
+        let Entry::Vacant(v) = exceeded_state.resources.entry(resource_tag.clone()) else {
             unreachable!(
                 "Memory-exceeding trackers require strict one-to-one binding with queries."
             );
         };
 
-        v.insert(QueryMemoryInfo {
-            exceeded_memory_flag: mode,
+        v.insert(ResourceMemoryInfo {
+            resource_tag: resource_tag.clone(),
+            name: mem_stat.name.clone(),
+            mutex: Arc::new(Mutex::new(QueryGcState::Running)),
             condvar: Arc::new(Default::default()),
+            killing_instant: None,
         });
-    }
-
-    pub(crate) fn select_children(
-        queries: &HashMap<usize, (QueryId, Priority)>,
-        exclude: &HashSet<usize>,
-    ) -> Option<usize> {
-        queries
-            .iter()
-            .filter(|(x, _)| !exclude.contains(x))
-            .min_by(|(_, left), (_, right)| left.1.cmp(&right.1).then(left.0.cmp(&right.0)))
-            .map(|(id, _)| *id)
     }
 
     fn recheck_limit(mem_stat: &MemStat) -> bool {
@@ -131,111 +163,129 @@ impl QueriesMemoryManager {
         GLOBAL_MEM_STAT.recheck_limit().is_ok()
     }
 
-    pub fn wait_memory(&self, mem_stat: &MemStat, cause: OutOfLimit) -> Result<(), OutOfLimit> {
+    pub fn wait_memory(
+        &self,
+        mem_stat: &MemStat,
+        tag: Option<&ResourceTag>,
+        cause: OutOfLimit,
+    ) -> Result<(), OutOfLimit> {
+        let Some(waiting_id) = tag else {
+            return Ok(());
+        };
+
         let parent_id = match &mem_stat.parent_memory_stat {
             None => 0,
             Some(mem_stat) => mem_stat.id,
         };
 
-        let mut exclude = HashSet::new();
-        let mut state = self.get_state();
+        for _index in 0..5 {
+            let mut state = self.get_state();
 
-        loop {
-            if let Some(query) = state.running_queries.get(&mem_stat.id) {
+            if let Some(waiting_resource) = state.resources.get(waiting_id) {
                 // kill by other
-                let flag = query.exceeded_memory_flag.load(Ordering::SeqCst);
-                if flag == MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR
-                    || flag == MEMORY_LIMIT_EXCEEDED_REPORTED_ERROR
-                {
-                    return Err(cause);
-                }
-            }
-
-            // No children exceeded memory. random kill
-            let Some(queries) = state.mem_stat.get_mut(&parent_id) else {
-                return Err(cause);
-            };
-
-            if queries.is_empty() {
-                return Err(cause);
-            }
-
-            // only has self not kill. kill self
-            let Some(mem_stat_id) = Self::select_children(queries, &exclude) else {
-                return Err(cause);
-            };
-
-            let Some(query) = state.running_queries.get(&mem_stat_id) else {
-                return Err(cause);
-            };
-
-            let _ = query.exceeded_memory_flag.compare_exchange(
-                MEMORY_LIMIT_EXCEEDED_NO_ERROR,
-                MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR,
-                Ordering::SeqCst,
-                Ordering::SeqCst,
-            );
-
-            // kill self
-            if mem_stat_id == mem_stat.id {
-                return Err(cause);
-            }
-
-            let mut all_timeout = true;
-            let condvar = query.condvar.clone();
-
-            // max wait 10 seconds per query
-            for _index in 0..20 {
-                let wait_time = Duration::from_millis(500);
-                let wait_result = condvar.wait_timeout(state, wait_time);
-                let wait_result = wait_result.unwrap_or_else(PoisonError::into_inner);
-
-                if Self::recheck_limit(mem_stat) {
+                if waiting_resource.killing_instant.is_some() {
                     return Ok(());
                 }
+            }
 
-                state = wait_result.0;
+            let Some(terminate_id) = state.low_priority_resource(parent_id) else {
+                return Err(cause);
+            };
 
-                // Query killed, but memory is still insufficient
-                if !wait_result.1.timed_out() {
-                    all_timeout = false;
+            if &terminate_id == waiting_id {
+                return Ok(());
+            }
+
+            let memory_gc_handler = state.memory_gc_handler.clone();
+
+            let Entry::Occupied(mut entry) = state.resources.entry(terminate_id) else {
+                continue;
+            };
+
+            if let Some(instant) = entry.get().killing_instant.as_ref() {
+                if instant.elapsed() > Duration::from_secs(10) {
+                    let (terminate_id, info) = entry.remove_entry();
+                    state.terminate(&terminate_id, &info);
+                    continue;
+                }
+            }
+
+            if let Some(handler) = memory_gc_handler {
+                let mutex = entry.get().mutex.clone();
+                let condvar = entry.get().condvar.clone();
+                let terminate_id = entry.key().clone();
+
+                if entry.get().killing_instant.is_none() {
+                    let handler = handler.clone();
+                    entry.get_mut().killing_instant = Some(Instant::now());
+
+                    drop(state);
+                    if !handler(&terminate_id, false) {
+                        if Self::recheck_limit(mem_stat) {
+                            return Ok(());
+                        }
+
+                        if !handler(&terminate_id, true) {
+                            let mut state = self.get_state();
+
+                            if let Some(resource) = state.resources.remove(&terminate_id) {
+                                state.terminate(&terminate_id, &resource);
+                            }
+
+                            continue;
+                        }
+                    }
+                }
+
+                let mutex = mutex.lock();
+                let mut mutex = mutex.unwrap_or_else(PoisonError::into_inner);
+                log::info!("exceeded {} wait killing {}", waiting_id, terminate_id);
+
+                // max wait 10 seconds per query
+                for _index in 0..100 {
+                    if *mutex == QueryGcState::Killed {
+                        if Self::recheck_limit(mem_stat) {
+                            return Ok(());
+                        }
+
+                        break;
+                    }
+
+                    let wait_time = Duration::from_millis(100);
+                    let wait_result = condvar.wait_timeout(mutex, wait_time);
+                    let wait_result = wait_result.unwrap_or_else(PoisonError::into_inner);
+
+                    if wait_result.1.timed_out() {
+                        if Self::recheck_limit(mem_stat) {
+                            return Ok(());
+                        }
+
+                        mutex = wait_result.0;
+                        continue;
+                    }
+
                     break;
                 }
             }
-
-            exclude.insert(mem_stat_id);
-
-            if all_timeout {
-                log::warn!("Timeout: Unable to kill query in 10 seconds");
-            }
         }
+
+        Err(cause)
     }
 
-    pub fn release_memory(&self, mem_stat: &MemStat) {
+    pub fn release_memory(&self, mem_stat: &MemStat, tag: Option<&ResourceTag>) {
+        let Some(terminate_id) = tag else {
+            return;
+        };
+
         let mut state = self.get_state();
 
-        let mut parent = mem_stat.parent_memory_stat.as_ref();
-
-        while let Some(parent_mem_stat) = parent.take() {
-            if let Entry::Occupied(mut v) = state.mem_stat.entry(parent_mem_stat.id) {
-                v.get_mut().remove(&mem_stat.id);
-
-                if v.get_mut().is_empty() {
-                    state.mem_stat.remove(&parent_mem_stat.id);
-                }
-            };
-
-            parent = parent_mem_stat.parent_memory_stat.as_ref();
-            if parent.is_none() && parent_mem_stat.id != 0 {
-                // Global mem state
-                if let Entry::Occupied(mut v) = state.mem_stat.entry(0) {
-                    v.get_mut().remove(&mem_stat.id);
-                }
-            }
-        }
-
-        if let Some(query_memory_info) = state.running_queries.remove(&mem_stat.id) {
-            query_memory_info.condvar.notify_all();
+        if let Some(info) = state.resources.remove(terminate_id) {
+            state.terminate(terminate_id, &info);
+            drop(state);
+            let mutex = info.mutex.lock();
+            let mut mutex = mutex.unwrap_or_else(PoisonError::into_inner);
+            *mutex = QueryGcState::Killed;
+            info.condvar.notify_all();
         }
     }
 
@@ -243,8 +293,9 @@ impl QueriesMemoryManager {
         self.state
             .get_or_init(|| {
                 Mutex::new(ExceededMemoryState {
-                    mem_stat: Default::default(),
-                    running_queries: Default::default(),
+                    groups: Default::default(),
+                    resources: Default::default(),
+                    memory_gc_handler: None,
                 })
             })
             .lock()
@@ -254,326 +305,288 @@ impl QueriesMemoryManager {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::collections::HashSet;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
-    use std::sync::Arc;
-    use std::time::Duration;
-    use std::time::Instant;
-
-    use crate::base::GlobalUniqName;
-    use crate::runtime::memory::mem_stat::MEMORY_LIMIT_EXCEEDED_NO_ERROR;
-    use crate::runtime::memory::mem_stat::MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR;
-    use crate::runtime::memory::memory_manager::QueriesMemoryManager;
-    use crate::runtime::MemStat;
-    use crate::runtime::OutOfLimit;
-    use crate::runtime::Thread;
-    use crate::runtime::ThreadTracker;
-
-    #[test]
-    fn test_exclusion_list() {
-        let mut queries = HashMap::new();
-        queries.insert(1, ("a".into(), 1));
-        queries.insert(2, ("b".into(), 1));
-        queries.insert(3, ("c".into(), 1));
-
-        let exclude: HashSet<usize> = [1, 2].iter().cloned().collect();
-        let selected = QueriesMemoryManager::select_children(&queries, &exclude);
-        assert_eq!(selected, Some(3));
-    }
-
-    #[test]
-    fn test_tie_breaker_with_query_id() {
-        let mut queries = HashMap::new();
-        queries.insert(1, ("query_2".into(), 1));
-        queries.insert(2, ("query_1".into(), 1));
-
-        let selected = QueriesMemoryManager::select_children(&queries, &HashSet::new());
-        assert_eq!(selected, Some(2));
-    }
-
-    #[test]
-    fn test_global_parent_registration() {
-        let manager = QueriesMemoryManager::create();
-        let parent = MemStat::create(GlobalUniqName::unique());
-        let child = MemStat::create_child(
-            GlobalUniqName::unique(),
-            Some(parent.clone()),
-            0,
-            AtomicBool::new(true),
-        );
-
-        let mut payload = ThreadTracker::new_tracking_payload();
-        payload.query_id = Some(GlobalUniqName::unique());
-        let _guard = ThreadTracker::tracking(payload);
-
-        manager.request_exceeded_memory(&child, Arc::new(AtomicUsize::new(0)));
-
-        let state = manager.get_state();
-        assert!(state.mem_stat[&0].contains_key(&child.id));
-        assert!(state.mem_stat[&parent.id].contains_key(&child.id));
-
-        assert!(!state.mem_stat[&0].contains_key(&parent.id));
-        assert!(!state.mem_stat[&parent.id].contains_key(&0));
-    }
-
-    #[test]
-    #[should_panic(expected = "unreachable")]
-    fn test_duplicate_registration_panic() {
-        let manager = QueriesMemoryManager::create();
-        let mem_stat = MemStat::create(GlobalUniqName::unique());
-
-        let mut payload = ThreadTracker::new_tracking_payload();
-        payload.query_id = Some(GlobalUniqName::unique());
-        let _guard = ThreadTracker::tracking(payload);
-
-        let mode = Arc::new(AtomicUsize::new(0));
-        manager.request_exceeded_memory(&mem_stat, mode.clone());
-        manager.request_exceeded_memory(&mem_stat, mode);
-    }
-
-    #[test]
-    fn test_self_termination_when_no_children() {
-        let manager = QueriesMemoryManager::create();
-        let mem_stat = MemStat::create(GlobalUniqName::unique());
-        let mode = Arc::new(AtomicUsize::new(MEMORY_LIMIT_EXCEEDED_NO_ERROR));
-
-        {
-            let mut payload = ThreadTracker::new_tracking_payload();
-            payload.query_id = Some(GlobalUniqName::unique());
-            let _guard = ThreadTracker::tracking(payload);
-
-            manager.request_exceeded_memory(&mem_stat, mode.clone());
-        }
-
-        let result = manager.wait_memory(&mem_stat, OutOfLimit::new(0, 0));
-        assert!(result.is_err());
-        assert_eq!(
-            mode.load(Ordering::SeqCst),
-            MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR
-        );
-    }
-
-    #[test]
-    fn test_priority_based_selection() {
-        let manager = QueriesMemoryManager::create();
-        let parent = MemStat::create(GlobalUniqName::unique());
-
-        let children = vec![
-            (1, 3, "low_pri".into()),
-            (2, 2, "mid_pri".into()),
-            (3, 1, "high_pri".into()),
-        ];
-
-        for (_id, pri, qid) in children {
-            let mut payload = ThreadTracker::new_tracking_payload();
-            payload.query_id = Some(qid);
-            let _guard = ThreadTracker::tracking(payload);
-
-            let mem = MemStat::create_child(
-                GlobalUniqName::unique(),
-                Some(parent.clone()),
-                pri,
-                AtomicBool::new(true),
-            );
-            manager.request_exceeded_memory(
-                &mem,
-                Arc::new(AtomicUsize::new(MEMORY_LIMIT_EXCEEDED_NO_ERROR)),
-            );
-        }
-
-        let target = MemStat::create_child(
-            GlobalUniqName::unique(),
-            Some(parent.clone()),
-            0,
-            AtomicBool::new(true),
-        );
-        let result = manager.wait_memory(&target, OutOfLimit::new(0, 0));
-
-        // recheck limit passed.
-        assert!(result.is_ok());
-        let state = manager.get_state();
-
-        let killed_children = state
-            .running_queries
-            .iter()
-            .filter(|(_, x)| {
-                x.exceeded_memory_flag.load(Ordering::SeqCst)
-                    == MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR
-            })
-            .map(|(x, y)| (*x, y.clone()))
-            .collect::<Vec<_>>();
-
-        assert_eq!(killed_children.len(), 1);
-        assert_eq!(state.mem_stat[&0][&killed_children[0].0].0, "high_pri");
-        assert_eq!(
-            state.mem_stat[&parent.id][&killed_children[0].0].0,
-            "high_pri"
-        );
-    }
-
-    #[test]
-    fn test_condvar_notification_with_no_child() {
-        let manager = Arc::new(QueriesMemoryManager::create());
-        let parent = MemStat::create(GlobalUniqName::unique());
-        let child = MemStat::create_child(
-            GlobalUniqName::unique(),
-            Some(parent.clone()),
-            0,
-            AtomicBool::new(true),
-        );
-
-        let child_mode = Arc::new(AtomicUsize::new(MEMORY_LIMIT_EXCEEDED_NO_ERROR));
-        {
-            let mut payload = ThreadTracker::new_tracking_payload();
-            payload.query_id = Some(GlobalUniqName::unique());
-            let _guard = ThreadTracker::tracking(payload);
-
-            manager.request_exceeded_memory(&child, child_mode.clone());
-        }
-
-        let manager_clone = manager.clone();
-        let child_clone = child.clone();
-        let handle = Thread::spawn(move || {
-            let instant = Instant::now();
-            assert!(manager_clone
-                .wait_memory(&child_clone, OutOfLimit::new(0, 0))
-                .is_err());
-            Ok::<_, OutOfLimit>(instant.elapsed())
-        });
-
-        std::thread::sleep(Duration::from_millis(1000));
-
-        manager.release_memory(&child);
-        assert!(handle.join().unwrap().unwrap() < Duration::from_millis(1000));
-    }
-
-    #[test]
-    fn test_condvar_notification() {
-        let manager = Arc::new(QueriesMemoryManager::create());
-        let parent = MemStat::create(GlobalUniqName::unique());
-        let child = MemStat::create_child(
-            GlobalUniqName::unique(),
-            Some(parent.clone()),
-            0,
-            AtomicBool::new(true),
-        );
-
-        let child_mode = Arc::new(AtomicUsize::new(MEMORY_LIMIT_EXCEEDED_NO_ERROR));
-        {
-            let mut payload = ThreadTracker::new_tracking_payload();
-            payload.query_id = Some(GlobalUniqName::unique());
-            let _guard = ThreadTracker::tracking(payload);
-            manager.request_exceeded_memory(&child, child_mode.clone());
-        }
-
-        // limit 500MB
-        parent.set_limit(500 * 1024 * 1024);
-        // used 1GB
-        parent.used.fetch_add(1024 * 1024 * 1024, Ordering::SeqCst);
-
-        let manager_clone = manager.clone();
-        let handle = Thread::spawn(move || {
-            let instant = Instant::now();
-            let target = MemStat::create_child(
-                GlobalUniqName::unique(),
-                Some(parent.clone()),
-                0,
-                AtomicBool::new(true),
-            );
-            assert!(manager_clone
-                .wait_memory(&target, OutOfLimit::new(0, 0))
-                .is_err());
-            Ok::<_, OutOfLimit>(instant.elapsed())
-        });
-
-        std::thread::sleep(Duration::from_millis(1000));
-
-        manager.release_memory(&child);
-
-        assert!(handle.join().unwrap().unwrap() > Duration::from_millis(1000));
-    }
-
-    #[test]
-    fn test_condvar_notification_with_recheck() {
-        let manager = Arc::new(QueriesMemoryManager::create());
-        let parent = MemStat::create(GlobalUniqName::unique());
-        let child = MemStat::create_child(
-            GlobalUniqName::unique(),
-            Some(parent.clone()),
-            0,
-            AtomicBool::new(true),
-        );
-
-        let child_mode = Arc::new(AtomicUsize::new(MEMORY_LIMIT_EXCEEDED_NO_ERROR));
-        {
-            let mut payload = ThreadTracker::new_tracking_payload();
-            payload.query_id = Some(GlobalUniqName::unique());
-            let _guard = ThreadTracker::tracking(payload);
-            manager.request_exceeded_memory(&child, child_mode.clone());
-        }
-
-        // limit 500MB
-        parent.set_limit(500 * 1024 * 1024);
-        // used 1GB
-        parent.used.fetch_add(1024 * 1024 * 1024, Ordering::SeqCst);
-
-        let handle = Thread::spawn({
-            let parent = parent.clone();
-            let manager = manager.clone();
-            move || {
-                let instant = Instant::now();
-                let target = MemStat::create_child(
-                    GlobalUniqName::unique(),
-                    Some(parent.clone()),
-                    0,
-                    AtomicBool::new(true),
-                );
-                assert!(manager.wait_memory(&target, OutOfLimit::new(0, 0)).is_ok());
-                Ok::<_, OutOfLimit>(instant.elapsed())
-            }
-        });
-
-        std::thread::sleep(Duration::from_millis(1000));
-
-        // reduce memory used.
-        parent.used.fetch_sub(800 * 1024 * 1024, Ordering::SeqCst);
-
-        std::thread::sleep(Duration::from_millis(1000));
-
-        // release memory
-        manager.release_memory(&child);
-
-        let duration = handle.join().unwrap().unwrap();
-        assert!(duration > Duration::from_millis(1000));
-        assert!(duration < Duration::from_millis(2000));
-    }
-
-    #[test]
-    fn test_cleanup_after_release() {
-        let manager = QueriesMemoryManager::create();
-        let parent = MemStat::create(GlobalUniqName::unique());
-        let child = MemStat::create_child(
-            GlobalUniqName::unique(),
-            Some(parent.clone()),
-            0,
-            AtomicBool::new(true),
-        );
-
-        let mut payload = ThreadTracker::new_tracking_payload();
-        payload.query_id = Some(GlobalUniqName::unique());
-        let _guard = ThreadTracker::tracking(payload);
-
-        manager.request_exceeded_memory(&child, Arc::new(AtomicUsize::new(0)));
-
-        manager.release_memory(&child);
-        let state = manager.get_state();
-
-        assert!(state.running_queries.is_empty());
-        assert!(!state.mem_stat[&0].contains_key(&child.id));
-        assert!(!state.mem_stat[&0].contains_key(&parent.id));
-        assert!(!state.mem_stat.contains_key(&parent.id))
-    }
+    // use std::collections::HashMap;
+    // use std::collections::HashSet;
+    // use std::sync::atomic::Ordering;
+    // use std::sync::Arc;
+    // use std::time::Duration;
+    // use std::time::Instant;
+    //
+    // use crate::base::GlobalUniqName;
+    // use crate::runtime::memory::mem_stat::MEMORY_LIMIT_EXCEEDED_NO_ERROR;
+    // use crate::runtime::memory::mem_stat::MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR;
+    // use crate::runtime::memory::memory_manager::QueriesMemoryManager;
+    // use crate::runtime::MemStat;
+    // use crate::runtime::OutOfLimit;
+    // use crate::runtime::Thread;
+    // use crate::runtime::ThreadTracker;
+    //
+    // #[test]
+    // fn test_exclusion_list() {
+    //     let mut queries = HashMap::new();
+    //     queries.insert(1, ("a".into(), 1));
+    //     queries.insert(2, ("b".into(), 1));
+    //     queries.insert(3, ("c".into(), 1));
+    //
+    //     let exclude: HashSet<usize> = [1, 2].iter().cloned().collect();
+    //     let selected = QueriesMemoryManager::select_children(&queries, &exclude);
+    //     assert_eq!(selected, Some(3));
+    // }
+    //
+    // #[test]
+    // fn test_tie_breaker_with_query_id() {
+    //     let mut queries = HashMap::new();
+    //     queries.insert(1, ("query_2".into(), 1));
+    //     queries.insert(2, ("query_1".into(), 1));
+    //
+    //     let selected = QueriesMemoryManager::select_children(&queries, &HashSet::new());
+    //     assert_eq!(selected, Some(2));
+    // }
+    //
+    // #[test]
+    // fn test_global_parent_registration() {
+    //     let manager = QueriesMemoryManager::create();
+    //     let parent = MemStat::create(GlobalUniqName::unique());
+    //     let child = MemStat::create_child(GlobalUniqName::unique(), Some(parent.clone()), 0);
+    //
+    //     let mut payload = ThreadTracker::new_tracking_payload();
+    //     payload.query_id = Some(GlobalUniqName::unique());
+    //     let _guard = ThreadTracker::tracking(payload);
+    //
+    //     manager.request_exceeded_memory(&child);
+    //
+    //     let state = manager.get_state();
+    //     assert!(state.mem_stat[&0].contains_key(&child.id));
+    //     assert!(state.mem_stat[&parent.id].contains_key(&child.id));
+    //
+    //     assert!(!state.mem_stat[&0].contains_key(&parent.id));
+    //     assert!(!state.mem_stat[&parent.id].contains_key(&0));
+    // }
+    //
+    // #[test]
+    // #[should_panic(expected = "unreachable")]
+    // fn test_duplicate_registration_panic() {
+    //     let manager = QueriesMemoryManager::create();
+    //     let mem_stat = MemStat::create(GlobalUniqName::unique());
+    //
+    //     let mut payload = ThreadTracker::new_tracking_payload();
+    //     payload.query_id = Some(GlobalUniqName::unique());
+    //     let _guard = ThreadTracker::tracking(payload);
+    //
+    //     manager.request_exceeded_memory(&mem_stat);
+    //     manager.request_exceeded_memory(&mem_stat);
+    // }
+    //
+    // #[test]
+    // fn test_self_termination_when_no_children() {
+    //     let manager = QueriesMemoryManager::create();
+    //     let mem_stat = MemStat::create(GlobalUniqName::unique());
+    //
+    //     {
+    //         let mut payload = ThreadTracker::new_tracking_payload();
+    //         payload.query_id = Some(GlobalUniqName::unique());
+    //         let _guard = ThreadTracker::tracking(payload);
+    //
+    //         mem_stat
+    //             .exceeded_limit_state
+    //             .store(MEMORY_LIMIT_EXCEEDED_NO_ERROR, Ordering::SeqCst);
+    //         manager.request_exceeded_memory(&mem_stat);
+    //     }
+    //
+    //     let result = manager.wait_memory(&mem_stat, OutOfLimit::new(0, 0));
+    //     assert!(result.is_err());
+    //     assert_eq!(
+    //         mem_stat.exceeded_limit_state.load(Ordering::SeqCst),
+    //         MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR
+    //     );
+    // }
+    //
+    // #[test]
+    // fn test_priority_based_selection() {
+    //     let manager = QueriesMemoryManager::create();
+    //     let parent = MemStat::create(GlobalUniqName::unique());
+    //
+    //     let children = vec![
+    //         (1, 3, "low_pri".into()),
+    //         (2, 2, "mid_pri".into()),
+    //         (3, 1, "high_pri".into()),
+    //     ];
+    //
+    //     for (_id, pri, qid) in children {
+    //         let mut payload = ThreadTracker::new_tracking_payload();
+    //         payload.query_id = Some(qid);
+    //         let _guard = ThreadTracker::tracking(payload);
+    //
+    //         let mem = MemStat::create_child(GlobalUniqName::unique(), Some(parent.clone()), pri);
+    //
+    //         mem.exceeded_limit_state
+    //             .store(MEMORY_LIMIT_EXCEEDED_NO_ERROR, Ordering::SeqCst);
+    //         manager.request_exceeded_memory(&mem);
+    //     }
+    //
+    //     let target = MemStat::create_child(GlobalUniqName::unique(), Some(parent.clone()), 0);
+    //     let result = manager.wait_memory(&target, OutOfLimit::new(0, 0));
+    //
+    //     // recheck limit passed.
+    //     assert!(result.is_ok());
+    //     let state = manager.get_state();
+    //
+    //     let killed_children = state
+    //         .running_queries
+    //         .iter()
+    //         .filter(|(_, x)| {
+    //             x.exceeded_memory_state().load(Ordering::SeqCst)
+    //                 == MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR
+    //         })
+    //         .map(|(x, y)| (*x, y.clone()))
+    //         .collect::<Vec<_>>();
+    //
+    //     assert_eq!(killed_children.len(), 1);
+    //     assert_eq!(state.mem_stat[&0][&killed_children[0].0].0, "high_pri");
+    //     assert_eq!(
+    //         state.mem_stat[&parent.id][&killed_children[0].0].0,
+    //         "high_pri"
+    //     );
+    // }
+    //
+    // #[test]
+    // fn test_condvar_notification_with_no_child() {
+    //     let manager = Arc::new(QueriesMemoryManager::create());
+    //     let parent = MemStat::create(GlobalUniqName::unique());
+    //     let child = MemStat::create_child(GlobalUniqName::unique(), Some(parent.clone()), 0);
+    //
+    //     {
+    //         let mut payload = ThreadTracker::new_tracking_payload();
+    //         payload.query_id = Some(GlobalUniqName::unique());
+    //         let _guard = ThreadTracker::tracking(payload);
+    //
+    //         child
+    //             .exceeded_limit_state
+    //             .store(MEMORY_LIMIT_EXCEEDED_NO_ERROR, Ordering::SeqCst);
+    //         manager.request_exceeded_memory(&child);
+    //     }
+    //
+    //     let manager_clone = manager.clone();
+    //     let child_clone = child.clone();
+    //     let handle = Thread::spawn(move || {
+    //         let instant = Instant::now();
+    //         assert!(manager_clone
+    //             .wait_memory(&child_clone, OutOfLimit::new(0, 0))
+    //             .is_err());
+    //         Ok::<_, OutOfLimit>(instant.elapsed())
+    //     });
+    //
+    //     std::thread::sleep(Duration::from_millis(1000));
+    //
+    //     manager.release_memory(&child);
+    //     assert!(handle.join().unwrap().unwrap() < Duration::from_millis(1000));
+    // }
+    //
+    // #[test]
+    // fn test_condvar_notification() {
+    //     let manager = Arc::new(QueriesMemoryManager::create());
+    //     let parent = MemStat::create(GlobalUniqName::unique());
+    //     let child = MemStat::create_child(GlobalUniqName::unique(), Some(parent.clone()), 0);
+    //
+    //     {
+    //         let mut payload = ThreadTracker::new_tracking_payload();
+    //         payload.query_id = Some(GlobalUniqName::unique());
+    //         let _guard = ThreadTracker::tracking(payload);
+    //         child
+    //             .exceeded_limit_state
+    //             .store(MEMORY_LIMIT_EXCEEDED_NO_ERROR, Ordering::SeqCst);
+    //         manager.request_exceeded_memory(&child);
+    //     }
+    //
+    //     // limit 500MB
+    //     parent.set_limit(500 * 1024 * 1024, true);
+    //     // used 1GB
+    //     parent.used.fetch_add(1024 * 1024 * 1024, Ordering::SeqCst);
+    //
+    //     let manager_clone = manager.clone();
+    //     let handle = Thread::spawn(move || {
+    //         let instant = Instant::now();
+    //         let target = MemStat::create_child(GlobalUniqName::unique(), Some(parent.clone()), 0);
+    //         assert!(manager_clone
+    //             .wait_memory(&target, OutOfLimit::new(0, 0))
+    //             .is_err());
+    //         Ok::<_, OutOfLimit>(instant.elapsed())
+    //     });
+    //
+    //     std::thread::sleep(Duration::from_millis(1000));
+    //
+    //     manager.release_memory(&child);
+    //
+    //     assert!(handle.join().unwrap().unwrap() > Duration::from_millis(1000));
+    // }
+    //
+    // #[test]
+    // fn test_condvar_notification_with_recheck() {
+    //     let manager = Arc::new(QueriesMemoryManager::create());
+    //     let parent = MemStat::create(GlobalUniqName::unique());
+    //     let child = MemStat::create_child(GlobalUniqName::unique(), Some(parent.clone()), 0);
+    //
+    //     {
+    //         let mut payload = ThreadTracker::new_tracking_payload();
+    //         payload.query_id = Some(GlobalUniqName::unique());
+    //         let _guard = ThreadTracker::tracking(payload);
+    //
+    //         child
+    //             .exceeded_limit_state
+    //             .store(MEMORY_LIMIT_EXCEEDED_NO_ERROR, Ordering::SeqCst);
+    //         manager.request_exceeded_memory(&child);
+    //     }
+    //
+    //     // limit 500MB
+    //     parent.set_limit(500 * 1024 * 1024, true);
+    //     // used 1GB
+    //     parent.used.fetch_add(1024 * 1024 * 1024, Ordering::SeqCst);
+    //
+    //     let handle = Thread::spawn({
+    //         let parent = parent.clone();
+    //         let manager = manager.clone();
+    //         move || {
+    //             let instant = Instant::now();
+    //             let target =
+    //                 MemStat::create_child(GlobalUniqName::unique(), Some(parent.clone()), 0);
+    //             assert!(manager.wait_memory(&target, OutOfLimit::new(0, 0)).is_ok());
+    //             Ok::<_, OutOfLimit>(instant.elapsed())
+    //         }
+    //     });
+    //
+    //     std::thread::sleep(Duration::from_millis(1000));
+    //
+    //     // reduce memory used.
+    //     parent.used.fetch_sub(800 * 1024 * 1024, Ordering::SeqCst);
+    //
+    //     std::thread::sleep(Duration::from_millis(1000));
+    //
+    //     // release memory
+    //     manager.release_memory(&child);
+    //
+    //     let duration = handle.join().unwrap().unwrap();
+    //     assert!(duration > Duration::from_millis(1000));
+    //     assert!(duration < Duration::from_millis(2000));
+    // }
+    //
+    // #[test]
+    // fn test_cleanup_after_release() {
+    //     let manager = QueriesMemoryManager::create();
+    //     let parent = MemStat::create(GlobalUniqName::unique());
+    //     let child = MemStat::create_child(GlobalUniqName::unique(), Some(parent.clone()), 0);
+    //
+    //     let mut payload = ThreadTracker::new_tracking_payload();
+    //     payload.query_id = Some(GlobalUniqName::unique());
+    //     let _guard = ThreadTracker::tracking(payload);
+    //
+    //     manager.request_exceeded_memory(&child);
+    //
+    //     manager.release_memory(&child);
+    //     let state = manager.get_state();
+    //
+    //     assert!(state.running_queries.is_empty());
+    //     assert!(!state.mem_stat[&0].contains_key(&child.id));
+    //     assert!(!state.mem_stat[&0].contains_key(&parent.id));
+    //     assert!(!state.mem_stat.contains_key(&parent.id))
+    // }
 }

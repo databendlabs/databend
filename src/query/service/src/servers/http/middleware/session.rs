@@ -636,14 +636,15 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             .map(|id| id.to_str().unwrap().to_string())
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
-        let query_mem_stat = MemStat::create(format!("Query-{}", query_id));
+        let query_mem_stat =
+            MemStat::create_with_resource_tag(format!("Query-{}", query_id), query_id.clone());
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
         tracking_payload.mem_stat = Some(query_mem_stat.clone());
 
         let _guard = ThreadTracker::tracking(tracking_payload);
         let _guard2 = defer(move || {
-            query_mem_stat.set_limit(0);
+            query_mem_stat.set_limit(0, true);
         });
 
         ThreadTracker::tracking_future(async move {

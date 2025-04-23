@@ -56,6 +56,7 @@ use crate::runtime::memory::MemStat;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::Profile;
 use crate::runtime::MemStatBuffer;
+use crate::runtime::OutOfLimit;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
@@ -81,6 +82,10 @@ impl LimitMemGuard {
             global_saved: GlobalStatBuffer::current().set_unlimited_flag(false),
             mem_stat_saved: MemStatBuffer::current().set_unlimited_flag(false),
         }
+    }
+
+    pub fn is_unlimited() -> bool {
+        GlobalStatBuffer::current().is_unlimited() || MemStatBuffer::current().unlimited_flag
     }
 }
 
@@ -184,6 +189,8 @@ impl ThreadTracker {
         let mut guard = TrackingGuard {
             saved: tracking_payload,
         };
+
+        let _guard = LimitMemGuard::enter_unlimited();
         let _ = MemStatBuffer::current().flush::<false>(0);
         let _ = GlobalStatBuffer::current().flush::<false>(0);
 
@@ -234,14 +241,16 @@ impl ThreadTracker {
     }
 
     pub fn query_id() -> Option<&'static String> {
-        TRACKER.with(|tracker| {
-            tracker
-                .borrow()
-                .payload
-                .query_id
-                .as_ref()
-                .map(|query_id| unsafe { &*(query_id as *const String) })
-        })
+        TRACKER
+            .try_with(|tracker| {
+                tracker
+                    .borrow()
+                    .payload
+                    .query_id
+                    .as_ref()
+                    .map(|query_id| unsafe { &*(query_id as *const String) })
+            })
+            .unwrap_or(None)
     }
 }
 

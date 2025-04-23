@@ -77,7 +77,9 @@ impl GlobalStatBuffer {
     ) -> std::result::Result<(), OutOfLimit> {
         match std::mem::take(&mut self.memory_usage) {
             0 => Ok(()),
-            usage => self.global_mem_stat.record_memory::<ROLLBACK>(usage, alloc),
+            usage => self
+                .global_mem_stat
+                .record_memory::<ROLLBACK>(usage, alloc, None),
         }
     }
 
@@ -160,7 +162,9 @@ impl GlobalStatBuffer {
 
         // Memory operations during destruction will be recorded to global stat.
         self.destroyed_thread_local_macro = true;
-        let _ = self.global_mem_stat.record_memory::<false>(memory_usage, 0);
+        let _ = self
+            .global_mem_stat
+            .record_memory::<false>(memory_usage, 0, None);
     }
 }
 

@@ -389,4 +389,23 @@ impl SessionManager {
         let active_sessions_guard = self.active_sessions.read();
         active_sessions_guard.values().cloned().collect::<Vec<_>>()
     }
+
+    pub fn kill_by_query_id(&self, query_id: &String) -> bool {
+        for session in self.active_sessions_snapshot() {
+            let Some(session) = session.upgrade() else {
+                continue;
+            };
+
+            let Some(session_query_id) = session.get_current_query_id() else {
+                continue;
+            };
+
+            if query_id == &session_query_id {
+                session.force_kill_query(ErrorCode::AbortedQuery(format!("")));
+                return true;
+            }
+        }
+
+        false
+    }
 }

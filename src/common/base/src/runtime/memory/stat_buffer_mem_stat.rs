@@ -32,7 +32,7 @@ pub struct MemStatBuffer {
     pub(crate) cur_mem_stat: Option<Arc<MemStat>>,
     pub(crate) memory_usage: i64,
     // Whether to allow unlimited memory. Alloc memory will not panic if it is true.
-    unlimited_flag: bool,
+    pub(crate) unlimited_flag: bool,
     pub(crate) global_mem_stat: &'static MemStat,
     destroyed_thread_local_macro: bool,
 }
@@ -73,26 +73,26 @@ impl MemStatBuffer {
 
         self.cur_mem_stat_id = 0;
         if let Some(mem_stat) = self.cur_mem_stat.take() {
-            if let Err(cause) = mem_stat.record_memory::<FALLBACK>(memory_usage, alloc) {
-                let memory_usage = match FALLBACK {
-                    true => memory_usage - alloc,
-                    false => memory_usage,
-                };
+            let may_root_oom = self
+                .global_mem_stat
+                .record_memory_impl::<false>(memory_usage, 0, None, None)
+                .err();
 
-                self.global_mem_stat
-                    .record_memory::<false>(memory_usage, 0)?;
+            if let Err(cause) =
+                mem_stat.record_memory::<FALLBACK>(memory_usage, alloc, may_root_oom)
+            {
+                if FALLBACK {
+                    self.global_mem_stat.rollback(alloc);
+                }
+
                 return Err(cause);
             }
+
+            return Ok(());
         }
 
-        if let Err(cause) = self
-            .global_mem_stat
-            .record_memory::<FALLBACK>(memory_usage, alloc)
-        {
-            return self.global_mem_stat.try_wait_memory(cause);
-        }
-
-        Ok(())
+        self.global_mem_stat
+            .record_memory::<FALLBACK>(memory_usage, alloc, None)
     }
 
     pub fn alloc(&mut self, mem_stat: &Arc<MemStat>, usage: i64) -> Result<(), AllocError> {
