@@ -16,7 +16,7 @@ module.exports = async ({ github, context, core }) => {
   }
 
   let body = release.body;
-
+  body = body.split("\n").slice(1).join("\n");
   body = "---\n" + body;
   body = body.replace(/^--$/gm, "---");
   body = body.replace(/^asset:.*$/gm, "");
