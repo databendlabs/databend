@@ -16,7 +16,20 @@ fn main() {
     divan::main()
 }
 
-#[divan::bench_group(max_time = 1)]
+// Timer precision: 10 ns
+// bench                fastest       │ slowest       │ median        │ mean          │ samples │ iters
+// ╰─ dummy                           │               │               │               │         │
+//    ├─ arrow_ipc_desc                 │               │               │               │         │
+//    │  ├─ LZ4         588.9 ms      │ 588.9 ms      │ 588.9 ms      │ 588.9 ms      │ 1       │ 1
+//    │  │              3.873 GB/s    │ 3.873 GB/s    │ 3.873 GB/s    │ 3.873 GB/s    │         │
+//    │  ╰─ Zstd        832.1 ms      │ 832.1 ms      │ 832.1 ms      │ 832.1 ms      │ 1       │ 1
+//    │                 1.942 GB/s    │ 1.942 GB/s    │ 1.942 GB/s    │ 1.942 GB/s    │         │
+//    ╰─ parquet_deser                │               │               │               │         │
+//       ├─ LZ4         807.5 ms      │ 807.5 ms      │ 807.5 ms      │ 807.5 ms      │ 1       │ 1
+//       │              3.176 GB/s    │ 3.176 GB/s    │ 3.176 GB/s    │ 3.176 GB/s    │         │
+//       ╰─ Zstd        1.009 s       │ 1.009 s       │ 1.009 s       │ 1.009 s       │ 1       │ 1
+//                      1.425 GB/s    │ 1.425 GB/s    │ 1.425 GB/s    │ 1.425 GB/s    │         │
+#[divan::bench_group(max_time = 3)]
 mod dummy {
     use std::sync::Arc;
 
@@ -85,7 +98,7 @@ mod dummy {
     }
 
     #[divan::bench(args = [TableCompression::LZ4, TableCompression::Zstd])]
-    fn native_deser(bencher: divan::Bencher, compression: TableCompression) {
+    fn arrow_ipc_desc(bencher: divan::Bencher, compression: TableCompression) {
         // write the block into temp memory buffers
         // prepare the metas
         // use deserialize_chunk to read back into block
