@@ -38,11 +38,6 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
     type ColumnIterator<'a> = ColumnIterator<'a>;
     type ColumnBuilder = ColumnBuilder;
 
-    #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
-        long
-    }
-
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_owned()
     }
@@ -51,7 +46,7 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         scalar.as_ref()
     }
 
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         Some(scalar.clone())
     }
 

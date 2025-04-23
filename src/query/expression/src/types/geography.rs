@@ -117,11 +117,6 @@ impl ValueType for GeographyType {
     type ColumnIterator<'a> = GeographyIterator<'a>;
     type ColumnBuilder = BinaryColumnBuilder;
 
-    #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: GeographyRef<'long>) -> GeographyRef<'short> {
-        long
-    }
-
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_owned()
     }
@@ -130,7 +125,7 @@ impl ValueType for GeographyType {
         scalar.as_ref()
     }
 
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         scalar.as_geography().cloned()
     }
 

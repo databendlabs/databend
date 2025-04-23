@@ -70,11 +70,6 @@ impl ValueType for DateType {
     type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, i32>>;
     type ColumnBuilder = Vec<i32>;
 
-    #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: i32) -> i32 {
-        long
-    }
-
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
     }

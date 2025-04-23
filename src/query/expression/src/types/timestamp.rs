@@ -75,11 +75,6 @@ impl ValueType for TimestampType {
     type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, i64>>;
     type ColumnBuilder = Vec<i64>;
 
-    #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: i64) -> i64 {
-        long
-    }
-
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
     }
