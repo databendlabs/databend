@@ -57,7 +57,7 @@ async fn handle(ctx: &HttpQueryContext) -> Result<ListRolesResponse> {
         let is_current = role.name == current_role;
         let is_default = role.name == default_role;
         roles.push(RoleInfo {
-            name: role.clone(),
+            name: role.name.clone(),
             is_current,
             is_default,
         });
