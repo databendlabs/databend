@@ -129,6 +129,7 @@ use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::OptimizePurgePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterPlan;
+use crate::plans::RefreshTableCachePlan;
 use crate::plans::RelOperator;
 use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
@@ -1125,6 +1126,14 @@ impl Binder {
             AlterTableAction::UnsetOptions { targets } => {
                 Ok(Plan::UnsetOptions(Box::new(UnsetOptionsPlan {
                     options: targets.iter().map(|i| i.name.to_lowercase()).collect(),
+                    catalog,
+                    database,
+                    table,
+                })))
+            }
+            AlterTableAction::RefreshTableCache => {
+                Ok(Plan::RefreshTableCache(Box::new(RefreshTableCachePlan {
+                    tenant,
                     catalog,
                     database,
                     table,

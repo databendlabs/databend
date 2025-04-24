@@ -3702,15 +3702,23 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
 }
 
 pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
-    let mut rename_database = map(
+    let rename_database = map(
         rule! {
             RENAME ~ TO ~ #ident
         },
         |(_, _, new_db)| AlterDatabaseAction::RenameDatabase { new_db },
     );
 
+    let refresh_cache = map(
+        rule! {
+            REFRESH ~ CACHE
+        },
+        |(_, _)| AlterDatabaseAction::RefreshDatabaseCache,
+    );
+
     rule!(
         #rename_database
+        | #refresh_cache
     )(i)
 }
 
@@ -3922,6 +3930,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, targets)| AlterTableAction::UnsetOptions { targets },
     );
 
+    let refresh_cache = map(
+        rule! {
+            REFRESH ~ CACHE
+        },
+        |(_, _)| AlterTableAction::RefreshTableCache,
+    );
+
     rule!(
         #alter_table_cluster_key
         | #drop_table_cluster_key
@@ -3935,6 +3950,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #revert_table
         | #set_table_options
         | #unset_table_options
+        | #refresh_cache
     )(i)
 }
 

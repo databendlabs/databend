@@ -297,6 +297,12 @@ ALTER TABLE t1 DROP COLUMN size;
 statement ok
 ALTER TABLE t1 DROP COLUMN path;
 
+statement error 1302
+alter table t1 refresh cache;
+
+statement error 1302
+alter database default refresh cache;
+
 statement ok
 SELECT * FROM t1 WHERE create_time > 111113;
 

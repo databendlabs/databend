@@ -219,7 +219,6 @@ impl IcebergTable {
     }
 
     /// create a new table on the table directory
-    /// TODO ADD TTL CACHE
     #[async_backtrace::framed]
     pub async fn try_create_from_iceberg_catalog(
         ctl: Arc<dyn iceberg::Catalog>,

@@ -69,6 +69,7 @@ impl Plan {
             Plan::DropDatabase(_) => Ok("DropDatabase".to_string()),
             Plan::UndropDatabase(_) => Ok("UndropDatabase".to_string()),
             Plan::RenameDatabase(_) => Ok("RenameDatabase".to_string()),
+            Plan::RefreshDatabaseCache(_) => Ok("RefreshDatabaseCache".to_string()),
 
             // Tables
             Plan::CreateTable(create_table) => format_create_table(create_table, options),
@@ -86,6 +87,7 @@ impl Plan {
             Plan::DropTableColumn(_) => Ok("DropTableColumn".to_string()),
             Plan::AlterTableClusterKey(_) => Ok("AlterTableClusterKey".to_string()),
             Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
+            Plan::RefreshTableCache(_) => Ok("RefreshTableCache".to_string()),
             Plan::ReclusterTable(_) => Ok("ReclusterTable".to_string()),
             Plan::TruncateTable(_) => Ok("TruncateTable".to_string()),
             Plan::OptimizePurge(_) => Ok("OptimizePurge".to_string()),
