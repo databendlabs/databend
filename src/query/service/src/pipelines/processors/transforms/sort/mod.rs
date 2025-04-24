@@ -36,6 +36,7 @@ mod collect;
 mod exchange;
 mod execute;
 mod merge_sort;
+mod route;
 mod sort_spill;
 mod wait;
 

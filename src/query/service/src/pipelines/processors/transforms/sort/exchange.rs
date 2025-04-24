@@ -13,17 +13,16 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Exchange;
 use databend_common_pipeline_transforms::processors::sort::Rows;
 
-use super::wait::SortSampleState;
+use super::SortScatteredMeta;
 
 pub struct SortRangeExchange<R: Rows> {
-    state: Arc<SortSampleState>,
     _r: PhantomData<R>,
 }
 
@@ -33,41 +32,22 @@ unsafe impl<R: Rows> Sync for SortRangeExchange<R> {}
 
 impl<R: Rows + 'static> Exchange for SortRangeExchange<R> {
     const NAME: &'static str = "SortRange";
-    fn partition(&self, data: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
-        if data.is_empty() {
-            return Ok(vec![]);
-        }
+    fn partition(&self, mut data: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
+        let Some(meta) = data.take_meta() else {
+            unreachable!();
+        };
 
-        let bounds = self.state.bounds();
-        // debug_assert_eq!(n, self.state.partitions());
-        debug_assert!(bounds.len() < n);
+        let Some(SortScatteredMeta(scattered)) = SortScatteredMeta::downcast_from(meta) else {
+            unreachable!();
+        };
 
-        if bounds.is_empty() {
-            return Ok(vec![data]);
-        }
+        assert!(scattered.len() <= n);
 
-        todo!()
+        let blocks = scattered
+            .into_iter()
+            .map(|meta| DataBlock::empty_with_meta(Box::new(meta)))
+            .collect();
 
-        // let bounds = R::from_column(&bounds.0)?;
-        // let rows = R::from_column(data.get_last_column())?;
-
-        // let mut i = 0;
-        // let mut j = 0;
-        // let mut bound = bounds.row(j);
-        // let mut indices = Vec::new();
-        // while i < rows.len() {
-        //     match rows.row(i).cmp(&bound) {
-        //         Ordering::Less => indices.push(j as u32),
-        //         Ordering::Greater if j + 1 < bounds.len() => {
-        //             j += 1;
-        //             bound = bounds.row(j);
-        //             continue;
-        //         }
-        //         _ => indices.push(j as u32 + 1),
-        //     }
-        //     i += 1;
-        // }
-
-        // DataBlock::scatter(&data, &indices, n)
+        Ok(blocks)
     }
 }
