@@ -37,7 +37,6 @@ use databend_common_exception::Result;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use enum_as_inner::EnumAsInner;
-// use ethnum::i256;
 use ethnum::u256;
 use ethnum::AsI256;
 use itertools::Itertools;
@@ -49,7 +48,6 @@ use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
-// use databend_common_column::types::NativeType;
 use super::SimpleDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -61,371 +59,6 @@ use crate::ColumnBuilder;
 use crate::Domain;
 use crate::Scalar;
 use crate::ScalarRef;
-
-// use databend_common_column::types::i256;
-
-/// Physical representation of a decimal
-#[derive(Clone, Copy, Default, Eq, Ord, Serialize, Deserialize)]
-#[allow(non_camel_case_types)]
-#[repr(C)]
-pub struct i256(pub ethnum::I256);
-
-impl i256 {
-    /// The additive identity for this integer type, i.e. `0`.
-    pub const ZERO: Self = Self(ethnum::I256([0; 2]));
-
-    /// The multiplicative identity for this integer type, i.e. `1`.
-    pub const ONE: Self = Self(ethnum::I256::new(1));
-
-    /// The multiplicative inverse for this integer type, i.e. `-1`.
-    pub const MINUS_ONE: Self = Self(ethnum::I256::new(-1));
-
-    // pub fn from(value: i128) -> Self {
-    //    Self(value.as_i256())
-    //}
-
-    /// Creates a new 256-bit integer value from a primitive `i128` integer.
-    #[inline]
-    pub const fn new(value: i128) -> Self {
-        Self(ethnum::I256::new(value))
-    }
-
-    /// Returns a new [`i256`] from two `i128`.
-    pub fn from_words(hi: i128, lo: i128) -> Self {
-        Self(ethnum::I256::from_words(hi, lo))
-    }
-
-    #[inline]
-    pub const fn to_le_bytes(&self) -> [u8; 32] {
-        let (high, low) = self.0.into_words();
-        let low = low.to_le_bytes();
-        let high = high.to_le_bytes();
-        let mut i = 0;
-        let mut bytes = [0u8; 32];
-        while i != 16 {
-            bytes[i] = low[i];
-            bytes[i + 16] = high[i];
-            i += 1;
-        }
-        bytes
-    }
-
-    #[inline]
-    pub const fn to_be_bytes(&self) -> [u8; 32] {
-        let (high, low) = self.0.into_words();
-        let low = low.to_be_bytes();
-        let high = high.to_be_bytes();
-        let mut bytes = [0; 32];
-        let mut i = 0;
-        while i != 16 {
-            bytes[i] = high[i];
-            bytes[i + 16] = low[i];
-            i += 1;
-        }
-        bytes
-    }
-
-    #[inline]
-    pub const fn from_be_bytes(bytes: [u8; 32]) -> Self {
-        let mut low = [0; 16];
-        let mut high = [0; 16];
-        let mut i = 0;
-        while i != 16 {
-            high[i] = bytes[i];
-            low[i] = bytes[i + 16];
-            i += 1;
-        }
-        let high = i128::from_be_bytes(high);
-        let low = i128::from_be_bytes(low);
-        Self(ethnum::I256::from_words(high, low))
-    }
-
-    #[inline]
-    pub const fn from_le_bytes(bytes: [u8; 32]) -> Self {
-        let mut low = [0; 16];
-        let mut high = [0; 16];
-        let mut i = 0;
-        while i != 16 {
-            low[i] = bytes[i];
-            high[i] = bytes[i + 16];
-            i += 1;
-        }
-        let high = i128::from_be_bytes(high);
-        let low = i128::from_be_bytes(low);
-        Self(ethnum::I256::from_words(high, low))
-    }
-
-    #[inline]
-    pub const fn is_positive(self) -> bool {
-        self.0.is_positive()
-    }
-
-    #[inline]
-    pub const fn is_negative(self) -> bool {
-        self.0.is_negative()
-    }
-
-    #[inline]
-    pub fn saturating_abs(self) -> Self {
-        Self(self.0.saturating_abs())
-    }
-
-    #[inline(always)]
-    pub fn leading_zeros(self) -> u32 {
-        self.0.leading_zeros()
-    }
-
-    /// Cast to a primitive `u64`.
-    #[inline]
-    pub const fn as_u64(self) -> u64 {
-        self.0.as_u64()
-    }
-
-    /// Cast to a primitive `i64`.
-    #[inline]
-    pub const fn as_i64(self) -> i64 {
-        self.0.as_i64()
-    }
-
-    /// Cast to a primitive `i128`.
-    #[inline]
-    pub const fn as_i128(self) -> i128 {
-        self.0.as_i128()
-    }
-
-    /// Get the low 128-bit word for this signed integer.
-    #[inline]
-    pub fn low(&self) -> &i128 {
-        self.0.low()
-    }
-
-    /// Get the high 128-bit word for this signed integer.
-    #[inline]
-    pub fn high(&self) -> &i128 {
-        self.0.high()
-    }
-
-    #[allow(unused_attributes)]
-    #[inline]
-    pub fn abs(self) -> Self {
-        Self(self.0.abs())
-    }
-
-    #[inline]
-    pub fn checked_neg(self) -> Option<Self> {
-        self.0.checked_neg().map(|v| Self(v))
-    }
-
-    /// Raises self to the power of `exp`, using exponentiation by squaring.
-    ///
-    /// # Examples
-    ///
-    /// Basic usage:
-    ///
-    /// ```
-    /// # use ethnum::I256;
-    ///
-    /// assert_eq!(I256::new(2).pow(5), 32);
-    /// ```
-    #[must_use = "this returns the result of the operation, \
-                  without modifying the original"]
-    #[inline]
-    pub fn pow(self, mut exp: u32) -> Self {
-        Self(self.0.pow(exp))
-    }
-}
-
-impl Neg for i256 {
-    type Output = Self;
-
-    #[inline]
-    fn neg(self) -> Self::Output {
-        let (a, b) = self.0.into_words();
-        Self(ethnum::I256::from_words(-a, b))
-    }
-}
-
-impl std::fmt::Debug for i256 {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-impl std::fmt::Display for i256 {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl AddAssign for i256 {
-    fn add_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0;
-    }
-}
-
-impl SubAssign for i256 {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.0 -= rhs.0;
-    }
-}
-
-impl MulAssign for i256 {
-    fn mul_assign(&mut self, rhs: Self) {
-        self.0 *= rhs.0;
-    }
-}
-
-impl DivAssign for i256 {
-    fn div_assign(&mut self, rhs: Self) {
-        self.0 /= rhs.0;
-    }
-}
-
-impl Add for i256 {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
-    }
-}
-
-impl Sub for i256 {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Self(self.0 - rhs.0)
-    }
-}
-
-impl Mul for i256 {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Self(self.0 * rhs.0)
-    }
-}
-
-impl Div for i256 {
-    type Output = Self;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        Self(self.0 / rhs.0)
-    }
-}
-
-macro_rules! impl_from {
-    ($($t:ty),* $(,)?) => {$(
-        impl From<$t> for i256 {
-            #[inline]
-            fn from(value: $t) -> Self {
-                i256(value.as_i256())
-            }
-        }
-    )*};
-}
-
-impl_from! {
-    bool,
-    i8, i16, i32, i64, i128,
-    u8, u16, u32, u64, u128,
-}
-
-impl TryFrom<u256> for i256 {
-    type Error = TryFromIntError;
-
-    fn try_from(value: u256) -> std::result::Result<Self, Self::Error> {
-        let i256_value = ethnum::i256::try_from(value)?;
-        Ok(i256(i256_value))
-    }
-}
-
-impl BorshSerialize for i256 {
-    fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
-        BorshSerialize::serialize(&self.0 .0, writer)
-    }
-}
-
-impl BorshDeserialize for i256 {
-    fn deserialize_reader<R: borsh::io::Read>(reader: &mut R) -> borsh::io::Result<Self> {
-        let value: [i128; 2] = BorshDeserialize::deserialize_reader(reader)?;
-        Ok(Self(ethnum::I256(value)))
-    }
-}
-
-impl Marshal for i256 {
-    fn marshal(&self, scratch: &mut [u8]) {
-        self.0.marshal(scratch);
-    }
-}
-
-macro_rules! impl_into_float {
-    ($($t:ty => $f:ident),* $(,)?) => {$(
-        impl From<i256> for $t {
-            #[inline]
-            fn from(x: i256) -> $t {
-                x.0.$f()
-            }
-        }
-    )*};
-}
-
-impl_into_float! {
-    f32 => as_f32, f64 => as_f64,
-}
-
-impl core::hash::Hash for i256 {
-    #[inline]
-    fn hash<H>(&self, hasher: &mut H)
-    where H: core::hash::Hasher {
-        core::hash::Hash::hash(&self.0, hasher);
-    }
-}
-
-impl PartialEq for i256 {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        let (ahi, alo) = self.0.into_words();
-        let (bhi, blo) = other.0.into_words();
-        (ahi == bhi) & (alo == blo)
-        // bitwise and rather than logical and
-        // to make O0 code more effecient.
-    }
-}
-
-impl PartialEq<i128> for i256 {
-    #[inline]
-    fn eq(&self, other: &i128) -> bool {
-        *self == i256::new(*other)
-    }
-}
-
-impl PartialEq<i256> for i128 {
-    #[inline]
-    fn eq(&self, other: &i256) -> bool {
-        i256::new(*self) == *other
-    }
-}
-
-impl PartialOrd for i256 {
-    #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialOrd<i128> for i256 {
-    #[inline]
-    fn partial_cmp(&self, rhs: &i128) -> Option<core::cmp::Ordering> {
-        Some(self.cmp(&i256::new(*rhs)))
-    }
-}
-
-impl PartialOrd<i256> for i128 {
-    #[inline]
-    fn partial_cmp(&self, rhs: &i256) -> Option<core::cmp::Ordering> {
-        Some(i256::new(*self).cmp(rhs))
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecimalType<T: Decimal>(PhantomData<T>);
@@ -1101,23 +734,23 @@ impl Decimal for i256 {
     }
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
-        self.checked_add(rhs)
+        self.0.checked_add(rhs.0).map(Self)
     }
 
     fn checked_sub(self, rhs: Self) -> Option<Self> {
-        self.checked_sub(rhs)
+        self.0.checked_sub(rhs.0).map(Self)
     }
 
     fn checked_div(self, rhs: Self) -> Option<Self> {
-        self.checked_div(rhs)
+        self.0.checked_div(rhs.0).map(Self)
     }
 
     fn checked_mul(self, rhs: Self) -> Option<Self> {
-        self.checked_mul(rhs)
+        self.0.checked_mul(rhs.0).map(Self)
     }
 
     fn checked_rem(self, rhs: Self) -> Option<Self> {
-        self.checked_rem(rhs)
+        self.0.checked_rem(rhs.0).map(Self)
     }
 
     fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self> {
@@ -1237,12 +870,12 @@ impl Decimal for i256 {
 
     fn to_float32(self, scale: u8) -> f32 {
         let div = 10_f32.powi(scale as i32);
-        self.0.as_f32() / div
+        self.as_f32() / div
     }
 
     fn to_float64(self, scale: u8) -> f64 {
         let div = 10_f64.powi(scale as i32);
-        self.0.as_f64() / div
+        self.as_f64() / div
     }
 
     fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U> {
@@ -2501,3 +2134,374 @@ pub const MIN_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = [
     -9999999999999999999999999999999999999,
     -99999999999999999999999999999999999999,
 ];
+
+/// Physical representation of a decimal
+#[derive(Clone, Copy, Default, Eq, Serialize, Deserialize)]
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub struct i256(pub ethnum::I256);
+
+impl i256 {
+    /// The additive identity for this integer type, i.e. `0`.
+    pub const ZERO: Self = Self(ethnum::I256([0; 2]));
+
+    /// The multiplicative identity for this integer type, i.e. `1`.
+    pub const ONE: Self = Self(ethnum::I256::new(1));
+
+    /// The multiplicative inverse for this integer type, i.e. `-1`.
+    pub const MINUS_ONE: Self = Self(ethnum::I256::new(-1));
+
+    /// Creates a new 256-bit integer value from a primitive `i128` integer.
+    #[inline]
+    pub const fn new(value: i128) -> Self {
+        Self(ethnum::I256::new(value))
+    }
+
+    /// Returns a new [`i256`] from two `i128`.
+    pub fn from_words(hi: i128, lo: i128) -> Self {
+        Self(ethnum::I256::from_words(hi, lo))
+    }
+
+    pub fn from_str_radix(
+        src: &str,
+        radix: u32,
+    ) -> std::result::Result<Self, std::num::ParseIntError> {
+        ethnum::I256::from_str_radix(src, radix).map(Self)
+    }
+
+    #[inline]
+    pub const fn to_le_bytes(&self) -> [u8; 32] {
+        let (high, low) = self.0.into_words();
+        let low = low.to_le_bytes();
+        let high = high.to_le_bytes();
+        let mut i = 0;
+        let mut bytes = [0u8; 32];
+        while i != 16 {
+            bytes[i] = low[i];
+            bytes[i + 16] = high[i];
+            i += 1;
+        }
+        bytes
+    }
+
+    #[inline]
+    pub const fn to_be_bytes(&self) -> [u8; 32] {
+        let (high, low) = self.0.into_words();
+        let low = low.to_be_bytes();
+        let high = high.to_be_bytes();
+        let mut bytes = [0; 32];
+        let mut i = 0;
+        while i != 16 {
+            bytes[i] = high[i];
+            bytes[i + 16] = low[i];
+            i += 1;
+        }
+        bytes
+    }
+
+    #[inline]
+    pub const fn from_be_bytes(bytes: [u8; 32]) -> Self {
+        let mut low = [0; 16];
+        let mut high = [0; 16];
+        let mut i = 0;
+        while i != 16 {
+            high[i] = bytes[i];
+            low[i] = bytes[i + 16];
+            i += 1;
+        }
+        let high = i128::from_be_bytes(high);
+        let low = i128::from_be_bytes(low);
+        Self(ethnum::I256::from_words(high, low))
+    }
+
+    #[inline]
+    pub const fn from_le_bytes(bytes: [u8; 32]) -> Self {
+        let mut low = [0; 16];
+        let mut high = [0; 16];
+        let mut i = 0;
+        while i != 16 {
+            low[i] = bytes[i];
+            high[i] = bytes[i + 16];
+            i += 1;
+        }
+        let high = i128::from_be_bytes(high);
+        let low = i128::from_be_bytes(low);
+        Self(ethnum::I256::from_words(high, low))
+    }
+
+    #[inline]
+    pub const fn is_positive(self) -> bool {
+        self.0.is_positive()
+    }
+
+    #[inline]
+    pub const fn is_negative(self) -> bool {
+        self.0.is_negative()
+    }
+
+    #[inline]
+    pub fn saturating_abs(self) -> Self {
+        Self(self.0.saturating_abs())
+    }
+
+    #[inline(always)]
+    pub fn leading_zeros(self) -> u32 {
+        self.0.leading_zeros()
+    }
+
+    /// Cast to a primitive `f32`.
+    #[inline]
+    pub fn as_f32(self) -> f32 {
+        self.0.as_f32()
+    }
+
+    /// Cast to a primitive `f64`.
+    #[inline]
+    pub fn as_f64(self) -> f64 {
+        self.0.as_f64()
+    }
+
+    /// Cast to a primitive `u64`.
+    #[inline]
+    pub const fn as_u64(self) -> u64 {
+        self.0.as_u64()
+    }
+
+    /// Cast to a primitive `i64`.
+    #[inline]
+    pub const fn as_i64(self) -> i64 {
+        self.0.as_i64()
+    }
+
+    /// Cast to a primitive `i128`.
+    #[inline]
+    pub const fn as_i128(self) -> i128 {
+        self.0.as_i128()
+    }
+
+    /// Get the low 128-bit word for this signed integer.
+    #[inline]
+    pub fn low(&self) -> &i128 {
+        self.0.low()
+    }
+
+    /// Get the high 128-bit word for this signed integer.
+    #[inline]
+    pub fn high(&self) -> &i128 {
+        self.0.high()
+    }
+
+    #[allow(unused_attributes)]
+    #[inline]
+    pub fn abs(self) -> Self {
+        Self(self.0.abs())
+    }
+
+    #[inline]
+    pub fn checked_neg(self) -> Option<Self> {
+        self.0.checked_neg().map(Self)
+    }
+
+    #[inline]
+    pub fn pow(self, exp: u32) -> Self {
+        Self(self.0.pow(exp))
+    }
+}
+
+impl Neg for i256 {
+    type Output = Self;
+
+    #[inline]
+    fn neg(self) -> Self::Output {
+        Self(self.0.checked_neg().expect("i256 overflow"))
+    }
+}
+
+impl std::fmt::Debug for i256 {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+impl std::fmt::Display for i256 {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl AddAssign for i256 {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
+}
+
+impl SubAssign for i256 {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
+    }
+}
+
+impl MulAssign for i256 {
+    fn mul_assign(&mut self, rhs: Self) {
+        self.0 *= rhs.0;
+    }
+}
+
+impl DivAssign for i256 {
+    fn div_assign(&mut self, rhs: Self) {
+        self.0 /= rhs.0;
+    }
+}
+
+impl Add for i256 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl Sub for i256 {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl Mul for i256 {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self(self.0 * rhs.0)
+    }
+}
+
+impl Div for i256 {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Self(self.0 / rhs.0)
+    }
+}
+
+macro_rules! impl_from {
+    ($($t:ty),* $(,)?) => {$(
+        impl From<$t> for i256 {
+            #[inline]
+            fn from(value: $t) -> Self {
+                i256(value.as_i256())
+            }
+        }
+    )*};
+}
+
+impl_from! {
+    bool,
+    i8, i16, i32, i64, i128,
+    u8, u16, u32, u64, u128,
+}
+
+impl TryFrom<u256> for i256 {
+    type Error = TryFromIntError;
+
+    fn try_from(value: u256) -> std::result::Result<Self, Self::Error> {
+        let i256_value = ethnum::i256::try_from(value)?;
+        Ok(i256(i256_value))
+    }
+}
+
+impl BorshSerialize for i256 {
+    fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
+        BorshSerialize::serialize(&self.0 .0, writer)
+    }
+}
+
+impl BorshDeserialize for i256 {
+    fn deserialize_reader<R: borsh::io::Read>(reader: &mut R) -> borsh::io::Result<Self> {
+        let value: [i128; 2] = BorshDeserialize::deserialize_reader(reader)?;
+        Ok(Self(ethnum::I256(value)))
+    }
+}
+
+impl Marshal for i256 {
+    fn marshal(&self, scratch: &mut [u8]) {
+        self.0.marshal(scratch);
+    }
+}
+
+macro_rules! impl_into_float {
+    ($($t:ty => $f:ident),* $(,)?) => {$(
+        impl From<i256> for $t {
+            #[inline]
+            fn from(x: i256) -> $t {
+                x.0.$f()
+            }
+        }
+    )*};
+}
+
+impl_into_float! {
+    f32 => as_f32, f64 => as_f64,
+}
+
+impl core::hash::Hash for i256 {
+    #[inline]
+    fn hash<H>(&self, hasher: &mut H)
+    where H: core::hash::Hasher {
+        core::hash::Hash::hash(&self.0, hasher);
+    }
+}
+
+impl PartialEq for i256 {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        let (ahi, alo) = self.0.into_words();
+        let (bhi, blo) = other.0.into_words();
+        (ahi == bhi) & (alo == blo)
+        // bitwise and rather than logical and
+        // to make O0 code more effecient.
+    }
+}
+
+impl PartialEq<i128> for i256 {
+    #[inline]
+    fn eq(&self, other: &i128) -> bool {
+        *self == i256::new(*other)
+    }
+}
+
+impl PartialEq<i256> for i128 {
+    #[inline]
+    fn eq(&self, other: &i256) -> bool {
+        i256::new(*self) == *other
+    }
+}
+
+impl PartialOrd for i256 {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialOrd<i128> for i256 {
+    #[inline]
+    fn partial_cmp(&self, rhs: &i128) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(&i256::new(*rhs)))
+    }
+}
+
+impl PartialOrd<i256> for i128 {
+    #[inline]
+    fn partial_cmp(&self, rhs: &i256) -> Option<core::cmp::Ordering> {
+        Some(i256::new(*self).cmp(rhs))
+    }
+}
+
+impl Ord for i256 {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+    }
+}
