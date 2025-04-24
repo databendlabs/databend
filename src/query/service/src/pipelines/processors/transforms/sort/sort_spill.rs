@@ -947,13 +947,13 @@ mod tests {
 
     async fn run_bound_block_stream<R: Rows>(
         spiller: impl Spill + Clone,
-        sort_desc: Arc<[SortColumnDescription]>,
+        sort_desc: &[SortColumnDescription],
         bound: Scalar,
         block_part: usize,
         want: Column,
     ) -> Result<()> {
         let (schema, block) = test_data();
-        let block = DataBlock::sort(&block, &sort_desc, None)?;
+        let block = DataBlock::sort(&block, sort_desc, None)?;
         let bound = Some(bound);
         let sort_row_offset = schema.fields().len();
 
@@ -963,7 +963,7 @@ mod tests {
         ]
         .into_iter()
         .map(|mut data| {
-            let col = convert_rows(schema.clone(), &sort_desc, data.clone()).unwrap();
+            let col = convert_rows(schema.clone(), sort_desc, data.clone()).unwrap();
             data.add_column(BlockEntry::new(col.data_type(), Value::Column(col)));
             SpillableBlock::new(data, sort_row_offset)
         })
@@ -991,15 +991,15 @@ mod tests {
         };
 
         {
-            let sort_desc = Arc::new([SortColumnDescription {
+            let sort_desc = [SortColumnDescription {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
-            }]);
+            }];
 
             run_bound_block_stream::<SimpleRowsAsc<Int32Type>>(
                 spiller.clone(),
-                sort_desc.clone(),
+                &sort_desc,
                 Scalar::Number(NumberScalar::Int32(5)),
                 4,
                 Int32Type::from_data(vec![3, 5]),
@@ -1008,7 +1008,7 @@ mod tests {
 
             run_bound_block_stream::<SimpleRowsAsc<Int32Type>>(
                 spiller.clone(),
-                sort_desc.clone(),
+                &sort_desc,
                 Scalar::Number(NumberScalar::Int32(8)),
                 4,
                 Int32Type::from_data(vec![3, 5, 7, 7]),
@@ -1017,15 +1017,15 @@ mod tests {
         }
 
         {
-            let sort_desc = Arc::new([SortColumnDescription {
+            let sort_desc = [SortColumnDescription {
                 offset: 1,
                 asc: false,
                 nulls_first: false,
-            }]);
+            }];
 
             run_bound_block_stream::<SimpleRowsDesc<StringType>>(
                 spiller.clone(),
-                sort_desc.clone(),
+                &sort_desc,
                 Scalar::String("f".to_string()),
                 4,
                 StringType::from_data(vec!["w", "h", "g", "f"]),
