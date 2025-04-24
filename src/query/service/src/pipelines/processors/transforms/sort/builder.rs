@@ -36,6 +36,7 @@ use super::execute::TransformSortExecute;
 use super::merge_sort::TransformSort;
 use super::shuffle::SortSampleState;
 use super::shuffle::TransformSortShuffle;
+use super::Base;
 use crate::spillers::Spiller;
 
 enum SortType {
@@ -199,6 +200,17 @@ impl TransformSortBuilder {
             !self.schema.has_field(ORDER_COL_NAME)
         });
     }
+
+    fn new_base(&self) -> Base {
+        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
+        let sort_row_offset = schema.fields().len() - 1;
+        Base {
+            sort_row_offset,
+            schema,
+            spiller: self.spiller.clone(),
+            limit: self.limit,
+        }
+    }
 }
 
 pub struct Build<'a> {
@@ -212,7 +224,7 @@ pub struct Build<'a> {
 }
 
 impl Build<'_> {
-    fn build_sort<A, C>(&mut self) -> Result<Box<dyn Processor>>
+    fn build_sort<A, C>(&mut self, limit_sort: bool) -> Result<Box<dyn Processor>>
     where
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
@@ -224,7 +236,7 @@ impl Build<'_> {
             schema,
             self.params.sort_desc.clone(),
             self.params.block_size,
-            self.params.limit.map(|limit| (limit, false)),
+            self.params.limit.map(|limit| (limit, limit_sort)),
             self.params.spiller.clone(),
             self.params.output_order_col,
             self.params.order_col_generated,
@@ -232,60 +244,18 @@ impl Build<'_> {
         )?))
     }
 
-    fn build_sort_limit<A, C>(&mut self) -> Result<Box<dyn Processor>>
+    fn build_sort_collect<A, C>(&mut self, limit_sort: bool) -> Result<Box<dyn Processor>>
     where
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
-        let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
-        Ok(Box::new(TransformSort::<A, C>::new(
-            self.input.clone(),
-            self.output.clone(),
-            schema,
-            self.params.sort_desc.clone(),
-            self.params.block_size,
-            Some((self.params.limit.unwrap(), true)),
-            self.params.spiller.clone(),
-            self.params.output_order_col,
-            self.params.order_col_generated,
-            self.params.memory_settings.clone(),
-        )?))
-    }
-
-    fn build_sort_collect<A, C>(&mut self) -> Result<Box<dyn Processor>>
-    where
-        A: SortAlgorithm + 'static,
-        C: RowConverter<A::Rows> + Send + 'static,
-    {
-        let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
-
         Ok(Box::new(TransformSortCollect::<A, C>::new(
             self.input.clone(),
             self.output.clone(),
-            schema,
+            self.params.new_base(),
             self.params.sort_desc.clone(),
             self.params.block_size,
-            self.params.limit.map(|limit| (limit, false)),
-            self.params.spiller.clone(),
-            self.params.order_col_generated,
-            self.params.memory_settings.clone(),
-        )?))
-    }
-
-    fn build_sort_limit_collect<A, C>(&mut self) -> Result<Box<dyn Processor>>
-    where
-        A: SortAlgorithm + 'static,
-        C: RowConverter<A::Rows> + Send + 'static,
-    {
-        let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
-        Ok(Box::new(TransformSortCollect::<A, C>::new(
-            self.input.clone(),
-            self.output.clone(),
-            schema,
-            self.params.sort_desc.clone(),
-            self.params.block_size,
-            Some((self.params.limit.unwrap(), true)),
-            self.params.spiller.clone(),
+            limit_sort,
             self.params.order_col_generated,
             self.params.memory_settings.clone(),
         )?))
@@ -293,14 +263,10 @@ impl Build<'_> {
 
     fn build_sort_exec<A>(&mut self) -> Result<Box<dyn Processor>>
     where A: SortAlgorithm + 'static {
-        let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
-
         Ok(Box::new(TransformSortExecute::<A>::new(
             self.input.clone(),
             self.output.clone(),
-            schema,
-            self.params.limit,
-            self.params.spiller.clone(),
+            self.params.new_base(),
             self.params.output_order_col,
         )?))
     }
@@ -331,24 +297,15 @@ impl RowsTypeVisitor for Build<'_> {
         R: Rows + 'static,
         C: RowConverter<R> + Send + 'static,
     {
+        let limit_sort = self.params.should_use_sort_limit();
         let processor = match self.typ {
-            SortType::Sort => match (
-                self.params.should_use_sort_limit(),
-                self.params.enable_loser_tree,
-            ) {
-                (true, true) => self.build_sort_limit::<LoserTreeSort<R>, C>(),
-                (true, false) => self.build_sort_limit::<HeapSort<R>, C>(),
-                (false, true) => self.build_sort::<LoserTreeSort<R>, C>(),
-                (false, false) => self.build_sort::<HeapSort<R>, C>(),
+            SortType::Sort => match self.params.enable_loser_tree {
+                true => self.build_sort::<LoserTreeSort<R>, C>(limit_sort),
+                false => self.build_sort::<HeapSort<R>, C>(limit_sort),
             },
-            SortType::Collect => match (
-                self.params.should_use_sort_limit(),
-                self.params.enable_loser_tree,
-            ) {
-                (true, true) => self.build_sort_limit_collect::<LoserTreeSort<R>, C>(),
-                (true, false) => self.build_sort_limit_collect::<HeapSort<R>, C>(),
-                (false, true) => self.build_sort_collect::<LoserTreeSort<R>, C>(),
-                (false, false) => self.build_sort_collect::<HeapSort<R>, C>(),
+            SortType::Collect => match self.params.enable_loser_tree {
+                true => self.build_sort_collect::<LoserTreeSort<R>, C>(limit_sort),
+                false => self.build_sort_collect::<HeapSort<R>, C>(limit_sort),
             },
             SortType::Execute => match self.params.enable_loser_tree {
                 true => self.build_sort_exec::<LoserTreeSort<R>>(),
