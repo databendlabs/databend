@@ -122,7 +122,10 @@ impl AsyncSink for RuntimeFilterSinkProcessor {
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to RuntimeFilterMeta"))?;
         let runtime_filter = RuntimeFilterMeta::downcast_from(ptr)
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to RuntimeFilterMeta"))?;
-        println!("runtime_filter: {:?}", runtime_filter);
+        log::info!(
+            "RuntimeFilterSinkProcessor recv runtime filter: {:?}",
+            runtime_filter
+        );
         Ok(false)
     }
 }

@@ -72,13 +72,9 @@ impl AsyncSink for ExchangeWriterSink {
             None => Err(ErrorCode::Internal(
                 "ExchangeWriterSink only recv ExchangeSerializeMeta, but got none.",
             )),
-            Some(block_meta) => ExchangeSerializeMeta::downcast_from(block_meta.clone())
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "ExchangeWriterSink only recv ExchangeSerializeMeta, but got {:?}",
-                        block_meta
-                    ))
-                }),
+            Some(block_meta) => ExchangeSerializeMeta::downcast_from(block_meta).ok_or_else(|| {
+                ErrorCode::Internal("ExchangeWriterSink only recv ExchangeSerializeMeta")
+            }),
         }?;
 
         let mut bytes = 0;
