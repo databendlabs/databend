@@ -55,8 +55,7 @@ impl TopKSorter {
         });
     }
 
-    fn push_column_internal<T: ValueType>(&mut self, col: &Column, bitmap: &mut MutableBitmap)
-    where for<'a> T::ScalarRef<'a>: Ord {
+    fn push_column_internal<T: ValueType>(&mut self, col: &Column, bitmap: &mut MutableBitmap) {
         let col = T::try_downcast_column(col).unwrap();
         for (i, value) in T::iter_column(&col).enumerate() {
             if !bitmap.get(i) {
@@ -105,10 +104,7 @@ impl TopKSorter {
         col: &Column,
         selection: &mut [u32],
         count: usize,
-    ) -> usize
-    where
-        for<'a> T::ScalarRef<'a>: Ord,
-    {
+    ) -> usize {
         let col = T::try_downcast_column(col).unwrap();
         let mut result_count = 0;
         for i in 0..count {
@@ -130,8 +126,7 @@ impl TopKSorter {
     }
 
     #[inline]
-    fn push_value<T: ValueType>(&mut self, value: T::ScalarRef<'_>) -> bool
-    where for<'a> T::ScalarRef<'a>: Ord {
+    fn push_value<T: ValueType>(&mut self, value: T::ScalarRef<'_>) -> bool {
         let order = self.ordering();
         unsafe {
             assume(self.data.len() == self.limit);
@@ -139,10 +134,7 @@ impl TopKSorter {
         let data = self.data[0].as_ref();
         let data = T::try_downcast_scalar(&data).unwrap();
 
-        let value = T::upcast_gat(value);
-
-        if Ord::cmp(&data, &value) != order {
-            drop(data);
+        if T::compare(data, value.clone()) != order {
             self.data[0] = T::upcast_scalar(T::to_owned_scalar(value));
             self.adjust();
             true
@@ -182,14 +174,15 @@ impl TopKSorter {
         })
     }
 
-    fn never_match_any_internal<T: ValueType>(&self, col: &Column) -> bool
-    where for<'a> T::ScalarRef<'a>: Ord {
+    fn never_match_any_internal<T: ValueType>(&self, col: &Column) -> bool {
         let col = T::try_downcast_column(col).unwrap();
         let data = self.data[0].as_ref();
 
         for val in T::iter_column(&col) {
             let data = T::try_downcast_scalar(&data).unwrap();
-            if (self.asc && data >= val) || (!self.asc && data <= val) {
+            if (self.asc && T::greater_than_equal(data.clone(), val.clone()))
+                || (!self.asc && T::less_than_equal(data, val))
+            {
                 return false;
             }
         }

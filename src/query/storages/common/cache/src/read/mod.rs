@@ -17,7 +17,7 @@ mod cached_ttl_reader;
 mod loader;
 mod readers;
 
-pub use cached_reader::CachedReader;
+pub use cached_reader::CacheReader;
 pub use loader::CacheKey;
 pub use loader::LoadParams;
 pub use loader::Loader;

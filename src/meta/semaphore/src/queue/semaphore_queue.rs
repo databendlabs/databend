@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt;
 
 use crate::queue::semaphore_event::PermitEvent;
 use crate::PermitEntry;
@@ -30,6 +31,27 @@ pub struct SemaphoreQueue {
     capacity: u64,
     acquired: BTreeMap<PermitSeq, PermitEntry>,
     waiting: BTreeMap<PermitSeq, PermitEntry>,
+}
+
+impl fmt::Display for SemaphoreQueue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SemaphoreQueue{{ {}/{}", self.size, self.capacity,)?;
+
+        write!(f, ", acquired: [")?;
+        for (seq, entry) in &self.acquired {
+            write!(f, "{}:{} ", seq, entry)?;
+        }
+        write!(f, "]")?;
+
+        write!(f, ", waiting: [")?;
+        for (seq, entry) in &self.waiting {
+            write!(f, "{}:{} ", seq, entry)?;
+        }
+        write!(f, "]")?;
+
+        write!(f, "}}")?;
+        Ok(())
+    }
 }
 
 impl SemaphoreQueue {
@@ -151,6 +173,21 @@ mod tests {
     use crate::queue::semaphore_queue::removed;
     use crate::queue::*;
     use crate::PermitEntry;
+
+    #[test]
+    fn test_display() {
+        let queue = SemaphoreQueue {
+            size: 10,
+            capacity: 20,
+            acquired: BTreeMap::from([(1, ent("t1", 3)), (2, ent("t2", 4))]),
+            waiting: BTreeMap::from([(3, ent("t3", 5)), (4, ent("t4", 6))]),
+        };
+
+        assert_eq!(
+            format!("{}", queue),
+            "SemaphoreQueue{ 10/20, acquired: [1:PermitEntry(id:t1, n:3) 2:PermitEntry(id:t2, n:4) ], waiting: [3:PermitEntry(id:t3, n:5) 4:PermitEntry(id:t4, n:6) ]}"
+        );
+    }
 
     #[test]
     fn test_insert() {

@@ -18,6 +18,7 @@ databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
 bincode = { workspace = true, features = ["serde"] }
+bytes = { workspace = true }
 cbordata = { workspace = true }
 fastrace = { workspace = true }
 goldenfile = { workspace = true }
@@ -35,7 +36,7 @@ thiserror = { workspace = true }
 xorfilter-rs = { workspace = true, features = ["cbordata"] }
 
 [dev-dependencies]
-criterion = { workspace = true }
+divan = { workspace = true }
 
 rand = { workspace = true }
 

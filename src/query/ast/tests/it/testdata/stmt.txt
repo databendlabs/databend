@@ -1906,6 +1906,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -1958,6 +1960,99 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+create table a (c1 decimal(38), c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"='33554432');
+---------- Output ---------
+CREATE TABLE a (c1 Decimal(38, 0), c2 Int32) PARTITION BY(c1, c2) PROPERTIES("read.split.metadata-target-size" = '33554432' "read.split.target-size" = '134217728')
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "a",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..18,
+                            ),
+                            name: "c1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Decimal {
+                            precision: 38,
+                            scale: 0,
+                        },
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                32..34,
+                            ),
+                            name: "c2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+                None,
+                None,
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        iceberg_table_partition: Some(
+            [
+                Identifier {
+                    span: Some(
+                        54..56,
+                    ),
+                    name: "c1",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        58..60,
+                    ),
+                    name: "c2",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        ),
+        table_properties: Some(
+            {
+                "\"read.split.metadata-target-size\"": "33554432",
+                "\"read.split.target-size\"": "134217728",
+            },
+        ),
         as_query: None,
         table_type: Normal,
     },
@@ -2010,6 +2105,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2059,6 +2156,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2143,6 +2242,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2227,6 +2328,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: Some(
             Query {
                 span: Some(
@@ -2390,6 +2493,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2468,6 +2573,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2623,6 +2730,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2754,6 +2863,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2860,6 +2971,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2966,6 +3079,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -3026,6 +3141,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -3070,6 +3187,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -3142,6 +3261,8 @@ CreateTable(
         ),
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -3543,6 +3664,8 @@ CreateTable(
             "compression": "zstd",
             "storage_format": "native",
         },
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -3683,6 +3806,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -5093,6 +5218,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -5174,6 +5301,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -5236,6 +5365,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -5296,6 +5427,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -5325,6 +5458,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: Some(
             Query {
                 span: Some(
@@ -13714,6 +13849,8 @@ CreateTable(
         table_options: {
             "comment": "Comment types type speedily ' \\\\ '' Fun!",
         },
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -13765,6 +13902,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Temporary,
     },
