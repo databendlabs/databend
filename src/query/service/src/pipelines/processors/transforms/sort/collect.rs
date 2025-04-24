@@ -20,7 +20,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
@@ -38,7 +37,6 @@ use databend_common_pipeline_transforms::TransformSortMergeLimit;
 use super::sort_spill::SortSpill;
 use super::Base;
 use super::MemoryRows;
-use crate::spillers::Spiller;
 
 enum Inner<A: SortAlgorithm> {
     Collect(Vec<DataBlock>),
@@ -77,28 +75,20 @@ where
     pub(super) fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        schema: DataSchemaRef,
+        base: Base,
         sort_desc: Arc<[SortColumnDescription]>,
         max_block_size: usize,
-        limit: Option<(usize, bool)>,
-        spiller: Arc<Spiller>,
+        sort_limit: bool,
         order_col_generated: bool,
         memory_settings: MemorySettings,
     ) -> Result<Self> {
-        let sort_row_offset = schema.fields().len() - 1;
-        let row_converter = C::create(&sort_desc, schema.clone())?;
-        let (name, inner, limit) = match limit {
-            Some((limit, true)) => (
+        let row_converter = C::create(&sort_desc, base.schema.clone())?;
+        let (name, inner) = match base.limit {
+            Some(limit) if sort_limit => (
                 "TransformSortMergeCollectLimit",
                 Inner::Limit(TransformSortMergeLimit::create(max_block_size, limit)),
-                Some(limit),
             ),
-            Some((limit, false)) => (
-                "TransformSortMergeCollect",
-                Inner::Collect(vec![]),
-                Some(limit),
-            ),
-            None => ("TransformSortMergeCollect", Inner::Collect(vec![]), None),
+            _ => ("TransformSortMergeCollect", Inner::Collect(vec![])),
         };
         Ok(Self {
             input,
@@ -108,12 +98,7 @@ where
             output_data: None,
             sort_desc,
             order_col_generated,
-            base: Base {
-                schema,
-                spiller,
-                sort_row_offset,
-                limit,
-            },
+            base,
             inner,
             aborting: AtomicBool::new(false),
             memory_settings,
