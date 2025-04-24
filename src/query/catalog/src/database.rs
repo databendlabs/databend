@@ -115,12 +115,16 @@ pub trait Database: DynClone + Sync + Send {
 
     #[async_backtrace::framed]
     async fn refresh_table(&self, _table_name: &str) -> Result<()> {
-        Ok(())
+        return Err(ErrorCode::TableEngineNotSupported(
+            "Only Iceberg catalog support refresh table cache",
+        ));
     }
 
     #[async_backtrace::framed]
     async fn refresh_database(&self) -> Result<()> {
-        Ok(())
+        Err(ErrorCode::TableEngineNotSupported(
+            "Only Iceberg catalog support refresh database cache",
+        ))
     }
 
     #[async_backtrace::framed]

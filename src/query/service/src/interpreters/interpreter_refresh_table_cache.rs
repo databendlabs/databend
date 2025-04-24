@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::RefreshTableCachePlan;
 
@@ -48,12 +47,6 @@ impl Interpreter for RefreshTableCacheInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
-
-        if !catalog.support_partition() {
-            return Err(ErrorCode::TableEngineNotSupported(
-                "Only Iceberg catalog support execute ALTER TABLE <table_name> REFRESH CACHE",
-            ));
-        }
 
         let _ = catalog
             .get_database(&plan.tenant, &plan.database)
