@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::row::RowConverter as CommonConverter;
 use databend_common_expression::types::DataType;
@@ -45,10 +44,10 @@ pub fn convert_rows(
         schema: DataSchemaRef,
         sort_desc: &'a [SortColumnDescription],
         data: DataBlock,
-        result: Result<Column>,
     }
 
     impl RowsTypeVisitor for ConvertRowsVisitor<'_> {
+        type Result = Result<Column>;
         fn schema(&self) -> DataSchemaRef {
             self.schema.clone()
         }
@@ -57,7 +56,7 @@ pub fn convert_rows(
             self.sort_desc
         }
 
-        fn visit_type<R, C>(&mut self)
+        fn visit_type<R, C>(&mut self) -> Self::Result
         where
             R: Rows + 'static,
             C: RowConverter<R> + Send + 'static,
@@ -68,11 +67,9 @@ pub fn convert_rows(
                 .map(|desc| self.data.get_by_offset(desc.offset).to_owned())
                 .collect::<Vec<_>>();
 
-            self.result = try {
-                let converter = C::create(self.sort_desc, self.schema.clone())?;
-                let rows = C::convert(&converter, &columns, self.data.num_rows())?;
-                rows.to_column()
-            }
+            let converter = C::create(self.sort_desc, self.schema.clone())?;
+            let rows = C::convert(&converter, &columns, self.data.num_rows())?;
+            Ok(rows.to_column())
         }
     }
 
@@ -80,53 +77,53 @@ pub fn convert_rows(
         schema: schema.clone(),
         sort_desc,
         data,
-        result: Err(ErrorCode::Internal("unreachable")),
     };
 
-    select_row_type(&mut visitor);
-    visitor.result
+    select_row_type(&mut visitor)
 }
 
-pub fn select_row_type(visitor: &mut impl RowsTypeVisitor) {
-    let sort_desc = visitor.sort_desc();
-    if sort_desc.len() == 1 {
-        let schema = visitor.schema();
-        let sort_type = schema.field(sort_desc[0].offset).data_type();
-        let asc = sort_desc[0].asc;
+pub fn select_row_type<V>(visitor: &mut V) -> V::Result
+where V: RowsTypeVisitor {
+    match &visitor.sort_desc() {
+        &[desc] => {
+            let schema = visitor.schema();
+            let sort_type = schema.field(desc.offset).data_type();
+            let asc = desc.asc;
 
-        match_template! {
-        T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
-        match sort_type {
-            DataType::T => {
-                if asc {
-                    visitor.visit_type::<SimpleRowsAsc<T>, SimpleRowConverter<T>>()
-                } else {
-                    visitor.visit_type::<SimpleRowsDesc<T>, SimpleRowConverter<T>>()
-                }
-            },
-            DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                NumberDataType::NUM_TYPE => {
+            match_template! {
+            T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
+            match sort_type {
+                DataType::T => {
                     if asc {
-                        visitor.visit_type::<SimpleRowsAsc<NumberType<NUM_TYPE>>, SimpleRowConverter<NumberType<NUM_TYPE>>>()
+                        visitor.visit_type::<SimpleRowsAsc<T>, SimpleRowConverter<T>>()
                     } else {
-                        visitor.visit_type::<SimpleRowsDesc<NumberType<NUM_TYPE>>, SimpleRowConverter<NumberType<NUM_TYPE>>>()
+                        visitor.visit_type::<SimpleRowsDesc<T>, SimpleRowConverter<T>>()
                     }
+                },
+                DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                    NumberDataType::NUM_TYPE => {
+                        if asc {
+                            visitor.visit_type::<SimpleRowsAsc<NumberType<NUM_TYPE>>, SimpleRowConverter<NumberType<NUM_TYPE>>>()
+                        } else {
+                            visitor.visit_type::<SimpleRowsDesc<NumberType<NUM_TYPE>>, SimpleRowConverter<NumberType<NUM_TYPE>>>()
+                        }
+                    }
+                }),
+                _ => visitor.visit_type::<CommonRows, CommonConverter>()
                 }
-            }),
-            _ => visitor.visit_type::<CommonRows, CommonConverter>()
             }
         }
-    } else {
-        visitor.visit_type::<CommonRows, CommonConverter>()
+        _ => visitor.visit_type::<CommonRows, CommonConverter>(),
     }
 }
 
 pub trait RowsTypeVisitor {
+    type Result;
     fn schema(&self) -> DataSchemaRef;
 
     fn sort_desc(&self) -> &[SortColumnDescription];
 
-    fn visit_type<R, C>(&mut self)
+    fn visit_type<R, C>(&mut self) -> Self::Result
     where
         R: Rows + 'static,
         C: RowConverter<R> + Send + 'static;
@@ -136,10 +133,10 @@ pub fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> 
     struct OrderFieldTypeVisitor<'a> {
         schema: DataSchemaRef,
         sort_desc: &'a [SortColumnDescription],
-        result: Option<DataType>,
     }
 
     impl RowsTypeVisitor for OrderFieldTypeVisitor<'_> {
+        type Result = DataType;
         fn schema(&self) -> DataSchemaRef {
             self.schema.clone()
         }
@@ -148,12 +145,12 @@ pub fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> 
             self.sort_desc
         }
 
-        fn visit_type<R, C>(&mut self)
+        fn visit_type<R, C>(&mut self) -> Self::Result
         where
             R: Rows + 'static,
             C: RowConverter<R> + Send + 'static,
         {
-            self.result = Some(R::data_type());
+            R::data_type()
         }
     }
 
@@ -161,9 +158,7 @@ pub fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> 
     let mut visitor = OrderFieldTypeVisitor {
         schema: schema.clone().into(),
         sort_desc: desc,
-        result: None,
     };
 
-    select_row_type(&mut visitor);
-    visitor.result.unwrap()
+    select_row_type(&mut visitor)
 }

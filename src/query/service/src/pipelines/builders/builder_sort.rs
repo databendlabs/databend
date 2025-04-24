@@ -34,10 +34,9 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::sort::add_range_shuffle;
-use crate::pipelines::processors::transforms::sort::add_range_shuffle_merge;
-use crate::pipelines::processors::transforms::sort::add_sort_sample;
-use crate::pipelines::processors::transforms::sort::SortSampleState;
+use crate::pipelines::processors::transforms::add_range_shuffle_exchange;
+use crate::pipelines::processors::transforms::add_range_shuffle_route;
+use crate::pipelines::processors::transforms::SortSampleState;
 use crate::pipelines::processors::transforms::TransformLimit;
 use crate::pipelines::processors::transforms::TransformSortBuilder;
 use crate::pipelines::PipelineBuilder;
@@ -144,7 +143,7 @@ impl PipelineBuilder {
                 if k > 0 && self.main_pipeline.output_len() > 1 {
                     builder
                         .remove_order_col_at_last()
-                        .build_range_shuffle_sort_pipeline(&mut self.main_pipeline, k)
+                        .build_range_shuffle_sort_pipeline(&mut self.main_pipeline)
                 } else {
                     builder
                         .remove_order_col_at_last()
@@ -213,18 +212,11 @@ impl SortPipelineBuilder {
         self.build_merge_sort_pipeline(pipeline, false)
     }
 
-    fn build_range_shuffle_sort_pipeline(self, pipeline: &mut Pipeline, k: usize) -> Result<()> {
+    fn build_range_shuffle_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
         let inputs = pipeline.output_len();
         let settings = self.ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
-        let sample = SortSampleState::new(
-            inputs,
-            max_threads,
-            self.schema.clone(),
-            self.sort_desc.clone(),
-        );
-
-        add_sort_sample(pipeline, sample.clone(), self.sort_desc.clone(), k)?;
+        let max_block_size = settings.get_max_block_size()? as usize;
 
         // Partial sort
         pipeline.add_transformer(|| {
@@ -234,20 +226,48 @@ impl SortPipelineBuilder {
             )
         });
 
-        self.build_merge_sort(pipeline, false)?;
+        let spiller = {
+            let location_prefix = self.ctx.query_id_spill_prefix();
+            let config = SpillerConfig {
+                spiller_type: SpillerType::OrderBy,
+                location_prefix,
+                disk_spill: None,
+                use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+            };
+            let op = DataOperator::instance().spill_operator();
+            Arc::new(Spiller::create(self.ctx.clone(), op, config)?)
+        };
 
-        add_range_shuffle(
-            pipeline,
-            sample.clone(),
-            self.sort_desc.clone(),
+        let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
+        let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
+
+        let builder = TransformSortBuilder::create(
             self.schema.clone(),
-            self.block_size,
-            self.limit,
-            self.remove_order_col_at_last,
-            self.enable_loser_tree,
-        )?;
+            self.sort_desc.clone(),
+            max_block_size,
+            spiller,
+        )
+        .with_limit(self.limit)
+        .with_order_col_generated(false)
+        .with_output_order_col(false)
+        .with_memory_settings(memory_settings)
+        .with_enable_loser_tree(enable_loser_tree);
 
-        add_range_shuffle_merge(pipeline)?;
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(builder.build_collect(input, output)?))
+        })?;
+
+        let state = SortSampleState::new(inputs, max_threads, self.schema.clone(), max_block_size);
+
+        builder.add_shuffle(pipeline, state.clone())?;
+
+        add_range_shuffle_exchange(pipeline, max_threads)?;
+
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(builder.build_exec(input, output)?))
+        })?;
+
+        add_range_shuffle_route(pipeline)?;
 
         if self.limit.is_none() {
             return Ok(());
