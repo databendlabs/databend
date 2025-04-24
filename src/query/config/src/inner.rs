@@ -169,6 +169,7 @@ pub struct QueryConfig {
     pub mysql_tls_server_key: String,
     pub max_active_sessions: u64,
     pub max_running_queries: u64,
+    pub global_statement_queue: bool,
     pub max_server_memory_usage: u64,
     pub max_memory_limit_enabled: bool,
     pub clickhouse_http_handler_host: String,
@@ -271,6 +272,7 @@ impl Default for QueryConfig {
             mysql_tls_server_key: "".to_string(),
             max_active_sessions: 256,
             max_running_queries: 8,
+            global_statement_queue: false,
             max_server_memory_usage: 0,
             max_memory_limit_enabled: false,
             clickhouse_http_handler_host: "127.0.0.1".to_string(),
@@ -615,6 +617,9 @@ pub struct CacheConfig {
     ///   increase this value.
     pub table_data_cache_population_queue_size: u32,
 
+    /// Bytes of data cache in-memory
+    pub data_cache_in_memory_bytes: u64,
+
     /// Storage that hold the raw data caches
     pub disk_cache_config: DiskCacheConfig,
 
@@ -732,6 +737,7 @@ impl Default for CacheConfig {
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,
+            data_cache_in_memory_bytes: 0,
             disk_cache_config: Default::default(),
             data_cache_key_reload_policy: Default::default(),
             table_data_deserialized_data_bytes: 0,

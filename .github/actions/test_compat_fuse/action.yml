@@ -5,25 +5,22 @@ runs:
   steps:
     - uses: ./.github/actions/setup_test
       with:
-        path: ./bins/current
+        path: ./bins/current/bin
         artifacts: sqllogictests,meta,query
 
     - name: Test compatibility
       shell: bash
-      # test-*.sh <old-query-ver> <meta-ver> <test-suite>
-      # The `meta-ver` must be compatible with `<old-query-ver>` and the latest version.
-      #
-      # `meta-ver` is not the target to test, just choose one that is compatible with `<old-query-ver>` and the latest query.
       run: |
-          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.46  1.2.527 base
-          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.241 1.2.527 revoke
-          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.306 1.2.527 rbac
-          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.307 1.2.527 rbac
-          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.318 1.2.527 rbac
-          bash ./tests/compat_fuse/test_compat_fuse_forward.sh 1.2.307 1.2.527 rbac
-          bash ./tests/compat_fuse/test_compat_fuse_forward.sh 1.2.318 1.2.527 rbac
-          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.680 1.2.680 udf
-          bash ./tests/compat_fuse/test_compat_fuse_forward.sh 1.2.680 1.2.680 udf
+          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.46   --reader-version  current  --meta-versions  1.2.527  1.2.677  --logictest-path  base
+          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.241  --reader-version  current  --meta-versions  1.2.527  1.2.677  --logictest-path  revoke
+          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.306  --reader-version  current  --meta-versions  1.2.527  1.2.677  --logictest-path  rbac
+          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.307  --reader-version  current  --meta-versions  1.2.527  1.2.677  --logictest-path  rbac
+          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.318  --reader-version  current  --meta-versions  1.2.527  1.2.677  --logictest-path  rbac
+          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.680  --reader-version  current  --meta-versions  1.2.527  1.2.680  --logictest-path  udf
+
+          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  current  --reader-version  1.2.307  --meta-versions  1.2.677           --logictest-path  rbac
+          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  current  --reader-version  1.2.318  --meta-versions  1.2.677           --logictest-path  rbac
+          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  current  --reader-version  1.2.680  --meta-versions  1.2.680           --logictest-path  udf
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure

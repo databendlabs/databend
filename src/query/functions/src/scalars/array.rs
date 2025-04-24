@@ -657,7 +657,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                         array_column
                             .iter()
                             .zip(T::iter_column(&col))
-                            .map(|(array, c)| T::iter_column(&array).contains(&T::upcast_gat(c))),
+                            .map(|(array, c)| {
+                                T::iter_column(&array).any(|v| T::equal(v, c.clone()))
+                            }),
                         &[],
                     ),
                 };

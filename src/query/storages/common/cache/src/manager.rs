@@ -31,6 +31,7 @@ use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
+use crate::caches::ColumnDataCache;
 use crate::caches::ColumnOrientedSegmentInfoCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::IcebergTableCache;
@@ -42,6 +43,7 @@ use crate::caches::SegmentBlockMetasCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::providers::HybridCache;
+use crate::providers::HybridCacheExt;
 use crate::DiskCacheAccessor;
 use crate::DiskCacheBuilder;
 use crate::InMemoryLruCache;
@@ -49,6 +51,7 @@ use crate::Unit;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
 
+#[derive(Default)]
 struct CacheSlot<T> {
     cache: RwLock<Option<T>>,
 }
@@ -84,11 +87,11 @@ pub struct CacheManager {
     inverted_index_file_cache: CacheSlot<InvertedIndexFileCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
     parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
-    table_data_cache: CacheSlot<DiskCacheAccessor>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
     segment_block_metas_cache: CacheSlot<SegmentBlockMetasCache>,
     block_meta_cache: CacheSlot<BlockMetaCache>,
 
+    column_data_cache: CacheSlot<ColumnDataCache>,
     // icebergs
     iceberg_table_meta_cache: CacheSlot<IcebergTableCache>,
 
@@ -129,7 +132,6 @@ impl CacheManager {
     ) -> Result<Self> {
         let tenant_id = tenant_id.into();
         let on_disk_cache_sync_data = config.disk_cache_config.sync_data;
-        let on_disk_cache_need_sync_data = config.disk_cache_config.sync_data;
         let allows_on_disk_cache = AtomicBool::new(ee_mode);
 
         let on_disk_cache_queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
@@ -144,7 +146,7 @@ impl CacheManager {
         };
 
         // setup table data cache
-        let table_data_cache = {
+        let column_data_cache = {
             match config.data_cache_storage {
                 CacheStorageTypeInnerConfig::None => CacheSlot::new(None),
                 CacheStorageTypeInnerConfig::Disk => {
@@ -158,16 +160,17 @@ impl CacheManager {
                         on_disk_cache_queue_size
                     );
 
-                    let cache = Self::new_on_disk_cache(
-                        DISK_TABLE_DATA_CACHE_NAME.to_owned(),
+                    Self::new_hybrid_cache_slot(
+                        HYBRID_CACHE_COLUMN_DATA,
+                        config.data_cache_in_memory_bytes as usize,
+                        Unit::Bytes,
                         &table_data_on_disk_cache_path,
                         on_disk_cache_queue_size,
                         config.disk_cache_config.max_bytes as usize,
                         config.data_cache_key_reload_policy.clone(),
-                        on_disk_cache_need_sync_data,
+                        on_disk_cache_sync_data,
                         ee_mode,
-                    )?;
-                    CacheSlot::new(cache)
+                    )?
                 }
             }
         };
@@ -199,10 +202,10 @@ impl CacheManager {
                 prune_partitions_cache: CacheSlot::new(None),
                 parquet_meta_data_cache: CacheSlot::new(None),
                 table_statistic_cache: CacheSlot::new(None),
-                table_data_cache,
                 in_memory_table_data_cache,
                 segment_block_metas_cache: CacheSlot::new(None),
                 block_meta_cache: CacheSlot::new(None),
+                column_data_cache,
                 iceberg_table_meta_cache: CacheSlot::new(None),
                 allows_on_disk_cache,
             }
@@ -243,7 +246,7 @@ impl CacheManager {
             let bloom_index_meta_cache = {
                 let bloom_filter_meta_on_disk_cache_path =
                     PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id)
+                        .join(tenant_id.clone())
                         .join("bloom_meta_v1");
                 Self::new_hybrid_cache_slot(
                     HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA,
@@ -312,13 +315,13 @@ impl CacheManager {
                 inverted_index_file_cache,
                 prune_partitions_cache,
                 table_statistic_cache,
-                table_data_cache,
                 in_memory_table_data_cache,
                 segment_block_metas_cache,
                 parquet_meta_data_cache,
                 block_meta_cache,
                 iceberg_table_meta_cache,
                 allows_on_disk_cache,
+                column_data_cache,
             }
         };
 
@@ -386,12 +389,10 @@ impl CacheManager {
                 Self::set_items_capacity(&self.block_meta_cache, new_capacity, name);
             }
 
-            DISK_TABLE_DATA_CACHE_NAME => {
-                return Err(ErrorCode::BadArguments(format!(
-                    "set capacity of cache {} is not allowed",
-                    name
-                )));
+            HYBRID_CACHE_COLUMN_DATA | IN_MEMORY_HYBRID_CACHE_COLUMN_DATA => {
+                Self::set_hybrid_cache_bytes_capacity(&self.column_data_cache, new_capacity, name);
             }
+
             _ => {
                 return Err(ErrorCode::BadArguments(format!(
                     "cache {} not found, or not allowed to be adjusted",
@@ -429,13 +430,13 @@ impl CacheManager {
     }
 
     fn set_hybrid_cache_items_capacity<T: Into<CacheValue<T>>>(
-        cache: &CacheSlot<HybridCache<T>>,
+        cache_slot: &CacheSlot<HybridCache<T>>,
         new_capacity: u64,
         name: impl Into<String>,
     ) {
-        if let Some(v) = cache.get() {
-            v.in_memory_cache()
-                .set_items_capacity(new_capacity as usize);
+        let cache = cache_slot.get();
+        if let Some(mem_cache) = cache.in_memory_cache() {
+            mem_cache.set_items_capacity(new_capacity as usize)
         } else {
             // In this case, only in-memory cache will be built, on-disk cache is NOT allowed
             // to be enabled this way yet.
@@ -444,20 +445,21 @@ impl CacheManager {
             if let Some(new_cache) =
                 Self::new_items_cache(in_memory_cache_name, new_capacity as usize)
             {
-                let hybrid_cache = HybridCache::new(name, new_cache, None);
-                cache.set(Some(hybrid_cache));
+                let hybrid_cache =
+                    HybridCache::new(name, Some(new_cache), cache.on_disk_cache().cloned());
+                cache_slot.set(hybrid_cache);
             }
         }
     }
 
     fn set_hybrid_cache_bytes_capacity<T: Into<CacheValue<T>>>(
-        cache: &CacheSlot<HybridCache<T>>,
+        cache_slot: &CacheSlot<HybridCache<T>>,
         new_capacity: u64,
         name: impl Into<String>,
     ) {
-        if let Some(v) = cache.get() {
-            v.in_memory_cache()
-                .set_bytes_capacity(new_capacity as usize);
+        let cache = cache_slot.get();
+        if let Some(mem_cache) = cache.in_memory_cache() {
+            mem_cache.set_bytes_capacity(new_capacity as usize)
         } else {
             // In this case, only in-memory cache will be built, on-disk cache is NOT allowed
             // to be enabled this way yet.
@@ -466,8 +468,9 @@ impl CacheManager {
             if let Some(new_cache) =
                 Self::new_bytes_cache(in_memory_cache_name, new_capacity as usize)
             {
-                let hybrid_cache = HybridCache::new(name, new_cache, None);
-                cache.set(Some(hybrid_cache));
+                let hybrid_cache =
+                    HybridCache::new(name, Some(new_cache), cache.on_disk_cache().cloned());
+                cache_slot.set(hybrid_cache);
             }
         }
     }
@@ -502,16 +505,12 @@ impl CacheManager {
 
     fn get_hybrid_cache<T>(&self, cache: Option<HybridCache<T>>) -> Option<HybridCache<T>>
     where CacheValue<T>: From<T> {
-        if let Some(cache) = cache {
-            if self.allows_on_disk_cache.load(Ordering::Relaxed) {
-                // Returns the original cache as it is, which may or may not have on-disk cache
-                Some(cache)
-            } else {
-                // Toggle off on-disk cache
-                Some(cache.toggle_off_disk_cache())
-            }
+        if self.allows_on_disk_cache.load(Ordering::Relaxed) {
+            // Returns the original cache as it is, which may or may not have on-disk cache
+            cache
         } else {
-            None
+            // Toggle off on-disk cache
+            cache.toggle_off_disk_cache()
         }
     }
 
@@ -531,13 +530,8 @@ impl CacheManager {
         self.parquet_meta_data_cache.get()
     }
 
-    pub fn get_table_data_cache(&self) -> Option<DiskCacheAccessor> {
-        if self.allows_on_disk_cache.load(Ordering::Relaxed) {
-            // If on-disk cache is allowed, return it as it is (which may be some cache, or none)
-            self.table_data_cache.get()
-        } else {
-            None
-        }
+    pub fn get_column_data_cache(&self) -> Option<ColumnDataCache> {
+        self.get_hybrid_cache(self.column_data_cache.get())
     }
 
     pub fn get_table_data_array_cache(&self) -> Option<ColumnArrayCache> {
@@ -628,15 +622,20 @@ impl CacheManager {
         let in_mem_cache_name = HybridCache::<V>::in_memory_cache_name(&name);
         let disk_cache_name = HybridCache::<V>::on_disk_cache_name(&name);
 
-        // Note that here we allow the capacity of in-memory cache to be zero,
-        // this may be handy for some performance testing scenarios
-        let in_memory_cache = match unit {
-            Unit::Bytes => {
-                InMemoryLruCache::with_bytes_capacity(in_mem_cache_name, in_memory_cache_capacity)
-            }
-            Unit::Count => {
-                InMemoryLruCache::with_items_capacity(in_mem_cache_name, in_memory_cache_capacity)
-            }
+        let in_memory_cache = if in_memory_cache_capacity == 0 {
+            None
+        } else {
+            Some(match unit {
+                Unit::Bytes => InMemoryLruCache::with_bytes_capacity(
+                    in_mem_cache_name,
+                    in_memory_cache_capacity,
+                ),
+
+                Unit::Count => InMemoryLruCache::with_items_capacity(
+                    in_mem_cache_name,
+                    in_memory_cache_capacity,
+                ),
+            })
         };
 
         let on_disk_cache = Self::new_on_disk_cache(
@@ -649,11 +648,11 @@ impl CacheManager {
             ee_mode,
         )?;
 
-        Ok(CacheSlot::new(Some(HybridCache::new(
+        Ok(CacheSlot::new(HybridCache::new(
             name,
             in_memory_cache,
             on_disk_cache,
-        ))))
+        )))
     }
 }
 
@@ -665,6 +664,8 @@ const MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA: &str =
     "memory_cache_inverted_index_file_meta_data";
 
 const HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "cache_bloom_index_file_meta_data";
+const HYBRID_CACHE_COLUMN_DATA: &str = "cache_column_data";
+const IN_MEMORY_HYBRID_CACHE_COLUMN_DATA: &str = "memory_cache_column_data";
 
 const IN_MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "memory_cache_bloom_index_file_meta_data";
 const HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "cache_bloom_index_filter";
@@ -677,8 +678,6 @@ const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas
 const MEMORY_CACHE_ICEBERG_TABLE: &str = "memory_cache_iceberg_table";
 
 const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
-
-const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";
 
 #[cfg(test)]
 mod tests {
@@ -711,29 +710,31 @@ mod tests {
     }
 
     fn all_disk_cache_enabled(cache_manager: &CacheManager) -> bool {
-        cache_manager.get_table_data_cache().is_some()
+        cache_manager
+            .get_column_data_cache()
+            .on_disk_cache()
+            .is_some()
             && cache_manager
                 .get_bloom_index_meta_cache()
-                .unwrap()
                 .on_disk_cache()
                 .is_some()
             && cache_manager
                 .get_bloom_index_meta_cache()
-                .unwrap()
                 .on_disk_cache()
                 .is_some()
     }
 
     fn all_disk_cache_disabled(cache_manager: &CacheManager) -> bool {
-        cache_manager.get_table_data_cache().is_none()
+        cache_manager
+            .get_column_data_cache()
+            .on_disk_cache()
+            .is_none()
             && cache_manager
                 .get_bloom_index_meta_cache()
-                .unwrap()
                 .on_disk_cache()
                 .is_none()
             && cache_manager
                 .get_bloom_index_meta_cache()
-                .unwrap()
                 .on_disk_cache()
                 .is_none()
     }
@@ -770,7 +771,7 @@ mod tests {
         cache_manager.set_allows_disk_cache(false);
         assert!(all_disk_cache_disabled(&cache_manager));
 
-        // All disk caches should be enabled, if toggled on disk caches
+        //  // All disk caches should be enabled, if toggled on disk caches
         cache_manager.set_allows_disk_cache(true);
         assert!(all_disk_cache_enabled(&cache_manager));
 

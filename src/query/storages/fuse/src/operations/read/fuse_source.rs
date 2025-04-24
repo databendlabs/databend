@@ -52,7 +52,6 @@ pub fn build_fuse_native_source_pipeline(
     topk: Option<TopK>,
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
-    virtual_reader: Arc<Option<VirtualColumnReader>>,
     receiver: Option<Receiver<Result<PartInfoPtr>>>,
 ) -> Result<()> {
     (max_threads, max_io_requests) =
@@ -88,7 +87,6 @@ pub fn build_fuse_native_source_pipeline(
                     table_schema.clone(),
                     block_reader.clone(),
                     index_reader.clone(),
-                    virtual_reader.clone(),
                     input,
                     output,
                 )
@@ -125,7 +123,6 @@ pub fn build_fuse_native_source_pipeline(
                     table_schema.clone(),
                     block_reader.clone(),
                     index_reader.clone(),
-                    virtual_reader.clone(),
                     input,
                     output,
                 )
@@ -144,7 +141,6 @@ pub fn build_fuse_native_source_pipeline(
             transform_input,
             transform_output,
             index_reader.clone(),
-            virtual_reader.clone(),
         )
     })?;
 

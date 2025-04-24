@@ -10,6 +10,9 @@ DROP TABLE IF EXISTS t3
 statement ok
 DROP TABLE IF EXISTS t4
 
+statement error 1302
+CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = iceberg
+
 statement ok
 CREATE TABLE t(c1 int) ENGINE = Null
 
@@ -658,3 +661,6 @@ unset ddl_column_type_nullable;
 
 statement ok
 drop table if exists b;
+
+statement error 1301
+create table a (c1 decimal(38), c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"='33554432');

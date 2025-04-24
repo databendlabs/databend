@@ -16,3 +16,7 @@ curl -s --header 'Content-Type: application/json'  "127.0.0.1:8000/v1/query/$qid
 
 curl -s --header 'Content-Type: application/json'  "127.0.0.1:8000/v1/query/$qid/page/2" \
  -u root: | jq '.data | length'
+
+# rows have diff sizes
+# row size >  (max_size / max_rows) = 10M / 10000
+echo "SELECT  repeat(number::string, 2000)  from numbers(100000)" |  $BENDSQL_CLIENT_CONNECT  | wc -l | sed 's/ //g'

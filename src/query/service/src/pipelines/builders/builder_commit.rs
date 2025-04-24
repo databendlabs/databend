@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::ExecutionInfo;
@@ -26,6 +28,7 @@ use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
 use databend_common_storages_fuse::operations::TruncateGenerator;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 
 use crate::pipelines::PipelineBuilder;
@@ -94,11 +97,22 @@ impl PipelineBuilder {
                         // extract re-cluster related mutations from physical plan
                         let recluster_info = plan.recluster_info.clone().unwrap_or_default();
 
+                        let extended_merged_blocks = recluster_info
+                            .merged_blocks
+                            .iter()
+                            .map(|block_meta| {
+                                Arc::new(ExtendedBlockMeta {
+                                    block_meta: Arc::unwrap_or_clone(block_meta.clone()),
+                                    draft_virtual_block_meta: None,
+                                })
+                            })
+                            .collect::<Vec<Arc<ExtendedBlockMeta>>>();
+
                         TableMutationAggregator::create(
                             table,
                             self.ctx.clone(),
                             base_segments,
-                            recluster_info.merged_blocks,
+                            extended_merged_blocks,
                             recluster_info.removed_segment_indexes,
                             recluster_info.removed_statistics,
                             *kind,

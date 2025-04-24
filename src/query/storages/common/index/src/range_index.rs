@@ -92,21 +92,16 @@ impl RangeIndex {
             .into_iter()
             .map(|(name, ty)| {
                 // internal column and stream column are not actual stored columns
-                // variant type may be virtual columns that are not included in leaf columns
-                if is_internal_column(&name)
-                    || is_stream_column(&name)
-                    || ty.remove_nullable() == DataType::Variant
-                {
+                if is_internal_column(&name) || is_stream_column(&name) {
                     return Ok((name, Domain::full(&ty)));
                 }
 
                 let column_ids = self.schema.leaf_columns_of(&name);
-                assert!(
-                    !column_ids.is_empty(),
-                    "column {} not found in schema {:?}",
-                    name,
-                    &self.schema
-                );
+                // virtual columns are not included in leaf columns
+                // TODO: add range filter for virtual columns
+                if column_ids.is_empty() {
+                    return Ok((name, Domain::full(&ty)));
+                }
 
                 let stats = column_ids
                     .iter()

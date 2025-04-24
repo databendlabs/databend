@@ -90,7 +90,7 @@ runs:
     - name: Check Binary Info
       shell: bash
       run: |
-        grep ' Compiled in ' target/sccache.log
+        grep ' Compiled in ' target/sccache.log || true
         readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
         ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
 

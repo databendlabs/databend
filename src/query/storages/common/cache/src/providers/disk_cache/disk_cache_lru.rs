@@ -33,6 +33,7 @@ impl CacheAccessor for LruDiskCacheHolder {
         "LruDiskCacheHolder"
     }
 
+    // TODO Change Arc<Bytes> to Bytes or Arc<Vec<u8>> ?
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
         let k = k.as_ref();
         {

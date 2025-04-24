@@ -147,6 +147,8 @@ impl StreamHandler for RealStreamHandler {
                 ..Default::default()
             },
             as_dropped: false,
+            table_properties: None,
+            table_partition: None,
         };
 
         catalog.create_table(req).await

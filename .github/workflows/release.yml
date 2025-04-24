@@ -92,16 +92,16 @@ jobs:
         shell: bash
         run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
       - name: Generate Release Note
+        uses: actions/github-script@v7
         env:
-          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.create_release.outputs.version }}
+          DATE: ${{ steps.date.outputs.DATE }}
+        with:
+          script: |
+            const script = require('./.github/scripts/generate_release_note.js')
+            await script({ github, context, core })
+      - name: Add Release Note
         run: |
-          mkdir -p docs/release-stable
-          df="docs/release-stable/${{ steps.date.outputs.DATE }}_${{ needs.create_release.outputs.version }}.md"
-          echo "---" > $df
-          gh release view --repo databendlabs/databend ${{ needs.create_release.outputs.version }} >> $df
-          sed -i -E 's/^--$/---/g' $df
-          sed -i -E '/^asset:/d' $df
-          sed -i -E 's_https://github.com/databendlabs/databend/pull/([0-9]+)_[#\1](https://github.com/databendlabs/databend/pull/\1)_g' $df
           git add docs/release-stable
           git status
       - uses: peter-evans/create-pull-request@v4

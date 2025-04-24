@@ -35,7 +35,7 @@ unindent = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-criterion = { workspace = true }
+divan = { workspace = true }
 goldenfile = { workspace = true }
 
 [[bench]]

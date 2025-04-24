@@ -103,7 +103,7 @@ impl LockHolder {
 
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
-                record_acquired_lock_nums(lock_type, table_id, 1);
+                record_acquired_lock_nums(lock_type, 1);
                 break;
             }
 
@@ -174,7 +174,7 @@ impl LockHolder {
         let res = catalog.create_lock_revision(req).await?;
         let revision = res.revision;
         // metrics.
-        record_created_lock_nums(lock_key.lock_type().to_string(), lock_key.get_table_id(), 1);
+        record_created_lock_nums(lock_key.lock_type().to_string(), 1);
         log::debug!("create table lock success, revision={}", revision);
 
         let delete_table_lock_req = DeleteLockRevReq::new(lock_key.clone(), revision);

@@ -358,6 +358,8 @@ impl TestFixture {
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
+            table_properties: Default::default(),
+            table_partition: None,
         }
     }
 
@@ -384,6 +386,8 @@ impl TestFixture {
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
+            table_properties: Default::default(),
+            table_partition: None,
         }
     }
 
@@ -409,6 +413,7 @@ impl TestFixture {
             schema: TestFixture::variant_table_schema(),
             engine: Engine::Fuse,
             engine_options: Default::default(),
+            table_properties: Default::default(),
             storage_params: None,
             options: [
                 // database id is required for FUSE
@@ -421,6 +426,7 @@ impl TestFixture {
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
+            table_partition: None,
         }
     }
 
@@ -453,11 +459,13 @@ impl TestFixture {
             ]
             .into(),
             field_comments: vec![],
+            table_partition: None,
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
+            table_properties: Default::default(),
         }
     }
 
@@ -504,6 +512,8 @@ impl TestFixture {
             inverted_indexes: None,
             ngram_indexes: None,
             attached_columns: None,
+            table_properties: Default::default(),
+            table_partition: None,
         }
     }
 

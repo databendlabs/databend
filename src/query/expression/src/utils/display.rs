@@ -73,6 +73,7 @@ use crate::ColumnIndex;
 use crate::ExprVisitor;
 use crate::FunctionEval;
 use crate::TableDataType;
+use crate::VariantDataType;
 
 const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
 
@@ -618,6 +619,20 @@ impl Display for DecimalDataType {
             DecimalDataType::Decimal256(size) => {
                 write!(f, "Decimal({}, {})", size.precision, size.scale)
             }
+        }
+    }
+}
+
+impl Display for VariantDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match &self {
+            VariantDataType::Jsonb => write!(f, "Jsonb"),
+            VariantDataType::Boolean => write!(f, "Boolean"),
+            VariantDataType::UInt64 => write!(f, "UInt64"),
+            VariantDataType::Int64 => write!(f, "Int64"),
+            VariantDataType::Float64 => write!(f, "Float64"),
+            VariantDataType::String => write!(f, "String"),
+            VariantDataType::Array(inner) => write!(f, "Array({inner})"),
         }
     }
 }

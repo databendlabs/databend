@@ -44,11 +44,6 @@ impl ValueType for IntervalType {
     type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, months_days_micros>>;
     type ColumnBuilder = Vec<months_days_micros>;
 
-    #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: months_days_micros) -> months_days_micros {
-        long
-    }
-
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
     }

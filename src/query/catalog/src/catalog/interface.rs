@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -134,6 +135,15 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     fn name(&self) -> String;
     // Get the info of the catalog.
     fn info(&self) -> Arc<CatalogInfo>;
+
+    // Return catalog tables support partition or properties.
+    fn support_partition(&self) -> bool {
+        false
+    }
+
+    fn is_external(&self) -> bool {
+        false
+    }
 
     // This is used to return a new catalog; in the new catalog, the table info is not refreshed
     // This is used for attached table, if we attach many tables each is to read from s3, query system.tables it will be very slow.
@@ -526,6 +536,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         unimplemented!()
+    }
+
+    // Get default table engine
+    fn default_table_engine(&self) -> Engine {
+        Engine::Fuse
     }
 
     fn get_stream_source_table(

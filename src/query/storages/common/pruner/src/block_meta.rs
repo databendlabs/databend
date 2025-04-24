@@ -22,7 +22,8 @@ use databend_common_expression::types::number::F32;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
-use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_common_expression::ColumnId;
+use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct BlockMetaIndex {
@@ -50,10 +51,10 @@ pub struct BlockMetaIndex {
 pub struct VirtualBlockMetaIndex {
     pub virtual_block_location: String,
     // Key is virtual column id, value is the column meta.
-    pub virtual_column_metas: BTreeMap<u32, ColumnMeta>,
+    pub virtual_column_metas: BTreeMap<ColumnId, VirtualColumnMeta>,
     // If all the virtual columns are generated,
     // we can reduce IO by ignoring the source column.
-    pub ignored_source_column_ids: HashSet<u32>,
+    pub ignored_source_column_ids: HashSet<ColumnId>,
 }
 
 #[typetag::serde(name = "block_meta_index")]

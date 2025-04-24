@@ -15,22 +15,22 @@ depends:
   - libc6 (>= 2.31)
 contents:
   # Binaries
-  - src: ${path}/bin/databend-query
+  - src: distro/bin/databend-query
     dst: /usr/bin/databend-query
 
   # Configs
-  - src: ${path}/configs/databend-query.toml
+  - src: distro/configs/databend-query.toml
     dst: /etc/databend/databend-query.toml
     type: config
 
   # Systemd
-  - src: ${path}/systemd/databend-query.service
+  - src: distro/systemd/databend-query.service
     dst: /lib/systemd/system/databend-query.service
-  - src: ${path}/systemd/databend-query.default
+  - src: distro/systemd/databend-query.default
     dst: /etc/default/databend-query
 
   # Docs
-  - src: ${path}/readme.txt
+  - src: distro/readme.txt
     dst: /usr/share/doc/databend/readme.txt
     file_info:
       mode: 0644
@@ -45,5 +45,5 @@ contents:
       mode: 0755
 
 scripts:
-  preinstall: ${path}/scripts/preinstall.sh
-  postinstall: ${path}/scripts/postinstall.sh
+  preinstall: distro/scripts/preinstall.sh
+  postinstall: distro/scripts/postinstall.sh

@@ -53,6 +53,9 @@ use databend_common_sql::PlanExtras;
 use log::info;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
+use tokio::sync::AcquireError as TokioAcquireError;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
 use tokio::time::error::Elapsed;
 
 use crate::sessions::QueryContext;
@@ -65,6 +68,8 @@ pub trait QueueData: Send + Sync + 'static {
     fn get_lock_key(&self) -> String;
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode;
+
+    fn lock_ttl(&self) -> Duration;
 
     fn timeout(&self) -> Duration;
 
@@ -85,6 +90,8 @@ pub(crate) struct Inner<Data: QueueData> {
 pub struct QueueManager<Data: QueueData> {
     permits: usize,
     meta_store: MetaStore,
+    semaphore: Arc<Semaphore>,
+    global_statement_queue: bool,
     queue: Mutex<HashMap<Data::Key, Inner<Data>>>,
 }
 
@@ -99,7 +106,11 @@ impl<Data: QueueData> QueueManager<Data> {
         };
 
         info!("queue manager permits: {:?}", permits);
-        GlobalInstance::set(Self::create(permits, metastore));
+        GlobalInstance::set(Self::create(
+            permits,
+            metastore,
+            conf.query.global_statement_queue,
+        ));
         Ok(())
     }
 
@@ -107,7 +118,11 @@ impl<Data: QueueData> QueueManager<Data> {
         GlobalInstance::get::<Arc<Self>>()
     }
 
-    pub fn create(mut permits: usize, meta_store: MetaStore) -> Arc<QueueManager<Data>> {
+    pub fn create(
+        mut permits: usize,
+        meta_store: MetaStore,
+        global_statement_queue: bool,
+    ) -> Arc<QueueManager<Data>> {
         if permits == 0 {
             permits = usize::MAX >> 4;
         }
@@ -115,7 +130,9 @@ impl<Data: QueueData> QueueManager<Data> {
         Arc::new(QueueManager {
             permits,
             meta_store,
+            global_statement_queue,
             queue: Mutex::new(HashMap::new()),
+            semaphore: Arc::new(Semaphore::new(permits)),
         })
     }
 
@@ -154,21 +171,35 @@ impl<Data: QueueData> QueueManager<Data> {
             );
 
             let timeout = data.timeout();
-            let semaphore_acquire = self.meta_store.new_acquired(
-                data.get_lock_key(),
-                self.permits as u64,
-                data.get_key(), // ID of this acquirer
-                Duration::from_secs(3),
-            );
 
-            let future = AcquireQueueFuture::create(
-                Arc::new(data),
-                tokio::time::timeout(timeout, semaphore_acquire),
-                self.clone(),
-            );
             let start_time = SystemTime::now();
+            let acquire_res = match self.global_statement_queue {
+                true => {
+                    let semaphore_acquire = self.meta_store.new_acquired(
+                        data.get_lock_key(),
+                        self.permits as u64,
+                        data.get_key(), // ID of this acquirer
+                        data.lock_ttl(),
+                    );
 
-            return match future.await {
+                    AcquireQueueFuture::create(
+                        Arc::new(data),
+                        tokio::time::timeout(timeout, semaphore_acquire),
+                        self.clone(),
+                    )
+                    .await
+                }
+                false => {
+                    AcquireQueueFuture::create(
+                        Arc::new(data),
+                        tokio::time::timeout(timeout, self.semaphore.clone().acquire_owned()),
+                        self.clone(),
+                    )
+                    .await
+                }
+            };
+
+            return match acquire_res {
                 Ok(v) => {
                     info!("finished acquiring from queue, length: {}", self.length());
 
@@ -195,7 +226,7 @@ impl<Data: QueueData> QueueManager<Data> {
             };
         }
 
-        Ok(AcquireQueueGuard::create(None))
+        Ok(AcquireQueueGuard::create_global(None))
     }
 
     pub(crate) fn add_entity(&self, inner: Inner<Data>) -> Data::Key {
@@ -229,31 +260,35 @@ impl<Data: QueueData> QueueManager<Data> {
     }
 }
 
-pub struct AcquireQueueGuard {
-    #[allow(dead_code)]
-    permit: Option<Permit>,
+pub enum AcquireQueueGuard {
+    Global(Option<Permit>),
+    Local(Option<OwnedSemaphorePermit>),
 }
-
-unsafe impl Send for AcquireQueueGuard {}
-unsafe impl Sync for AcquireQueueGuard {}
 
 impl Drop for AcquireQueueGuard {
     fn drop(&mut self) {
-        if self.permit.is_some() {
-            dec_session_running_acquired_queries();
+        match self {
+            AcquireQueueGuard::Local(Some(_)) | AcquireQueueGuard::Global(Some(_)) => {
+                dec_session_running_acquired_queries();
+            }
+            _ => {}
         }
     }
 }
 
 impl AcquireQueueGuard {
-    pub fn create(permit: Option<Permit>) -> Self {
-        AcquireQueueGuard { permit }
+    pub fn create_global(permit: Option<Permit>) -> Self {
+        AcquireQueueGuard::Global(permit)
+    }
+
+    pub fn create_local(permit: Option<OwnedSemaphorePermit>) -> Self {
+        AcquireQueueGuard::Local(permit)
     }
 }
 
 pin_project! {
-    pub struct AcquireQueueFuture<Data: QueueData, T>
-where T: Future<Output =  std::result::Result<std::result::Result<Permit, AcquireError>, Elapsed>>
+pub struct AcquireQueueFuture<Data: QueueData, T, Permit, E>
+where T: Future<Output =  std::result::Result<std::result::Result<Permit, E>, Elapsed>>
 {
     #[pin]
     inner: T,
@@ -267,8 +302,8 @@ where T: Future<Output =  std::result::Result<std::result::Result<Permit, Acquir
 }
 }
 
-impl<Data: QueueData, T> AcquireQueueFuture<Data, T>
-where T: Future<Output = std::result::Result<std::result::Result<Permit, AcquireError>, Elapsed>>
+impl<Data: QueueData, T, Permit, E> AcquireQueueFuture<Data, T, Permit, E>
+where T: Future<Output = std::result::Result<std::result::Result<Permit, E>, Elapsed>>
 {
     pub fn create(data: Arc<Data>, inner: T, mgr: Arc<QueueManager<Data>>) -> Self {
         AcquireQueueFuture {
@@ -282,52 +317,59 @@ where T: Future<Output = std::result::Result<std::result::Result<Permit, Acquire
     }
 }
 
-impl<Data: QueueData, T> Future for AcquireQueueFuture<Data, T>
-where T: Future<Output = std::result::Result<std::result::Result<Permit, AcquireError>, Elapsed>>
-{
-    type Output = Result<AcquireQueueGuard>;
+macro_rules! impl_acquire_queue_future {
+    ($Permit:ty, $fn_name:ident, $Error:ty) => {
+        impl<Data: QueueData, T> Future for AcquireQueueFuture<Data, T, $Permit, $Error>
+        where T: Future<Output = std::result::Result<std::result::Result<$Permit, $Error>, Elapsed>>
+        {
+            type Output = Result<AcquireQueueGuard>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
+            fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+                let this = self.project();
 
-        if this.is_abort.load(Ordering::SeqCst) {
-            return Poll::Ready(Err(Data::remove_error_message(this.key.take())));
-        }
+                if this.is_abort.load(Ordering::SeqCst) {
+                    return Poll::Ready(Err(Data::remove_error_message(this.key.take())));
+                }
 
-        match this.inner.poll(cx) {
-            Poll::Ready(res) => {
-                if let Some(key) = this.key.take() {
-                    if this.manager.remove_entity(&key).is_none() {
-                        return Poll::Ready(Err(Data::remove_error_message(Some(key))));
+                match this.inner.poll(cx) {
+                    Poll::Ready(res) => {
+                        if let Some(key) = this.key.take() {
+                            if this.manager.remove_entity(&key).is_none() {
+                                return Poll::Ready(Err(Data::remove_error_message(Some(key))));
+                            }
+                        }
+
+                        Poll::Ready(match res {
+                            Ok(Ok(v)) => Ok(AcquireQueueGuard::$fn_name(Some(v))),
+                            Ok(Err(_)) => Err(ErrorCode::TokioError("acquire queue failure.")),
+                            Err(_elapsed) => Err(ErrorCode::Timeout("query queuing timeout")),
+                        })
+                    }
+                    Poll::Pending => {
+                        if !*this.has_pending {
+                            *this.has_pending = true;
+                        }
+
+                        if let Some(data) = this.data.take() {
+                            let waker = cx.waker().clone();
+                            *this.key = Some(this.manager.add_entity(Inner {
+                                data,
+                                waker,
+                                instant: Instant::now(),
+                                is_abort: this.is_abort.clone(),
+                            }));
+                        }
+
+                        Poll::Pending
                     }
                 }
-
-                Poll::Ready(match res {
-                    Ok(Ok(v)) => Ok(AcquireQueueGuard::create(Some(v))),
-                    Ok(Err(_)) => Err(ErrorCode::TokioError("acquire queue failure.")),
-                    Err(_elapsed) => Err(ErrorCode::Timeout("query queuing timeout")),
-                })
-            }
-            Poll::Pending => {
-                if !*this.has_pending {
-                    *this.has_pending = true;
-                }
-
-                if let Some(data) = this.data.take() {
-                    let waker = cx.waker().clone();
-                    *this.key = Some(this.manager.add_entity(Inner {
-                        data,
-                        waker,
-                        instant: Instant::now(),
-                        is_abort: this.is_abort.clone(),
-                    }));
-                }
-
-                Poll::Pending
             }
         }
-    }
+    };
 }
+
+impl_acquire_queue_future!(Permit, create_global, AcquireError);
+impl_acquire_queue_future!(OwnedSemaphorePermit, create_local, TokioAcquireError);
 
 pub struct QueryEntry {
     ctx: Arc<QueryContext>,
@@ -336,6 +378,7 @@ pub struct QueryEntry {
     pub sql: String,
     pub user_info: UserInfo,
     pub timeout: Duration,
+    pub lock_ttl: Duration,
     pub need_acquire_to_queue: bool,
 }
 
@@ -357,6 +400,7 @@ impl QueryEntry {
                 0 => Duration::from_secs(60 * 60 * 24 * 365 * 35),
                 timeout => Duration::from_secs(timeout),
             },
+            lock_ttl: Duration::from_secs(settings.get_statement_queue_ttl_in_seconds()?),
         })
     }
 
@@ -482,6 +526,10 @@ impl QueueData for QueryEntry {
                 key
             )),
         }
+    }
+
+    fn lock_ttl(&self) -> Duration {
+        self.lock_ttl
     }
 
     fn timeout(&self) -> Duration {

@@ -38,19 +38,13 @@ static SHUTDOWN_LOCK_HOLDER_NUMS: LazyLock<Counter> =
 const LABEL_TYPE: &str = "type";
 const LABEL_TABLE_ID: &str = "table_id";
 
-pub fn record_created_lock_nums(lock_type: String, table_id: u64, num: u64) {
-    let labels = &vec![
-        (LABEL_TYPE, lock_type),
-        (LABEL_TABLE_ID, table_id.to_string()),
-    ];
+pub fn record_created_lock_nums(lock_type: String, num: u64) {
+    let labels = &vec![(LABEL_TYPE, lock_type)];
     CREATED_LOCK_NUMS.get_or_create(labels).inc_by(num);
 }
 
-pub fn record_acquired_lock_nums(lock_type: String, table_id: u64, num: u64) {
-    let labels = &vec![
-        (LABEL_TYPE, lock_type),
-        (LABEL_TABLE_ID, table_id.to_string()),
-    ];
+pub fn record_acquired_lock_nums(lock_type: String, num: u64) {
+    let labels = &vec![(LABEL_TYPE, lock_type)];
     ACQUIRED_LOCK_NUMS.get_or_create(labels).inc_by(num);
 }
 

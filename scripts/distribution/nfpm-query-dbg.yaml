@@ -14,5 +14,5 @@ depends:
   - databend-query
 contents:
   # Binaries
-  - src: ${path}/bin/databend-query.debug
+  - src: distro/bin/databend-query.debug
     dst: /usr/bin/databend-query.debug

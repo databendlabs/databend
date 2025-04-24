@@ -134,7 +134,8 @@ impl Interpreter for DropTableInterpreter {
             })
             .await?;
 
-        if !is_temp {
+        if !is_temp && !catalog.is_external() {
+            // iceberg table do not need to generate ownership
             // we should do `drop ownership` after actually drop table, otherwise when we drop the ownership,
             // but the table still exists, in the interval maybe some unexpected things will happen.
             // drop the ownership

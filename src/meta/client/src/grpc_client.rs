@@ -17,8 +17,6 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -27,23 +25,18 @@ use arrow_flight::BasicAuth;
 use databend_common_base::base::tokio::select;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::sync::mpsc::UnboundedReceiver;
-use databend_common_base::base::tokio::sync::mpsc::UnboundedSender;
 use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::tokio::sync::oneshot::Sender as OneSend;
 use databend_common_base::base::tokio::time::sleep;
-use databend_common_base::containers::ItemManager;
 use databend_common_base::containers::Pool;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::UnlimitedFuture;
-use databend_common_grpc::ConnectionFactory;
-use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_api::reply::reply_to_api_result;
-use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
@@ -55,24 +48,20 @@ use databend_common_meta_types::protobuf::HandshakeRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftRequest;
-use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::ConnectionError;
-use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaHandshakeError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
-use databend_common_metrics::count::Count;
 use fastrace::func_name;
 use fastrace::func_path;
 use fastrace::future::FutureExt as MTFutureExt;
 use fastrace::Span;
 use futures::stream::StreamExt;
-use futures::FutureExt;
 use log::debug;
 use log::error;
 use log::info;
@@ -82,7 +71,6 @@ use parking_lot::Mutex;
 use prost::Message;
 use semver::Version;
 use serde::de::DeserializeOwned;
-use tonic::async_trait;
 use tonic::codegen::BoxStream;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
@@ -100,346 +88,21 @@ use crate::grpc_action::RequestFor;
 use crate::grpc_metrics;
 use crate::message;
 use crate::message::Response;
+use crate::required::std;
+use crate::required::supported_features;
+use crate::required::Features;
 use crate::to_digit_ver;
+use crate::ClientHandle;
 use crate::ClientWorkerRequest;
+use crate::FeatureSpec;
+use crate::MetaChannelManager;
 use crate::MetaGrpcReadReq;
 use crate::MetaGrpcReq;
-use crate::Streamed;
-use crate::METACLI_COMMIT_SEMVER;
-use crate::MIN_METASRV_SEMVER;
 
 const RPC_RETRIES: usize = 4;
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 pub(crate) type RealClient = MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>;
-
-#[derive(Debug)]
-pub struct MetaChannelManager {
-    username: String,
-    password: String,
-    timeout: Option<Duration>,
-    tls_config: Option<RpcClientTlsConfig>,
-
-    /// The endpoints of the meta-service cluster.
-    ///
-    /// The endpoints will be added to a built client item
-    /// and will be updated when a error or successful response is received.
-    endpoints: Arc<Mutex<Endpoints>>,
-}
-
-impl MetaChannelManager {
-    pub fn new(
-        username: impl ToString,
-        password: impl ToString,
-        timeout: Option<Duration>,
-        tls_config: Option<RpcClientTlsConfig>,
-        endpoints: Arc<Mutex<Endpoints>>,
-    ) -> Self {
-        Self {
-            username: username.to_string(),
-            password: password.to_string(),
-            timeout,
-            tls_config,
-            endpoints,
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn new_established_client(
-        &self,
-        addr: &String,
-    ) -> Result<EstablishedClient, MetaClientError> {
-        let chan = self.build_channel(addr).await?;
-
-        let (mut real_client, once) = Self::new_real_client(chan);
-
-        info!(
-            "MetaChannelManager done building RealClient to {}, start handshake",
-            addr
-        );
-
-        let handshake_res = MetaGrpcClient::handshake(
-            &mut real_client,
-            &METACLI_COMMIT_SEMVER,
-            &MIN_METASRV_SEMVER,
-            &self.username,
-            &self.password,
-        )
-        .await;
-
-        info!(
-            "MetaChannelManager done handshake to {}, result.err(): {:?}",
-            addr,
-            handshake_res.as_ref().err()
-        );
-
-        let (token, server_version) = handshake_res?;
-
-        // Update the token for the client interceptor.
-        // Safe unwrap(): it is the first time setting it.
-        once.set(token).unwrap();
-
-        Ok(EstablishedClient::new(
-            real_client,
-            server_version,
-            addr,
-            self.endpoints.clone(),
-        ))
-    }
-
-    /// Create a MetaServiceClient with authentication interceptor
-    ///
-    /// The returned `OnceCell` is used to fill in a token for the interceptor.
-    pub fn new_real_client(chan: Channel) -> (RealClient, Arc<OnceCell<Vec<u8>>>) {
-        let once = Arc::new(OnceCell::new());
-
-        let interceptor = AuthInterceptor {
-            token: once.clone(),
-        };
-
-        let client = MetaServiceClient::with_interceptor(chan, interceptor)
-            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
-            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
-
-        (client, once)
-    }
-
-    #[async_backtrace::framed]
-    async fn build_channel(&self, addr: &String) -> Result<Channel, MetaNetworkError> {
-        info!("MetaChannelManager::build_channel to {}", addr);
-
-        let ch = ConnectionFactory::create_rpc_channel(addr, self.timeout, self.tls_config.clone())
-            .await
-            .map_err(|e| match e {
-                GrpcConnectionError::InvalidUri { .. } => MetaNetworkError::BadAddressFormat(
-                    AnyError::new(&e).add_context(|| "while creating rpc channel"),
-                ),
-                GrpcConnectionError::TLSConfigError { .. } => MetaNetworkError::TLSConfigError(
-                    AnyError::new(&e).add_context(|| "while creating rpc channel"),
-                ),
-                GrpcConnectionError::CannotConnect { .. } => MetaNetworkError::ConnectionError(
-                    ConnectionError::new(e, "while creating rpc channel"),
-                ),
-            })?;
-        Ok(ch)
-    }
-}
-
-#[async_trait]
-impl ItemManager for MetaChannelManager {
-    type Key = String;
-    type Item = EstablishedClient;
-    type Error = MetaClientError;
-
-    #[logcall::logcall(err = "debug")]
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    async fn build(&self, addr: &Self::Key) -> Result<Self::Item, Self::Error> {
-        self.new_established_client(addr).await
-    }
-
-    #[logcall::logcall(err = "debug")]
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    async fn check(&self, ch: Self::Item) -> Result<Self::Item, Self::Error> {
-        // The underlying `tonic::transport::channel::Channel` reconnects when server is down.
-        // But we still need to assert the readiness, e.g., when handshake token expires
-        // If there was an error occurred, the channel will be closed.
-        if let Some(e) = ch.take_error() {
-            return Err(MetaNetworkError::from(e).into());
-        }
-        Ok(ch)
-    }
-}
-
-/// A handle to access meta-client worker.
-/// The worker will be actually running in a dedicated runtime: `MetaGrpcClient.rt`.
-pub struct ClientHandle {
-    /// For debug purpose only.
-    pub endpoints: Vec<String>,
-    /// For sending request to meta-client worker.
-    pub(crate) req_tx: UnboundedSender<ClientWorkerRequest>,
-    /// Notify auto sync to stop.
-    /// `oneshot::Receiver` impl `Drop` by sending a closed notification to the `Sender` half.
-    #[allow(dead_code)]
-    cancel_auto_sync_tx: oneshot::Sender<()>,
-
-    /// The reference to the dedicated runtime.
-    ///
-    /// If all ClientHandle are dropped, the runtime will be destroyed.
-    ///
-    /// In order not to let a blocking operation(such as calling the new PipelinePullingExecutor)
-    /// in a tokio runtime block meta-client background tasks.
-    /// If a background task is blocked, no meta-client will be able to proceed if meta-client is reused.
-    ///
-    /// Note that a thread_pool tokio runtime does not help:
-    /// a scheduled tokio-task resides in `filo_slot` won't be stolen by other tokio-workers.
-    ///
-    /// This `rt` previously is stored in `MetaGrpcClient`, which leads to a deadlock:
-    /// - When all `ClientHandle` are dropped, the two workers `worker_loop()` and `auto_sync_interval()`
-    ///   will quit.
-    /// - These two futures both held a reference to `MetaGrpcClient`.
-    /// - The last of these(say, `F`) two will drop `MetaGrpcClient.rt` and `Runtime::_dropper`
-    ///   will block waiting for the runtime to shut down.
-    /// - But `F` is still held, deadlock occurs.
-    _rt: Arc<Runtime>,
-}
-
-impl Display for ClientHandle {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ClientHandle({})", self.endpoints.join(","))
-    }
-}
-
-impl Drop for ClientHandle {
-    fn drop(&mut self) {
-        info!("{} handle dropped", self);
-    }
-}
-
-impl ClientHandle {
-    pub async fn list(&self, prefix: &str) -> Result<BoxStream<StreamItem>, MetaError> {
-        let strm = self
-            .request(Streamed(ListKVReq {
-                prefix: prefix.to_string(),
-            }))
-            .await?;
-
-        Ok(strm)
-    }
-
-    /// Send a request to the internal worker task, which will be running in another runtime.
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    pub async fn request<Req, E>(&self, req: Req) -> Result<Req::Reply, E>
-    where
-        Req: RequestFor,
-        Req: Into<message::Request>,
-        Result<Req::Reply, E>: TryFrom<Response>,
-        <Result<Req::Reply, E> as TryFrom<Response>>::Error: std::fmt::Display,
-        E: From<MetaClientError> + Debug,
-    {
-        let rx = self
-            .send_request_to_worker(req)
-            .map_err(MetaClientError::from)?;
-
-        UnlimitedFuture::create(async move {
-            let _g = grpc_metrics::client_request_inflight.counter_guard();
-            rx.await
-        })
-        .map(|recv_res| Self::parse_worker_result(recv_res))
-        .await
-    }
-
-    /// Send a request to the internal worker task, which will be running in another runtime.
-    #[fastrace::trace]
-    pub fn request_sync<Req, E>(&self, req: Req) -> Result<Req::Reply, E>
-    where
-        Req: RequestFor,
-        Req: Into<message::Request>,
-        Result<Req::Reply, E>: TryFrom<Response>,
-        <Result<Req::Reply, E> as TryFrom<Response>>::Error: std::fmt::Display,
-        E: From<MetaClientError> + Debug,
-    {
-        let _g = grpc_metrics::client_request_inflight.counter_guard();
-
-        let rx = self
-            .send_request_to_worker(req)
-            .map_err(MetaClientError::from)?;
-
-        let recv_res = rx.blocking_recv();
-        Self::parse_worker_result(recv_res)
-    }
-
-    /// Send request to client worker, return a receiver to receive the RPC response.
-    fn send_request_to_worker<Req>(
-        &self,
-        req: Req,
-    ) -> Result<oneshot::Receiver<Response>, ConnectionError>
-    where
-        Req: Into<message::Request>,
-    {
-        static META_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
-
-        let (tx, rx) = oneshot::channel();
-        let worker_request = ClientWorkerRequest {
-            request_id: META_REQUEST_ID.fetch_add(1, Ordering::Relaxed),
-            resp_tx: tx,
-            req: req.into(),
-            span: Span::enter_with_local_parent(std::any::type_name::<ClientWorkerRequest>()),
-            tracking_payload: Some(ThreadTracker::new_tracking_payload()),
-        };
-
-        debug!(
-            "{} send request to meta client worker: request: {:?}",
-            self, worker_request
-        );
-
-        self.req_tx.send(worker_request).map_err(|e| {
-            let req = e.0;
-
-            let err = AnyError::error(format!(
-                "Meta ClientHandle failed to send request(request_id={}, req_name={}) to worker",
-                req.request_id,
-                req.req.name()
-            ));
-
-            error!("{}", err);
-            ConnectionError::new(err, "Meta ClientHandle failed to send request to worker")
-        })?;
-
-        Ok(rx)
-    }
-
-    /// Parse the result returned from grpc client worker.
-    fn parse_worker_result<Reply, E>(
-        res: Result<Response, oneshot::error::RecvError>,
-    ) -> Result<Reply, E>
-    where
-        Result<Reply, E>: TryFrom<Response>,
-        <Result<Reply, E> as TryFrom<Response>>::Error: Display,
-        E: From<MetaClientError> + Debug,
-    {
-        let response = res.map_err(|e| {
-            let err = AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker");
-            error!(
-                error :? =(&e);
-                "Meta ClientHandle recv response from meta client worker failed"
-            );
-            let conn_err =
-                ConnectionError::new(err, "Meta ClientHandle failed to receive from worker");
-            MetaClientError::from(conn_err)
-        })?;
-
-        let res: Result<Reply, E> = response
-            .try_into()
-            .map_err(|e| format!("expect: {}, got: {}", std::any::type_name::<Reply>(), e))
-            .unwrap();
-
-        res
-    }
-
-    #[async_backtrace::framed]
-    pub async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
-        self.request(message::GetClusterStatus {}).await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
-        self.request(message::GetClientInfo {}).await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn make_established_client(&self) -> Result<EstablishedClient, MetaClientError> {
-        self.request(message::MakeEstablishedClient {}).await
-    }
-
-    /// Return the endpoints list cached on this client.
-    #[async_backtrace::framed]
-    pub async fn get_cached_endpoints(&self) -> Result<Vec<String>, MetaError> {
-        self.request(message::GetEndpoints {}).await
-    }
-}
 
 // TODO: maybe it just needs a runtime, not a MetaGrpcClientWorker.
 //
@@ -455,6 +118,9 @@ pub struct MetaGrpcClient {
     endpoints: Arc<Mutex<Endpoints>>,
     endpoints_str: Vec<String>,
     auto_sync_interval: Option<Duration>,
+
+    #[allow(dead_code)]
+    required_features: &'static [FeatureSpec],
 }
 
 impl Debug for MetaGrpcClient {
@@ -494,6 +160,7 @@ impl MetaGrpcClient {
         )
     }
 
+    /// Create a new meta-client with exact required features.
     #[fastrace::trace]
     pub fn try_create(
         endpoints_str: Vec<String>,
@@ -503,12 +170,52 @@ impl MetaGrpcClient {
         auto_sync_interval: Option<Duration>,
         tls_config: Option<RpcClientTlsConfig>,
     ) -> Result<Arc<ClientHandle>, CreationError> {
+        Self::try_create_with_features(
+            endpoints_str,
+            username,
+            password,
+            timeout,
+            auto_sync_interval,
+            tls_config,
+            std(),
+        )
+    }
+
+    /// Create a new meta-client with specific required features.
+    ///
+    /// This method enables version compatibility by allowing an older meta-client to
+    /// connect to a newer meta-server with a limited feature set.
+    /// During handshaking, the server verifies that it supports all features in `required_features`.
+    ///
+    /// Features not specified in `required_features` may still be available if the server supports them,
+    /// but errors will only be returned when those features are actually accessed.
+    ///
+    /// For common feature sets, use the predefined collections in the `required` module:
+    /// - `std()` - Standard features for general client usage
+    /// - `business()` - Core business logic features (read, write, transaction)
+    /// - `export()` - Features required for export operations
+    #[fastrace::trace]
+    pub fn try_create_with_features(
+        endpoints_str: Vec<String>,
+        username: &str,
+        password: &str,
+        timeout: Option<Duration>,
+        auto_sync_interval: Option<Duration>,
+        tls_config: Option<RpcClientTlsConfig>,
+        required_features: &'static [FeatureSpec],
+    ) -> Result<Arc<ClientHandle>, CreationError> {
         Self::endpoints_non_empty(&endpoints_str)?;
 
         let endpoints = Arc::new(Mutex::new(Endpoints::new(endpoints_str.clone())));
 
-        let mgr =
-            MetaChannelManager::new(username, password, timeout, tls_config, endpoints.clone());
+        let mgr = MetaChannelManager::new(
+            username,
+            password,
+            timeout,
+            tls_config,
+            required_features,
+            endpoints.clone(),
+        );
 
         let rt = Runtime::with_worker_threads(
             1,
@@ -536,6 +243,7 @@ impl MetaGrpcClient {
             endpoints,
             endpoints_str,
             auto_sync_interval,
+            required_features,
         });
 
         let worker_name = worker.to_string();
@@ -927,14 +635,13 @@ impl MetaGrpcClient {
     pub async fn handshake(
         client: &mut RealClient,
         client_ver: &Version,
-        min_metasrv_ver: &Version,
+        required_server_features: &'static [FeatureSpec],
         username: &str,
         password: &str,
-    ) -> Result<(Vec<u8>, u64), MetaHandshakeError> {
+    ) -> Result<(Vec<u8>, u64, Features), MetaHandshakeError> {
         debug!(
-            client_ver :% =(client_ver),
-            min_metasrv_ver :% =(min_metasrv_ver);
-            "client version"
+            "client version: {}, required server versions: {:?}",
+            client_ver, required_server_features
         );
 
         let auth = BasicAuth {
@@ -976,19 +683,28 @@ impl MetaGrpcClient {
             "talking to a very old databend-meta: upgrade databend-meta to at least 0.8"
         );
 
-        let min_compatible = to_digit_ver(min_metasrv_ver);
-        if resp.protocol_version < min_compatible {
-            return Err(MetaHandshakeError::new(format!(
-                "Invalid: server protocol_version({}) < client min-compatible({})",
-                from_digit_ver(resp.protocol_version),
-                min_metasrv_ver
-            )));
+        let server_version = from_digit_ver(resp.protocol_version);
+        let server_tuple = (
+            server_version.major,
+            server_version.minor,
+            server_version.patch,
+        );
+
+        let server_provided = supported_features(server_tuple);
+
+        for (feat, least_server_version) in required_server_features {
+            if server_tuple < *least_server_version {
+                return Err(MetaHandshakeError::new(format!(
+                    "Invalid: server protocol_version({:?}) < client required({:?}) for feature {}",
+                    server_tuple, least_server_version, feat
+                )));
+            }
         }
 
         let token = resp.payload;
         let server_version = resp.protocol_version;
 
-        Ok((token, server_version))
+        Ok((token, server_version, server_provided))
     }
 
     /// Create a watching stream that receives KV change events.
@@ -1001,23 +717,10 @@ impl MetaGrpcClient {
         debug!("{}: handle watch request: {:?}", self, watch_request);
 
         let mut client = self.get_established_client().await?;
+        client.ensure_feature("watch")?;
 
-        // Since 1.2.677, initial_flush is added to WatchRequest.
-        // If the server is not upto date to support this feature, return an error.
         if watch_request.initial_flush {
-            let server_version = client.server_protocol_version();
-            let least_server_version = 1002677;
-
-            if server_version < least_server_version {
-                let err = format!(
-                    "WatchRequest::initial_flush requires databend-meta server is at least {}, but: {}",
-                    least_server_version, server_version
-                );
-
-                error!("{}", err);
-
-                return Err(MetaHandshakeError::new(err).into());
-            }
+            client.ensure_feature("watch/initial_flush")?;
         }
         let res = client.watch(watch_request).await?;
         Ok(res.into_inner())
@@ -1036,14 +739,14 @@ impl MetaGrpcClient {
         );
 
         let mut client = self.get_established_client().await?;
-        // TODO: since 1.2.315, export_v1() is added, via which chunk size can be specified.
-        let res = if client.server_protocol_version() >= 1002315 {
+        let res = if client.has_feature("export_v1") {
             client
                 .export_v1(pb::ExportRequest {
                     chunk_size: export_request.chunk_size,
                 })
                 .await?
         } else {
+            client.ensure_feature("export")?;
             client.export(Empty {}).await?
         };
         Ok(res.into_inner())
@@ -1056,6 +759,7 @@ impl MetaGrpcClient {
         debug!("{}::get_cluster_status", self);
 
         let mut client = self.get_established_client().await?;
+        client.ensure_feature("get_cluster_status")?;
         let res = client.get_cluster_status(Empty {}).await?;
         Ok(res.into_inner())
     }
@@ -1067,6 +771,7 @@ impl MetaGrpcClient {
         debug!("{}::get_client_info", self);
 
         let mut client = self.get_established_client().await?;
+        client.ensure_feature("get_client_info")?;
         let res = client.get_client_info(Empty {}).await?;
         Ok(res.into_inner())
     }
@@ -1092,6 +797,8 @@ impl MetaGrpcClient {
                 .get_established_client()
                 .with_timing_threshold(threshold(), info_spent("MetaGrpcClient::make_client"))
                 .await?;
+
+            client.ensure_feature("kv_api")?;
 
             let req = traced_req(raft_req.clone());
 
@@ -1159,6 +866,8 @@ impl MetaGrpcClient {
                 )
                 .await?;
 
+            established_client.ensure_feature("kv_read_v1")?;
+
             let raft_req: RaftRequest = grpc_req.clone().into();
             let req = traced_req(raft_req.clone());
 
@@ -1215,6 +924,8 @@ impl MetaGrpcClient {
         let req = traced_req(txn.clone());
 
         let mut client = self.get_established_client().await?;
+        client.ensure_feature("transaction")?;
+
         let result = client.transaction(req).await;
 
         let result: Result<TxnReply, Status> = match result {

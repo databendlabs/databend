@@ -15,3 +15,4 @@
 mod computed_columns;
 mod vacuum;
 mod virtual_columns;
+mod virtual_columns_builder;

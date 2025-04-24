@@ -134,6 +134,7 @@ impl PageManager {
         remain_rows: &mut usize,
         remain_size: &mut usize,
     ) -> Result<()> {
+        assert!(self.row_buffer.is_none());
         if block.is_empty() {
             return Ok(());
         }
@@ -148,10 +149,11 @@ impl PageManager {
             .map(|entry| entry.to_column(block.num_rows()))
             .collect_vec();
 
+        let block_memory_size = block.memory_size();
         let mut take_rows = min(
             *remain_rows,
-            if block.memory_size() > *remain_size {
-                (*remain_size * block.num_rows()) / block.memory_size()
+            if block_memory_size > *remain_size {
+                (*remain_size * block.num_rows()) / block_memory_size
             } else {
                 block.num_rows()
             },
@@ -161,17 +163,15 @@ impl PageManager {
             take_rows = 1;
         }
 
-        // theoretically, it should always be smaller than the memory_size of the block.
-        *remain_size -= min(
-            *remain_size,
-            take_rows * block.memory_size() / block.num_rows(),
-        );
-        *remain_rows -= take_rows;
-
         if take_rows == block.num_rows() {
+            // theoretically, it should always be smaller than the memory_size of the block.
+            *remain_size -= min(*remain_size, block_memory_size);
+            *remain_rows -= take_rows;
             serializer.append(columns, block.num_rows());
-            self.row_buffer = None;
         } else {
+            // Since not all rows of the block are used, either the size limit or the row limit must have been exceeded.
+            // simply set any of remain_xxx to end the page.
+            *remain_rows = 0;
             let fn_slice = |columns: &[Column], range: Range<usize>| {
                 columns
                     .iter()

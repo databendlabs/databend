@@ -119,6 +119,8 @@ impl Interpreter for CreateViewInterpreter {
                 ..Default::default()
             },
             as_dropped: false,
+            table_properties: None,
+            table_partition: None,
         };
         catalog.create_table(plan).await?;
 

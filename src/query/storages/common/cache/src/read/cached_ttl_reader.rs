@@ -33,14 +33,14 @@ pub trait TTLValue {
 }
 
 /// A cache-aware reader with ttl
-pub struct CachedTTLReader<L, C> {
+pub struct CacheTTLReader<L, C> {
     cache: Option<Arc<C>>,
     loader: Arc<L>,
     ttl: Duration,
 }
 
 // InMemoryLruCache<V>
-impl<V: Into<CacheValue<V>> + TTLValue, L, C> CachedTTLReader<L, C>
+impl<V: Into<CacheValue<V>> + TTLValue, L, C> CacheTTLReader<L, C>
 where
     L: Loader<V> + Sync + Send + 'static,
     C: CacheAccessor<V = V> + Sync + Send + 'static,

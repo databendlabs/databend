@@ -40,11 +40,6 @@ impl ValueType for BooleanType {
     type ColumnIterator<'a> = databend_common_column::bitmap::utils::BitmapIter<'a>;
     type ColumnBuilder = MutableBitmap;
 
-    #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: bool) -> bool {
-        long
-    }
-
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
     }

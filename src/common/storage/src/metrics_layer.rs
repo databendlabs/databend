@@ -242,7 +242,6 @@ impl EncodeLabelSet for OperationLabels {
     fn encode(&self, mut encoder: LabelSetEncoder) -> Result<(), fmt::Error> {
         (observe::LABEL_SCHEME, self.0.scheme.into_static()).encode(encoder.encode_label())?;
         (observe::LABEL_NAMESPACE, self.0.namespace.as_ref()).encode(encoder.encode_label())?;
-        (observe::LABEL_ROOT, self.0.root.as_ref()).encode(encoder.encode_label())?;
         (observe::LABEL_OPERATION, self.0.operation).encode(encoder.encode_label())?;
 
         if let Some(error) = &self.0.error {

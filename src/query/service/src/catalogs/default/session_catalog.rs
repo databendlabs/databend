@@ -148,6 +148,14 @@ impl Catalog for SessionCatalog {
         self.inner.info()
     }
 
+    fn support_partition(&self) -> bool {
+        self.inner.support_partition()
+    }
+
+    fn is_external(&self) -> bool {
+        self.inner.is_external()
+    }
+
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
         Ok(self)
     }

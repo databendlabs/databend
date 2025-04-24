@@ -150,7 +150,11 @@ impl Acquirer {
         // Step 4: Wait for the semaphore to be acquired or removed.
 
         while let Some(sem_event) = self.permit_event_rx.recv().await {
-            debug!("semaphore event: {:?}", sem_event);
+            info!(
+                "Acquirer({}): received semaphore event: {:?}",
+                self.ctx, sem_event
+            );
+
             match sem_event {
                 PermitEvent::Acquired((seq, _)) => {
                     if seq == permit_key.seq {
@@ -227,6 +231,7 @@ impl Acquirer {
             val_bytes,
             self.lease,
             cancel_rx.map(|_| ()),
+            self.ctx.clone(),
         );
 
         let task_name = format!("{}/(seq={})", self.ctx, sem_key.seq);
@@ -256,7 +261,10 @@ impl Acquirer {
         val_bytes: Vec<u8>,
         ttl: Duration,
         cancel: impl Future<Output = ()> + Send + 'static,
+        ctx: impl ToString,
     ) -> Result<(), ConnectionClosed> {
+        let ctx = ctx.to_string();
+
         let sleep_time = ttl / 3;
         let sleep_time = std::cmp::min(sleep_time, Duration::from_millis(2_000));
 
@@ -286,6 +294,11 @@ impl Acquirer {
             // Extend the lease only if the entry still exists. If the entry has been removed,
             // it means the semaphore has been released. Re-inserting it would cause confusion
             // in the semaphore state and potentially lead to inconsistent behavior.
+
+            info!(
+                "{}: About to extend semaphore permit lease: {} ttl: {:?}",
+                ctx, key_str, ttl
+            );
 
             let upsert = UpsertKV::update(&key_str, &val_bytes)
                 .with(MatchSeq::GE(1))

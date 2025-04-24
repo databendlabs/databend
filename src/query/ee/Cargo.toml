@@ -19,7 +19,6 @@ databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
-databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-license = { workspace = true }
 databend-common-management = { workspace = true }
@@ -29,7 +28,6 @@ databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
-databend-common-pipeline-sinks = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-sql = { workspace = true }

@@ -21,13 +21,11 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
 use databend_common_native::read::reader::NativeReader;
 use databend_common_native::read::ColumnIter;
-use databend_common_native::read::NativeColumnsReader;
 use databend_common_storage::ColumnNode;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
@@ -287,20 +285,6 @@ impl BlockReader {
             column_node.init.clone(),
         ) {
             Ok(column_iter) => Ok(column_iter),
-            Err(err) => Err(err.into()),
-        }
-    }
-
-    pub(crate) fn build_virtual_column_iter(
-        name: String,
-        data_type: TableDataType,
-        readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
-    ) -> Result<ColumnIter<'static>> {
-        let field = TableField::new(&name, data_type);
-
-        let native_column_reader = NativeColumnsReader::new()?;
-        match native_column_reader.column_iters(readers, field, vec![]) {
-            Ok(iter) => Ok(iter),
             Err(err) => Err(err.into()),
         }
     }

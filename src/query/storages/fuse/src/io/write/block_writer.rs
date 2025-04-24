@@ -32,6 +32,9 @@ use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
+use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
+use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
@@ -39,10 +42,13 @@ use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
+use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
+use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::WriteSettings;
@@ -122,6 +128,7 @@ pub struct BlockSerialization {
     pub block_meta: BlockMeta,
     pub bloom_index_state: Option<BloomIndexState>,
     pub inverted_index_states: Vec<InvertedIndexState>,
+    pub virtual_column_state: Option<VirtualColumnState>,
 }
 
 #[derive(Clone)]
@@ -133,6 +140,7 @@ pub struct BlockBuilder {
     pub cluster_stats_gen: ClusterStatsGenerator,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
+    pub virtual_column_builder: Option<VirtualColumnBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
@@ -166,6 +174,18 @@ impl BlockBuilder {
             )?;
             inverted_index_states.push(inverted_index_state);
         }
+
+        let virtual_column_state =
+            if let Some(ref virtual_column_builder) = self.virtual_column_builder {
+                let virtual_column_state = virtual_column_builder.add_block(
+                    &data_block,
+                    &self.write_settings,
+                    &block_location,
+                )?;
+                Some(virtual_column_state)
+            } else {
+                None
+            };
 
         let row_count = data_block.num_rows() as u64;
         let col_stats =
@@ -201,6 +221,7 @@ impl BlockBuilder {
                 .unwrap_or_default(),
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
+            virtual_block_meta: None,
             create_on: Some(Utc::now()),
             // TODO(kould): ngram index
             ngram_filter_index_size: None,
@@ -211,6 +232,7 @@ impl BlockBuilder {
             block_meta,
             bloom_index_state,
             inverted_index_states,
+            virtual_column_state,
         };
         Ok(serialized)
     }
@@ -219,14 +241,33 @@ impl BlockBuilder {
 pub struct BlockWriter;
 
 impl BlockWriter {
-    pub async fn write_down(dal: &Operator, serialized: BlockSerialization) -> Result<BlockMeta> {
+    pub async fn write_down(
+        dal: &Operator,
+        serialized: BlockSerialization,
+    ) -> Result<ExtendedBlockMeta> {
         let block_meta = serialized.block_meta;
+
+        let extended_block_meta =
+            if let Some(virtual_column_state) = &serialized.virtual_column_state {
+                ExtendedBlockMeta {
+                    block_meta: block_meta.clone(),
+                    draft_virtual_block_meta: Some(
+                        virtual_column_state.draft_virtual_block_meta.clone(),
+                    ),
+                }
+            } else {
+                ExtendedBlockMeta {
+                    block_meta: block_meta.clone(),
+                    draft_virtual_block_meta: None,
+                }
+            };
 
         Self::write_down_data_block(dal, serialized.block_raw_data, &block_meta.location.0).await?;
         Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
+        Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
 
-        Ok(block_meta)
+        Ok(extended_block_meta)
     }
 
     pub async fn write_down_data_block(
@@ -276,6 +317,35 @@ impl BlockWriter {
             metrics_inc_block_inverted_index_write_nums(1);
             metrics_inc_block_inverted_index_write_bytes(index_size);
             metrics_inc_block_inverted_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
+        Ok(())
+    }
+
+    pub async fn write_down_virtual_column_state(
+        dal: &Operator,
+        virtual_column_state: Option<VirtualColumnState>,
+    ) -> Result<()> {
+        if let Some(virtual_column_state) = virtual_column_state {
+            if virtual_column_state
+                .draft_virtual_block_meta
+                .virtual_column_size
+                == 0
+            {
+                return Ok(());
+            }
+            let start = Instant::now();
+
+            let index_size = virtual_column_state
+                .draft_virtual_block_meta
+                .virtual_column_size;
+            let location = &virtual_column_state
+                .draft_virtual_block_meta
+                .virtual_location
+                .0;
+            write_data(virtual_column_state.data, dal, location).await?;
+            metrics_inc_block_virtual_column_write_nums(1);
+            metrics_inc_block_virtual_column_write_bytes(index_size);
+            metrics_inc_block_virtual_column_write_milliseconds(start.elapsed().as_millis() as u64);
         }
         Ok(())
     }

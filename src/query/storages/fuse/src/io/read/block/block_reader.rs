@@ -220,7 +220,7 @@ impl BlockReader {
         let read_from_disk_cache: usize = block_read_res
             .cached_column_data
             .iter()
-            .map(|(_, bytes)| bytes.len())
+            .map(|(_, bytes)| bytes.size())
             .sum();
 
         let read_from_in_mem_cache_array: usize = block_read_res

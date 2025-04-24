@@ -15,6 +15,7 @@
 use codeq::Decode;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::SeqV;
+use log::info;
 use log::warn;
 use tokio::sync::mpsc;
 
@@ -74,6 +75,11 @@ impl Processor {
         prev: Option<SeqV<PermitEntry>>,
         current: Option<SeqV<PermitEntry>>,
     ) -> Result<(), ConnectionClosed> {
+        info!(
+            "{} processing kv change: {}: {:?} -> {:?}",
+            self.ctx, sem_key, prev, current
+        );
+
         // Update local queue to update the acquired/released state.
         let state_changes = match (prev, current) {
             (None, Some(entry)) => self.queue.insert(sem_key.seq, entry.data),
@@ -89,7 +95,11 @@ impl Processor {
             }
         };
 
+        info!("{} queue state: {}", self.ctx, self.queue);
+
         for event in state_changes {
+            info!("{} sending event: {}", self.ctx, event);
+
             self.tx.send(event).await.map_err(|e| {
                 ConnectionClosed::new_str(format!("Semaphore-Watcher fail to send {}", e.0))
                     .context(&self.ctx)

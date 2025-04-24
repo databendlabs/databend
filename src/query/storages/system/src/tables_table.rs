@@ -475,7 +475,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             }
                             Err(err) => {
                                 let msg = format!(
-                                    "Failed to get table in database: {}, {}",
+                                    "Failed to get table in database: {}.{}, {}",
+                                    ctl_name,
                                     db.name(),
                                     err
                                 );
@@ -498,7 +499,12 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             match ctl.get_database(&tenant, db.as_str()).await {
                                 Ok(database) => dbs.push(database),
                                 Err(err) => {
-                                    let msg = format!("Failed to get database: {}, {}", db, err);
+                                    let msg = format!(
+                                        "Failed to get database: {}.{}, {}",
+                                        ctl.name(),
+                                        db,
+                                        err
+                                    );
                                     warn!("{}", msg);
                                 }
                             }
@@ -624,8 +630,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                 // - others
                                 // TODO(liyz): return the warnings in the HTTP query protocol.
                                 let msg = format!(
-                                    "Failed to list tables in database: {}, {}",
-                                    db_name, err
+                                    "Failed to list tables in database: {}.{}, {}",
+                                    ctl.name(),
+                                    db_name,
+                                    err
                                 );
                                 warn!("{}", msg);
                                 ctx.push_warning(msg);
@@ -641,8 +649,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                 Ok(t) => tables.extend(t),
                                 Err(err) => {
                                     let msg = format!(
-                                        "Failed to get_table_history tables in database: {}, {}",
-                                        db_name, err
+                                        "Failed to get_table_history tables in database: {}.{}, {}",
+                                        ctl.name(),
+                                        db_name,
+                                        err
                                     );
                                     // warn no need to pad in ctx
                                     warn!("{}", msg);
@@ -659,8 +669,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                 Ok(t) => tables.push(t),
                                 Err(err) => {
                                     let msg = format!(
-                                        "Failed to get table in database: {}, {}",
-                                        db_name, err
+                                        "Failed to get table in database: {}.{}, {}",
+                                        ctl.name(),
+                                        db_name,
+                                        err
                                     );
                                     // warn no need to pad in ctx
                                     warn!("{}", msg);

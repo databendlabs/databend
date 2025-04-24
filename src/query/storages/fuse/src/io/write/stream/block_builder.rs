@@ -331,12 +331,14 @@ impl StreamBlockBuilder {
             inverted_index_size,
             create_on: Some(Utc::now()),
             ngram_filter_index_size: None,
+            virtual_block_meta: None,
         };
         let serialized = BlockSerialization {
             block_raw_data,
             block_meta,
             bloom_index_state,
             inverted_index_states,
+            virtual_column_state: None,
         };
         Ok(serialized)
     }

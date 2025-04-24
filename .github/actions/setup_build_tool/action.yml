@@ -49,7 +49,7 @@ runs:
         export SCCACHE_S3_KEY_PREFIX="cache/sccache/"
         export SCCACHE_S3_USE_SSL="true"
         export SCCACHE_ERROR_LOG=/workspace/target/sccache.log
-        export SCCACHE_LOG=debug
+        export SCCACHE_LOG=info
         EOF
             ;;
 
@@ -62,7 +62,7 @@ runs:
         export SCCACHE_GCS_BUCKET=databend-ci
         export SCCACHE_GCS_KEY_PREFIX="cache/sccache/"
         export SCCACHE_ERROR_LOG=/workspace/target/sccache.log
-        export SCCACHE_LOG=debug
+        export SCCACHE_LOG=info
         EOF
             ;;
 
@@ -100,6 +100,13 @@ runs:
     - name: check disk space
       shell: bash
       run: df -h
+
+    - name: check system info
+      shell: bash
+      run: |
+        uname -a
+        cat /proc/cpuinfo
+        free -h
 
     # - uses: everpcpc/actions-cache@v1
     #   if: env.RUNNER_PROVIDER == 'aws'

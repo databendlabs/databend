@@ -71,7 +71,6 @@ pub struct RefreshVirtualColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub virtual_columns: Vec<VirtualField>,
     pub segment_locs: Option<Vec<Location>>,
 }
 

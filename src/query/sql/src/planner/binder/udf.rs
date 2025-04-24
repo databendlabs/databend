@@ -32,6 +32,7 @@ use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_version::UDF_CLIENT_USER_AGENT;
 
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
@@ -105,8 +106,12 @@ impl Binder {
                         .get_settings()
                         .get_external_server_request_batch_rows()? as usize;
 
-                let endpoint =
-                    UDFFlightClient::build_endpoint(address, connect_timeout, request_timeout)?;
+                let endpoint = UDFFlightClient::build_endpoint(
+                    address,
+                    connect_timeout,
+                    request_timeout,
+                    UDF_CLIENT_USER_AGENT.as_str(),
+                )?;
 
                 let mut client = UDFFlightClient::connect(endpoint, connect_timeout, batch_rows)
                     .await?

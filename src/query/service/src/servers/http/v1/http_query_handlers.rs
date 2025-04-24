@@ -273,7 +273,6 @@ async fn query_final_handler(
             Some(query) => {
                 let mut response = query
                     .get_response_state_only()
-                    .await
                     .map_err(HttpErrorCode::server_error)?;
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
@@ -338,7 +337,6 @@ async fn query_state_handler(
                 } else {
                     let response = query
                         .get_response_state_only()
-                        .await
                         .map_err(HttpErrorCode::server_error)?;
                     Ok(QueryResponse::from_internal(query_id, response, false))
                 }

@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use bollard::container::ListContainersOptions;
 use bollard::container::RemoveContainerOptions;
 use bollard::Docker;
 use clap::Parser;
@@ -27,6 +28,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use testcontainers::core::client::docker_client_instance;
+use testcontainers::core::logs::consumer::logging_consumer::LoggingConsumer;
 use testcontainers::core::IntoContainerPort;
 use testcontainers::core::WaitFor;
 use testcontainers::runners::AsyncRunner;
@@ -44,7 +46,7 @@ use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
 const CONTAINER_RETRY_TIMES: usize = 3;
-const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 180;
+const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 60;
 const CONTAINER_TIMEOUT_SECONDS: u64 = 300;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -262,22 +264,24 @@ pub async fn run_ttc_container(
     let container_name = format!("databend-ttc-{}-{}", port, x);
     let start = Instant::now();
     println!("Starting container {container_name}");
+    let dsn = format!(
+        "databend://root:@127.0.0.1:{}?sslmode=disable",
+        http_server_port
+    );
 
     let mut i = 1;
     loop {
+        let log_consumer = LoggingConsumer::new();
+
         let container_res = GenericImage::new(image, tag)
             .with_exposed_port(port.tcp())
             .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
+            .with_startup_timeout(Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS))
             .with_network("host")
-            .with_env_var(
-                "DATABEND_DSN",
-                format!(
-                    "databend://root:@127.0.0.1:{}?sslmode=disable",
-                    http_server_port
-                ),
-            )
+            .with_env_var("DATABEND_DSN", &dsn)
             .with_env_var("TTC_PORT", format!("{port}"))
             .with_container_name(&container_name)
+            .with_log_consumer(log_consumer)
             .start()
             .await;
         let duration = start.elapsed().as_secs();
@@ -455,6 +459,25 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
 
 // Stop the running container to avoid conflict
 async fn stop_container(docker: &Docker, container_name: &str) {
+    let opts = Some(ListContainersOptions::<String> {
+        all: true,
+        ..Default::default()
+    });
+    let containers = docker.list_containers(opts).await;
+    if let Ok(containers) = containers {
+        if !containers.is_empty() {
+            println!("==> list containers");
+            for container in containers {
+                if let Some(names) = container.names {
+                    println!(
+                        " -> container name: {:?}, status: {:?}",
+                        names, container.state
+                    );
+                }
+            }
+        }
+    }
+
     let container = docker.inspect_container(container_name, None).await;
     if let Ok(container) = container {
         println!(

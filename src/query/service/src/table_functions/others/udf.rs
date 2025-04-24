@@ -52,6 +52,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::OneBlockSource;
 use databend_common_storages_factory::Table;
+use databend_common_version::UDF_CLIENT_USER_AGENT;
 use url::Url;
 
 pub struct UdfEchoTable {
@@ -142,8 +143,12 @@ impl Table for UdfEchoTable {
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
 
-        let endpoint =
-            UDFFlightClient::build_endpoint(&self.address, connect_timeout, request_timeout)?;
+        let endpoint = UDFFlightClient::build_endpoint(
+            &self.address,
+            connect_timeout,
+            request_timeout,
+            UDF_CLIENT_USER_AGENT.as_str(),
+        )?;
         let mut client = UDFFlightClient::connect(endpoint, connect_timeout, 65536)
             .await?
             .with_tenant(ctx.get_tenant().tenant_name())?

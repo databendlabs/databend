@@ -52,6 +52,10 @@ impl<const PASSED: bool> QueueData for TestData<PASSED> {
         ErrorCode::Internal(format!("{:?}", key))
     }
 
+    fn lock_ttl(&self) -> Duration {
+        Duration::from_secs(3)
+    }
+
     fn timeout(&self) -> Duration {
         Duration::from_secs(1000)
     }
@@ -63,171 +67,178 @@ impl<const PASSED: bool> QueueData for TestData<PASSED> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_passed_acquire() -> Result<()> {
-    let metastore = create_meta_store().await?;
-    let test_count = (SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos()
-        % 5) as usize
-        + 5;
+    for is_global in [true, false] {
+        let metastore = create_meta_store().await?;
+        let test_count = (SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            % 5) as usize
+            + 5;
 
-    let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
-    let queue = QueueManager::<TestData<true>>::create(1, metastore);
-    let mut join_handles = Vec::with_capacity(test_count);
+        let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
+        let queue = QueueManager::<TestData<true>>::create(1, metastore, is_global);
+        let mut join_handles = Vec::with_capacity(test_count);
 
-    let instant = Instant::now();
-    for index in 0..test_count {
-        join_handles.push({
-            let queue = queue.clone();
-            let barrier = barrier.clone();
-            databend_common_base::runtime::spawn(async move {
-                barrier.wait().await;
-                let _guard = queue
-                    .acquire(TestData::<true> {
-                        lock_id: String::from("test_passed_acquire"),
-                        acquire_id: format!("TestData{}", index),
-                    })
-                    .await?;
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                Result::<()>::Ok(())
+        let instant = Instant::now();
+        for index in 0..test_count {
+            join_handles.push({
+                let queue = queue.clone();
+                let barrier = barrier.clone();
+                databend_common_base::runtime::spawn(async move {
+                    barrier.wait().await;
+                    let _guard = queue
+                        .acquire(TestData::<true> {
+                            lock_id: String::from("test_passed_acquire"),
+                            acquire_id: format!("TestData{}", index),
+                        })
+                        .await?;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    Result::<()>::Ok(())
+                })
             })
-        })
-    }
+        }
 
-    for join_handle in join_handles {
-        let _ = join_handle.await;
-    }
+        for join_handle in join_handles {
+            let _ = join_handle.await;
+        }
 
-    assert!(instant.elapsed() < Duration::from_secs(test_count as u64));
-    assert_eq!(queue.length(), 0);
+        assert!(instant.elapsed() < Duration::from_secs(test_count as u64));
+        assert_eq!(queue.length(), 0);
+    }
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_serial_acquire() -> Result<()> {
-    let metastore = create_meta_store().await?;
-    let test_count = (SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos()
-        % 5) as usize
-        + 5;
+    for is_global in [true, false] {
+        let metastore = create_meta_store().await?;
+        let test_count = (SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            % 5) as usize
+            + 5;
 
-    let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
-    let queue = QueueManager::<TestData>::create(1, metastore);
-    let mut join_handles = Vec::with_capacity(test_count);
+        let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
+        let queue = QueueManager::<TestData>::create(1, metastore, is_global);
+        let mut join_handles = Vec::with_capacity(test_count);
 
-    let instant = Instant::now();
-    for index in 0..test_count {
-        join_handles.push({
-            let queue = queue.clone();
-            let barrier = barrier.clone();
-            databend_common_base::runtime::spawn(async move {
-                barrier.wait().await;
-                let _guard = queue
-                    .acquire(TestData {
-                        lock_id: String::from("test_serial_acquire"),
-                        acquire_id: format!("TestData{}", index),
-                    })
-                    .await?;
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                Result::<()>::Ok(())
+        let instant = Instant::now();
+        for index in 0..test_count {
+            join_handles.push({
+                let queue = queue.clone();
+                let barrier = barrier.clone();
+                databend_common_base::runtime::spawn(async move {
+                    barrier.wait().await;
+                    let _guard = queue
+                        .acquire(TestData {
+                            lock_id: String::from("test_serial_acquire"),
+                            acquire_id: format!("TestData{}", index),
+                        })
+                        .await?;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    Result::<()>::Ok(())
+                })
             })
-        })
+        }
+
+        for join_handle in join_handles {
+            let _ = join_handle.await;
+        }
+
+        assert!(instant.elapsed() >= Duration::from_secs(test_count as u64));
+        assert_eq!(queue.length(), 0);
     }
-
-    for join_handle in join_handles {
-        let _ = join_handle.await;
-    }
-
-    assert!(instant.elapsed() >= Duration::from_secs(test_count as u64));
-    assert_eq!(queue.length(), 0);
-
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_concurrent_acquire() -> Result<()> {
-    let metastore = create_meta_store().await?;
-    let test_count = (SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos()
-        % 5) as usize
-        + 5;
+    for is_global in [true, false] {
+        let metastore = create_meta_store().await?;
+        let test_count = (SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            % 5) as usize
+            + 5;
 
-    let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
-    let queue = QueueManager::<TestData>::create(2, metastore);
-    let mut join_handles = Vec::with_capacity(test_count);
+        let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
+        let queue = QueueManager::<TestData>::create(2, metastore, is_global);
+        let mut join_handles = Vec::with_capacity(test_count);
 
-    let instant = Instant::now();
-    for index in 0..test_count {
-        join_handles.push({
-            let queue = queue.clone();
-            let barrier = barrier.clone();
-            databend_common_base::runtime::spawn(async move {
-                barrier.wait().await;
-                let _guard = queue
-                    .acquire(TestData {
-                        lock_id: String::from("test_concurrent_acquire"),
-                        acquire_id: format!("TestData{}", index),
-                    })
-                    .await?;
+        let instant = Instant::now();
+        for index in 0..test_count {
+            join_handles.push({
+                let queue = queue.clone();
+                let barrier = barrier.clone();
+                databend_common_base::runtime::spawn(async move {
+                    barrier.wait().await;
+                    let _guard = queue
+                        .acquire(TestData {
+                            lock_id: String::from("test_concurrent_acquire"),
+                            acquire_id: format!("TestData{}", index),
+                        })
+                        .await?;
 
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                Result::<()>::Ok(())
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    Result::<()>::Ok(())
+                })
             })
-        })
+        }
+
+        for join_handle in join_handles {
+            let _ = join_handle.await;
+        }
+
+        assert!(instant.elapsed() >= Duration::from_secs((test_count / 2) as u64));
+        assert!(instant.elapsed() < Duration::from_secs((test_count) as u64));
+
+        assert_eq!(queue.length(), 0);
     }
-
-    for join_handle in join_handles {
-        let _ = join_handle.await;
-    }
-
-    assert!(instant.elapsed() >= Duration::from_secs((test_count / 2) as u64));
-    assert!(instant.elapsed() < Duration::from_secs((test_count) as u64));
-
-    assert_eq!(queue.length(), 0);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_list_acquire() -> Result<()> {
-    let metastore = create_meta_store().await?;
-    let test_count = (SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos()
-        % 5) as usize
-        + 5;
+    for is_global in [true, false] {
+        let metastore = create_meta_store().await?;
+        let test_count = (SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            % 5) as usize
+            + 5;
 
-    let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
-    let queue = QueueManager::<TestData>::create(1, metastore);
-    let mut join_handles = Vec::with_capacity(test_count);
+        let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
+        let queue = QueueManager::<TestData>::create(1, metastore, is_global);
+        let mut join_handles = Vec::with_capacity(test_count);
 
-    for index in 0..test_count {
-        join_handles.push({
-            let queue = queue.clone();
-            let barrier = barrier.clone();
-            databend_common_base::runtime::spawn(async move {
-                barrier.wait().await;
-                let _guard = queue
-                    .acquire(TestData {
-                        lock_id: String::from("test_list_acquire"),
-                        acquire_id: format!("TestData{}", index),
-                    })
-                    .await?;
+        for index in 0..test_count {
+            join_handles.push({
+                let queue = queue.clone();
+                let barrier = barrier.clone();
+                databend_common_base::runtime::spawn(async move {
+                    barrier.wait().await;
+                    let _guard = queue
+                        .acquire(TestData {
+                            lock_id: String::from("test_list_acquire"),
+                            acquire_id: format!("TestData{}", index),
+                        })
+                        .await?;
 
-                tokio::time::sleep(Duration::from_secs(10)).await;
-                Result::<()>::Ok(())
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    Result::<()>::Ok(())
+                })
             })
-        })
-    }
+        }
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
-    assert_eq!(queue.length(), test_count - 1);
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        assert_eq!(queue.length(), test_count - 1);
+    }
 
     Ok(())
 }

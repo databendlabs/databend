@@ -18,11 +18,12 @@ use std::sync::Arc;
 use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_io::MergeIOReadResult;
 use enum_as_inner::EnumAsInner;
 
-type CachedColumnData = Vec<(ColumnId, Arc<Bytes>)>;
+type CachedColumnData = Vec<(ColumnId, Arc<ColumnData>)>;
 type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
 
 #[derive(EnumAsInner)]
@@ -65,7 +66,7 @@ impl BlockReadResult {
         // merge column data from cache
         for (column_id, data) in &self.cached_column_data {
             let data = data.as_ref();
-            res.insert(*column_id, DataItem::RawData(data.clone()));
+            res.insert(*column_id, DataItem::RawData(data.bytes()));
         }
 
         // merge column array from cache
@@ -90,8 +91,7 @@ impl BlockReadResult {
 
         // merge column data from cache
         for (column_id, data) in &self.cached_column_data {
-            let data = data.as_ref();
-            res.insert(*column_id, data.clone());
+            res.insert(*column_id, data.bytes());
         }
 
         Ok(res)

@@ -1,10 +1,10 @@
-query 
+query
 select * from infer_schema(location => '@data/parquet/tuple.parquet')
 ----
 id INT 0 0
 t TUPLE(A INT32, B STRING) 0 1
 
-query 
+query
 select * from infer_schema(location => '@data/parquet/complex.parquet')
 ----
 resourceType VARCHAR 1 0
@@ -39,13 +39,13 @@ yy__us_core_race VARCHAR 1 28
 yy__us_core_ethnicity VARCHAR 1 29
 yy__us_core_birthsex TUPLE(VALUECODE STRING,) 1 30
 
-query 
+query
 select * from infer_schema(location => '@data/parquet/variant.parquet')
 ----
 a INT 0 0
 b VARIANT 0 1
 
-query 
+query
 select * from infer_schema(location => '@data/parquet/', FILE_FORMAT => 'PARQUET',  pattern => 'tuple.*')
 ----
 id INT 0 0
@@ -55,7 +55,7 @@ statement ok
 drop CONNECTION IF EXISTS my_conn
 
 statement ok
-create CONNECTION my_conn STORAGE_TYPE = 's3' access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900/'
+create CONNECTION my_conn STORAGE_TYPE = 's3' access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900/' region='auto'
 
 query
 select * from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parquet', connection_name => 'my_conn')

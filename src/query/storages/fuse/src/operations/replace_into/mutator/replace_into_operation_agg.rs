@@ -583,10 +583,10 @@ impl AggregationContext {
             })??;
 
         // persistent data
-        let new_block_meta = BlockWriter::write_down(&self.data_accessor, serialized).await?;
+        let extended_block_meta = BlockWriter::write_down(&self.data_accessor, serialized).await?;
 
         metrics_inc_replace_block_number_write(1);
-        metrics_inc_replace_row_number_write(new_block_meta.row_count);
+        metrics_inc_replace_row_number_write(extended_block_meta.block_meta.row_count);
         metrics_inc_replace_replaced_blocks_rows(num_rows as u64);
 
         // generate log
@@ -595,7 +595,7 @@ impl AggregationContext {
                 segment_idx: segment_index,
                 block_idx: block_index,
             },
-            block_meta: Arc::new(new_block_meta),
+            block_meta: Arc::new(extended_block_meta),
         };
 
         Ok(Some(mutation))

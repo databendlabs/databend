@@ -60,6 +60,7 @@ message TableIdent {
   uint64 seq = 2;
 }
 
+
 // TableMeta is a container of all non-identity information.
 message TableMeta {
   uint64 ver = 100;

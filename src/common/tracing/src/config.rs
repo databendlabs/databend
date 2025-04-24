@@ -100,15 +100,8 @@ impl Display for StderrConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}{}, level={}, format={}",
-            self.on,
-            if !self.on {
-                "(To enable: LOG_STDERR_ON=true or RUST_LOG=info)"
-            } else {
-                ""
-            },
-            self.level,
-            self.format,
+            "enabled={}, level={}, format={}",
+            self.on, self.level, self.format,
         )
     }
 }

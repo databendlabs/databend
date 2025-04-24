@@ -74,6 +74,11 @@ impl MetaEventSubscriber {
                 .context(&self.ctx)
         })?;
 
+        info!(
+            "{} watch stream created: [{}, {})",
+            self.ctx, self.left, self.right
+        );
+
         Ok(strm)
     }
 
@@ -115,6 +120,11 @@ impl MetaEventSubscriber {
                     watch_result
                 }
             };
+
+            info!(
+                "{} received event from watch-stream: {:?}",
+                self.ctx, watch_result
+            );
 
             let Some(watch_response) = watch_result? else {
                 // TODO: add retry connecting.
