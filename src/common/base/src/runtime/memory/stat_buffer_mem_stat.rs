@@ -72,27 +72,13 @@ impl MemStatBuffer {
         }
 
         self.cur_mem_stat_id = 0;
+
         if let Some(mem_stat) = self.cur_mem_stat.take() {
-            let may_root_oom = self
-                .global_mem_stat
-                .record_memory_impl::<false>(memory_usage, 0, None, None)
-                .err();
-
-            if let Err(cause) =
-                mem_stat.record_memory::<FALLBACK>(memory_usage, alloc, may_root_oom)
-            {
-                if FALLBACK {
-                    self.global_mem_stat.rollback(alloc);
-                }
-
-                return Err(cause);
-            }
-
-            return Ok(());
+            return mem_stat.terminable_record_memory::<FALLBACK>(memory_usage, alloc);
         }
 
         self.global_mem_stat
-            .record_memory::<FALLBACK>(memory_usage, alloc, None)
+            .record_memory::<FALLBACK>(memory_usage, alloc)
     }
 
     pub fn alloc(&mut self, mem_stat: &Arc<MemStat>, usage: i64) -> Result<(), AllocError> {

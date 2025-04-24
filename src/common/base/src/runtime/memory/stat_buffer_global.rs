@@ -71,15 +71,10 @@ impl GlobalStatBuffer {
     }
 
     /// Flush buffered stat to MemStat it belongs to.
-    pub fn flush<const ROLLBACK: bool>(
-        &mut self,
-        alloc: i64,
-    ) -> std::result::Result<(), OutOfLimit> {
+    pub fn flush<const ROLLBACK: bool>(&mut self, alloc: i64) -> Result<(), OutOfLimit> {
         match std::mem::take(&mut self.memory_usage) {
             0 => Ok(()),
-            usage => self
-                .global_mem_stat
-                .record_memory::<ROLLBACK>(usage, alloc, None),
+            usage => self.global_mem_stat.record_memory::<ROLLBACK>(usage, alloc),
         }
     }
 
@@ -162,9 +157,7 @@ impl GlobalStatBuffer {
 
         // Memory operations during destruction will be recorded to global stat.
         self.destroyed_thread_local_macro = true;
-        let _ = self
-            .global_mem_stat
-            .record_memory::<false>(memory_usage, 0, None);
+        let _ = self.global_mem_stat.record_memory::<false>(memory_usage, 0);
     }
 }
 

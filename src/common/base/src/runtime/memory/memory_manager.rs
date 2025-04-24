@@ -15,9 +15,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::mem::MaybeUninit;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
@@ -27,13 +24,8 @@ use std::sync::PoisonError;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::runtime::memory::mem_stat::MEMORY_LIMIT_EXCEEDED_NO_ERROR;
-use crate::runtime::memory::mem_stat::MEMORY_LIMIT_EXCEEDED_REPORTED_ERROR;
-use crate::runtime::memory::mem_stat::MEMORY_LIMIT_EXCEEDED_REPORTING_ERROR;
-use crate::runtime::memory::mem_stat::MEMORY_LIMIT_RELEASED_MEMORY;
 use crate::runtime::MemStat;
 use crate::runtime::OutOfLimit;
-use crate::runtime::ThreadTracker;
 use crate::runtime::GLOBAL_MEM_STAT;
 
 pub static GLOBAL_QUERIES_MANAGER: QueriesMemoryManager = QueriesMemoryManager::create();
@@ -49,8 +41,6 @@ enum QueryGcState {
 
 #[derive(Debug, Clone)]
 struct ResourceMemoryInfo {
-    resource_tag: String,
-    name: Option<String>,
     condvar: Arc<Condvar>,
     mutex: Arc<Mutex<QueryGcState>>,
     killing_instant: Option<Instant>,
@@ -59,19 +49,18 @@ struct ResourceMemoryInfo {
 unsafe impl Send for ResourceMemoryInfo {}
 unsafe impl Sync for ResourceMemoryInfo {}
 
+type GcHandler = Arc<dyn Fn(&String, bool) -> bool + Send + Sync + 'static>;
+
 #[allow(dead_code)]
 struct ExceededMemoryState {
     resources: HashMap<ResourceTag, ResourceMemoryInfo>,
     groups: HashMap<usize, HashSet<(Priority, ResourceTag)>>,
-    memory_gc_handler: Option<Arc<dyn Fn(&String, bool) -> bool + Send + Sync + 'static>>,
+    memory_gc_handler: Option<GcHandler>,
 }
 
 impl ExceededMemoryState {
     pub fn low_priority_resource(&self, id: usize) -> Option<String> {
-        let Some(resources) = self.groups.get(&id) else {
-            return None;
-        };
-
+        let resources = self.groups.get(&id)?;
         resources.iter().min().map(|(_, tag)| tag.clone())
     }
 
@@ -83,7 +72,7 @@ impl ExceededMemoryState {
         }
 
         for value in self.groups.values_mut() {
-            value.retain(|(x, v)| v != id);
+            value.retain(|(_, v)| v != id);
         }
     }
 }
@@ -147,11 +136,9 @@ impl QueriesMemoryManager {
         };
 
         v.insert(ResourceMemoryInfo {
-            resource_tag: resource_tag.clone(),
-            name: mem_stat.name.clone(),
-            mutex: Arc::new(Mutex::new(QueryGcState::Running)),
-            condvar: Arc::new(Default::default()),
             killing_instant: None,
+            condvar: Arc::new(Default::default()),
+            mutex: Arc::new(Mutex::new(QueryGcState::Running)),
         });
     }
 
@@ -239,7 +226,7 @@ impl QueriesMemoryManager {
 
                 let mutex = mutex.lock();
                 let mut mutex = mutex.unwrap_or_else(PoisonError::into_inner);
-                log::info!("exceeded {} wait killing {}", waiting_id, terminate_id);
+                eprintln!("exceeded {} wait killing {}", waiting_id, terminate_id);
 
                 // max wait 10 seconds per query
                 for _index in 0..100 {
@@ -272,7 +259,8 @@ impl QueriesMemoryManager {
         Err(cause)
     }
 
-    pub fn release_memory(&self, mem_stat: &MemStat, tag: Option<&ResourceTag>) {
+    pub fn release_memory(&self, tag: Option<&ResourceTag>) {
+        eprintln!("exceeded release {:?}", tag);
         let Some(terminate_id) = tag else {
             return;
         };

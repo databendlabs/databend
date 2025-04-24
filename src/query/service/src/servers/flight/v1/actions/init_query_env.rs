@@ -24,7 +24,8 @@ use crate::servers::flight::v1::packets::QueryEnv;
 pub static INIT_QUERY_ENV: &str = "/actions/init_query_env";
 
 pub async fn init_query_env(env: QueryEnv) -> Result<()> {
-    let query_mem_stat = MemStat::create(format!("Query-{}", env.query_id));
+    let query_mem_stat =
+        MemStat::create_terminable(format!("Query-{}", env.query_id), env.query_id.clone());
     let query_max_memory_usage = env.settings.get_max_query_memory_usage()?;
     let out_of_memory_behavior = env.settings.get_query_out_of_memory_behavior()?;
 

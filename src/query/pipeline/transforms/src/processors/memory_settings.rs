@@ -95,13 +95,13 @@ mod tests {
 
     fn create_static_mem_stat(usage: usize) -> &'static MemStat {
         let mem_stat = MemStat::create(GlobalUniqName::unique());
-        let _ = mem_stat.record_memory::<false>(usage as i64, 0, None);
+        let _ = mem_stat.record_memory::<false>(usage as i64, 0);
         Box::leak(Box::new(Arc::into_inner(mem_stat).unwrap()))
     }
 
     fn create_mem_stat(usage: usize) -> Arc<MemStat> {
         let mem_stat = MemStat::create(GlobalUniqName::unique());
-        let _ = mem_stat.record_memory::<false>(usage as i64, 0, None);
+        let _ = mem_stat.record_memory::<false>(usage as i64, 0);
         mem_stat
     }
 

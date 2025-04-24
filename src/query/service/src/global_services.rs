@@ -181,7 +181,7 @@ impl GlobalServices {
     }
 }
 
-pub fn memory_gc_handle(query_id: &String, force: bool) -> bool {
+pub fn memory_gc_handle(query_id: &String, _force: bool) -> bool {
     log::info!("memory_gc_handle {}", query_id);
     let sessions_manager = SessionManager::instance();
     // TODO: dealloc jemalloc dirty page?

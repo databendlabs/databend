@@ -401,7 +401,9 @@ impl SessionManager {
             };
 
             if query_id == &session_query_id {
-                session.force_kill_query(ErrorCode::AbortedQuery(format!("")));
+                session.force_kill_query(ErrorCode::AbortedQuery(
+                    "Query interrupted due to memory contention.",
+                ));
                 return true;
             }
         }
