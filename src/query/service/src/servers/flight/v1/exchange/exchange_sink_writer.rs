@@ -70,11 +70,15 @@ impl AsyncSink for ExchangeWriterSink {
     async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
         let serialize_meta = match data_block.take_meta() {
             None => Err(ErrorCode::Internal(
-                "ExchangeWriterSink only recv ExchangeSerializeMeta.",
+                "ExchangeWriterSink only recv ExchangeSerializeMeta, but got none.",
             )),
-            Some(block_meta) => ExchangeSerializeMeta::downcast_from(block_meta).ok_or_else(|| {
-                ErrorCode::Internal("ExchangeWriterSink only recv ExchangeSerializeMeta.")
-            }),
+            Some(block_meta) => ExchangeSerializeMeta::downcast_from(block_meta.clone())
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "ExchangeWriterSink only recv ExchangeSerializeMeta, but got {:?}",
+                        block_meta
+                    ))
+                }),
         }?;
 
         let mut bytes = 0;
