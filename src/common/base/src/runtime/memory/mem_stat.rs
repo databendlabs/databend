@@ -341,14 +341,6 @@ impl MemStat {
         }
 
         if water_height != 0 && used <= water_height {
-            eprintln!(
-                "{:?} check limit {}, {}, {}, {}",
-                tag,
-                limit,
-                water_height,
-                used,
-                self.exceeded_memory.load(Ordering::SeqCst)
-            );
             if self.exceeded_memory.fetch_and(false, Ordering::SeqCst) {
                 let _guard = LimitMemGuard::enter_unlimited();
                 let revert_limit = self.memory_limit.set_limit.load(Ordering::Relaxed);
