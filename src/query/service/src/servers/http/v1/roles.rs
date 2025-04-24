@@ -43,11 +43,11 @@ pub struct RoleInfo {
 async fn handle(ctx: &HttpQueryContext) -> Result<ListRolesResponse> {
     let mut all_roles = ctx.session.get_all_available_roles().await?;
     all_roles.sort_by(|a, b| a.name.cmp(&b.name));
+    let current_user = ctx.session.get_current_user()?;
     let current_role = ctx
         .session
         .get_current_role()
         .map_or(PUBLIC_ROLE.to_string(), |role| role.name);
-    let current_user = ctx.session.get_current_user()?;
     let default_role = current_user
         .option
         .default_role()
