@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_storages_parquet::ParquetFilesPart;
+use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;
 
 pub(crate) fn convert_file_scan_task(task: iceberg::scan::FileScanTask) -> ParquetPart {
-    let file = ParquetFilesPart {
-        files: vec![(task.data_file_path.clone(), task.length)],
+    let file = ParquetFilePart {
+        file: task.data_file_path.clone(),
+        compressed_size: task.length,
         estimated_uncompressed_size: task.length * 5,
     };
-    ParquetPart::ParquetFiles(file)
+    ParquetPart::ParquetFile(file)
 }

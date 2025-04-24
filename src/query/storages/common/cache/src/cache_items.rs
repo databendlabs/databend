@@ -34,6 +34,10 @@ use crate::HybridCache;
 pub struct ColumnData(Bytes);
 
 impl ColumnData {
+    pub fn from_bytes(bytes: Bytes) -> Self {
+        ColumnData(bytes)
+    }
+
     pub fn from_merge_io_read_result(bytes: Bytes) -> Self {
         // Bytes are from merge read result, may refer to a large chunk of memory;
         // Caching this large buffer wastes memory, so we need to copy it out.

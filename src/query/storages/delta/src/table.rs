@@ -42,7 +42,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::init_operator;
-use databend_common_storages_parquet::ParquetFilesPart;
+use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSPruner;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
@@ -337,9 +337,10 @@ impl DeltaTable {
                 let partition_values = get_partition_values(add, &partition_fields)?;
                 Ok(Arc::new(Box::new(DeltaPartInfo {
                         partition_values,
-                        data: ParquetPart::ParquetFiles(
-                            ParquetFilesPart {
-                                files: vec![(add.path.clone(), add.size as u64)],
+                        data: ParquetPart::ParquetFile(
+                            ParquetFilePart {
+                                file: add.path.clone(),
+                                compressed_size: add.size as u64,
                                 estimated_uncompressed_size: add.size as u64, // This field is not used here.
                             },
                         ),

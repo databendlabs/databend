@@ -38,7 +38,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
 use databend_common_storage::read_metadata_async;
 use databend_common_storage::DataOperator;
-use databend_common_storages_parquet::ParquetFilesPart;
+use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
@@ -120,8 +120,9 @@ impl Table for ResultScan {
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        let part = ParquetPart::ParquetFiles(ParquetFilesPart {
-            files: vec![(self.location.clone(), self.file_size)],
+        let part = ParquetPart::ParquetFile(ParquetFilePart {
+            file: self.location.clone(),
+            compressed_size: self.file_size,
             estimated_uncompressed_size: self.file_size,
         });
 

@@ -17,7 +17,6 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
-use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -73,10 +72,6 @@ pub struct ParquetTableInfo {
     pub compression_ratio: f64,
     pub leaf_fields: Arc<Vec<TableField>>,
 
-    // These fields are only used in coordinator node of the cluster,
-    // so we don't need to serialize them.
-    #[serde(skip)]
-    pub parquet_metas: Arc<Mutex<Vec<Arc<FullParquetMeta>>>>,
     #[serde(skip)]
     pub need_stats_provider: bool,
     #[serde(skip)]
@@ -214,7 +209,6 @@ mod tests {
             files_to_read: None,
             schema_from: "".to_string(),
             compression_ratio: 0.0,
-            parquet_metas: Arc::new(Mutex::new(vec![])),
             need_stats_provider: false,
             max_threads: 1,
             max_memory_usage: 10000,

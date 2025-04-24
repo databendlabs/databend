@@ -44,7 +44,6 @@ type SchemaIndex = usize;
 enum State {
     Init,
     ReadRowGroup((SchemaIndex, ReadPolicyImpl)),
-    // ReadFiles((SchemaIndex, Vec<(String, Vec<u8>)>)),
 }
 
 pub struct ParquetCopySource {

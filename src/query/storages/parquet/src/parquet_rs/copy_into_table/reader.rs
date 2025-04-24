@@ -57,6 +57,7 @@ impl RowGroupReaderForCopy {
             None,
             read_settings.max_gap_size,
             read_settings.max_range_size,
+            false,
         );
         let mut _sorter = None;
         self.row_group_reader_builder
