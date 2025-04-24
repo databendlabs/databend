@@ -39,6 +39,6 @@ pub async fn verify_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoRespo
     Ok(Json(VerifyResponse {
         tenant: tenant.tenant_name().to_string(),
         user: user.name.to_string(),
-        roles: roles.iter().map(|r| r.name).collect(),
+        roles: roles.into_iter().map(|r| r.name).collect(),
     }))
 }
