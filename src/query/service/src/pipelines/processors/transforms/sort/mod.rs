@@ -37,8 +37,8 @@ mod exchange;
 mod execute;
 mod merge_sort;
 mod route;
+mod shuffle;
 mod sort_spill;
-mod wait;
 
 use sort_spill::SpillableBlock;
 

@@ -34,17 +34,18 @@ use databend_common_pipeline_transforms::MemorySettings;
 use super::collect::TransformSortCollect;
 use super::execute::TransformSortExecute;
 use super::merge_sort::TransformSort;
+use super::shuffle::SortSampleState;
+use super::shuffle::TransformSortShuffle;
 use crate::spillers::Spiller;
 
 enum SortType {
     Sort,
     Collect,
     Execute,
+    Shuffle,
 }
 
 pub struct TransformSortBuilder {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
     schema: DataSchemaRef,
     block_size: usize,
     sort_desc: Arc<[SortColumnDescription]>,
@@ -54,22 +55,16 @@ pub struct TransformSortBuilder {
     spiller: Arc<Spiller>,
     enable_loser_tree: bool,
     limit: Option<usize>,
-    processor: Option<Result<Box<dyn Processor>>>,
-    typ: SortType,
 }
 
 impl TransformSortBuilder {
     pub fn create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
         block_size: usize,
         spiller: Arc<Spiller>,
     ) -> Self {
-        Self {
-            input,
-            output,
+        TransformSortBuilder {
             block_size,
             schema,
             sort_desc,
@@ -79,8 +74,6 @@ impl TransformSortBuilder {
             enable_loser_tree: false,
             limit: None,
             memory_settings: MemorySettings::disable_spill(),
-            processor: None,
-            typ: SortType::Sort,
         }
     }
 
@@ -109,34 +102,133 @@ impl TransformSortBuilder {
         self
     }
 
-    pub fn build(mut self) -> Result<Box<dyn Processor>> {
-        debug_assert!(if self.output_order_col {
+    pub fn build(
+        &self,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> Result<Box<dyn Processor>> {
+        self.check();
+
+        let mut build = Build {
+            params: self,
+            input,
+            output,
+            processor: None,
+            typ: SortType::Sort,
+            id: 0,
+            state: None,
+        };
+
+        select_row_type(&mut build);
+        build.processor.unwrap()
+    }
+
+    pub fn build_collect(
+        &self,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> Result<Box<dyn Processor>> {
+        self.check();
+
+        let mut build = Build {
+            params: self,
+            input,
+            output,
+            processor: None,
+            typ: SortType::Collect,
+            id: 0,
+            state: None,
+        };
+
+        select_row_type(&mut build);
+        build.processor.unwrap()
+    }
+
+    pub fn build_exec(
+        &self,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> Result<Box<dyn Processor>> {
+        self.check();
+
+        let mut build = Build {
+            params: self,
+            input,
+            output,
+            processor: None,
+            typ: SortType::Execute,
+            id: 0,
+            state: None,
+        };
+
+        select_row_type(&mut build);
+        build.processor.unwrap()
+    }
+
+    pub fn build_shuffle(
+        &self,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        id: usize,
+        state: Arc<SortSampleState>,
+    ) -> Result<Box<dyn Processor>> {
+        self.check();
+
+        let mut build = Build {
+            params: self,
+            input,
+            output,
+            processor: None,
+            typ: SortType::Shuffle,
+            id,
+            state: Some(state),
+        };
+
+        select_row_type(&mut build);
+        build.processor.unwrap()
+    }
+
+    fn should_use_sort_limit(&self) -> bool {
+        self.limit.map(|limit| limit < 10000).unwrap_or_default()
+    }
+
+    fn check(&self) {
+        assert!(if self.output_order_col {
             self.schema.has_field(ORDER_COL_NAME)
         } else {
             !self.schema.has_field(ORDER_COL_NAME)
         });
-
-        select_row_type(&mut self);
-        self.processor.unwrap()
     }
+}
 
+pub struct Build<'a> {
+    params: &'a TransformSortBuilder,
+    typ: SortType,
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    processor: Option<Result<Box<dyn Processor>>>,
+    id: usize,
+    state: Option<Arc<SortSampleState>>,
+}
+
+impl Build<'_> {
     fn build_sort<A, C>(&mut self) -> Result<Box<dyn Processor>>
     where
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
-        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
+        let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
         Ok(Box::new(TransformSort::<A, C>::new(
             self.input.clone(),
             self.output.clone(),
             schema,
-            self.sort_desc.clone(),
-            self.block_size,
-            self.limit.map(|limit| (limit, false)),
-            self.spiller.clone(),
-            self.output_order_col,
-            self.order_col_generated,
-            self.memory_settings.clone(),
+            self.params.sort_desc.clone(),
+            self.params.block_size,
+            self.params.limit.map(|limit| (limit, false)),
+            self.params.spiller.clone(),
+            self.params.output_order_col,
+            self.params.order_col_generated,
+            self.params.memory_settings.clone(),
         )?))
     }
 
@@ -145,31 +237,19 @@ impl TransformSortBuilder {
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
-        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
+        let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
         Ok(Box::new(TransformSort::<A, C>::new(
             self.input.clone(),
             self.output.clone(),
             schema,
-            self.sort_desc.clone(),
-            self.block_size,
-            Some((self.limit.unwrap(), true)),
-            self.spiller.clone(),
-            self.output_order_col,
-            self.order_col_generated,
-            self.memory_settings.clone(),
+            self.params.sort_desc.clone(),
+            self.params.block_size,
+            Some((self.params.limit.unwrap(), true)),
+            self.params.spiller.clone(),
+            self.params.output_order_col,
+            self.params.order_col_generated,
+            self.params.memory_settings.clone(),
         )?))
-    }
-
-    pub fn build_collect(mut self) -> Result<Box<dyn Processor>> {
-        debug_assert!(if self.output_order_col {
-            self.schema.has_field(ORDER_COL_NAME)
-        } else {
-            !self.schema.has_field(ORDER_COL_NAME)
-        });
-        self.typ = SortType::Collect;
-
-        select_row_type(&mut self);
-        self.processor.unwrap()
     }
 
     fn build_sort_collect<A, C>(&mut self) -> Result<Box<dyn Processor>>
@@ -177,18 +257,18 @@ impl TransformSortBuilder {
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
-        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
+        let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
 
         Ok(Box::new(TransformSortCollect::<A, C>::new(
             self.input.clone(),
             self.output.clone(),
             schema,
-            self.sort_desc.clone(),
-            self.block_size,
-            self.limit.map(|limit| (limit, false)),
-            self.spiller.clone(),
-            self.order_col_generated,
-            self.memory_settings.clone(),
+            self.params.sort_desc.clone(),
+            self.params.block_size,
+            self.params.limit.map(|limit| (limit, false)),
+            self.params.spiller.clone(),
+            self.params.order_col_generated,
+            self.params.memory_settings.clone(),
         )?))
     }
 
@@ -197,54 +277,53 @@ impl TransformSortBuilder {
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
-        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
+        let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
         Ok(Box::new(TransformSortCollect::<A, C>::new(
             self.input.clone(),
             self.output.clone(),
             schema,
-            self.sort_desc.clone(),
-            self.block_size,
-            Some((self.limit.unwrap(), true)),
-            self.spiller.clone(),
-            self.order_col_generated,
-            self.memory_settings.clone(),
+            self.params.sort_desc.clone(),
+            self.params.block_size,
+            Some((self.params.limit.unwrap(), true)),
+            self.params.spiller.clone(),
+            self.params.order_col_generated,
+            self.params.memory_settings.clone(),
         )?))
-    }
-
-    pub fn build_exec(mut self) -> Result<Box<dyn Processor>> {
-        debug_assert!(if self.output_order_col {
-            self.schema.has_field(ORDER_COL_NAME)
-        } else {
-            !self.schema.has_field(ORDER_COL_NAME)
-        });
-        self.typ = SortType::Execute;
-
-        select_row_type(&mut self);
-        self.processor.unwrap()
     }
 
     fn build_sort_exec<A>(&mut self) -> Result<Box<dyn Processor>>
     where A: SortAlgorithm + 'static {
-        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
+        let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
 
         Ok(Box::new(TransformSortExecute::<A>::new(
             self.input.clone(),
             self.output.clone(),
             schema,
-            self.limit,
-            self.spiller.clone(),
-            self.output_order_col,
+            self.params.limit,
+            self.params.spiller.clone(),
+            self.params.output_order_col,
         )?))
+    }
+
+    fn build_sort_shuffle<R>(&mut self) -> Result<Box<dyn Processor>>
+    where R: Rows + 'static {
+        Ok(Box::new(TransformSortShuffle::<R>::new(
+            self.input.clone(),
+            self.output.clone(),
+            self.id,
+            self.state.clone().unwrap(),
+            self.params.spiller.clone(),
+        )))
     }
 }
 
-impl RowsTypeVisitor for TransformSortBuilder {
+impl RowsTypeVisitor for Build<'_> {
     fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+        self.params.schema.clone()
     }
 
     fn sort_desc(&self) -> &[SortColumnDescription] {
-        &self.sort_desc
+        &self.params.sort_desc
     }
 
     fn visit_type<R, C>(&mut self)
@@ -254,8 +333,8 @@ impl RowsTypeVisitor for TransformSortBuilder {
     {
         let processor = match self.typ {
             SortType::Sort => match (
-                self.limit.map(|limit| limit < 10000).unwrap_or_default(),
-                self.enable_loser_tree,
+                self.params.should_use_sort_limit(),
+                self.params.enable_loser_tree,
             ) {
                 (true, true) => self.build_sort_limit::<LoserTreeSort<R>, C>(),
                 (true, false) => self.build_sort_limit::<HeapSort<R>, C>(),
@@ -263,18 +342,19 @@ impl RowsTypeVisitor for TransformSortBuilder {
                 (false, false) => self.build_sort::<HeapSort<R>, C>(),
             },
             SortType::Collect => match (
-                self.limit.map(|limit| limit < 10000).unwrap_or_default(),
-                self.enable_loser_tree,
+                self.params.should_use_sort_limit(),
+                self.params.enable_loser_tree,
             ) {
                 (true, true) => self.build_sort_limit_collect::<LoserTreeSort<R>, C>(),
                 (true, false) => self.build_sort_limit_collect::<HeapSort<R>, C>(),
                 (false, true) => self.build_sort_collect::<LoserTreeSort<R>, C>(),
                 (false, false) => self.build_sort_collect::<HeapSort<R>, C>(),
             },
-            SortType::Execute => match self.enable_loser_tree {
+            SortType::Execute => match self.params.enable_loser_tree {
                 true => self.build_sort_exec::<LoserTreeSort<R>>(),
                 false => self.build_sort_exec::<HeapSort<R>>(),
             },
+            SortType::Shuffle => self.build_sort_shuffle::<R>(),
         };
         self.processor = Some(processor)
     }
