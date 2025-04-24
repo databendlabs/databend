@@ -47,9 +47,8 @@ async fn handle(ctx: &HttpQueryContext) -> Result<ListRolesResponse> {
         .session
         .get_current_role()
         .map_or(PUBLIC_ROLE.to_string(), |role| role.name);
-    let default_role = ctx
-        .session
-        .get_current_user()?
+    let current_user = ctx.session.get_current_user()?;
+    let default_role = current_user
         .option
         .default_role()
         .map_or(PUBLIC_ROLE.to_string(), |role| role.to_string());
