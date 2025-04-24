@@ -147,6 +147,8 @@ fn test_statement() {
         r#"create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary' warehouse='default');"#,
         r#"select current_catalog();"#,
         r#"use catalog ctl;"#,
+        r#"catalog ctl;"#,
+        r#"set catalog ctl;"#,
         r#"create database if not exists a;"#,
         r#"create database ctl.t engine = Default;"#,
         r#"create database t engine = Default;"#,
