@@ -20,15 +20,19 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
 
-pub struct TransformSortRoute {
+struct TransformSortRoute {
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
     cur_input: usize,
 }
 
 impl TransformSortRoute {
-    pub fn new(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>) -> Self {
+    fn new(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>) -> Self {
         Self {
             inputs,
             output,
@@ -36,7 +40,7 @@ impl TransformSortRoute {
         }
     }
 
-    fn process_input(&mut self) -> Result<()> {
+    fn process(&mut self) -> Result<()> {
         for (i, input) in self.inputs.iter().enumerate() {
             if i != self.cur_input {
                 if !input.is_finished() && !input.has_data() {
@@ -84,7 +88,7 @@ impl Processor for TransformSortRoute {
             return Ok(Event::NeedConsume);
         }
 
-        self.process_input()?;
+        self.process()?;
 
         if self.inputs.iter().all(|input| input.is_finished()) {
             self.output.finish();
@@ -93,4 +97,24 @@ impl Processor for TransformSortRoute {
 
         Ok(Event::NeedData)
     }
+}
+
+pub fn add_range_shuffle_route(pipeline: &mut Pipeline) -> Result<()> {
+    let inputs = pipeline.output_len();
+    let inputs_port = (0..inputs).map(|_| InputPort::create()).collect::<Vec<_>>();
+    let output = OutputPort::create();
+
+    let processor = ProcessorPtr::create(Box::new(TransformSortRoute::new(
+        inputs_port.clone(),
+        output.clone(),
+    )));
+
+    let pipe = Pipe::create(inputs, 1, vec![PipeItem::create(
+        processor,
+        inputs_port,
+        vec![output],
+    )]);
+
+    pipeline.add_pipe(pipe);
+    Ok(())
 }

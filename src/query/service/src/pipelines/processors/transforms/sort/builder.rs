@@ -20,6 +20,8 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::sort::algorithm::HeapSort;
 use databend_common_pipeline_transforms::sort::algorithm::LoserTreeSort;
@@ -114,14 +116,12 @@ impl TransformSortBuilder {
             params: self,
             input,
             output,
-            processor: None,
             typ: SortType::Sort,
             id: 0,
             state: None,
         };
 
-        select_row_type(&mut build);
-        build.processor.unwrap()
+        select_row_type(&mut build)
     }
 
     pub fn build_collect(
@@ -135,14 +135,12 @@ impl TransformSortBuilder {
             params: self,
             input,
             output,
-            processor: None,
             typ: SortType::Collect,
             id: 0,
             state: None,
         };
 
-        select_row_type(&mut build);
-        build.processor.unwrap()
+        select_row_type(&mut build)
     }
 
     pub fn build_exec(
@@ -156,14 +154,12 @@ impl TransformSortBuilder {
             params: self,
             input,
             output,
-            processor: None,
             typ: SortType::Execute,
             id: 0,
             state: None,
         };
 
-        select_row_type(&mut build);
-        build.processor.unwrap()
+        select_row_type(&mut build)
     }
 
     pub fn build_shuffle(
@@ -179,14 +175,12 @@ impl TransformSortBuilder {
             params: self,
             input,
             output,
-            processor: None,
             typ: SortType::Shuffle,
             id,
             state: Some(state),
         };
 
-        select_row_type(&mut build);
-        build.processor.unwrap()
+        select_row_type(&mut build)
     }
 
     fn should_use_sort_limit(&self) -> bool {
@@ -211,14 +205,27 @@ impl TransformSortBuilder {
             limit: self.limit,
         }
     }
+
+    pub fn add_shuffle(&self, pipeline: &mut Pipeline, state: Arc<SortSampleState>) -> Result<()> {
+        use std::sync::atomic;
+        let i = atomic::AtomicUsize::new(0);
+        pipeline.add_transform(|input, output| {
+            let id = i.fetch_add(1, atomic::Ordering::AcqRel);
+            Ok(ProcessorPtr::create(self.build_shuffle(
+                input,
+                output,
+                id,
+                state.clone(),
+            )?))
+        })
+    }
 }
 
-pub struct Build<'a> {
+struct Build<'a> {
     params: &'a TransformSortBuilder,
     typ: SortType,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    processor: Option<Result<Box<dyn Processor>>>,
     id: usize,
     state: Option<Arc<SortSampleState>>,
 }
@@ -284,6 +291,7 @@ impl Build<'_> {
 }
 
 impl RowsTypeVisitor for Build<'_> {
+    type Result = Result<Box<dyn Processor>>;
     fn schema(&self) -> DataSchemaRef {
         self.params.schema.clone()
     }
@@ -292,13 +300,13 @@ impl RowsTypeVisitor for Build<'_> {
         &self.params.sort_desc
     }
 
-    fn visit_type<R, C>(&mut self)
+    fn visit_type<R, C>(&mut self) -> Self::Result
     where
         R: Rows + 'static,
         C: RowConverter<R> + Send + 'static,
     {
         let limit_sort = self.params.should_use_sort_limit();
-        let processor = match self.typ {
+        match self.typ {
             SortType::Sort => match self.params.enable_loser_tree {
                 true => self.build_sort::<LoserTreeSort<R>, C>(limit_sort),
                 false => self.build_sort::<HeapSort<R>, C>(limit_sort),
@@ -312,7 +320,6 @@ impl RowsTypeVisitor for Build<'_> {
                 false => self.build_sort_exec::<HeapSort<R>>(),
             },
             SortType::Shuffle => self.build_sort_shuffle::<R>(),
-        };
-        self.processor = Some(processor)
+        }
     }
 }

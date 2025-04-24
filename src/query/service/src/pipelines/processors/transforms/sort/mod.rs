@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod sort_exchange;
-mod sort_merge;
-mod sort_sample;
-mod sort_wait;
-
 use std::sync::Arc;
 
 use bounds::Bounds;
@@ -25,13 +20,12 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_transforms::SortSpillParams;
-pub use sort_merge::*;
-pub use sort_sample::*;
+use sort_spill::SpillableBlock;
 
-mod builder;
-pub use builder::TransformSortBuilder;
+use crate::spillers::Spiller;
 
 mod bounds;
+mod builder;
 mod collect;
 mod exchange;
 mod execute;
@@ -40,9 +34,10 @@ mod route;
 mod shuffle;
 mod sort_spill;
 
-use sort_spill::SpillableBlock;
-
-use crate::spillers::Spiller;
+pub use builder::*;
+pub use exchange::*;
+pub use route::*;
+pub use shuffle::*;
 
 #[derive(Clone)]
 struct Base {
