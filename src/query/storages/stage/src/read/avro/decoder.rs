@@ -42,7 +42,6 @@ use databend_common_meta_app::principal::NullAs;
 use lexical_core::FromLexical;
 use num_bigint::BigInt;
 use num_traits::NumCast;
-use databend_common_expression::types::i256;
 
 use crate::read::avro::avro_to_jsonb::to_jsonb;
 use crate::read::avro::schema_match::MatchedField;

@@ -20,10 +20,10 @@ use std::ops::BitXor;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use databend_common_expression::types::Decimal;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::decimal::DecimalDomain;
 use databend_common_expression::types::decimal::DecimalType;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::Number;
@@ -33,6 +33,7 @@ use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Decimal;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberClass;
@@ -65,7 +66,6 @@ use databend_functions_scalar_decimal::register_decimal_to_int;
 use databend_functions_scalar_decimal::register_decimal_to_string;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
-use databend_common_expression::types::i256;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);

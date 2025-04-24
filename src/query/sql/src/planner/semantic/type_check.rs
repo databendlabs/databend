@@ -21,7 +21,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
 
-use databend_common_expression::types::i256;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -72,6 +71,7 @@ use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;

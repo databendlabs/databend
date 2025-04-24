@@ -15,21 +15,17 @@
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::ops::Range;
-
 use std::num::TryFromIntError;
-
-use micromarshal::Marshal;
-use std::ops::Mul;
-use std::ops::Div;
 use std::ops::Add;
-use std::ops::Sub;
-
-use std::ops::Neg;
 use std::ops::AddAssign;
-use std::ops::SubAssign;
-use std::ops::MulAssign;
+use std::ops::Div;
 use std::ops::DivAssign;
+use std::ops::Mul;
+use std::ops::MulAssign;
+use std::ops::Neg;
+use std::ops::Range;
+use std::ops::Sub;
+use std::ops::SubAssign;
 
 use arrow_data::ArrayData;
 use arrow_data::ArrayDataBuilder;
@@ -41,10 +37,11 @@ use databend_common_exception::Result;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use enum_as_inner::EnumAsInner;
-//use ethnum::i256;
+// use ethnum::i256;
 use ethnum::u256;
 use ethnum::AsI256;
 use itertools::Itertools;
+use micromarshal::Marshal;
 use num_bigint::BigInt;
 use num_traits::FromBytes;
 use num_traits::NumCast;
@@ -52,8 +49,7 @@ use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
-//use databend_common_column::types::NativeType;
-
+// use databend_common_column::types::NativeType;
 use super::SimpleDomain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -66,10 +62,10 @@ use crate::Domain;
 use crate::Scalar;
 use crate::ScalarRef;
 
-//use databend_common_column::types::i256;
+// use databend_common_column::types::i256;
 
 /// Physical representation of a decimal
-#[derive(Clone, Copy, Default, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Default, Eq, Ord, Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct i256(pub ethnum::I256);
@@ -84,8 +80,14 @@ impl i256 {
     /// The multiplicative inverse for this integer type, i.e. `-1`.
     pub const MINUS_ONE: Self = Self(ethnum::I256::new(-1));
 
-    pub fn from(value: i128) -> Self {
-        Self(value.as_i256())
+    // pub fn from(value: i128) -> Self {
+    //    Self(value.as_i256())
+    //}
+
+    /// Creates a new 256-bit integer value from a primitive `i128` integer.
+    #[inline]
+    pub const fn new(value: i128) -> Self {
+        Self(ethnum::I256::new(value))
     }
 
     /// Returns a new [`i256`] from two `i128`.
@@ -161,6 +163,28 @@ impl i256 {
     #[inline]
     pub const fn is_negative(self) -> bool {
         self.0.is_negative()
+    }
+
+    #[inline]
+    pub fn saturating_abs(self) -> Self {
+        Self(self.0.saturating_abs())
+    }
+
+    #[inline(always)]
+    pub fn leading_zeros(self) -> u32 {
+        self.0.leading_zeros()
+    }
+
+    /// Cast to a primitive `u64`.
+    #[inline]
+    pub const fn as_u64(self) -> u64 {
+        self.0.as_u64()
+    }
+
+    /// Cast to a primitive `i64`.
+    #[inline]
+    pub const fn as_i64(self) -> i64 {
+        self.0.as_i64()
     }
 
     /// Cast to a primitive `i128`.
@@ -289,8 +313,6 @@ impl Div for i256 {
     }
 }
 
-
-
 macro_rules! impl_from {
     ($($t:ty),* $(,)?) => {$(
         impl From<$t> for i256 {
@@ -317,12 +339,9 @@ impl TryFrom<u256> for i256 {
     }
 }
 
-
-
-
 impl BorshSerialize for i256 {
     fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
-        BorshSerialize::serialize(&self.0.0, writer)
+        BorshSerialize::serialize(&self.0 .0, writer)
     }
 }
 
@@ -354,13 +373,59 @@ impl_into_float! {
     f32 => as_f32, f64 => as_f64,
 }
 
+impl core::hash::Hash for i256 {
+    #[inline]
+    fn hash<H>(&self, hasher: &mut H)
+    where H: core::hash::Hasher {
+        core::hash::Hash::hash(&self.0, hasher);
+    }
+}
 
+impl PartialEq for i256 {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        let (ahi, alo) = self.0.into_words();
+        let (bhi, blo) = other.0.into_words();
+        (ahi == bhi) & (alo == blo)
+        // bitwise and rather than logical and
+        // to make O0 code more effecient.
+    }
+}
 
+impl PartialEq<i128> for i256 {
+    #[inline]
+    fn eq(&self, other: &i128) -> bool {
+        *self == i256::new(*other)
+    }
+}
 
+impl PartialEq<i256> for i128 {
+    #[inline]
+    fn eq(&self, other: &i256) -> bool {
+        i256::new(*self) == *other
+    }
+}
 
+impl PartialOrd for i256 {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
+impl PartialOrd<i128> for i256 {
+    #[inline]
+    fn partial_cmp(&self, rhs: &i128) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(&i256::new(*rhs)))
+    }
+}
 
-
+impl PartialOrd<i256> for i128 {
+    #[inline]
+    fn partial_cmp(&self, rhs: &i256) -> Option<core::cmp::Ordering> {
+        Some(i256::new(*self).cmp(rhs))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecimalType<T: Decimal>(PhantomData<T>);
@@ -1058,9 +1123,11 @@ impl Decimal for i256 {
     fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self> {
         let div = i256::e(shift_scale);
         let ret: Option<i256> = if self.is_negative() == rhs.is_negative() {
-            self.checked_mul(rhs).map(|x| (x + div / i256::from(2)) / div)
+            self.checked_mul(rhs)
+                .map(|x| (x + div / i256::from(2)) / div)
         } else {
-            self.checked_mul(rhs).map(|x| (x - div / i256::from(2)) / div)
+            self.checked_mul(rhs)
+                .map(|x| (x - div / i256::from(2)) / div)
         };
 
         ret.or_else(|| {
@@ -1093,9 +1160,11 @@ impl Decimal for i256 {
 
         let mul = i256::e(mul_scale);
         let ret: Option<i256> = if self.is_negative() == rhs.is_negative() {
-            self.checked_mul(mul).map(|x| (x + rhs / i256::from(2)) / rhs)
+            self.checked_mul(mul)
+                .map(|x| (x + rhs / i256::from(2)) / rhs)
         } else {
-            self.checked_mul(mul).map(|x| (x - rhs / i256::from(2)) / rhs)
+            self.checked_mul(mul)
+                .map(|x| (x - rhs / i256::from(2)) / rhs)
         };
 
         ret.or_else(fallback)

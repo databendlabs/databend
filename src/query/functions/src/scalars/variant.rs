@@ -22,6 +22,7 @@ use bstr::ByteSlice;
 use databend_common_column::types::months_days_micros;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::string_to_date;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::nullable::NullableDomain;
@@ -37,6 +38,10 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::Decimal128Type;
+use databend_common_expression::types::Decimal256Type;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::GenericType;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::MutableBitmap;
@@ -732,24 +737,57 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-/**
     registry.register_combine_nullable_1_arg::<VariantType, Decimal128Type, _, _>(
         "as_decimal128",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<Decimal128Type>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
+        vectorize_with_builder_1_arg::<VariantType, NullableType<Decimal128Type>>(
+            |v, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
                 }
-            }
-            match RawJsonb::new(v).as_decimal128() {
-                Ok(Some(res)) => output.push(&res),
-                _ => output.push_null(),
-            }
-        }),
+                match RawJsonb::new(v).as_decimal128() {
+                    Ok(Some(res)) => {
+                        let size = DecimalSize {
+                            precision: res.precision,
+                            scale: res.scale,
+                        };
+                        let val = DecimalScalar::Decimal128(res.value, size);
+                        output.push(res.value);
+                    }
+                    _ => output.push_null(),
+                }
+            },
+        ),
     );
-*/
+
+    registry.register_combine_nullable_1_arg::<VariantType, Decimal256Type, _, _>(
+        "as_decimal256",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<Decimal256Type>>(
+            |v, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match RawJsonb::new(v).as_decimal256() {
+                    Ok(Some(res)) => {
+                        let size = DecimalSize {
+                            precision: res.precision,
+                            scale: res.scale,
+                        };
+                        let val = DecimalScalar::Decimal256(i256(res.value), size);
+                        output.push(i256(res.value));
+                    }
+                    _ => output.push_null(),
+                }
+            },
+        ),
+    );
 
     registry.register_combine_nullable_1_arg::<VariantType, BinaryType, _, _>(
         "as_binary",

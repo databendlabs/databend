@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::compare_columns;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
@@ -31,7 +32,6 @@ use rand::rngs::SmallRng;
 use rand::thread_rng;
 use rand::Rng;
 use rand::SeedableRng;
-use databend_common_expression::types::i256;
 
 use super::assert_unary_arguments;
 use super::AggregateUnaryFunction;

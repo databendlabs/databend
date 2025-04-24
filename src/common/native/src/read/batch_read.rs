@@ -73,8 +73,11 @@ pub fn read_nested_column<R: NativeReadBuf>(
         ),
         Decimal(decimal) if decimal.precision() > MAX_DECIMAL128_PRECISION => {
             init.push(InitNested::Primitive(is_nullable));
-            //read_nested_decimal::<databend_common_column::types::i256, ethnum::i256, _>(
-            read_nested_decimal::<databend_common_column::types::i256, databend_common_expression::types::i256, _>(
+            read_nested_decimal::<
+                databend_common_column::types::i256,
+                databend_common_expression::types::i256,
+                _,
+            >(
                 &mut readers.pop().unwrap(),
                 data_type.clone(),
                 decimal.size(),

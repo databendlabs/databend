@@ -17,6 +17,7 @@ use std::ops::*;
 use std::sync::Arc;
 
 use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_cmp_2_arg;
 use databend_common_expression::Domain;
@@ -27,7 +28,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
-use databend_common_expression::types::i256;
 
 use super::convert_to_decimal;
 use super::convert_to_decimal_domain;

@@ -19,6 +19,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 use databend_common_expression::types::decimal::DecimalType;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::number::F32;
 use databend_common_expression::types::number::F64;
@@ -42,7 +43,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
-use databend_common_expression::types::i256;
 use md5::Digest;
 use md5::Md5 as Md5Hasher;
 use naive_cityhash::cityhash64_with_seed;
@@ -311,7 +311,7 @@ for_all_integer_types! { integer_impl }
 impl DFHash for i256 {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        Hash::hash(self.0.0.as_slice(), state);
+        Hash::hash(self.0 .0.as_slice(), state);
     }
 }
 

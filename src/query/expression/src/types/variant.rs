@@ -246,12 +246,8 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
         ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
         ScalarRef::Binary(s) => jsonb::Value::Binary(s),
         ScalarRef::String(s) => jsonb::Value::String(s.into()),
-        ScalarRef::Timestamp(ts) => jsonb::Value::Timestamp(jsonb::Timestamp {
-            value: ts,
-        }),
-        ScalarRef::Date(d) => jsonb::Value::Date(jsonb::Date {
-            value: d,
-        }),
+        ScalarRef::Timestamp(ts) => jsonb::Value::Timestamp(jsonb::Timestamp { value: ts }),
+        ScalarRef::Date(d) => jsonb::Value::Date(jsonb::Date { value: d }),
         ScalarRef::Interval(i) => {
             let interval = jsonb::Interval {
                 months: i.months(),

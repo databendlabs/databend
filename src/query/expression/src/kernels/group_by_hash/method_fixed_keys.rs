@@ -24,10 +24,10 @@ use ethnum::u256;
 use ethnum::U256;
 use micromarshal::Marshal;
 
-use crate::types::i256;
 use crate::types::boolean::BooleanType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
+use crate::types::i256;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;

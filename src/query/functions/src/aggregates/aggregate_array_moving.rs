@@ -22,6 +22,7 @@ use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
@@ -44,7 +45,6 @@ use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use num_traits::AsPrimitive;
-use databend_common_expression::types::i256;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;

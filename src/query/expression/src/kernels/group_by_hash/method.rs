@@ -23,9 +23,9 @@ use databend_common_hashtable::FastHash;
 use either::Either;
 use ethnum::u256;
 
-use crate::types::i256;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::Decimal;
+use crate::types::i256;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;

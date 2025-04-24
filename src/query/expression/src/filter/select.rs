@@ -14,12 +14,12 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use crate::types::i256;
 
 use crate::arrow::and_validities;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::types::decimal::DecimalType;
+use crate::types::i256;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
 use crate::types::AnyType;
