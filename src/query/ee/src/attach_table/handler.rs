@@ -111,6 +111,8 @@ impl AttachTableHandler for RealAttachTableHandler {
             },
             table_meta,
             as_dropped: false,
+            table_properties: None,
+            table_partition: None,
         };
 
         Ok(req)

@@ -21,6 +21,7 @@ use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_sql::plans::RenameTableColumnPlan;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
@@ -73,9 +74,12 @@ impl Interpreter for RenameTableColumnInterpreter {
 
             let table_info = table.get_table_info();
             let engine = table.engine();
-            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+            if matches!(
+                engine.to_uppercase().as_str(),
+                VIEW_ENGINE | STREAM_ENGINE | ICEBERG_ENGINE
+            ) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is {} that doesn't support alter",
+                    "{}.{} engine is {} that doesn't support rename column name",
                     &self.plan.database, &self.plan.table, engine
                 )));
             }

@@ -95,18 +95,24 @@ abc
 tpch
 
 statement ok
-create table if not exists abc.t(id int);
+create table if not exists abc.t(id int) engine=ICEBERG;
 
 query T
 desc abc.t;
 ----
 id INT YES NULL (empty)
 
+statement error 1302
+ALTER TABLE abc.t rename column id to b
+
 statement ok
 create or replace table abc.t1(c1 int, c2 string);
 
+statement error 1301
+create or replace table abc.t1(c1 datetime, c2 string) partition by (c1, c2);
+
 statement ok
-create or replace table abc.t1(c1 date, c2 string);
+create or replace table abc.t1(c1 date, c2 string) partition by (c2) properties ("read.split.target-size"='134217728', "read.split.metadata-target-size"='33554432');
 
 query T
 desc abc.t1;
@@ -119,6 +125,9 @@ show tables from abc;
 ----
 t
 t1
+
+statement error 1302
+CREATE TABLE IF NOT EXISTS abc.t2(c1 int) ENGINE = fuse
 
 statement ok
 drop table abc.t

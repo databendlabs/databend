@@ -272,7 +272,7 @@ impl Default for QueryConfig {
             mysql_tls_server_key: "".to_string(),
             max_active_sessions: 256,
             max_running_queries: 8,
-            global_statement_queue: true,
+            global_statement_queue: false,
             max_server_memory_usage: 0,
             max_memory_limit_enabled: false,
             clickhouse_http_handler_host: "127.0.0.1".to_string(),

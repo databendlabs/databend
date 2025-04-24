@@ -43,11 +43,6 @@ impl ValueType for StringType {
     type ColumnIterator<'a> = StringIterator<'a>;
     type ColumnBuilder = StringColumnBuilder;
 
-    #[inline]
-    fn upcast_gat<'short, 'long: 'short>(long: &'long str) -> &'short str {
-        long
-    }
-
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_string()
     }
@@ -56,7 +51,7 @@ impl ValueType for StringType {
         scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         scalar.as_string().cloned()
     }
 
