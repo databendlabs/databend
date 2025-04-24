@@ -126,6 +126,6 @@ impl AsyncSink for RuntimeFilterSinkProcessor {
             "RuntimeFilterSinkProcessor recv runtime filter: {:?}",
             runtime_filter
         );
-        Ok(false)
+        Ok(true)
     }
 }
