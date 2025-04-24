@@ -37,6 +37,7 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::i256;
 
 use crate::BUILTIN_FUNCTIONS;
 
@@ -662,7 +663,7 @@ fn transform_literal(lit: ASTLiteral) -> Scalar {
             value,
             precision,
             scale,
-        } => Scalar::Decimal(DecimalScalar::Decimal256(value, DecimalSize {
+        } => Scalar::Decimal(DecimalScalar::Decimal256(i256(value), DecimalSize {
             precision,
             scale,
         })),

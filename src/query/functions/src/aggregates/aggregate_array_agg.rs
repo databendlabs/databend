@@ -35,7 +35,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use ethnum::i256;
+use databend_common_expression::types::i256;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::ScalarStateFunc;

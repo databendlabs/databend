@@ -732,6 +732,25 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+/**
+    registry.register_combine_nullable_1_arg::<VariantType, Decimal128Type, _, _>(
+        "as_decimal128",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<Decimal128Type>>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push_null();
+                    return;
+                }
+            }
+            match RawJsonb::new(v).as_decimal128() {
+                Ok(Some(res)) => output.push(&res),
+                _ => output.push_null(),
+            }
+        }),
+    );
+*/
+
     registry.register_combine_nullable_1_arg::<VariantType, BinaryType, _, _>(
         "as_binary",
         |_, _| FunctionDomain::Full,

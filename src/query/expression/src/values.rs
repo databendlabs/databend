@@ -33,7 +33,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
-use ethnum::i256;
+use crate::types::i256;
 use geo::Geometry;
 use geo::Point;
 use geozero::CoordDimensions;
@@ -1406,7 +1406,7 @@ impl Column {
                 }
                 DecimalDataType::Decimal256(size) => {
                     let values = (0..len)
-                        .map(|_| i256::from(rng.gen::<i16>()))
+                        .map(|_| i256::from(rng.gen::<i16>().into()))
                         .collect::<Vec<i256>>();
                     Column::Decimal(DecimalColumn::Decimal256(values.into(), *size))
                 }

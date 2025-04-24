@@ -28,7 +28,7 @@ pub fn decode_decimal128_from_bytes(arr: &FixedLenByteArray, size: DecimalSize) 
 pub fn decode_decimal256_from_bytes(arr: &FixedLenByteArray, size: DecimalSize) -> Scalar {
     let v = i256::from_be_bytes(sign_extend_be(arr.as_bytes()));
     let (lo, hi) = v.to_parts();
-    let v = I256::from_words(hi, lo as i128);
+    let v = databend_common_expression::types::i256(I256::from_words(hi, lo as i128));
     Scalar::Decimal(DecimalScalar::Decimal256(v, size))
 }
 

@@ -20,6 +20,7 @@ use std::ops::BitXor;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use databend_common_expression::types::Decimal;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::decimal::DecimalDomain;
 use databend_common_expression::types::decimal::DecimalType;
@@ -62,9 +63,9 @@ use databend_common_expression::FunctionSignature;
 use databend_functions_scalar_decimal::register_decimal_to_float;
 use databend_functions_scalar_decimal::register_decimal_to_int;
 use databend_functions_scalar_decimal::register_decimal_to_string;
-use ethnum::i256;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
+use databend_common_expression::types::i256;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);

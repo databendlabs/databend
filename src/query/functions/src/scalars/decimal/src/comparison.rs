@@ -27,7 +27,7 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
-use ethnum::i256;
+use databend_common_expression::types::i256;
 
 use super::convert_to_decimal;
 use super::convert_to_decimal_domain;

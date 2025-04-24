@@ -24,7 +24,7 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
-use ethnum::i256;
+use databend_common_expression::types::i256;
 
 use super::get_levels;
 use super::AggregateUnaryFunction;

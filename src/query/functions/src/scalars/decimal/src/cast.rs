@@ -37,8 +37,8 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use ethnum::i256;
 use num_traits::AsPrimitive;
+use databend_common_expression::types::i256;
 
 // int float to decimal
 pub fn register_to_decimal(registry: &mut FunctionRegistry) {
@@ -589,7 +589,7 @@ fn decimal_256_to_128(
 
         vectorize_with_builder_1_arg::<DecimalType<i256>, DecimalType<i128>>(
             |x: i256, builder: &mut Vec<i128>, ctx: &mut EvalContext| match x.checked_mul(factor) {
-                Some(x) if x <= max && x >= min => builder.push(*x.low()),
+                Some(x) if x <= max.into() && x >= min.into() => builder.push(*x.low()),
                 _ => {
                     ctx.set_error(
                         builder.len(),
@@ -614,7 +614,7 @@ fn decimal_256_to_128(
                 };
 
                 match y {
-                    Some(y) if (y <= max && y >= min) && (y != 0 || x / source_factor == 0) => {
+                    Some(y) if (y <= max.into() && y >= min.into()) && (y != i256::from(0) || x / source_factor == i256::from(0)) => {
                         builder.push(*y.low());
                     }
                     _ => {
@@ -635,7 +635,7 @@ macro_rules! m_decimal_to_decimal {
     ($from_size: expr, $dest_size: expr, $value: expr, $from_type_name: ty, $dest_type_name: ty, $ctx: expr) => {
         type F = $from_type_name;
         type T = $dest_type_name;
-
+/**
         let buffer: Value<DecimalType<F>> = $value.try_downcast().unwrap();
         // faster path
         let result: Value<DecimalType<T>> = if $from_size.scale == $dest_size.scale
@@ -707,6 +707,8 @@ macro_rules! m_decimal_to_decimal {
         };
 
         result.upcast_decimal($dest_size)
+*/
+        todo!()
     };
 }
 

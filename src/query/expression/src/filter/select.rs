@@ -14,7 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use ethnum::i256;
+use crate::types::i256;
 
 use crate::arrow::and_validities;
 use crate::filter::SelectOp;

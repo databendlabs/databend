@@ -27,7 +27,7 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use ethnum::i256;
+use databend_common_expression::types::i256;
 
 pub fn register_decimal_math(registry: &mut FunctionRegistry) {
     let factory_rounds = |params: &[Scalar], args_type: &[DataType], round_mode: RoundMode| {

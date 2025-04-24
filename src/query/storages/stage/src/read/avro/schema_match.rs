@@ -18,7 +18,7 @@ use apache_avro::Schema;
 use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
-use ethnum::i256;
+use databend_common_expression::types::i256;
 
 type MatchResult<T> = Result<T, String>;
 

@@ -21,9 +21,9 @@ use databend_common_exception::Result;
 use databend_common_hashtable::DictionaryKeys;
 use databend_common_hashtable::FastHash;
 use either::Either;
-use ethnum::i256;
 use ethnum::u256;
 
+use crate::types::i256;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::Decimal;
 use crate::types::DataType;

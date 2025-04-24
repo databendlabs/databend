@@ -43,8 +43,8 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use ethnum::i256;
 use num_traits::AsPrimitive;
+use databend_common_expression::types::i256;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;

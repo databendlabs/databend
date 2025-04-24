@@ -35,8 +35,8 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::BinaryWrite;
-use ethnum::i256;
 use roaring::RoaringTreemap;
+use databend_common_expression::types::i256;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;

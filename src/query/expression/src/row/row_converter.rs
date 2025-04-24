@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use ethnum::i256;
+use crate::types::i256;
 
 use super::fixed;
 use super::fixed::FixedLengthEncoding;

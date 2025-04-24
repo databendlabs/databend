@@ -21,6 +21,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
 
+use databend_common_expression::types::i256;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -3961,7 +3962,7 @@ impl<'a> TypeChecker<'a> {
                 value,
                 precision,
                 scale,
-            } => Scalar::Decimal(DecimalScalar::Decimal256(*value, DecimalSize {
+            } => Scalar::Decimal(DecimalScalar::Decimal256(i256(*value), DecimalSize {
                 precision: *precision,
                 scale: *scale,
             })),

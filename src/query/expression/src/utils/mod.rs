@@ -28,7 +28,7 @@ pub mod visitor;
 use databend_common_ast::Span;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
-use ethnum::i256;
+use crate::types::i256;
 
 pub use self::column_from::*;
 use crate::types::decimal::DecimalScalar;
@@ -169,18 +169,18 @@ fn shrink_i64(num: i64) -> Scalar {
 
 fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
     if size.scale == 0 {
-        if decimal.is_positive() && decimal <= i256::from(u64::MAX) {
-            return shrink_u64(decimal.as_u64());
-        } else if decimal <= i256::from(i64::MAX) && decimal >= i256::from(i64::MIN) {
-            return shrink_i64(decimal.as_i64());
+        if decimal.is_positive() && decimal <= i256::from(u64::MAX.into()) {
+            return shrink_u64(decimal.0.as_u64());
+        } else if decimal <= i256::from(i64::MAX.into()) && decimal >= i256::from(i64::MIN.into()) {
+            return shrink_i64(decimal.0.as_i64());
         }
     }
 
-    let valid_bits = 256 - decimal.saturating_abs().leading_zeros();
+    let valid_bits = 256 - decimal.0.saturating_abs().leading_zeros();
     let log10_2 = std::f64::consts::LOG10_2;
     let mut precision = ((valid_bits as f64) * log10_2).floor() as u8;
 
-    if decimal.saturating_abs() >= i256::from(10).pow(precision as u32) {
+    if i256(decimal.0.saturating_abs()) >= i256::from(10).pow(precision as u32) {
         precision += 1;
     }
 

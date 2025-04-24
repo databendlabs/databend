@@ -26,12 +26,12 @@ use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::Scalar;
-use ethnum::i256;
 use rand::prelude::SliceRandom;
 use rand::rngs::SmallRng;
 use rand::thread_rng;
 use rand::Rng;
 use rand::SeedableRng;
+use databend_common_expression::types::i256;
 
 use super::assert_unary_arguments;
 use super::AggregateUnaryFunction;

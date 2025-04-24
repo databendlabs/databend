@@ -16,7 +16,7 @@ use bumpalo::Bump;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
-use ethnum::i256;
+use crate::types::i256;
 
 use crate::read;
 use crate::store;

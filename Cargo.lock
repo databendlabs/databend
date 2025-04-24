@@ -6185,10 +6185,10 @@ dependencies = [
 
 [[package]]
 name = "ethnum"
-version = "1.5.0"
-source = "git+https://github.com/datafuse-extras/ethnum-rs?rev=4cb05f1#4cb05f1e407f76b193d81eef71b5dd0b73216856"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0939f82868b77ef93ce3c3c3daf2b3c526b456741da5a1a4559e590965b6026b"
 dependencies = [
- "borsh",
  "serde",
 ]
 
@@ -8438,12 +8438,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "i256"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d33e2469f814f46f104fc4641cba20f3ba3b2b902e7d3c12db5bab37b33f6ac9"
-
-[[package]]
 name = "iana-time-zone"
 version = "0.1.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9195,11 +9189,11 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.1"
-source = "git+https://github.com/b41sh/jsonb?rev=e59567b08e4a3db886764096305b3be74c8e1e13#e59567b08e4a3db886764096305b3be74c8e1e13"
+source = "git+https://github.com/b41sh/jsonb?rev=df93358108160ff772b60f2337957b0886b5639a#df93358108160ff772b60f2337957b0886b5639a"
 dependencies = [
  "byteorder",
+ "ethnum",
  "fast-float2",
- "i256",
  "itoa",
  "jiff 0.2.10",
  "nom 8.0.0",

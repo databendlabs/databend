@@ -20,11 +20,11 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_hashtable::FastHash;
-use ethnum::i256;
 use ethnum::u256;
 use ethnum::U256;
 use micromarshal::Marshal;
 
+use crate::types::i256;
 use crate::types::boolean::BooleanType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;

@@ -18,8 +18,8 @@ use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
+use databend_common_expression::types::i256;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use ethnum::I256;
 use parquet::data_type::AsBytes;
 use parquet::data_type::ByteArray;
 use parquet::data_type::FixedLenByteArray;
@@ -135,8 +135,8 @@ fn convert_page_index_int32(
                     Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                 ),
                 TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max.into()), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min.into()), *size)),
                 ),
                 _ => unreachable!(),
             };
@@ -165,8 +165,8 @@ fn convert_page_index_int64(
                     Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                 ),
                 TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max.into()), *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min.into()), *size)),
                 ),
                 _ => unreachable!(),
             };

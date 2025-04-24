@@ -19,7 +19,8 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use ethnum::I256;
+use databend_common_expression::types::i256;
+
 use parquet::data_type::AsBytes;
 use parquet::file::statistics::Statistics;
 
@@ -58,8 +59,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
                         Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                     ),
                     TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max.into()), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min.into()), *size)),
                     ),
                     _ => return None,
                 }
@@ -89,8 +90,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
                         Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
                     ),
                     TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max.into()), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min.into()), *size)),
                     ),
                     _ => return None,
                 }
