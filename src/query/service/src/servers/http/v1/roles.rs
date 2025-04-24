@@ -23,6 +23,8 @@ use serde::Serialize;
 
 use crate::servers::http::v1::HttpQueryContext;
 
+const PUBLIC_ROLE: &'static str = "public";
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ListRolesResponse {
     pub roles: Vec<RoleInfo>,
@@ -35,47 +37,35 @@ pub struct RoleInfo {
     pub is_default: bool,
 }
 
+/// same as `show_roles` in
+/// src/query/service/src/table_functions/show_roles/show_roles_table.rs
 #[async_backtrace::framed]
 async fn handle(ctx: &HttpQueryContext) -> Result<ListRolesResponse> {
-    let user = ctx.session.get_current_user()?;
+    let mut all_roles = ctx.session.get_all_available_roles().await?;
+    all_roles.sort_by(|a, b| a.name.cmp(&b.name));
     let current_role = ctx
         .session
         .get_current_role()
-        .map_or("public".to_string(), |role| role.name);
-    let default_role = user
+        .map_or(PUBLIC_ROLE.to_string(), |role| role.name);
+    let default_role = ctx
+        .session
+        .get_current_user()?
         .option
         .default_role()
-        .map_or("public".to_string(), |role| role.to_string());
+        .map_or(PUBLIC_ROLE.to_string(), |role| role.to_string());
     let mut roles = vec![];
-    if user.is_account_admin() {
-        // return all roles for account admin
-        let user_api = UserApiProvider::instance();
-        let all_roles = user_api
-            .get_roles(&ctx.session.get_current_tenant())
-            .await?;
-        for role in all_roles {
-            let is_current = role.name == current_role;
-            let is_default = role.name == default_role;
-            roles.push(RoleInfo {
-                name: role.name,
-                is_current,
-                is_default,
-            });
-        }
-    } else {
-        for role in user.grants.roles() {
-            let is_current = role == current_role;
-            let is_default = role == default_role;
-            roles.push(RoleInfo {
-                name: role.clone(),
-                is_current,
-                is_default,
-            });
-        }
+    for role in all_roles {
+        let is_current = role.name == current_role;
+        let is_default = role.name == default_role;
+        roles.push(RoleInfo {
+            name: role.clone(),
+            is_current,
+            is_default,
+        });
     }
     if roles.is_empty() {
         roles.push(RoleInfo {
-            name: "public".to_string(),
+            name: PUBLIC_ROLE.to_string(),
             is_current: true,
             is_default: true,
         });
