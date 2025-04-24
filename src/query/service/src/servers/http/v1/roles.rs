@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_users::UserApiProvider;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
