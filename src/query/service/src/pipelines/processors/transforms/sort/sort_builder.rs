@@ -33,11 +33,11 @@ use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::sort::RowsTypeVisitor;
 use databend_common_pipeline_transforms::MemorySettings;
 
-use super::collect::TransformSortCollect;
-use super::execute::TransformSortExecute;
 use super::merge_sort::TransformSort;
-use super::shuffle::SortSampleState;
-use super::shuffle::TransformSortShuffle;
+use super::sort_collect::TransformSortCollect;
+use super::sort_execute::TransformSortExecute;
+use super::sort_shuffle::SortSampleState;
+use super::sort_shuffle::TransformSortShuffle;
 use super::Base;
 use crate::spillers::Spiller;
 

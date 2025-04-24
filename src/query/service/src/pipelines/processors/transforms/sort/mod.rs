@@ -25,19 +25,19 @@ use sort_spill::SpillableBlock;
 use crate::spillers::Spiller;
 
 mod bounds;
-mod builder;
-mod collect;
-mod exchange;
-mod execute;
 mod merge_sort;
-mod route;
-mod shuffle;
+mod sort_builder;
+mod sort_collect;
+mod sort_exchange;
+mod sort_execute;
+mod sort_route;
+mod sort_shuffle;
 mod sort_spill;
 
-pub use builder::*;
-pub use exchange::*;
-pub use route::*;
-pub use shuffle::*;
+pub use sort_builder::*;
+pub use sort_exchange::*;
+pub use sort_route::*;
+pub use sort_shuffle::*;
 
 #[derive(Clone)]
 struct Base {

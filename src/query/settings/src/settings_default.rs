@@ -655,7 +655,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
                 }),
                 ("range_shuffle_sort_simple_size", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(20),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Sets the simple size per partition used for range shuffle sorting, 0 to disable range shuffle sorting.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
