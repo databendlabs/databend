@@ -50,15 +50,8 @@ impl RowGroupReaderForCopy {
         read_settings: &ReadSettings,
         batch_size: usize,
     ) -> Result<Option<ReadPolicyImpl>> {
-        let row_group = InMemoryRowGroup::new(
-            &part.location,
-            op.clone(),
-            &part.meta,
-            None,
-            read_settings.max_gap_size,
-            read_settings.max_range_size,
-            false,
-        );
+        let row_group =
+            InMemoryRowGroup::new(&part.location, op.clone(), &part.meta, None, *read_settings);
         let mut _sorter = None;
         self.row_group_reader_builder
             .build(row_group, None, &mut _sorter, batch_size)

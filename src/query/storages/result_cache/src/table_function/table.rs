@@ -124,6 +124,7 @@ impl Table for ResultScan {
             file: self.location.clone(),
             compressed_size: self.file_size,
             estimated_uncompressed_size: self.file_size,
+            dedup_key: format!("{}_{}", self.location, self.file_size),
         });
 
         let part_info: Box<dyn PartInfo> = Box::new(part);
@@ -156,15 +157,12 @@ impl Table for ResultScan {
         )?
         .with_options(read_options);
         let row_group_reader = Arc::new(builder.build_row_group_reader(false)?);
-        let full_file_reader = Some(Arc::new(builder.build_full_reader(false)?));
-
         pipeline.add_source(
             |output| {
                 ParquetSource::create(
                     ctx.clone(),
                     output,
                     row_group_reader.clone(),
-                    full_file_reader.clone(),
                     Arc::new(None),
                     vec![],
                 )

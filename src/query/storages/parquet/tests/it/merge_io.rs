@@ -23,6 +23,7 @@ use arrow_schema::Schema;
 use bytes::Bytes;
 use databend_common_base::base::tokio;
 use databend_common_storages_parquet::InMemoryRowGroup;
+use databend_common_storages_parquet::ReadSettings;
 use opendal::services::Memory;
 use opendal::Operator;
 use parquet::arrow::ArrowWriter;
@@ -85,10 +86,20 @@ async fn test_merge() {
     let meta = RowGroupMetaData::builder(descr.into()).build().unwrap();
 
     // for gap=0;
-    let gap0 = InMemoryRowGroup::new(path, op.clone(), &meta, None, 0, 0, false);
+    let gap0 = InMemoryRowGroup::new(path, op.clone(), &meta, None, ReadSettings {
+        max_gap_size: 0,
+        max_range_size: 0,
+        parquet_fast_read_bytes: u64::MAX,
+        enable_cache: false,
+    });
 
     // for gap=10
-    let gap10 = InMemoryRowGroup::new(path, op, &meta, None, 10, 200, false);
+    let gap10 = InMemoryRowGroup::new(path, op, &meta, None, ReadSettings {
+        max_gap_size: 10,
+        max_range_size: 200,
+        parquet_fast_read_bytes: u64::MAX,
+        enable_cache: false,
+    });
     let ranges = [(1..10), (15..30), (40..50)];
     let (gap0_chunks, gap0_merged) = gap0.get_ranges(ranges.as_ref()).await.unwrap();
     let (gap10_chunks, gap10_merged) = gap10.get_ranges(ranges.as_ref()).await.unwrap();

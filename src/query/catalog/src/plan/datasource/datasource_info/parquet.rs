@@ -131,7 +131,6 @@ mod tests {
     use std::sync::Arc;
 
     use arrow_schema::Schema as ArrowSchema;
-    use databend_common_base::base::tokio::sync::Mutex;
     use databend_common_storage::StageFilesInfo;
     use parquet::basic::ConvertedType;
     use parquet::basic::Repetition;

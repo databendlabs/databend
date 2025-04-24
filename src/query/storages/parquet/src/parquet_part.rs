@@ -54,6 +54,7 @@ pub struct ParquetFilePart {
     pub file: String,
     pub compressed_size: u64,
     pub estimated_uncompressed_size: u64,
+    pub dedup_key: String,
 }
 
 impl ParquetFilePart {
@@ -97,26 +98,27 @@ impl ParquetPart {
 }
 
 pub(crate) fn collect_file_parts(
-    files: Vec<(String, u64, Option<String>)>,
+    files: Vec<(String, u64, String)>,
     compress_ratio: f64,
     partitions: &mut Partitions,
     stats: &mut PartStatistics,
     num_columns_to_read: usize,
     total_columns_to_read: usize,
 ) {
-    for (file, size, _) in files.into_iter() {
+    for (file, size, dedup_key) in files.into_iter() {
         stats.read_bytes += size as usize;
         let estimated_read_rows: f64 = size as f64 / (total_columns_to_read * 8) as f64;
         let read_bytes =
             (size as f64) * (num_columns_to_read as f64) / (total_columns_to_read as f64);
 
-        let estimated_uncompressed_size = (read_bytes as f64) * compress_ratio;
+        let estimated_uncompressed_size = read_bytes * compress_ratio;
 
         partitions.partitions.push(Arc::new(
             Box::new(ParquetPart::ParquetFile(ParquetFilePart {
                 file,
                 compressed_size: size,
                 estimated_uncompressed_size: estimated_uncompressed_size as u64,
+                dedup_key,
             })) as Box<dyn PartInfo>,
         ));
 

@@ -37,6 +37,8 @@ use parquet::file::reader::Length;
 use parquet::file::serialized_reader::SerializedPageReader;
 use parquet::format::PageLocation;
 
+use crate::ReadSettings;
+
 /// An in-memory column chunk.
 ///
 /// It is a private struct in apache `parquet` crate, so we just copied it here.
@@ -106,9 +108,7 @@ pub struct InMemoryRowGroup<'a> {
     page_locations: Option<&'a [Vec<PageLocation>]>,
     column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
     row_count: usize,
-    max_gap_size: u64,
-    max_range_size: u64,
-    enable_cache: bool,
+    read_settings: ReadSettings,
 }
 
 impl<'a> InMemoryRowGroup<'a> {
@@ -117,9 +117,7 @@ impl<'a> InMemoryRowGroup<'a> {
         op: Operator,
         rg: &'a RowGroupMetaData,
         page_locations: Option<&'a [Vec<PageLocation>]>,
-        max_gap_size: u64,
-        max_range_size: u64,
-        enable_cache: bool,
+        read_settings: ReadSettings,
     ) -> Self {
         Self {
             location,
@@ -128,9 +126,7 @@ impl<'a> InMemoryRowGroup<'a> {
             page_locations,
             column_chunks: vec![None; rg.num_columns()],
             row_count: rg.num_rows() as usize,
-            max_gap_size,
-            max_range_size,
-            enable_cache,
+            read_settings,
         }
     }
 
@@ -242,8 +238,12 @@ impl<'a> InMemoryRowGroup<'a> {
 
     pub async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<(Vec<Bytes>, bool)> {
         let raw_ranges = ranges.to_vec();
-        let range_merger =
-            RangeMerger::from_iter(raw_ranges.clone(), self.max_gap_size, self.max_range_size);
+        let range_merger = RangeMerger::from_iter(
+            raw_ranges.clone(),
+            self.read_settings.max_gap_size,
+            self.read_settings.max_range_size,
+            Some(self.read_settings.parquet_fast_read_bytes),
+        );
         let merged_ranges = range_merger.ranges();
         let blocking_op = self.op.blocking();
         let location = self.location.to_owned();
@@ -252,7 +252,7 @@ impl<'a> InMemoryRowGroup<'a> {
         let chunks = match self.op.info().full_capability().blocking {
             true => {
                 // Read merged range data.
-                let column_data_cache = if self.enable_cache {
+                let column_data_cache = if self.read_settings.enable_cache {
                     CacheManager::instance().get_column_data_cache()
                 } else {
                     None
@@ -291,7 +291,7 @@ impl<'a> InMemoryRowGroup<'a> {
                     let fut_read = self.op.read_with(self.location);
                     let key = format!("{location}_{range:?}");
                     handles.push(async move {
-                        let column_data_cache = if self.enable_cache {
+                        let column_data_cache = if self.read_settings.enable_cache {
                             CacheManager::instance().get_column_data_cache()
                         } else {
                             None

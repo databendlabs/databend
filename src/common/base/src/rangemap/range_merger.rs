@@ -46,8 +46,15 @@ pub struct RangeMerger {
 }
 
 impl RangeMerger {
-    pub fn from_iter<I>(iter: I, max_gap_size: u64, max_range_size: u64) -> Self
-    where I: IntoIterator<Item = Range<u64>> {
+    pub fn from_iter<I>(
+        iter: I,
+        max_gap_size: u64,
+        max_range_size: u64,
+        whole_read_size: Option<u64>,
+    ) -> Self
+    where
+        I: IntoIterator<Item = Range<u64>>,
+    {
         let mut raw_ranges: Vec<_> = iter.into_iter().collect();
         raw_ranges.sort_by(|a, b| a.start.cmp(&b.start));
 
@@ -56,6 +63,17 @@ impl RangeMerger {
             max_range_size,
             ranges: Vec::with_capacity(raw_ranges.len()),
         };
+
+        let whole_read_size = whole_read_size.unwrap_or(usize::MAX as u64);
+        if !raw_ranges.is_empty() {
+            let max_end = raw_ranges.iter().map(|r| r.end).max().unwrap_or(0);
+
+            if max_end - raw_ranges[0].start <= whole_read_size {
+                let r = raw_ranges.first().unwrap().start..max_end;
+                rs.ranges = vec![r];
+                return rs;
+            }
+        }
 
         for range in &raw_ranges {
             rs.add(range);

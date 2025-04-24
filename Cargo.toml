@@ -345,12 +345,10 @@ hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio"
 ## iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/apache/iceberg-rust", rev = "45345e4" }
 ## iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/apache/iceberg-rust", rev = "45345e4" }
 
-
 iceberg = { path = "/home/sundy/work/iceberg-rust/crates/iceberg", features = ["storage-all"] }
 iceberg-catalog-glue = { path = "/home/sundy/work/iceberg-rust/crates/catalog/glue" }
 iceberg-catalog-hms = { path = "/home/sundy/work/iceberg-rust/crates/catalog/hms" }
 iceberg-catalog-rest = { path = "/home/sundy/work/iceberg-rust/crates/catalog/rest" }
-
 
 indexmap = "2.0.0"
 indicatif = "0.17.5"

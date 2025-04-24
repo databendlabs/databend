@@ -72,9 +72,7 @@ impl ParquetRSRowGroupReader {
             op,
             &part.meta,
             page_locations.as_deref(),
-            read_settings.max_gap_size,
-            read_settings.max_range_size,
-            true,
+            read_settings.with_enable_cache(true),
         );
         let mut selection = part
             .selectors

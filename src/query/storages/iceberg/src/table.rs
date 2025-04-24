@@ -304,7 +304,6 @@ impl IcebergTable {
         }
 
         let row_group_reader = Arc::new(builder.build_row_group_reader(need_row_number)?);
-        let full_file_reader = Some(Arc::new(builder.build_full_reader(need_row_number)?));
 
         let topk = Arc::new(topk);
         pipeline.add_source(
@@ -313,7 +312,6 @@ impl IcebergTable {
                     ctx.clone(),
                     output,
                     row_group_reader.clone(),
-                    full_file_reader.clone(),
                     topk.clone(),
                     internal_columns.clone(),
                 )

@@ -66,12 +66,14 @@ impl StageFileInfo {
         }
     }
 
-    pub fn dedup_key(&self) -> Option<String> {
+    pub fn dedup_key(&self) -> String {
         // should not use last_modified because the accuracy is in seconds for S3.
         if let Some(md5) = &self.md5 {
-            Some(md5.clone())
+            md5.clone()
         } else {
-            self.etag.clone()
+            self.etag
+                .clone()
+                .unwrap_or(format!("{}/{}", self.path, self.size))
         }
     }
 }

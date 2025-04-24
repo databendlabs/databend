@@ -257,7 +257,7 @@ impl Table for ParquetRSTable {
 
     async fn column_statistics_provider(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn TableContext>,
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         if !self.need_stats_provider {
             return Ok(Box::new(DummyColumnStatisticsProvider));
@@ -311,7 +311,7 @@ impl Table for ParquetRSTable {
             self.leaf_fields.clone(),
             self.max_threads,
             self.max_memory_usage,
-            Some(ctx.get_id()),
+            true,
         )
         .await?;
         let elapsed = now.elapsed();

@@ -4345,10 +4345,8 @@ dependencies = [
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
  "log",
- "opendal",
  "serde",
  "serde_json",
- "typetag",
  "uuid",
 ]
 

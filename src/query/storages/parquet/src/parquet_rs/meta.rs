@@ -37,10 +37,8 @@ pub async fn read_metadata_async_cached(
     path: &str,
     operator: &Operator,
     file_size: Option<u64>,
-    query_id: String,
-    dedup_key: Option<String>,
+    dedup_key: &str,
 ) -> Result<Arc<ParquetMetaData>> {
-    let dedup_key = dedup_key.unwrap_or(query_id);
     let info = operator.info();
     let location = format!("{dedup_key}:{}/{}/{}", info.name(), info.root(), path);
     let reader = MetaReader::meta_data_reader(operator.clone(), location.len() - path.len());
@@ -56,12 +54,12 @@ pub async fn read_metadata_async_cached(
 #[async_backtrace::framed]
 pub async fn read_metas_in_parallel(
     op: &Operator,
-    file_infos: &[(String, u64, Option<String>)],
+    file_infos: &[(String, u64, String)],
     expected: (SchemaDescPtr, String),
     leaf_fields: Arc<Vec<TableField>>,
     num_threads: usize,
     max_memory_usage: u64,
-    use_cache: Option<String>,
+    enable_cache: bool,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
     if file_infos.is_empty() {
         return Ok(vec![]);
@@ -89,7 +87,7 @@ pub async fn read_metas_in_parallel(
             leaf_fields,
             schema_from,
             max_memory_usage,
-            use_cache.clone(),
+            enable_cache,
         ));
     }
 
@@ -179,11 +177,11 @@ async fn load_and_check_parquet_meta(
     op: Operator,
     expect: &SchemaDescriptor,
     schema_from: &str,
-    use_cache: Option<String>,
-    dedup_key: Option<String>,
+    enable_cache: bool,
+    dedup_key: &str,
 ) -> Result<Arc<ParquetMetaData>> {
-    let metadata = if let Some(query_id) = use_cache {
-        read_metadata_async_cached(file, &op, Some(size), query_id, dedup_key).await?
+    let metadata = if enable_cache {
+        read_metadata_async_cached(file, &op, Some(size), dedup_key).await?
     } else {
         Arc::new(read_metadata_async(file, &op, Some(size)).await?)
     };
@@ -197,13 +195,13 @@ async fn load_and_check_parquet_meta(
 }
 
 pub async fn read_parquet_metas_batch(
-    file_infos: Vec<(String, u64, Option<String>)>,
+    file_infos: Vec<(String, u64, String)>,
     op: Operator,
     expect: SchemaDescPtr,
     leaf_fields: Arc<Vec<TableField>>,
     schema_from: String,
     max_memory_usage: u64,
-    use_cache: Option<String>,
+    enable_cache: bool,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
     let mut metas = Vec::with_capacity(file_infos.len());
     for (location, size, dedup_key) in file_infos {
@@ -213,8 +211,8 @@ pub async fn read_parquet_metas_batch(
             op.clone(),
             &expect,
             &schema_from,
-            use_cache.clone(),
-            dedup_key,
+            enable_cache,
+            &dedup_key,
         )
         .await?;
         if unlikely(meta.file_metadata().num_rows() == 0) {

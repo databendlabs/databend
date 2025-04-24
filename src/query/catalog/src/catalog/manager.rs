@@ -168,7 +168,6 @@ impl CatalogManager {
             .ok_or_else(|| ErrorCode::BadArguments(format!("unknown catalog type: {:?}", typ)))?;
 
         let v = creator.try_create(info)?;
-        println!("created new catalog {} with key {:?}", v.name(), key);
         let mut w = self.catalog_caches.write();
         w.insert(key, v.clone());
         Ok(v)
