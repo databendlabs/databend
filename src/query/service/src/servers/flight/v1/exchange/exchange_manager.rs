@@ -57,7 +57,6 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
-use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
@@ -422,7 +421,7 @@ impl DataExchangeManager {
             retry_times: settings.get_flight_max_retry_times()?,
             retry_interval: settings.get_flight_retry_interval()?,
         };
-        let root_actions = actions.get_root_actions()?;
+        let mut root_fragment_ids = actions.get_root_fragment_ids()?;
         let conf = GlobalConfig::instance();
 
         // Initialize query env between cluster nodes
@@ -445,7 +444,8 @@ impl DataExchangeManager {
         }
 
         // Get local pipeline of local task
-        let build_res = self.get_root_pipeline(ctx, root_actions)?;
+        let main_fragment_id = root_fragment_ids.pop().unwrap();
+        let build_res = self.get_root_pipeline(ctx, main_fragment_id, root_fragment_ids)?;
 
         let prepared_query = actions.prepared_query()?;
         let _: HashMap<String, ()> = cluster
@@ -458,10 +458,10 @@ impl DataExchangeManager {
     fn get_root_pipeline(
         &self,
         ctx: Arc<QueryContext>,
-        root_actions: &QueryFragmentActions,
+        main_fragment_id: usize,
+        fragment_ids: Vec<usize>,
     ) -> Result<PipelineBuildResult> {
         let query_id = ctx.get_id();
-        let fragment_id = root_actions.fragment_id;
 
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -478,8 +478,25 @@ impl DataExchangeManager {
                         .collect::<Vec<_>>()
                 );
                 let injector = DefaultExchangeInjector::create();
-                let mut build_res =
-                    query_coordinator.subscribe_fragment(&ctx, fragment_id, injector)?;
+                let mut build_res = query_coordinator.subscribe_fragment(
+                    &ctx,
+                    main_fragment_id,
+                    injector.clone(),
+                )?;
+
+                for fragment_id in fragment_ids {
+                    let sub_build_res = query_coordinator.subscribe_fragment(
+                        &ctx,
+                        fragment_id,
+                        injector.clone(),
+                    )?;
+                    build_res
+                        .sources_pipelines
+                        .push(sub_build_res.main_pipeline);
+                    build_res
+                        .sources_pipelines
+                        .extend(sub_build_res.sources_pipelines);
+                }
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
                 let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;

@@ -69,14 +69,18 @@ impl AsyncSource for RuntimeFilterSourceProcessor {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeFilterMeta {
     inlist: Vec<RemoteExpr<String>>,
     min_max: Vec<RemoteExpr<String>>,
 }
 
 #[typetag::serde(name = "runtime_filter_meta")]
-impl BlockMetaInfo for RuntimeFilterMeta {}
+impl BlockMetaInfo for RuntimeFilterMeta {
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
 
 impl From<&RuntimeFilterInfo> for RuntimeFilterMeta {
     fn from(runtime_filter_info: &RuntimeFilterInfo) -> Self {
