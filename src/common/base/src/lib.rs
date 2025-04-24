@@ -29,7 +29,6 @@
 #![feature(slice_ptr_get)]
 #![feature(alloc_layout_extra)]
 #![feature(let_chains)]
-#![feature(integer_atomics)]
 
 pub mod base;
 pub mod containers;

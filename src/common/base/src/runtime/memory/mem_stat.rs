@@ -340,6 +340,7 @@ impl MemStat {
             return Err(out_of_limit);
         }
 
+        #[allow(clippy::collapsible_if)]
         if water_height != 0 && used <= water_height {
             if self.exceeded_memory.fetch_and(false, Ordering::SeqCst) {
                 let _guard = LimitMemGuard::enter_unlimited();
