@@ -25,23 +25,14 @@ fn test_geo() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("geo.txt").unwrap();
 
-    println!("\n-----1");
     test_geo_to_h3(file);
-    println!("\n-----2");
     test_great_circle_distance(file);
-    println!("\n-----3");
     test_geo_distance(file);
-    println!("\n-----4");
     test_great_circle_angle(file);
-    println!("\n-----5");
     test_point_in_ellipses(file);
-    println!("\n-----6");
     test_point_in_polygon(file);
-    println!("\n-----7");
     test_geohash_encode(file);
-    println!("\n-----8");
     test_geohash_decode(file);
-    println!("\n-----9");
 }
 
 fn test_geo_to_h3(file: &mut impl Write) {

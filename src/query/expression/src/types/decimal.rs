@@ -2502,6 +2502,6 @@ impl PartialOrd<i256> for i128 {
 impl Ord for i256 {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+        self.0.cmp(&other.0)
     }
 }
