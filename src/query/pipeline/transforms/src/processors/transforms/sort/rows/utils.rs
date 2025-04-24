@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::row::RowConverter as CommonConverter;
 use databend_common_expression::types::DataType;
@@ -21,7 +22,6 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -41,55 +41,50 @@ pub fn convert_rows(
     sort_desc: &[SortColumnDescription],
     data: DataBlock,
 ) -> Result<Column> {
-    let num_rows = data.num_rows();
+    struct ConvertRowsVisitor<'a> {
+        schema: DataSchemaRef,
+        sort_desc: &'a [SortColumnDescription],
+        data: DataBlock,
+        result: Result<Column>,
+    }
 
-    if sort_desc.len() == 1 {
-        let sort_type = schema.field(sort_desc[0].offset).data_type();
-        let asc = sort_desc[0].asc;
+    impl RowsTypeVisitor for ConvertRowsVisitor<'_> {
+        fn schema(&self) -> DataSchemaRef {
+            self.schema.clone()
+        }
 
-        let offset = sort_desc[0].offset;
-        let columns = &data.columns()[offset..offset + 1];
+        fn sort_desc(&self) -> &[SortColumnDescription] {
+            self.sort_desc
+        }
 
-        match_template! {
-        T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
-        match sort_type {
-            DataType::T => {
-                if asc {
-                    convert_columns::<SimpleRowsAsc<T>,SimpleRowConverter<_>>(schema, sort_desc, columns, num_rows)
-                } else {
-                    convert_columns::<SimpleRowsDesc<T>,SimpleRowConverter<_>>(schema, sort_desc, columns, num_rows)
-                }
-            },
-            DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                NumberDataType::NUM_TYPE => {
-                    if asc {
-                        convert_columns::<SimpleRowsAsc<NumberType<NUM_TYPE>>,SimpleRowConverter<_>>(schema, sort_desc, columns, num_rows)
-                    } else {
-                        convert_columns::<SimpleRowsDesc<NumberType<NUM_TYPE>>,SimpleRowConverter<_>>(schema, sort_desc, columns, num_rows)
-                    }
-                }
-            }),
-            _ => convert_columns::<CommonRows, CommonConverter>(schema, sort_desc, columns, num_rows),
+        fn visit_type<R, C>(&mut self)
+        where
+            R: Rows + 'static,
+            C: RowConverter<R> + Send + 'static,
+        {
+            let columns = self
+                .sort_desc
+                .iter()
+                .map(|desc| self.data.get_by_offset(desc.offset).to_owned())
+                .collect::<Vec<_>>();
+
+            self.result = try {
+                let converter = C::create(self.sort_desc, self.schema.clone())?;
+                let rows = C::convert(&converter, &columns, self.data.num_rows())?;
+                rows.to_column()
             }
         }
-    } else {
-        let columns = sort_desc
-            .iter()
-            .map(|desc| data.get_by_offset(desc.offset).to_owned())
-            .collect::<Vec<_>>();
-        convert_columns::<CommonRows, CommonConverter>(schema, sort_desc, &columns, num_rows)
     }
-}
 
-fn convert_columns<R: Rows, C: RowConverter<R>>(
-    schema: DataSchemaRef,
-    sort_desc: &[SortColumnDescription],
-    columns: &[BlockEntry],
-    num_rows: usize,
-) -> Result<Column> {
-    let converter = C::create(sort_desc, schema)?;
-    let rows = C::convert(&converter, columns, num_rows)?;
-    Ok(rows.to_column())
+    let mut visitor = ConvertRowsVisitor {
+        schema: schema.clone(),
+        sort_desc,
+        data,
+        result: Err(ErrorCode::Internal("unreachable")),
+    };
+
+    select_row_type(&mut visitor);
+    visitor.result
 }
 
 pub fn select_row_type(visitor: &mut impl RowsTypeVisitor) {
@@ -138,19 +133,37 @@ pub trait RowsTypeVisitor {
 }
 
 pub fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> DataType {
-    debug_assert!(!desc.is_empty());
-    if desc.len() == 1 {
-        let order_by_field = schema.field(desc[0].offset);
-        if matches!(
-            order_by_field.data_type(),
-            DataType::Number(_)
-                | DataType::Date
-                | DataType::Timestamp
-                | DataType::Binary
-                | DataType::String
-        ) {
-            return order_by_field.data_type().clone();
+    struct OrderFieldTypeVisitor<'a> {
+        schema: DataSchemaRef,
+        sort_desc: &'a [SortColumnDescription],
+        result: Option<DataType>,
+    }
+
+    impl RowsTypeVisitor for OrderFieldTypeVisitor<'_> {
+        fn schema(&self) -> DataSchemaRef {
+            self.schema.clone()
+        }
+
+        fn sort_desc(&self) -> &[SortColumnDescription] {
+            self.sort_desc
+        }
+
+        fn visit_type<R, C>(&mut self)
+        where
+            R: Rows + 'static,
+            C: RowConverter<R> + Send + 'static,
+        {
+            self.result = Some(R::data_type());
         }
     }
-    DataType::Binary
+
+    assert!(!desc.is_empty());
+    let mut visitor = OrderFieldTypeVisitor {
+        schema: schema.clone().into(),
+        sort_desc: desc,
+        result: None,
+    };
+
+    select_row_type(&mut visitor);
+    visitor.result.unwrap()
 }

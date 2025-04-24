@@ -1045,7 +1045,7 @@ mod tests {
         SpillableBlock::new(sliced_block, sort_row_offset)
     }
 
-    async fn prepare_test_blocks<R: Rows>(
+    async fn prepare_test_blocks(
         spiller: &impl Spill,
         sort_desc: &[SortColumnDescription],
         with_spilled: bool,
@@ -1152,7 +1152,7 @@ mod tests {
         with_sliced: bool,
     ) -> Result<()> {
         let (_, blocks, sort_row_offset) =
-            prepare_test_blocks::<R>(&spiller, sort_desc, with_spilled, with_sliced).await?;
+            prepare_test_blocks(&spiller, sort_desc, with_spilled, with_sliced).await?;
 
         let mut stream = BoundBlockStream::<R, _> {
             blocks,

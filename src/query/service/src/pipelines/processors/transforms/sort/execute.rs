@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -28,7 +27,6 @@ use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgori
 use super::sort_spill::SortSpill;
 use super::Base;
 use super::SortCollectedMeta;
-use crate::spillers::Spiller;
 
 pub struct TransformSortExecute<A: SortAlgorithm> {
     input: Arc<InputPort>,
@@ -48,22 +46,14 @@ where A: SortAlgorithm
     pub(super) fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        schema: DataSchemaRef,
-        limit: Option<usize>,
-        spiller: Arc<Spiller>,
+        base: Base,
         output_order_col: bool,
     ) -> Result<Self> {
-        let sort_row_offset = schema.fields().len() - 1;
         Ok(Self {
             input,
             output,
             remove_order_col: !output_order_col,
-            base: Base {
-                schema,
-                spiller,
-                sort_row_offset,
-                limit,
-            },
+            base,
             inner: None,
         })
     }
