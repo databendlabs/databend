@@ -491,6 +491,47 @@ ShowColumns(
 
 
 ---------- Input ----------
+show columns from ctl.db.t
+---------- Output ---------
+SHOW COLUMNS FROM t FROM ctl.db
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    18..21,
+                ),
+                name: "ctl",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        database: Some(
+            Identifier {
+                span: Some(
+                    22..24,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                25..26,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        full: false,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
 show full columns from t from db like 'id%'
 ---------- Output ---------
 SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
@@ -511,6 +552,42 @@ ShowColumns(
         table: Identifier {
             span: Some(
                 23..24,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        full: true,
+        limit: Some(
+            Like {
+                pattern: "id%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+show full columns from db.t like 'id%'
+---------- Output ---------
+SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    23..25,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                26..27,
             ),
             name: "t",
             quote: None,

@@ -786,20 +786,37 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+
+    pub fn from_tables(i: Input) -> IResult<(Option<Identifier>, Option<Identifier>, Identifier)> {
+        let from_dot_table = map(
+            rule! {
+               ( FROM | IN ) ~ ^#dot_separated_idents_1_to_3
+            },
+            |(_, (catalog, database, table))| (catalog, database, table),
+        );
+
+        let from_table = map(
+            rule! {
+                ( FROM | IN ) ~ #ident
+                ~ ( FROM | IN ) ~ ^#dot_separated_idents_1_to_2
+            },
+            |(_, table, _, (catalog, database))| (catalog, Some(database), table),
+        );
+
+        rule!(
+            #from_table
+            | #from_dot_table
+        )(i)
+    }
+
     let show_columns = map(
         rule! {
             SHOW
             ~ FULL? ~ COLUMNS
-            ~ ( FROM | IN ) ~ #ident
-            ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)?
+            ~ #from_tables
             ~ #show_limit?
         },
-        |(_, opt_full, _, _, table, ctl_db, limit)| {
-            let (catalog, database) = match ctl_db {
-                Some((_, (Some(c), d))) => (Some(c), Some(d)),
-                Some((_, (None, d))) => (None, Some(d)),
-                _ => (None, None),
-            };
+        |(_, opt_full, _, (catalog, database, table), limit)| {
             Statement::ShowColumns(ShowColumnsStmt {
                 catalog,
                 database,
