@@ -12,25 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Exchange;
-use databend_common_pipeline_transforms::processors::sort::Rows;
 
 use super::SortScatteredMeta;
 
-pub struct SortRangeExchange<R: Rows> {
-    _r: PhantomData<R>,
-}
+pub struct SortRangeExchange;
 
-unsafe impl<R: Rows> Send for SortRangeExchange<R> {}
-
-unsafe impl<R: Rows> Sync for SortRangeExchange<R> {}
-
-impl<R: Rows + 'static> Exchange for SortRangeExchange<R> {
+impl Exchange for SortRangeExchange {
     const NAME: &'static str = "SortRange";
     fn partition(&self, mut data: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let Some(meta) = data.take_meta() else {

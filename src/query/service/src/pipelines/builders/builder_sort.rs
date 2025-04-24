@@ -300,8 +300,6 @@ impl SortPipelineBuilder {
 
         pipeline.add_transform(|input, output| {
             let builder = TransformSortBuilder::create(
-                input,
-                output,
                 sort_merge_output_schema.clone(),
                 self.sort_desc.clone(),
                 self.block_size,
@@ -313,7 +311,7 @@ impl SortPipelineBuilder {
             .with_memory_settings(memory_settings.clone())
             .with_enable_loser_tree(enable_loser_tree);
 
-            Ok(ProcessorPtr::create(builder.build()?))
+            Ok(ProcessorPtr::create(builder.build(input, output)?))
         })
     }
 

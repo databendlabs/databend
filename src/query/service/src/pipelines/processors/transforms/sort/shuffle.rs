@@ -42,7 +42,7 @@ enum Step {
     Scattered(Vec<SortCollectedMeta>),
 }
 
-pub struct TransformSortWait<R: Rows> {
+pub struct TransformSortShuffle<R: Rows> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     id: usize,
@@ -52,7 +52,7 @@ pub struct TransformSortWait<R: Rows> {
     _r: PhantomData<R>,
 }
 
-impl<R: Rows> TransformSortWait<R> {
+impl<R: Rows> TransformSortShuffle<R> {
     pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -69,20 +69,6 @@ impl<R: Rows> TransformSortWait<R> {
             step: Step::None,
             _r: PhantomData,
         }
-    }
-
-    pub fn create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        id: usize,
-        inputs: usize,
-        partitions: usize,
-        schema: DataSchemaRef,
-        batch_rows: usize,
-        spiller: Arc<Spiller>,
-    ) -> Self {
-        let state = SortSampleState::new(inputs, partitions, schema, batch_rows);
-        Self::new(input, output, id, state, spiller)
     }
 
     async fn scatter(&mut self) -> Result<()> {
@@ -138,9 +124,9 @@ impl<R: Rows> TransformSortWait<R> {
 }
 
 #[async_trait::async_trait]
-impl<R: Rows + 'static> Processor for TransformSortWait<R> {
+impl<R: Rows + 'static> Processor for TransformSortShuffle<R> {
     fn name(&self) -> String {
-        "TransformSortWait".to_string()
+        "TransformSortShuffle".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
