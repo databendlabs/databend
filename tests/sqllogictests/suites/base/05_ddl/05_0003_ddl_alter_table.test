@@ -297,10 +297,10 @@ ALTER TABLE t1 DROP COLUMN size;
 statement ok
 ALTER TABLE t1 DROP COLUMN path;
 
-statement error 1302
+statement ok
 alter table t1 refresh cache;
 
-statement error 1302
+statement ok
 alter database default refresh cache;
 
 statement ok
