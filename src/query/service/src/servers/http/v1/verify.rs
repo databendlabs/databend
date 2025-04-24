@@ -35,9 +35,10 @@ pub async fn verify_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoRespo
         .session
         .get_current_user()
         .map_err(HttpErrorCode::server_error)?;
+    let roles = ctx.session.get_all_effective_roles().await?;
     Ok(Json(VerifyResponse {
         tenant: tenant.tenant_name().to_string(),
         user: user.name.to_string(),
-        roles: user.grants.roles(),
+        roles: roles.iter().map(|r| r.name).collect(),
     }))
 }
