@@ -13,7 +13,10 @@ CONNECTION=(
 );
 
 statement ok
-use catalog ctl;
+SET catalog ctl;
+
+statement ok
+catalog ctl;
 
 statement ok
 select * from iceberg_snapshot('tpch', 'lineitem');

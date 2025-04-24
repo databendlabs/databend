@@ -3496,6 +3496,40 @@ UseCatalog {
 
 
 ---------- Input ----------
+catalog ctl;
+---------- Output ---------
+USE CATALOG ctl
+---------- AST ------------
+UseCatalog {
+    catalog: Identifier {
+        span: Some(
+            8..11,
+        ),
+        name: "ctl",
+        quote: None,
+        ident_type: None,
+    },
+}
+
+
+---------- Input ----------
+set catalog ctl;
+---------- Output ---------
+USE CATALOG ctl
+---------- AST ------------
+UseCatalog {
+    catalog: Identifier {
+        span: Some(
+            12..15,
+        ),
+        name: "ctl",
+        quote: None,
+        ident_type: None,
+    },
+}
+
+
+---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
 CREATE DATABASE IF NOT EXISTS a
