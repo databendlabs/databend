@@ -53,21 +53,37 @@ pub struct TransformSortWait<R: Rows> {
 }
 
 impl<R: Rows> TransformSortWait<R> {
-    // pub fn new(
-    //     input: Arc<InputPort>,
-    //     output: Arc<OutputPort>,
-    //     id: usize,
-    //     state: Arc<SortSampleState>,
-    // ) -> Self {
-    //     Self {
-    //         input,
-    //         output,
-    //         id,
-    //         state,
-    //         meta: None,
-    //         _r: Default::default(),
-    //     }
-    // }
+    pub fn new(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        id: usize,
+        state: Arc<SortSampleState>,
+        spiller: Arc<Spiller>,
+    ) -> Self {
+        Self {
+            input,
+            output,
+            id,
+            state,
+            spiller,
+            step: Step::None,
+            _r: PhantomData,
+        }
+    }
+
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        id: usize,
+        inputs: usize,
+        partitions: usize,
+        schema: DataSchemaRef,
+        batch_rows: usize,
+        spiller: Arc<Spiller>,
+    ) -> Self {
+        let state = SortSampleState::new(inputs, partitions, schema, batch_rows);
+        Self::new(input, output, id, state, spiller)
+    }
 
     async fn scatter(&mut self) -> Result<()> {
         let scatter_bounds = self.state.bounds();
@@ -195,6 +211,24 @@ pub struct SortSampleState {
 }
 
 impl SortSampleState {
+    pub fn new(
+        inputs: usize,
+        partitions: usize,
+        schema: DataSchemaRef,
+        batch_rows: usize,
+    ) -> Arc<SortSampleState> {
+        Arc::new(SortSampleState {
+            inner: RwLock::new(StateInner {
+                partitions,
+                schema,
+                partial: vec![None; inputs],
+                bounds: None,
+                batch_rows,
+            }),
+            done: WatchNotify::new(),
+        })
+    }
+
     pub fn commit_sample<R: Rows>(&self, id: usize, bounds: Bounds) -> Result<bool> {
         let mut inner = self.inner.write().unwrap();
 
