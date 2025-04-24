@@ -22,7 +22,7 @@ use serde::Serialize;
 
 use crate::servers::http::v1::HttpQueryContext;
 
-const PUBLIC_ROLE: &'static str = "public";
+const PUBLIC_ROLE: &str = "public";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ListRolesResponse {
