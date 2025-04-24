@@ -56,7 +56,9 @@ impl Interpreter for RefreshTableCacheInterpreter {
         }
 
         let _ = catalog
-            .get_table(&plan.tenant, &plan.database, &plan.table)
+            .get_database(&plan.tenant, &plan.database)
+            .await?
+            .refresh_table(&plan.table)
             .await?;
 
         Ok(PipelineBuildResult::create())

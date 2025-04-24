@@ -58,7 +58,7 @@ impl Interpreter for RefreshDatabaseCacheInterpreter {
         let _ = catalog
             .get_database(&plan.tenant, &plan.database)
             .await?
-            .trigger_use()
+            .refresh_database()
             .await?;
 
         Ok(PipelineBuildResult::create())
