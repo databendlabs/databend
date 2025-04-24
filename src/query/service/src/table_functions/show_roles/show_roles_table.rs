@@ -160,7 +160,7 @@ impl AsyncSource for ShowRolesSource {
 }
 
 async fn show_roles(ctx: Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
-    let mut roles = ctx.get_all_effective_roles().await?;
+    let mut roles = ctx.get_all_available_roles().await?;
     roles.sort_by(|a, b| a.name.cmp(&b.name));
 
     let current_role_name = ctx.get_current_role().map(|r| r.name).unwrap_or_default();
