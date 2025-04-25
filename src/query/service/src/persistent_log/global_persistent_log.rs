@@ -66,6 +66,7 @@ pub struct GlobalPersistentLog {
     initialized: AtomicBool,
     tables: Vec<Box<dyn PersistentLogTable>>,
     retention: usize,
+    retention_interval: usize,
 }
 
 impl GlobalPersistentLog {
@@ -120,6 +121,7 @@ impl GlobalPersistentLog {
             initialized: AtomicBool::new(false),
             tables,
             retention: cfg.log.persistentlog.retention,
+            retention_interval: cfg.log.persistentlog.retention_interval,
         });
         GlobalInstance::set(instance);
         GlobalIORuntime::instance().try_spawn(
@@ -160,6 +162,7 @@ impl GlobalPersistentLog {
                 Box::new(QueryLogTable::new()),
             ],
             retention: cfg.log.persistentlog.retention,
+            retention_interval: cfg.log.persistentlog.retention_interval,
         })
     }
 
@@ -188,15 +191,15 @@ impl GlobalPersistentLog {
             }
         });
         loop {
-            // create the stage, database and table if not exists
-            // alter the table if schema is changed
             if !prepared {
+                // No need to wait, we want to do prepare as soon as possible
                 let prepare_guard = self.acquire(&meta_key, self.interval, 0).await?;
                 self.prepare().await?;
                 info!("Persistent log prepared successfully");
                 prepared = true;
                 drop(prepare_guard);
             }
+            // Periodically performs persistent log COPY INTO/ INSERT INTO  every `interval` seconds (around)
             let may_permit = self
                 .acquire(&meta_key, self.interval, self.interval)
                 .await?;
@@ -304,6 +307,8 @@ impl GlobalPersistentLog {
         Ok(())
     }
 
+    /// Create the stage, database and table if not exists
+    /// Alter the table if schema is changed
     pub async fn prepare(&self) -> Result<()> {
         let stage_name = self.stage_name.clone();
         let create_stage = format!("CREATE STAGE IF NOT EXISTS {}", stage_name);
@@ -383,11 +388,18 @@ impl GlobalPersistentLog {
         Ok(())
     }
 
+    /// Periodically performs persistent log cleaning every `retention_interval` hours (around)
     async fn clean_work(&self) -> Result<()> {
         loop {
+            // will check if it is already `retention_interval` hours every sleep_time
+            let sleep_time = Duration::from_mins(30 + random::<u64>() % 60);
             let meta_key = format!("{}/persistent_log_clean", self.tenant_id);
             let may_permit = self
-                .acquire(&meta_key, 60, Duration::from_hours(self.interval).as_secs())
+                .acquire(
+                    &meta_key,
+                    60,
+                    Duration::from_hours(self.retention_interval as u64).as_secs(),
+                )
                 .await?;
             if let Some(guard) = may_permit {
                 if let Err(e) = self.do_clean().await {
@@ -396,9 +408,7 @@ impl GlobalPersistentLog {
                 self.finish_hook(&meta_key).await?;
                 drop(guard);
             }
-
-            // sleep for a random time between 30 and 90 minutes
-            sleep(Duration::from_mins(30 + random::<u64>() % 60)).await;
+            sleep(sleep_time).await;
         }
     }
 
@@ -406,6 +416,10 @@ impl GlobalPersistentLog {
         for table in &self.tables {
             let clean_sql = table.clean_sql(self.retention);
             self.execute_sql(&clean_sql).await?;
+            info!(
+                "Periodic retention operation on persistent log table '{}' completed successfully.",
+                table.table_name()
+            );
         }
 
         let session = create_session(&self.tenant_id, &self.cluster_id).await?;
@@ -416,7 +430,11 @@ impl GlobalPersistentLog {
         {
             for table in &self.tables {
                 let vacuum = format!("VACUUM TABLE persistent_system.{}", table.table_name());
-                self.execute_sql(&vacuum).await?
+                self.execute_sql(&vacuum).await?;
+                info!(
+                "Periodic VACUUM operation on persistent log table '{}' completed successfully.",
+                table.table_name()
+            );
             }
         }
         Ok(())

@@ -2567,15 +2567,6 @@ pub struct PersistentLogConfig {
     #[serde(rename = "stage_name")]
     pub log_persistentlog_stage_name: String,
 
-    /// Specifies how long the persistent log should be retained, in hours
-    #[clap(
-        long = "log-persistentlog-retention",
-        value_name = "VALUE",
-        default_value = "72"
-    )]
-    #[serde(rename = "retention")]
-    pub log_persistentlog_retention: usize,
-
     /// Log level <DEBUG|INFO|WARN|ERROR>
     #[clap(
         long = "log-persistentlog-level",
@@ -2584,6 +2575,26 @@ pub struct PersistentLogConfig {
     )]
     #[serde(rename = "level")]
     pub log_persistentlog_level: String,
+
+    /// The retention period (in hours) for persistent logs.
+    /// Data older than this period will be deleted during retention tasks.
+    #[clap(
+        long = "log-persistentlog-retention",
+        value_name = "VALUE",
+        default_value = "72"
+    )]
+    #[serde(rename = "retention")]
+    pub log_persistentlog_retention: usize,
+
+    /// The interval (in hours) at which the retention process is triggered.
+    /// Specifies how often the retention task runs to clean up old data.
+    #[clap(
+        long = "log-persistentlog-retention-interval",
+        value_name = "VALUE",
+        default_value = "24"
+    )]
+    #[serde(rename = "retention_interval")]
+    pub log_persistentlog_retention_interval: usize,
 }
 
 impl Default for PersistentLogConfig {
@@ -2602,6 +2613,7 @@ impl TryInto<InnerPersistentLogConfig> for PersistentLogConfig {
             stage_name: self.log_persistentlog_stage_name,
             level: self.log_persistentlog_level,
             retention: self.log_persistentlog_retention,
+            retention_interval: self.log_persistentlog_retention_interval,
         })
     }
 }
@@ -2614,6 +2626,7 @@ impl From<InnerPersistentLogConfig> for PersistentLogConfig {
             log_persistentlog_stage_name: inner.stage_name,
             log_persistentlog_level: inner.level,
             log_persistentlog_retention: inner.retention,
+            log_persistentlog_retention_interval: inner.retention_interval,
         }
     }
 }
