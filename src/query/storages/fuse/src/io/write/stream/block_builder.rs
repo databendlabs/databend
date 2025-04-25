@@ -332,7 +332,6 @@ impl StreamBlockBuilder {
             compression: self.properties.write_settings.table_compression.into(),
             inverted_index_size,
             create_on: Some(Utc::now()),
-            ngram_filter_index_size: None,
             virtual_block_meta: None,
         };
         let serialized = BlockSerialization {
