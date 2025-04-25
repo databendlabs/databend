@@ -20,6 +20,7 @@ use std::fmt::Write;
 use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_column::binary::BinaryColumn;
 use databend_common_io::deserialize_bitmap;
@@ -244,7 +245,7 @@ impl Display for ScalarRef<'_> {
                 }
                 Ok(())
             }
-            ScalarRef::String(s) => write!(f, "'{s}'"),
+            ScalarRef::String(s) => write!(f, "{}", QuotedString(s, '\'')),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
             ScalarRef::Interval(interval) => write!(f, "'{}'", interval_to_string(interval)),
