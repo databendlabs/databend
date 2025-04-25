@@ -79,7 +79,7 @@ use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTab
 use crate::pipelines::processors::transforms::hash_join::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHashTable;
-use crate::pipelines::processors::transforms::RuntimeFilterMeta;
+use crate::pipelines::processors::transforms::RuntimeFiltersMeta;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
@@ -119,7 +119,7 @@ pub struct HashJoinBuildState {
 
     /// Spill related states.
     pub(crate) memory_settings: MemorySettings,
-    pub(crate) runtime_filter_sender: Option<Sender<RuntimeFilterMeta>>,
+    pub(crate) runtime_filter_sender: Option<Sender<RuntimeFiltersMeta>>,
 }
 
 impl HashJoinBuildState {
@@ -131,7 +131,7 @@ impl HashJoinBuildState {
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
         num_threads: usize,
-        rf_src_send: Option<Sender<RuntimeFilterMeta>>,
+        rf_src_send: Option<Sender<RuntimeFiltersMeta>>,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -291,6 +291,7 @@ impl HashJoinBuildState {
                     .build_watcher
                     .send(HashTableType::Empty)
                     .map_err(|_| ErrorCode::TokioError("build_watcher channel is closed"))?;
+                self.send_runtime_filter_meta(Default::default())?;
                 self.set_bloom_filter_ready(false)?;
                 return Ok(());
             }
@@ -310,6 +311,7 @@ impl HashJoinBuildState {
             if self.hash_join_state.spilled_partitions.read().is_empty() {
                 self.add_runtime_filter(&build_chunks, build_num_rows)?;
             } else {
+                self.send_runtime_filter_meta(Default::default())?;
                 self.set_bloom_filter_ready(false)?;
             }
 
@@ -842,6 +844,7 @@ impl HashJoinBuildState {
 
     fn add_runtime_filter(&self, build_chunks: &[DataBlock], build_num_rows: usize) -> Result<()> {
         let mut bloom_filter_ready = false;
+        let mut runtime_filters_meta = RuntimeFiltersMeta::default();
         for rf in self.runtime_filter_desc() {
             let mut runtime_filter = RuntimeFilterInfo::default();
             if rf.enable_inlist_runtime_filter && build_num_rows < INLIST_RUNTIME_FILTER_THRESHOLD {
@@ -870,10 +873,11 @@ impl HashJoinBuildState {
             }
             if !runtime_filter.is_empty() {
                 bloom_filter_ready |= !runtime_filter.is_blooms_empty();
-                self.send_runtime_filter_meta(&runtime_filter)?;
+                runtime_filters_meta.add(rf.scan_id, &runtime_filter);
                 self.ctx.set_runtime_filter((rf.scan_id, runtime_filter));
             }
         }
+        self.send_runtime_filter_meta(runtime_filters_meta)?;
         self.set_bloom_filter_ready(bloom_filter_ready)?;
         Ok(())
     }
@@ -1075,9 +1079,9 @@ impl HashJoinBuildState {
             .any(|rf| rf.enable_min_max_runtime_filter)
     }
 
-    fn send_runtime_filter_meta(&self, runtime_filter_info: &RuntimeFilterInfo) -> Result<()> {
+    fn send_runtime_filter_meta(&self, runtime_filter: RuntimeFiltersMeta) -> Result<()> {
         if let Some(sender) = self.runtime_filter_sender.as_ref() {
-            sender.send_blocking(runtime_filter_info.into()).unwrap();
+            sender.send_blocking(runtime_filter).unwrap();
             sender.close();
         }
         Ok(())

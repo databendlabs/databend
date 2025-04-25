@@ -42,9 +42,9 @@ mod transform_udf_server;
 mod window;
 
 pub use hash_join::*;
-pub use runtime_filter::RuntimeFilterMeta;
 pub use runtime_filter::RuntimeFilterSinkProcessor;
 pub use runtime_filter::RuntimeFilterSourceProcessor;
+pub use runtime_filter::RuntimeFiltersMeta;
 pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;
 pub use transform_add_internal_columns::TransformAddInternalColumns;

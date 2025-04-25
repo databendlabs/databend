@@ -137,7 +137,7 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::processors::transforms::RuntimeFilterMeta;
+use crate::pipelines::processors::transforms::RuntimeFiltersMeta;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
@@ -284,11 +284,11 @@ impl QueryContext {
         }
     }
 
-    pub fn rf_src_recv(&self, join_id: u32) -> Receiver<RuntimeFilterMeta> {
+    pub fn rf_src_recv(&self, join_id: u32) -> Receiver<RuntimeFiltersMeta> {
         self.shared.rf_src_recv(join_id)
     }
 
-    pub fn rf_src_send(&self, join_id: u32) -> Sender<RuntimeFilterMeta> {
+    pub fn rf_src_send(&self, join_id: u32) -> Sender<RuntimeFiltersMeta> {
         self.shared.rf_src_send(join_id)
     }
 

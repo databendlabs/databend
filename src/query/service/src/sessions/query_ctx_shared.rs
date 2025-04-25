@@ -70,7 +70,7 @@ use uuid::Uuid;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::processors::transforms::RuntimeFilterMeta;
+use crate::pipelines::processors::transforms::RuntimeFiltersMeta;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::storages::Table;
@@ -179,8 +179,8 @@ pub struct QueryContextShared {
 }
 
 type RuntimeFilterChannel = (
-    Option<Sender<RuntimeFilterMeta>>,
-    Option<Receiver<RuntimeFilterMeta>>,
+    Option<Sender<RuntimeFiltersMeta>>,
+    Option<Receiver<RuntimeFiltersMeta>>,
 );
 
 impl QueryContextShared {
@@ -251,7 +251,7 @@ impl QueryContextShared {
         }))
     }
 
-    pub fn rf_src_recv(&self, join_id: u32) -> Receiver<RuntimeFilterMeta> {
+    pub fn rf_src_recv(&self, join_id: u32) -> Receiver<RuntimeFiltersMeta> {
         let mut rf_source = self.rf_source.lock();
         match rf_source.get_mut(&join_id).map(|(_, receiver)| receiver) {
             Some(receiver) => receiver.take().unwrap(),
@@ -262,7 +262,7 @@ impl QueryContextShared {
             }
         }
     }
-    pub fn rf_src_send(&self, join_id: u32) -> Sender<RuntimeFilterMeta> {
+    pub fn rf_src_send(&self, join_id: u32) -> Sender<RuntimeFiltersMeta> {
         let mut rf_source = self.rf_source.lock();
         match rf_source.get_mut(&join_id).map(|(sender, _)| sender) {
             Some(sender) => sender.take().unwrap(),

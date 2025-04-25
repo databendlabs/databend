@@ -32,13 +32,13 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 
 pub struct RuntimeFilterSourceProcessor {
-    pub meta_receiver: Receiver<RuntimeFilterMeta>,
+    pub meta_receiver: Receiver<RuntimeFiltersMeta>,
 }
 
 impl RuntimeFilterSourceProcessor {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        receiver: Receiver<RuntimeFilterMeta>,
+        receiver: Receiver<RuntimeFiltersMeta>,
         output_port: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx, output_port, Self {
@@ -63,12 +63,7 @@ impl AsyncSource for RuntimeFilterSourceProcessor {
             rf.is_ok()
         );
         match rf {
-            Ok(runtime_filter) => Ok(Some(DataBlock::empty_with_meta(Box::new(
-                RuntimeFilterMeta {
-                    inlist: runtime_filter.inlist,
-                    min_max: runtime_filter.min_max,
-                },
-            )))),
+            Ok(runtime_filter) => Ok(Some(DataBlock::empty_with_meta(Box::new(runtime_filter)))),
             Err(_) => {
                 // The channel is closed, we should return None to stop generating
                 Ok(None)
@@ -77,22 +72,29 @@ impl AsyncSource for RuntimeFilterSourceProcessor {
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct RuntimeFiltersMeta {
+    runtime_filters: Vec<RuntimeFilterMeta>,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeFilterMeta {
+    scan_id: usize,
     inlist: Vec<RemoteExpr<String>>,
     min_max: Vec<RemoteExpr<String>>,
 }
 
-#[typetag::serde(name = "runtime_filter_meta")]
-impl BlockMetaInfo for RuntimeFilterMeta {
+#[typetag::serde(name = "runtime_filters_meta")]
+impl BlockMetaInfo for RuntimeFiltersMeta {
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
     }
 }
 
-impl From<&RuntimeFilterInfo> for RuntimeFilterMeta {
-    fn from(runtime_filter_info: &RuntimeFilterInfo) -> Self {
-        Self {
+impl RuntimeFiltersMeta {
+    pub fn add(&mut self, scan_id: usize, runtime_filter_info: &RuntimeFilterInfo) {
+        let rf = RuntimeFilterMeta {
+            scan_id,
             inlist: runtime_filter_info
                 .inlists_ref()
                 .iter()
@@ -103,14 +105,21 @@ impl From<&RuntimeFilterInfo> for RuntimeFilterMeta {
                 .iter()
                 .map(|expr| expr.as_remote_expr())
                 .collect(),
-        }
+        };
+        self.runtime_filters.push(rf);
     }
 }
-pub struct RuntimeFilterSinkProcessor {}
+pub struct RuntimeFilterSinkProcessor {
+    node_num: usize,
+    recv_num: usize,
+}
 
 impl RuntimeFilterSinkProcessor {
-    pub fn create(input: Arc<InputPort>) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(AsyncSinker::create(input, Self {})))
+    pub fn create(input: Arc<InputPort>, node_num: usize) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(AsyncSinker::create(input, Self {
+            node_num,
+            recv_num: 0,
+        })))
     }
 }
 
@@ -128,12 +137,13 @@ impl AsyncSink for RuntimeFilterSinkProcessor {
         let ptr = data_block
             .take_meta()
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to RuntimeFilterMeta"))?;
-        let runtime_filter = RuntimeFilterMeta::downcast_from(ptr)
+        let runtime_filter = RuntimeFiltersMeta::downcast_from(ptr)
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to RuntimeFilterMeta"))?;
         log::info!(
             "RuntimeFilterSinkProcessor recv runtime filter: {:?}",
             runtime_filter
         );
-        Ok(true)
+        self.recv_num += 1;
+        Ok(self.node_num == self.recv_num)
     }
 }
