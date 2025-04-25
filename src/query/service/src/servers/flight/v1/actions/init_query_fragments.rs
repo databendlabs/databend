@@ -27,6 +27,9 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
+    if fragments.query_id.ends_with("-log") {
+        tracking_payload.should_log = false;
+    }
     tracking_payload.query_id = Some(fragments.query_id.clone());
     let _guard = ThreadTracker::tracking(tracking_payload);
 

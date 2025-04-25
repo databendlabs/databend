@@ -24,6 +24,9 @@ pub async fn start_prepared_query(id: String) -> Result<()> {
     let ctx = DataExchangeManager::instance().get_query_ctx(&id)?;
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    if id.ends_with("-log") {
+        tracking_payload.should_log = false;
+    }
     tracking_payload.query_id = Some(id.clone());
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     let _guard = ThreadTracker::tracking(tracking_payload);

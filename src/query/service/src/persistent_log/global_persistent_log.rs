@@ -286,7 +286,9 @@ impl GlobalPersistentLog {
 
     async fn execute_sql(&self, sql: &str) -> Result<()> {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        let query_id = Uuid::new_v4().to_string();
+        // In cluster mode, other nodes don't know we need to ignore the log from this sql
+        // so, this is a workaround to inform other nodes specifically handle it
+        let query_id = format!("{}-log", Uuid::new_v4().to_string());
         tracking_payload.query_id = Some(query_id.clone());
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
         // prevent log table from logging its own logs
