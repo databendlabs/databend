@@ -191,13 +191,34 @@ impl<R: Rows + 'static> Processor for TransformSortShuffle<R> {
     async fn async_process(&mut self) -> Result<()> {
         let bounds = match &self.step {
             Step::None if self.input.is_finished() => Bounds::default(),
-            Step::Meta(meta) => meta.bounds.clone(),
+            Step::Meta(meta) => meta.generate_bounds(),
             _ => unreachable!(),
         };
         self.state.commit_sample::<R>(self.id, bounds)?;
         self.state.done.notified().await;
         self.step = Step::Scattered(self.scatter().await?);
         Ok(())
+    }
+}
+
+impl SortCollectedMeta {
+    fn generate_bounds(&self) -> Bounds {
+        if self.bounds.len() > 1 {
+            return self.bounds.clone();
+        }
+
+        let Some(blocks) = self.blocks.get(self.blocks.len() / 2) else {
+            return Bounds::default();
+        };
+
+        blocks
+            .get(blocks.len() / 2)
+            .map(|block| match block.domain.len() {
+                0 => Bounds::default(),
+                1 => Bounds::new_unchecked(block.domain.clone()),
+                _ => Bounds::new_unchecked(block.domain.slice(0..1)),
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -261,7 +282,13 @@ impl StateInner {
     fn determine_bounds<R: Rows>(&mut self) -> Result<()> {
         let v = self.partial.drain(..).map(Option::unwrap).collect();
         let bounds = Bounds::merge::<R>(v, self.batch_rows)?;
-        let bounds = bounds.reduce(self.partitions - 1).unwrap_or(bounds);
+
+        let n = self.partitions - 1;
+        let bounds = if bounds.len() < n {
+            bounds
+        } else {
+            bounds.dedup_reduce::<R>(n)
+        };
         assert!(bounds.len() < self.partitions);
 
         self.bounds = Some(bounds);
