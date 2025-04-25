@@ -96,7 +96,7 @@ impl Bounds {
         self.0.iter().all(|col| col.len() == 0)
     }
 
-    pub fn reduce(&self, n: usize, data_type: DataType) -> Option<Self> {
+    pub fn reduce(&self, n: usize) -> Option<Self> {
         if n == 0 {
             return Some(Self::default());
         }
@@ -126,7 +126,6 @@ impl Bounds {
 
         Some(Bounds(vec![Column::take_column_indices(
             &self.0,
-            data_type,
             &indices,
             indices.len(),
         )]))
@@ -219,16 +218,16 @@ mod tests {
             .collect::<Result<Vec<_>>>()?;
         let bounds = Bounds::merge::<SimpleRowsDesc<Int32Type>>(data, 2)?;
 
-        let got = bounds.reduce(4, Int32Type::data_type()).unwrap();
+        let got = bounds.reduce(4).unwrap();
         assert_eq!(got, Bounds(vec![Int32Type::from_data(vec![8, 6, 2, 1])])); // 77 _8 7 _6 3 _2 1 _1 -2
 
-        let got = bounds.reduce(3, Int32Type::data_type()).unwrap();
+        let got = bounds.reduce(3).unwrap();
         assert_eq!(got, Bounds(vec![Int32Type::from_data(vec![8, 3, 1])])); // 77 _8 7 6 _3 2 1 _1 -2
 
-        let got = bounds.reduce(2, Int32Type::data_type()).unwrap();
+        let got = bounds.reduce(2).unwrap();
         assert_eq!(got, Bounds(vec![Int32Type::from_data(vec![7, 1])])); // 77 8 _7 6 3 2 _1 1 -2
 
-        let got = bounds.reduce(1, Int32Type::data_type()).unwrap();
+        let got = bounds.reduce(1).unwrap();
         assert_eq!(got, Bounds(vec![Int32Type::from_data(vec![3])])); // 77 8 7 6 _3 2 1 1 -2
 
         Ok(())

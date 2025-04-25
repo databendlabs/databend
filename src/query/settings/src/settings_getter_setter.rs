@@ -512,8 +512,8 @@ impl Settings {
         Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
     }
 
-    pub fn get_range_shuffle_sort_simple_size(&self) -> Result<usize> {
-        Ok(self.try_get_u64("range_shuffle_sort_simple_size")? as usize)
+    pub fn get_enable_range_shuffle_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_range_shuffle_sort")? == 1)
     }
 
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {

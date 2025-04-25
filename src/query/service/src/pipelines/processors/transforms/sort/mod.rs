@@ -28,6 +28,7 @@ mod bounds;
 mod merge_sort;
 mod sort_builder;
 mod sort_collect;
+mod sort_combine;
 mod sort_exchange;
 mod sort_execute;
 mod sort_route;
@@ -60,7 +61,7 @@ local_block_meta_serde!(SortCollectedMeta);
 impl BlockMetaInfo for SortCollectedMeta {}
 
 #[derive(Debug)]
-struct SortScatteredMeta(pub Vec<SortCollectedMeta>);
+struct SortScatteredMeta(pub Vec<Option<SortCollectedMeta>>);
 
 local_block_meta_serde!(SortScatteredMeta);
 

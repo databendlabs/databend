@@ -654,12 +654,12 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
                 }),
-                ("range_shuffle_sort_simple_size", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the simple size per partition used for range shuffle sorting, 0 to disable range shuffle sorting.",
+                ("enable_range_shuffle_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable range shuffle sort.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=500)),
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),

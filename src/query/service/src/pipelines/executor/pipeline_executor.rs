@@ -268,7 +268,7 @@ impl PipelineExecutor {
     pub fn format_graph_nodes(&self) -> String {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.format_graph_nodes(),
-            PipelineExecutor::QueriesPipelineExecutor(v) => v.graph.format_graph_nodes(),
+            PipelineExecutor::QueriesPipelineExecutor(v) => v.graph.format_graph_nodes(false),
         }
     }
 

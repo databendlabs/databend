@@ -91,6 +91,11 @@ where
             return Ok(Event::NeedConsume);
         }
 
+        if self.input.is_finished() && self.inner.is_none() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
         if let Some(mut block) = self.input.pull_data().transpose()? {
             assert!(self.inner.is_none());
             let meta = block
@@ -102,12 +107,12 @@ where
             return Ok(Event::Async);
         }
 
-        if self.input.is_finished() {
-            Ok(Event::Async)
-        } else {
-            self.input.set_need_data();
-            Ok(Event::NeedData)
+        if self.inner.is_some() {
+            return Ok(Event::Async);
         }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
     }
 
     #[async_backtrace::framed]
@@ -122,6 +127,7 @@ where
         }
         if finish {
             self.output.finish();
+            self.inner = None;
         }
         Ok(())
     }

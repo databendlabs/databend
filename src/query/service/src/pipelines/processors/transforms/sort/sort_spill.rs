@@ -105,9 +105,11 @@ where A: SortAlgorithm
 
         let subsequent = blocks
             .into_iter()
-            .map(|list| base.new_stream(Vec::from(list).into(), None))
-            .collect();
-
+            .filter_map(|list| {
+                (!list.is_empty()).then(|| base.new_stream(Vec::from(list).into(), None))
+            })
+            .collect::<Vec<_>>();
+        debug_assert!(!subsequent.is_empty());
         Self {
             base,
             step: Step::Sort(StepSort {
@@ -237,6 +239,8 @@ impl<A: SortAlgorithm> StepCollect<A> {
             let data = input_data.pop().unwrap();
             vec![base.new_block(data)].into()
         } else {
+            // todo: using multi-threaded cascade two-way merge sorting algorithm to obtain the best performance
+            // also see https://arxiv.org/pdf/1406.2628
             let mut merger = create_memory_merger::<A>(
                 input_data,
                 base.schema.clone(),
@@ -500,6 +504,7 @@ impl Base {
         blocks: VecDeque<SpillableBlock>,
         bound: Option<Scalar>,
     ) -> BoundBlockStream<R, Arc<Spiller>> {
+        assert!(!blocks.is_empty());
         BoundBlockStream {
             blocks,
             bound,
