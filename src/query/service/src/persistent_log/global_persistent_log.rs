@@ -28,6 +28,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_client::MetaGrpcClient;
@@ -43,6 +44,7 @@ use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::PERSISTENT_LOG_SCHEMA_VERSION;
+use futures_util::TryStreamExt;
 use log::error;
 use log::info;
 use rand::random;
@@ -290,6 +292,7 @@ impl GlobalPersistentLog {
         let query_id = Uuid::new_v4().to_string();
         tracking_payload.query_id = Some(query_id.clone());
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
+        // prevent log table from logging its own logs
         tracking_payload.should_log = false;
         let _guard = ThreadTracker::tracking(tracking_payload);
         ThreadTracker::tracking_future(self.do_execute(sql, query_id)).await?;
@@ -303,7 +306,8 @@ impl GlobalPersistentLog {
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
         let executor = InterpreterFactory::get(context.clone(), &plan).await?;
-        let _ = executor.execute(context).await?;
+        let stream = executor.execute(context).await?;
+        let _: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
         Ok(())
     }
 
