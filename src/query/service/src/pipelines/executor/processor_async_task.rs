@@ -157,7 +157,7 @@ impl ProcessorAsyncTask {
                                     processor_name,
                                     elapsed,
                                     active_workers,
-                                    graph_clone.format_graph_nodes()
+                                    graph_clone.format_graph_nodes(false)
                                 );
                             }
                         };
