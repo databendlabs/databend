@@ -20,6 +20,7 @@ use std::mem;
 
 use anyerror::AnyError;
 use bloomfilter::Bloom;
+use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -43,12 +44,12 @@ impl TryFrom<&BloomFilter> for Vec<u8> {
     }
 }
 
-impl TryFrom<&[u8]> for BloomFilter {
+impl TryFrom<Bytes> for BloomFilter {
     type Error = ErrorCode;
 
-    fn try_from(value: &[u8]) -> std::result::Result<BloomFilter, Self::Error> {
+    fn try_from(value: Bytes) -> std::result::Result<BloomFilter, Self::Error> {
         Ok(BloomFilter {
-            filter: Bloom::<u64>::from_slice(value).map_err(|e| {
+            filter: Bloom::<u64>::from_slice(value.as_ref()).map_err(|e| {
                 ErrorCode::StorageOther(format!("failed to decode ngram index meta {}", e))
             })?,
         })
@@ -92,8 +93,8 @@ impl FilterBuilder for BloomBuilder {
     }
 
     fn build(&mut self) -> std::result::Result<Self::Filter, Self::Error> {
-        let mut bloom = Bloom::new(self.bitmap_size, self.set.len())
-            .map_err(|e| BloomBuildingError::new(e))?;
+        let mut bloom =
+            Bloom::new(self.bitmap_size, self.set.len()).map_err(BloomBuildingError::new)?;
 
         for hash in mem::take(&mut self.set) {
             bloom.set(&hash);

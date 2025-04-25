@@ -26,6 +26,7 @@ pub use bloom_filter::BloomBuilder;
 pub use bloom_filter::BloomBuildingError;
 pub use bloom_filter::BloomCodecError;
 pub use bloom_filter::BloomFilter;
+use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 pub use xor8_filter::Xor8Builder;
 pub use xor8_filter::Xor8BuildingError;
@@ -49,30 +50,15 @@ impl TryFrom<&FilterImpl> for Vec<u8> {
     type Error = ErrorCode;
 
     fn try_from(value: &FilterImpl) -> std::result::Result<Vec<u8>, ErrorCode> {
-        Ok(match value {
-            FilterImpl::Xor(filter) => {
-                let mut bytes = filter.to_bytes()?;
-                bytes.push(0u8);
-                bytes
-            }
-            FilterImpl::Bloom(filter) => {
-                let mut bytes = filter.to_bytes()?;
-                bytes.push(1u8);
-                bytes
-            }
-        })
+        value.to_bytes()
     }
 }
 
-impl TryFrom<&[u8]> for FilterImpl {
+impl TryFrom<Bytes> for FilterImpl {
     type Error = ErrorCode;
 
-    fn try_from(value: &[u8]) -> std::result::Result<FilterImpl, Self::Error> {
-        Ok(match value[value.len() - 1] {
-            0 => FilterImpl::Xor(Xor8Filter::try_from(&value[0..value.len() - 1])?),
-            1 => FilterImpl::Bloom(BloomFilter::try_from(&value[0..value.len() - 1])?),
-            _ => unreachable!(),
-        })
+    fn try_from(value: Bytes) -> std::result::Result<FilterImpl, Self::Error> {
+        Ok(Self::from_bytes(value.as_ref())?.0)
     }
 }
 
@@ -105,11 +91,28 @@ impl Filter for FilterImpl {
     }
 
     fn to_bytes(&self) -> Result<Vec<u8>, Self::CodecError> {
-        Vec::<u8>::try_from(self)
+        Ok(match self {
+            FilterImpl::Xor(filter) => {
+                let mut bytes = filter.to_bytes()?;
+                bytes.push(0u8);
+                bytes
+            }
+            FilterImpl::Bloom(filter) => {
+                let mut bytes = filter.to_bytes()?;
+                bytes.push(1u8);
+                bytes
+            }
+        })
     }
 
     fn from_bytes(buf: &[u8]) -> Result<(Self, usize), Self::CodecError> {
-        Self::try_from(buf).map(|filter| (filter, buf.len()))
+        Ok(match buf[buf.len() - 1] {
+            0 => Xor8Filter::from_bytes(&buf[0..buf.len() - 1])
+                .map(|(filter, len)| (FilterImpl::Xor(filter), len))?,
+            1 => BloomFilter::from_bytes(&buf[0..buf.len() - 1])
+                .map(|(filter, len)| (FilterImpl::Bloom(filter), len))?,
+            _ => unreachable!(),
+        })
     }
 }
 
