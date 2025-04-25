@@ -459,6 +459,8 @@ pub enum TokenKind {
     CHAR,
     #[token("COLUMN", ignore(ascii_case))]
     COLUMN,
+    #[token("CACHE", ignore(ascii_case))]
+    CACHE,
     #[token("COLUMN_MATCH_MODE", ignore(ascii_case))]
     COLUMN_MATCH_MODE,
     #[token("COLUMNS", ignore(ascii_case))]

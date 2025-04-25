@@ -495,3 +495,17 @@ impl DropTableClusterKeyPlan {
         Arc::new(DataSchema::empty())
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct RefreshTableCachePlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl RefreshTableCachePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

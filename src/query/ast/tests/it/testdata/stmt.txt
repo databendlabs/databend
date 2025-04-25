@@ -491,6 +491,47 @@ ShowColumns(
 
 
 ---------- Input ----------
+show columns from ctl.db.t
+---------- Output ---------
+SHOW COLUMNS FROM t FROM ctl.db
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    18..21,
+                ),
+                name: "ctl",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        database: Some(
+            Identifier {
+                span: Some(
+                    22..24,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                25..26,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        full: false,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
 show full columns from t from db like 'id%'
 ---------- Output ---------
 SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
@@ -511,6 +552,42 @@ ShowColumns(
         table: Identifier {
             span: Some(
                 23..24,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        full: true,
+        limit: Some(
+            Like {
+                pattern: "id%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+show full columns from db.t like 'id%'
+---------- Output ---------
+SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    23..25,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                26..27,
             ),
             name: "t",
             quote: None,
@@ -3480,6 +3557,40 @@ Query(
 
 ---------- Input ----------
 use catalog ctl;
+---------- Output ---------
+USE CATALOG ctl
+---------- AST ------------
+UseCatalog {
+    catalog: Identifier {
+        span: Some(
+            12..15,
+        ),
+        name: "ctl",
+        quote: None,
+        ident_type: None,
+    },
+}
+
+
+---------- Input ----------
+catalog ctl;
+---------- Output ---------
+USE CATALOG ctl
+---------- AST ------------
+UseCatalog {
+    catalog: Identifier {
+        span: Some(
+            8..11,
+        ),
+        name: "ctl",
+        quote: None,
+        ident_type: None,
+    },
+}
+
+
+---------- Input ----------
+set catalog ctl;
 ---------- Output ---------
 USE CATALOG ctl
 ---------- AST ------------
@@ -12554,6 +12665,40 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t refresh cache;
+---------- Output ---------
+ALTER TABLE t REFRESH CACHE
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: RefreshTableCache,
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t COMMENT='t1-commnet';
 ---------- Output ---------
 ALTER TABLE t COMMENT='t1-commnet'
@@ -13613,6 +13758,37 @@ AlterDatabase(
                 ident_type: None,
             },
         },
+    },
+)
+
+
+---------- Input ----------
+ALTER DATABASE ctl.c refresh cache;
+---------- Output ---------
+ALTER DATABASE ctl.c REFRESH CACHE
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: false,
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    15..18,
+                ),
+                name: "ctl",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        database: Identifier {
+            span: Some(
+                19..20,
+            ),
+            name: "c",
+            quote: None,
+            ident_type: None,
+        },
+        action: RefreshDatabaseCache,
     },
 )
 
