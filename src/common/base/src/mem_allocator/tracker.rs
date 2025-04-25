@@ -537,6 +537,7 @@ mod tests {
     use crate::runtime::GlobalStatBuffer;
     use crate::runtime::MemStat;
     use crate::runtime::MemStatBuffer;
+    use crate::runtime::ParentMemStat;
     use crate::runtime::Thread;
     use crate::runtime::ThreadTracker;
     use crate::runtime::GLOBAL_QUERIES_MANAGER;
@@ -551,7 +552,12 @@ mod tests {
         global: Arc<MemStat>,
     ) -> R {
         {
-            let mem_stat = MemStat::create(GlobalUniqName::unique());
+            let mem_stat = MemStat::create_child(
+                GlobalUniqName::unique(),
+                0,
+                None,
+                ParentMemStat::Normal(global.clone()),
+            );
             let mut tracking_payload = ThreadTracker::new_tracking_payload();
             tracking_payload.mem_stat = Some(mem_stat.clone());
 

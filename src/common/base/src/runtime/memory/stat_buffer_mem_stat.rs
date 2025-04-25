@@ -232,6 +232,7 @@ mod tests {
     use std::alloc::AllocError;
     use std::sync::atomic::Ordering;
 
+    use crate::runtime::memory::mem_stat::ParentMemStat;
     use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
     use crate::runtime::memory::stat_buffer_mem_stat::MemStatBuffer;
     use crate::runtime::GlobalStatBuffer;
@@ -244,7 +245,12 @@ mod tests {
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
-        let mem_stat = MemStat::create(String::from("test"));
+        let mem_stat = MemStat::create_child(
+            String::from("test"),
+            0,
+            None,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
         buffer.alloc(&mem_stat, 1)?;
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
         assert_eq!(TEST_GLOBAL.used.load(Ordering::Relaxed), 0);
@@ -269,8 +275,18 @@ mod tests {
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
-        let mem_stat_1 = MemStat::create(String::from("test"));
-        let mem_stat_2 = MemStat::create(String::from("test"));
+        let mem_stat_1 = MemStat::create_child(
+            String::from("test"),
+            0,
+            None,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
+        let mem_stat_2 = MemStat::create_child(
+            String::from("test"),
+            0,
+            None,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
         buffer.alloc(&mem_stat_1, 1)?;
         assert_eq!(mem_stat_1.used.load(Ordering::Relaxed), 0);
         assert_eq!(mem_stat_2.used.load(Ordering::Relaxed), 0);
@@ -294,7 +310,12 @@ mod tests {
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
-        let mem_stat = MemStat::create(String::from("test"));
+        let mem_stat = MemStat::create_child(
+            String::from("test"),
+            0,
+            None,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
         let _shared = mem_stat.clone();
 
         buffer.dealloc(&mem_stat, 1);
@@ -321,8 +342,18 @@ mod tests {
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
-        let mem_stat_1 = MemStat::create(String::from("test"));
-        let mem_stat_2 = MemStat::create(String::from("test"));
+        let mem_stat_1 = MemStat::create_child(
+            String::from("test"),
+            0,
+            None,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
+        let mem_stat_2 = MemStat::create_child(
+            String::from("test"),
+            0,
+            None,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
         let _shared = (mem_stat_1.clone(), mem_stat_2.clone());
 
         buffer.dealloc(&mem_stat_1, 1);

@@ -32,6 +32,7 @@ use crate::runtime::LimitMemGuard;
 ///
 /// Every alloc/dealloc stat will be fed to this mem stat.
 pub static GLOBAL_MEM_STAT: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
+
 const MINIMUM_MEMORY_LIMIT: i64 = 256 * 1024 * 1024;
 
 #[derive(Default)]
@@ -49,6 +50,12 @@ impl MemoryLimit {
             water_height: AtomicI64::new(0),
         }
     }
+}
+
+pub enum ParentMemStat {
+    Root,
+    StaticRef(&'static MemStat),
+    Normal(Arc<MemStat>),
 }
 
 /// Memory allocation stat.
@@ -74,7 +81,7 @@ pub struct MemStat {
     #[allow(dead_code)]
     priority: usize,
 
-    pub(crate) parent_memory_stat: Option<Arc<MemStat>>,
+    pub(crate) parent_memory_stat: ParentMemStat,
 }
 
 impl MemStat {
@@ -85,7 +92,7 @@ impl MemStat {
             queries_memory_manager,
             used: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
-            parent_memory_stat: None,
+            parent_memory_stat: ParentMemStat::Root,
             priority: 0,
             exceeded_mutex: Mutex::new(false),
             memory_limit: MemoryLimit::new(),
@@ -95,18 +102,23 @@ impl MemStat {
     }
 
     pub fn create(name: String) -> Arc<MemStat> {
-        MemStat::create_child(name, 0, None, None)
+        MemStat::create_child(name, 0, None, ParentMemStat::StaticRef(&GLOBAL_MEM_STAT))
     }
 
     pub fn create_terminable(name: String, tag: String) -> Arc<MemStat> {
-        MemStat::create_child(name, 0, Some(tag), None)
+        MemStat::create_child(
+            name,
+            0,
+            Some(tag),
+            ParentMemStat::StaticRef(&GLOBAL_MEM_STAT),
+        )
     }
 
     pub fn create_child(
         name: String,
         priority: usize,
         resource_tag: Option<String>,
-        parent_memory_stat: Option<Arc<MemStat>>,
+        parent_memory_stat: ParentMemStat,
     ) -> Arc<MemStat> {
         let id = match GlobalSequence::next() {
             0 => GlobalSequence::next(),
@@ -153,8 +165,7 @@ impl MemStat {
         alloc_memory: i64,
         rollback_memory: i64,
     ) -> Result<(), OutOfLimit> {
-        let _ = self.record_memory_impl::<NEED_ROLLBACK>(alloc_memory, rollback_memory, None);
-        Ok(())
+        self.record_memory_impl::<NEED_ROLLBACK>(alloc_memory, rollback_memory, None)
     }
 
     /// Feed memory usage stat to MemStat and return if it exceeds the limit.
@@ -166,12 +177,16 @@ impl MemStat {
         alloc_memory: i64,
         rollback_memory: i64,
     ) -> Result<(), OutOfLimit> {
-        if let Err(cause) =
-            self.record_memory_impl::<NEED_ROLLBACK>(alloc_memory, rollback_memory, None)
-        {
-            if !cause.can_ignore {
-                return Err(cause);
+        if let Err(cause) = self.record_memory_impl::<false>(alloc_memory, 0, None) {
+            if cause.can_ignore {
+                return Ok(());
             }
+
+            if NEED_ROLLBACK {
+                self.rollback(rollback_memory);
+            }
+
+            return Err(cause);
         }
 
         Ok(())
@@ -183,20 +198,18 @@ impl MemStat {
         rollback_memory: i64,
         memory_requester: Option<&String>,
     ) -> Result<(), OutOfLimit> {
-        match self.parent_memory_stat.as_ref() {
-            Some(parent_memory_stat) => parent_memory_stat.record_memory_impl::<NEED_ROLLBACK>(
+        match &self.parent_memory_stat {
+            ParentMemStat::Root => Ok(()),
+            ParentMemStat::StaticRef(global) => global.record_memory_impl::<NEED_ROLLBACK>(
                 alloc_memory,
                 rollback_memory,
                 memory_requester,
             ),
-            None => match self.id == 0 {
-                true => Ok(()),
-                false => GLOBAL_MEM_STAT.record_memory_impl::<NEED_ROLLBACK>(
-                    alloc_memory,
-                    rollback_memory,
-                    memory_requester,
-                ),
-            },
+            ParentMemStat::Normal(mem_stat) => mem_stat.record_memory_impl::<NEED_ROLLBACK>(
+                alloc_memory,
+                rollback_memory,
+                memory_requester,
+            ),
         }
     }
 
@@ -288,9 +301,10 @@ impl MemStat {
         let exceeded_mutex = self.exceeded_mutex.lock();
         let mut exceeded_mutex = exceeded_mutex.unwrap_or_else(PoisonError::into_inner);
 
-        let parent_memory_limit = match self.parent_memory_stat.as_ref() {
-            None => &GLOBAL_MEM_STAT.memory_limit,
-            Some(parent) => &parent.memory_limit,
+        let parent_memory_limit = match &self.parent_memory_stat {
+            ParentMemStat::Root => &GLOBAL_MEM_STAT.memory_limit,
+            ParentMemStat::StaticRef(global) => &global.memory_limit,
+            ParentMemStat::Normal(mem_stat) => &mem_stat.memory_limit,
         };
 
         let parent_limit = parent_memory_limit.limit.load(Ordering::Relaxed);
@@ -321,10 +335,10 @@ impl MemStat {
     pub fn rollback(&self, memory_usage: i64) {
         self.used.fetch_sub(memory_usage, Ordering::Relaxed);
 
-        match self.parent_memory_stat.as_ref() {
-            None if self.id == 0 => {}
-            None => GLOBAL_MEM_STAT.rollback(memory_usage),
-            Some(parent_memory_stat) => parent_memory_stat.rollback(memory_usage),
+        match &self.parent_memory_stat {
+            ParentMemStat::Root => {}
+            ParentMemStat::StaticRef(global) => global.rollback(memory_usage),
+            ParentMemStat::Normal(mem_stat) => mem_stat.rollback(memory_usage),
         };
     }
 
@@ -416,6 +430,7 @@ mod tests {
 
     use databend_common_exception::Result;
 
+    use crate::runtime::memory::mem_stat::ParentMemStat;
     use crate::runtime::memory::mem_stat::MINIMUM_MEMORY_LIMIT;
     use crate::runtime::MemStat;
 
@@ -476,8 +491,12 @@ mod tests {
     #[test]
     fn test_multiple_level_mem_stat() -> Result<()> {
         let mem_stat = MemStat::create("TEST".to_string());
-        let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), 0, None, Some(mem_stat.clone()));
+        let child_mem_stat = MemStat::create_child(
+            "TEST_CHILD".to_string(),
+            0,
+            None,
+            ParentMemStat::Normal(mem_stat.clone()),
+        );
 
         mem_stat.record_memory::<false>(1, 1).unwrap();
         mem_stat.record_memory::<false>(2, 2).unwrap();
@@ -500,8 +519,12 @@ mod tests {
     fn test_multiple_level_mem_stat_with_check_limit() -> Result<()> {
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2, false);
-        let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), 0, None, Some(mem_stat.clone()));
+        let child_mem_stat = MemStat::create_child(
+            "TEST_CHILD".to_string(),
+            0,
+            None,
+            ParentMemStat::Normal(mem_stat.clone()),
+        );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT, false);
 
         mem_stat.record_memory::<false>(1, 1).unwrap();
@@ -530,8 +553,12 @@ mod tests {
         // parent failure
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT, false);
-        let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), 0, None, Some(mem_stat.clone()));
+        let child_mem_stat = MemStat::create_child(
+            "TEST_CHILD".to_string(),
+            0,
+            None,
+            ParentMemStat::Normal(mem_stat.clone()),
+        );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2, false);
 
         assert!(child_mem_stat
@@ -543,8 +570,12 @@ mod tests {
         // child failure
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2, false);
-        let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), 0, None, Some(mem_stat.clone()));
+        let child_mem_stat = MemStat::create_child(
+            "TEST_CHILD".to_string(),
+            0,
+            None,
+            ParentMemStat::Normal(mem_stat.clone()),
+        );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT, false);
 
         assert!(child_mem_stat

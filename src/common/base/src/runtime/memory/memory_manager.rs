@@ -24,9 +24,9 @@ use std::sync::PoisonError;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::runtime::memory::mem_stat::ParentMemStat;
 use crate::runtime::MemStat;
 use crate::runtime::OutOfLimit;
-use crate::runtime::GLOBAL_MEM_STAT;
 
 pub static GLOBAL_QUERIES_MANAGER: QueriesMemoryManager = QueriesMemoryManager::create();
 
@@ -101,32 +101,40 @@ impl QueriesMemoryManager {
         let priority = 0;
         let mut exceeded_state = self.get_state();
 
-        let mut parent = mem_stat.parent_memory_stat.as_ref();
+        let mut parent = &mem_stat.parent_memory_stat;
 
-        while let Some(parent_mem_stat) = parent {
-            match exceeded_state.groups.entry(parent_mem_stat.id) {
-                Entry::Vacant(v) => {
-                    v.insert(HashSet::new())
-                        .insert((priority, resource_tag.clone()));
+        loop {
+            match parent {
+                ParentMemStat::Root => {
+                    break;
                 }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().insert((priority, resource_tag.clone()));
-                }
-            };
+                ParentMemStat::StaticRef(_) => {
+                    match exceeded_state.groups.entry(0) {
+                        Entry::Vacant(v) => {
+                            v.insert(HashSet::new())
+                                .insert((priority, resource_tag.clone()));
+                        }
+                        Entry::Occupied(mut v) => {
+                            v.get_mut().insert((priority, resource_tag.clone()));
+                        }
+                    };
 
-            parent = parent_mem_stat.parent_memory_stat.as_ref();
-        }
+                    break;
+                }
+                ParentMemStat::Normal(parent_mem_stat) => {
+                    match exceeded_state.groups.entry(parent_mem_stat.id) {
+                        Entry::Vacant(v) => {
+                            v.insert(HashSet::new())
+                                .insert((priority, resource_tag.clone()));
+                        }
+                        Entry::Occupied(mut v) => {
+                            v.get_mut().insert((priority, resource_tag.clone()));
+                        }
+                    };
 
-        if mem_stat.id != 0 {
-            match exceeded_state.groups.entry(0) {
-                Entry::Vacant(v) => {
-                    v.insert(HashSet::new())
-                        .insert((priority, resource_tag.clone()));
+                    parent = &parent_mem_stat.parent_memory_stat;
                 }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().insert((priority, resource_tag.clone()));
-                }
-            };
+            }
         }
 
         let Entry::Vacant(v) = exceeded_state.resources.entry(resource_tag.clone()) else {
@@ -143,11 +151,11 @@ impl QueriesMemoryManager {
     }
 
     fn recheck_limit(mem_stat: &MemStat) -> bool {
-        if let Some(parent) = mem_stat.parent_memory_stat.as_ref() {
-            return parent.recheck_limit().is_ok();
+        match &mem_stat.parent_memory_stat {
+            ParentMemStat::Root => true,
+            ParentMemStat::StaticRef(global) => global.recheck_limit().is_ok(),
+            ParentMemStat::Normal(mem_stat) => mem_stat.recheck_limit().is_ok(),
         }
-
-        GLOBAL_MEM_STAT.recheck_limit().is_ok()
     }
 
     pub fn wait_memory(
@@ -161,8 +169,9 @@ impl QueriesMemoryManager {
         };
 
         let parent_id = match &mem_stat.parent_memory_stat {
-            None => 0,
-            Some(mem_stat) => mem_stat.id,
+            ParentMemStat::Root => 0,
+            ParentMemStat::StaticRef(_) => 0,
+            ParentMemStat::Normal(mem_stat) => mem_stat.id,
         };
 
         for _index in 0..5 {

@@ -39,6 +39,7 @@ pub use memory::GlobalStatBuffer;
 pub use memory::MemStat;
 pub use memory::MemStatBuffer;
 pub use memory::OutOfLimit;
+pub use memory::ParentMemStat;
 pub use memory::GLOBAL_MEM_STAT;
 pub use memory::GLOBAL_QUERIES_MANAGER;
 pub use runtime::block_on;
