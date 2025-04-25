@@ -2171,62 +2171,22 @@ impl i256 {
 
     #[inline]
     pub const fn to_le_bytes(&self) -> [u8; 32] {
-        let (high, low) = self.0.into_words();
-        let low = low.to_le_bytes();
-        let high = high.to_le_bytes();
-        let mut i = 0;
-        let mut bytes = [0u8; 32];
-        while i != 16 {
-            bytes[i] = low[i];
-            bytes[i + 16] = high[i];
-            i += 1;
-        }
-        bytes
+        self.0.to_le_bytes()
     }
 
     #[inline]
     pub const fn to_be_bytes(&self) -> [u8; 32] {
-        let (high, low) = self.0.into_words();
-        let low = low.to_be_bytes();
-        let high = high.to_be_bytes();
-        let mut bytes = [0; 32];
-        let mut i = 0;
-        while i != 16 {
-            bytes[i] = high[i];
-            bytes[i + 16] = low[i];
-            i += 1;
-        }
-        bytes
+        self.0.to_be_bytes()
     }
 
     #[inline]
     pub const fn from_be_bytes(bytes: [u8; 32]) -> Self {
-        let mut low = [0; 16];
-        let mut high = [0; 16];
-        let mut i = 0;
-        while i != 16 {
-            high[i] = bytes[i];
-            low[i] = bytes[i + 16];
-            i += 1;
-        }
-        let high = i128::from_be_bytes(high);
-        let low = i128::from_be_bytes(low);
-        Self(ethnum::I256::from_words(high, low))
+        Self(ethnum::I256::from_be_bytes(bytes))
     }
 
     #[inline]
     pub const fn from_le_bytes(bytes: [u8; 32]) -> Self {
-        let mut low = [0; 16];
-        let mut high = [0; 16];
-        let mut i = 0;
-        while i != 16 {
-            low[i] = bytes[i];
-            high[i] = bytes[i + 16];
-            i += 1;
-        }
-        let high = i128::from_be_bytes(high);
-        let low = i128::from_be_bytes(low);
-        Self(ethnum::I256::from_words(high, low))
+        Self(ethnum::I256::from_le_bytes(bytes))
     }
 
     #[inline]
@@ -2244,27 +2204,27 @@ impl i256 {
         Self(self.0.saturating_abs())
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn leading_zeros(self) -> u32 {
         self.0.leading_zeros()
     }
 
-    /// Cast to a primitive `f32`.
+    /// Cast to a primitive `i8`.
     #[inline]
-    pub fn as_f32(self) -> f32 {
-        self.0.as_f32()
+    pub const fn as_i8(self) -> i8 {
+        self.0.as_i8()
     }
 
-    /// Cast to a primitive `f64`.
+    /// Cast to a primitive `i16`.
     #[inline]
-    pub fn as_f64(self) -> f64 {
-        self.0.as_f64()
+    pub const fn as_i16(self) -> i16 {
+        self.0.as_i16()
     }
 
-    /// Cast to a primitive `u64`.
+    /// Cast to a primitive `i32`.
     #[inline]
-    pub const fn as_u64(self) -> u64 {
-        self.0.as_u64()
+    pub const fn as_i32(self) -> i32 {
+        self.0.as_i32()
     }
 
     /// Cast to a primitive `i64`.
@@ -2277,6 +2237,66 @@ impl i256 {
     #[inline]
     pub const fn as_i128(self) -> i128 {
         self.0.as_i128()
+    }
+
+    /// Cast to a primitive `u8`.
+    #[inline]
+    pub const fn as_u8(self) -> u8 {
+        self.0.as_u8()
+    }
+
+    /// Cast to a primitive `u16`.
+    #[inline]
+    pub const fn as_u16(self) -> u16 {
+        self.0.as_u16()
+    }
+
+    /// Cast to a primitive `u32`.
+    #[inline]
+    pub const fn as_u32(self) -> u32 {
+        self.0.as_u32()
+    }
+
+    /// Cast to a primitive `u64`.
+    #[inline]
+    pub const fn as_u64(self) -> u64 {
+        self.0.as_u64()
+    }
+
+    /// Cast to a primitive `u128`.
+    #[inline]
+    pub const fn as_u128(self) -> u128 {
+        self.0.as_u128()
+    }
+
+    /// Cast to a primitive `u256`.
+    #[inline]
+    pub const fn as_u256(self) -> u256 {
+        self.0.as_u256()
+    }
+
+    /// Cast to a primitive `isize`.
+    #[inline]
+    pub const fn as_isize(self) -> isize {
+        self.0.as_isize()
+    }
+
+    /// Cast to a primitive `usize`.
+    #[inline]
+    pub const fn as_usize(self) -> usize {
+        self.0.as_usize()
+    }
+
+    /// Cast to a primitive `f32`.
+    #[inline]
+    pub fn as_f32(self) -> f32 {
+        self.0.as_f32()
+    }
+
+    /// Cast to a primitive `f64`.
+    #[inline]
+    pub fn as_f64(self) -> f64 {
+        self.0.as_f64()
     }
 
     /// Get the low 128-bit word for this signed integer.
@@ -2308,15 +2328,6 @@ impl i256 {
     }
 }
 
-impl Neg for i256 {
-    type Output = Self;
-
-    #[inline]
-    fn neg(self) -> Self::Output {
-        Self(self.0.checked_neg().expect("i256 overflow"))
-    }
-}
-
 impl std::fmt::Debug for i256 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
@@ -2326,6 +2337,15 @@ impl std::fmt::Debug for i256 {
 impl std::fmt::Display for i256 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl Neg for i256 {
+    type Output = Self;
+
+    #[inline]
+    fn neg(self) -> Self::Output {
+        Self(self.0.checked_neg().expect("i256 overflow"))
     }
 }
 
@@ -2456,11 +2476,7 @@ impl core::hash::Hash for i256 {
 impl PartialEq for i256 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        let (ahi, alo) = self.0.into_words();
-        let (bhi, blo) = other.0.into_words();
-        (ahi == bhi) & (alo == blo)
-        // bitwise and rather than logical and
-        // to make O0 code more effecient.
+        self.0.eq(&other.0)
     }
 }
 
