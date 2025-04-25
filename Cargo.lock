@@ -3950,6 +3950,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-pipeline-core",
  "futures",
+ "log",
  "parking_lot 0.12.3",
 ]
 

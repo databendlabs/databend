@@ -54,7 +54,15 @@ impl AsyncSource for RuntimeFilterSourceProcessor {
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.meta_receiver.recv().await {
+        let start = std::time::Instant::now();
+        log::info!("RuntimeFilterSource recv() start");
+        let rf = self.meta_receiver.recv().await;
+        log::info!(
+            "RuntimeFilterSource recv() take {:?},get {}",
+            start.elapsed(),
+            rf.is_ok()
+        );
+        match rf {
             Ok(runtime_filter) => Ok(Some(DataBlock::empty_with_meta(Box::new(
                 RuntimeFilterMeta {
                     inlist: runtime_filter.inlist,
