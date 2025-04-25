@@ -14,7 +14,7 @@ statement ok
 CREATE TABLE showcolumn.t3(c1 int null default 4, c2 Datetime not null default '2022-02-02 12:00:00', c3 String not null Default 'c3') ENGINE = Null;
 
 query TTTTTT
-SHOW COLUMNS FROM t3 FROM showcolumn
+SHOW COLUMNS FROM default.showcolumn.t3
 ----
 c1 INT YES 4 NULL NULL
 c2 TIMESTAMP NO '2022-02-02 12:00:00.000000' NULL NULL

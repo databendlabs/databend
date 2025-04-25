@@ -475,6 +475,16 @@ error:
 
 
 ---------- Input ----------
+show columns from db1.t from ctl.db
+---------- Output ---------
+error: 
+  --> SQL:1:25
+  |
+1 | show columns from db1.t from ctl.db
+  |                         ^^^^ unexpected `from`, expecting `FORMAT`, `.`, `LIKE`, `WHERE`, or `;`
+
+
+---------- Input ----------
 SELECT c a as FROM t
 ---------- Output ---------
 error: 
