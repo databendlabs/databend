@@ -34,8 +34,8 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::add_range_shuffle_exchange;
 use crate::pipelines::processors::transforms::add_range_shuffle_route;
+use crate::pipelines::processors::transforms::SortRangeExchange;
 use crate::pipelines::processors::transforms::SortSampleState;
 use crate::pipelines::processors::transforms::TransformLimit;
 use crate::pipelines::processors::transforms::TransformSortBuilder;
@@ -139,8 +139,9 @@ impl PipelineBuilder {
             None => {
                 // Build for single node mode.
                 // We build the full sort pipeline for it.
-                let k = self.settings.get_range_shuffle_sort_simple_size()?;
-                if k > 0 && self.main_pipeline.output_len() > 1 {
+                if self.settings.get_enable_range_shuffle_sort()?
+                    && self.main_pipeline.output_len() > 1
+                {
                     builder
                         .remove_order_col_at_last()
                         .build_range_shuffle_sort_pipeline(&mut self.main_pipeline)
@@ -261,7 +262,11 @@ impl SortPipelineBuilder {
 
         builder.add_shuffle(pipeline, state.clone())?;
 
-        add_range_shuffle_exchange(pipeline, max_threads)?;
+        pipeline.exchange(max_threads, Arc::new(SortRangeExchange));
+
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(builder.build_combine(input, output)?))
+        })?;
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(builder.build_exec(input, output)?))

@@ -31,10 +31,12 @@ use databend_common_pipeline_transforms::sort::utils::ORDER_COL_NAME;
 use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::sort::RowsTypeVisitor;
+use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::MemorySettings;
 
 use super::merge_sort::TransformSort;
 use super::sort_collect::TransformSortCollect;
+use super::sort_combine::TransformSortCombine;
 use super::sort_execute::TransformSortExecute;
 use super::sort_shuffle::SortSampleState;
 use super::sort_shuffle::TransformSortShuffle;
@@ -46,6 +48,7 @@ enum SortType {
     Collect,
     Execute,
     Shuffle,
+    Combine,
 }
 
 pub struct TransformSortBuilder {
@@ -183,6 +186,25 @@ impl TransformSortBuilder {
         select_row_type(&mut build)
     }
 
+    pub fn build_combine(
+        &self,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> Result<Box<dyn Processor>> {
+        self.check();
+
+        let mut build = Build {
+            params: self,
+            input,
+            output,
+            typ: SortType::Combine,
+            id: 0,
+            state: None,
+        };
+
+        select_row_type(&mut build)
+    }
+
     fn should_use_sort_limit(&self) -> bool {
         self.limit.map(|limit| limit < 10000).unwrap_or_default()
     }
@@ -288,6 +310,15 @@ impl Build<'_> {
             self.params.spiller.clone(),
         )))
     }
+
+    fn build_sort_combine<R>(&mut self) -> Result<Box<dyn Processor>>
+    where R: Rows + 'static {
+        Ok(AccumulatingTransformer::create(
+            self.input.clone(),
+            self.output.clone(),
+            TransformSortCombine::<R>::new(self.params.block_size),
+        ))
+    }
 }
 
 impl RowsTypeVisitor for Build<'_> {
@@ -320,6 +351,7 @@ impl RowsTypeVisitor for Build<'_> {
                 false => self.build_sort_exec::<HeapSort<R>>(),
             },
             SortType::Shuffle => self.build_sort_shuffle::<R>(),
+            SortType::Combine => self.build_sort_combine::<R>(),
         }
     }
 }

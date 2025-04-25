@@ -39,7 +39,7 @@ use crate::spillers::Spiller;
 enum Step {
     None,
     Meta(Box<SortCollectedMeta>),
-    Scattered(Vec<SortCollectedMeta>),
+    Scattered(Vec<Option<SortCollectedMeta>>),
 }
 
 pub struct TransformSortShuffle<R: Rows> {
@@ -71,25 +71,26 @@ impl<R: Rows> TransformSortShuffle<R> {
         }
     }
 
-    async fn scatter(&mut self) -> Result<()> {
-        let scatter_bounds = self.state.bounds();
-
-        let Step::Meta(box SortCollectedMeta {
+    async fn scatter(&mut self) -> Result<Vec<Option<SortCollectedMeta>>> {
+        let SortCollectedMeta {
             params,
             bounds,
             blocks,
-        }) = std::mem::replace(&mut self.step, Step::None)
-        else {
-            unreachable!()
+        } = match std::mem::replace(&mut self.step, Step::None) {
+            Step::None => {
+                return Ok(vec![]);
+            }
+            Step::Meta(box meta) => meta,
+            _ => unreachable!(),
         };
 
+        let scatter_bounds = self.state.bounds();
         if scatter_bounds.is_empty() {
-            Step::Scattered(vec![SortCollectedMeta {
+            return Ok(vec![Some(SortCollectedMeta {
                 params,
                 bounds,
                 blocks,
-            }]);
-            return Ok(());
+            })]);
         }
 
         let base = {
@@ -102,24 +103,31 @@ impl<R: Rows> TransformSortShuffle<R> {
             }
         };
 
-        let mut scattered_meta = std::iter::repeat_with(|| SortCollectedMeta {
-            params,
-            bounds: bounds.clone(),
-            blocks: vec![],
-        })
-        .take(scatter_bounds.len() + 1)
-        .collect::<Vec<_>>();
+        let mut scattered_blocks = std::iter::repeat_with(Vec::new)
+            .take(scatter_bounds.len() + 1)
+            .collect::<Vec<_>>();
         for blocks in blocks {
             let scattered = base
                 .scatter_stream::<R>(Vec::from(blocks).into(), scatter_bounds.clone())
                 .await?;
             for (i, part) in scattered.into_iter().enumerate() {
-                scattered_meta[i].blocks.push(part.into_boxed_slice());
+                if !part.is_empty() {
+                    scattered_blocks[i].push(part.into_boxed_slice());
+                }
             }
         }
-        self.step = Step::Scattered(scattered_meta);
 
-        Ok(())
+        let scattered_meta = scattered_blocks
+            .into_iter()
+            .map(|blocks| {
+                (!blocks.is_empty()).then_some(SortCollectedMeta {
+                    params,
+                    bounds: bounds.clone(),
+                    blocks,
+                })
+            })
+            .collect();
+        Ok(scattered_meta)
     }
 }
 
@@ -182,12 +190,14 @@ impl<R: Rows + 'static> Processor for TransformSortShuffle<R> {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let bounds = match &self.step {
+            Step::None if self.input.is_finished() => Bounds::default(),
             Step::Meta(meta) => meta.bounds.clone(),
             _ => unreachable!(),
         };
         self.state.commit_sample::<R>(self.id, bounds)?;
         self.state.done.notified().await;
-        self.scatter().await
+        self.step = Step::Scattered(self.scatter().await?);
+        Ok(())
     }
 }
 
@@ -252,9 +262,7 @@ impl StateInner {
     fn determine_bounds<R: Rows>(&mut self) -> Result<()> {
         let v = self.partial.drain(..).map(Option::unwrap).collect();
         let bounds = Bounds::merge::<R>(v, self.batch_rows)?;
-        let bounds = bounds
-            .reduce(self.partitions - 1, R::data_type())
-            .unwrap_or(bounds);
+        let bounds = bounds.reduce(self.partitions - 1).unwrap_or(bounds);
         assert!(bounds.len() < self.partitions);
 
         self.bounds = Some(bounds);
