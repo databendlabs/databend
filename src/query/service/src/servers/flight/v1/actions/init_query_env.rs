@@ -33,9 +33,6 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
     }
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
-    if env.query_id.ends_with("-log") {
-        tracking_payload.should_log = false;
-    }
     tracking_payload.query_id = Some(env.query_id.clone());
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
     let _guard = ThreadTracker::tracking(tracking_payload);
