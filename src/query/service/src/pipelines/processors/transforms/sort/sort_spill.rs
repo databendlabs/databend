@@ -596,7 +596,7 @@ pub struct SpillableBlock {
     data: Option<DataBlock>,
     rows: usize,
     location: Option<Location>,
-    domain: Column,
+    pub(super) domain: Column,
     processed: usize,
 }
 
