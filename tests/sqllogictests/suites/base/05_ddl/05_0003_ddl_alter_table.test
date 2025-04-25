@@ -298,6 +298,12 @@ statement ok
 ALTER TABLE t1 DROP COLUMN path;
 
 statement ok
+alter table t1 refresh cache;
+
+statement ok
+alter database default refresh cache;
+
+statement ok
 SELECT * FROM t1 WHERE create_time > 111113;
 
 statement ok

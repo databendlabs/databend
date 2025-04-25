@@ -122,7 +122,9 @@ use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::OptimizePurgePlan;
 use crate::plans::PresignPlan;
 use crate::plans::ReclusterPlan;
+use crate::plans::RefreshDatabaseCachePlan;
 use crate::plans::RefreshIndexPlan;
+use crate::plans::RefreshTableCachePlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RelOperator;
@@ -232,6 +234,7 @@ pub enum Plan {
     UndropDatabase(Box<UndropDatabasePlan>),
     RenameDatabase(Box<RenameDatabasePlan>),
     UseDatabase(Box<UseDatabasePlan>),
+    RefreshDatabaseCache(Box<RefreshDatabaseCachePlan>),
 
     // Tables
     ShowCreateTable(Box<ShowCreateTablePlan>),
@@ -257,6 +260,7 @@ pub enum Plan {
     ExistsTable(Box<ExistsTablePlan>),
     SetOptions(Box<SetOptionsPlan>),
     UnsetOptions(Box<UnsetOptionsPlan>),
+    RefreshTableCache(Box<RefreshTableCachePlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),

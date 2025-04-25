@@ -38,6 +38,7 @@ use crate::planner::semantic::normalize_identifier;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::Plan;
+use crate::plans::RefreshDatabaseCachePlan;
 use crate::plans::RenameDatabaseEntity;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RewriteKind;
@@ -199,6 +200,14 @@ impl Binder {
                     entities: vec![entry],
                 })))
             }
+
+            AlterDatabaseAction::RefreshDatabaseCache => Ok(Plan::RefreshDatabaseCache(Box::new(
+                RefreshDatabaseCachePlan {
+                    tenant,
+                    catalog,
+                    database,
+                },
+            ))),
         }
     }
 

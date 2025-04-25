@@ -299,7 +299,6 @@ impl CacheManager {
                 config.block_meta_count as usize,
             );
 
-            // TODO ADD CONFIG
             let iceberg_table_meta_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_ICEBERG_TABLE,
                 config.iceberg_table_meta_count as usize,

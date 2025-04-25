@@ -1,8 +1,8 @@
 # How to add new functions
 
-- [Scalar function](https://docs.databend.com/guides/community/contributor/how-to-write-scalar-functions)
+- [Scalar function](https://docs.databend.com/developer/community/contributor/how-to-write-scalar-functions)
 
-- [Aggregate function](https://docs.databend.com/guides/community/contributor/how-to-write-aggregate-functions)
+- [Aggregate function](https://docs.databend.com/developer/community/contributor/how-to-write-aggregate-functions)
 
 ## Don't forget to add tests
 
