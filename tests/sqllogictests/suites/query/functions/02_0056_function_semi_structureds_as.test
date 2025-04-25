@@ -58,6 +58,25 @@ select as_object(parse_json('{"k": 123}'))
 ----
 {"k":123}
 
+query TT
+select to_binary('abc')::variant, as_binary(to_binary('abc')::variant)
+----
+"616263" 616263
+
+query TT
+select to_date('2025-01-01')::variant, as_date(to_date('2025-01-01')::variant)
+----
+"2025-01-01" 2025-01-01
+
+query TT
+select to_timestamp('2025-01-01 10:00:00')::variant, as_timestamp(to_timestamp('2025-01-01 10:00:00')::variant)
+----
+"2025-01-01 10:00:00.000000" 2025-01-01 10:00:00.000000
+
+query TT
+select to_interval('10 months 2 days')::variant, as_interval(to_interval('10 months 2 days')::variant)
+----
+"10 months 2 days" 10 months 2 days
 
 query B
 select is_null_value(parse_json('null'))
@@ -129,6 +148,27 @@ select is_object(parse_json('["a","b","c"]'))
 ----
 0
 
+query B
+select is_binary(to_binary('abc')::variant)
+----
+1
+
+query B 
+select is_date(to_date('2025-01-01')::variant)
+----
+1
+
+query B
+select is_timestamp(to_timestamp('2025-01-01 10:00:00')::variant)
+----
+1
+
+query B
+select is_interval(to_interval('10 months 2 days')::variant)
+----
+1
+
+
 statement ok
 DROP DATABASE IF EXISTS db1
 
@@ -186,4 +226,5 @@ select id, v, is_null_value(v), is_boolean(v), is_integer(v), is_float(v), is_st
 
 statement ok
 DROP DATABASE db1
+
 

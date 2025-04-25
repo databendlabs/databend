@@ -9190,7 +9190,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.1"
-source = "git+https://github.com/b41sh/jsonb?rev=90b9b0155daf395f22ec47c0cacfb70ba8e96985#90b9b0155daf395f22ec47c0cacfb70ba8e96985"
+source = "git+https://github.com/b41sh/jsonb?rev=73871c14bc11b65a1cba90bdb4ccc85f06c356e2#73871c14bc11b65a1cba90bdb4ccc85f06c356e2"
 dependencies = [
  "byteorder",
  "ethnum",

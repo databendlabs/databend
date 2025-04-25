@@ -732,6 +732,23 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_binary",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            match RawJsonb::new(v).is_binary() {
+                Ok(res) => output.push(res),
+                Err(_) => output.push(false),
+            }
+        }),
+    );
+
     registry.register_combine_nullable_1_arg::<VariantType, BinaryType, _, _>(
         "as_binary",
         |_, _| FunctionDomain::Full,
@@ -745,6 +762,23 @@ pub fn register(registry: &mut FunctionRegistry) {
             match RawJsonb::new(v).as_binary() {
                 Ok(Some(res)) => output.push(&res),
                 _ => output.push_null(),
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_date",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            match RawJsonb::new(v).is_date() {
+                Ok(res) => output.push(res),
+                Err(_) => output.push(false),
             }
         }),
     );
@@ -766,6 +800,23 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_timestamp",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            match RawJsonb::new(v).is_timestamp() {
+                Ok(res) => output.push(res),
+                Err(_) => output.push(false),
+            }
+        }),
+    );
+
     registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
         "as_timestamp",
         |_, _| FunctionDomain::Full,
@@ -783,6 +834,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             },
         ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_interval",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            match RawJsonb::new(v).is_interval() {
+                Ok(res) => output.push(res),
+                Err(_) => output.push(false),
+            }
+        }),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, IntervalType, _, _>(
@@ -1199,6 +1267,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.push_null();
                 return;
             }
+            if let Ok(Some(date)) = raw_jsonb.as_date() {
+                output.push(date.value);
+                return;
+            }
             match raw_jsonb
                 .as_str()
                 .map_err(|e| format!("{e}"))
@@ -1233,6 +1305,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             let raw_jsonb = RawJsonb::new(val);
+            if let Ok(Some(date)) = raw_jsonb.as_date() {
+                output.push(date.value);
+                return;
+            }
             match raw_jsonb
                 .as_str()
                 .map_err(|e| format!("{e}"))
@@ -1268,6 +1344,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.push_null();
                     return;
                 }
+                if let Ok(Some(ts)) = raw_jsonb.as_timestamp() {
+                    output.push(ts.value);
+                    return;
+                }
                 match raw_jsonb
                     .as_str()
                     .map_err(|e| format!("{e}"))
@@ -1301,6 +1381,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 let raw_jsonb = RawJsonb::new(val);
+                if let Ok(Some(ts)) = raw_jsonb.as_timestamp() {
+                    output.push(ts.value);
+                    return;
+                }
                 match raw_jsonb
                     .as_str()
                     .map_err(|e| format!("{e}"))
