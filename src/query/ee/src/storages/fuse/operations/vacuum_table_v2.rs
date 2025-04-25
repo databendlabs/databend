@@ -457,7 +457,6 @@ async fn list_until_prefix(
     gc_root_meta_ts: Option<DateTime<Utc>>,
 ) -> Result<Vec<Entry>> {
     info!("list until prefix: {}", until);
-    eprintln!("list until prefix inside: {}", until);
     let dal = fuse_table.get_operator_ref();
 
     match dal.info().scheme() {
@@ -524,10 +523,8 @@ async fn fs_list_until_prefix(
     let mut res = Vec::new();
     for entry in entries {
         if entry.path() >= until {
-            eprintln!("entry path: {} >= until: {}", entry.path(), until);
             info!("entry path: {} >= until: {}", entry.path(), until);
             if need_one_more {
-                eprintln!("kept");
                 res.push(entry);
             }
             break;
@@ -648,8 +645,6 @@ async fn select_gc_root(
         gc_root_path
     };
 
-    eprintln!("gc root path {}", gc_root_path);
-
     let dal = fuse_table.get_operator_ref();
     let gc_root = read_snapshot_from_location(fuse_table, &gc_root_path).await;
 
@@ -706,8 +701,6 @@ async fn select_gc_root(
                 ))
             })?;
             let snapshots_to_gc = gc_candidates[..gc_root_idx].to_vec();
-
-            eprintln!("snapshots to gc {:?}", snapshots_to_gc);
 
             Ok(Some((gc_root, snapshots_to_gc, gc_root_meta_ts)))
         }
