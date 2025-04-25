@@ -229,6 +229,7 @@ pub fn init_logging(
     if cfg.stderr.on {
         let dispatch = Dispatch::new()
             .filter(env_filter(&cfg.stderr.level))
+            .filter(filter_by_thread_tracker())
             .append(
                 logforth::append::Stderr::default().with_layout(get_layout(&cfg.stderr.format)),
             );
