@@ -3292,7 +3292,6 @@ dependencies = [
  "databend-functions-scalar-math",
  "databend-functions-scalar-numeric-basic-arithmetic",
  "divan",
- "ethnum",
  "geo",
  "geohash",
  "geozero",
@@ -3810,7 +3809,6 @@ dependencies = [
  "databend-common-column",
  "databend-common-expression",
  "env_logger 0.11.5",
- "ethnum",
  "hashbrown 0.14.5",
  "log",
  "lz4",
@@ -4372,7 +4370,6 @@ dependencies = [
  "databend-storages-common-pruner",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
- "ethnum",
  "futures",
  "log",
  "opendal 0.53.1",
@@ -4461,7 +4458,6 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "enum-as-inner",
- "ethnum",
  "futures",
  "jsonb",
  "lexical-core",
@@ -4859,7 +4855,6 @@ version = "0.1.0"
 dependencies = [
  "databend-common-expression",
  "databend-functions-scalar-decimal",
- "ethnum",
  "lexical-core",
  "match-template",
  "num-traits",
@@ -4884,7 +4879,6 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-expression",
- "ethnum",
  "match-template",
  "num-traits",
 ]
