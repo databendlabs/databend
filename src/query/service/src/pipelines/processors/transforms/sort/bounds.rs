@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -31,6 +30,10 @@ pub struct Bounds(
 );
 
 impl Bounds {
+    pub fn new_unchecked(column: Column) -> Bounds {
+        Bounds(vec![column])
+    }
+
     pub fn from_column<R: Rows>(column: Column) -> Result<Bounds> {
         let block = DataBlock::sort(
             &DataBlock::new_from_columns(vec![column]),
@@ -100,12 +103,12 @@ impl Bounds {
         if n == 0 {
             return Some(Self::default());
         }
-        let count = self.len();
-        if n >= count {
+        let total = self.len();
+        if n >= total {
             return None;
         }
 
-        let step = count / n;
+        let step = total / n;
         let offset = step / 2;
         let indices = self
             .0
@@ -130,6 +133,55 @@ impl Bounds {
             indices.len(),
         )]))
     }
+
+    pub fn dedup_reduce<R: Rows>(&self, n: usize) -> Self {
+        if n == 0 {
+            return Self::default();
+        }
+        let total = self.len();
+        let mut step = total as f64 / n as f64;
+        let mut target = step / 2.0;
+        let mut indices = Vec::with_capacity(n);
+        let mut last: Option<(R, _)> = None;
+        for (i, (b_idx, r_idx)) in self
+            .0
+            .iter()
+            .enumerate()
+            .rev()
+            .flat_map(|(b_idx, col)| std::iter::repeat_n(b_idx, col.len()).zip(0..col.len()))
+            .enumerate()
+        {
+            if indices.len() >= n {
+                break;
+            }
+            if (i as f64) < target {
+                continue;
+            }
+
+            let cur_rows = R::from_column(&self.0[b_idx]).unwrap();
+            if last
+                .as_ref()
+                .map(|(last_rows, last_idx)| cur_rows.row(r_idx) == last_rows.row(*last_idx))
+                .unwrap_or_default()
+            {
+                continue;
+            }
+
+            indices.push((b_idx as u32, r_idx as u32, 1));
+            target += step;
+            if (i as f64) > target && indices.len() < n {
+                step = (total - i) as f64 / (n - indices.len()) as f64;
+                target = i as f64 + step / 2.0;
+            }
+            last = Some((cur_rows, r_idx));
+        }
+
+        Bounds(vec![Column::take_column_indices(
+            &self.0,
+            &indices,
+            indices.len(),
+        )])
+    }
 }
 
 impl SortedStream for Bounds {
@@ -146,7 +198,6 @@ impl SortedStream for Bounds {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::ArgType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::FromData;
     use databend_common_pipeline_transforms::sort::SimpleRowsAsc;
@@ -229,6 +280,37 @@ mod tests {
 
         let got = bounds.reduce(1).unwrap();
         assert_eq!(got, Bounds(vec![Int32Type::from_data(vec![3])])); // 77 8 7 6 _3 2 1 1 -2
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dedup_reduce() -> Result<()> {
+        let column = Int32Type::from_data(vec![1, 2, 2, 3, 3, 3, 4, 5, 5]);
+        let bounds = Bounds::new_unchecked(column);
+        let reduced = bounds.dedup_reduce::<SimpleRowsAsc<Int32Type>>(3);
+        assert_eq!(reduced, Bounds(vec![Int32Type::from_data(vec![2, 3, 5])]));
+
+        let column = Int32Type::from_data(vec![5, 5, 4, 3, 3, 3, 2, 2, 1]);
+        let bounds = Bounds::new_unchecked(column);
+        let reduced = bounds.dedup_reduce::<SimpleRowsDesc<Int32Type>>(3);
+        assert_eq!(reduced, Bounds(vec![Int32Type::from_data(vec![4, 3, 1])]));
+
+        let bounds_vec = [vec![5, 6, 7, 7], vec![3, 3, 4, 5], vec![1, 2, 2, 3]]
+            .into_iter()
+            .map(Int32Type::from_data)
+            .collect::<Vec<_>>();
+        let bounds = Bounds(bounds_vec);
+        let reduced = bounds.dedup_reduce::<SimpleRowsAsc<Int32Type>>(5);
+        assert_eq!(
+            reduced,
+            Bounds(vec![Int32Type::from_data(vec![2, 3, 4, 6, 7])])
+        );
+
+        let column = Int32Type::from_data(vec![1, 1, 1, 1, 1]);
+        let bounds = Bounds(vec![column]);
+        let reduced = bounds.dedup_reduce::<SimpleRowsAsc<Int32Type>>(3);
+        assert_eq!(reduced, Bounds(vec![Int32Type::from_data(vec![1])]));
 
         Ok(())
     }

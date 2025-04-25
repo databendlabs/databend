@@ -135,7 +135,7 @@ select t, t:a from @data/parquet/tuple.parquet order by id desc limit 2;
 
 # topk contains output
 query TT
-select id, t:b, t:a from @data/parquet/tuple.parquet order by t:a desc limit 2;
+select id, t:b, t:a from @data/parquet/tuple.parquet order by t:a desc, id desc limit 2;
 ----
 3 c 3
 2 b 3
