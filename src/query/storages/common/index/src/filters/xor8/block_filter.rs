@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_expression::TableSchemaRef;
 
-use crate::filters::xor8::xor8_filter::Xor8Filter;
+use crate::filters::FilterImpl;
 
 /// Filters of a given DataBlock
 /// `filter_schema.fields.len()` should equals `filters.len()`
@@ -24,5 +24,5 @@ pub struct BlockFilter {
     // schema of index block, chosen columns only
     pub filter_schema: TableSchemaRef,
     // filters of index block, chosen columns only
-    pub filters: Vec<Arc<Xor8Filter>>,
+    pub filters: Vec<Arc<FilterImpl>>,
 }

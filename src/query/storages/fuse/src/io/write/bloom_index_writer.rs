@@ -29,6 +29,7 @@ use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
+use databend_storages_common_index::NgramArgs;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::meta::Location;
@@ -70,9 +71,11 @@ impl BloomIndexState {
         block: &DataBlock,
         location: Location,
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+        ngram_args: &[NgramArgs],
     ) -> Result<Option<Self>> {
         // write index
-        let mut builder = BloomIndexBuilder::create(ctx.get_function_context()?, bloom_columns_map);
+        let mut builder =
+            BloomIndexBuilder::create(ctx.get_function_context()?, bloom_columns_map, ngram_args)?;
         builder.add_block(block)?;
         let maybe_bloom_index = builder.finalize()?;
         if let Some(bloom_index) = maybe_bloom_index {
@@ -89,6 +92,7 @@ pub struct BloomIndexRebuilder {
     pub table_dal: Operator,
     pub storage_format: FuseStorageFormat,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+    pub ngram_args: Vec<NgramArgs>,
 }
 
 impl BloomIndexRebuilder {
@@ -132,7 +136,8 @@ impl BloomIndexRebuilder {
         let mut builder = BloomIndexBuilder::create(
             self.table_ctx.get_function_context()?,
             self.bloom_columns_map.clone(),
-        );
+            &self.ngram_args,
+        )?;
         builder.add_block(&data_block)?;
         let maybe_bloom_index = builder.finalize()?;
 

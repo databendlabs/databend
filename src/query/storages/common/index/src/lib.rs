@@ -28,6 +28,7 @@ pub use bloom_index::BloomIndex;
 pub use bloom_index::BloomIndexBuilder;
 pub use bloom_index::BloomIndexMeta;
 pub use bloom_index::FilterEvalResult;
+pub use bloom_index::NgramArgs;
 pub use eliminate_cast::eliminate_cast;
 pub use index::Index;
 pub use inverted_index::extract_component_fields;

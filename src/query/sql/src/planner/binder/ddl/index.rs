@@ -580,12 +580,20 @@ impl Binder {
             let value = val.to_lowercase();
             match key.as_str() {
                 "gram_size" => {
-                    if value.parse::<u32>().is_err() {
+                    if value.parse::<usize>().is_err() {
                         return Err(ErrorCode::IndexOptionInvalid(format!(
                             "value `{value}` is not a legal number",
                         )));
                     }
                     options.insert("gram_size".to_string(), value);
+                }
+                "bitmap_size" => {
+                    if value.parse::<usize>().is_err() {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "value `{value}` is not a legal number",
+                        )));
+                    }
+                    options.insert("bitmap_size".to_string(), value);
                 }
                 _ => {
                     return Err(ErrorCode::IndexOptionInvalid(format!(
