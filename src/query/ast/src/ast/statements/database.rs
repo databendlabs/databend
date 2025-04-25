@@ -166,6 +166,9 @@ impl Display for AlterDatabaseStmt {
             AlterDatabaseAction::RenameDatabase { new_db } => {
                 write!(f, " RENAME TO {new_db}")?;
             }
+            AlterDatabaseAction::RefreshDatabaseCache => {
+                write!(f, " REFRESH CACHE")?;
+            }
         }
 
         Ok(())
@@ -175,6 +178,7 @@ impl Display for AlterDatabaseStmt {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum AlterDatabaseAction {
     RenameDatabase { new_db: Identifier },
+    RefreshDatabaseCache,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]

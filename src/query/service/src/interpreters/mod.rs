@@ -84,6 +84,8 @@ mod interpreter_procedure_call;
 mod interpreter_procedure_create;
 mod interpreter_procedure_desc;
 mod interpreter_procedure_drop;
+mod interpreter_refresh_database_cache;
+mod interpreter_refresh_table_cache;
 mod interpreter_rename_warehouse;
 mod interpreter_rename_warehouse_cluster;
 mod interpreter_replace;

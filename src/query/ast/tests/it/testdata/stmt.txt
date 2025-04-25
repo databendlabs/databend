@@ -12665,6 +12665,40 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t refresh cache;
+---------- Output ---------
+ALTER TABLE t REFRESH CACHE
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: RefreshTableCache,
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t COMMENT='t1-commnet';
 ---------- Output ---------
 ALTER TABLE t COMMENT='t1-commnet'
@@ -13724,6 +13758,37 @@ AlterDatabase(
                 ident_type: None,
             },
         },
+    },
+)
+
+
+---------- Input ----------
+ALTER DATABASE ctl.c refresh cache;
+---------- Output ---------
+ALTER DATABASE ctl.c REFRESH CACHE
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: false,
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    15..18,
+                ),
+                name: "ctl",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        database: Identifier {
+            span: Some(
+                19..20,
+            ),
+            name: "c",
+            quote: None,
+            ident_type: None,
+        },
+        action: RefreshDatabaseCache,
     },
 )
 
