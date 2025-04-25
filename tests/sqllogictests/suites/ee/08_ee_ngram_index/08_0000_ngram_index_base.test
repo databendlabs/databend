@@ -27,6 +27,15 @@ CREATE TABLE t1 (id int, content string, NGRAM INDEX idx1 (content) gram_size = 
 statement ok
 CREATE TABLE t2 (id int, content string)
 
+statement error
+CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 0
+
+statement error
+CREATE NGRAM INDEX idx2 ON t2(content) bitmap_size = 0
+
+statement error
+CREATE NGRAM INDEX idx2 ON t2(content) bitmap_size = 134217729
+
 statement ok
 CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5
 

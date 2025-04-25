@@ -65,6 +65,8 @@ use crate::MetadataRef;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
+const MAXIMUM_BLOOM_BITMAP_SIZE: usize = 128 * 1024 * 1024;
+
 // valid values for inverted index option tokenizer
 static INDEX_TOKENIZER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
@@ -580,18 +582,41 @@ impl Binder {
             let value = val.to_lowercase();
             match key.as_str() {
                 "gram_size" => {
-                    if value.parse::<usize>().is_err() {
-                        return Err(ErrorCode::IndexOptionInvalid(format!(
-                            "value `{value}` is not a legal number",
-                        )));
+                    match value.parse::<usize>() {
+                        Ok(num) => {
+                            if num == 0 {
+                                return Err(ErrorCode::IndexOptionInvalid(
+                                    "`gram_size` cannot be 0",
+                                ));
+                            }
+                        }
+                        Err(_) => {
+                            return Err(ErrorCode::IndexOptionInvalid(format!(
+                                "value `{value}` is not a legal number",
+                            )));
+                        }
                     }
                     options.insert("gram_size".to_string(), value);
                 }
                 "bitmap_size" => {
-                    if value.parse::<usize>().is_err() {
-                        return Err(ErrorCode::IndexOptionInvalid(format!(
-                            "value `{value}` is not a legal number",
-                        )));
+                    match value.parse::<usize>() {
+                        Ok(num) => {
+                            if num == 0 {
+                                return Err(ErrorCode::IndexOptionInvalid(
+                                    "`bitmap_size` cannot be 0",
+                                ));
+                            }
+                            if num > MAXIMUM_BLOOM_BITMAP_SIZE {
+                                return Err(ErrorCode::IndexOptionInvalid(format!(
+                                    "bitmap_size: `{num}` is too large (bitmap_size is maximum: {MAXIMUM_BLOOM_BITMAP_SIZE})",
+                                )));
+                            }
+                        }
+                        Err(_) => {
+                            return Err(ErrorCode::IndexOptionInvalid(format!(
+                                "value `{value}` is not a legal number",
+                            )));
+                        }
                     }
                     options.insert("bitmap_size".to_string(), value);
                 }

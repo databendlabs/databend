@@ -369,7 +369,7 @@ impl BloomIndex {
             arg.index(i).and_then(|scalar| {
                 scalar.as_string().and_then(|text| {
                     let text = text.to_lowercase();
-                    if text.is_empty() || gram_size == 0 {
+                    if text.is_empty() {
                         return None;
                     }
 
