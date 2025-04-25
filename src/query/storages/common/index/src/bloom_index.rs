@@ -530,7 +530,7 @@ impl BloomIndex {
 
 pub struct BloomIndexBuilder {
     func_ctx: FunctionContext,
-    bloom_columns: Vec<ColumnFilterBuilder>,
+    columns: Vec<ColumnFilterBuilder>,
 }
 
 struct ColumnFilterBuilder {
@@ -596,7 +596,7 @@ impl BloomIndexBuilder {
 
         Ok(Self {
             func_ctx,
-            bloom_columns,
+            columns: bloom_columns,
         })
     }
 }
@@ -610,8 +610,8 @@ impl BloomIndexBuilder {
             return Ok(());
         }
 
-        let mut keys_to_remove = Vec::with_capacity(self.bloom_columns.len());
-        for (index, index_column) in self.bloom_columns.iter_mut().enumerate() {
+        let mut keys_to_remove = Vec::with_capacity(self.columns.len());
+        for (index, index_column) in self.columns.iter_mut().enumerate() {
             let field_type = &block.get_by_offset(index_column.index).data_type;
             if !Xor8Filter::supported_type(field_type) {
                 keys_to_remove.push(index);
@@ -721,16 +721,16 @@ impl BloomIndexBuilder {
             }
         }
         for k in keys_to_remove {
-            self.bloom_columns.remove(k);
+            self.columns.remove(k);
         }
         Ok(())
     }
 
     pub fn finalize(&mut self) -> Result<Option<BloomIndex>> {
-        let mut column_distinct_count = HashMap::with_capacity(self.bloom_columns.len());
-        let mut filters = Vec::with_capacity(self.bloom_columns.len());
-        let mut filter_fields = Vec::with_capacity(self.bloom_columns.len());
-        for column in self.bloom_columns.iter_mut() {
+        let mut column_distinct_count = HashMap::with_capacity(self.columns.len());
+        let mut filters = Vec::with_capacity(self.columns.len());
+        let mut filter_fields = Vec::with_capacity(self.columns.len());
+        for column in self.columns.iter_mut() {
             let filter = column.builder.build()?;
             let filter_name = if column.is_ngram {
                 BloomIndex::build_filter_ngram_name(&column.field)
