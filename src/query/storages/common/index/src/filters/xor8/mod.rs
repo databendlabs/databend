@@ -76,6 +76,13 @@ impl FilterImpl {
 impl Filter for FilterImpl {
     type CodecError = ErrorCode;
 
+    fn len(&self) -> Option<usize> {
+        match self {
+            FilterImpl::Xor(filter) => filter.len(),
+            FilterImpl::Bloom(filter) => filter.len(),
+        }
+    }
+
     fn contains<K: ?Sized + Hash>(&self, key: &K) -> bool {
         match self {
             FilterImpl::Xor(filter) => filter.contains(key),

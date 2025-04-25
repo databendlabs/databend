@@ -77,7 +77,6 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             0,
             None,
             None,
-            None,
             meta::Compression::Lz4Raw,
             Some(Utc::now()),
         ));
