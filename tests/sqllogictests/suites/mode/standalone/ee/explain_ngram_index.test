@@ -96,3 +96,9 @@ TableScan
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 5 to 5, bloom pruning: 5 to 1>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%your eggs%'))], limit: NONE]
 └── estimated rows: 0.04
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE IF EXISTS test_ngram_index_db
