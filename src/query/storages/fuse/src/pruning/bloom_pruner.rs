@@ -26,10 +26,12 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::Value;
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
+use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -66,6 +68,9 @@ pub struct BloomPrunerCreator {
     /// pre calculated digest for constant Scalar
     scalar_map: HashMap<Scalar, u64>,
 
+    /// Ngram args aligned with BloomColumn using Ngram
+    ngram_args: Vec<NgramArgs>,
+
     /// the data accessor
     dal: Operator,
 
@@ -83,6 +88,7 @@ impl BloomPrunerCreator {
         dal: Operator,
         filter_expr: Option<&Expr<String>>,
         bloom_index_cols: BloomIndexColumns,
+        ngram_args: Vec<NgramArgs>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Option<Arc<dyn BloomPruner + Send + Sync>>> {
         let Some(expr) = filter_expr else {
@@ -91,26 +97,48 @@ impl BloomPrunerCreator {
         let bloom_columns_map =
             bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
         let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
-        let (index_fields, scalars) = BloomIndex::filter_index_field(expr, &bloom_column_fields)?;
+        let (mut bloom_fields, bloom_scalars) =
+            BloomIndex::filter_index_field(expr, bloom_column_fields)?;
 
-        if index_fields.is_empty() {
+        let ngram_column_fields: Vec<TableField> =
+            ngram_args.iter().map(|arg| arg.field().clone()).collect();
+        let (mut ngram_fields, ngram_scalars) =
+            BloomIndex::filter_index_field(expr, ngram_column_fields)?;
+
+        if bloom_fields.is_empty() && ngram_fields.is_empty() {
             return Ok(None);
         }
 
         // convert to filter column names
         let mut scalar_map = HashMap::<Scalar, u64>::new();
-        for (scalar, ty) in scalars.into_iter() {
+        for (_, scalar, ty) in bloom_scalars.into_iter() {
             if let Entry::Vacant(e) = scalar_map.entry(scalar) {
                 let digest = BloomIndex::calculate_scalar_digest(&func_ctx, e.key(), &ty)?;
                 e.insert(digest);
             }
         }
+        for (i, scalar, _) in ngram_scalars.into_iter() {
+            for words in BloomIndex::calculate_ngram_nullable_column(
+                Value::Scalar(scalar),
+                ngram_args[i].gram_size(),
+                |word| word.to_string(),
+            ) {
+                for word in words {
+                    let hash1 = BloomIndex::ngram_hash(&word);
+                    if let Entry::Vacant(e) = scalar_map.entry(Scalar::String(word)) {
+                        e.insert(hash1);
+                    }
+                }
+            }
+        }
+        bloom_fields.append(&mut ngram_fields);
 
         Ok(Some(Arc::new(Self {
             func_ctx,
-            index_fields,
+            index_fields: bloom_fields,
             filter_expression: expr.clone(),
             scalar_map,
+            ngram_args,
             dal,
             data_schema: schema.clone(),
             bloom_index_builder,
@@ -134,7 +162,10 @@ impl BloomPrunerCreator {
             Vec::with_capacity(self.index_fields.len()),
             |mut acc, field| {
                 if column_ids_of_indexed_block.contains(&field.column_id()) {
-                    acc.push(BloomIndex::build_filter_column_name(version, field)?);
+                    acc.push(BloomIndex::build_filter_bloom_name(version, field)?);
+                }
+                if column_ids_of_indexed_block.contains(&field.column_id()) {
+                    acc.push(BloomIndex::build_filter_ngram_name(field));
                 }
                 Ok::<_, ErrorCode>(acc)
             },
@@ -187,6 +218,7 @@ impl BloomPrunerCreator {
             .apply(
                 self.filter_expression.clone(),
                 &self.scalar_map,
+                &self.ngram_args,
                 column_stats,
                 self.data_schema.clone(),
             )? != FilterEvalResult::MustFalse),

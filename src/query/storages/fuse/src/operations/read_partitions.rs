@@ -39,6 +39,8 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::DefaultExprBinder;
@@ -46,6 +48,7 @@ use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::NgramArgs;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
@@ -65,6 +68,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
+use itertools::Itertools;
 use log::info;
 use opendal::Operator;
 use sha2::Digest;
@@ -622,6 +626,7 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         dal: Operator,
     ) -> Result<FusePruner> {
+        let ngram_args = Self::create_ngram_index_args(&self.table_info.meta)?;
         let bloom_index_builder = if ctx
             .get_settings()
             .get_enable_auto_fix_missing_bloom_index()?
@@ -638,6 +643,7 @@ impl FuseTable {
                 table_dal: dal.clone(),
                 storage_format,
                 bloom_columns_map,
+                ngram_args: ngram_args.clone(),
             })
         } else {
             None
@@ -651,6 +657,7 @@ impl FuseTable {
                     table_schema.clone(),
                     &push_downs,
                     self.bloom_index_cols(),
+                    ngram_args,
                     bloom_index_builder,
                 )?
             } else {
@@ -664,10 +671,42 @@ impl FuseTable {
                     self.cluster_key_meta.clone(),
                     cluster_keys,
                     self.bloom_index_cols(),
+                    ngram_args,
                     bloom_index_builder,
                 )?
             };
         Ok(pruner)
+    }
+
+    pub fn create_ngram_index_args(table_meta: &TableMeta) -> Result<Vec<NgramArgs>> {
+        let mut ngram_index_args = Vec::with_capacity(table_meta.indexes.len());
+        for index in table_meta.indexes.values() {
+            if !matches!(index.index_type, TableIndexType::Ngram) {
+                continue;
+            }
+            if !index.sync_creation {
+                continue;
+            }
+
+            let Some((pos, field)) = table_meta
+                .schema
+                .fields()
+                .iter()
+                .find_position(|field| field.column_id() == index.column_ids[0])
+            else {
+                continue;
+            };
+            let gram_size = match index.options.get("gram_size") {
+                None => 3,
+                Some(s) => s.parse::<usize>()?,
+            };
+            let bitmap_size = match index.options.get("bitmap_size") {
+                None => 1024,
+                Some(s) => s.parse::<usize>()?,
+            };
+            ngram_index_args.push(NgramArgs::new(pos, field.clone(), gram_size, bitmap_size));
+        }
+        Ok(ngram_index_args)
     }
 
     pub fn check_prune_cache(

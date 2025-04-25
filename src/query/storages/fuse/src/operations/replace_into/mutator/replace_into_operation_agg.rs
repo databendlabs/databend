@@ -48,7 +48,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::filters::Filter;
-use databend_storages_common_index::filters::Xor8Filter;
+use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -754,12 +754,12 @@ impl AggregationContext {
         location: &Location,
         index_len: u64,
         bloom_on_conflict_field_index: &[FieldIndex],
-    ) -> Result<Vec<Option<Arc<Xor8Filter>>>> {
+    ) -> Result<Vec<Option<Arc<FilterImpl>>>> {
         // different block may have different version of bloom filter index
         let mut col_names = Vec::with_capacity(bloom_on_conflict_field_index.len());
 
         for idx in bloom_on_conflict_field_index {
-            let bloom_column_name = BloomIndex::build_filter_column_name(
+            let bloom_column_name = BloomIndex::build_filter_bloom_name(
                 location.1,
                 &self.on_conflict_fields[*idx].table_field,
             )?;

@@ -151,6 +151,7 @@ impl TransformSerializeBlock {
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
+        let ngram_args = FuseTable::create_ngram_index_args(&table.table_info.meta)?;
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
         let virtual_column_builder = if ctx
@@ -170,6 +171,7 @@ impl TransformSerializeBlock {
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
             bloom_columns_map,
+            ngram_args,
             inverted_index_builders,
             virtual_column_builder,
             table_meta_timestamps,
