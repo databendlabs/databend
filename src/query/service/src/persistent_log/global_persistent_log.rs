@@ -128,13 +128,7 @@ impl GlobalPersistentLog {
         GlobalInstance::set(instance);
         GlobalIORuntime::instance().try_spawn(
             async move {
-                let mut tracking_payload = ThreadTracker::new_tracking_payload();
-                tracking_payload.should_log = false;
-                let _guard = ThreadTracker::tracking(tracking_payload);
-
-                if let Err(e) =
-                    ThreadTracker::tracking_future(GlobalPersistentLog::instance().work()).await
-                {
+                if let Err(e) = GlobalPersistentLog::instance().work().await {
                     error!("persistent log exit {}", e);
                 }
             },
@@ -177,7 +171,6 @@ impl GlobalPersistentLog {
     }
 
     pub async fn work(&self) -> Result<()> {
-        let mut prepared = false;
         let meta_key = format!("{}/persistent_log_work", self.tenant_id);
         // Wait all services to be initialized
         loop {
@@ -187,20 +180,20 @@ impl GlobalPersistentLog {
                 break;
             }
         }
+
+        // No need to wait, we want to do prepare as soon as possible
+        let prepare_guard = self.acquire(&meta_key, self.interval, 0).await?;
+        self.prepare().await?;
+        info!("Persistent log prepared successfully");
+        drop(prepare_guard);
+
         spawn(async move {
             if let Err(e) = GlobalPersistentLog::instance().clean_work().await {
                 error!("Persistent log clean_work exit {}", e);
             }
         });
+
         loop {
-            if !prepared {
-                // No need to wait, we want to do prepare as soon as possible
-                let prepare_guard = self.acquire(&meta_key, self.interval, 0).await?;
-                self.prepare().await?;
-                info!("Persistent log prepared successfully");
-                prepared = true;
-                drop(prepare_guard);
-            }
             // Periodically performs persistent log COPY INTO/ INSERT INTO  every `interval` seconds (around)
             let may_permit = self
                 .acquire(&meta_key, self.interval, self.interval)
@@ -237,26 +230,30 @@ impl GlobalPersistentLog {
         lease: u64,
         interval: u64,
     ) -> Result<Option<Permit>> {
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.should_log = false;
+        let _guard = ThreadTracker::tracking(tracking_payload);
         let meta_client = match &self.meta_store {
             MetaStore::R(handle) => handle.clone(),
             _ => unreachable!("Metastore::L should only used for testing"),
         };
-        let acquired_guard = Semaphore::new_acquired(
+        let acquired_guard = ThreadTracker::tracking_future(Semaphore::new_acquired(
             meta_client,
             meta_key,
             1,
             self.node_id.clone(),
             Duration::from_secs(lease),
-        )
+        ))
         .await
         .map_err(|_e| "acquire semaphore failed from GlobalPersistentLog")?;
         if interval == 0 {
             return Ok(Some(acquired_guard));
         }
-        if match self
-            .meta_store
-            .get_kv(&format!("{}/last_timestamp", meta_key))
-            .await?
+        if match ThreadTracker::tracking_future(
+            self.meta_store
+                .get_kv(&format!("{}/last_timestamp", meta_key)),
+        )
+        .await?
         {
             Some(v) => {
                 let last: u64 = serde_json::from_slice(&v.data)?;
