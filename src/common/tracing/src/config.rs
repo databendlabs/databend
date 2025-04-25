@@ -359,6 +359,7 @@ impl Default for PersistentLogConfig {
         Self {
             on: false,
             interval: 2,
+            // The default value of stage name uses an uuid to avoid conflicts with existing stages
             stage_name: "log_1f93b76af0bd4b1d8e018667865fbc65".to_string(),
             retention: 72,
             level: "WARN".to_string(),

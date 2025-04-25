@@ -2556,6 +2556,9 @@ pub struct PersistentLogConfig {
     pub log_persistentlog_interval: usize,
 
     /// Specifies the name of the staging area that temporarily holds log data before it is finally copied into the table
+    ///
+    /// Note:
+    /// The default value uses an uuid to avoid conflicts with existing stages
     #[clap(
         long = "log-persistentlog-stage-name",
         value_name = "VALUE",
