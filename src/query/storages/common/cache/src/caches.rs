@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
+use databend_storages_common_index::filters::FilterImpl;
 
 pub use crate::cache_items::*;
 use crate::manager::CacheManager;

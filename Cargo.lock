@@ -1441,6 +1441,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bloomfilter"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f6d7f06817e48ea4e17532fa61bc4e8b9a101437f0623f69d2ea54284f3a817"
+dependencies = [
+ "getrandom 0.2.15",
+ "siphasher 1.0.1",
+]
+
+[[package]]
 name = "bollard"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3325,7 +3335,7 @@ dependencies = [
  "sha2",
  "simdutf8",
  "simple_hll",
- "siphasher",
+ "siphasher 0.3.11",
  "strength_reduce",
  "stringslice",
  "twox-hash",
@@ -4184,7 +4194,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "siphasher",
+ "siphasher 0.3.11",
  "tantivy",
  "tantivy-common",
  "tantivy-fst",
@@ -5301,7 +5311,7 @@ dependencies = [
  "parquet",
  "rayon",
  "rustix 0.38.42",
- "siphasher",
+ "siphasher 0.3.11",
  "tempfile",
 ]
 
@@ -5311,6 +5321,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "bincode 2.0.0-rc.3",
+ "bloomfilter",
  "bytes",
  "cbordata",
  "databend-common-ast",
@@ -5325,6 +5336,7 @@ dependencies = [
  "levenshtein_automata",
  "log",
  "match-template",
+ "naive-cityhash",
  "parquet",
  "rand 0.8.5",
  "roaring",
@@ -11192,7 +11204,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90fcb95eef784c2ac79119d1dd819e162b5da872ce6f3c3abe1e8ca1c082f72b"
 dependencies = [
- "siphasher",
+ "siphasher 0.3.11",
 ]
 
 [[package]]
@@ -13514,6 +13526,15 @@ name = "siphasher"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
+
+[[package]]
+name = "siphasher"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "sized-chunks"

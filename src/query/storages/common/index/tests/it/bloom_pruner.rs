@@ -478,16 +478,17 @@ fn eval_index_expr(
     };
 
     let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
-    let (_, scalars) = BloomIndex::filter_index_field(&expr, &fields).unwrap();
+    let (_, scalars) = BloomIndex::filter_index_field(&expr, fields).unwrap();
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
-    for (scalar, ty) in scalars.into_iter() {
+    for (_, scalar, ty) in scalars.into_iter() {
         scalar_map.entry(scalar).or_insert_with_key(|scalar| {
             BloomIndex::calculate_scalar_digest(&func_ctx, scalar, &ty).unwrap()
         });
     }
 
-    let mut builder = BloomIndexBuilder::create(func_ctx.clone(), bloom_columns.clone());
+    let mut builder =
+        BloomIndexBuilder::create(func_ctx.clone(), bloom_columns.clone(), &[]).unwrap();
     builder.add_block(block).unwrap();
     let index = builder.finalize().unwrap().unwrap();
 
@@ -514,7 +515,7 @@ fn eval_index_expr(
         .collect();
 
     let (expr, domains) = index
-        .rewrite_expr(expr, &scalar_map, &column_stats, schema)
+        .rewrite_expr(expr, &scalar_map, &[], &column_stats, schema)
         .unwrap();
     let result =
         match ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0 {
