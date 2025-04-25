@@ -218,7 +218,7 @@ impl TransformSortBuilder {
     }
 
     fn new_base(&self) -> Base {
-        let schema = add_order_field(self.schema.clone(), &self.sort_desc);
+        let schema = self.inner_schema();
         let sort_row_offset = schema.fields().len() - 1;
         Base {
             sort_row_offset,
@@ -226,6 +226,10 @@ impl TransformSortBuilder {
             spiller: self.spiller.clone(),
             limit: self.limit,
         }
+    }
+
+    pub fn inner_schema(&self) -> DataSchemaRef {
+        add_order_field(self.schema.clone(), &self.sort_desc)
     }
 
     pub fn add_shuffle(&self, pipeline: &mut Pipeline, state: Arc<SortSampleState>) -> Result<()> {

@@ -258,7 +258,8 @@ impl SortPipelineBuilder {
             Ok(ProcessorPtr::create(builder.build_collect(input, output)?))
         })?;
 
-        let state = SortSampleState::new(inputs, max_threads, self.schema.clone(), max_block_size);
+        let state =
+            SortSampleState::new(inputs, max_threads, builder.inner_schema(), max_block_size);
 
         builder.add_shuffle(pipeline, state.clone())?;
 

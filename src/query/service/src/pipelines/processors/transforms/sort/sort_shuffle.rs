@@ -251,7 +251,6 @@ impl SortSampleState {
 struct StateInner {
     // target partitions
     partitions: usize,
-    // schema for bounds DataBlock
     schema: DataSchemaRef,
     partial: Vec<Option<Bounds>>,
     bounds: Option<Bounds>,
