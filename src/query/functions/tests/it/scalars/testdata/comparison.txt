@@ -1172,7 +1172,7 @@ evaluation:
 | Row 1  | '-32768'                                                  | '-32768'                                                  | true    |
 | Row 2  | '1234.5678'                                               | '1234.5678'                                               | true    |
 | Row 3  | '1.912e2'                                                 | '1.912e2'                                                 | true    |
-| Row 4  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'                                           | true    |
+| Row 4  | '"\\\\\\"abc\\\\\\""'                                     | '"\\\\\\"abc\\\\\\""'                                     | true    |
 | Row 5  | '{"k":"v","a":"b"}'                                       | '{"k":"v","a":"d"}'                                       | false   |
 | Row 6  | '[1,2,3,["a","b","d"]]'                                   | '[1,2,3,["a","b","c"]]'                                   | true    |
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------+
@@ -1199,7 +1199,7 @@ evaluation:
 | Row 1  | '-32768'                                                  | '-32768'                                                  | true          |
 | Row 2  | '1234.5678'                                               | '1234.5678'                                               | true          |
 | Row 3  | '1.912e2'                                                 | '1.912e2'                                                 | true          |
-| Row 4  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'                                           | true          |
+| Row 4  | '"\\\\\\"abc\\\\\\""'                                     | '"\\\\\\"abc\\\\\\""'                                     | true          |
 | Row 5  | '{"k":"v","a":"b"}'                                       | '{"k":"v","a":"d"}'                                       | false         |
 | Row 6  | '[1,2,3,["a","b","d"]]'                                   | '[1,2,3,["a","b","c"]]'                                   | true          |
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------------+
@@ -1224,8 +1224,7 @@ output         : false
 
 ast            : 'hello
 ' like 'h%'
-raw expr       : like('hello
-', 'h%')
+raw expr       : like('hello\n', 'h%')
 checked expr   : like<String, String>("hello\n", "h%")
 optimized expr : true
 output type    : Boolean
@@ -1235,8 +1234,7 @@ output         : true
 
 ast            : 'h
 ' like 'h_'
-raw expr       : like('h
-', 'h_')
+raw expr       : like('h\n', 'h_')
 checked expr   : like<String, String>("h\n", "h_")
 optimized expr : true
 output type    : Boolean
@@ -1245,7 +1243,7 @@ output         : true
 
 
 ast            : '%' like '\%'
-raw expr       : like('%', '\%')
+raw expr       : like('%', '\\%')
 checked expr   : like<String, String>("%", "\\%")
 optimized expr : true
 output type    : Boolean
@@ -1254,7 +1252,7 @@ output         : true
 
 
 ast            : 'v%xx' like '_\%%'
-raw expr       : like('v%xx', '_\%%')
+raw expr       : like('v%xx', '_\\%%')
 checked expr   : like<String, String>("v%xx", "_\\%%")
 optimized expr : true
 output type    : Boolean
