@@ -157,6 +157,10 @@ where
         let unit_size = self.memory_settings.spill_unit_size;
         let num_merge = bytes.div_ceil(unit_size).max(2);
         let batch_rows = rows.div_ceil(num_merge);
+
+        /// The memory will be doubled during merging.
+        const MERGE_RATIO: usize = 2;
+        let num_merge = num_merge.div_ceil(MERGE_RATIO).max(2);
         log::info!("determine sort spill params, buffer_bytes: {bytes}, buffer_rows: {rows}, spill_unit_size: {unit_size}, batch_rows: {batch_rows}, batch_num_merge {num_merge}");
         SortSpillParams {
             batch_rows,
