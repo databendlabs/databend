@@ -101,7 +101,7 @@ evaluation:
 | Row 3  | '-32768'                                                  | '-32768'                |
 | Row 4  | '1234.5678'                                               | '1234.5678'             |
 | Row 5  | '1.912e2'                                                 | '191.2'                 |
-| Row 6  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'         |
+| Row 6  | '"\\\\\\"abc\\\\\\""'                                     | '"\\\\\\"abc\\\\\\""'   |
 | Row 7  | '"databend"'                                              | '"databend"'            |
 | Row 8  | '{"k":"v","a":"b"}'                                       | '{"a":"b","k":"v"}'     |
 | Row 9  | '[1,2,3,["a","b","c"]]'                                   | '[1,2,3,["a","b","c"]]' |
@@ -234,7 +234,7 @@ evaluation:
 | Row 3  | '-32768'                                                  | '-32768'                |
 | Row 4  | '1234.5678'                                               | '1234.5678'             |
 | Row 5  | '1.912e2'                                                 | '191.2'                 |
-| Row 6  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'         |
+| Row 6  | '"\\\\\\"abc\\\\\\""'                                     | '"\\\\\\"abc\\\\\\""'   |
 | Row 7  | '"databend"'                                              | '"databend"'            |
 | Row 8  | '{"k":"v","a":"b"}'                                       | '{"a":"b","k":"v"}'     |
 | Row 9  | '[1,2,3,["a","b","c"]]'                                   | '[1,2,3,["a","b","c"]]' |
@@ -2807,14 +2807,7 @@ checked expr   : json_pretty<Variant>(CAST<String>("[1, 2, 3, 4, 5, 6]" AS Varia
 optimized expr : "[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]"
 output type    : String
 output domain  : {"[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]"..="[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]"}
-output         : '[
-  1,
-  2,
-  3,
-  4,
-  5,
-  6
-]'
+output         : '[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]'
 
 
 ast            : json_pretty(parse_json('{"k1":123, "k2":"abc"}'))
@@ -2823,10 +2816,7 @@ checked expr   : json_pretty<Variant>(CAST<String>("{\"k1\":123, \"k2\":\"abc\"}
 optimized expr : "{\n  \"k1\": 123,\n  \"k2\": \"abc\"\n}"
 output type    : String
 output domain  : {"{\n  \"k1\": 123,\n  \"k2\": \"abc\"\n}"..="{\n  \"k1\": 123,\n  \"k2\": \"abc\"\n}"}
-output         : '{
-  "k1": 123,
-  "k2": "abc"
-}'
+output         : '{\n  "k1": 123,\n  "k2": "abc"\n}'
 
 
 ast            : json_pretty(parse_json('{"a":1,"b":true,"c":["1","2","3"],"d":{"a":1,"b":[1,2,3],"c":{"a":1,"b":2}}}'))
@@ -2835,27 +2825,7 @@ checked expr   : json_pretty<Variant>(CAST<String>("{\"a\":1,\"b\":true,\"c\":[\
 optimized expr : "{\n  \"a\": 1,\n  \"b\": true,\n  \"c\": [\n    \"1\",\n    \"2\",\n    \"3\"\n  ],\n  \"d\": {\n    \"a\": 1,\n    \"b\": [\n      1,\n      2,\n      3\n    ],\n    \"c\": {\n      \"a\": 1,\n      \"b\": 2\n    }\n  }\n}"
 output type    : String
 output domain  : {"{\n  \"a\": 1,\n  \"b\": true,\n  \"c\": [\n    \"1\",\n    \"2\",\n    \"3\"\n  ],\n  \"d\": {\n    \"a\": 1,\n    \"b\": [\n      1,\n      2,\n      3\n    ],\n    \"c\": {\n      \"a\": 1,\n      \"b\": 2\n    }\n  }\n}"..="{\n  \"a\": 1,\n  \"b\": true,\n  \"c\": [\n    \"1\",\n    \"2\",\n    \"3\"\n  ],\n  \"d\": {\n    \"a\": 1,\n    \"b\": [\n      1,\n      2,\n      3\n    ],\n    \"c\": {\n      \"a\": 1,\n      \"b\": 2\n    }\n  }\n}"}
-output         : '{
-  "a": 1,
-  "b": true,
-  "c": [
-    "1",
-    "2",
-    "3"
-  ],
-  "d": {
-    "a": 1,
-    "b": [
-      1,
-      2,
-      3
-    ],
-    "c": {
-      "a": 1,
-      "b": 2
-    }
-  }
-}'
+output         : '{\n  "a": 1,\n  "b": true,\n  "c": [\n    "1",\n    "2",\n    "3"\n  ],\n  "d": {\n    "a": 1,\n    "b": [\n      1,\n      2,\n      3\n    ],\n    "c": {\n      "a": 1,\n      "b": 2\n    }\n  }\n}'
 
 
 ast            : json_strip_nulls(parse_json('true'))
