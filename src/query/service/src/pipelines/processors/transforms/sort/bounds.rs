@@ -205,6 +205,11 @@ mod tests {
 
     use super::*;
 
+    fn int32_columns<T>(data: T) -> Vec<Column>
+    where T: IntoIterator<Item = Vec<i32>> {
+        data.into_iter().map(Int32Type::from_data).collect()
+    }
+
     #[test]
     fn test_merge() -> Result<()> {
         {
@@ -227,17 +232,12 @@ mod tests {
 
             assert_eq!(
                 bounds,
-                Bounds(vec![
-                    Int32Type::from_data(vec![6, 7]),
-                    Int32Type::from_data(vec![2, 6, 6]),
-                    Int32Type::from_data(vec![0, 0, 1]),
-                ])
+                Bounds(int32_columns([vec![6, 7], vec![2, 6, 6], vec![0, 0, 1]]))
             );
         }
 
         {
-            let data = vec![vec![77, -2, 7], vec![3, 8, 6, 1, 1], vec![2]];
-
+            let data = [vec![77, -2, 7], vec![3, 8, 6, 1, 1], vec![2]];
             let data = data
                 .into_iter()
                 .map(|v| Bounds::from_column::<SimpleRowsDesc<Int32Type>>(Int32Type::from_data(v)))
@@ -246,13 +246,13 @@ mod tests {
 
             assert_eq!(
                 bounds,
-                Bounds(vec![
-                    Int32Type::from_data(vec![-2]),
-                    Int32Type::from_data(vec![1, 1]),
-                    Int32Type::from_data(vec![3, 2]),
-                    Int32Type::from_data(vec![7, 6]),
-                    Int32Type::from_data(vec![77, 8]),
-                ])
+                Bounds(int32_columns([
+                    vec![-2],
+                    vec![1, 1],
+                    vec![3, 2],
+                    vec![7, 6],
+                    vec![77, 8]
+                ]))
             );
         }
 
@@ -270,16 +270,16 @@ mod tests {
         let bounds = Bounds::merge::<SimpleRowsDesc<Int32Type>>(data, 2)?;
 
         let got = bounds.reduce(4).unwrap();
-        assert_eq!(got, Bounds(vec![Int32Type::from_data(vec![8, 6, 2, 1])])); // 77 _8 7 _6 3 _2 1 _1 -2
+        assert_eq!(got, Bounds(int32_columns([vec![8, 6, 2, 1]]))); // 77 _8 7 _6 3 _2 1 _1 -2
 
         let got = bounds.reduce(3).unwrap();
-        assert_eq!(got, Bounds(vec![Int32Type::from_data(vec![8, 3, 1])])); // 77 _8 7 6 _3 2 1 _1 -2
+        assert_eq!(got, Bounds(int32_columns([vec![8, 3, 1]]))); // 77 _8 7 6 _3 2 1 _1 -2
 
         let got = bounds.reduce(2).unwrap();
-        assert_eq!(got, Bounds(vec![Int32Type::from_data(vec![7, 1])])); // 77 8 _7 6 3 2 _1 1 -2
+        assert_eq!(got, Bounds(int32_columns([vec![7, 1]]))); // 77 8 _7 6 3 2 _1 1 -2
 
         let got = bounds.reduce(1).unwrap();
-        assert_eq!(got, Bounds(vec![Int32Type::from_data(vec![3])])); // 77 8 7 6 _3 2 1 1 -2
+        assert_eq!(got, Bounds(int32_columns([vec![3]]))); // 77 8 7 6 _3 2 1 1 -2
 
         Ok(())
     }
@@ -289,28 +289,23 @@ mod tests {
         let column = Int32Type::from_data(vec![1, 2, 2, 3, 3, 3, 4, 5, 5]);
         let bounds = Bounds::new_unchecked(column);
         let reduced = bounds.dedup_reduce::<SimpleRowsAsc<Int32Type>>(3);
-        assert_eq!(reduced, Bounds(vec![Int32Type::from_data(vec![2, 3, 5])]));
+        assert_eq!(reduced, Bounds(int32_columns([vec![2, 3, 5]])));
 
         let column = Int32Type::from_data(vec![5, 5, 4, 3, 3, 3, 2, 2, 1]);
         let bounds = Bounds::new_unchecked(column);
         let reduced = bounds.dedup_reduce::<SimpleRowsDesc<Int32Type>>(3);
-        assert_eq!(reduced, Bounds(vec![Int32Type::from_data(vec![4, 3, 1])]));
+        assert_eq!(reduced, Bounds(int32_columns([vec![4, 3, 1]])));
 
-        let bounds_vec = [vec![5, 6, 7, 7], vec![3, 3, 4, 5], vec![1, 2, 2, 3]]
-            .into_iter()
-            .map(Int32Type::from_data)
-            .collect::<Vec<_>>();
-        let bounds = Bounds(bounds_vec);
+        let bounds = Bounds(int32_columns([vec![5, 6, 7, 7], vec![3, 3, 4, 5], vec![
+            1, 2, 2, 3,
+        ]]));
         let reduced = bounds.dedup_reduce::<SimpleRowsAsc<Int32Type>>(5);
-        assert_eq!(
-            reduced,
-            Bounds(vec![Int32Type::from_data(vec![2, 3, 4, 6, 7])])
-        );
+        assert_eq!(reduced, Bounds(int32_columns([vec![2, 3, 4, 6, 7]])));
 
         let column = Int32Type::from_data(vec![1, 1, 1, 1, 1]);
         let bounds = Bounds(vec![column]);
         let reduced = bounds.dedup_reduce::<SimpleRowsAsc<Int32Type>>(3);
-        assert_eq!(reduced, Bounds(vec![Int32Type::from_data(vec![1])]));
+        assert_eq!(reduced, Bounds(int32_columns([vec![1]])));
 
         Ok(())
     }
