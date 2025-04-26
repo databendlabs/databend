@@ -283,19 +283,19 @@ impl Display for ScalarRef<'_> {
             ScalarRef::Variant(s) => {
                 let raw_jsonb = RawJsonb::new(s);
                 let value = raw_jsonb.to_string();
-                write!(f, "'{value}'")
+                write!(f, "{}", QuotedString(value, '\''))
             }
             ScalarRef::Geometry(s) => {
                 let geom = ewkb_to_geo(&mut Ewkb(s))
                     .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
                     .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
-                write!(f, "'{geom}'")
+                write!(f, "{}", QuotedString(geom, '\''))
             }
             ScalarRef::Geography(v) => {
                 let geog = ewkb_to_geo(&mut Ewkb(v.0))
                     .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
                     .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
-                write!(f, "'{geog}'")
+                write!(f, "{}", QuotedString(geog, '\''))
             }
         }
     }
