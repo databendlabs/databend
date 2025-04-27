@@ -25,8 +25,10 @@ function check_query_log() {
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select 123"}')
 query_id=$(echo $response | jq -r '.id')
 echo "Query ID: $query_id"
+sleep 2
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select 123"}')
 # Wait for the query to be logged
-sleep 15
+sleep 13
 
 # Test 1
 check_query_log "1" "$query_id" "SELECT count(*) FROM persistent_system.query_log WHERE target = 'databend::log::profile' and" "1"

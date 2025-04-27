@@ -24,10 +24,12 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_client::MetaGrpcClient;
@@ -43,10 +45,12 @@ use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::PERSISTENT_LOG_SCHEMA_VERSION;
+use futures_util::TryStreamExt;
 use log::error;
 use log::info;
 use rand::random;
 use tokio::time::sleep;
+use uuid::Uuid;
 
 use crate::interpreters::InterpreterFactory;
 use crate::persistent_log::session::create_session;
@@ -54,7 +58,6 @@ use crate::persistent_log::table_schemas::PersistentLogTable;
 use crate::persistent_log::table_schemas::QueryDetailsTable;
 use crate::persistent_log::table_schemas::QueryLogTable;
 use crate::persistent_log::table_schemas::QueryProfileTable;
-use crate::sessions::QueryContext;
 
 pub struct GlobalPersistentLog {
     meta_store: MetaStore,
@@ -66,6 +69,7 @@ pub struct GlobalPersistentLog {
     initialized: AtomicBool,
     tables: Vec<Box<dyn PersistentLogTable>>,
     retention: usize,
+    retention_interval: usize,
 }
 
 impl GlobalPersistentLog {
@@ -120,6 +124,7 @@ impl GlobalPersistentLog {
             initialized: AtomicBool::new(false),
             tables,
             retention: cfg.log.persistentlog.retention,
+            retention_interval: cfg.log.persistentlog.retention_interval,
         });
         GlobalInstance::set(instance);
         GlobalIORuntime::instance().try_spawn(
@@ -154,6 +159,7 @@ impl GlobalPersistentLog {
                 Box::new(QueryLogTable::new()),
             ],
             retention: cfg.log.persistentlog.retention,
+            retention_interval: cfg.log.persistentlog.retention_interval,
         })
     }
 
@@ -166,7 +172,6 @@ impl GlobalPersistentLog {
     }
 
     pub async fn work(&self) -> Result<()> {
-        let mut prepared = false;
         let meta_key = format!("{}/persistent_log_work", self.tenant_id);
         // Wait all services to be initialized
         loop {
@@ -176,21 +181,21 @@ impl GlobalPersistentLog {
                 break;
             }
         }
+
+        // No need to wait, we want to do prepare as soon as possible
+        let prepare_guard = self.acquire(&meta_key, self.interval, 0).await?;
+        self.prepare().await?;
+        info!("Persistent log prepared successfully");
+        drop(prepare_guard);
+
         spawn(async move {
             if let Err(e) = GlobalPersistentLog::instance().clean_work().await {
                 error!("Persistent log clean_work exit {}", e);
             }
         });
+
         loop {
-            // create the stage, database and table if not exists
-            // alter the table if schema is changed
-            if !prepared {
-                let prepare_guard = self.acquire(&meta_key, self.interval, 0).await?;
-                self.prepare().await?;
-                info!("Persistent log prepared successfully");
-                prepared = true;
-                drop(prepare_guard);
-            }
+            // Periodically performs persistent log COPY INTO/ INSERT INTO  every `interval` seconds (around)
             let may_permit = self
                 .acquire(&meta_key, self.interval, self.interval)
                 .await?;
@@ -226,26 +231,30 @@ impl GlobalPersistentLog {
         lease: u64,
         interval: u64,
     ) -> Result<Option<Permit>> {
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.should_log = false;
+        let _guard = ThreadTracker::tracking(tracking_payload);
         let meta_client = match &self.meta_store {
             MetaStore::R(handle) => handle.clone(),
             _ => unreachable!("Metastore::L should only used for testing"),
         };
-        let acquired_guard = Semaphore::new_acquired(
+        let acquired_guard = ThreadTracker::tracking_future(Semaphore::new_acquired(
             meta_client,
             meta_key,
             1,
             self.node_id.clone(),
             Duration::from_secs(lease),
-        )
+        ))
         .await
         .map_err(|_e| "acquire semaphore failed from GlobalPersistentLog")?;
         if interval == 0 {
             return Ok(Some(acquired_guard));
         }
-        if match self
-            .meta_store
-            .get_kv(&format!("{}/last_timestamp", meta_key))
-            .await?
+        if match ThreadTracker::tracking_future(
+            self.meta_store
+                .get_kv(&format!("{}/last_timestamp", meta_key)),
+        )
+        .await?
         {
             Some(v) => {
                 let last: u64 = serde_json::from_slice(&v.data)?;
@@ -277,25 +286,39 @@ impl GlobalPersistentLog {
     }
 
     async fn execute_sql(&self, sql: &str) -> Result<()> {
-        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
-        let context = session.create_query_context().await?;
-        let query_id = context.get_id();
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        let query_id = Uuid::new_v4().to_string();
         tracking_payload.query_id = Some(query_id.clone());
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
+        // prevent log table from logging its own logs
+        tracking_payload.should_log = false;
         let _guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(self.do_execute(context, sql)).await?;
+        ThreadTracker::tracking_future(self.do_execute(sql, query_id)).await?;
         Ok(())
     }
 
-    async fn do_execute(&self, context: Arc<QueryContext>, sql: &str) -> Result<()> {
+    async fn do_execute(&self, sql: &str, query_id: String) -> Result<()> {
+        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
+        // only need run the sql on the current node
+        let context = session.create_query_context_with_cluster(
+            Arc::new(Cluster {
+                unassign: false,
+                local_id: self.node_id.clone(),
+                nodes: vec![],
+            }),
+            ThreadTracker::mem_stat().cloned(),
+        )?;
+        context.update_init_query_id(query_id);
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
         let executor = InterpreterFactory::get(context.clone(), &plan).await?;
-        let _ = executor.execute(context).await?;
+        let stream = executor.execute(context).await?;
+        let _: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
         Ok(())
     }
 
+    /// Create the stage, database and table if not exists
+    /// Alter the table if schema is changed
     pub async fn prepare(&self) -> Result<()> {
         let stage_name = self.stage_name.clone();
         let create_stage = format!("CREATE STAGE IF NOT EXISTS {}", stage_name);
@@ -375,10 +398,19 @@ impl GlobalPersistentLog {
         Ok(())
     }
 
+    /// Periodically performs persistent log cleaning every `retention_interval` hours (around)
     async fn clean_work(&self) -> Result<()> {
         loop {
+            // will check if it is already `retention_interval` hours every sleep_time
+            let sleep_time = Duration::from_mins(30 + random::<u64>() % 60);
             let meta_key = format!("{}/persistent_log_clean", self.tenant_id);
-            let may_permit = self.acquire(&meta_key, 60, 60 * 60).await?;
+            let may_permit = self
+                .acquire(
+                    &meta_key,
+                    60,
+                    Duration::from_hours(self.retention_interval as u64).as_secs(),
+                )
+                .await?;
             if let Some(guard) = may_permit {
                 if let Err(e) = self.do_clean().await {
                     error!("persistent log clean failed: {}", e);
@@ -386,9 +418,7 @@ impl GlobalPersistentLog {
                 self.finish_hook(&meta_key).await?;
                 drop(guard);
             }
-
-            // sleep for a random time between 30 and 90 minutes
-            sleep(Duration::from_mins(30 + random::<u64>() % 60)).await;
+            sleep(sleep_time).await;
         }
     }
 
@@ -396,6 +426,10 @@ impl GlobalPersistentLog {
         for table in &self.tables {
             let clean_sql = table.clean_sql(self.retention);
             self.execute_sql(&clean_sql).await?;
+            info!(
+                "Periodic retention operation on persistent log table '{}' completed successfully.",
+                table.table_name()
+            );
         }
 
         let session = create_session(&self.tenant_id, &self.cluster_id).await?;
@@ -406,7 +440,11 @@ impl GlobalPersistentLog {
         {
             for table in &self.tables {
                 let vacuum = format!("VACUUM TABLE persistent_system.{}", table.table_name());
-                self.execute_sql(&vacuum).await?
+                self.execute_sql(&vacuum).await?;
+                info!(
+                "Periodic VACUUM operation on persistent log table '{}' completed successfully.",
+                table.table_name()
+            );
             }
         }
         Ok(())

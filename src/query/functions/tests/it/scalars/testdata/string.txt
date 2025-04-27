@@ -343,21 +343,21 @@ evaluation (internal):
 
 
 ast            : quote('a\0b')
-raw expr       : quote('a b')
+raw expr       : quote('a\x00b')
 checked expr   : quote<String>("a\0b")
 optimized expr : "a\\0b"
 output type    : String
 output domain  : {"a\\0b"..="a\\0b"}
-output         : 'a\0b'
+output         : 'a\\0b'
 
 
 ast            : quote('a\'b')
-raw expr       : quote('a'b')
+raw expr       : quote('a\'b')
 checked expr   : quote<String>("a'b")
 optimized expr : "a\\'b"
 output type    : String
 output domain  : {"a\\'b"..="a\\'b"}
-output         : 'a\'b'
+output         : 'a\\\'b'
 
 
 ast            : quote('a\"b')
@@ -366,53 +366,52 @@ checked expr   : quote<String>("a\"b")
 optimized expr : "a\\\"b"
 output type    : String
 output domain  : {"a\\\"b"..="a\\\"b"}
-output         : 'a\"b'
+output         : 'a\\"b'
 
 
 ast            : quote('a\bb')
-raw expr       : quote('ab')
+raw expr       : quote('a\x08b')
 checked expr   : quote<String>("a\u{8}b")
 optimized expr : "a\\bb"
 output type    : String
 output domain  : {"a\\bb"..="a\\bb"}
-output         : 'a\bb'
+output         : 'a\\bb'
 
 
 ast            : quote('a\nb')
-raw expr       : quote('a
-b')
+raw expr       : quote('a\nb')
 checked expr   : quote<String>("a\nb")
 optimized expr : "a\\nb"
 output type    : String
 output domain  : {"a\\nb"..="a\\nb"}
-output         : 'a\nb'
+output         : 'a\\nb'
 
 
 ast            : quote('a\rb')
-raw expr       : quote('ab')
+raw expr       : quote('a\rb')
 checked expr   : quote<String>("a\rb")
 optimized expr : "a\\rb"
 output type    : String
 output domain  : {"a\\rb"..="a\\rb"}
-output         : 'a\rb'
+output         : 'a\\rb'
 
 
 ast            : quote('a\tb')
-raw expr       : quote('a	b')
+raw expr       : quote('a\tb')
 checked expr   : quote<String>("a\tb")
 optimized expr : "a\\tb"
 output type    : String
 output domain  : {"a\\tb"..="a\\tb"}
-output         : 'a\tb'
+output         : 'a\\tb'
 
 
 ast            : quote('a\\b')
-raw expr       : quote('a\b')
+raw expr       : quote('a\\b')
 checked expr   : quote<String>("a\\b")
 optimized expr : "a\\\\b"
 output type    : String
 output domain  : {"a\\\\b"..="a\\\\b"}
-output         : 'a\\b'
+output         : 'a\\\\b'
 
 
 ast            : quote('你好')
@@ -455,15 +454,15 @@ ast            : quote(a)
 raw expr       : quote(a::String)
 checked expr   : quote<String>(a)
 evaluation:
-+--------+---------------------+----------+
-|        | a                   | Output   |
-+--------+---------------------+----------+
-| Type   | String              | String   |
-| Domain | {"a\\'b"..="a\\nb"} | {""..}   |
-| Row 0  | 'a\0b'              | 'a\\0b'  |
-| Row 1  | 'a\'b'              | 'a\\\'b' |
-| Row 2  | 'a\nb'              | 'a\\nb'  |
-+--------+---------------------+----------+
++--------+---------------------+--------------+
+|        | a                   | Output       |
++--------+---------------------+--------------+
+| Type   | String              | String       |
+| Domain | {"a\\'b"..="a\\nb"} | {""..}       |
+| Row 0  | 'a\\0b'             | 'a\\\\0b'    |
+| Row 1  | 'a\\\'b'            | 'a\\\\\\\'b' |
+| Row 2  | 'a\\nb'             | 'a\\\\nb'    |
++--------+---------------------+--------------+
 evaluation (internal):
 +--------+------------------------------------+
 | Column | Data                               |
@@ -752,12 +751,12 @@ output         : ' aa'
 
 
 ast            : ltrim('\taa')
-raw expr       : ltrim('	aa')
+raw expr       : ltrim('\taa')
 checked expr   : ltrim<String>("\taa")
 optimized expr : "\taa"
 output type    : String
 output domain  : {"\taa"..="\taa"}
-output         : '	aa'
+output         : '\taa'
 
 
 ast            : ltrim('#000000123','0#')
@@ -856,12 +855,12 @@ output         : 'aa '
 
 
 ast            : rtrim('aa\t')
-raw expr       : rtrim('aa	')
+raw expr       : rtrim('aa\t')
 checked expr   : rtrim<String>("aa\t")
 optimized expr : "aa\t"
 output type    : String
 output domain  : {"aa\t"..="aa\t"}
-output         : 'aa	'
+output         : 'aa\t'
 
 
 ast            : rtrim('$125.00','0.')
@@ -1413,12 +1412,12 @@ evaluation (internal):
 
 
 ast            : trim('\ta\t')
-raw expr       : trim('	a	')
+raw expr       : trim('\ta\t')
 checked expr   : trim<String>("\ta\t")
 optimized expr : "\ta\t"
 output type    : String
 output domain  : {"\ta\t"..="\ta\t"}
-output         : '	a	'
+output         : '\ta\t'
 
 
 ast            : trim('*-*ABC-*-','*-')
