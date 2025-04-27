@@ -499,28 +499,48 @@ where
 
     let min_for_precision = T::min_for_precision(size.precision);
     let max_for_precision = T::max_for_precision(size.precision);
+    let mut nerver_overflow = true;
 
-    let f = |x: S::ScalarRef<'_>, builder: &mut Vec<T>, ctx: &mut EvalContext| {
+    for x in [
+        <S::ScalarRef<'_> as Number>::MIN,
+        <S::ScalarRef<'_> as Number>::MAX,
+    ] {
         if let Some(x) = T::from_i128(x.as_()).checked_mul(multiplier) {
             if x > max_for_precision || x < min_for_precision {
+                nerver_overflow = false;
+                break;
+            }
+        } else {
+            nerver_overflow = false;
+            break;
+        }
+    }
+
+    if nerver_overflow {
+        let f = |x: S::ScalarRef<'_>, _ctx: &mut EvalContext| T::from_i128(x.as_()) * multiplier;
+        vectorize_1_arg(f)(from, ctx)
+    } else {
+        let f = |x: S::ScalarRef<'_>, builder: &mut Vec<T>, ctx: &mut EvalContext| {
+            if let Some(x) = T::from_i128(x.as_()).checked_mul(multiplier) {
+                if x > max_for_precision || x < min_for_precision {
+                    ctx.set_error(
+                        builder.len(),
+                        concat!("Decimal overflow at line : ", line!()),
+                    );
+                    builder.push(T::one());
+                } else {
+                    builder.push(x);
+                }
+            } else {
                 ctx.set_error(
                     builder.len(),
                     concat!("Decimal overflow at line : ", line!()),
                 );
                 builder.push(T::one());
-            } else {
-                builder.push(x);
             }
-        } else {
-            ctx.set_error(
-                builder.len(),
-                concat!("Decimal overflow at line : ", line!()),
-            );
-            builder.push(T::one());
-        }
-    };
-
-    vectorize_with_builder_1_arg(f)(from, ctx)
+        };
+        vectorize_with_builder_1_arg(f)(from, ctx)
+    }
 }
 
 fn float_to_decimal<T: Decimal, S: ArgType>(
