@@ -123,9 +123,8 @@ macro_rules! binary_decimal {
 
             let scale_mul = scale_a + scale_b - $size.scale;
 
-            if scale_mul == 0 && !overflow {
+            if scale_mul == 0 {
                 let func = |a: T, b: T, _ctx: &mut EvalContext| a * b;
-
                 vectorize_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
                     a, b, $ctx,
                 )
