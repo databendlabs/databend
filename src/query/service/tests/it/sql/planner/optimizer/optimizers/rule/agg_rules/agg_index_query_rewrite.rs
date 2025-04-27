@@ -86,6 +86,8 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
         inverted_indexes: None,
         ngram_indexes: None,
         attached_columns: None,
+        table_partition: None,
+        table_properties: None,
     }
 }
 

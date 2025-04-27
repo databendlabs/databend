@@ -123,7 +123,10 @@ pub fn run_parser<O>(
             } else {
                 Err(ParseError(
                     transform_span(&rest[..1]),
-                    "unable to parse rest of the sql".to_string(),
+                    format!(
+                        "unable to parse rest of the sql, rest tokens:  {:?} ",
+                        rest.tokens
+                    ),
                 ))
             }
         }

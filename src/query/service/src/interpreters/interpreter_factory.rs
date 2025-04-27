@@ -62,6 +62,8 @@ use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_procedure_call::CallProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_create::CreateProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
+use crate::interpreters::interpreter_refresh_database_cache::RefreshDatabaseCacheInterpreter;
+use crate::interpreters::interpreter_refresh_table_cache::RefreshTableCacheInterpreter;
 use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterpreter;
 use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
@@ -338,6 +340,9 @@ impl InterpreterFactory {
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
+            Plan::RefreshTableCache(refresh_table_cache) => Ok(Arc::new(
+                RefreshTableCacheInterpreter::try_create(ctx, *refresh_table_cache.clone())?,
+            )),
             Plan::ReclusterTable(recluster) => Ok(Arc::new(ReclusterTableInterpreter::try_create(
                 ctx,
                 *recluster.clone(),
@@ -565,6 +570,9 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::RefreshDatabaseCache(refresh_database_cache) => Ok(Arc::new(
+                RefreshDatabaseCacheInterpreter::try_create(ctx, *refresh_database_cache.clone())?,
+            )),
             Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
 
             Plan::RevertTable(p) => Ok(Arc::new(RevertTableInterpreter::try_create(

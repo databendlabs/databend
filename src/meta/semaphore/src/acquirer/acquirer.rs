@@ -150,7 +150,11 @@ impl Acquirer {
         // Step 4: Wait for the semaphore to be acquired or removed.
 
         while let Some(sem_event) = self.permit_event_rx.recv().await {
-            debug!("semaphore event: {:?}", sem_event);
+            info!(
+                "Acquirer({}): received semaphore event: {:?}",
+                self.ctx, sem_event
+            );
+
             match sem_event {
                 PermitEvent::Acquired((seq, _)) => {
                     if seq == permit_key.seq {

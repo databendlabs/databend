@@ -129,6 +129,7 @@ use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::OptimizePurgePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterPlan;
+use crate::plans::RefreshTableCachePlan;
 use crate::plans::RelOperator;
 use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
@@ -453,13 +454,26 @@ impl Binder {
             table_type,
             engine,
             uri_location,
+            iceberg_table_partition,
+            table_properties,
         } = stmt;
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
-        // Take FUSE engine AS default engine
-        let engine = engine.unwrap_or(Engine::Fuse);
+        let catalog = self.ctx.get_catalog(&catalog).await?;
+
+        let engine = engine.unwrap_or(catalog.default_table_engine());
+        if catalog.support_partition() != (engine == Engine::Iceberg) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Catalog '{}' engine type is {:?} but table {} engine type is {}",
+                catalog.name(),
+                catalog.info().catalog_type(),
+                table,
+                engine
+            )));
+        }
+
         let mut options: BTreeMap<String, String> = BTreeMap::new();
         let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
         for table_option in table_options.iter() {
@@ -469,6 +483,28 @@ impl Binder {
                 table_option.1.to_string(),
             )?;
         }
+
+        let table_properties = match &table_properties {
+            Some(props) => {
+                let mut iceberg_table_options = BTreeMap::new();
+                props.iter().try_for_each(|(k, v)| {
+                    self.insert_table_option_with_validation(
+                        &mut iceberg_table_options,
+                        k.to_lowercase(),
+                        v.to_string(),
+                    )
+                })?;
+                Some(iceberg_table_options)
+            }
+            None => None,
+        };
+
+        let table_partition = iceberg_table_partition.as_ref().map(|partitions| {
+            partitions
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<String>>()
+        });
 
         let mut storage_params = match (uri_location, engine) {
             (Some(uri), Engine::Fuse) => {
@@ -649,7 +685,6 @@ impl Binder {
         };
 
         if engine == Engine::Memory {
-            let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
@@ -666,7 +701,6 @@ impl Binder {
             //
             // Later, when database id is kept, let say in `TableInfo`, we can
             // safely eliminate this "FUSE" constant and the table meta option entry.
-            let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
@@ -737,7 +771,7 @@ impl Binder {
         let plan = CreateTablePlan {
             create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
-            catalog: catalog.clone(),
+            catalog: catalog.name().clone(),
             database: database.clone(),
             table,
             schema: schema.clone(),
@@ -745,6 +779,8 @@ impl Binder {
             engine_options,
             storage_params,
             options,
+            table_properties,
+            table_partition,
             field_comments,
             cluster_key,
             as_select: as_query_plan,
@@ -812,6 +848,8 @@ impl Binder {
             engine_options: BTreeMap::new(),
             storage_params: Some(sp),
             options,
+            table_properties: None,
+            table_partition: None,
             field_comments: vec![],
             cluster_key: None,
             as_select: None,
@@ -1088,6 +1126,14 @@ impl Binder {
             AlterTableAction::UnsetOptions { targets } => {
                 Ok(Plan::UnsetOptions(Box::new(UnsetOptionsPlan {
                     options: targets.iter().map(|i| i.name.to_lowercase()).collect(),
+                    catalog,
+                    database,
+                    table,
+                })))
+            }
+            AlterTableAction::RefreshTableCache => {
+                Ok(Plan::RefreshTableCache(Box::new(RefreshTableCachePlan {
+                    tenant,
                     catalog,
                     database,
                     table,

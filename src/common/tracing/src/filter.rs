@@ -12,25 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This is the Iceberg catalog support for databend.
-//! Iceberg offered support for tables, that meaning the catalog and database data
-//! should be managed by ourselves.
+use databend_common_base::runtime::ThreadTracker;
+use logforth::filter::CustomFilter;
+use logforth::filter::FilterResult;
 
-#![feature(impl_trait_in_assoc_type)]
-#![allow(clippy::diverging_sub_expression)]
-
-pub(crate) mod cache;
-mod catalog;
-mod database;
-mod iceberg_inspect;
-mod partition;
-mod predicate;
-mod statistics;
-pub mod table;
-mod table_source;
-
-pub use catalog::IcebergCatalog;
-pub use catalog::IcebergCreator;
-pub use catalog::ICEBERG_CATALOG;
-pub use iceberg_inspect::IcebergInspectTable;
-pub use table::IcebergTable;
+pub fn filter_by_thread_tracker() -> CustomFilter {
+    CustomFilter::new(|_metadata| match ThreadTracker::should_log() {
+        true => FilterResult::Neutral,
+        false => FilterResult::Reject,
+    })
+}
