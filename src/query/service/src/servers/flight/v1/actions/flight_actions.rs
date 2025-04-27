@@ -26,6 +26,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::servers::flight::v1::actions::get_profile::get_profile;
+use crate::servers::flight::v1::actions::get_running_query_dump::get_running_query_dump;
 use crate::servers::flight::v1::actions::init_query_env::init_query_env;
 use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
 use crate::servers::flight::v1::actions::init_query_fragments::init_query_fragments;
@@ -37,6 +38,7 @@ use crate::servers::flight::v1::actions::system_action::system_action;
 use crate::servers::flight::v1::actions::truncate_table::truncate_table;
 use crate::servers::flight::v1::actions::truncate_table::TRUNCATE_TABLE;
 use crate::servers::flight::v1::actions::GET_PROFILE;
+use crate::servers::flight::v1::actions::GET_RUNNING_QUERY_DUMP;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::KILL_QUERY;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
@@ -135,4 +137,5 @@ pub fn flight_actions() -> FlightActions {
         .action(SET_PRIORITY, set_priority)
         .action(SYSTEM_ACTION, system_action)
         .action(GET_PROFILE, get_profile)
+        .action(GET_RUNNING_QUERY_DUMP, get_running_query_dump)
 }

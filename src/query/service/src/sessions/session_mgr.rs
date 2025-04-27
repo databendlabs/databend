@@ -373,6 +373,27 @@ impl SessionManager {
         )))
     }
 
+    pub fn get_running_graph_dump(&self, query_id: &str) -> Result<String> {
+        for weak_ptr in self.active_sessions_snapshot() {
+            let Some(arc_session) = weak_ptr.upgrade() else {
+                continue;
+            };
+
+            let session_ctx = arc_session.session_ctx.as_ref();
+
+            if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                if query_id == *context_shared.init_query_id.as_ref().read() {
+                    return Ok(context_shared.get_executor_graph_dump());
+                }
+            }
+        }
+
+        Err(ErrorCode::UnknownQuery(format!(
+            "Unknown query {}",
+            query_id
+        )))
+    }
+
     fn active_sessions_snapshot(&self) -> Vec<Weak<Session>> {
         // Here the situation is the same of method `graceful_shutdown`:
         //
