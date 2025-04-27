@@ -216,13 +216,6 @@ where
         }
     }
 
-    fn input_rows(&self) -> usize {
-        match &self.inner {
-            Inner::Collect(input_data) | Inner::Spill(input_data, _) => input_data.in_memory_rows(),
-            _ => 0,
-        }
-    }
-
     fn check_spill(&self) -> bool {
         if !self.memory_settings.check_spill() {
             return false;
