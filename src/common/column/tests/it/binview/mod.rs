@@ -15,6 +15,7 @@
 mod builder;
 
 use databend_common_column::binview::BinaryViewColumn;
+use databend_common_column::binview::StringColumn;
 use databend_common_column::binview::Utf8ViewColumn;
 
 #[test]
@@ -95,6 +96,33 @@ fn basics_binary_view() {
         array.value(1),
         b"Databend Cloud is a Cost-Effective alternative to Snowflake."
     );
+}
+
+#[test]
+fn gc_dict() {
+    let data = (0..100).map(|c| format!("loooooooooooonstr{}", c % 3));
+    let array: StringColumn = data.into_iter().collect();
+    let array2 = array.gc_with_dict(None);
+
+    assert_eq!(array, array2);
+    assert_eq!(array.total_buffer_len(), 18 * 100);
+    assert_eq!(array2.total_buffer_len(), 18 * 3);
+
+    for i in (0..100).step_by(10) {
+        let s = array.clone().sliced(i, 10);
+        let s2 = s.gc_with_dict(None);
+
+        assert_eq!(s, s2);
+        assert_eq!(s2.total_buffer_len(), 18 * 3);
+    }
+}
+
+#[test]
+fn gc_dict_small() {
+    let data = (0..100).map(|c| format!("lo{}", c % 3));
+    let array: StringColumn = data.into_iter().collect();
+    let array2 = array.gc_with_dict(None);
+    assert_eq!(array, array2);
 }
 
 #[test]

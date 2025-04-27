@@ -12,61 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate criterion;
-
-use criterion::black_box;
-use criterion::Criterion;
-use databend_common_ast::parser::parse_expr;
-use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
-
-fn bench(c: &mut Criterion) {
-    let mut group = c.benchmark_group("bench_parser");
-    group.sample_size(10);
-
-    group.bench_function("large_statement", |b| {
-        b.iter(|| {
-            let case = r#"explain SELECT SUM(count) FROM (SELECT ((((((((((((true)and(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))or((('780820706')=('')))) IS NOT NULL AND ((((((((((true)AND(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))OR((('780820706')=(''))))) ::INT64)as count FROM t0) as res;"#;
-            let tokens = tokenize_sql(case).unwrap();
-            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
-            black_box(stmt);
-        })
-    });
-    group.bench_function("large_query", |b| {
-        b.iter(|| {
-            let case = r#"SELECT SUM(count) FROM (SELECT ((((((((((((true)and(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))or((('780820706')=('')))) IS NOT NULL AND ((((((((((true)AND(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))OR((('780820706')=(''))))) ::INT64)as count FROM t0) as res;"#;
-            let tokens = tokenize_sql(case).unwrap();
-            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
-            black_box(stmt);
-        })
-    });
-    group.bench_function("deep_query", |b| {
-        b.iter(|| {
-            let case = r#"SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers"#;
-            let tokens = tokenize_sql(case).unwrap();
-            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
-            black_box(stmt);
-        })
-    });
-    group.bench_function("wide_expr", |b| {
-        b.iter(|| {
-            let case = r#"a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a"#;
-            let tokens = tokenize_sql(case).unwrap();
-            let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
-            black_box(expr);
-        })
-    });
-    group.bench_function("deep_expr", |b| {
-        b.iter(|| {
-            let case = r#"((((((((((((((((((((((((((((((1))))))))))))))))))))))))))))))"#;
-            let tokens = tokenize_sql(case).unwrap();
-            let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
-            black_box(expr);
-        })
-    });
+fn main() {
+    divan::main()
 }
 
-criterion_group!(benches, bench);
-criterion_main!(benches);
+// bench                  fastest       │ slowest       │ median        │ mean          │ samples │ iters
+// ╰─ dummy                             │               │               │               │         │
+//    ├─ deep_query       122 µs        │ 324.3 µs      │ 127.2 µs      │ 130.1 µs      │ 100     │ 100
+//    ├─ large_query      1.366 ms      │ 1.686 ms      │ 1.409 ms      │ 1.417 ms      │ 100     │ 100
+//    ├─ large_statement  1.336 ms      │ 1.441 ms      │ 1.391 ms      │ 1.39 ms       │ 100     │ 100
+//    ╰─ wide_expr        556 µs        │ 697.2 µs      │ 578.3 µs      │ 580.5 µs      │ 100     │ 100
+#[divan::bench_group(max_time = 0.5)]
+mod dummy {
+    use databend_common_ast::parser::parse_expr;
+    use databend_common_ast::parser::parse_sql;
+    use databend_common_ast::parser::tokenize_sql;
+    use databend_common_ast::parser::Dialect;
+
+    #[divan::bench]
+    fn large_statement() {
+        let case = r#"explain SELECT SUM(count) FROM (SELECT ((((((((((((true)and(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))or((('780820706')=('')))) IS NOT NULL AND ((((((((((true)AND(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))OR((('780820706')=(''))))) ::INT64)as count FROM t0) as res;"#;
+        let tokens = tokenize_sql(case).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        divan::black_box(stmt);
+    }
+
+    #[divan::bench]
+    fn large_query() {
+        let case = r#"SELECT SUM(count) FROM (SELECT ((((((((((((true)and(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))or((('780820706')=('')))) IS NOT NULL AND ((((((((((true)AND(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))OR((('780820706')=(''))))) ::INT64)as count FROM t0) as res;"#;
+        let tokens = tokenize_sql(case).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        divan::black_box(stmt);
+    }
+
+    #[divan::bench]
+    fn deep_query() {
+        let case = r#"SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers UNION ALL SELECT * FROM numbers"#;
+        let tokens = tokenize_sql(case).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        divan::black_box(stmt);
+    }
+
+    #[divan::bench]
+    fn wide_expr() {
+        let case = r#"a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a"#;
+        let tokens = tokenize_sql(case).unwrap();
+        let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        divan::black_box(expr);
+    }
+}

@@ -33,14 +33,12 @@ use databend_common_exception::Result;
 use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
 
-use super::HttpQueryContext;
 use crate::servers::http::v1::query::http_query::ExpireResult;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::ServerInfo;
-use crate::servers::http::v1::query::HttpQueryRequest;
 
 #[derive(Clone, Debug, Copy, Eq, PartialEq)]
-pub(crate) enum RemoveReason {
+pub enum RemoveReason {
     Timeout,
     Canceled,
     Finished,
@@ -106,27 +104,17 @@ impl HttpQueryManager {
         GlobalInstance::get()
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn try_create_query(
-        self: &Arc<Self>,
-        ctx: &HttpQueryContext,
-        request: HttpQueryRequest,
-    ) -> Result<Arc<HttpQuery>> {
-        let query = HttpQuery::try_create(ctx, request).await?;
-        self.add_query(&query.id, query.clone()).await;
-        Ok(query)
-    }
-
     pub(crate) fn get_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
         self.queries.get(query_id).map(|q| q.to_owned())
     }
 
     #[async_backtrace::framed]
-    async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
-        self.queries.insert(query_id.to_string(), query.clone());
+    pub async fn add_query(self: &Arc<Self>, query: HttpQuery) -> Arc<HttpQuery> {
+        let query = Arc::new(query);
+        self.queries.insert(query.id.clone(), query.clone());
 
         let self_clone = self.clone();
-        let query_id_clone = query_id.to_string();
+        let query_id_clone = query.id.clone();
         let query_result_timeout_secs = query.result_timeout_secs;
 
         // downgrade to weak reference
@@ -168,6 +156,8 @@ impl HttpQueryManager {
                 }
             }
         });
+
+        query
     }
 
     #[async_backtrace::framed]

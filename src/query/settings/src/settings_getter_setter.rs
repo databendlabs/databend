@@ -932,4 +932,12 @@ impl Settings {
     pub fn get_enable_block_stream_write(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_block_stream_write")? == 1)
     }
+
+    pub fn get_statement_queue_ttl_in_seconds(&self) -> Result<u64> {
+        self.try_get_u64("statement_queue_ttl_in_seconds")
+    }
+
+    pub fn get_trace_sample_rate(&self) -> Result<u64> {
+        self.try_get_u64("trace_sample_rate")
+    }
 }

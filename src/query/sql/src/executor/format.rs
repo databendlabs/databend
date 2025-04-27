@@ -829,19 +829,6 @@ fn table_scan_to_format_tree(
             let mut names = virtual_column
                 .virtual_column_fields
                 .iter()
-                .filter(|c| c.is_created)
-                .map(|c| c.name.clone())
-                .collect::<Vec<_>>();
-            names.sort();
-            names.iter().join(", ")
-        })
-    });
-    let not_created_virtual_columns = plan.source.push_downs.as_ref().and_then(|extras| {
-        extras.virtual_column.as_ref().map(|virtual_column| {
-            let mut names = virtual_column
-                .virtual_column_fields
-                .iter()
-                .filter(|c| !c.is_created)
                 .map(|c| c.name.clone())
                 .collect::<Vec<_>>();
             names.sort();
@@ -881,13 +868,6 @@ fn table_scan_to_format_tree(
         if !virtual_columns.is_empty() {
             let virtual_columns = format!("virtual columns: [{virtual_columns}]");
             children.push(FormatTreeNode::new(virtual_columns));
-        }
-    }
-    if let Some(not_created_virtual_columns) = not_created_virtual_columns {
-        if !not_created_virtual_columns.is_empty() {
-            let not_created_virtual_columns =
-                format!("not created virtual columns: [{not_created_virtual_columns}]");
-            children.push(FormatTreeNode::new(not_created_virtual_columns));
         }
     }
 

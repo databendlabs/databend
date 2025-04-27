@@ -92,6 +92,27 @@ impl DataExchangeManager {
         GlobalInstance::get()
     }
 
+    pub fn get_running_query_graph_dump(&self, query_id: &str) -> Result<String> {
+        let running_executor = {
+            let queries_coordinator_guard = self.queries_coordinator.lock();
+            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+            let Some(coordinator) = queries_coordinator.get(query_id) else {
+                return Ok(format!("Unknown query {}", query_id));
+            };
+
+            let Some(info) = &coordinator.info else {
+                return Ok(format!("Unknown running query {}", query_id));
+            };
+
+            info.query_executor.clone()
+        };
+
+        Ok(match running_executor {
+            None => format!("Unknown running query {}", query_id),
+            Some(executor) => executor.get_inner().format_graph_nodes(),
+        })
+    }
+
     pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };

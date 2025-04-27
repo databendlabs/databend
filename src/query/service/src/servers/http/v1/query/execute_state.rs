@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::CatchUnwindFuture;
@@ -34,6 +33,7 @@ use futures::StreamExt;
 use log::debug;
 use log::error;
 use log::info;
+use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
@@ -115,6 +115,7 @@ impl ExecuteState {
 
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) sender: SizedChannelSender<DataBlock>,
 }
 
 pub struct ExecuteRunning {
@@ -238,32 +239,30 @@ impl Executor {
 
     pub fn get_query_duration_ms(&self) -> i64 {
         match &self.state {
-            Starting(ExecuteStarting { ctx }) | Running(ExecuteRunning { ctx, .. }) => {
+            Starting(ExecuteStarting { ctx, .. }) | Running(ExecuteRunning { ctx, .. }) => {
                 ctx.get_query_duration_ms()
             }
             Stopped(f) => f.query_duration_ms,
         }
     }
 
-    #[async_backtrace::framed]
-    pub async fn start_to_running(this: &Arc<RwLock<Executor>>, state: ExecuteState) {
-        let mut guard = this.write().await;
+    pub fn start_to_running(this: &Arc<Mutex<Executor>>, state: ExecuteState) {
+        let mut guard = this.lock();
         if let Starting(_) = &guard.state {
             guard.state = state
         }
     }
 
-    #[async_backtrace::framed]
-    pub async fn start_to_stop(this: &Arc<RwLock<Executor>>, state: ExecuteState) {
-        let mut guard = this.write().await;
+    pub fn start_to_stop(this: &Arc<Mutex<Executor>>, state: ExecuteState) {
+        let mut guard = this.lock();
         if let Starting(_) = &guard.state {
             guard.state = state
         }
     }
-    #[async_backtrace::framed]
-    pub async fn stop<C>(this: &Arc<RwLock<Executor>>, reason: Result<(), C>) {
+
+    pub fn stop<C>(this: &Arc<Mutex<Executor>>, reason: Result<(), C>) {
         let reason = reason.with_context(|| "execution stopped");
-        let mut guard = this.write().await;
+        let mut guard = this.lock();
 
         let state = match &guard.state {
             Starting(s) => {
@@ -337,7 +336,7 @@ impl Executor {
 impl ExecuteState {
     #[async_backtrace::framed]
     pub(crate) async fn try_start_query(
-        executor: Arc<RwLock<Executor>>,
+        executor: Arc<Mutex<Executor>>,
         sql: String,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
@@ -377,7 +376,7 @@ impl ExecuteState {
             has_result_set,
         };
         info!("http query change state to Running");
-        Executor::start_to_running(&executor, Running(running_state)).await;
+        Executor::start_to_running(&executor, Running(running_state));
 
         let executor_clone = executor.clone();
         let ctx_clone = ctx.clone();
@@ -392,11 +391,11 @@ impl ExecuteState {
         );
         match CatchUnwindFuture::create(res).await {
             Ok(Err(err)) => {
-                Executor::stop(&executor_clone, Err(err.clone())).await;
+                Executor::stop(&executor_clone, Err(err.clone()));
                 block_sender_closer.close();
             }
             Err(e) => {
-                Executor::stop(&executor_clone, Err(e)).await;
+                Executor::stop(&executor_clone, Err(e));
                 block_sender_closer.close();
             }
             _ => {}
@@ -411,7 +410,7 @@ async fn execute(
     schema: DataSchemaRef,
     ctx: Arc<QueryContext>,
     block_sender: SizedChannelSender<DataBlock>,
-    executor: Arc<RwLock<Executor>>,
+    executor: Arc<Mutex<Executor>>,
 ) -> Result<(), ExecutionError> {
     let make_error = || format!("failed to execute {}", interpreter.name());
 
@@ -423,11 +422,11 @@ async fn execute(
         None => {
             let block = DataBlock::empty_with_schema(schema);
             block_sender.send(block, 0).await;
-            Executor::stop::<()>(&executor, Ok(())).await;
+            Executor::stop::<()>(&executor, Ok(()));
             block_sender.close();
         }
         Some(Err(err)) => {
-            Executor::stop(&executor, Err(err)).await;
+            Executor::stop(&executor, Err(err));
             block_sender.close();
         }
         Some(Ok(block)) => {
@@ -444,7 +443,7 @@ async fn execute(
                     }
                 };
             }
-            Executor::stop::<()>(&executor, Ok(())).await;
+            Executor::stop::<()>(&executor, Ok(()));
             block_sender.close();
         }
     }

@@ -1018,6 +1018,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("statement_queue_ttl_in_seconds", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(15),
+                    desc: "This parameter specifies the interval, in seconds, between lease renewal operations with the meta service to maintain active communication.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=3600)),
+                }),
                 ("geometry_output_format", DefaultSettingValue {
                     value: UserSettingValue::String("GeoJSON".to_owned()),
                     desc: "Display format for GEOMETRY values.",
@@ -1263,6 +1270,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("trace_sample_rate", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Setting the trace sample rate. The value should be between '0' and '100'",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
                 }),
             ]);
 

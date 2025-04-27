@@ -37,9 +37,6 @@ impl ValueType for EmptyMapType {
     type ColumnIterator<'a> = std::iter::RepeatN<()>;
     type ColumnBuilder = usize;
 
-    #[inline]
-    fn upcast_gat<'short, 'long: 'short>(_: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {}
-
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
     }

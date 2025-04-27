@@ -191,6 +191,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 DataType::Geometry => Ok(ColumnType::MYSQL_TYPE_GEOMETRY),
                 DataType::Geography => Ok(ColumnType::MYSQL_TYPE_GEOMETRY),
                 DataType::Decimal(_) => Ok(ColumnType::MYSQL_TYPE_DECIMAL),
+                DataType::Interval => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 _ => Err(ErrorCode::Unimplemented(format!(
                     "Unsupported column type:{:?}",
                     field.data_type()

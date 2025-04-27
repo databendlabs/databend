@@ -32,7 +32,6 @@ use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableField;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_users::UserApiProvider;
@@ -145,12 +144,13 @@ impl ToReadDataSourcePlan for dyn Table {
         if let Some(ref push_downs) = push_downs {
             if let Some(ref virtual_column) = push_downs.virtual_column {
                 let mut schema = output_schema.as_ref().clone();
-                let fields = virtual_column
-                    .virtual_column_fields
-                    .iter()
-                    .map(|c| TableField::new(&c.name, *c.data_type.clone()))
-                    .collect::<Vec<_>>();
-                schema.add_columns(&fields)?;
+                for field in &virtual_column.virtual_column_fields {
+                    schema.add_internal_field(
+                        &field.name,
+                        *field.data_type.clone(),
+                        field.column_id,
+                    );
+                }
                 output_schema = Arc::new(schema);
             }
         }

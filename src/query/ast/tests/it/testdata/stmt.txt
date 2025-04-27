@@ -491,6 +491,47 @@ ShowColumns(
 
 
 ---------- Input ----------
+show columns from ctl.db.t
+---------- Output ---------
+SHOW COLUMNS FROM t FROM ctl.db
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    18..21,
+                ),
+                name: "ctl",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        database: Some(
+            Identifier {
+                span: Some(
+                    22..24,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                25..26,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        full: false,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
 show full columns from t from db like 'id%'
 ---------- Output ---------
 SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
@@ -511,6 +552,42 @@ ShowColumns(
         table: Identifier {
             span: Some(
                 23..24,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        full: true,
+        limit: Some(
+            Like {
+                pattern: "id%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+show full columns from db.t like 'id%'
+---------- Output ---------
+SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    23..25,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                26..27,
             ),
             name: "t",
             quote: None,
@@ -1906,6 +1983,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -1958,6 +2037,99 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+create table a (c1 decimal(38), c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"='33554432');
+---------- Output ---------
+CREATE TABLE a (c1 Decimal(38, 0), c2 Int32) PARTITION BY(c1, c2) PROPERTIES("read.split.metadata-target-size" = '33554432' "read.split.target-size" = '134217728')
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "a",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..18,
+                            ),
+                            name: "c1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Decimal {
+                            precision: 38,
+                            scale: 0,
+                        },
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                32..34,
+                            ),
+                            name: "c2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+                None,
+                None,
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        iceberg_table_partition: Some(
+            [
+                Identifier {
+                    span: Some(
+                        54..56,
+                    ),
+                    name: "c1",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        58..60,
+                    ),
+                    name: "c2",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        ),
+        table_properties: Some(
+            {
+                "\"read.split.metadata-target-size\"": "33554432",
+                "\"read.split.target-size\"": "134217728",
+            },
+        ),
         as_query: None,
         table_type: Normal,
     },
@@ -2010,6 +2182,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2059,6 +2233,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2143,6 +2319,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2227,6 +2405,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: Some(
             Query {
                 span: Some(
@@ -2390,6 +2570,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2468,6 +2650,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2623,6 +2807,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2754,6 +2940,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2860,6 +3048,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -2966,6 +3156,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -3026,6 +3218,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -3070,6 +3264,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -3142,6 +3338,8 @@ CreateTable(
         ),
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -3375,6 +3573,40 @@ UseCatalog {
 
 
 ---------- Input ----------
+catalog ctl;
+---------- Output ---------
+USE CATALOG ctl
+---------- AST ------------
+UseCatalog {
+    catalog: Identifier {
+        span: Some(
+            8..11,
+        ),
+        name: "ctl",
+        quote: None,
+        ident_type: None,
+    },
+}
+
+
+---------- Input ----------
+set catalog ctl;
+---------- Output ---------
+USE CATALOG ctl
+---------- AST ------------
+UseCatalog {
+    catalog: Identifier {
+        span: Some(
+            12..15,
+        ),
+        name: "ctl",
+        quote: None,
+        ident_type: None,
+    },
+}
+
+
+---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
 CREATE DATABASE IF NOT EXISTS a
@@ -3543,6 +3775,8 @@ CreateTable(
             "compression": "zstd",
             "storage_format": "native",
         },
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -3683,6 +3917,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -5093,6 +5329,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -5174,6 +5412,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -5236,6 +5476,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -5296,6 +5538,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -5325,6 +5569,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: Some(
             Query {
                 span: Some(
@@ -12419,6 +12665,40 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t refresh cache;
+---------- Output ---------
+ALTER TABLE t REFRESH CACHE
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: RefreshTableCache,
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t COMMENT='t1-commnet';
 ---------- Output ---------
 ALTER TABLE t COMMENT='t1-commnet'
@@ -13483,6 +13763,37 @@ AlterDatabase(
 
 
 ---------- Input ----------
+ALTER DATABASE ctl.c refresh cache;
+---------- Output ---------
+ALTER DATABASE ctl.c REFRESH CACHE
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: false,
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    15..18,
+                ),
+                name: "ctl",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        database: Identifier {
+            span: Some(
+                19..20,
+            ),
+            name: "c",
+            quote: None,
+            ident_type: None,
+        },
+        action: RefreshDatabaseCache,
+    },
+)
+
+
+---------- Input ----------
 VACUUM TABLE t;
 ---------- Output ---------
 VACUUM TABLE t 
@@ -13714,6 +14025,8 @@ CreateTable(
         table_options: {
             "comment": "Comment types type speedily ' \\\\ '' Fun!",
         },
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Normal,
     },
@@ -13765,6 +14078,8 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
         as_query: None,
         table_type: Temporary,
     },

@@ -33,14 +33,14 @@ pub trait TTLValue {
 }
 
 /// A cache-aware reader with ttl
-pub struct CachedTTLReader<L, C> {
+pub struct CacheTTLReader<L, C> {
     cache: Option<Arc<C>>,
     loader: Arc<L>,
     ttl: Duration,
 }
 
 // InMemoryLruCache<V>
-impl<V: Into<CacheValue<V>> + TTLValue, L, C> CachedTTLReader<L, C>
+impl<V: Into<CacheValue<V>> + TTLValue, L, C> CacheTTLReader<L, C>
 where
     L: Loader<V> + Sync + Send + 'static,
     C: CacheAccessor<V = V> + Sync + Send + 'static,
@@ -115,6 +115,38 @@ where
                         }
                     }
                 }
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn refresh(&self, params: &LoadParams) -> Result<()> {
+        match &self.cache {
+            None => {
+                let _ = self.loader.load(params).await?;
+                Ok(())
+            }
+            Some(cache) => {
+                let v = self.loader.load(params).await?;
+                let cache_key = self.loader.cache_key(params);
+                match params.put_cache {
+                    true => {
+                        let _ = cache.insert(cache_key, v);
+                        Ok(())
+                    }
+                    false => Ok(()),
+                }
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub fn remove(&self, params: &LoadParams) -> bool {
+        match &self.cache {
+            None => false,
+            Some(cache) => {
+                let cache_key = self.loader.cache_key(params);
+                cache.evict(cache_key.as_str())
             }
         }
     }

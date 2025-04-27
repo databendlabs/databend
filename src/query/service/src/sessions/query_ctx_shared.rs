@@ -739,6 +739,13 @@ impl QueryContextShared {
         }
     }
 
+    pub fn get_executor_graph_dump(&self) -> String {
+        match self.executor.read().upgrade() {
+            None => String::new(),
+            Some(executor) => executor.format_graph_nodes(),
+        }
+    }
+
     pub fn get_query_profiles(&self) -> Vec<PlanProfile> {
         if let Some(executor) = self.executor.read().upgrade() {
             self.add_query_profiles(&executor.fetch_profiling(false));

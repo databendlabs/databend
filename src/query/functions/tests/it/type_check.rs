@@ -75,10 +75,10 @@ fn test_type_check() {
             "n_d128",
             Decimal128Type::from_data(vec![0_i128]).wrap_nullable(None),
         ),
-        ("d256", Decimal256Type::from_data(vec![ethnum::I256::ZERO])),
+        ("d256", Decimal256Type::from_data(vec![i256::ZERO])),
         (
             "n_d256",
-            Decimal256Type::from_data(vec![ethnum::I256::ZERO]).wrap_nullable(None),
+            Decimal256Type::from_data(vec![i256::ZERO]).wrap_nullable(None),
         ),
     ];
 

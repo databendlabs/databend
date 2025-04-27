@@ -18,6 +18,7 @@ pub mod binary;
 pub mod boolean;
 pub mod double;
 pub mod integer;
+pub mod view;
 
 pub use basic::CommonCompression;
 use databend_common_expression::types::Bitmap;

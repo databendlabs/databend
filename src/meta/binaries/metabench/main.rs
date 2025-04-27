@@ -38,6 +38,7 @@ use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_client::required;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -124,8 +125,15 @@ async fn main() {
         let param = cmd_and_param.get(1).unwrap_or(&"").to_string();
 
         let handle = runtime::spawn(async move {
-            let client =
-                MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None);
+            let client = MetaGrpcClient::try_create_with_features(
+                vec![addr.to_string()],
+                "root",
+                "xxx",
+                None,
+                None,
+                None,
+                required::read_write(),
+            );
 
             let client = match client {
                 Ok(client) => client,
@@ -208,6 +216,8 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
             as_dropped: false,
+            table_properties: None,
+            table_partition: None,
         })
         .await;
 
@@ -252,6 +262,8 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
             as_dropped: false,
+            table_properties: None,
+            table_partition: None,
         })
         .await;
 

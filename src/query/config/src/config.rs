@@ -1458,6 +1458,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "8")]
     pub max_running_queries: u64,
 
+    #[clap(long, value_name = "VALUE", default_value = "false")]
+    pub global_statement_queue: bool,
+
     /// The max total memory in bytes that can be used by this process.
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
@@ -1788,6 +1791,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             mysql_tls_server_key: self.mysql_tls_server_key,
             max_active_sessions: self.max_active_sessions,
             max_running_queries: self.max_running_queries,
+            global_statement_queue: self.global_statement_queue,
             max_server_memory_usage: self.max_server_memory_usage,
             max_memory_limit_enabled: self.max_memory_limit_enabled,
             clickhouse_http_handler_host: self.clickhouse_http_handler_host,
@@ -1880,6 +1884,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             mysql_tls_server_key: inner.mysql_tls_server_key,
             max_active_sessions: inner.max_active_sessions,
             max_running_queries: inner.max_running_queries,
+            global_statement_queue: inner.global_statement_queue,
             max_server_memory_usage: inner.max_server_memory_usage,
             max_memory_limit_enabled: inner.max_memory_limit_enabled,
 
@@ -2551,6 +2556,9 @@ pub struct PersistentLogConfig {
     pub log_persistentlog_interval: usize,
 
     /// Specifies the name of the staging area that temporarily holds log data before it is finally copied into the table
+    ///
+    /// Note:
+    /// The default value uses an uuid to avoid conflicts with existing stages
     #[clap(
         long = "log-persistentlog-stage-name",
         value_name = "VALUE",
@@ -2558,15 +2566,6 @@ pub struct PersistentLogConfig {
     )]
     #[serde(rename = "stage_name")]
     pub log_persistentlog_stage_name: String,
-
-    /// Specifies how long the persistent log should be retained, in hours
-    #[clap(
-        long = "log-persistentlog-retention",
-        value_name = "VALUE",
-        default_value = "72"
-    )]
-    #[serde(rename = "retention")]
-    pub log_persistentlog_retention: usize,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
     #[clap(
@@ -2576,6 +2575,26 @@ pub struct PersistentLogConfig {
     )]
     #[serde(rename = "level")]
     pub log_persistentlog_level: String,
+
+    /// The retention period (in hours) for persistent logs.
+    /// Data older than this period will be deleted during retention tasks.
+    #[clap(
+        long = "log-persistentlog-retention",
+        value_name = "VALUE",
+        default_value = "72"
+    )]
+    #[serde(rename = "retention")]
+    pub log_persistentlog_retention: usize,
+
+    /// The interval (in hours) at which the retention process is triggered.
+    /// Specifies how often the retention task runs to clean up old data.
+    #[clap(
+        long = "log-persistentlog-retention-interval",
+        value_name = "VALUE",
+        default_value = "24"
+    )]
+    #[serde(rename = "retention_interval")]
+    pub log_persistentlog_retention_interval: usize,
 }
 
 impl Default for PersistentLogConfig {
@@ -2594,6 +2613,7 @@ impl TryInto<InnerPersistentLogConfig> for PersistentLogConfig {
             stage_name: self.log_persistentlog_stage_name,
             level: self.log_persistentlog_level,
             retention: self.log_persistentlog_retention,
+            retention_interval: self.log_persistentlog_retention_interval,
         })
     }
 }
@@ -2606,6 +2626,7 @@ impl From<InnerPersistentLogConfig> for PersistentLogConfig {
             log_persistentlog_stage_name: inner.stage_name,
             log_persistentlog_level: inner.level,
             log_persistentlog_retention: inner.retention,
+            log_persistentlog_retention_interval: inner.retention_interval,
         }
     }
 }
@@ -3039,6 +3060,14 @@ pub struct CacheConfig {
     )]
     pub table_data_cache_population_queue_size: u32,
 
+    /// Bytes of data cache in-memory
+    #[clap(
+        long = "cache-data-cache-in-memory-bytes",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub data_cache_in_memory_bytes: u64,
+
     /// Storage that hold the data caches
     #[clap(flatten)]
     #[serde(rename = "disk")]
@@ -3144,10 +3173,17 @@ pub struct DiskCacheConfig {
     )]
     pub path: String,
 
-    /// Whether sync data after write.
-    /// If the query node's memory is managed by cgroup (at least cgroup v1),
-    /// it's recommended to set this to true to prevent the container from
-    /// being killed due to high dirty page memory usage.
+    /// Controls whether to synchronize data to disk after write operations.
+    ///
+    /// When enabled, this option forces written data to be flushed to physical storage,
+    /// reducing the amount of dirty pages in memory. This is particularly important in
+    /// containerized environments where:
+    ///
+    /// 1. Memory limits are enforced by cgroups (v1, maybe v2 as well, though accounting differs)
+    /// 2. Dirty pages are counted against the memory limit, which increases the possibility of triggering OOM kills
+    ///
+    /// Setting this to true improves stability in memory-constrained / containerized environments at the cost
+    /// of potentially reduced write performance.
     #[clap(
         long = "cache-disk-sync-data",
         value_name = "VALUE",
@@ -3300,6 +3336,7 @@ mod cache_config_converters {
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
+                data_cache_in_memory_bytes: value.data_cache_in_memory_bytes,
                 disk_cache_config: value.disk_cache_config.try_into()?,
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.try_into()?,
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
@@ -3335,6 +3372,7 @@ mod cache_config_converters {
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.into(),
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
+                data_cache_in_memory_bytes: value.data_cache_in_memory_bytes,
                 disk_cache_config: value.disk_cache_config.into(),
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,

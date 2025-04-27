@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! The compilation artefact of this crate cannot be cached, so to avoid long ci compilation times,
+//! you should avoid introducing this crate in the underlying crate.
+
 use std::sync::LazyLock;
 
 use semver::Version;
@@ -51,6 +54,9 @@ pub static DATABEND_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 
     Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
 });
+
+pub static UDF_CLIENT_USER_AGENT: LazyLock<String> =
+    LazyLock::new(|| format!("databend-query/{}", *DATABEND_SEMVER));
 
 pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let semver = DATABEND_GIT_SEMVER;

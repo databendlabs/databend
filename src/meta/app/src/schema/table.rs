@@ -251,6 +251,12 @@ pub struct TableStatistics {
     pub number_of_blocks: Option<u64>,
 }
 
+/// Iceberg table parition
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum TablePartition {
+    Identity { columns: Vec<String> },
+}
+
 /// The essential state that defines what a table is.
 ///
 /// It is what a meta store just needs to save.
@@ -428,6 +434,22 @@ impl TableInfo {
     }
 }
 
+impl Default for TablePartition {
+    fn default() -> Self {
+        TablePartition::Identity { columns: vec![] }
+    }
+}
+
+impl Display for TablePartition {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            TablePartition::Identity { columns } => {
+                write!(f, "Partition Transform Identity: {:?}", columns)
+            }
+        }
+    }
+}
+
 impl Default for TableMeta {
     fn default() -> Self {
         TableMeta {
@@ -554,6 +576,11 @@ pub struct CreateTableReq {
     ///
     /// currently used in atomic CTAS.
     pub as_dropped: bool,
+
+    /// Iceberg table properties
+    pub table_properties: Option<BTreeMap<String, String>>,
+    /// Iceberg table partition
+    pub table_partition: Option<TablePartition>,
 }
 
 impl CreateTableReq {

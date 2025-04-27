@@ -30,7 +30,6 @@ databend-functions-scalar-geo = { workspace = true }
 databend-functions-scalar-integer-basic-arithmetic = { workspace = true }
 databend-functions-scalar-math = { workspace = true }
 databend-functions-scalar-numeric-basic-arithmetic = { workspace = true }
-ethnum = { workspace = true }
 geo = { workspace = true }
 geohash = { workspace = true }
 geozero = { workspace = true }
@@ -70,8 +69,8 @@ unicase = { workspace = true }
 
 [dev-dependencies]
 comfy-table = { workspace = true }
-criterion = { workspace = true }
 databend-common-ast = { workspace = true }
+divan = { workspace = true }
 goldenfile = { workspace = true }
 
 [[bench]]

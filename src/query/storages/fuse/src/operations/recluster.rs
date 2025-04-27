@@ -42,7 +42,6 @@ use crate::operations::ReclusterMutator;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
-use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::SegmentLocation;
 
@@ -103,7 +102,6 @@ impl FuseTable {
                 self.schema_with_stream(),
                 self.get_operator(),
                 &push_downs,
-                self.get_storage_format(),
                 chunk.to_vec(),
             )
             .await?;
@@ -226,7 +224,6 @@ impl FuseTable {
         schema: TableSchemaRef,
         dal: Operator,
         push_down: &Option<PushDownInfo>,
-        storage_format: FuseStorageFormat,
         mut segment_locs: Vec<SegmentLocation>,
     ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
         let max_concurrency = {
@@ -254,7 +251,6 @@ impl FuseTable {
             BloomIndexColumns::None,
             max_concurrency,
             bloom_index_builder,
-            storage_format,
         )?;
 
         let segment_pruner =

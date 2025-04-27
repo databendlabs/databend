@@ -28,6 +28,7 @@ pub(crate) use execute_state::Executor;
 pub use execute_state::Progresses;
 pub use expirable::ExpiringState;
 pub use expiring_map::ExpiringMap;
+pub use http_query::HttpQuery;
 pub use http_query::HttpQueryRequest;
 pub use http_query::HttpQueryResponseInternal;
 pub use http_query::HttpSessionConf;

@@ -342,10 +342,8 @@ evaluation:
 | Row 0  | 'abc'                | '^a'                    | true    |
 | Row 1  | 'abd'                | 'Ab'                    | true    |
 | Row 2  | 'Abe'                | 'abe'                   | true    |
-| Row 3  | 'new*                | 'new\*.\*line'          | false   |
-|        | *line'               |                         |         |
-| Row 4  | 'fo                  | '^fo$'                  | false   |
-|        | fo'                  |                         |         |
+| Row 3  | 'new*\n*line'        | 'new\\*.\\*line'        | false   |
+| Row 4  | 'fo\nfo'             | '^fo$'                  | false   |
 | Row 5  | ''                   | ''                      | true    |
 +--------+----------------------+-------------------------+---------+
 evaluation (internal):
@@ -372,10 +370,8 @@ evaluation:
 | Row 0  | 'abc'                | '^a'                    | ''         | true    |
 | Row 1  | 'abd'                | 'Ab'                    | 'c'        | false   |
 | Row 2  | 'Abe'                | 'abe'                   | 'i'        | true    |
-| Row 3  | 'new*                | 'new\*.\*line'          | 'n'        | true    |
-|        | *line'               |                         |            |         |
-| Row 4  | 'fo                  | '^fo$'                  | 'm'        | true    |
-|        | fo'                  |                         |            |         |
+| Row 3  | 'new*\n*line'        | 'new\\*.\\*line'        | 'n'        | true    |
+| Row 4  | 'fo\nfo'             | '^fo$'                  | 'm'        | true    |
 | Row 5  | ''                   | ''                      | 'c'        | true    |
 +--------+----------------------+-------------------------+------------+---------+
 evaluation (internal):
@@ -1206,7 +1202,7 @@ evaluation (internal):
 
 
 ast            : regexp_extract(null, '(\d+)-(\d+)-(\d+)', ['y', 'm'])
-raw expr       : regexp_extract(NULL, '(\d+)-(\d+)-(\d+)', array('y', 'm'))
+raw expr       : regexp_extract(NULL, '(\\d+)-(\\d+)-(\\d+)', array('y', 'm'))
 checked expr   : regexp_extract<String NULL, String NULL, Array(String) NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("(\\d+)-(\\d+)-(\\d+)" AS String NULL), CAST<Array(String)>(array<T0=String><T0, T0>("y", "m") AS Array(String) NULL))
 optimized expr : NULL
 output type    : Map(String, String) NULL
@@ -1215,7 +1211,7 @@ output         : NULL
 
 
 ast            : regexp_extract_all(null, 'Order-(\d+)-(\d+)', 2)
-raw expr       : regexp_extract_all(NULL, 'Order-(\d+)-(\d+)', 2)
+raw expr       : regexp_extract_all(NULL, 'Order-(\\d+)-(\\d+)', 2)
 checked expr   : regexp_extract_all<String NULL, String NULL, UInt32 NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("Order-(\\d+)-(\\d+)" AS String NULL), CAST<UInt8>(2_u8 AS UInt32 NULL))
 optimized expr : NULL
 output type    : Array(String) NULL
@@ -1224,7 +1220,7 @@ output         : NULL
 
 
 ast            : regexp_extract(null, '([A-Za-z]+) ([A-Za-z]+), Age: (\d+)', 3)
-raw expr       : regexp_extract(NULL, '([A-Za-z]+) ([A-Za-z]+), Age: (\d+)', 3)
+raw expr       : regexp_extract(NULL, '([A-Za-z]+) ([A-Za-z]+), Age: (\\d+)', 3)
 checked expr   : regexp_extract<String NULL, String NULL, UInt32 NULL>(CAST<NULL>(NULL AS String NULL), CAST<String>("([A-Za-z]+) ([A-Za-z]+), Age: (\\d+)" AS String NULL), CAST<UInt8>(3_u8 AS UInt32 NULL))
 optimized expr : NULL
 output type    : String NULL

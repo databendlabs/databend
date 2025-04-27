@@ -60,7 +60,9 @@ pub fn write<W: Write>(
             }
         }),
         Column::Boolean(column) => write_bitmap(w, &column, validity, write_options, scratch),
-        Column::String(column) => write_view::<W>(w, &column.to_binview(), write_options, scratch),
+        Column::String(column) => {
+            write_view::<W>(w, &column.to_binview(), validity, write_options, scratch)
+        }
         Column::Timestamp(column) => {
             write_primitive::<i64, W>(w, &column, validity, write_options, scratch)
         }

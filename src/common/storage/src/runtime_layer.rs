@@ -35,6 +35,7 @@ use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
 use opendal::Buffer;
+use opendal::Metadata;
 use opendal::Result;
 
 /// # TODO
@@ -89,11 +90,11 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
     type Inner = A;
     type Reader = RuntimeIO<A::Reader>;
     type BlockingReader = A::BlockingReader;
-    type Writer = A::Writer;
+    type Writer = RuntimeIO<A::Writer>;
     type BlockingWriter = A::BlockingWriter;
-    type Lister = A::Lister;
+    type Lister = RuntimeIO<A::Lister>;
     type BlockingLister = A::BlockingLister;
-    type Deleter = RuntimeIO<A::Deleter>;
+    type Deleter = RuntimeIO<RuntimeIO<A::Deleter>>;
     type BlockingDeleter = A::BlockingDeleter;
 
     fn inner(&self) -> &Self::Inner {
@@ -130,6 +131,10 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
             .spawn(async move { op.write(&path, args).await })
             .await
             .expect("join must success")
+            .map(|(rp, r)| {
+                let r = RuntimeIO::new(r, self.runtime.clone());
+                (rp, r)
+            })
     }
 
     async fn stat(&self, path: &str, args: OpStat) -> Result<RpStat> {
@@ -152,6 +157,10 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
                 let r = RuntimeIO::new(r, self.runtime.clone());
                 (rp, r)
             })
+            .map(|(rp, r)| {
+                let r = RuntimeIO::new(r, self.runtime.clone());
+                (rp, r)
+            })
     }
 
     async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Lister)> {
@@ -161,6 +170,10 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
             .spawn(async move { op.list(&path, args).await })
             .await
             .expect("join must success")
+            .map(|(rp, r)| {
+                let r = RuntimeIO::new(r, self.runtime.clone());
+                (rp, r)
+            })
     }
 
     fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
@@ -211,13 +224,77 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
     }
 }
 
+impl<R: oio::Write> oio::Write for RuntimeIO<R> {
+    async fn write(&mut self, bs: Buffer) -> Result<()> {
+        let mut r = self.inner.take().expect("writer must be valid");
+        let runtime = self.runtime.clone();
+
+        let (r, res) = runtime
+            .spawn(async move {
+                let res = r.write(bs).await;
+                (r, res)
+            })
+            .await
+            .expect("join must success");
+        self.inner = Some(r);
+        res
+    }
+
+    async fn close(&mut self) -> Result<Metadata> {
+        let mut r = self.inner.take().expect("writer must be valid");
+        let runtime = self.runtime.clone();
+
+        let (r, res) = runtime
+            .spawn(async move {
+                let res = r.close().await;
+                (r, res)
+            })
+            .await
+            .expect("join must success");
+        self.inner = Some(r);
+        res
+    }
+
+    async fn abort(&mut self) -> Result<()> {
+        let mut r = self.inner.take().expect("writer must be valid");
+        let runtime = self.runtime.clone();
+
+        let (r, res) = runtime
+            .spawn(async move {
+                let res = r.abort().await;
+                (r, res)
+            })
+            .await
+            .expect("join must success");
+        self.inner = Some(r);
+        res
+    }
+}
+
+impl<R: oio::List> oio::List for RuntimeIO<R> {
+    async fn next(&mut self) -> Result<Option<oio::Entry>> {
+        let mut r = self.inner.take().expect("lister must be valid");
+        let runtime = self.runtime.clone();
+
+        let (r, res) = runtime
+            .spawn(async move {
+                let res = r.next().await;
+                (r, res)
+            })
+            .await
+            .expect("join must success");
+        self.inner = Some(r);
+        res
+    }
+}
+
 impl<R: oio::Delete> oio::Delete for RuntimeIO<R> {
     fn delete(&mut self, path: &str, args: OpDelete) -> Result<()> {
         self.inner.as_mut().unwrap().delete(path, args)
     }
 
     async fn flush(&mut self) -> Result<usize> {
-        let mut r = self.inner.take().expect("reader must be valid");
+        let mut r = self.inner.take().expect("deleter must be valid");
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
