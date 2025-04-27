@@ -637,7 +637,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
 display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.1.2" }
-jsonb = { git = "https://github.com/b41sh/jsonb", rev = "73871c14bc11b65a1cba90bdb4ccc85f06c356e2" }
+jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "dcaf261" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.3" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
