@@ -2135,7 +2135,7 @@ pub const MIN_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = [
     -99999999999999999999999999999999999999,
 ];
 
-/// Physical representation of a decimal
+/// The wrapper of `ethnum::I256`, used to implement the `BorshSerialize` and `BorshDeserialize` traits.
 #[derive(Clone, Copy, Default, Eq, Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
 #[repr(C)]
