@@ -31,6 +31,7 @@ use opendal::Operator;
 use opentelemetry_otlp::WithExportConfig;
 
 use crate::config::OTLPProtocol;
+use crate::filter::filter_by_thread_tracker;
 use crate::loggers::get_layout;
 use crate::loggers::new_rolling_file_appender;
 use crate::remote_log::RemoteLog;
@@ -219,6 +220,7 @@ pub fn init_logging(
 
         let dispatch = Dispatch::new()
             .filter(env_filter(&cfg.file.level))
+            .filter(filter_by_thread_tracker())
             .append(normal_log_file.with_layout(get_layout(&cfg.file.format)));
         logger = logger.dispatch(dispatch);
     }
@@ -227,6 +229,7 @@ pub fn init_logging(
     if cfg.stderr.on {
         let dispatch = Dispatch::new()
             .filter(env_filter(&cfg.stderr.level))
+            .filter(filter_by_thread_tracker())
             .append(
                 logforth::append::Stderr::default().with_layout(get_layout(&cfg.stderr.format)),
             );
@@ -253,6 +256,7 @@ pub fn init_logging(
             .expect("initialize opentelemetry logger");
         let dispatch = Dispatch::new()
             .filter(env_filter(&cfg.otlp.level))
+            .filter(filter_by_thread_tracker())
             .append(otel);
         logger = logger.dispatch(dispatch);
     }
@@ -261,6 +265,7 @@ pub fn init_logging(
     if cfg.tracing.on || cfg.structlog.on {
         let dispatch = Dispatch::new()
             .filter(env_filter(&cfg.tracing.capture_log_level))
+            .filter(filter_by_thread_tracker())
             .append(logforth::append::FastraceEvent::default());
         logger = logger.dispatch(dispatch);
     }
@@ -281,6 +286,7 @@ pub fn init_logging(
                     EnvFilterBuilder::new()
                         .filter(Some("databend::log::query"), LevelFilter::Trace),
                 ))
+                .filter(filter_by_thread_tracker())
                 .append(query_log_file.with_layout(get_layout("identical")));
             logger = logger.dispatch(dispatch);
         }
@@ -306,6 +312,7 @@ pub fn init_logging(
                     EnvFilterBuilder::new()
                         .filter(Some("databend::log::query"), LevelFilter::Trace),
                 ))
+                .filter(filter_by_thread_tracker())
                 .append(otel);
             logger = logger.dispatch(dispatch);
         }
@@ -327,6 +334,7 @@ pub fn init_logging(
                     EnvFilterBuilder::new()
                         .filter(Some("databend::log::profile"), LevelFilter::Trace),
                 ))
+                .filter(filter_by_thread_tracker())
                 .append(profile_log_file.with_layout(get_layout("identical")));
             logger = logger.dispatch(dispatch);
         }
@@ -352,6 +360,7 @@ pub fn init_logging(
                     EnvFilterBuilder::new()
                         .filter(Some("databend::log::profile"), LevelFilter::Trace),
                 ))
+                .filter(filter_by_thread_tracker())
                 .append(otel);
             logger = logger.dispatch(dispatch);
         }
@@ -372,6 +381,7 @@ pub fn init_logging(
                 EnvFilterBuilder::new()
                     .filter(Some("databend::log::structlog"), LevelFilter::Trace),
             ))
+            .filter(filter_by_thread_tracker())
             .append(structlog_log_file);
         logger = logger.dispatch(dispatch);
     }
@@ -400,6 +410,7 @@ pub fn init_logging(
             .filter(EnvFilter::new(
                 filter_builder.parse(&cfg.persistentlog.level),
             ))
+            .filter(filter_by_thread_tracker())
             .append(remote_log);
 
         logger = logger.dispatch(dispatch);
