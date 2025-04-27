@@ -28,7 +28,7 @@ use crate::servers::flight::v1::actions::GET_RUNNING_QUERY_DUMP;
 
 #[poem::handler]
 #[async_backtrace::framed]
-pub async fn graph_dump(Path(query_id): Path<String>) -> poem::Result<impl IntoResponse> {
+pub async fn running_query_dump(Path(query_id): Path<String>) -> poem::Result<impl IntoResponse> {
     #[derive(serde::Serialize)]
     struct QueryRunningGraphDump {
         query_id: String,

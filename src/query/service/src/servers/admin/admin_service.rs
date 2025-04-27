@@ -81,7 +81,7 @@ impl AdminService {
             )
             .at(
                 "v1/queries/:query_id/graph_dump",
-                get(super::v1::query_profiling::query_profiling_handler),
+                get(super::v1::query_dump::running_query_dump),
             )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler))
