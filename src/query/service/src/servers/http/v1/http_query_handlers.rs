@@ -51,6 +51,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::query::ExecuteStateKind;
+use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::RemoveReason;
@@ -399,18 +400,29 @@ pub(crate) async fn query_handler(
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
-        let agent_info = ctx.user_agent.as_ref().map(|s|(format!("(from {s})"))).unwrap_or("".to_string());
-        let client_session_id_info = ctx.client_session_id.as_ref().map(|s|(format!("(client_session_id={s})"))).unwrap_or("".to_string());
+        let agent_info = ctx.user_agent.as_ref().map(|s| (format!("(from {s})"))).unwrap_or("".to_string());
+        let client_session_id_info = ctx.client_session_id.as_ref().map(|s| (format!("(client_session_id={s})"))).unwrap_or("".to_string());
         info!("http query new request{}{}: {}", agent_info, client_session_id_info, mask_connection_info(&format!("{:?}", req)));
-        let http_query_manager = HttpQueryManager::instance();
         let sql = req.sql.clone();
 
-        let query = http_query_manager
-            .try_create_query(ctx, req.clone())
-            .await
-            .map_err(|err| err.display_with_sql(&sql));
-        match query {
-            Ok(query) => {
+        match HttpQuery::try_create(ctx, req.clone()).await {
+            Err(err) => {
+                let err = err.display_with_sql(&sql);
+                error!("http query fail to start sql, error: {:?}", err);
+                ctx.set_fail();
+                Ok(req.fail_to_start_sql(err).into_response())
+            }
+            Ok(mut query) => {
+                if let Err(err) = query.start_query(sql.clone()).await {
+                    let err = err.display_with_sql(&sql);
+                    error!("http query fail to start sql, error: {:?}", err);
+                    ctx.set_fail();
+                    return Ok(req.fail_to_start_sql(err).into_response());
+                }
+
+                let http_query_manager = HttpQueryManager::instance();
+                let query = http_query_manager.add_query(query).await;
+
                 query.update_expire_time(true).await;
                 // tmp workaround to tolerant old clients
                 let resp = query
@@ -430,11 +442,6 @@ pub(crate) async fn query_handler(
                     );
                 query.update_expire_time(false).await;
                 Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
-            }
-            Err(e) => {
-                error!("http query fail to start sql, error: {:?}", e);
-                ctx.set_fail();
-                Ok(req.fail_to_start_sql(e).into_response())
             }
         }
     }

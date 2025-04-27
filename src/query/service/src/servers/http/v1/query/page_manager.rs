@@ -56,7 +56,7 @@ pub struct PageManager {
     last_page: Option<Page>,
     row_buffer: Option<Vec<Column>>,
     block_receiver: SizedChannelReceiver<DataBlock>,
-    format_settings: Arc<RwLock<Option<FormatSettings>>>,
+    pub(crate) format_settings: Arc<RwLock<Option<FormatSettings>>>,
 }
 
 impl PageManager {
