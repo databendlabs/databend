@@ -61,6 +61,11 @@ Filter
     ├── push downs: [filters: [is_true(like(t1.content (#1), '%your eggs%'))], limit: NONE]
     └── estimated rows: 10.00
 
+query T
+SELECT id, content FROM t1 WHERE content LIKE '%your eggs%'
+----
+8 Put all your eggs in one basket
+
 statement ok
 DROP TABLE IF EXISTS t2
 
@@ -96,6 +101,11 @@ TableScan
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 5 to 5, bloom pruning: 5 to 1>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%your eggs%'))], limit: NONE]
 └── estimated rows: 0.04
+
+query T
+SELECT id, content FROM t1 WHERE content LIKE '%your eggs%'
+----
+8 Put all your eggs in one basket
 
 statement ok
 USE default

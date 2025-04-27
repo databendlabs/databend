@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::hash::Hasher;
 use std::ops::ControlFlow;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -58,12 +59,13 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
+use databend_common_functions::scalars::CityHasher64;
+use databend_common_functions::scalars::DFHash;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
 use jsonb::RawJsonb;
-use naive_cityhash::cityhash64_with_seed;
 use parquet::format::FileMetaData;
 use serde::Deserialize;
 use serde::Serialize;
@@ -73,6 +75,7 @@ use crate::eliminate_cast::cast_const;
 use crate::filters::BlockBloomFilterIndexVersion;
 use crate::filters::BlockFilter;
 use crate::filters::BloomBuilder;
+use crate::filters::BloomFilter;
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
 use crate::filters::FilterImpl;
@@ -200,6 +203,13 @@ pub struct BloomIndex {
 pub enum FilterEvalResult {
     MustFalse,
     Uncertain,
+}
+
+pub struct BloomIndexResult {
+    pub bloom_fields: Vec<TableField>,
+    pub bloom_scalars: Vec<(usize, Scalar, DataType)>,
+    pub ngram_fields: Vec<TableField>,
+    pub ngram_scalars: Vec<(usize, Scalar)>,
 }
 
 impl BloomIndex {
@@ -398,7 +408,9 @@ impl BloomIndex {
     }
 
     pub fn ngram_hash(s: &str) -> u64 {
-        cityhash64_with_seed(s.as_bytes(), 1575457558)
+        let mut hasher = CityHasher64::with_seed(1575457558);
+        DFHash::hash(s, &mut hasher);
+        hasher.finish()
     }
 
     /// calculate digest for constant scalar
@@ -424,18 +436,31 @@ impl BloomIndex {
     #[expect(clippy::type_complexity)]
     pub fn filter_index_field(
         expr: &Expr<String>,
-        fields: Vec<TableField>,
-    ) -> Result<(Vec<TableField>, Vec<(usize, Scalar, DataType)>)> {
+        bloom_fields: Vec<TableField>,
+        ngram_fields: Vec<TableField>,
+    ) -> Result<BloomIndexResult> {
         let mut visitor = Visitor(ShortListVisitor {
-            fields,
-            founds: Vec::new(),
-            scalars: Vec::new(),
+            bloom_fields,
+            ngram_fields,
+            bloom_founds: Vec::new(),
+            ngram_founds: Vec::new(),
+            bloom_scalars: Vec::new(),
+            ngram_scalars: Vec::new(),
         });
         visit_expr(expr, &mut visitor)?;
         let Visitor(ShortListVisitor {
-            founds, scalars, ..
+            bloom_founds,
+            ngram_founds,
+            bloom_scalars,
+            ngram_scalars,
+            ..
         }) = visitor;
-        Ok((founds, scalars))
+        Ok(BloomIndexResult {
+            bloom_fields: bloom_founds,
+            bloom_scalars,
+            ngram_fields: ngram_founds,
+            ngram_scalars,
+        })
     }
 
     /// For every applicable column, we will create a filter.
@@ -590,7 +615,7 @@ impl BloomIndexBuilder {
                 field: arg.field.clone(),
                 is_ngram: true,
                 gram_size: arg.gram_size,
-                builder: FilterImplBuilder::Bloom(BloomBuilder::create(arg.bitmap_size)?),
+                builder: FilterImplBuilder::Ngram(BloomBuilder::create(arg.bitmap_size)?),
             });
         }
 
@@ -611,7 +636,14 @@ impl BloomIndexBuilder {
         }
 
         let mut keys_to_remove = Vec::with_capacity(self.columns.len());
-        for (index, index_column) in self.columns.iter_mut().enumerate() {
+
+        let (bloom_iter, ngram_iter): (Vec<_>, Vec<_>) = self
+            .columns
+            .iter_mut()
+            .enumerate()
+            .partition(|(_, column)| !column.is_ngram);
+
+        for (index, index_column) in bloom_iter {
             let field_type = &block.get_by_offset(index_column.index).data_type;
             if !Xor8Filter::supported_type(field_type) {
                 keys_to_remove.push(index);
@@ -684,40 +716,49 @@ impl BloomIndexBuilder {
                 }
             };
 
-            if index_column.is_ngram {
-                for digests in BloomIndex::calculate_ngram_nullable_column(
-                    Value::Column(column),
-                    index_column.gram_size,
-                    BloomIndex::ngram_hash,
-                ) {
-                    if digests.is_empty() {
-                        continue;
-                    }
-                    index_column.builder.add_digests(digests.iter())
-                }
+            let (column, validity) =
+                BloomIndex::calculate_nullable_column_digest(&self.func_ctx, &column, &data_type)?;
+            // create filter per column
+            if validity.as_ref().map(|v| v.null_count()).unwrap_or(0) > 0 {
+                let validity = validity.unwrap();
+                let it = column.deref().iter().zip(validity.iter()).map(
+                    |(v, b)| {
+                        if !b {
+                            &0
+                        } else {
+                            v
+                        }
+                    },
+                );
+                index_column.builder.add_digests(it);
             } else {
-                let (column, validity) = BloomIndex::calculate_nullable_column_digest(
-                    &self.func_ctx,
-                    &column,
-                    &data_type,
-                )?;
-                // create filter per column
-                if validity.as_ref().map(|v| v.null_count()).unwrap_or(0) > 0 {
-                    let validity = validity.unwrap();
-                    let it =
-                        column.deref().iter().zip(validity.iter()).map(
-                            |(v, b)| {
-                                if !b {
-                                    &0
-                                } else {
-                                    v
-                                }
-                            },
-                        );
-                    index_column.builder.add_digests(it);
-                } else {
-                    index_column.builder.add_digests(column.deref());
+                index_column.builder.add_digests(column.deref());
+            }
+        }
+        for (index, index_column) in ngram_iter {
+            let field_type = &block.get_by_offset(index_column.index).data_type;
+            if !BloomFilter::supported_type(field_type) {
+                keys_to_remove.push(index);
+                continue;
+            }
+
+            let column = match &block.get_by_offset(index_column.index).value {
+                Value::Scalar(s) => {
+                    let builder = ColumnBuilder::repeat(&s.as_ref(), 1, field_type);
+                    builder.build()
                 }
+                Value::Column(c) => c.clone(),
+            };
+
+            for digests in BloomIndex::calculate_ngram_nullable_column(
+                Value::Column(column),
+                index_column.gram_size,
+                BloomIndex::ngram_hash,
+            ) {
+                if digests.is_empty() {
+                    continue;
+                }
+                index_column.builder.add_digests(digests.iter())
             }
         }
         for k in keys_to_remove {
@@ -1181,14 +1222,17 @@ impl EqVisitor for RewriteVisitor<'_> {
 }
 
 struct ShortListVisitor {
-    fields: Vec<TableField>,
-    founds: Vec<TableField>,
-    scalars: Vec<(usize, Scalar, DataType)>,
+    bloom_fields: Vec<TableField>,
+    ngram_fields: Vec<TableField>,
+    bloom_founds: Vec<TableField>,
+    ngram_founds: Vec<TableField>,
+    bloom_scalars: Vec<(usize, Scalar, DataType)>,
+    ngram_scalars: Vec<(usize, Scalar)>,
 }
 
 impl ShortListVisitor {
-    fn found_field(&self, name: &str) -> Option<(usize, &TableField)> {
-        self.fields
+    fn found_field<'a>(fields: &'a [TableField], name: &str) -> Option<(usize, &'a TableField)> {
+        fields
             .iter()
             .enumerate()
             .find_map(|(i, field)| (field.name == name).then_some((i, field)))
@@ -1203,18 +1247,32 @@ impl EqVisitor for ShortListVisitor {
         scalar: &Scalar,
         ty: &DataType,
         _: &DataType,
-        _: bool,
+        is_like: bool,
     ) -> ResultRewrite {
-        if let Some((i, v)) = self.found_field(col_name) {
-            if !scalar.is_null() && Xor8Filter::supported_type(ty) {
-                self.founds.push(v.clone());
-                self.scalars.push((i, scalar.clone(), ty.clone()));
+        if is_like {
+            if let Some((i, v)) = Self::found_field(&self.ngram_fields, col_name) {
+                if !scalar.is_null() && BloomFilter::supported_type(ty) {
+                    self.ngram_founds.push(v.clone());
+                    self.ngram_scalars.push((i, scalar.clone()));
+                }
+            }
+        } else {
+            if let Some((i, v)) = Self::found_field(&self.bloom_fields, col_name) {
+                if !scalar.is_null() && Xor8Filter::supported_type(ty) {
+                    self.bloom_founds.push(v.clone());
+                    self.bloom_scalars.push((i, scalar.clone(), ty.clone()));
+                }
             }
         }
         Ok(ControlFlow::Break(None))
     }
 
-    fn enter_cast(&mut self, cast: &Expr<String>, constant: &Constant, _: bool) -> ResultRewrite {
+    fn enter_cast(
+        &mut self,
+        cast: &Expr<String>,
+        constant: &Constant,
+        is_like: bool,
+    ) -> ResultRewrite {
         let Expr::Cast(Cast {
             is_try: false,
             expr:
@@ -1230,24 +1288,46 @@ impl EqVisitor for ShortListVisitor {
             return Ok(ControlFlow::Continue(None));
         };
 
-        let Some((i, field)) = self.found_field(id) else {
-            return Ok(ControlFlow::Break(None));
-        };
-        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
-            return Ok(ControlFlow::Break(None));
-        }
+        if is_like {
+            let Some((i, field)) = Self::found_field(&self.ngram_fields, id) else {
+                return Ok(ControlFlow::Break(None));
+            };
+            if !BloomFilter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
+                return Ok(ControlFlow::Break(None));
+            }
 
-        let Some(s) = cast_const(
-            &FunctionContext::default(),
-            src_type.to_owned(),
-            constant.clone(),
-        ) else {
-            return Ok(ControlFlow::Break(None));
-        };
+            let Some(s) = cast_const(
+                &FunctionContext::default(),
+                src_type.to_owned(),
+                constant.clone(),
+            ) else {
+                return Ok(ControlFlow::Break(None));
+            };
 
-        if !s.is_null() {
-            self.founds.push(field.to_owned());
-            self.scalars.push((i, s, src_type.to_owned()));
+            if !s.is_null() {
+                self.ngram_founds.push(field.to_owned());
+                self.ngram_scalars.push((i, s));
+            }
+        } else {
+            let Some((i, field)) = Self::found_field(&self.bloom_fields, id) else {
+                return Ok(ControlFlow::Break(None));
+            };
+            if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
+                return Ok(ControlFlow::Break(None));
+            }
+
+            let Some(s) = cast_const(
+                &FunctionContext::default(),
+                src_type.to_owned(),
+                constant.clone(),
+            ) else {
+                return Ok(ControlFlow::Break(None));
+            };
+
+            if !s.is_null() {
+                self.bloom_founds.push(field.to_owned());
+                self.bloom_scalars.push((i, s, src_type.to_owned()));
+            }
         }
 
         Ok(ControlFlow::Break(None))

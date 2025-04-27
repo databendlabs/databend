@@ -97,27 +97,24 @@ impl BloomPrunerCreator {
         let bloom_columns_map =
             bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
         let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
-        let (mut bloom_fields, bloom_scalars) =
-            BloomIndex::filter_index_field(expr, bloom_column_fields)?;
-
         let ngram_column_fields: Vec<TableField> =
             ngram_args.iter().map(|arg| arg.field().clone()).collect();
-        let (mut ngram_fields, ngram_scalars) =
-            BloomIndex::filter_index_field(expr, ngram_column_fields)?;
+        let mut result =
+            BloomIndex::filter_index_field(expr, bloom_column_fields, ngram_column_fields)?;
 
-        if bloom_fields.is_empty() && ngram_fields.is_empty() {
+        if result.bloom_fields.is_empty() && result.ngram_fields.is_empty() {
             return Ok(None);
         }
 
         // convert to filter column names
         let mut scalar_map = HashMap::<Scalar, u64>::new();
-        for (_, scalar, ty) in bloom_scalars.into_iter() {
+        for (_, scalar, ty) in result.bloom_scalars.into_iter() {
             if let Entry::Vacant(e) = scalar_map.entry(scalar) {
                 let digest = BloomIndex::calculate_scalar_digest(&func_ctx, e.key(), &ty)?;
                 e.insert(digest);
             }
         }
-        for (i, scalar, _) in ngram_scalars.into_iter() {
+        for (i, scalar) in result.ngram_scalars.into_iter() {
             for words in BloomIndex::calculate_ngram_nullable_column(
                 Value::Scalar(scalar),
                 ngram_args[i].gram_size(),
@@ -131,11 +128,12 @@ impl BloomPrunerCreator {
                 }
             }
         }
-        bloom_fields.append(&mut ngram_fields);
+        let mut index_fields = result.bloom_fields;
+        index_fields.append(&mut result.ngram_fields);
 
         Ok(Some(Arc::new(Self {
             func_ctx,
-            index_fields: bloom_fields,
+            index_fields,
             filter_expression: expr.clone(),
             scalar_map,
             ngram_args,

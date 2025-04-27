@@ -27,7 +27,6 @@ jsonb = { workspace = true }
 levenshtein_automata = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
-naive-cityhash = { workspace = true }
 parquet = { workspace = true }
 roaring = { workspace = true }
 serde = { workspace = true }

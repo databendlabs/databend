@@ -5336,7 +5336,6 @@ dependencies = [
  "levenshtein_automata",
  "log",
  "match-template",
- "naive-cityhash",
  "parquet",
  "rand 0.8.5",
  "roaring",

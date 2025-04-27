@@ -23,9 +23,11 @@ use bloomfilter::Bloom;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
+use crate::Index;
 
 pub struct BloomBuilder {
     bitmap_size: usize,
@@ -141,6 +143,12 @@ impl Filter for BloomFilter {
             },
             buf.len(),
         ))
+    }
+}
+
+impl Index for BloomFilter {
+    fn supported_type(data_type: &DataType) -> bool {
+        matches!(data_type.remove_nullable(), DataType::String)
     }
 }
 

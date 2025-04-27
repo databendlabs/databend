@@ -38,12 +38,12 @@ use crate::filters::FilterBuilder;
 
 pub enum FilterImpl {
     Xor(Xor8Filter),
-    Bloom(BloomFilter),
+    Ngram(BloomFilter),
 }
 
 pub enum FilterImplBuilder {
     Xor(Xor8Builder),
-    Bloom(BloomBuilder),
+    Ngram(BloomBuilder),
 }
 
 impl TryFrom<&FilterImpl> for Vec<u8> {
@@ -68,7 +68,7 @@ impl FilterImpl {
             FilterImpl::Xor(filter) => {
                 std::mem::size_of::<Xor8Builder>() + filter.filter.finger_prints.len()
             }
-            FilterImpl::Bloom(_) => std::mem::size_of::<BloomFilter>(),
+            FilterImpl::Ngram(_) => std::mem::size_of::<BloomFilter>(),
         }
     }
 }
@@ -79,21 +79,21 @@ impl Filter for FilterImpl {
     fn len(&self) -> Option<usize> {
         match self {
             FilterImpl::Xor(filter) => filter.len(),
-            FilterImpl::Bloom(filter) => filter.len(),
+            FilterImpl::Ngram(filter) => filter.len(),
         }
     }
 
     fn contains<K: ?Sized + Hash>(&self, key: &K) -> bool {
         match self {
             FilterImpl::Xor(filter) => filter.contains(key),
-            FilterImpl::Bloom(filter) => filter.contains(key),
+            FilterImpl::Ngram(filter) => filter.contains(key),
         }
     }
 
     fn contains_digest(&self, digest: u64) -> bool {
         match self {
             FilterImpl::Xor(filter) => filter.contains_digest(digest),
-            FilterImpl::Bloom(filter) => filter.contains_digest(digest),
+            FilterImpl::Ngram(filter) => filter.contains_digest(digest),
         }
     }
 
@@ -104,7 +104,7 @@ impl Filter for FilterImpl {
                 bytes.push(0u8);
                 bytes
             }
-            FilterImpl::Bloom(filter) => {
+            FilterImpl::Ngram(filter) => {
                 let mut bytes = filter.to_bytes()?;
                 bytes.push(1u8);
                 bytes
@@ -117,7 +117,7 @@ impl Filter for FilterImpl {
             0 => Xor8Filter::from_bytes(&buf[0..buf.len() - 1])
                 .map(|(filter, len)| (FilterImpl::Xor(filter), len))?,
             1 => BloomFilter::from_bytes(&buf[0..buf.len() - 1])
-                .map(|(filter, len)| (FilterImpl::Bloom(filter), len))?,
+                .map(|(filter, len)| (FilterImpl::Ngram(filter), len))?,
             _ => unreachable!(),
         })
     }
@@ -130,28 +130,28 @@ impl FilterBuilder for FilterImplBuilder {
     fn add_key<K: Hash>(&mut self, key: &K) {
         match self {
             FilterImplBuilder::Xor(filter) => filter.add_key(key),
-            FilterImplBuilder::Bloom(filter) => filter.add_key(key),
+            FilterImplBuilder::Ngram(filter) => filter.add_key(key),
         }
     }
 
     fn add_keys<K: Hash>(&mut self, keys: &[K]) {
         match self {
             FilterImplBuilder::Xor(filter) => filter.add_keys(keys),
-            FilterImplBuilder::Bloom(filter) => filter.add_keys(keys),
+            FilterImplBuilder::Ngram(filter) => filter.add_keys(keys),
         }
     }
 
     fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
         match self {
             FilterImplBuilder::Xor(filter) => filter.add_digests(digests),
-            FilterImplBuilder::Bloom(filter) => filter.add_digests(digests),
+            FilterImplBuilder::Ngram(filter) => filter.add_digests(digests),
         }
     }
 
     fn build(&mut self) -> Result<Self::Filter, Self::Error> {
         match self {
             FilterImplBuilder::Xor(filter) => Ok(FilterImpl::Xor(filter.build()?)),
-            FilterImplBuilder::Bloom(filter) => Ok(FilterImpl::Bloom(filter.build()?)),
+            FilterImplBuilder::Ngram(filter) => Ok(FilterImpl::Ngram(filter.build()?)),
         }
     }
 }
