@@ -26,6 +26,7 @@ fn main() {
 //       ├─ 4                                  1.224 µs      │ 4.253 µs      │ 1.255 µs      │ 1.292 µs      │ 100     │ 100
 //       ├─ 64                                 3.087 µs      │ 3.53 µs       │ 3.151 µs      │ 3.166 µs      │ 100     │ 100
 //       ╰─ 1024                               51.45 µs      │ 328.9 µs      │ 53.24 µs      │ 61.26 µs      │ 100     │ 100
+#[cfg(target_os = "linux")]
 #[divan::bench_group(max_time = 0.5)]
 mod dummy {
     use std::fs::File;

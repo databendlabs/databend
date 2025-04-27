@@ -25,6 +25,8 @@ use databend_common_base::base::short_sql;
 use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
@@ -36,7 +38,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
 use databend_storages_common_session::TxnState;
-use fastrace::prelude::*;
 use http::StatusCode;
 use log::info;
 use log::warn;
@@ -367,6 +368,7 @@ pub struct HttpQuery {
     pub(crate) has_temp_table_before_run: bool,
     pub(crate) has_temp_table_after_run: Mutex<Option<bool>>,
     pub(crate) is_session_handle_refreshed: AtomicBool,
+    pub(crate) query_mem_stat: Option<Arc<MemStat>>,
 }
 
 fn try_set_txn(
@@ -406,10 +408,7 @@ fn try_set_txn(
 impl HttpQuery {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub(crate) async fn try_create(
-        ctx: &HttpQueryContext,
-        request: HttpQueryRequest,
-    ) -> Result<Arc<HttpQuery>> {
+    pub async fn try_create(ctx: &HttpQueryContext, req: HttpQueryRequest) -> Result<HttpQuery> {
         let http_query_manager = HttpQueryManager::instance();
         let session = ctx
             .upgrade_session(SessionType::HTTPQuery)
@@ -421,7 +420,7 @@ impl HttpQuery {
         // - the current database
         // - the current role
         // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
-        if let Some(session_conf) = &request.session {
+        if let Some(session_conf) = &req.session {
             if let Some(catalog) = &session_conf.catalog {
                 session.set_current_catalog(catalog.clone());
             }
@@ -474,6 +473,11 @@ impl HttpQuery {
         session.set_client_host(ctx.client_host.clone());
 
         let http_ctx = ctx;
+        let query_mem_stat = MemStat::create(format!("Query-{}", query_id));
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.mem_stat = Some(query_mem_stat.clone());
+        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
         let ctx = session.create_query_context().await?;
 
         // Deduplicate label is used on the DML queries which may be retried by the client.
@@ -492,14 +496,14 @@ impl HttpQuery {
 
         let session_id = session.get_id().clone();
         let node_id = ctx.get_cluster().local_id.clone();
-        let sql = &request.sql;
+        let sql = &req.sql;
         info!(query_id = query_id, session_id = session_id, node_id = node_id, sql = sql; "create query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
         // and the data in the stage attachment (which is mostly a s3 path) will be inserted into
         // the table.
-        if let Some(attachment) = &request.stage_attachment {
+        if let Some(attachment) = &req.stage_attachment {
             ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
                 file_format_options: attachment.file_format_options.as_ref().map(|v| {
@@ -511,26 +515,17 @@ impl HttpQuery {
             })
         };
 
-        let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
+        let (sender, block_receiver) = sized_spsc(req.pagination.max_rows_in_buffer);
 
         let state = Arc::new(Mutex::new(Executor {
             query_id: query_id.clone(),
-            state: ExecuteState::Starting(ExecuteStarting { ctx: ctx.clone() }),
+            state: ExecuteState::Starting(ExecuteStarting {
+                ctx: ctx.clone(),
+                sender,
+            }),
         }));
-        let block_sender_closer = block_sender.closer();
-        let state_clone = state.clone();
-        let ctx_clone = ctx.clone();
-        let sql = request.sql.clone();
 
-        let http_query_runtime_instance = GlobalQueryRuntime::instance();
-        let span = if let Some(parent) = SpanContext::current_local_parent() {
-            Span::root(std::any::type_name::<ExecuteState>(), parent)
-                .with_properties(|| http_ctx.to_fastrace_properties())
-        } else {
-            Span::noop()
-        };
         let format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>> = Default::default();
-        let format_settings_clone = format_settings.clone();
         let tenant = session.get_current_tenant();
         let user_name = session.get_current_user()?.name;
 
@@ -538,54 +533,21 @@ impl HttpQuery {
             ClientSessionManager::instance().on_query_start(&cid, &user_name, &session);
         };
         let has_temp_table_before_run = !session.temp_tbl_mgr().lock().is_empty();
-        http_query_runtime_instance.runtime().try_spawn(
-            async move {
-                let state = state_clone.clone();
-                if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
-                    state,
-                    sql,
-                    session,
-                    ctx_clone.clone(),
-                    block_sender,
-                    format_settings_clone,
-                ))
-                .await
-                .with_context(|| "failed to start query")
-                .flatten()
-                {
-                    let state = ExecuteStopped {
-                        stats: Progresses::default(),
-                        schema: vec![],
-                        has_result_set: None,
-                        reason: Err(e.clone()),
-                        session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
-                        query_duration_ms: ctx_clone.get_query_duration_ms(),
-                        affect: ctx_clone.get_affect(),
-                        warnings: ctx_clone.pop_warnings(),
-                    };
-                    info!("http query change state to Stopped, fail to start {:?}", e);
-                    Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)));
-                    block_sender_closer.close();
-                }
-            }
-            .in_span(span),
-            None,
-        )?;
 
         let data = Arc::new(TokioMutex::new(PageManager::new(
-            request.pagination.max_rows_per_page,
+            req.pagination.max_rows_per_page,
             block_receiver,
             format_settings,
         )));
 
-        let query = HttpQuery {
+        Ok(HttpQuery {
             id: query_id,
             tenant,
             user_name,
             client_session_id: http_ctx.client_session_id.clone(),
             session_id,
             node_id,
-            request,
+            request: req,
             state,
             page_manager: data,
             result_timeout_secs,
@@ -597,9 +559,8 @@ impl HttpQuery {
             is_txn_mgr_saved: Default::default(),
             has_temp_table_after_run: Default::default(),
             is_session_handle_refreshed: Default::default(),
-        };
-
-        Ok(Arc::new(query))
+            query_mem_stat: ctx.get_query_memory_tracking(),
+        })
     }
 
     #[async_backtrace::framed]
@@ -760,6 +721,68 @@ impl HttpQuery {
             next_page_no: page_manager.next_page_no(),
         };
         Ok(response)
+    }
+
+    pub async fn start_query(&mut self, sql: String) -> Result<()> {
+        let (block_sender, query_context) = {
+            let state = self.state.lock();
+            let ExecuteState::Starting(state) = &state.state else {
+                return Err(ErrorCode::Internal("Query state must be Starting."));
+            };
+
+            (state.sender.clone(), state.ctx.clone())
+        };
+
+        let query_session = query_context.get_current_session();
+
+        let query_state = self.state.clone();
+
+        let query_format_settings = {
+            let page_manager = self.page_manager.lock().await;
+            page_manager.format_settings.clone()
+        };
+
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.mem_stat = query_context.get_query_memory_tracking();
+        tracking_payload.query_id = Some(query_context.get_id());
+        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
+        GlobalQueryRuntime::instance().runtime().try_spawn(
+            async move {
+                if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
+                    query_state.clone(),
+                    sql,
+                    query_session,
+                    query_context.clone(),
+                    block_sender.clone(),
+                    query_format_settings,
+                ))
+                .await
+                .with_context(|| "failed to start query")
+                .flatten()
+                {
+                    let state = ExecuteStopped {
+                        stats: Progresses::default(),
+                        schema: vec![],
+                        has_result_set: None,
+                        reason: Err(e.clone()),
+                        session_state: ExecutorSessionState::new(
+                            query_context.get_current_session(),
+                        ),
+                        query_duration_ms: query_context.get_query_duration_ms(),
+                        affect: query_context.get_affect(),
+                        warnings: query_context.pop_warnings(),
+                    };
+
+                    info!("http query change state to Stopped, fail to start {:?}", e);
+                    Executor::start_to_stop(&query_state, ExecuteState::Stopped(Box::new(state)));
+                    block_sender.close();
+                }
+            },
+            None,
+        )?;
+
+        Ok(())
     }
 
     #[async_backtrace::framed]
