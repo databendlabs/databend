@@ -134,7 +134,7 @@ where A: SortAlgorithm
         collect.sort_input_data(&self.base, input_data, aborting)
     }
 
-    pub async fn subsequent_spill_last(&mut self, target_rows: usize) -> Result<()> {
+    pub async fn collect_spill_last(&mut self, target_rows: usize) -> Result<()> {
         let Step::Collect(collect) = &mut self.step else {
             unreachable!()
         };
