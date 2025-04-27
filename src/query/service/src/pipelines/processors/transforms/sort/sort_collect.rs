@@ -127,7 +127,7 @@ where
         let params = if no_spill {
             SortSpillParams {
                 batch_rows: self.max_block_size,
-                num_merge: merger.num_rows().div_ceil(self.max_block_size),
+                num_merge: merger.num_rows().div_ceil(self.max_block_size).max(2),
             }
         } else {
             self.determine_params(merger.num_bytes(), merger.num_rows())
@@ -152,7 +152,7 @@ where
         let params = if no_spill {
             SortSpillParams {
                 batch_rows: self.max_block_size,
-                num_merge: num_rows.div_ceil(self.max_block_size),
+                num_merge: num_rows.div_ceil(self.max_block_size).max(2),
             }
         } else {
             self.determine_params(num_bytes, num_rows)
