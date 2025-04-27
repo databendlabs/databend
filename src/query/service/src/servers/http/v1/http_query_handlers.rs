@@ -21,6 +21,7 @@ use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
@@ -355,39 +356,58 @@ async fn query_page_handler(
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
-    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
-    let _t = SlowRequestLogTracker::new(ctx);
+    // tracing in middleware
 
-    async {
-        let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.get_query(&query_id) {
-            Some(query) => {
-                if query.user_name != ctx.user_name {
-                    return Err(poem::error::Error::from_string(
-                        format!(
-                            "wrong user, query {} expect {}, got {}",
-                            query_id, query.user_name, ctx.user_name
-                        ),
-                        StatusCode::UNAUTHORIZED,
-                    ));
-                }
-                query.check_client_session_id(&ctx.client_session_id)?;
-                if let Some(reason) = query.check_removed() {
-                    Err(query_id_removed(&query_id, reason))
-                } else {
-                    query.update_expire_time(true).await;
-                    let resp = query.get_response_page(page_no).await.map_err(|err| {
-                        poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
-                    })?;
-                    query.update_expire_time(false).await;
-                    Ok(QueryResponse::from_internal(query_id, resp, false))
-                }
+    let http_query_manager = HttpQueryManager::instance();
+
+    let Some(query) = http_query_manager.get_query(&query_id) else {
+        return Err(query_id_not_found(&query_id, &ctx.node_id));
+    };
+
+    let query_mem_stat = query.query_mem_stat.clone();
+
+    let query_page_handle = {
+        let query_id = query_id.clone();
+        async move {
+            if query.user_name != ctx.user_name {
+                return Err(poem::error::Error::from_string(
+                    format!(
+                        "wrong user, query {} expect {}, got {}",
+                        query_id, query.user_name, ctx.user_name
+                    ),
+                    StatusCode::UNAUTHORIZED,
+                ));
             }
-            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
+
+            query.check_client_session_id(&ctx.client_session_id)?;
+            if let Some(reason) = query.check_removed() {
+                Err(query_id_removed(&query_id, reason))
+            } else {
+                query.update_expire_time(true).await;
+                let resp = query.get_response_page(page_no).await.map_err(|err| {
+                    poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
+                })?;
+                query.update_expire_time(false).await;
+                Ok(QueryResponse::from_internal(query_id, resp, false))
+            }
         }
-    }
-    .in_span(root)
-    .await
+    };
+
+    let query_page_handle = {
+        let root = get_http_tracing_span(func_path!(), ctx, &query_id);
+        let _t = SlowRequestLogTracker::new(ctx);
+        query_page_handle.in_span(root)
+    };
+
+    let query_page_handle = {
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.mem_stat = query_mem_stat;
+        tracking_payload.query_id = Some(query_id.clone());
+        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+        ThreadTracker::tracking_future(query_page_handle)
+    };
+
+    query_page_handle.await
 }
 
 #[poem::handler]

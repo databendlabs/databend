@@ -25,6 +25,8 @@ use databend_common_base::base::short_sql;
 use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
@@ -366,6 +368,7 @@ pub struct HttpQuery {
     pub(crate) has_temp_table_before_run: bool,
     pub(crate) has_temp_table_after_run: Mutex<Option<bool>>,
     pub(crate) is_session_handle_refreshed: AtomicBool,
+    pub(crate) query_mem_stat: Option<Arc<MemStat>>,
 }
 
 fn try_set_txn(
@@ -470,6 +473,11 @@ impl HttpQuery {
         session.set_client_host(ctx.client_host.clone());
 
         let http_ctx = ctx;
+        let query_mem_stat = MemStat::create(format!("Query-{}", query_id));
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.mem_stat = Some(query_mem_stat.clone());
+        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
         let ctx = session.create_query_context().await?;
 
         // Deduplicate label is used on the DML queries which may be retried by the client.
@@ -551,6 +559,7 @@ impl HttpQuery {
             is_txn_mgr_saved: Default::default(),
             has_temp_table_after_run: Default::default(),
             is_session_handle_refreshed: Default::default(),
+            query_mem_stat: ctx.get_query_memory_tracking(),
         })
     }
 
@@ -732,6 +741,11 @@ impl HttpQuery {
             let page_manager = self.page_manager.lock().await;
             page_manager.format_settings.clone()
         };
+
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.mem_stat = query_context.get_query_memory_tracking();
+        tracking_payload.query_id = Some(query_context.get_id());
+        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
 
         GlobalQueryRuntime::instance().runtime().try_spawn(
             async move {
