@@ -187,4 +187,30 @@ impl CommonCompression {
         }
         Ok(())
     }
+
+    pub fn decompress_buffer<R: NativeReadBuf>(
+        &self,
+        reader: &mut R,
+        _uncompressed_size: usize,
+        compressed_size: usize,
+        out_slice: &mut [u8],
+        scratch: &mut Vec<u8>,
+    ) -> Result<()> {
+        let mut use_inner = false;
+        reader.fill_buf()?;
+        let input = if reader.buffer_bytes().len() >= compressed_size {
+            use_inner = true;
+            reader.buffer_bytes()
+        } else {
+            scratch.resize(compressed_size, 0);
+            reader.read_exact(scratch.as_mut_slice())?;
+            scratch.as_slice()
+        };
+
+        self.decompress(&input[..compressed_size], out_slice)?;
+        if use_inner {
+            reader.consume(compressed_size);
+        }
+        Ok(())
+    }
 }
