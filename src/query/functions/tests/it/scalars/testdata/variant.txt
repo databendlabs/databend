@@ -1064,6 +1064,42 @@ output domain  : Undefined
 output         : '{"a":"b"}'
 
 
+ast            : as_binary(to_binary('abcd')::variant)
+raw expr       : as_binary(CAST(to_binary('abcd') AS Variant))
+checked expr   : as_binary<Variant>(CAST<Binary>(CAST<String>("abcd" AS Binary) AS Variant))
+optimized expr : 61626364
+output type    : Binary NULL
+output domain  : Undefined
+output         : 61626364
+
+
+ast            : as_date(to_date('2025-10-11')::variant)
+raw expr       : as_date(CAST(to_date('2025-10-11') AS Variant))
+checked expr   : as_date<Variant>(CAST<Date>(CAST<String>("2025-10-11" AS Date) AS Variant))
+optimized expr : 20372
+output type    : Date NULL
+output domain  : {20372..=20372}
+output         : '2025-10-11'
+
+
+ast            : as_timestamp(to_timestamp('2025-05-01 10:00:00')::variant)
+raw expr       : as_timestamp(CAST(to_timestamp('2025-05-01 10:00:00') AS Variant))
+checked expr   : as_timestamp<Variant>(CAST<Timestamp>(CAST<String>("2025-05-01 10:00:00" AS Timestamp) AS Variant))
+optimized expr : 1746093600000000
+output type    : Timestamp NULL
+output domain  : {1746093600000000..=1746093600000000}
+output         : '2025-05-01 10:00:00.000000'
+
+
+ast            : as_interval(to_interval('1 year 2 month')::variant)
+raw expr       : as_interval(CAST(to_interval('1 year 2 month') AS Variant))
+checked expr   : as_interval<Variant>(CAST<Interval>(CAST<String>("1 year 2 month" AS Interval) AS Variant))
+optimized expr : 1 year 2 months
+output type    : Interval NULL
+output domain  : SimpleDomain { min: months_days_micros(1109194275199700726309615304704), max: months_days_micros(1109194275199700726309615304704) }
+output         : '1 year 2 months'
+
+
 ast            : as_boolean(parse_json(s))
 raw expr       : as_boolean(parse_json(s::String))
 checked expr   : as_boolean<Variant>(CAST<String>(s AS Variant))
@@ -1340,6 +1376,42 @@ output         : false
 ast            : is_object(parse_json('{"a":"b"}'))
 raw expr       : is_object(parse_json('{"a":"b"}'))
 checked expr   : is_object<Variant>(CAST<String>("{\"a\":\"b\"}" AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_binary(to_binary('abcd')::variant)
+raw expr       : is_binary(CAST(to_binary('abcd') AS Variant))
+checked expr   : is_binary<Variant>(CAST<Binary>(CAST<String>("abcd" AS Binary) AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_date(to_date('2025-10-11')::variant)
+raw expr       : is_date(CAST(to_date('2025-10-11') AS Variant))
+checked expr   : is_date<Variant>(CAST<Date>(CAST<String>("2025-10-11" AS Date) AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_timestamp(to_timestamp('2025-05-01 10:00:00')::variant)
+raw expr       : is_timestamp(CAST(to_timestamp('2025-05-01 10:00:00') AS Variant))
+checked expr   : is_timestamp<Variant>(CAST<Timestamp>(CAST<String>("2025-05-01 10:00:00" AS Timestamp) AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_interval(to_interval('1 year 2 month')::variant)
+raw expr       : is_interval(CAST(to_interval('1 year 2 month') AS Variant))
+checked expr   : is_interval<Variant>(CAST<Interval>(CAST<String>("1 year 2 month" AS Interval) AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}

@@ -357,7 +357,7 @@ impl Debug for DecimalScalar {
                 write!(
                     f,
                     "{}_d256({},{})",
-                    display_decimal_256(*val, size.scale),
+                    display_decimal_256(val.0, size.scale),
                     size.precision,
                     size.scale
                 )
@@ -373,7 +373,7 @@ impl Display for DecimalScalar {
                 write!(f, "{}", display_decimal_128(*val, size.scale))
             }
             DecimalScalar::Decimal256(val, size) => {
-                write!(f, "{}", display_decimal_256(*val, size.scale))
+                write!(f, "{}", display_decimal_256(val.0, size.scale))
             }
         }
     }
@@ -425,7 +425,7 @@ impl Debug for DecimalColumn {
                 .field(&format_args!(
                     "[{}]",
                     &val.iter()
-                        .map(|x| display_decimal_256(*x, size.scale))
+                        .map(|x| display_decimal_256(x.0, size.scale))
                         .join(", ")
                 ))
                 .finish(),
@@ -1117,8 +1117,8 @@ impl Display for DecimalDomain {
             }
             DecimalDomain::Decimal256(SimpleDomain { min, max }, size) => {
                 write!(f, "{}", SimpleDomain {
-                    min: display_decimal_256(*min, size.scale),
-                    max: display_decimal_256(*max, size.scale),
+                    min: display_decimal_256(min.0, size.scale),
+                    max: display_decimal_256(max.0, size.scale),
                 })
             }
         }

@@ -231,7 +231,7 @@ output         : '-1'
 ast            : CAST(1.1 AS VARIANT)
 raw expr       : CAST(1.1 AS Variant)
 checked expr   : CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Variant)
-optimized expr : 0x2000000020000009603ff199999999999a
+optimized expr : 0x2000000020000013700000000000000000000000000000000b0201
 output type    : Variant
 output domain  : Undefined
 output         : '1.1'
@@ -266,7 +266,7 @@ output         : '[0,"a"]'
 ast            : CAST(to_timestamp(1000000) AS VARIANT)
 raw expr       : CAST(to_timestamp(1000000) AS Variant)
 checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt32>(1000000_u32 AS Int64) AS Timestamp) AS Variant)
-optimized expr : 0x200000001000001a313937302d30312d31322031333a34363a34302e303030303030
+optimized expr : 0x200000006000000920000000e8d4a51000
 output type    : Variant
 output domain  : Undefined
 output         : '"1970-01-12 13:46:40.000000"'
@@ -2409,7 +2409,7 @@ output         : '-1'
 ast            : TRY_CAST(1.1 AS VARIANT)
 raw expr       : TRY_CAST(1.1 AS Variant)
 checked expr   : TRY_CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Variant NULL)
-optimized expr : 0x2000000020000009603ff199999999999a
+optimized expr : 0x2000000020000013700000000000000000000000000000000b0201
 output type    : Variant NULL
 output domain  : Undefined
 output         : '1.1'
@@ -2445,7 +2445,7 @@ output         : '[0,"a"]'
 ast            : TRY_CAST(to_timestamp(1000000) AS VARIANT)
 raw expr       : TRY_CAST(to_timestamp(1000000) AS Variant)
 checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt32>(1000000_u32 AS Int64) AS Timestamp) AS Variant NULL)
-optimized expr : 0x200000001000001a313937302d30312d31322031333a34363a34302e303030303030
+optimized expr : 0x200000006000000920000000e8d4a51000
 output type    : Variant NULL
 output domain  : Undefined
 output         : '"1970-01-12 13:46:40.000000"'

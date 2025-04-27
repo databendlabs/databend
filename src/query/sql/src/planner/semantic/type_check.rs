@@ -71,6 +71,7 @@ use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -3961,7 +3962,7 @@ impl<'a> TypeChecker<'a> {
                 value,
                 precision,
                 scale,
-            } => Scalar::Decimal(DecimalScalar::Decimal256(*value, DecimalSize {
+            } => Scalar::Decimal(DecimalScalar::Decimal256(i256(*value), DecimalSize {
                 precision: *precision,
                 scale: *scale,
             })),

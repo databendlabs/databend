@@ -14,7 +14,6 @@
 
 use databend_common_exception::Result;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
-use ethnum::i256;
 
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
@@ -25,6 +24,7 @@ use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
+use crate::types::i256;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;

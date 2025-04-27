@@ -306,7 +306,7 @@ enquote = "1.1.0"
 enum-as-inner = "0.6"
 enum_dispatch = "0.3.13"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
-ethnum = { version = "1.5.0" }
+ethnum = { version = "1.5.1" }
 faststr = "0.2"
 feature-set = { version = "0.1.1" }
 flatbuffers = "24" # Must use the same version with arrow-ipc
@@ -350,7 +350,7 @@ jaq-core = "1.5.1"
 jaq-interpret = "1.5.0"
 jaq-parse = "1.0.3"
 jaq-std = "1.6.0"
-jiff = { version = "0.2.1", features = ["serde", "tzdb-bundle-always"] }
+jiff = { version = "0.2.10", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.1"
 jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
@@ -637,7 +637,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
 display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.1.2" }
-ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
+jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "dcaf261" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.3" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
