@@ -39,7 +39,8 @@ impl PipelineBuilder {
         self.build_pipeline(&sink.input)?;
         self.main_pipeline.resize(1, true)?;
         let node_num = self.ctx.get_cluster().nodes.len();
-        self.main_pipeline
-            .add_sink(|input| RuntimeFilterSinkProcessor::create(input, node_num))
+        self.main_pipeline.add_sink(|input| {
+            RuntimeFilterSinkProcessor::create(input, node_num, self.ctx.rf_sink_send(sink.join_id))
+        })
     }
 }

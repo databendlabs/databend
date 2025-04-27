@@ -601,6 +601,7 @@ impl PhysicalPlanBuilder {
         let runtime_filter_sink = Box::new(PhysicalPlan::RuntimeFilterSink(RuntimeFilterSink {
             plan_id: 0,
             input: exchange,
+            join_id,
         }));
         Ok(runtime_filter_sink)
     }

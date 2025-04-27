@@ -27,6 +27,7 @@ use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
+use crate::pipelines::processors::transforms::RuntimeFilterChannels;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
 use crate::pipelines::processors::HashJoinDesc;
@@ -157,7 +158,10 @@ impl PipelineBuilder {
             hash_join_plan
                 .runtime_filter_plan
                 .as_ref()
-                .map(|_| self.ctx.rf_src_send(hash_join_plan.join_id)),
+                .map(|_| RuntimeFilterChannels {
+                    rf_src_send: self.ctx.rf_src_send(hash_join_plan.join_id),
+                    rf_sink_recv: self.ctx.rf_sink_recv(hash_join_plan.join_id),
+                }),
         )?;
         build_state.add_runtime_filter_ready();
 

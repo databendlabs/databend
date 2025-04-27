@@ -54,8 +54,8 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFiltersForScan;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
@@ -137,7 +137,7 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::processors::transforms::RuntimeFiltersMeta;
+use crate::pipelines::processors::transforms::RemoteRuntimeFilters;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
@@ -284,12 +284,20 @@ impl QueryContext {
         }
     }
 
-    pub fn rf_src_recv(&self, join_id: u32) -> Receiver<RuntimeFiltersMeta> {
+    pub fn rf_src_recv(&self, join_id: u32) -> Receiver<RemoteRuntimeFilters> {
         self.shared.rf_src_recv(join_id)
     }
 
-    pub fn rf_src_send(&self, join_id: u32) -> Sender<RuntimeFiltersMeta> {
+    pub fn rf_src_send(&self, join_id: u32) -> Sender<RemoteRuntimeFilters> {
         self.shared.rf_src_send(join_id)
+    }
+
+    pub fn rf_sink_recv(&self, join_id: u32) -> Receiver<RemoteRuntimeFilters> {
+        self.shared.rf_sink_recv(join_id)
+    }
+
+    pub fn rf_sink_send(&self, join_id: u32) -> Sender<RemoteRuntimeFilters> {
+        self.shared.rf_sink_send(join_id)
     }
 
     pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
@@ -1392,21 +1400,21 @@ impl TableContext for QueryContext {
         runtime_filters.clear();
     }
 
-    fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
+    fn set_runtime_filter(&self, filters: (IndexType, RuntimeFiltersForScan)) {
         let mut runtime_filters = self.shared.runtime_filters.write();
         match runtime_filters.entry(filters.0) {
             Entry::Vacant(v) => {
                 v.insert(filters.1);
             }
             Entry::Occupied(mut v) => {
-                for filter in filters.1.get_inlist() {
-                    v.get_mut().add_inlist(filter.clone());
+                for (rf_id, filter) in filters.1.inlist.into_iter() {
+                    v.get_mut().add_inlist(rf_id, filter);
                 }
-                for filter in filters.1.get_min_max() {
-                    v.get_mut().add_min_max(filter.clone());
+                for (rf_id, filter) in filters.1.min_max.into_iter() {
+                    v.get_mut().add_min_max(rf_id, filter);
                 }
-                for filter in filters.1.blooms() {
-                    v.get_mut().add_bloom(filter);
+                for (rf_id, filter) in filters.1.bloom.into_iter() {
+                    v.get_mut().add_bloom(rf_id, filter);
                 }
             }
         }
@@ -1457,7 +1465,7 @@ impl TableContext for QueryContext {
     fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_bloom()).clone(),
+            Some(v) => v.bloom.values().cloned().collect(),
             None => vec![],
         }
     }
@@ -1465,7 +1473,7 @@ impl TableContext for QueryContext {
     fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_inlist()).clone(),
+            Some(v) => v.inlist.values().cloned().collect(),
             None => vec![],
         }
     }
@@ -1473,14 +1481,14 @@ impl TableContext for QueryContext {
     fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_min_max()).clone(),
+            Some(v) => v.min_max.values().cloned().collect(),
             None => vec![],
         }
     }
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool {
         if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
-            return !runtime_filter.get_bloom().is_empty();
+            return !runtime_filter.bloom.is_empty();
         }
         false
     }

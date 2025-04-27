@@ -54,7 +54,7 @@ pub struct HashJoinDesc {
 }
 
 pub struct RuntimeFilterDesc {
-    pub _id: usize,
+    pub id: usize,
     pub build_key: Expr,
     pub probe_key: Expr<String>,
     pub scan_id: usize,
@@ -78,7 +78,7 @@ impl From<&RemoteRuntimeFiltersDesc> for RuntimeFiltersDesc {
 impl From<&RemoteRuntimeFilterDesc> for RuntimeFilterDesc {
     fn from(runtime_filter: &RemoteRuntimeFilterDesc) -> Self {
         Self {
-            _id: runtime_filter.id,
+            id: runtime_filter.id,
             build_key: runtime_filter.build_key.as_expr(&BUILTIN_FUNCTIONS),
             probe_key: runtime_filter.probe_key.as_expr(&BUILTIN_FUNCTIONS),
             scan_id: runtime_filter.scan_id,

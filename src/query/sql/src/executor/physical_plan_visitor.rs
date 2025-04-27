@@ -138,6 +138,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::RuntimeFilterSink(RuntimeFilterSink {
             plan_id: plan.plan_id,
+            join_id: plan.join_id,
             input: Box::new(input),
         }))
     }

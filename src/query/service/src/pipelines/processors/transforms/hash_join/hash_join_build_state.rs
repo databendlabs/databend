@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
@@ -20,10 +21,11 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use async_channel::Receiver;
 use async_channel::Sender;
 use databend_common_base::base::tokio::sync::Barrier;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFiltersForScan;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
@@ -79,7 +81,7 @@ use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTab
 use crate::pipelines::processors::transforms::hash_join::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHashTable;
-use crate::pipelines::processors::transforms::RuntimeFiltersMeta;
+use crate::pipelines::processors::transforms::RemoteRuntimeFilters;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
@@ -119,7 +121,14 @@ pub struct HashJoinBuildState {
 
     /// Spill related states.
     pub(crate) memory_settings: MemorySettings,
-    pub(crate) runtime_filter_sender: Option<Sender<RuntimeFiltersMeta>>,
+    pub(crate) rf_channels: Option<RuntimeFilterChannels>,
+}
+
+pub struct RuntimeFilterChannels {
+    /// send runtime filter to `RuntimeFilterSourceProcessor`
+    pub(crate) rf_src_send: Sender<RemoteRuntimeFilters>,
+    /// receive runtime filter from `RuntimeFilterSinkProcessor`
+    pub(crate) rf_sink_recv: Receiver<RemoteRuntimeFilters>,
 }
 
 impl HashJoinBuildState {
@@ -131,7 +140,7 @@ impl HashJoinBuildState {
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
         num_threads: usize,
-        rf_src_send: Option<Sender<RuntimeFiltersMeta>>,
+        rf_channels: Option<RuntimeFilterChannels>,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -168,7 +177,7 @@ impl HashJoinBuildState {
             build_hash_table_tasks: Default::default(),
             mutex: Default::default(),
             memory_settings,
-            runtime_filter_sender: rf_src_send,
+            rf_channels,
         }))
     }
 
@@ -311,7 +320,6 @@ impl HashJoinBuildState {
             if self.hash_join_state.spilled_partitions.read().is_empty() {
                 self.add_runtime_filter(&build_chunks, build_num_rows)?;
             } else {
-                self.send_runtime_filter_meta(Default::default())?;
                 self.set_bloom_filter_ready(false)?;
             }
 
@@ -844,15 +852,16 @@ impl HashJoinBuildState {
 
     fn add_runtime_filter(&self, build_chunks: &[DataBlock], build_num_rows: usize) -> Result<()> {
         let mut bloom_filter_ready = false;
-        let mut runtime_filters_meta = RuntimeFiltersMeta::default();
+        let mut runtime_filters = HashMap::new();
         for rf in self.runtime_filter_desc() {
-            let mut runtime_filter = RuntimeFilterInfo::default();
+            let mut runtime_filter = RuntimeFiltersForScan::default();
             if rf.enable_inlist_runtime_filter && build_num_rows < INLIST_RUNTIME_FILTER_THRESHOLD {
                 self.inlist_runtime_filter(
                     &mut runtime_filter,
                     build_chunks,
                     &rf.build_key,
                     &rf.probe_key,
+                    rf.id,
                 )?;
             }
             if rf.enable_bloom_runtime_filter {
@@ -861,6 +870,7 @@ impl HashJoinBuildState {
                     &mut runtime_filter,
                     &rf.build_key,
                     &rf.probe_key,
+                    rf.id,
                 )?;
             }
             if rf.enable_min_max_runtime_filter {
@@ -869,15 +879,15 @@ impl HashJoinBuildState {
                     &mut runtime_filter,
                     &rf.build_key,
                     &rf.probe_key,
+                    rf.id,
                 )?;
             }
             if !runtime_filter.is_empty() {
                 bloom_filter_ready |= !runtime_filter.is_blooms_empty();
-                runtime_filters_meta.add(rf.scan_id, &runtime_filter);
-                self.ctx.set_runtime_filter((rf.scan_id, runtime_filter));
+                runtime_filters.insert(rf.scan_id, runtime_filter);
             }
         }
-        self.send_runtime_filter_meta(runtime_filters_meta)?;
+        self.send_runtime_filter_meta(runtime_filters)?;
         self.set_bloom_filter_ready(bloom_filter_ready)?;
         Ok(())
     }
@@ -885,9 +895,10 @@ impl HashJoinBuildState {
     fn bloom_runtime_filter(
         &self,
         data_blocks: &[DataBlock],
-        runtime_filter: &mut RuntimeFilterInfo,
+        runtime_filter: &mut RuntimeFiltersForScan,
         build_key: &Expr,
         probe_key: &Expr<String>,
+        rf_id: usize,
     ) -> Result<()> {
         if !build_key.data_type().remove_nullable().is_number()
             && !build_key.data_type().remove_nullable().is_string()
@@ -925,23 +936,24 @@ impl HashJoinBuildState {
             hashes_vec.push(hash);
         });
         let filter = BinaryFuse16::try_from(&hashes_vec)?;
-        runtime_filter.add_bloom((id.to_string(), filter));
+        runtime_filter.add_bloom(rf_id, (id.to_string(), filter));
         Ok(())
     }
 
     fn inlist_runtime_filter(
         &self,
-        runtime_filter: &mut RuntimeFilterInfo,
+        runtime_filter: &mut RuntimeFiltersForScan,
         data_blocks: &[DataBlock],
         build_key: &Expr,
         probe_key: &Expr<String>,
+        rf_id: usize,
     ) -> Result<()> {
         if let Some(distinct_build_column) =
             dedup_build_key_column(&self.func_ctx, data_blocks, build_key)?
         {
             if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
                 info!("inlist_filter: {:?}", filter.sql_display());
-                runtime_filter.add_inlist(filter);
+                runtime_filter.add_inlist(rf_id, filter);
             }
         }
         Ok(())
@@ -950,9 +962,10 @@ impl HashJoinBuildState {
     fn min_max_runtime_filter(
         &self,
         data_blocks: &[DataBlock],
-        runtime_filter: &mut RuntimeFilterInfo,
+        runtime_filter: &mut RuntimeFiltersForScan,
         build_key: &Expr,
         probe_key: &Expr<String>,
+        rf_id: usize,
     ) -> Result<()> {
         if !build_key.runtime_filter_supported_types() {
             return Ok(());
@@ -1045,7 +1058,7 @@ impl HashJoinBuildState {
             };
             if let Some(min_max_filter) = min_max_filter {
                 info!("min_max_filter: {:?}", min_max_filter.sql_display());
-                runtime_filter.add_min_max(min_max_filter);
+                runtime_filter.add_min_max(rf_id, min_max_filter);
             }
         }
         Ok(())
@@ -1079,10 +1092,24 @@ impl HashJoinBuildState {
             .any(|rf| rf.enable_min_max_runtime_filter)
     }
 
-    fn send_runtime_filter_meta(&self, runtime_filter: RuntimeFiltersMeta) -> Result<()> {
-        if let Some(sender) = self.runtime_filter_sender.as_ref() {
-            sender.send_blocking(runtime_filter).unwrap();
-            sender.close();
+    fn send_runtime_filter_meta(
+        &self,
+        mut rf: HashMap<usize, RuntimeFiltersForScan>,
+    ) -> Result<()> {
+        if let Some(channels) = self.rf_channels.as_ref() {
+            channels
+                .rf_src_send
+                .send_blocking(rf.into())
+                .map_err(|_| ErrorCode::TokioError("send runtime filter meta failed"))?;
+            channels.rf_src_send.close();
+            let merged_rf = channels
+                .rf_sink_recv
+                .recv_blocking()
+                .map_err(|_| ErrorCode::TokioError("receive runtime filter meta failed"))?;
+            rf = merged_rf.into();
+        }
+        for (scan_id, runtime_filter) in rf.into_iter() {
+            self.ctx.set_runtime_filter((scan_id, runtime_filter));
         }
         Ok(())
     }

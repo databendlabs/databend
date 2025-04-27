@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use async_channel::Sender;
+use databend_common_catalog::runtime_filter_info::RuntimeFiltersForScan;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionID;
 use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -32,18 +37,16 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 
 pub struct RuntimeFilterSourceProcessor {
-    pub meta_receiver: Receiver<RuntimeFiltersMeta>,
+    pub receiver: Receiver<RemoteRuntimeFilters>,
 }
 
 impl RuntimeFilterSourceProcessor {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        receiver: Receiver<RuntimeFiltersMeta>,
+        receiver: Receiver<RemoteRuntimeFilters>,
         output_port: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx, output_port, Self {
-            meta_receiver: receiver,
-        })
+        AsyncSourcer::create(ctx, output_port, Self { receiver })
     }
 }
 
@@ -56,7 +59,7 @@ impl AsyncSource for RuntimeFilterSourceProcessor {
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let start = std::time::Instant::now();
         log::info!("RuntimeFilterSource recv() start");
-        let rf = self.meta_receiver.recv().await;
+        let rf = self.receiver.recv().await;
         log::info!(
             "RuntimeFilterSource recv() take {:?},get {}",
             start.elapsed(),
@@ -72,53 +75,24 @@ impl AsyncSource for RuntimeFilterSourceProcessor {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
-pub struct RuntimeFiltersMeta {
-    runtime_filters: Vec<RuntimeFilterMeta>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct RuntimeFilterMeta {
-    scan_id: usize,
-    inlist: Vec<RemoteExpr<String>>,
-    min_max: Vec<RemoteExpr<String>>,
-}
-
-#[typetag::serde(name = "runtime_filters_meta")]
-impl BlockMetaInfo for RuntimeFiltersMeta {
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
-    }
-}
-
-impl RuntimeFiltersMeta {
-    pub fn add(&mut self, scan_id: usize, runtime_filter_info: &RuntimeFilterInfo) {
-        let rf = RuntimeFilterMeta {
-            scan_id,
-            inlist: runtime_filter_info
-                .inlists_ref()
-                .iter()
-                .map(|expr| expr.as_remote_expr())
-                .collect(),
-            min_max: runtime_filter_info
-                .min_maxs_ref()
-                .iter()
-                .map(|expr| expr.as_remote_expr())
-                .collect(),
-        };
-        self.runtime_filters.push(rf);
-    }
-}
 pub struct RuntimeFilterSinkProcessor {
     node_num: usize,
     recv_num: usize,
+    rf: Vec<RemoteRuntimeFilters>,
+    sender: Sender<RemoteRuntimeFilters>,
 }
 
 impl RuntimeFilterSinkProcessor {
-    pub fn create(input: Arc<InputPort>, node_num: usize) -> Result<ProcessorPtr> {
+    pub fn create(
+        input: Arc<InputPort>,
+        node_num: usize,
+        sender: Sender<RemoteRuntimeFilters>,
+    ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(input, Self {
             node_num,
             recv_num: 0,
+            rf: vec![],
+            sender,
         })))
     }
 }
@@ -137,13 +111,154 @@ impl AsyncSink for RuntimeFilterSinkProcessor {
         let ptr = data_block
             .take_meta()
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to RuntimeFilterMeta"))?;
-        let runtime_filter = RuntimeFiltersMeta::downcast_from(ptr)
+        let runtime_filter = RemoteRuntimeFilters::downcast_from(ptr)
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to RuntimeFilterMeta"))?;
         log::info!(
             "RuntimeFilterSinkProcessor recv runtime filter: {:?}",
             runtime_filter
         );
         self.recv_num += 1;
-        Ok(self.node_num == self.recv_num)
+        self.rf.push(runtime_filter);
+        let all_recv = self.node_num == self.recv_num;
+        if all_recv {
+            let merged_rf = RemoteRuntimeFilters::merge(&self.rf);
+            self.sender.send(merged_rf).await.map_err(|_| {
+                ErrorCode::Internal("RuntimeFilterSinkProcessor failed to send runtime filter")
+            })?;
+        }
+        Ok(all_recv)
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct RemoteRuntimeFilters {
+    scan_id_to_runtime_filter: HashMap<usize, RemoteRuntimeFiltersForScan>,
+}
+
+impl From<HashMap<usize, RuntimeFiltersForScan>> for RemoteRuntimeFilters {
+    fn from(rfs: HashMap<usize, RuntimeFiltersForScan>) -> Self {
+        let mut remote_runtime_filters = RemoteRuntimeFilters::default();
+        for (scan_id, runtime_filter) in rfs {
+            remote_runtime_filters.add(scan_id, &runtime_filter);
+        }
+        remote_runtime_filters
+    }
+}
+
+impl From<RemoteRuntimeFilters> for HashMap<usize, RuntimeFiltersForScan> {
+    fn from(rfs: RemoteRuntimeFilters) -> Self {
+        rfs.scan_id_to_runtime_filter
+            .into_iter()
+            .map(|(scan_id, runtime_filter)| (scan_id, runtime_filter.into()))
+            .collect()
+    }
+}
+
+impl From<RemoteRuntimeFiltersForScan> for RuntimeFiltersForScan {
+    fn from(rfs: RemoteRuntimeFiltersForScan) -> Self {
+        Self {
+            inlist: rfs
+                .rf_id_to_inlist
+                .into_iter()
+                .map(|(id, expr)| (id, expr.as_expr(&BUILTIN_FUNCTIONS)))
+                .collect(),
+            min_max: rfs
+                .rf_id_to_min_max
+                .into_iter()
+                .map(|(id, expr)| (id, expr.as_expr(&BUILTIN_FUNCTIONS)))
+                .collect(),
+            bloom: Default::default(),
+        }
+    }
+}
+
+impl RemoteRuntimeFilters {
+    pub fn merge(rfs: &[RemoteRuntimeFilters]) -> Self {
+        if rfs.is_empty() {
+            return RemoteRuntimeFilters::default();
+        }
+
+        let mut common_scans: Vec<usize> =
+            rfs[0].scan_id_to_runtime_filter.keys().cloned().collect();
+        for rf in &rfs[1..] {
+            common_scans.retain(|scan_id| rf.scan_id_to_runtime_filter.contains_key(scan_id));
+        }
+
+        let mut merged = RemoteRuntimeFilters::default();
+
+        for scan_id in common_scans {
+            let mut merged_for_scan = RemoteRuntimeFiltersForScan::default();
+            let first_scan = &rfs[0].scan_id_to_runtime_filter[&scan_id];
+
+            let mut common_inlist_ids: Vec<usize> =
+                first_scan.rf_id_to_inlist.keys().cloned().collect();
+            let mut common_min_max_ids: Vec<usize> =
+                first_scan.rf_id_to_min_max.keys().cloned().collect();
+            for rf in &rfs[1..] {
+                let scan_filter = &rf.scan_id_to_runtime_filter[&scan_id];
+                common_inlist_ids.retain(|id| scan_filter.rf_id_to_inlist.contains_key(id));
+                common_min_max_ids.retain(|id| scan_filter.rf_id_to_min_max.contains_key(id));
+            }
+
+            for rf_id in &common_inlist_ids {
+                let mut exprs = Vec::new();
+                for rf in rfs.iter() {
+                    exprs.push(
+                        rf.scan_id_to_runtime_filter[&scan_id].rf_id_to_inlist[rf_id].clone(),
+                    );
+                }
+                let merged_expr = exprs
+                    .into_iter()
+                    .reduce(|acc, expr| RemoteExpr::FunctionCall {
+                        span: None,
+                        id: Box::new(FunctionID::Builtin {
+                            name: "or".to_string(),
+                            id: 0,
+                        }),
+                        generics: vec![],
+                        args: vec![acc, expr],
+                        return_type: DataType::Boolean,
+                    })
+                    .unwrap();
+                merged_for_scan.rf_id_to_inlist.insert(*rf_id, merged_expr);
+            }
+
+            merged
+                .scan_id_to_runtime_filter
+                .insert(scan_id, merged_for_scan);
+        }
+
+        merged
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct RemoteRuntimeFiltersForScan {
+    rf_id_to_inlist: HashMap<usize, RemoteExpr<String>>,
+    rf_id_to_min_max: HashMap<usize, RemoteExpr<String>>,
+}
+
+#[typetag::serde(name = "runtime_filters_for_join")]
+impl BlockMetaInfo for RemoteRuntimeFilters {
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
+
+impl RemoteRuntimeFilters {
+    pub fn add(&mut self, scan_id: usize, r: &RuntimeFiltersForScan) {
+        let rf = RemoteRuntimeFiltersForScan {
+            rf_id_to_inlist: r
+                .inlist
+                .iter()
+                .map(|(id, expr)| (*id, expr.as_remote_expr()))
+                .collect(),
+            rf_id_to_min_max: r
+                .min_max
+                .iter()
+                .map(|(id, expr)| (*id, expr.as_remote_expr()))
+                .collect(),
+        };
+        self.scan_id_to_runtime_filter.insert(scan_id, rf);
     }
 }

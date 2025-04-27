@@ -23,5 +23,6 @@ pub struct RuntimeFilterSource {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeFilterSink {
     pub plan_id: u32,
+    pub join_id: u32,
     pub input: Box<PhysicalPlan>,
 }
