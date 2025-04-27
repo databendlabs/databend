@@ -49,6 +49,7 @@ pub struct TransformSortCollect<A: SortAlgorithm, C> {
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
 
+    max_block_size: usize,
     row_converter: C,
     sort_desc: Arc<[SortColumnDescription]>,
     /// If this transform is after an Exchange transform,
@@ -100,6 +101,7 @@ where
             inner,
             aborting: AtomicBool::new(false),
             memory_settings,
+            max_block_size,
         })
     }
 
@@ -111,12 +113,19 @@ where
         Ok((rows, block))
     }
 
-    fn limit_trans_to_spill(&mut self) -> Result<()> {
+    fn limit_trans_to_spill(&mut self, no_spill: bool) -> Result<()> {
         let Inner::Limit(merger) = &self.inner else {
             unreachable!()
         };
         assert!(merger.num_rows() > 0);
-        let params = self.determine_params(merger.num_bytes(), merger.num_rows());
+        let params = if no_spill {
+            SortSpillParams {
+                batch_rows: self.max_block_size,
+                num_merge: merger.num_rows().div_ceil(self.max_block_size),
+            }
+        } else {
+            self.determine_params(merger.num_bytes(), merger.num_rows())
+        };
         let Inner::Limit(merger) = &mut self.inner else {
             unreachable!()
         };
@@ -126,7 +135,7 @@ where
         Ok(())
     }
 
-    fn collect_trans_to_spill(&mut self, input_data: Vec<DataBlock>) {
+    fn collect_trans_to_spill(&mut self, input_data: Vec<DataBlock>, no_spill: bool) {
         let (num_rows, num_bytes) = input_data
             .iter()
             .map(|block| (block.num_rows(), block.memory_size()))
@@ -134,17 +143,24 @@ where
                 (acc_rows + rows, acc_bytes + bytes)
             });
         assert!(num_rows > 0);
-        let params = self.determine_params(num_bytes, num_rows);
+        let params = if no_spill {
+            SortSpillParams {
+                batch_rows: self.max_block_size,
+                num_merge: num_rows.div_ceil(self.max_block_size),
+            }
+        } else {
+            self.determine_params(num_bytes, num_rows)
+        };
         let spill_sort = SortSpill::new(self.base.clone(), params);
         self.inner = Inner::Spill(input_data, spill_sort);
     }
 
-    fn trans_to_spill(&mut self) -> Result<()> {
+    fn trans_to_spill(&mut self, no_spill: bool) -> Result<()> {
         match &mut self.inner {
-            Inner::Limit(_) => self.limit_trans_to_spill(),
+            Inner::Limit(_) => self.limit_trans_to_spill(no_spill),
             Inner::Collect(input_data) => {
                 let input_data = std::mem::take(input_data);
-                self.collect_trans_to_spill(input_data);
+                self.collect_trans_to_spill(input_data, no_spill);
                 Ok(())
             }
             Inner::Spill(_, _) => Ok(()),
@@ -316,18 +332,19 @@ where
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let finished = self.input.is_finished();
-        self.trans_to_spill()?;
+        self.trans_to_spill(finished)?;
 
-        let input = self.input_rows();
         let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
             unreachable!()
         };
+
+        let input = input_data.in_memory_rows();
         let memory_rows = spill_sort.collect_memory_rows();
         let max = spill_sort.max_rows();
 
         if memory_rows > 0 && memory_rows + input > max {
             spill_sort
-                .subsequent_spill_last(memory_rows + input - max)
+                .collect_spill_last(memory_rows + input - max)
                 .await?;
         }
         if input > max || finished && input > 0 {

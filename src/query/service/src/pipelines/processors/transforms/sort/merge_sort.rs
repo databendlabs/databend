@@ -430,7 +430,7 @@ where
 
                 if memory_rows > 0 && memory_rows + input > max {
                     spill_sort
-                        .subsequent_spill_last(memory_rows + input - max)
+                        .collect_spill_last(memory_rows + input - max)
                         .await?;
                 }
                 if input > max || finished && input > 0 {
