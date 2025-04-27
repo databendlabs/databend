@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod cluster;
-pub mod config;
-pub mod instance_status;
-pub mod processes;
-pub mod query_dump;
-pub mod query_profiling;
-pub mod settings;
-pub mod stream_status;
-pub mod system;
-pub mod tenant_table_stats;
-pub mod tenant_tables;
-pub mod user_functions;
+use databend_common_base::runtime::ThreadTracker;
+use logforth::filter::CustomFilter;
+use logforth::filter::FilterResult;
+
+pub fn filter_by_thread_tracker() -> CustomFilter {
+    CustomFilter::new(|_metadata| match ThreadTracker::should_log() {
+        true => FilterResult::Neutral,
+        false => FilterResult::Reject,
+    })
+}
