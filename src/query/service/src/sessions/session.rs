@@ -388,6 +388,10 @@ impl Session {
         self.session_ctx.set_temp_tbl_mgr(temp_tbl_mgr)
     }
 
+    pub fn get_trace_sample_rate(&self) -> Result<u64> {
+        self.session_ctx.get_settings().get_trace_sample_rate()
+    }
+
     pub fn set_query_priority(&self, priority: u8) {
         if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.set_priority(priority);
