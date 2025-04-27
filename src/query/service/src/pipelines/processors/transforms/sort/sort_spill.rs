@@ -136,7 +136,7 @@ where A: SortAlgorithm
             .await
     }
 
-    pub async fn subsequent_spill_last(&mut self, target_rows: usize) -> Result<()> {
+    pub async fn collect_spill_last(&mut self, target_rows: usize) -> Result<()> {
         let Step::Collect(collect) = &mut self.step else {
             unreachable!()
         };

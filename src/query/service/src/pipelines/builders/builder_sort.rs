@@ -216,7 +216,7 @@ impl SortPipelineBuilder {
     fn build_range_shuffle_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
         let inputs = pipeline.output_len();
         let settings = self.ctx.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
+        let num_exec = inputs;
         let max_block_size = settings.get_max_block_size()? as usize;
 
         // Partial sort
@@ -258,12 +258,11 @@ impl SortPipelineBuilder {
             Ok(ProcessorPtr::create(builder.build_collect(input, output)?))
         })?;
 
-        let state =
-            SortSampleState::new(inputs, max_threads, builder.inner_schema(), max_block_size);
+        let state = SortSampleState::new(inputs, num_exec, builder.inner_schema(), max_block_size);
 
         builder.add_shuffle(pipeline, state.clone())?;
 
-        pipeline.exchange(max_threads, Arc::new(SortRangeExchange));
+        pipeline.exchange(num_exec, Arc::new(SortRangeExchange));
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(builder.build_combine(input, output)?))
