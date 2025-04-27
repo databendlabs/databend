@@ -655,7 +655,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
                 }),
                 ("enable_range_shuffle_sort", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enable range shuffle sort.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

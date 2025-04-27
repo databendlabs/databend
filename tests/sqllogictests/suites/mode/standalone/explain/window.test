@@ -48,9 +48,6 @@ statement ok
 set sort_spilling_memory_ratio = 0;
 
 statement ok
-set enable_parallel_multi_merge_sort = 0;
-
-statement ok
 set enable_range_shuffle_sort = 0;
 
 query T

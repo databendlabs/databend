@@ -1,9 +1,6 @@
 statement ok
 create or replace table t1(a int, b int);
 
-statement ok
-set enable_range_shuffle_sort = 0;
-
 query T
 explain select a from (select * from t1 order by a) as t2 where a > 1;
 ----

@@ -963,7 +963,7 @@ mod tests {
         ]
         .into_iter()
         .map(|mut data| {
-            let col = convert_rows(schema.clone(), &sort_desc, data.clone()).unwrap();
+            let col = convert_rows(schema.clone(), sort_desc, data.clone()).unwrap();
             data.add_column(col);
 
             SpillableBlock::new(data, sort_row_offset)
@@ -1046,7 +1046,7 @@ mod tests {
     ) -> SpillableBlock {
         let mut sliced_block = block.slice(range);
         let col = convert_rows(schema.clone(), sort_desc, sliced_block.clone()).unwrap();
-        sliced_block.add_column(BlockEntry::new(col.data_type(), Value::Column(col)));
+        sliced_block.add_column(col);
         SpillableBlock::new(sliced_block, sort_row_offset)
     }
 

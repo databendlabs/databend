@@ -121,7 +121,7 @@ where
         let params = if no_spill {
             SortSpillParams {
                 batch_rows: self.max_block_size,
-                num_merge: merger.num_rows().div_ceil(self.max_block_size),
+                num_merge: merger.num_rows().div_ceil(self.max_block_size).max(2),
             }
         } else {
             self.determine_params(merger.num_bytes(), merger.num_rows())
@@ -146,7 +146,7 @@ where
         let params = if no_spill {
             SortSpillParams {
                 batch_rows: self.max_block_size,
-                num_merge: num_rows.div_ceil(self.max_block_size),
+                num_merge: num_rows.div_ceil(self.max_block_size).max(2),
             }
         } else {
             self.determine_params(num_bytes, num_rows)
@@ -207,13 +207,6 @@ where
                 Ok(())
             }
             _ => unreachable!(),
-        }
-    }
-
-    fn input_rows(&self) -> usize {
-        match &self.inner {
-            Inner::Collect(input_data) | Inner::Spill(input_data, _) => input_data.in_memory_rows(),
-            _ => 0,
         }
     }
 
