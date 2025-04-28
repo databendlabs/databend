@@ -23,13 +23,13 @@ use databend_common_exception::Result;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalType;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use ethnum::i256;
 use num_traits::AsPrimitive;
 
 use super::AggregateUnaryFunction;

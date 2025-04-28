@@ -121,7 +121,6 @@ use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
 use crate::DEFAULT_ROW_PER_PAGE;
-use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -273,12 +272,7 @@ impl FuseTable {
     }
 
     pub fn get_write_settings(&self) -> WriteSettings {
-        let default_rows_per_page = if self.operator.info().native_capability().blocking {
-            DEFAULT_ROW_PER_PAGE_FOR_BLOCKING
-        } else {
-            DEFAULT_ROW_PER_PAGE
-        };
-        let max_page_size = self.get_option(FUSE_OPT_KEY_ROW_PER_PAGE, default_rows_per_page);
+        let max_page_size = self.get_option(FUSE_OPT_KEY_ROW_PER_PAGE, DEFAULT_ROW_PER_PAGE);
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 

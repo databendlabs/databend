@@ -465,6 +465,7 @@ pub enum AlterTableAction {
     UnsetOptions {
         targets: Vec<Identifier>,
     },
+    RefreshTableCache,
 }
 
 impl Display for AlterTableAction {
@@ -533,6 +534,9 @@ impl Display for AlterTableAction {
                     write_comma_separated_list(f, unset_targets)?;
                     write!(f, ")")?;
                 }
+            }
+            AlterTableAction::RefreshTableCache => {
+                write!(f, "REFRESH CACHE")?;
             }
         };
         Ok(())

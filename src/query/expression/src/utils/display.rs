@@ -20,6 +20,7 @@ use std::fmt::Write;
 use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_column::binary::BinaryColumn;
 use databend_common_io::deserialize_bitmap;
@@ -244,7 +245,7 @@ impl Display for ScalarRef<'_> {
                 }
                 Ok(())
             }
-            ScalarRef::String(s) => write!(f, "'{s}'"),
+            ScalarRef::String(s) => write!(f, "{}", QuotedString(s, '\'')),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
             ScalarRef::Interval(interval) => write!(f, "'{}'", interval_to_string(interval)),
@@ -282,19 +283,19 @@ impl Display for ScalarRef<'_> {
             ScalarRef::Variant(s) => {
                 let raw_jsonb = RawJsonb::new(s);
                 let value = raw_jsonb.to_string();
-                write!(f, "'{value}'")
+                write!(f, "{}", QuotedString(value, '\''))
             }
             ScalarRef::Geometry(s) => {
                 let geom = ewkb_to_geo(&mut Ewkb(s))
                     .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
                     .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
-                write!(f, "'{geom}'")
+                write!(f, "{}", QuotedString(geom, '\''))
             }
             ScalarRef::Geography(v) => {
                 let geog = ewkb_to_geo(&mut Ewkb(v.0))
                     .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
                     .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
-                write!(f, "'{geog}'")
+                write!(f, "{}", QuotedString(geog, '\''))
             }
         }
     }
@@ -356,7 +357,7 @@ impl Debug for DecimalScalar {
                 write!(
                     f,
                     "{}_d256({},{})",
-                    display_decimal_256(*val, size.scale),
+                    display_decimal_256(val.0, size.scale),
                     size.precision,
                     size.scale
                 )
@@ -372,7 +373,7 @@ impl Display for DecimalScalar {
                 write!(f, "{}", display_decimal_128(*val, size.scale))
             }
             DecimalScalar::Decimal256(val, size) => {
-                write!(f, "{}", display_decimal_256(*val, size.scale))
+                write!(f, "{}", display_decimal_256(val.0, size.scale))
             }
         }
     }
@@ -424,7 +425,7 @@ impl Debug for DecimalColumn {
                 .field(&format_args!(
                     "[{}]",
                     &val.iter()
-                        .map(|x| display_decimal_256(*x, size.scale))
+                        .map(|x| display_decimal_256(x.0, size.scale))
                         .join(", ")
                 ))
                 .finish(),
@@ -1116,8 +1117,8 @@ impl Display for DecimalDomain {
             }
             DecimalDomain::Decimal256(SimpleDomain { min, max }, size) => {
                 write!(f, "{}", SimpleDomain {
-                    min: display_decimal_256(*min, size.scale),
-                    max: display_decimal_256(*max, size.scale),
+                    min: display_decimal_256(min.0, size.scale),
+                    max: display_decimal_256(max.0, size.scale),
                 })
             }
         }

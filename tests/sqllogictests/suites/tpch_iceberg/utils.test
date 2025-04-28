@@ -130,6 +130,12 @@ statement error 1302
 CREATE TABLE IF NOT EXISTS abc.t2(c1 int) ENGINE = fuse
 
 statement ok
+alter table abc.t refresh cache;
+
+statement ok
+alter database abc refresh cache;
+
+statement ok
 drop table abc.t
 
 statement ok

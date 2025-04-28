@@ -16,6 +16,7 @@ use std::ops::*;
 use std::sync::Arc;
 
 use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::with_decimal_mapped_type;
@@ -27,7 +28,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use ethnum::i256;
 
 pub fn register_decimal_math(registry: &mut FunctionRegistry) {
     let factory_rounds = |params: &[Scalar], args_type: &[DataType], round_mode: RoundMode| {

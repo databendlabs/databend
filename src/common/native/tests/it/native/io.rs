@@ -110,6 +110,25 @@ fn test_freq() {
 }
 
 #[test]
+fn test_dict_string() {
+    let size = WRITE_PAGE * 5;
+
+    let values = vec![
+        (0..size)
+            .map(|s| format!("stringxxxxxxxx{}", s % 4))
+            .collect::<Vec<_>>(),
+        // (0..size)
+        //     .map(|s| format!("abc{}", s % 4))
+        //     .collect::<Vec<_>>(),
+    ];
+    for v in values {
+        let col = StringColumn::from_iter(v.iter());
+        let chunk = vec![Column::String(col)];
+        test_write_read(chunk);
+    }
+}
+
+#[test]
 fn test_bitpacking() {
     let size = WRITE_PAGE * 5;
     let chunk = vec![

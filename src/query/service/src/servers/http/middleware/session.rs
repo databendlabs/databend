@@ -25,8 +25,6 @@ use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_base::headers::HEADER_WAREHOUSE;
-use databend_common_base::runtime::defer;
-use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -635,22 +633,6 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             .get(HEADER_QUERY_ID)
             .map(|id| id.to_str().unwrap().to_string())
             .unwrap_or_else(|| Uuid::new_v4().to_string());
-
-        let query_mem_stat = match self.endpoint_kind {
-            EndpointKind::StartQuery => {
-                MemStat::create_terminable(format!("Query-{}", query_id), query_id.clone())
-            }
-            _ => MemStat::create(format!("Query-{}", query_id)),
-        };
-
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        tracking_payload.query_id = Some(query_id.clone());
-        tracking_payload.mem_stat = Some(query_mem_stat.clone());
-
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        let _guard2 = defer(move || {
-            query_mem_stat.set_limit(0, false);
-        });
 
         ThreadTracker::tracking_future(async move {
             match self.auth(&req, query_id).await {

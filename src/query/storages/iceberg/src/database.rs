@@ -117,6 +117,37 @@ impl Database for IcebergDatabase {
     }
 
     #[async_backtrace::framed]
+    async fn refresh_table(&self, table_name: &str) -> Result<()> {
+        let params = LoadParams {
+            location: format!("{}{}{}", self.name(), cache::SEP_STR, table_name),
+            len_hint: None,
+            ver: 0,
+            put_cache: true,
+        };
+        let reader =
+            super::cache::iceberg_table_cache_reader(self.ctl.iceberg_catalog(), self.ctl.info());
+        let _ = reader.refresh(&params).await?;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn refresh_database(&self) -> Result<()> {
+        let table_names = self
+            .ctl
+            .iceberg_catalog()
+            .list_tables(&self.ident)
+            .await
+            .map_err(|err| {
+                ErrorCode::UnknownException(format!("Iceberg list tables failed: {err:?}"))
+            })?;
+
+        for name in table_names {
+            let _ = self.refresh_table(&name.name).await?;
+        }
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let table_names = self
             .ctl
@@ -248,6 +279,18 @@ impl Database for IcebergDatabase {
                 Err(err)
             }
         } else {
+            let params = LoadParams {
+                location: format!("{}{}{}", self.name(), cache::SEP_STR, table_name),
+                len_hint: None,
+                ver: 0,
+                put_cache: true,
+            };
+            let reader = super::cache::iceberg_table_cache_reader(
+                self.ctl.iceberg_catalog(),
+                self.ctl.info(),
+            );
+
+            reader.remove(&params);
             Ok(DropTableReply {})
         }
     }
