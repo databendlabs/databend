@@ -636,7 +636,7 @@ impl PhysicalPlanBuilder {
 
             let enable_bloom_runtime_filter = {
                 // shuffle join does not support bloom runtime filter for now
-                let is_shuffle = self.ctx.get_cluster().is_empty() && !is_broadcast;
+                let is_shuffle = !self.ctx.get_cluster().is_empty() && !is_broadcast;
                 let is_supported_type = data_type.is_number() || data_type.is_string();
                 let enable_bloom_runtime_filter_based_on_stats = adjust_bloom_runtime_filter(
                     self.ctx.clone(),
