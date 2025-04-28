@@ -300,7 +300,7 @@ impl HashJoinBuildState {
                     .build_watcher
                     .send(HashTableType::Empty)
                     .map_err(|_| ErrorCode::TokioError("build_watcher channel is closed"))?;
-                self.send_runtime_filter_meta(Default::default())?;
+                self.send_runtime_filter_meta(None)?;
                 self.set_bloom_filter_ready(false)?;
                 return Ok(());
             }
@@ -887,7 +887,7 @@ impl HashJoinBuildState {
                 runtime_filters.insert(rf.scan_id, runtime_filter);
             }
         }
-        self.send_runtime_filter_meta(runtime_filters)?;
+        self.send_runtime_filter_meta(Some(runtime_filters))?;
         self.set_bloom_filter_ready(bloom_filter_ready)?;
         Ok(())
     }
@@ -1094,7 +1094,7 @@ impl HashJoinBuildState {
 
     fn send_runtime_filter_meta(
         &self,
-        mut rf: HashMap<usize, RuntimeFiltersForScan>,
+        mut rf: Option<HashMap<usize, RuntimeFiltersForScan>>,
     ) -> Result<()> {
         if let Some(channels) = self.rf_channels.as_ref() {
             channels
@@ -1108,7 +1108,7 @@ impl HashJoinBuildState {
                 .map_err(|_| ErrorCode::TokioError("receive runtime filter meta failed"))?;
             rf = merged_rf.into();
         }
-        for (scan_id, runtime_filter) in rf.into_iter() {
+        for (scan_id, runtime_filter) in rf.unwrap_or_default().into_iter() {
             self.ctx.set_runtime_filter((scan_id, runtime_filter));
         }
         Ok(())

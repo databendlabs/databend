@@ -130,27 +130,33 @@ impl AsyncSink for RuntimeFilterSinkProcessor {
     }
 }
 
+/// One-to-one correspondence with HashJoin operator.
+///
+/// When the build side is empty, `scan_id_to_runtime_filter` is `None`.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 pub struct RemoteRuntimeFilters {
-    scan_id_to_runtime_filter: HashMap<usize, RemoteRuntimeFiltersForScan>,
+    scan_id_to_runtime_filter: Option<HashMap<usize, RemoteRuntimeFiltersForScan>>,
 }
 
-impl From<HashMap<usize, RuntimeFiltersForScan>> for RemoteRuntimeFilters {
-    fn from(rfs: HashMap<usize, RuntimeFiltersForScan>) -> Self {
-        let mut remote_runtime_filters = RemoteRuntimeFilters::default();
-        for (scan_id, runtime_filter) in rfs {
-            remote_runtime_filters.add(scan_id, &runtime_filter);
+impl From<Option<HashMap<usize, RuntimeFiltersForScan>>> for RemoteRuntimeFilters {
+    fn from(rfs: Option<HashMap<usize, RuntimeFiltersForScan>>) -> Self {
+        RemoteRuntimeFilters {
+            scan_id_to_runtime_filter: rfs.map(|rfs| {
+                rfs.into_iter()
+                    .map(|(scan_id, runtime_filter)| (scan_id, runtime_filter.into()))
+                    .collect()
+            }),
         }
-        remote_runtime_filters
     }
 }
 
-impl From<RemoteRuntimeFilters> for HashMap<usize, RuntimeFiltersForScan> {
+impl From<RemoteRuntimeFilters> for Option<HashMap<usize, RuntimeFiltersForScan>> {
     fn from(rfs: RemoteRuntimeFilters) -> Self {
-        rfs.scan_id_to_runtime_filter
-            .into_iter()
-            .map(|(scan_id, runtime_filter)| (scan_id, runtime_filter.into()))
-            .collect()
+        rfs.scan_id_to_runtime_filter.map(|rfs| {
+            rfs.into_iter()
+                .map(|(scan_id, runtime_filter)| (scan_id, runtime_filter.into()))
+                .collect()
+        })
     }
 }
 
@@ -172,31 +178,51 @@ impl From<RemoteRuntimeFiltersForScan> for RuntimeFiltersForScan {
     }
 }
 
+impl From<RuntimeFiltersForScan> for RemoteRuntimeFiltersForScan {
+    fn from(rfs: RuntimeFiltersForScan) -> Self {
+        Self {
+            rf_id_to_inlist: rfs
+                .inlist
+                .iter()
+                .map(|(id, expr)| (*id, expr.as_remote_expr()))
+                .collect(),
+            rf_id_to_min_max: rfs
+                .min_max
+                .iter()
+                .map(|(id, expr)| (*id, expr.as_remote_expr()))
+                .collect(),
+        }
+    }
+}
 impl RemoteRuntimeFilters {
     pub fn merge(rfs: &[RemoteRuntimeFilters]) -> Self {
         log::info!("start merge runtime filters: {:?}", rfs);
+        let rfs = rfs
+            .iter()
+            .filter_map(|rfs| rfs.scan_id_to_runtime_filter.as_ref())
+            .collect::<Vec<_>>();
+
         if rfs.is_empty() {
             return RemoteRuntimeFilters::default();
         }
 
-        let mut common_scans: Vec<usize> =
-            rfs[0].scan_id_to_runtime_filter.keys().cloned().collect();
+        let mut common_scans: Vec<usize> = rfs[0].keys().cloned().collect();
         for rf in &rfs[1..] {
-            common_scans.retain(|scan_id| rf.scan_id_to_runtime_filter.contains_key(scan_id));
+            common_scans.retain(|scan_id| rf.contains_key(scan_id));
         }
 
-        let mut merged = RemoteRuntimeFilters::default();
+        let mut merged = HashMap::new();
 
         for scan_id in common_scans {
             let mut merged_for_scan = RemoteRuntimeFiltersForScan::default();
-            let first_scan = &rfs[0].scan_id_to_runtime_filter[&scan_id];
+            let first_scan = &rfs[0][&scan_id];
 
             let mut common_inlist_ids: Vec<usize> =
                 first_scan.rf_id_to_inlist.keys().cloned().collect();
             let mut common_min_max_ids: Vec<usize> =
                 first_scan.rf_id_to_min_max.keys().cloned().collect();
             for rf in &rfs[1..] {
-                let scan_filter = &rf.scan_id_to_runtime_filter[&scan_id];
+                let scan_filter = &rf[&scan_id];
                 common_inlist_ids.retain(|id| scan_filter.rf_id_to_inlist.contains_key(id));
                 common_min_max_ids.retain(|id| scan_filter.rf_id_to_min_max.contains_key(id));
             }
@@ -204,9 +230,7 @@ impl RemoteRuntimeFilters {
             for rf_id in &common_inlist_ids {
                 let mut exprs = Vec::new();
                 for rf in rfs.iter() {
-                    exprs.push(
-                        rf.scan_id_to_runtime_filter[&scan_id].rf_id_to_inlist[rf_id].clone(),
-                    );
+                    exprs.push(rf[&scan_id].rf_id_to_inlist[rf_id].clone());
                 }
                 log::info!("merge inlist: {:?}, rf_id: {:?}", exprs, rf_id);
                 let merged_expr = exprs
@@ -228,9 +252,7 @@ impl RemoteRuntimeFilters {
             for rf_id in &common_min_max_ids {
                 let mut exprs = Vec::new();
                 for rf in rfs.iter() {
-                    exprs.push(
-                        rf.scan_id_to_runtime_filter[&scan_id].rf_id_to_min_max[rf_id].clone(),
-                    );
+                    exprs.push(rf[&scan_id].rf_id_to_min_max[rf_id].clone());
                 }
                 log::info!("merge min_max: {:?}, rf_id: {:?}", exprs, rf_id);
                 let merged_expr = exprs
@@ -249,12 +271,12 @@ impl RemoteRuntimeFilters {
                 merged_for_scan.rf_id_to_min_max.insert(*rf_id, merged_expr);
             }
 
-            merged
-                .scan_id_to_runtime_filter
-                .insert(scan_id, merged_for_scan);
+            merged.insert(scan_id, merged_for_scan);
         }
 
-        merged
+        RemoteRuntimeFilters {
+            scan_id_to_runtime_filter: Some(merged),
+        }
     }
 }
 
@@ -268,23 +290,5 @@ pub struct RemoteRuntimeFiltersForScan {
 impl BlockMetaInfo for RemoteRuntimeFilters {
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
-    }
-}
-
-impl RemoteRuntimeFilters {
-    pub fn add(&mut self, scan_id: usize, r: &RuntimeFiltersForScan) {
-        let rf = RemoteRuntimeFiltersForScan {
-            rf_id_to_inlist: r
-                .inlist
-                .iter()
-                .map(|(id, expr)| (*id, expr.as_remote_expr()))
-                .collect(),
-            rf_id_to_min_max: r
-                .min_max
-                .iter()
-                .map(|(id, expr)| (*id, expr.as_remote_expr()))
-                .collect(),
-        };
-        self.scan_id_to_runtime_filter.insert(scan_id, rf);
     }
 }
