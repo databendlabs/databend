@@ -31,14 +31,18 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
+use crate::util::generate_catalog_meta;
 
 pub struct LocksTable {
     table_info: TableInfo,
@@ -60,10 +64,15 @@ impl AsyncSystemTable for LocksTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let ctls = catalog_mgr
-            .list_catalogs(&tenant, ctx.session_state())
-            .await?;
-
+        let ctls = vec![
+            catalog_mgr
+                .get_catalog(
+                    tenant.tenant_name(),
+                    self.table_info.catalog(),
+                    ctx.session_state(),
+                )
+                .await?,
+        ];
         let mut lock_table_id = Vec::new();
         let mut lock_revision = Vec::new();
         let mut lock_type = Vec::new();
@@ -155,7 +164,7 @@ impl LocksTable {
         ])
     }
 
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
         let table_info = TableInfo {
             desc: "'system'.'locks'".to_string(),
             name: "locks".to_string(),
@@ -165,6 +174,11 @@ impl LocksTable {
                 engine: "SystemLocks".to_string(),
                 ..Default::default()
             },
+            catalog_info: Arc::new(CatalogInfo {
+                name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
+                meta: generate_catalog_meta(ctl_name),
+                ..Default::default()
+            }),
             ..Default::default()
         };
         AsyncOneBlockSystemTable::create(LocksTable { table_info })

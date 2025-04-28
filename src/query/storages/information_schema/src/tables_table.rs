@@ -16,9 +16,13 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_storages_system::generate_catalog_meta;
 use databend_common_storages_view::view_table::ViewTable;
 use databend_common_storages_view::view_table::QUERY;
 
@@ -51,8 +55,9 @@ impl TablesTable {
     // | CREATE_OPTIONS  | varchar(256)                                                       | YES  |     | NULL    |       |
     // | TABLE_COMMENT   | text                                                               | YES  |     | NULL    |       |
     // +-----------------+--------------------------------------------------------------------+------+-----+---------+-------+
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let query = "SELECT
+    pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
+        let query = format!(
+            "SELECT
             database AS table_catalog,
             database AS table_schema,
             name AS table_name,
@@ -67,12 +72,14 @@ impl TablesTable {
             NULL AS table_collation,
             NULL AS data_free,
             comment AS table_comment
-        FROM default.system.tables ORDER BY table_schema;";
+        FROM {}.system.tables ORDER BY table_schema;",
+            ctl_name
+        );
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'default'.'information_schema'.'tables'".to_string(),
+            desc: "'information_schema'.'tables'".to_string(),
             name: "tables".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
@@ -80,6 +87,11 @@ impl TablesTable {
                 engine: "VIEW".to_string(),
                 ..Default::default()
             },
+            catalog_info: Arc::new(CatalogInfo {
+                name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
+                meta: generate_catalog_meta(ctl_name),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 

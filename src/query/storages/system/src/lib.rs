@@ -131,4 +131,5 @@ pub use temp_files_table::TempFilesTable;
 pub use temporary_tables_table::TemporaryTablesTable;
 pub use user_functions_table::UserFunctionsTable;
 pub use users_table::UsersTable;
+pub use util::generate_catalog_meta;
 pub use virtual_columns_table::VirtualColumnsTable;

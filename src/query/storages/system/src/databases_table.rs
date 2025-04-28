@@ -34,6 +34,8 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -44,6 +46,7 @@ use log::warn;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
+use crate::util::generate_catalog_meta;
 
 pub type DatabasesTableWithHistory = DatabasesTable<true>;
 pub type DatabasesTableWithoutHistory = DatabasesTable<false>;
@@ -123,17 +126,22 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
 
         let catalogs = if let Some(filter_catalog_name) = filter_catalog_name {
             let mut res = vec![];
-            let ctl = ctx.get_catalog(&filter_catalog_name).await?;
-            res.push((filter_catalog_name, ctl));
+            if filter_catalog_name == self.get_table_info().catalog() {
+                let ctl = ctx.get_catalog(&filter_catalog_name).await?;
+                res.push((filter_catalog_name, ctl));
+            }
+            // If empty return empty result
             res
         } else {
-            let catalogs = CatalogManager::instance();
-            catalogs
-                .list_catalogs(&tenant, ctx.session_state())
-                .await?
-                .iter()
-                .map(|e| (e.name(), e.clone()))
-                .collect()
+            let catalog_mgr = CatalogManager::instance();
+            let ctl = catalog_mgr
+                .get_catalog(
+                    tenant.tenant_name(),
+                    self.get_table_info().catalog(),
+                    ctx.session_state(),
+                )
+                .await?;
+            vec![(ctl.name(), ctl)]
         };
 
         let user_api = UserApiProvider::instance();
@@ -286,7 +294,7 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
 impl<const WITH_HISTORY: bool> DatabasesTable<WITH_HISTORY>
 where DatabasesTable<WITH_HISTORY>: HistoryAware
 {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("catalog", TableDataType::String),
             TableField::new("name", TableDataType::String),
@@ -311,6 +319,11 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
                 engine: "SystemDatabases".to_string(),
                 ..Default::default()
             },
+            catalog_info: Arc::new(CatalogInfo {
+                name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
+                meta: generate_catalog_meta(ctl_name),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 

@@ -16,17 +16,22 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_storages_system::generate_catalog_meta;
 use databend_common_storages_view::view_table::ViewTable;
 use databend_common_storages_view::view_table::QUERY;
 
 pub struct ColumnsTable {}
 
 impl ColumnsTable {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let query = "SELECT
+    pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
+        let query = format!(
+            "SELECT
             database AS table_catalog,
             database AS table_schema,
             table AS table_name,
@@ -59,12 +64,14 @@ impl ColumnsTable {
             NULL AS privileges,
             default_expression as default,
             NULL AS extra
-        FROM default.system.columns;";
+        FROM {}.system.columns;",
+            ctl_name
+        );
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'default'.'information_schema'.'columns'".to_string(),
+            desc: "'information_schema'.'columns'".to_string(),
             name: "columns".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
@@ -72,6 +79,11 @@ impl ColumnsTable {
                 engine: "VIEW".to_string(),
                 ..Default::default()
             },
+            catalog_info: Arc::new(CatalogInfo {
+                name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
+                meta: generate_catalog_meta(ctl_name),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 

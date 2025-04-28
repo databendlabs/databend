@@ -4273,6 +4273,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-catalog",
  "databend-common-meta-app",
+ "databend-common-storages-system",
  "databend-common-storages-view",
 ]
 
