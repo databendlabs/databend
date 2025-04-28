@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
-use std::mem;
 
 use databend_common_ast::ast::AlterVirtualColumnStmt;
 use databend_common_ast::ast::CreateVirtualColumnStmt;
@@ -38,7 +37,6 @@ use log::debug;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
-use crate::optimizer::ir::SExpr;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::DropVirtualColumnPlan;
@@ -48,7 +46,6 @@ use crate::plans::RewriteKind;
 use crate::resolve_type_name;
 use crate::BindContext;
 use crate::SelectBuilder;
-use crate::VirtualColumnRewriter;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -401,26 +398,5 @@ impl Binder {
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowVirtualColumns)
             .await
-    }
-
-    // Rewrite virtual columns, add virtual column index to Scan plan.
-    pub(in crate::planner::binder) fn rewrite_virtual_column(
-        &mut self,
-        bind_context: &mut BindContext,
-        s_expr: SExpr,
-    ) -> Result<SExpr> {
-        if bind_context
-            .virtual_column_context
-            .virtual_column_indices
-            .is_empty()
-        {
-            return Ok(s_expr);
-        }
-        let virtual_column_indices =
-            mem::take(&mut bind_context.virtual_column_context.virtual_column_indices);
-        let mut s_expr = s_expr.clone();
-        let mut virtual_column_rewriter = VirtualColumnRewriter::new(virtual_column_indices);
-        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
-        Ok(s_expr)
     }
 }

@@ -255,15 +255,6 @@ impl Binder {
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
 
-        // rewrite variant inner fields as virtual columns
-        if !from_context
-            .virtual_column_context
-            .virtual_column_indices
-            .is_empty()
-        {
-            s_expr = self.rewrite_virtual_column(&mut from_context, s_expr)?;
-        }
-
         // add internal column binding into expr
         s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
 

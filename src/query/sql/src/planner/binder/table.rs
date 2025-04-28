@@ -74,6 +74,7 @@ use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::VirtualColumn;
 
 impl Binder {
     pub fn bind_dummy_table(
@@ -391,6 +392,24 @@ impl Binder {
                     .table_index(Some(*table_index))
                     .column_position(*column_position)
                     .virtual_expr(virtual_expr.clone())
+                    .build();
+                    bind_context.add_column_binding(column_binding);
+                    base_column_scan_id.insert(*column_index, scan_id);
+                }
+                ColumnEntry::VirtualColumn(VirtualColumn {
+                    table_index,
+                    column_index,
+                    column_name,
+                    data_type,
+                    ..
+                }) => {
+                    let column_binding = ColumnBindingBuilder::new(
+                        column_name.clone(),
+                        *column_index,
+                        Box::new(DataType::from(data_type)),
+                        Visibility::InVisible,
+                    )
+                    .table_index(Some(*table_index))
                     .build();
                     bind_context.add_column_binding(column_binding);
                     base_column_scan_id.insert(*column_index, scan_id);

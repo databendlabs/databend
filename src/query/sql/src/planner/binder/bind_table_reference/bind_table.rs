@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Identifier;
@@ -31,6 +30,8 @@ use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
@@ -39,7 +40,10 @@ use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 use crate::BindContext;
+use crate::ColumnBindingBuilder;
+use crate::ColumnEntry;
 use crate::IndexType;
+use crate::Visibility;
 
 impl Binder {
     /// Bind a base table.
@@ -162,7 +166,7 @@ impl Binder {
                 let table_index = self.metadata.write().add_table(
                     catalog,
                     database.clone(),
-                    table_meta,
+                    table_meta.clone(),
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
@@ -286,6 +290,7 @@ impl Binder {
                     false,
                     cte_suffix_name,
                 );
+                self.bind_table_virtual_column(bind_context, table_meta.clone(), table_index)?;
 
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
@@ -297,8 +302,6 @@ impl Binder {
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
-
-                self.bind_table_virtual_column(&mut bind_context, table_meta.clone(), table_index)?;
 
                 Ok((s_expr, bind_context))
             }
@@ -343,7 +346,6 @@ impl Binder {
             return Ok(());
         }
 
-        let source_schema = table.schema();
         let table_meta = &table.get_table_info().meta;
         let Some(ref virtual_schema) = table_meta.virtual_schema else {
             return Ok(());
@@ -358,26 +360,64 @@ impl Binder {
                 .virtual_column_context
                 .table_indices
                 .insert(table_index);
-            let mut virtual_column_name_map = HashMap::with_capacity(virtual_schema.fields.len());
             for virtual_field in virtual_schema.fields.iter() {
-                let Ok(source_field) =
-                    source_schema.field_of_column_id(virtual_field.source_column_id)
-                else {
+                let Some(base_column) = ({
+                    let guard = self.metadata.read();
+                    guard
+                        .columns_by_table_index(table_index)
+                        .iter()
+                        .find_map(|column| {
+                            if let ColumnEntry::BaseTableColumn(base_column) = column {
+                                if base_column.column_id == Some(virtual_field.source_column_id) {
+                                    return Some(base_column.clone());
+                                }
+                            }
+                            None
+                        })
+                }) else {
                     continue;
                 };
-                let name = format!("{}{}", source_field.name, virtual_field.name);
+
+                let name = format!("{}{}", base_column.column_name, virtual_field.name);
+                let mut index = 0;
+                // Check for duplicate virtual columns
+                for table_column in self
+                    .metadata
+                    .read()
+                    .virtual_columns_by_table_index(table_index)
+                {
+                    if table_column.name() == name {
+                        index = table_column.index();
+                        break;
+                    }
+                }
                 let column_id = virtual_field.column_id;
 
                 // It's not possible to determine the actual type based on the type of generated virtual columns,
                 // as fields in non-leaf nodes are not generated with virtual columns,
                 // and these ungenerated nodes may have inconsistent types.
-                let data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
-                virtual_column_name_map.insert(name, (data_type, column_id));
+                let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
+                let data_type = Box::new(DataType::from(&table_data_type));
+
+                if index == 0 {
+                    let is_created = true;
+
+                    index = self.metadata.write().add_virtual_column(
+                        &base_column,
+                        column_id,
+                        name.clone(),
+                        table_data_type,
+                        Scalar::String(name.clone()),
+                        None,
+                        is_created,
+                    );
+                }
+                let virtual_column_binding =
+                    ColumnBindingBuilder::new(name, index, data_type, Visibility::InVisible)
+                        .table_index(Some(table_index))
+                        .build();
+                bind_context.columns.push(virtual_column_binding);
             }
-            bind_context
-                .virtual_column_context
-                .virtual_column_names
-                .insert(table_index, virtual_column_name_map);
         }
 
         Ok(())
