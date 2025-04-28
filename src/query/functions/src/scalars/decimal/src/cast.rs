@@ -499,7 +499,7 @@ where
 
     let min_for_precision = T::min_for_precision(size.precision);
     let max_for_precision = T::max_for_precision(size.precision);
-    let mut nerver_overflow = true;
+    let mut never_overflow = true;
 
     for x in [
         <S::ScalarRef<'_> as Number>::MIN,
@@ -507,16 +507,16 @@ where
     ] {
         if let Some(x) = T::from_i128(x.as_()).checked_mul(multiplier) {
             if x > max_for_precision || x < min_for_precision {
-                nerver_overflow = false;
+                never_overflow = false;
                 break;
             }
         } else {
-            nerver_overflow = false;
+            never_overflow = false;
             break;
         }
     }
 
-    if nerver_overflow {
+    if never_overflow {
         let f = |x: S::ScalarRef<'_>, _ctx: &mut EvalContext| T::from_i128(x.as_()) * multiplier;
         vectorize_1_arg(f)(from, ctx)
     } else {

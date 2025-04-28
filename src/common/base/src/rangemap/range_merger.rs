@@ -64,7 +64,7 @@ impl RangeMerger {
             ranges: Vec::with_capacity(raw_ranges.len()),
         };
 
-        let whole_read_size = whole_read_size.unwrap_or(usize::MAX as u64);
+        let whole_read_size = whole_read_size.unwrap_or(0 as u64);
         if !raw_ranges.is_empty() {
             let max_end = raw_ranges.iter().map(|r| r.end).max().unwrap_or(0);
 
