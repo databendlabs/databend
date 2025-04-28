@@ -22,6 +22,9 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::table::get_change_type;
 
+use super::Exchange;
+use super::FragmentKind;
+use crate::executor::PhysicalPlan;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Join;
@@ -30,12 +33,12 @@ use crate::IndexType;
 use crate::MetadataRef;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Default)]
-pub struct PhysicalRuntimeFilters {
-    pub filters: Vec<PhysicalRuntimeFilter>,
+pub struct RemoteRuntimeFiltersDesc {
+    pub filters: Vec<RemoteRuntimeFilterDesc>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct PhysicalRuntimeFilter {
+pub struct RemoteRuntimeFilterDesc {
     pub id: usize,
     pub build_key: RemoteExpr,
     pub probe_key: RemoteExpr<String>,
@@ -136,7 +139,7 @@ impl JoinRuntimeFilter {
     }
 
     /// Build runtime filters for a join operation
-    pub async fn build_runtime_filter(
+    pub async fn build_runtime_filter_desc(
         ctx: Arc<dyn TableContext>,
         metadata: &MetadataRef,
         join: &Join,
@@ -144,15 +147,9 @@ impl JoinRuntimeFilter {
         is_broadcast: bool,
         build_keys: &[RemoteExpr],
         probe_keys: Vec<Option<(RemoteExpr<String>, usize, usize)>>,
-    ) -> Result<PhysicalRuntimeFilters> {
+    ) -> Result<RemoteRuntimeFiltersDesc> {
         // Early return if runtime filters are not supported for this join type
         if !Self::supported_join_type_for_runtime_filter(&join.join_type) {
-            return Ok(Default::default());
-        }
-
-        // For cluster, only support runtime filter for broadcast join
-        let is_cluster = !ctx.get_cluster().is_empty();
-        if is_cluster && !is_broadcast {
             return Ok(Default::default());
         }
 
@@ -177,6 +174,8 @@ impl JoinRuntimeFilter {
 
             // Determine which filter types to enable based on data type and statistics
             let enable_bloom_runtime_filter = {
+                // shuffle join does not support bloom runtime filter for now
+                let is_shuffle = !ctx.get_cluster().is_empty() && !is_broadcast;
                 let is_supported_type = Self::is_type_supported_for_bloom_filter(&data_type);
                 let enable_bloom_runtime_filter_based_on_stats = Self::adjust_bloom_runtime_filter(
                     ctx.clone(),
@@ -185,14 +184,14 @@ impl JoinRuntimeFilter {
                     s_expr,
                 )
                 .await?;
-                is_supported_type && enable_bloom_runtime_filter_based_on_stats
+                !is_shuffle && is_supported_type && enable_bloom_runtime_filter_based_on_stats
             };
 
             let enable_min_max_runtime_filter =
                 Self::is_type_supported_for_min_max_filter(&data_type);
 
             // Create and add the runtime filter
-            let runtime_filter = PhysicalRuntimeFilter {
+            let runtime_filter = RemoteRuntimeFilterDesc {
                 id,
                 build_key: build_key.clone(),
                 probe_key,
@@ -204,6 +203,40 @@ impl JoinRuntimeFilter {
             filters.push(runtime_filter);
         }
 
-        Ok(PhysicalRuntimeFilters { filters })
+        Ok(RemoteRuntimeFiltersDesc { filters })
     }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeFilterSource {
+    pub plan_id: u32,
+    pub join_id: u32,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeFilterSink {
+    pub plan_id: u32,
+    pub join_id: u32,
+    pub input: Box<PhysicalPlan>,
+}
+
+pub fn build_runtime_filter_plan(join_id: u32) -> Result<Box<PhysicalPlan>> {
+    let runtime_filter_source = Box::new(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
+        plan_id: 0,
+        join_id,
+    }));
+    let exchange = Box::new(PhysicalPlan::Exchange(Exchange {
+        plan_id: 0,
+        input: runtime_filter_source,
+        kind: FragmentKind::Expansive,
+        keys: vec![],
+        allow_adjust_parallelism: true,
+        ignore_exchange: false,
+    }));
+    let runtime_filter_sink = Box::new(PhysicalPlan::RuntimeFilterSink(RuntimeFilterSink {
+        plan_id: 0,
+        input: exchange,
+        join_id,
+    }));
+    Ok(runtime_filter_sink)
 }
