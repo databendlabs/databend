@@ -92,8 +92,7 @@ pub async fn do_vacuum2(
 
     let retention_policy = fuse_table.get_data_retention_policy(ctx.as_ref())?;
 
-    // Indicates whether to use the current table snapshot as gc root,
-    // true means vacuum all the historical snapshots.
+    // By default, do not vacuum all the historical snapshots.
     let mut is_vacuum_all = false;
     let mut respect_flash_back_with_lvt = None;
 
@@ -107,6 +106,7 @@ pub async fn do_vacuum2(
                 delta_duration
             };
 
+            // A zero retention period indicates that we should vacuum all the historical snapshots
             is_vacuum_all = retention_period.is_zero();
 
             let Some(lvt) = set_lvt(fuse_table, ctx.as_ref(), retention_period).await? else {
@@ -125,7 +125,7 @@ pub async fn do_vacuum2(
             ));
 
             let snapshots_before_lvt =
-                collect_gc_candidate_by_retention_period(fuse_table, lvt, is_vacuum_all).await?;
+                collect_gc_candidates_by_retention_period(fuse_table, lvt, is_vacuum_all).await?;
             snapshots_before_lvt
         }
         RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots_to_keep) => {
@@ -157,10 +157,12 @@ pub async fn do_vacuum2(
                 is_vacuum_all = true;
             }
 
-            // When selecting the GC root later, the last snapshot in `snapshots` is a candidate,
-            // but its commit status is uncertain, its previous snapshot is typically used as the GC root, except in the is_vacuum_all case.
-            //
-            // Therefore, during snapshot truncation, we keep 2 extra snapshots; see `select_gc_root` for details.
+            // When selecting the GC root later, the last snapshot in `snapshots` (after truncation)
+            // is the candidate, but its commit status is uncertain, so its previous snapshot is used
+            // as the GC root instead (except in the is_vacuum_all case).
+
+            // Therefore, during snapshot truncation, we keep 2 extra snapshots;
+            // see `select_gc_root` for details.
             let num_candidates = len - num_snapshots_to_keep + 2;
             snapshots.truncate(num_candidates);
             snapshots
@@ -375,7 +377,7 @@ pub async fn do_vacuum2(
     Ok(files_to_gc)
 }
 
-async fn collect_gc_candidate_by_retention_period(
+async fn collect_gc_candidates_by_retention_period(
     fuse_table: &FuseTable,
     lvt: DateTime<Utc>,
     is_vacuum_all: bool,

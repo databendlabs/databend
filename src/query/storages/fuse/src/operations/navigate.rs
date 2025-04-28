@@ -287,7 +287,7 @@ impl FuseTable {
                     )
                     .await?;
 
-                // TODO
+                // Safe to unwrap: table snapshot and snapshot timestamp exist, otherwise we should not be here
                 let timestamp = table
                     .read_table_snapshot()
                     .await?

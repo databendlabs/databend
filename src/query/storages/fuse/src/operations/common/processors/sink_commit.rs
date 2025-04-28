@@ -264,6 +264,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let keep_last_snapshot = true;
         match purge_mode {
             PurgeMode::PurgeAllHistory => {
+                // Purge all history, using current table snapshot as gc root.
+
                 let snapshot_files = tbl.list_snapshot_files().await?;
                 if let Err(e) = tbl
                     .do_purge(&self.ctx, snapshot_files, None, keep_last_snapshot, false)
@@ -279,6 +281,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 }
             }
             PurgeMode::PurgeAccordingToRetention => {
+                // Navigate to the retention point, and purge history before that point
+
                 let is_dry_run = false;
                 // Using setting or table option, no customized navigation point
                 let navigation_point = None;
