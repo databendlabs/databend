@@ -122,7 +122,7 @@ pub struct ExecuteRunning {
     // used to kill query
     session: Arc<Session>,
     // mainly used to get progress for now
-    ctx: Arc<QueryContext>,
+    pub(crate) ctx: Arc<QueryContext>,
     schema: Vec<QueryResponseField>,
     has_result_set: bool,
     #[allow(dead_code)]
