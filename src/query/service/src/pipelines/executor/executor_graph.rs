@@ -28,6 +28,7 @@ use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
@@ -185,7 +186,7 @@ impl ExecutingGraph {
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
-        Self::init_graph(&mut pipeline, &mut graph);
+        Self::init_graph(&mut pipeline, &mut graph, &query_id);
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
@@ -208,7 +209,7 @@ impl ExecutingGraph {
         let mut graph = StableGraph::new();
 
         for pipeline in &mut pipelines {
-            Self::init_graph(pipeline, &mut graph);
+            Self::init_graph(pipeline, &mut graph, &query_id);
         }
 
         Ok(ExecutingGraph {
@@ -224,7 +225,11 @@ impl ExecutingGraph {
         })
     }
 
-    fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, EdgeInfo>) {
+    fn init_graph(
+        pipeline: &mut Pipeline,
+        graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
+        query_id: &str,
+    ) {
         #[derive(Debug)]
         struct Edge {
             source_port: usize,
@@ -234,6 +239,7 @@ impl ExecutingGraph {
         }
 
         let mut pipes_edges: Vec<Vec<Edge>> = Vec::new();
+        let mut time_series_builder = QueryTimeSeriesProfileBuilder::new(query_id.to_string());
         for pipe in &pipeline.pipes {
             assert_eq!(
                 pipe.input_length,
@@ -245,6 +251,10 @@ impl ExecutingGraph {
 
             for item in &pipe.items {
                 let pid = graph.node_count();
+                if let Some(scope) = pipe.scope.as_ref() {
+                    let plan_id = scope.id;
+                    time_series_builder.register_time_series_profile(plan_id);
+                }
                 let node = Node::create(
                     pid,
                     pipe.scope.clone(),
@@ -277,6 +287,29 @@ impl ExecutingGraph {
             }
 
             pipes_edges.push(pipe_edges);
+        }
+        let query_time_series = Arc::new(time_series_builder.build());
+        let node_indices: Vec<_> = graph.node_indices().collect();
+        for node_index in node_indices {
+            let plan_id = {
+                &graph[node_index]
+                    .tracking_payload
+                    .profile
+                    .as_ref()
+                    .and_then(|x| x.plan_id)
+            };
+            if let Some(plan_id) = plan_id {
+                // we are sure that the node is only have one reference in the graph
+                let mut_node = Arc::get_mut(&mut graph[node_index]);
+                debug_assert!(
+                    mut_node.is_some(),
+                    "ExecutorGraph's node should only have one reference"
+                );
+                if let Some(mut_node) = mut_node {
+                    mut_node.tracking_payload.time_series_profile =
+                        Some((*plan_id, query_time_series.clone()));
+                }
+            }
         }
 
         // The last pipe cannot contain any output edge.

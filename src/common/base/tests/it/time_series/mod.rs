@@ -12,20 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::mem_allocator::TrackingGlobalAllocator;
-
-mod ext;
-mod fixed_heap;
-mod metrics;
-mod pool;
-mod pool_retry;
-mod progress;
-mod range_merger;
-mod runtime;
-mod stoppable;
-mod string;
-mod time_series;
-
-// runtime tests depends on the memory stat collector.
-#[global_allocator]
-pub static GLOBAL_ALLOCATOR: TrackingGlobalAllocator = TrackingGlobalAllocator::create();
+mod profile;
