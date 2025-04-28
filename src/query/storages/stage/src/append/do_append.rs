@@ -35,7 +35,11 @@ impl StageTable {
 
         let fmt = self.table_info.stage_info.file_format_params.clone();
         let mem_limit = settings.get_max_memory_usage()? as usize;
-        let max_threads = settings.get_max_threads()? as usize;
+        let mut max_threads = settings.get_max_threads()? as usize;
+        if self.table_info.copy_into_location_ordered {
+            max_threads = 1;
+            pipeline.try_resize(1)?;
+        }
 
         let op = StageTable::get_op(&self.table_info.stage_info)?;
         let query_id = ctx.get_id();

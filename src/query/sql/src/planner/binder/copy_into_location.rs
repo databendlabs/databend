@@ -109,6 +109,15 @@ impl Binder {
                     .await
             }
         }?;
+        println!("qyery pln: {:?}", &query);
+        println!("qyery pln: {}", &query);
+        let mut is_ordered = false;
+        if let Plan::Query { s_expr, .. } = &query {
+            let p = s_expr.derive_relational_prop()?;
+            if !p.orderings.is_empty() || p.partition_orderings.is_some() {
+                is_ordered = true;
+            }
+        }
 
         let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), &stmt.dst).await?;
 
@@ -140,6 +149,7 @@ impl Binder {
             path,
             from: Box::new(query),
             options: stmt.options.clone(),
+            is_ordered,
         }))
     }
 }
