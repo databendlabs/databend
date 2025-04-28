@@ -26,6 +26,8 @@ use databend_common_cloud_control::pb::WarehouseOptions;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_settings::DefaultSettings;
+use databend_common_settings::SettingScope;
 use databend_common_sql::plans::AlterTaskPlan;
 
 use crate::interpreters::common::get_task_client_config;
@@ -137,6 +139,22 @@ impl AlterTaskInterpreter {
         }
         req
     }
+
+    fn validate_session_parameters(&self) -> Result<()> {
+        match &self.plan.alter_options {
+            AlterTaskOptions::Set {
+                session_parameters, ..
+            } => {
+                if let Some(session_parameters) = session_parameters {
+                    for (key, _) in session_parameters.iter() {
+                        DefaultSettings::check_setting_scope(key, SettingScope::Session)?;
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -158,6 +176,7 @@ impl Interpreter for AlterTaskInterpreter {
                 "cannot alter task without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
         }
+        self.validate_session_parameters()?;
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
         let req = self.build_request();
