@@ -776,9 +776,9 @@ impl Decimal for i256 {
         let div = i256::e(shift_scale);
         if !overflow {
             let ret = if self.is_negative() == rhs.is_negative() {
-                (self * rhs + div / 2) / div
+                (self * rhs + div / i256::from(2)) / div
             } else {
-                (self * rhs - div / 2) / div
+                (self * rhs - div / i256::from(2)) / div
             };
             return Some(ret);
         }
