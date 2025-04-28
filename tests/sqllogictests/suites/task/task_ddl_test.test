@@ -13,7 +13,7 @@ CREATE TASK mytask
   SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
   AS SELECT 1;
 
-statement ok
+statement error 2801
 CREATE TASK task_with_bad_set
   WAREHOUSE = 'mywh'
   SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
