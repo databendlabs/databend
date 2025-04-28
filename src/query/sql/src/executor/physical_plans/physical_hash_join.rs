@@ -400,10 +400,6 @@ impl PhysicalPlanBuilder {
         Ok(())
     }
 
-    // Removed unused function
-    #[allow(dead_code)]
-    fn unused_placeholder(&self) {}
-
     /// Processes join equi-conditions
     ///
     /// # Arguments
