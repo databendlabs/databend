@@ -64,10 +64,14 @@ impl QueryTimeSeriesProfile {
         }
         #[derive(Serialize)]
         struct ProfileTimeSeries(u32, Vec<Vec<usize>>);
+        let mut quota = DEFAULT_BATCH_SIZE;
         let mut plans = Vec::with_capacity(self.plans_profiles.len());
         for (plan_id, plan_profile) in self.plans_profiles.iter().enumerate() {
+            if quota <= 0 && !finish {
+                break;
+            }
             let profile_time_series_vec: Vec<ProfileTimeSeries> = plan_profile
-                .flush(finish)
+                .flush(finish, &mut quota)
                 .into_iter()
                 .map(|(id, points)| ProfileTimeSeries(id, points))
                 .collect();

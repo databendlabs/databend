@@ -121,9 +121,12 @@ impl TimeSeriesProfiles {
         is_record
     }
 
-    pub fn flush(&self, finish: bool) -> Vec<(u32, Vec<Vec<usize>>)> {
+    pub fn flush(&self, finish: bool, quota: &mut usize) -> Vec<(u32, Vec<Vec<usize>>)> {
         let mut batch = Vec::with_capacity(self.profiles.len());
         for (profile_name, profile) in self.profiles.iter().enumerate() {
+            if *quota <= 0 && !finish {
+                break;
+            }
             if finish {
                 // if flush called by finish, we need to flush the last record
                 let last_value = profile.value.swap(0, SeqCst);
@@ -131,7 +134,14 @@ impl TimeSeriesProfiles {
                     .points
                     .push((profile.last_record_timestamp.load(SeqCst), last_value));
             }
-            let points = Vec::from_iter(profile.points.try_iter());
+            let mut points = Vec::with_capacity(profile.points.len());
+            while let Ok(point) = profile.points.pop() {
+                points.push(point);
+                *quota -= 1;
+                if *quota <= 0 && !finish {
+                    break;
+                }
+            }
             batch.push((profile_name as u32, compress_time_point(&points)));
         }
         batch
