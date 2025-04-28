@@ -117,14 +117,22 @@ impl Debug for ImmutableCatalog {
 
 impl ImmutableCatalog {
     #[async_backtrace::framed]
-    pub async fn try_create_with_config(conf: &InnerConfig) -> Result<Self> {
+    pub fn try_create_with_config(
+        conf: Option<&InnerConfig>,
+        catalog_name: Option<&String>,
+    ) -> Result<Self> {
         // The global db meta.
         let mut sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
         sys_db_meta.init_db("system");
         sys_db_meta.init_db("information_schema");
 
-        let sys_db = SystemDatabase::create(&mut sys_db_meta, conf);
-        let info_schema_db = InformationSchemaDatabase::create(&mut sys_db_meta);
+        let catalog_name = if let Some(ctl_name) = catalog_name {
+            ctl_name
+        } else {
+            "default"
+        };
+        let sys_db = SystemDatabase::create(&mut sys_db_meta, conf, catalog_name);
+        let info_schema_db = InformationSchemaDatabase::create(&mut sys_db_meta, catalog_name);
 
         Ok(Self {
             info_schema_db: Arc::new(info_schema_db),
@@ -467,8 +475,6 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
-    // Table index
-
     #[async_backtrace::framed]
     async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
         unimplemented!()
@@ -504,6 +510,30 @@ impl Catalog for ImmutableCatalog {
         &self,
         _req: ListIndexesByIdReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
+        unimplemented!()
+    }
+
+
+    #[async_backtrace::framed]
+    async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_virtual_column(&self, _req: UpdateVirtualColumnReq) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_virtual_column(&self, _req: DropVirtualColumnReq) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_virtual_columns(
+        &self,
+        _req: ListVirtualColumnsReq,
+    ) -> Result<Vec<VirtualColumnMeta>> {
         unimplemented!()
     }
 

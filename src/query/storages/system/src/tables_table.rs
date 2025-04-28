@@ -43,6 +43,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -58,6 +60,7 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
 use crate::util::find_eq_or_filter;
+use crate::util::generate_catalog_meta;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,
@@ -160,21 +163,22 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let catalogs: Vec<Arc<dyn Catalog>> = catalog_mgr
-            .list_catalogs(&tenant, ctx.session_state())
-            .await?
-            .into_iter()
-            .map(|cat| cat.disable_table_info_refresh())
-            .collect::<Result<Vec<_>>>()?;
+        let catalog = catalog_mgr
+            .get_catalog(
+                tenant.tenant_name(),
+                self.get_table_info().catalog(),
+                ctx.session_state(),
+            )
+            .await?;
 
         // Optimization target:  Fast path for known iceberg catalog SHOW TABLES
         if let Some((catalog_name, db_name)) =
-            self.is_external_show_tables_query(&push_downs, &catalogs)
+            self.is_external_show_tables_query(&push_downs, &catalog)
         {
             self.show_tables_from_external_catalog(ctx, catalog_name, db_name)
                 .await
         } else {
-            self.get_full_data_from_catalogs(ctx, push_downs, catalogs)
+            self.get_full_data_from_catalogs(ctx, push_downs, catalog)
                 .await
         }
     }
@@ -282,12 +286,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        catalogs: Vec<Arc<dyn Catalog>>,
+        catalog_impl: Arc<dyn Catalog>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-
-        let mut ctls: Vec<(String, Arc<dyn Catalog>)> =
-            catalogs.iter().map(|e| (e.name(), e.clone())).collect();
 
         let mut catalogs = vec![];
         let mut databases = vec![];
@@ -390,15 +391,20 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             }
         }
 
-        ctls = if !catalog_name.is_empty() && !invalid_optimize {
+        let ctl_name = catalog_impl.name();
+
+        let ctls = if !catalog_name.is_empty() && !invalid_optimize {
             let mut res = vec![];
             for name in &catalog_name {
-                let ctl = ctx.get_catalog(name).await?;
-                res.push((name.to_string(), ctl));
+                if *name == ctl_name {
+                    let ctl = ctx.get_catalog(name).await?;
+                    res.push((name.to_string(), ctl));
+                }
             }
+            // If empty return empty result
             res
         } else {
-            ctls
+            vec![(ctl_name, catalog_impl)]
         };
 
         let visibility_checker = ctx.get_visibility_checker(false).await?;
@@ -963,7 +969,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     fn is_external_show_tables_query(
         &self,
         push_downs: &Option<PushDownInfo>,
-        catalogs: &[Arc<dyn Catalog>],
+        catalog: &Arc<dyn Catalog>,
     ) -> Option<(String, String)> {
         if !WITH_HISTORY && WITHOUT_VIEW {
             let mut database_name = None;
@@ -1012,11 +1018,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     // Check iceberg catalog existence
                     if let Some(catalog_name) = catalog_name {
                         if let Some(database_name) = database_name {
-                            for catalog in catalogs {
-                                if catalog.name() == catalog_name {
-                                    if let CatalogType::Iceberg = catalog.info().catalog_type() {
-                                        return Some((catalog_name, database_name));
-                                    }
+                            if catalog.name() == catalog_name {
+                                if let CatalogType::Iceberg = catalog.info().catalog_type() {
+                                    return Some((catalog_name, database_name));
                                 }
                             }
                         }
@@ -1035,9 +1039,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(&catalog_name).await?;
-        let db = catalog.get_database(&tenant, &db_name).await?;
-        let all_table_names = db.list_tables_names().await?;
-
+        let all_table_names = catalog.list_tables_names(&tenant, &db_name).await?;
         let rows = all_table_names.len();
         Self::generate_tables_block(
             vec![catalog_name; rows],
@@ -1066,7 +1068,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         )
     }
 
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
         let name = Self::TABLE_NAME;
         let table_info = TableInfo {
             desc: format!("'system'.'{name}'"),
@@ -1078,6 +1080,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
                 ..Default::default()
             },
+            catalog_info: Arc::new(CatalogInfo {
+                name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
+                meta: generate_catalog_meta(ctl_name),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 

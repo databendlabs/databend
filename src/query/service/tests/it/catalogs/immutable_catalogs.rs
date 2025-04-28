@@ -31,7 +31,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
     let tenant = Tenant::new_literal(tenant_name);
 
     let conf = databend_query::test_kits::ConfigBuilder::create().config();
-    let catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
+    let catalog = ImmutableCatalog::try_create_with_config(Some(&conf), None)?;
 
     // get system database
     let database = catalog.get_database(&tenant, "system").await?;
