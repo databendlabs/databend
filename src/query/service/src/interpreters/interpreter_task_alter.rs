@@ -141,17 +141,14 @@ impl AlterTaskInterpreter {
     }
 
     fn validate_session_parameters(&self) -> Result<()> {
-        match &self.plan.alter_options {
-            AlterTaskOptions::Set {
-                session_parameters, ..
-            } => {
-                if let Some(session_parameters) = session_parameters {
-                    for (key, _) in session_parameters.iter() {
-                        DefaultSettings::check_setting_scope(key, SettingScope::Session)?;
-                    }
-                }
+        if let AlterTaskOptions::Set {
+            session_parameters: Some(session_parameters),
+            ..
+        } = &self.plan.alter_options
+        {
+            for (key, _) in session_parameters.iter() {
+                DefaultSettings::check_setting_scope(key, SettingScope::Session)?;
             }
-            _ => {}
         }
         Ok(())
     }
