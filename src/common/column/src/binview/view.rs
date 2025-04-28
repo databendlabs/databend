@@ -49,6 +49,11 @@ impl View {
         unsafe { std::mem::transmute(self) }
     }
 
+    #[inline(always)]
+    pub fn as_i128(self) -> i128 {
+        unsafe { std::mem::transmute(self) }
+    }
+
     /// Create a new inline view without verifying the length
     ///
     /// # Safety

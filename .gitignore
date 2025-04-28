@@ -3,6 +3,7 @@
 
 # visual studio code files
 .vscode
+.windsurf
 .dir-locals.el
 .bash_history
 .mysql_history

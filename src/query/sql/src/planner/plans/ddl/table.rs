@@ -52,6 +52,8 @@ pub struct CreateTablePlan {
     pub engine_options: TableOptions,
     pub storage_params: Option<StorageParams>,
     pub options: TableOptions,
+    pub table_properties: Option<TableOptions>,
+    pub table_partition: Option<Vec<String>>,
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
@@ -489,6 +491,20 @@ pub struct DropTableClusterKeyPlan {
 }
 
 impl DropTableClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RefreshTableCachePlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl RefreshTableCachePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

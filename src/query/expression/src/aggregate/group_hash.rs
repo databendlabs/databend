@@ -17,8 +17,8 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::Index;
 use databend_common_exception::Result;
-use ethnum::i256;
 
+use crate::types::i256;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::BinaryType;

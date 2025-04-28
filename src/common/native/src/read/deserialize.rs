@@ -164,7 +164,7 @@ where
             DynIter::new(DecimalNestedIter::<
                 _,
                 databend_common_column::types::i256,
-                ethnum::i256,
+                databend_common_expression::types::i256,
             >::new(
                 readers.pop().unwrap(), data_type.clone(), t.size(), init
             ))

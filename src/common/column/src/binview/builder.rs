@@ -132,7 +132,6 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
         let len = v.length;
         if len <= 12 {
             self.total_bytes_len += len as usize;
-            debug_assert!(self.views.capacity() > self.views.len());
             self.views.push(v)
         } else {
             let data = buffers.get_unchecked(v.buffer_idx as usize);
@@ -141,6 +140,15 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
             let t = T::from_bytes_unchecked(bytes);
             self.push_value(t)
         }
+    }
+
+    /// # Safety
+    /// - caller ensure that view is duplicated
+    #[inline]
+    pub(crate) unsafe fn push_duplicated_view_unchecked(&mut self, v: View) {
+        let len = v.length;
+        self.total_bytes_len += len as usize;
+        self.views.push(v);
     }
 
     pub fn push_value<V: AsRef<T>>(&mut self, value: V) {

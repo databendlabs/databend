@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
@@ -37,7 +38,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use ethnum::i256;
 use num_traits::AsPrimitive;
 
 // int float to decimal
@@ -676,7 +676,7 @@ macro_rules! m_decimal_to_decimal {
             let max = T::max_for_precision($dest_size.precision);
             let min = T::min_for_precision($dest_size.precision);
 
-            let source_factor = F::e($from_size.scale as u32);
+            let source_factor = T::e($from_size.scale as u32);
 
             vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
                 |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| {

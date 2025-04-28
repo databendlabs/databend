@@ -3288,7 +3288,7 @@ dependencies = [
  "hex",
  "hyper-util",
  "itertools 0.13.0",
- "jiff 0.2.8",
+ "jiff 0.2.10",
  "jsonb",
  "lexical-core",
  "log",
@@ -3335,7 +3335,7 @@ dependencies = [
  "geozero",
  "goldenfile",
  "hex",
- "jiff 0.2.8",
+ "jiff 0.2.10",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -3377,7 +3377,6 @@ dependencies = [
  "databend-functions-scalar-math",
  "databend-functions-scalar-numeric-basic-arithmetic",
  "divan",
- "ethnum",
  "geo",
  "geohash",
  "geozero",
@@ -3390,7 +3389,7 @@ dependencies = [
  "jaq-interpret",
  "jaq-parse",
  "jaq-std",
- "jiff 0.2.8",
+ "jiff 0.2.10",
  "jsonb",
  "lexical-core",
  "libm",
@@ -3483,7 +3482,7 @@ dependencies = [
  "geo",
  "geozero",
  "hex",
- "jiff 0.2.8",
+ "jiff 0.2.10",
  "lexical-core",
  "micromarshal",
  "rmp-serde",
@@ -3895,7 +3894,6 @@ dependencies = [
  "databend-common-column",
  "databend-common-expression",
  "env_logger 0.11.8",
- "ethnum",
  "hashbrown 0.14.5",
  "log",
  "lz4",
@@ -4325,6 +4323,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
+ "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4456,7 +4455,6 @@ dependencies = [
  "databend-storages-common-pruner",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
- "ethnum",
  "futures",
  "log",
  "opendal",
@@ -4545,7 +4543,6 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "enum-as-inner",
- "ethnum",
  "futures",
  "jsonb",
  "lexical-core",
@@ -4612,7 +4609,7 @@ dependencies = [
  "databend-storages-common-cache",
  "futures",
  "itertools 0.13.0",
- "jiff 0.2.8",
+ "jiff 0.2.10",
  "jsonb",
  "log",
  "once_cell",
@@ -4943,7 +4940,6 @@ version = "0.1.0"
 dependencies = [
  "databend-common-expression",
  "databend-functions-scalar-decimal",
- "ethnum",
  "lexical-core",
  "match-template",
  "num-traits",
@@ -4958,7 +4954,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "dtparse",
- "jiff 0.2.8",
+ "jiff 0.2.10",
  "num-traits",
 ]
 
@@ -4968,7 +4964,6 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-expression",
- "ethnum",
  "match-template",
  "num-traits",
 ]
@@ -5231,7 +5226,7 @@ dependencies = [
  "hyper-util",
  "indicatif",
  "itertools 0.13.0",
- "jiff 0.2.8",
+ "jiff 0.2.10",
  "jsonb",
  "jwt-simple",
  "log",
@@ -5335,7 +5330,7 @@ dependencies = [
  "derive-visitor",
  "ethnum",
  "itertools 0.13.0",
- "jiff 0.2.8",
+ "jiff 0.2.10",
  "jsonb",
  "rand 0.8.5",
  "reqwest",
@@ -6204,7 +6199,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "env_filter",
- "jiff 0.2.8",
+ "jiff 0.2.10",
  "log",
 ]
 
@@ -6279,10 +6274,10 @@ dependencies = [
 
 [[package]]
 name = "ethnum"
-version = "1.5.0"
-source = "git+https://github.com/datafuse-extras/ethnum-rs?rev=4cb05f1#4cb05f1e407f76b193d81eef71b5dd0b73216856"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0939f82868b77ef93ce3c3c3daf2b3c526b456741da5a1a4559e590965b6026b"
 dependencies = [
- "borsh",
  "serde",
 ]
 
@@ -9281,9 +9276,9 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.2.8"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5ad87c89110f55e4cd4dc2893a9790820206729eaf221555f742d540b0724a0"
+checksum = "5a064218214dc6a10fbae5ec5fa888d80c45d611aba169222fc272072bf7aef6"
 dependencies = [
  "jiff-static",
  "jiff-tzdb",
@@ -9297,9 +9292,9 @@ dependencies = [
 
 [[package]]
 name = "jiff-static"
-version = "0.2.8"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d076d5b64a7e2fe6f0743f02c43ca4a6725c0f904203bfe276a5b3e793103605"
+checksum = "199b7932d97e325aff3a7030e141eafe7f2c6268e1d1b24859b753a627f45254"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9344,12 +9339,13 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7e7eadf220028b2482ef22189ee7ce946665874dcc1040d82c827ff06963fbe"
+source = "git+https://github.com/databendlabs/jsonb?rev=dcaf261#dcaf261df0f2a41ce9029a91444611c1d401e390"
 dependencies = [
  "byteorder",
+ "ethnum",
  "fast-float2",
  "itoa",
+ "jiff 0.2.10",
  "nom 8.0.0",
  "num-traits",
  "ordered-float 5.0.0",

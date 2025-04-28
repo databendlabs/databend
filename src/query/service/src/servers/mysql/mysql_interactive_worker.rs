@@ -45,6 +45,8 @@ use opensrv_mysql::InitWriter;
 use opensrv_mysql::ParamParser;
 use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
+use rand::thread_rng;
+use rand::Rng as _;
 use rand::RngCore;
 use uuid::Uuid;
 
@@ -192,7 +194,9 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
         let query_id = Uuid::new_v4().to_string();
-        let root = Span::root(func_path!(), SpanContext::random())
+        let sampled =
+            thread_rng().gen_range(0..100) <= self.base.session.get_trace_sample_rate()?;
+        let root = Span::root(func_path!(), SpanContext::random().sampled(sampled))
             .with_properties(|| self.base.session.to_fastrace_properties());
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();

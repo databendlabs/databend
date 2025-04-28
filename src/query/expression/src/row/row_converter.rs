@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use ethnum::i256;
 
 use super::fixed;
 use super::fixed::FixedLengthEncoding;
@@ -25,6 +24,7 @@ use super::variable;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
+use crate::types::i256;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberColumn;

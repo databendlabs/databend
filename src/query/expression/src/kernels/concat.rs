@@ -20,12 +20,12 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use ethnum::i256;
 use itertools::Itertools;
 
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
+use crate::types::i256;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;

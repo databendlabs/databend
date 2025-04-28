@@ -25,6 +25,11 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType::Float32;
+use databend_common_expression::types::NumberDataType::Float64;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableDataType::Null;
+use databend_common_expression::TableDataType::Timestamp;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateOption;
@@ -35,12 +40,17 @@ use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_storages_common_cache::LoadParams;
 use educe::Educe;
 use iceberg::arrow::arrow_schema_to_schema;
+use iceberg::spec::PartitionSpec;
+use iceberg::spec::Schema as IceSchema;
 use iceberg::spec::Schema as IcebergSchema;
+use iceberg::spec::Transform;
+use iceberg::spec::UnboundPartitionField;
 use iceberg::TableCreation;
 use iceberg::TableIdent;
 
@@ -103,6 +113,37 @@ impl Database for IcebergDatabase {
     #[async_backtrace::framed]
     async fn trigger_use(&self) -> Result<()> {
         let _ = self.list_tables().await?;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn refresh_table(&self, table_name: &str) -> Result<()> {
+        let params = LoadParams {
+            location: format!("{}{}{}", self.name(), cache::SEP_STR, table_name),
+            len_hint: None,
+            ver: 0,
+            put_cache: true,
+        };
+        let reader =
+            super::cache::iceberg_table_cache_reader(self.ctl.iceberg_catalog(), self.ctl.info());
+        let _ = reader.refresh(&params).await?;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn refresh_database(&self) -> Result<()> {
+        let table_names = self
+            .ctl
+            .iceberg_catalog()
+            .list_tables(&self.ident)
+            .await
+            .map_err(|err| {
+                ErrorCode::UnknownException(format!("Iceberg list tables failed: {err:?}"))
+            })?;
+
+        for name in table_names {
+            let _ = self.refresh_table(&name.name).await?;
+        }
         Ok(())
     }
 
@@ -180,15 +221,19 @@ impl Database for IcebergDatabase {
             }
         }
 
-        let table_create_option = TableCreation::builder()
-            .name(req.table_name().to_string())
-            .properties(HashMap::new())
-            .schema(convert_table_schema(
-                req.table_meta.schema.as_ref(),
-                req.db_name(),
-                req.table_name(),
-            )?)
-            .build();
+        let schema = convert_table_schema(
+            req.table_meta.schema.as_ref(),
+            req.db_name(),
+            req.table_name(),
+        )?;
+
+        let properties = if let Some(table_properties) = &req.table_properties {
+            table_properties.clone().into_iter().collect()
+        } else {
+            HashMap::new()
+        };
+
+        let table_create_option = build_table_creation_option(&req, properties, schema)?;
 
         let _ = self
             .ctl
@@ -234,6 +279,18 @@ impl Database for IcebergDatabase {
                 Err(err)
             }
         } else {
+            let params = LoadParams {
+                location: format!("{}{}{}", self.name(), cache::SEP_STR, table_name),
+                len_hint: None,
+                ver: 0,
+                put_cache: true,
+            };
+            let reader = super::cache::iceberg_table_cache_reader(
+                self.ctl.iceberg_catalog(),
+                self.ctl.info(),
+            );
+
+            reader.remove(&params);
             Ok(DropTableReply {})
         }
     }
@@ -268,4 +325,78 @@ fn convert_table_schema(
     })?;
 
     Ok(schema) // Return the converted Iceberg schema
+}
+
+fn is_invalid_partition_type(ty: &TableDataType) -> bool {
+    match ty {
+        TableDataType::Number(Float32)
+        | TableDataType::Number(Float64)
+        | TableDataType::Decimal(_)
+        | Timestamp
+        | Null => true,
+        TableDataType::Nullable(inner_ty) => is_invalid_partition_type(inner_ty),
+        _ => false,
+    }
+}
+
+fn build_identity_partition_spec(
+    columns: &[String],
+    req_schema: &TableSchema,
+    ice_schema: &IceSchema,
+) -> Result<PartitionSpec> {
+    let mut fields = vec![];
+
+    for (i, col) in columns.iter().enumerate() {
+        // Use req_schema for type validation
+        let origin_ty = &req_schema.field_with_name(col)?.data_type;
+        if is_invalid_partition_type(origin_ty) {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "Partition key {} is {:?} type. Cannot set FLOAT, DOUBLE, DECIMAL, DATETIME as partition field", col, origin_ty
+            )));
+        }
+
+        let field = ice_schema.field_by_name(col.as_str());
+        if let Some(field) = field {
+            fields.push(UnboundPartitionField {
+                source_id: field.id,
+                name: field.name.to_string(),
+                field_id: Some(i as i32),
+                transform: Transform::Identity,
+            });
+        } else {
+            return Err(ErrorCode::Internal(format!(
+                "Can not get partition field '{}' in Iceberg schema.",
+                col
+            )));
+        }
+    }
+
+    Ok(PartitionSpec::builder(ice_schema.clone())
+        .with_spec_id(1)
+        .add_unbound_fields(fields)
+        .unwrap()
+        .build()
+        .unwrap())
+}
+
+fn build_table_creation_option(
+    req: &CreateTableReq,
+    properties: HashMap<String, String>,
+    schema: IceSchema,
+) -> Result<TableCreation> {
+    let builder = TableCreation::builder()
+        .name(req.table_name().to_string())
+        .properties(properties)
+        .schema(schema.clone());
+
+    if let Some(ref partition) = req.table_partition {
+        match partition {
+            TablePartition::Identity { columns } => {
+                let spec = build_identity_partition_spec(columns, &req.table_meta.schema, &schema)?;
+                Ok(builder.partition_spec(spec).build())
+            }
+        }
+    } else {
+        Ok(builder.build())
+    }
 }

@@ -25,6 +25,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::DecimalType;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::*;
@@ -35,7 +36,6 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::BinaryWrite;
-use ethnum::i256;
 use roaring::RoaringTreemap;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;

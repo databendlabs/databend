@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateDatabaseReq;
@@ -126,5 +129,18 @@ pub struct ShowCreateDatabasePlan {
 impl ShowCreateDatabasePlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RefreshDatabaseCachePlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+}
+
+impl RefreshDatabaseCachePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
     }
 }

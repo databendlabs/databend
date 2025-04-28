@@ -216,6 +216,8 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
             as_dropped: false,
+            table_properties: None,
+            table_partition: None,
         })
         .await;
 
@@ -260,6 +262,8 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
             as_dropped: false,
+            table_properties: None,
+            table_partition: None,
         })
         .await;
 

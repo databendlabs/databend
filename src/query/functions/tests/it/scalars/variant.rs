@@ -510,6 +510,18 @@ fn test_as_type(file: &mut impl Write) {
     run_ast(file, "as_array(parse_json('{\"a\":\"b\"}'))", &[]);
     run_ast(file, "as_object(parse_json('[1,2,3]'))", &[]);
     run_ast(file, "as_object(parse_json('{\"a\":\"b\"}'))", &[]);
+    run_ast(file, "as_binary(to_binary('abcd')::variant)", &[]);
+    run_ast(file, "as_date(to_date('2025-10-11')::variant)", &[]);
+    run_ast(
+        file,
+        "as_timestamp(to_timestamp('2025-05-01 10:00:00')::variant)",
+        &[],
+    );
+    run_ast(
+        file,
+        "as_interval(to_interval('1 year 2 month')::variant)",
+        &[],
+    );
 
     let columns = &[(
         "s",
@@ -546,6 +558,18 @@ fn test_is_type(file: &mut impl Write) {
     run_ast(file, "is_array(parse_json('{\"a\":\"b\"}'))", &[]);
     run_ast(file, "is_object(parse_json('[1,2,3]'))", &[]);
     run_ast(file, "is_object(parse_json('{\"a\":\"b\"}'))", &[]);
+    run_ast(file, "is_binary(to_binary('abcd')::variant)", &[]);
+    run_ast(file, "is_date(to_date('2025-10-11')::variant)", &[]);
+    run_ast(
+        file,
+        "is_timestamp(to_timestamp('2025-05-01 10:00:00')::variant)",
+        &[],
+    );
+    run_ast(
+        file,
+        "is_interval(to_interval('1 year 2 month')::variant)",
+        &[],
+    );
 
     let columns = &[(
         "s",
