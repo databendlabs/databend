@@ -121,10 +121,10 @@ impl TimeSeriesProfiles {
         is_record
     }
 
-    pub fn flush(&self, finish: bool, quota: &mut usize) -> Vec<(u32, Vec<Vec<usize>>)> {
+    pub fn flush(&self, finish: bool, quota: &mut i32) -> Vec<(u32, Vec<Vec<usize>>)> {
         let mut batch = Vec::with_capacity(self.profiles.len());
         for (profile_name, profile) in self.profiles.iter().enumerate() {
-            if *quota <= 0 && !finish {
+            if *quota == 0 && !finish {
                 break;
             }
             if finish {
@@ -138,7 +138,7 @@ impl TimeSeriesProfiles {
             while let Ok(point) = profile.points.pop() {
                 points.push(point);
                 *quota -= 1;
-                if *quota <= 0 && !finish {
+                if *quota == 0 && !finish {
                     break;
                 }
             }
