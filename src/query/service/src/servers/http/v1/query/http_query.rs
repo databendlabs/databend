@@ -26,7 +26,6 @@ use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::MemStat;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
@@ -473,11 +472,6 @@ impl HttpQuery {
         session.set_client_host(ctx.client_host.clone());
 
         let http_ctx = ctx;
-        let query_mem_stat = MemStat::create(format!("Query-{}", query_id));
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        tracking_payload.mem_stat = Some(query_mem_stat.clone());
-        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
-
         let ctx = session.create_query_context().await?;
 
         // Deduplicate label is used on the DML queries which may be retried by the client.
@@ -741,11 +735,6 @@ impl HttpQuery {
             let page_manager = self.page_manager.lock().await;
             page_manager.format_settings.clone()
         };
-
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        tracking_payload.mem_stat = query_context.get_query_memory_tracking();
-        tracking_payload.query_id = Some(query_context.get_id());
-        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
 
         GlobalQueryRuntime::instance().runtime().try_spawn(
             async move {
