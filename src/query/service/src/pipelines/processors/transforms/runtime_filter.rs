@@ -174,6 +174,7 @@ impl From<RemoteRuntimeFiltersForScan> for RuntimeFiltersForScan {
 
 impl RemoteRuntimeFilters {
     pub fn merge(rfs: &[RemoteRuntimeFilters]) -> Self {
+        log::info!("start merge runtime filters: {:?}", rfs);
         if rfs.is_empty() {
             return RemoteRuntimeFilters::default();
         }
@@ -207,20 +208,45 @@ impl RemoteRuntimeFilters {
                         rf.scan_id_to_runtime_filter[&scan_id].rf_id_to_inlist[rf_id].clone(),
                     );
                 }
+                log::info!("merge inlist: {:?}, rf_id: {:?}", exprs, rf_id);
                 let merged_expr = exprs
                     .into_iter()
                     .reduce(|acc, expr| RemoteExpr::FunctionCall {
                         span: None,
                         id: Box::new(FunctionID::Builtin {
                             name: "or".to_string(),
-                            id: 0,
+                            id: 1,
                         }),
                         generics: vec![],
                         args: vec![acc, expr],
-                        return_type: DataType::Boolean,
+                        return_type: DataType::Nullable(Box::new(DataType::Boolean)),
                     })
                     .unwrap();
                 merged_for_scan.rf_id_to_inlist.insert(*rf_id, merged_expr);
+            }
+
+            for rf_id in &common_min_max_ids {
+                let mut exprs = Vec::new();
+                for rf in rfs.iter() {
+                    exprs.push(
+                        rf.scan_id_to_runtime_filter[&scan_id].rf_id_to_min_max[rf_id].clone(),
+                    );
+                }
+                log::info!("merge min_max: {:?}, rf_id: {:?}", exprs, rf_id);
+                let merged_expr = exprs
+                    .into_iter()
+                    .reduce(|acc, expr| RemoteExpr::FunctionCall {
+                        span: None,
+                        id: Box::new(FunctionID::Builtin {
+                            name: "or".to_string(),
+                            id: 1,
+                        }),
+                        generics: vec![],
+                        args: vec![acc, expr],
+                        return_type: DataType::Nullable(Box::new(DataType::Boolean)),
+                    })
+                    .unwrap();
+                merged_for_scan.rf_id_to_min_max.insert(*rf_id, merged_expr);
             }
 
             merged
