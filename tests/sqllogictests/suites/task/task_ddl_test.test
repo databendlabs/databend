@@ -107,8 +107,7 @@ SUCCEEDED
 statement ok
 CREATE TASK sessionTask
   WAREHOUSE = 'mywh'
-  SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
-  DATABASE = 'mydb', TIMEZONE = 'America/Los_Angeles'
+  SCHEDULE = USING CRON '0 0 0 1 1 ? 2100' 'America/Los_Angeles'
   AS SELECT 1;
 
 query SSS
