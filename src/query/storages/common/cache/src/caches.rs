@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
-use databend_storages_common_index::filters::FilterImpl;
 
 pub use crate::cache_items::*;
 use crate::manager::CacheManager;
@@ -46,7 +45,7 @@ pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
 pub type TableSnapshotStatisticCache = InMemoryLruCache<TableSnapshotStatistics>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
-pub type BloomIndexFilterCache = HybridCache<FilterImpl>;
+pub type BloomIndexFilterCache = HybridCache<Xor8Filter>;
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 
@@ -124,7 +123,7 @@ impl CachedObject<(PartStatistics, Partitions)> for (PartStatistics, Partitions)
     }
 }
 
-impl CachedObject<FilterImpl> for FilterImpl {
+impl CachedObject<Xor8Filter> for Xor8Filter {
     type Cache = BloomIndexFilterCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_bloom_index_filter_cache()
@@ -236,10 +235,10 @@ impl From<TableSnapshotStatistics> for CacheValue<TableSnapshotStatistics> {
     }
 }
 
-impl From<FilterImpl> for CacheValue<FilterImpl> {
-    fn from(value: FilterImpl) -> Self {
+impl From<Xor8Filter> for CacheValue<Xor8Filter> {
+    fn from(value: Xor8Filter) -> Self {
         CacheValue {
-            mem_bytes: value.mem_bytes(),
+            mem_bytes: std::mem::size_of::<Xor8Filter>() + value.filter.finger_prints.len(),
             inner: Arc::new(value),
         }
     }

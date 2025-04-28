@@ -18,7 +18,6 @@ databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
 bincode = { workspace = true, features = ["serde"] }
-bloomfilter = { workspace = true, features = ["serde"] }
 bytes = { workspace = true }
 cbordata = { workspace = true }
 fastrace = { workspace = true }

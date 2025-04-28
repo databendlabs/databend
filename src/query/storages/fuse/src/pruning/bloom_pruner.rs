@@ -115,13 +115,16 @@ impl BloomPrunerCreator {
             }
         }
         for (i, scalar) in result.ngram_scalars.into_iter() {
+            let gram_size = ngram_args[i].gram_size();
+            let bitmap_size = ngram_args[i].bitmap_size();
             for words in BloomIndex::calculate_ngram_nullable_column(
                 Value::Scalar(scalar),
-                ngram_args[i].gram_size(),
-                |word| word.to_string(),
+                gram_size,
+                bitmap_size,
+                |word, _| word.to_string(),
             ) {
                 for word in words {
-                    let hash1 = BloomIndex::ngram_hash(&word);
+                    let hash1 = BloomIndex::ngram_hash(&word, bitmap_size);
                     if let Entry::Vacant(e) = scalar_map.entry(Scalar::String(word)) {
                         e.insert(hash1);
                     }
@@ -162,8 +165,12 @@ impl BloomPrunerCreator {
                 if column_ids_of_indexed_block.contains(&field.column_id()) {
                     acc.push(BloomIndex::build_filter_bloom_name(version, field)?);
                 }
-                if column_ids_of_indexed_block.contains(&field.column_id()) {
-                    acc.push(BloomIndex::build_filter_ngram_name(field));
+                if let Some(ngram_arg) = self.ngram_args.iter().find(|arg| arg.field() == field) {
+                    acc.push(BloomIndex::build_filter_ngram_name(
+                        field,
+                        ngram_arg.gram_size(),
+                        ngram_arg.bitmap_size(),
+                    ));
                 }
                 Ok::<_, ErrorCode>(acc)
             },
