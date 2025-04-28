@@ -14,9 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
@@ -28,21 +26,20 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_storages_common_table_meta::table::get_change_type;
 
+use super::JoinRuntimeFilter;
+use super::PhysicalRuntimeFilters;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::IndexType;
-use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 
@@ -111,22 +108,6 @@ pub struct HashJoin {
     pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
 
     pub runtime_filter: PhysicalRuntimeFilters,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Default)]
-pub struct PhysicalRuntimeFilters {
-    pub filters: Vec<PhysicalRuntimeFilter>,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct PhysicalRuntimeFilter {
-    pub id: usize,
-    pub build_key: RemoteExpr,
-    pub probe_key: RemoteExpr<String>,
-    pub scan_id: usize,
-    pub enable_bloom_runtime_filter: bool,
-    pub enable_inlist_runtime_filter: bool,
-    pub enable_min_max_runtime_filter: bool,
 }
 
 impl HashJoin {
@@ -973,98 +954,15 @@ impl PhysicalPlanBuilder {
         build_keys: &[RemoteExpr],
         probe_keys: Vec<Option<(RemoteExpr<String>, usize, usize)>>,
     ) -> Result<PhysicalRuntimeFilters> {
-        if !supported_join_type_for_runtime_filter(&join.join_type) {
-            return Ok(Default::default());
-        }
-
-        let is_cluster = !self.ctx.get_cluster().is_empty();
-        if is_cluster && !is_broadcast {
-            // For cluster, only support runtime filter for broadcast join.
-            return Ok(Default::default());
-        }
-
-        let mut filters = Vec::new();
-        for (build_key, probe_key, scan_id, table_index) in build_keys
-            .iter()
-            .zip(probe_keys.into_iter())
-            .filter_map(|(b, p)| p.map(|(p, scan_id, table_index)| (b, p, scan_id, table_index)))
-        {
-            if probe_key.as_column_ref().is_none() {
-                continue;
-            }
-
-            let data_type = build_key
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .data_type()
-                .remove_nullable();
-            let id = self.metadata.write().next_runtime_filter_id();
-
-            let enable_bloom_runtime_filter = {
-                let is_supported_type = data_type.is_number() || data_type.is_string();
-                let enable_bloom_runtime_filter_based_on_stats = adjust_bloom_runtime_filter(
-                    self.ctx.clone(),
-                    &self.metadata,
-                    Some(table_index),
-                    s_expr,
-                )
-                .await?;
-                is_supported_type && enable_bloom_runtime_filter_based_on_stats
-            };
-            let enable_min_max_runtime_filter =
-                data_type.is_number() || data_type.is_date() || data_type.is_string();
-            let runtime_filter = PhysicalRuntimeFilter {
-                id,
-                build_key: build_key.clone(),
-                probe_key,
-                scan_id,
-                enable_bloom_runtime_filter,
-                enable_inlist_runtime_filter: true,
-                enable_min_max_runtime_filter,
-            };
-            filters.push(runtime_filter);
-        }
-        Ok(PhysicalRuntimeFilters { filters })
+        JoinRuntimeFilter::build_runtime_filter(
+            self.ctx.clone(),
+            &self.metadata,
+            join,
+            s_expr,
+            is_broadcast,
+            build_keys,
+            probe_keys,
+        )
+        .await
     }
-}
-
-pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
-    matches!(
-        join_type,
-        JoinType::Inner
-            | JoinType::Right
-            | JoinType::RightSemi
-            | JoinType::RightAnti
-            | JoinType::LeftMark
-    )
-}
-
-// Check if enable bloom runtime filter
-async fn adjust_bloom_runtime_filter(
-    ctx: Arc<dyn TableContext>,
-    metadata: &MetadataRef,
-    table_index: Option<IndexType>,
-    s_expr: &SExpr,
-) -> Result<bool> {
-    // The setting of `enable_bloom_runtime_filter` is true by default.
-    if !ctx.get_settings().get_bloom_runtime_filter()? {
-        return Ok(false);
-    }
-    if let Some(table_index) = table_index {
-        let table_entry = metadata.read().table(table_index).clone();
-        let change_type = get_change_type(table_entry.alias_name());
-        let table = table_entry.table();
-        if let Some(stats) = table
-            .table_statistics(ctx.clone(), true, change_type)
-            .await?
-        {
-            if let Some(num_rows) = stats.num_rows {
-                let join_cardinality = RelExpr::with_s_expr(s_expr)
-                    .derive_cardinality()?
-                    .cardinality;
-                // If the filtered data reduces to less than 1/1000 of the original dataset, we will enable bloom runtime filter.
-                return Ok(join_cardinality <= (num_rows / 1000) as f64);
-            }
-        }
-    }
-    Ok(false)
 }
