@@ -173,7 +173,7 @@ fn test_record_inner_basic() -> Result<()> {
 fn test_record_inner_special() -> Result<()> {
     // Simulate concurrently recording but one thread is late
     let points = ProfilePoints::new();
-    let now = 1000000001 as usize;
+    let now = 1000000001_usize;
     for i in 0..10 {
         points.record_time_slot(now, i);
     }
@@ -196,7 +196,7 @@ fn test_record_inner_special() -> Result<()> {
 fn test_record_inner_special_invalid() -> Result<()> {
     // Simulate concurrently recording but one thread is later than 1 second
     let points = ProfilePoints::new();
-    let now = 1000000001 as usize;
+    let now = 1000000001_usize;
     for i in 0..10 {
         points.record_time_slot(now, i);
     }
