@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
@@ -124,23 +123,23 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
             }
         }
 
+        let ctl = ctx.get_catalog(self.get_table_info().catalog()).await?;
+        let visibility_checker = if ctl.is_external() {
+            None
+        } else {
+            Some(ctx.get_visibility_checker(false).await?)
+        };
+        let catalog_dbs = visibility_checker
+            .as_ref()
+            .and_then(|c| c.get_visibility_database());
         let catalogs = if let Some(filter_catalog_name) = filter_catalog_name {
             let mut res = vec![];
             if filter_catalog_name == self.get_table_info().catalog() {
-                let ctl = ctx.get_catalog(&filter_catalog_name).await?;
                 res.push((filter_catalog_name, ctl));
             }
             // If empty return empty result
             res
         } else {
-            let catalog_mgr = CatalogManager::instance();
-            let ctl = catalog_mgr
-                .get_catalog(
-                    tenant.tenant_name(),
-                    self.get_table_info().catalog(),
-                    ctx.session_state(),
-                )
-                .await?;
             vec![(ctl.name(), ctl)]
         };
 
@@ -151,8 +150,6 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
         let mut owners: Vec<Option<String>> = vec![];
         let mut dropped_on: Vec<Option<i64>> = vec![];
 
-        let visibility_checker = ctx.get_visibility_checker(false).await?;
-        let catalog_dbs = visibility_checker.get_visibility_database();
         // None means has global level privileges
         if let Some(catalog_dbs) = catalog_dbs {
             if WITH_HISTORY {
@@ -252,11 +249,16 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
                 let final_dbs = databases
                     .into_iter()
                     .filter(|db| {
-                        visibility_checker.check_database_visibility(
-                            &ctl_name,
-                            db.name(),
-                            db.get_db_info().database_id.db_id,
-                        )
+                        visibility_checker
+                            .as_ref()
+                            .map(|c| {
+                                c.check_database_visibility(
+                                    &ctl_name,
+                                    db.name(),
+                                    db.get_db_info().database_id.db_id,
+                                )
+                            })
+                            .unwrap_or(true)
                     })
                     .collect::<Vec<_>>();
 
