@@ -215,9 +215,7 @@ fn load_test_cases(base_path: &Path) -> Result<Vec<TestCase>> {
         return Ok(Vec::new());
     }
 
-    let mut entrys = fs::read_dir(cases_dir)?
-        .into_iter()
-        .collect::<io::Result<Vec<_>>>()?;
+    let mut entrys = fs::read_dir(cases_dir)?.collect::<io::Result<Vec<_>>>()?;
     entrys.sort_by_key(fs::DirEntry::file_name);
     for entry in entrys {
         let path = entry.path();
