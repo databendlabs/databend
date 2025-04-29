@@ -109,7 +109,7 @@ impl Binder {
     pub(crate) async fn bind_stage_table(
         &mut self,
         table_ctx: Arc<dyn TableContext>,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stage_info: StageInfo,
         files_info: StageFilesInfo,
         alias: &Option<TableAlias>,
@@ -143,7 +143,9 @@ impl Binder {
             false,
             true,
             None,
-        );
+            &mut bind_context.virtual_column_context,
+            &mut bind_context.columns,
+        )?;
 
         let (s_expr, mut bind_context) =
             self.bind_base_table(bind_context, "system", table_index, None, &None)?;

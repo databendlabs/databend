@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Write;
-use std::sync::Arc;
-
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
@@ -24,16 +21,12 @@ use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_with_options::check_with_opt_valid;
 use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::Scalar;
-use databend_common_expression::TableDataType;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
@@ -41,10 +34,6 @@ use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 use crate::BindContext;
-use crate::ColumnBindingBuilder;
-use crate::ColumnEntry;
-use crate::IndexType;
-use crate::Visibility;
 
 impl Binder {
     /// Bind a base table.
@@ -173,7 +162,9 @@ impl Binder {
                     bind_context.planning_agg_index,
                     false,
                     None,
-                );
+                    &mut bind_context.virtual_column_context,
+                    &mut bind_context.columns,
+                )?;
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
                     database.as_str(),
@@ -258,7 +249,9 @@ impl Binder {
                         false,
                         false,
                         None,
-                    );
+                        &mut bind_context.virtual_column_context,
+                        &mut bind_context.columns,
+                    )?;
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query)?;
                     if let Some(alias) = alias {
@@ -290,8 +283,9 @@ impl Binder {
                     bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
-                );
-                self.bind_table_virtual_column(bind_context, table_meta.clone(), table_index)?;
+                    &mut bind_context.virtual_column_context,
+                    &mut bind_context.columns,
+                )?;
 
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
@@ -330,184 +324,5 @@ impl Binder {
             },
             _ => Ok(()),
         }
-    }
-
-    fn bind_table_virtual_column(
-        &mut self,
-        bind_context: &mut BindContext,
-        table: Arc<dyn Table>,
-        table_index: IndexType,
-    ) -> Result<()> {
-        if !bind_context.virtual_column_context.allow_pushdown {
-            return Ok(());
-        }
-
-        // Ignore tables that do not support virtual columns
-        if !table.support_virtual_columns() {
-            return Ok(());
-        }
-
-        let table_meta = &table.get_table_info().meta;
-        let Some(ref virtual_schema) = table_meta.virtual_schema else {
-            return Ok(());
-        };
-
-        if !bind_context
-            .virtual_column_context
-            .table_indices
-            .contains(&table_index)
-        {
-            bind_context
-                .virtual_column_context
-                .table_indices
-                .insert(table_index);
-            for virtual_field in virtual_schema.fields.iter() {
-                let Some(base_column) = ({
-                    let guard = self.metadata.read();
-                    guard
-                        .columns_by_table_index(table_index)
-                        .iter()
-                        .find_map(|column| {
-                            if let ColumnEntry::BaseTableColumn(base_column) = column {
-                                if base_column.column_id == Some(virtual_field.source_column_id) {
-                                    return Some(base_column.clone());
-                                }
-                            }
-                            None
-                        })
-                }) else {
-                    continue;
-                };
-
-                let name = format!("{}{}", base_column.column_name, virtual_field.name);
-                let mut index = 0;
-                // Check for duplicate virtual columns
-                for table_column in self
-                    .metadata
-                    .read()
-                    .virtual_columns_by_table_index(table_index)
-                {
-                    if table_column.name() == name {
-                        index = table_column.index();
-                        break;
-                    }
-                }
-                let column_id = virtual_field.column_id;
-
-                // It's not possible to determine the actual type based on the type of generated virtual columns,
-                // as fields in non-leaf nodes are not generated with virtual columns,
-                // and these ungenerated nodes may have inconsistent types.
-                let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
-                let data_type = Box::new(DataType::from(&table_data_type));
-
-                if index == 0 {
-                    let is_created = true;
-
-                    let path = Self::convert_array_index(&virtual_field.name)?;
-                    index = self.metadata.write().add_virtual_column(
-                        &base_column,
-                        column_id,
-                        name.clone(),
-                        table_data_type,
-                        Scalar::String(path),
-                        None,
-                        is_created,
-                    );
-                }
-                let virtual_column_binding =
-                    ColumnBindingBuilder::new(name, index, data_type, Visibility::InVisible)
-                        .table_index(Some(table_index))
-                        .build();
-                bind_context.columns.push(virtual_column_binding);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn convert_array_index(input: &str) -> Result<String> {
-        let mut chars = input.chars().peekable();
-        let mut path = "{".to_string();
-
-        while chars.peek().is_some() {
-            if chars.next() != Some('[') {
-                return Err(ErrorCode::InvalidArgument("Expected '['".to_string()));
-            }
-            if let Some('\'') = chars.peek() {
-                let _ = chars.next();
-                path.push('"');
-
-                let mut is_empty = true;
-                for c in chars.by_ref() {
-                    is_empty = false;
-                    if c == '\'' {
-                        break;
-                    }
-                    path.write_char(c)?;
-                }
-                if is_empty {
-                    let _ = path.pop();
-                } else {
-                    path.push('"')
-                }
-                if chars.next() != Some(']') {
-                    return Err(ErrorCode::InvalidArgument("Expected ']' after string"));
-                }
-            } else {
-                while let Some(&c) = chars.peek() {
-                    if c == ']' {
-                        break;
-                    }
-                    path.write_char(c)?;
-                    chars.next();
-                }
-                if chars.next() != Some(']') {
-                    return Err(ErrorCode::InvalidArgument(
-                        "Expected ']' after index".to_string(),
-                    ));
-                }
-            };
-
-            path.write_char(',')?;
-        }
-        if path.len() > 1 {
-            let _ = path.pop();
-        }
-        path.write_char('}')?;
-
-        if chars.next().is_some() {
-            return Err(ErrorCode::InvalidArgument("Unexpected trailing characters"));
-        }
-        Ok(path)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use databend_common_exception::Result;
-
-    use crate::Binder;
-
-    #[test]
-    fn test_convert_array_index() -> Result<()> {
-        let success = vec![
-            ("['a']", "{\"a\"}"),
-            ("['a'][0]", "{\"a\",0}"),
-            ("['a']['b']", "{\"a\",\"b\"}"),
-            ("['a']['some_word']", "{\"a\",\"some_word\"}"),
-            ("['a'][42]['long_string']", "{\"a\",42,\"long_string\"}"),
-            ("['a'][0]['b']['c']", "{\"a\",0,\"b\",\"c\"}"),
-            ("['key']['value'][123]", "{\"key\",\"value\",123}"),
-            ("[0]", "{0}"),
-        ];
-        let failure = vec!["invalid", "['a'", "['a']extra"];
-        for (case, result) in success {
-            assert_eq!(result, Binder::convert_array_index(case)?);
-        }
-        for case in failure {
-            assert!(Binder::convert_array_index(case).is_err());
-        }
-
-        Ok(())
     }
 }

@@ -63,9 +63,6 @@ pub struct VirtualColumnField {
     pub cast_func_name: Option<String>,
     /// Virtual column data type.
     pub data_type: Box<TableDataType>,
-    /// Is the virtual column is created,
-    /// if not, reminder user to create it.
-    pub is_created: bool,
 }
 
 /// Information about prewhere optimization.

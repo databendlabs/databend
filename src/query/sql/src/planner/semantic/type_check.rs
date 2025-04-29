@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::fmt::Write;
 use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -170,10 +171,12 @@ use crate::plans::WindowOrderBy;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::Visibility;
 
 /// A helper for type checking.
 ///
@@ -572,7 +575,7 @@ impl<'a> TypeChecker<'a> {
             Expr::Cast {
                 expr, target_type, ..
             } => {
-                let box (mut scalar, data_type) = self.resolve(expr)?;
+                let box (scalar, data_type) = self.resolve(expr)?;
                 if target_type == &TypeName::Variant {
                     if let Some(result) =
                         self.resolve_cast_to_variant(expr.span(), &data_type, &scalar, false)
@@ -599,8 +602,10 @@ impl<'a> TypeChecker<'a> {
                 let target_type = if data_type.remove_nullable() == DataType::Variant {
                     let target_type = checked_expr.data_type().nest_wrap_nullable();
 
-                    if self.try_rewrite_virtual_column_cast(&mut scalar, &target_type) {
-                        return Ok(Box::new((scalar, target_type)));
+                    if let Some(new_scalar) =
+                        self.try_rewrite_virtual_column_cast(&scalar, &target_type)
+                    {
+                        return Ok(Box::new((new_scalar, target_type)));
                     }
                     target_type
                 // if the source type is nullable, cast target type should also be nullable.
@@ -1178,40 +1183,76 @@ impl<'a> TypeChecker<'a> {
 
     fn try_rewrite_virtual_column_cast(
         &mut self,
-        scalar: &mut ScalarExpr,
+        scalar: &ScalarExpr,
         target_type: &DataType,
-    ) -> bool {
-        let ScalarExpr::BoundColumnRef(column) = scalar else {
-            return false;
+    ) -> Option<ScalarExpr> {
+        let Ok(cast_ty) = infer_schema_type(target_type) else {
+            return None;
         };
+        let ScalarExpr::BoundColumnRef(column) = scalar else {
+            return None;
+        };
+        column.column.table_index?;
         let mut guard = self.metadata.write();
-        if column.column.table_index.is_none() {
-            return false;
-        }
         let ColumnEntry::VirtualColumn(virtual_column) = guard.column(column.column.index).clone()
         else {
-            return false;
+            return None;
         };
+        // If VirtualColumn has been cast to another type, the rewrite of this cast is canceled.
+        if let Some((source_cast_ty, _)) = virtual_column.cast_type {
+            if source_cast_ty == cast_ty {
+                return Some(scalar.clone());
+            }
+            let source_column_binding = ColumnBindingBuilder::new(
+                virtual_column.source_column_name,
+                virtual_column.source_column_index,
+                Box::new(DataType::Nullable(Box::new(DataType::Variant))),
+                Visibility::Visible,
+            )
+            .build();
+            return Some(ScalarExpr::CastExpr(CastExpr {
+                span: scalar.span(),
+                is_try: false,
+                argument: Box::new(ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "get_by_keypath".to_string(),
+                    params: vec![],
+                    arguments: vec![
+                        ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: scalar.span(),
+                            column: source_column_binding,
+                        }),
+                        ScalarExpr::ConstantExpr(ConstantExpr {
+                            span: scalar.span(),
+                            value: virtual_column.key_paths,
+                        }),
+                    ],
+                })),
+                target_type: Box::new(target_type.clone()),
+            }));
+        }
         let ColumnEntry::BaseTableColumn(source_column) =
             guard.column(virtual_column.source_column_index).clone()
         else {
-            return false;
+            return None;
         };
-        if let Some(table_ty) = Option::<TableDataType>::from(target_type) {
+        if let Ok(column_ty) = infer_schema_type(column.column.data_type.as_ref()) {
+            let mut column = column.clone();
+
             // Tips: column id from source virtual_column
             column.column.index = guard.add_virtual_column(
                 &source_column,
                 virtual_column.column_id,
                 virtual_column.column_name,
-                table_ty,
+                column_ty,
+                Some((cast_ty, true)),
                 virtual_column.key_paths,
                 Some(virtual_column.column_index),
-                virtual_column.is_created,
             );
             column.column.data_type = Box::new(target_type.clone());
-            return true;
+            return Some(ScalarExpr::BoundColumnRef(column));
         }
-        false
+        None
     }
 
     // TODO: remove this function
@@ -3989,33 +4030,44 @@ impl<'a> TypeChecker<'a> {
         {
             return Ok(None);
         }
-        let ScalarExpr::BoundColumnRef(column_ref) = &args[0] else {
-            return Ok(None);
-        };
-        // only rewrite when arg[1] is path
-        let ScalarExpr::ConstantExpr(ConstantExpr {
-            value: Scalar::String(path),
-            ..
-        }) = &args[1]
-        else {
-            return Ok(None);
-        };
         let name = if matches!(func_name, "get" | "get_string") {
-            format!("v['{}']", path)
+            let mut name = String::new();
+            Self::merge_fn_get(args, &mut name)?;
+            name
         } else {
+            let ScalarExpr::BoundColumnRef(column_ref) = &args[0] else {
+                return Ok(None);
+            };
+            // only rewrite when arg[1] is path
+            let ScalarExpr::ConstantExpr(ConstantExpr {
+                value: Scalar::String(path),
+                ..
+            }) = &args[1]
+            else {
+                return Ok(None);
+            };
             let Ok(key_paths) = parse_key_paths(path.as_bytes()) else {
                 return Ok(None);
             };
             Self::keypaths_to_name(&column_ref.column.column_name, &key_paths)
         };
-        let Ok(result) = self.resolve(&Expr::ColumnRef {
+        let mut expr = Expr::ColumnRef {
             span,
             column: ColumnRef {
                 database: None,
                 table: None,
                 column: ColumnID::Name(Identifier::from_name(span, name)),
             },
-        }) else {
+        };
+        if func_name.ends_with("_string") {
+            expr = Expr::Cast {
+                span,
+                expr: Box::new(expr),
+                target_type: TypeName::String,
+                pg_style: false,
+            }
+        }
+        let Ok(result) = self.resolve(&expr) else {
             return Ok(None);
         };
 
@@ -4040,6 +4092,30 @@ impl<'a> TypeChecker<'a> {
             ))));
         }
         Ok(Some(result))
+    }
+
+    fn merge_fn_get(args: &[ScalarExpr], name: &mut String) -> Result<()> {
+        match &args[0] {
+            ScalarExpr::BoundColumnRef(column) => {
+                *name = column.column.column_name.to_string();
+            }
+            ScalarExpr::FunctionCall(func_call) => {
+                // without 'get_string'
+                if matches!(func_call.func_name.as_str(), "get") {
+                    Self::merge_fn_get(&func_call.arguments, name)?;
+                }
+            }
+            _ => return Ok(()),
+        }
+        // only rewrite when arg[1] is path
+        let ScalarExpr::ConstantExpr(ConstantExpr {
+            value: scalar_expr, ..
+        }) = &args[1]
+        else {
+            return Ok(());
+        };
+        write!(name, "[{}]", scalar_expr)?;
+        Ok(())
     }
 
     fn resolve_trim_function(

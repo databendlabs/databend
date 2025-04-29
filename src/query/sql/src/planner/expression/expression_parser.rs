@@ -64,7 +64,9 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
         false,
         false,
         None,
-    );
+        &mut bind_context.virtual_column_context,
+        &mut bind_context.columns,
+    )?;
 
     let columns = metadata.read().columns_by_table_index(table_index);
     let table = metadata.read().table(table_index).clone();

@@ -37,7 +37,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -566,12 +565,13 @@ impl PhysicalPlanBuilder {
             {
                 source_column_ids.insert(virtual_column.source_column_id);
                 let cast_func_name =
-                    if virtual_column.data_type.remove_nullable() != TableDataType::Variant {
-                        let dest_type = DataType::from(&virtual_column.data_type.remove_nullable());
-                        get_simple_cast_function(true, &DataType::Variant, &dest_type)
-                    } else {
-                        None
-                    };
+                    virtual_column
+                        .cast_type
+                        .as_ref()
+                        .and_then(|(cast_ty, is_try)| {
+                            let dest_type = DataType::from(&cast_ty.remove_nullable());
+                            get_simple_cast_function(*is_try, &DataType::Variant, &dest_type)
+                        });
                 let virtual_column_field = VirtualColumnField {
                     source_column_id: virtual_column.source_column_id,
                     source_name: virtual_column.source_column_name.clone(),
@@ -580,7 +580,6 @@ impl PhysicalPlanBuilder {
                     key_paths: virtual_column.key_paths.clone(),
                     cast_func_name,
                     data_type: Box::new(virtual_column.data_type.clone()),
-                    is_created: virtual_column.is_created,
                 };
                 column_and_indices.push((virtual_column_field, *index));
             }

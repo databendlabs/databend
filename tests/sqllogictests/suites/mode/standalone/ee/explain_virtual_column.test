@@ -112,25 +112,21 @@ Filter
 query T
 explain select a, get_by_keypath_string(v, '{"a",0}') from t2 where get_by_keypath_string(v, '{"b","c"}') like '%10%'
 ----
-EvalScalar
-├── output columns: [t2.a (#0), get_by_keypath_string(v, '{"a",0}') (#7)]
-├── expressions: [CAST(v['a'][0] (#2) AS String NULL)]
+Filter
+├── output columns: [t2.a (#0), t2.v['a'][0] (#2)]
+├── filters: [is_true(like(v['b']['c'] (#5), '%10%'))]
 ├── estimated rows: 0.50
-└── Filter
-    ├── output columns: [t2.a (#0), t2.v['a'][0] (#2)]
-    ├── filters: [is_true(like(CAST(v['b']['c'] (#5) AS String NULL), '%10%'))]
-    ├── estimated rows: 0.50
-    └── TableScan
-        ├── table: default.test_virtual_db.t2
-        ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]
-        ├── read rows: 1
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        ├── push downs: [filters: [is_true(like(CAST(v['b']['c'] (#5) AS String NULL), '%10%'))], limit: NONE]
-        ├── virtual columns: [v['a'][0], v['b']['c']]
-        └── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t2
+    ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(like(v['b']['c'] (#5), '%10%'))], limit: NONE]
+    ├── virtual columns: [v['a'][0], v['b']['c']]
+    └── estimated rows: 1.00
 
 query T
 explain select a, get(v, 'd') from t2 where get(v, 'd') = 20
@@ -152,27 +148,57 @@ Filter
     └── estimated rows: 1.00
 
 query T
-explain select a, get_string(v, 'd') from t2 where get_string(v, 'd') like '%20%'
+explain select a, get(get(v, 'a'), 0) from t2;
+----
+TableScan
+├── table: default.test_virtual_db.t2
+├── output columns: [a (#0), v['a'][0] (#2)]
+├── read rows: 1
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['a'][0]]
+└── estimated rows: 1.00
+
+query T
+explain select v['d']::string, v['d']::int from t2;
 ----
 EvalScalar
-├── output columns: [t2.a (#0), get_string(v, 'd') (#7)]
-├── expressions: [CAST(v['d'] (#6) AS String NULL)]
+├── output columns: [t2.v['d'] (#6), v['d']::Int32 (#7)]
+├── expressions: [CAST(get_by_keypath(v (#1), '{"d"}') AS Int32 NULL)]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t2
+    ├── output columns: [v (#1), v['d'] (#6)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── virtual columns: [v['d']]
+    └── estimated rows: 1.00
+
+query T
+explain select a, get_string(v, 'd') from t2 where get_string(v, 'd') like '%20%'
+----
+Filter
+├── output columns: [t2.a (#0), t2.v['d'] (#6)]
+├── filters: [is_true(like(v['d'] (#6), '%20%'))]
 ├── estimated rows: 0.50
-└── Filter
-    ├── output columns: [t2.a (#0), t2.v['d'] (#6)]
-    ├── filters: [is_true(like(CAST(v['d'] (#6) AS String NULL), '%20%'))]
-    ├── estimated rows: 0.50
-    └── TableScan
-        ├── table: default.test_virtual_db.t2
-        ├── output columns: [a (#0), v['d'] (#6)]
-        ├── read rows: 1
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        ├── push downs: [filters: [is_true(like(CAST(v['d'] (#6) AS String NULL), '%20%'))], limit: NONE]
-        ├── virtual columns: [v['d']]
-        └── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t2
+    ├── output columns: [a (#0), v['d'] (#6)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(like(v['d'] (#6), '%20%'))], limit: NONE]
+    ├── virtual columns: [v['d']]
+    └── estimated rows: 1.00
 
 query T
 explain select v['b']['c']::int from t2;

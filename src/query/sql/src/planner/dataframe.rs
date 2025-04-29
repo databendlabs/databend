@@ -102,7 +102,9 @@ impl Dataframe {
                 false,
                 false,
                 None,
-            );
+                &mut bind_context.virtual_column_context,
+                &mut bind_context.columns,
+            )?;
 
             binder.bind_base_table(&bind_context, database, table_index, None, &None)
         } else {
