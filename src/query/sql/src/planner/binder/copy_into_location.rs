@@ -109,12 +109,10 @@ impl Binder {
                     .await
             }
         }?;
-        println!("qyery pln: {:?}", &query);
-        println!("qyery pln: {}", &query);
         let mut is_ordered = false;
         if let Plan::Query { s_expr, .. } = &query {
             let p = s_expr.derive_relational_prop()?;
-            if !p.orderings.is_empty() || p.partition_orderings.is_some() {
+            if !p.orderings.is_empty() {
                 is_ordered = true;
             }
         }
