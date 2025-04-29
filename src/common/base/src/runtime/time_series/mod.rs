@@ -17,8 +17,8 @@ mod query_profile;
 
 pub use profile::compress_time_point;
 pub use profile::get_time_series_profile_desc;
-pub use profile::TimeSeriesProfileDesc;
 pub use profile::ProfilePoints;
+pub use profile::TimeSeriesProfileDesc;
 pub use profile::TimeSeriesProfileName;
 pub use profile::TimeSeriesProfiles;
 pub use query_profile::QueryTimeSeriesProfile;
