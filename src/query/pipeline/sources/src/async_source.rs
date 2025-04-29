@@ -131,7 +131,9 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
             return Ok(());
         }
         match self.inner.generate().await? {
-            None => self.is_finish = true,
+            None => {
+                self.is_finish = true;
+            }
             Some(data_block) => {
                 if !data_block.is_empty() {
                     let progress_values = ProgressValues {

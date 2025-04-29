@@ -31,6 +31,7 @@ mod util;
 
 pub use desc::HashJoinDesc;
 pub use hash_join_build_state::HashJoinBuildState;
+pub use hash_join_build_state::RuntimeFilterChannels;
 pub use hash_join_probe_state::HashJoinProbeState;
 pub use hash_join_spiller::HashJoinSpiller;
 pub use hash_join_state::*;

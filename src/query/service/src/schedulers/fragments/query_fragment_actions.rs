@@ -126,12 +126,16 @@ impl QueryFragmentsActions {
         self.ctx.get_cluster().local_id()
     }
 
-    pub fn get_root_actions(&self) -> Result<&QueryFragmentActions> {
-        self.fragments_actions.last().ok_or_else(|| {
-            ErrorCode::Internal(
-                "Logical error, call get_root_actions in empty QueryFragmentsActions",
-            )
-        })
+    pub fn get_root_fragment_ids(&self) -> Result<Vec<usize>> {
+        let mut fragment_ids = Vec::new();
+        for fragment_actions in &self.fragments_actions {
+            let plan = &fragment_actions.fragment_actions[0].physical_plan;
+            if !matches!(plan, PhysicalPlan::ExchangeSink(_)) {
+                fragment_ids.push(fragment_actions.fragment_id);
+            }
+        }
+
+        Ok(fragment_ids)
     }
 
     pub fn pop_root_actions(&mut self) -> Option<QueryFragmentActions> {

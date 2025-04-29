@@ -23,6 +23,8 @@ use std::sync::Weak;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use async_channel::Receiver;
+use async_channel::Sender;
 use dashmap::DashMap;
 use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
@@ -35,8 +37,8 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::query_kind::QueryKind;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFiltersForScan;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::StageAttachment;
@@ -68,6 +70,7 @@ use uuid::Uuid;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::transforms::RemoteRuntimeFilters;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::storages::Table;
@@ -144,7 +147,7 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 
-    pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
+    pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFiltersForScan>>>,
 
     pub(in crate::sessions) runtime_filter_ready:
         Arc<RwLock<HashMap<IndexType, Vec<Arc<RuntimeFilterReady>>>>>,
@@ -169,8 +172,18 @@ pub struct QueryContextShared {
     // Used by hilbert clustering when do recluster.
     pub(in crate::sessions) selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
 
+    // join_id -> (sender, receiver)
+    pub(in crate::sessions) rf_source: Arc<Mutex<HashMap<u32, RuntimeFilterSourceChannel>>>,
+
+    pub(in crate::sessions) rf_sink: Arc<Mutex<HashMap<u32, RuntimeFilterSourceChannel>>>,
+
     pub(in crate::sessions) pruned_partitions_stats: Arc<RwLock<Option<PartStatistics>>>,
 }
+
+type RuntimeFilterSourceChannel = (
+    Option<Sender<RemoteRuntimeFilters>>,
+    Option<Receiver<RemoteRuntimeFilters>>,
+);
 
 impl QueryContextShared {
     pub fn try_create(
@@ -235,8 +248,56 @@ impl QueryContextShared {
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             selected_segment_locs: Default::default(),
+            rf_source: Arc::new(Mutex::new(HashMap::new())),
+            rf_sink: Arc::new(Mutex::new(HashMap::new())),
             pruned_partitions_stats: Arc::new(RwLock::new(None)),
         }))
+    }
+
+    pub fn rf_src_recv(&self, join_id: u32) -> Receiver<RemoteRuntimeFilters> {
+        let mut rf_source = self.rf_source.lock();
+        match rf_source.get_mut(&join_id).map(|(_, receiver)| receiver) {
+            Some(receiver) => receiver.take().unwrap(),
+            None => {
+                let (sender, receiver) = async_channel::unbounded();
+                rf_source.insert(join_id, (Some(sender), None));
+                receiver
+            }
+        }
+    }
+    pub fn rf_src_send(&self, join_id: u32) -> Sender<RemoteRuntimeFilters> {
+        let mut rf_source = self.rf_source.lock();
+        match rf_source.get_mut(&join_id).map(|(sender, _)| sender) {
+            Some(sender) => sender.take().unwrap(),
+            None => {
+                let (sender, receiver) = async_channel::unbounded();
+                rf_source.insert(join_id, (None, Some(receiver)));
+                sender
+            }
+        }
+    }
+
+    pub fn rf_sink_recv(&self, join_id: u32) -> Receiver<RemoteRuntimeFilters> {
+        let mut rf_sink = self.rf_sink.lock();
+        match rf_sink.get_mut(&join_id).map(|(_, receiver)| receiver) {
+            Some(receiver) => receiver.take().unwrap(),
+            None => {
+                let (sender, receiver) = async_channel::unbounded();
+                rf_sink.insert(join_id, (Some(sender), None));
+                receiver
+            }
+        }
+    }
+    pub fn rf_sink_send(&self, join_id: u32) -> Sender<RemoteRuntimeFilters> {
+        let mut rf_sink = self.rf_sink.lock();
+        match rf_sink.get_mut(&join_id).map(|(sender, _)| sender) {
+            Some(sender) => sender.take().unwrap(),
+            None => {
+                let (sender, receiver) = async_channel::unbounded();
+                rf_sink.insert(join_id, (None, Some(receiver)));
+                sender
+            }
+        }
     }
 
     pub fn set_error<C>(&self, err: ErrorCode<C>) {
