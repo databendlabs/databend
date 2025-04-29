@@ -422,7 +422,7 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_runtime_filter", DefaultSettingValue {
+                ("enable_join_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
