@@ -1532,6 +1532,11 @@ impl TableContext for QueryContext {
         }
     }
 
+    fn clear_table_meta_timestamps_cache(&self) {
+        let cache = self.shared.get_table_meta_timestamps();
+        cache.lock().clear();
+    }
+
     fn get_read_block_thresholds(&self) -> BlockThresholds {
         *self.block_threshold.read()
     }
