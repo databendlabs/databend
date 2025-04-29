@@ -175,10 +175,7 @@ impl SExpr {
     /// Check if contain subquery
     #[recursive::recursive]
     pub(crate) fn has_subquery(&self) -> bool {
-        if !self.plan.has_subquery() {
-            return self.children.iter().any(|child| child.has_subquery());
-        }
-        true
+        self.plan.has_subquery() || self.children.iter().any(|child| child.has_subquery())
     }
 
     //

@@ -297,6 +297,31 @@ HashJoin
     └── estimated rows: 1.00
 
 query T
+explain raw select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number)
+----
+EvalScalar
+├── scalars: [t.number (#0) AS (#0)]
+└── Filter
+    ├── filters: [SUBQUERY]
+    ├── subquerys
+    │   └── Subquery (Exists)
+    │       ├── output_column: system.numbers.number (#1)
+    │       └── EvalScalar
+    │           ├── scalars: [numbers.number (#1) AS (#1)]
+    │           └── Filter
+    │               ├── filters: [eq(numbers.number (#1), t.number (#0))]
+    │               └── Scan
+    │                   ├── table: system.numbers (#1)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Scan
+        ├── table: system.numbers (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and number = 0 and t.number < 10)
 ----
 HashJoin

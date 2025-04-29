@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::io;
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -37,6 +39,7 @@ use databend_common_sql::MetadataRef;
 use databend_common_storage::Datum;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
+use goldenfile::Mint;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -56,8 +59,6 @@ struct YamlTestCase {
     column_statistics: HashMap<String, YamlColumnStatistics>,
     #[serde(default)]
     statistics_file: Option<String>,
-    raw_plan: String,
-    optimized_plan: String,
     good_plan: Option<String>,
 }
 
@@ -84,8 +85,6 @@ struct YamlColumnStatistics {
 struct TestCase {
     pub name: &'static str,
     pub sql: &'static str,
-    pub raw_plan: &'static str,      // Expected raw plan string
-    pub expected_plan: &'static str, // Expected optimized plan string
     pub table_statistics: HashMap<String, YamlTableStatistics>,
     pub column_statistics: HashMap<String, YamlColumnStatistics>,
 }
@@ -148,8 +147,6 @@ fn create_test_case(yaml: YamlTestCase, base_path: &Path) -> Result<TestCase> {
     Ok(TestCase {
         name: Box::leak(yaml.name.into_boxed_str()),
         sql: Box::leak(yaml.sql.into_boxed_str()),
-        raw_plan: Box::leak(yaml.raw_plan.into_boxed_str()),
-        expected_plan: Box::leak(yaml.optimized_plan.into_boxed_str()),
         table_statistics,
         column_statistics,
     })
@@ -218,8 +215,9 @@ fn load_test_cases(base_path: &Path) -> Result<Vec<TestCase>> {
         return Ok(Vec::new());
     }
 
-    for entry in fs::read_dir(cases_dir)? {
-        let entry = entry?;
+    let mut entrys = fs::read_dir(cases_dir)?.collect::<io::Result<Vec<_>>>()?;
+    entrys.sort_by_key(fs::DirEntry::file_name);
+    for entry in entrys {
         let path = entry.path();
 
         if path.is_file()
@@ -321,7 +319,7 @@ impl<'a> SExprVisitor for ScanStatsVisitor<'a> {
                 let new_plan = Arc::new(RelOperator::Scan(new_scan));
                 let new_expr = expr.replace_plan(new_plan);
                 println!(
-                    "Set statistics for table: {}, table_idx:{}, new stats: {:?}",
+                    "Set statistics for table: {}, table_idx:{}, new stats:\n{:#?}",
                     table_name,
                     table_index,
                     new_stats.clone()
@@ -352,6 +350,7 @@ async fn test_tpcds_optimizer() -> Result<()> {
     // Load test cases from YAML files
     let base_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data");
+    let mut mint = Mint::new("tests/it/sql/planner/optimizer/data/cases");
 
     let tests = load_test_cases(&base_path)?;
 
@@ -363,6 +362,7 @@ async fn test_tpcds_optimizer() -> Result<()> {
     // Run all test cases
     for test in tests {
         println!("\n\n========== Testing: {} ==========", test.name);
+        let file = &mut mint.new_goldenfile(format!("{}.txt", test.name)).unwrap();
 
         // Parse SQL to get raw plan
         let mut raw_plan = raw_plan(&ctx, test.sql).await?;
@@ -373,49 +373,14 @@ async fn test_tpcds_optimizer() -> Result<()> {
         // Print and verify raw plan
         let format_option = FormatOptions { verbose: false };
         let raw_plan_str = raw_plan.format_indent(format_option)?;
-        println!("Raw plan:\n{}", raw_plan_str);
 
         // Verify raw plan matches expected
-        let actual_raw = raw_plan_str.trim();
-        let expected_raw = test.raw_plan.trim();
-        if actual_raw != expected_raw {
-            println!("Raw plan difference detected for test {}:\n", test.name);
-            println!("Expected raw plan:\n{}\n", expected_raw);
-            println!("Actual raw plan:\n{}\n", actual_raw);
-            // Update the expected output in the test case
-            println!(
-                "To fix the test, update the raw_plan in the test case to match the actual output."
-            );
-        }
-        assert_eq!(
-            actual_raw, expected_raw,
-            "Test {} failed: raw plan does not match expected output",
-            test.name
-        );
+        writeln!(file, "Raw plan:\n{}", raw_plan_str)?;
 
         // Optimize the plan
         let optimized_plan = optimize_plan(&ctx, raw_plan).await?;
         let optimized_plan_str = optimized_plan.format_indent(Default::default())?;
-        println!("Optimized plan:\n{}", optimized_plan_str);
-
-        // Verify the optimized plan matches expected output
-        let actual_optimized = optimized_plan_str.trim();
-        let expected_optimized = test.expected_plan.trim();
-        if actual_optimized != expected_optimized {
-            println!(
-                "Optimized plan difference detected for test {}:\n",
-                test.name
-            );
-            println!("Expected optimized plan:\n{}\n", expected_optimized);
-            println!("Actual optimized plan:\n{}\n", actual_optimized);
-            // Update the expected output in the test case
-            println!("To fix the test, update the expected_plan in the test case to match the actual output.");
-        }
-        assert_eq!(
-            actual_optimized, expected_optimized,
-            "Test {} failed: optimized plan does not match expected output",
-            test.name
-        );
+        writeln!(file, "Optimized plan:\n{}", optimized_plan_str)?;
 
         println!("✅ {} test passed!", test.name);
     }
