@@ -840,44 +840,42 @@ where T: EqVisitor
         let mut result = ControlFlow::Continue(None);
 
         if id.name() == "like" {
-            match args.as_slice() {
-                // patterns like `Column like <constant>`
-                [Expr::ColumnRef(ColumnRef {
-                    id,
-                    data_type: column_type,
-                    ..
-                }), Expr::Constant(Constant { scalar, .. })] => {
-                    if let Some(pattern) = scalar.as_string() {
-                        match generate_like_pattern(pattern.as_bytes(), 1) {
-                            LikePattern::StartOfPercent(v) | LikePattern::EndOfPercent(v) => {
-                                let string = String::from_utf8_lossy(v.as_ref()).to_string();
+            // patterns like `Column like <constant>`
+            if let [Expr::ColumnRef(ColumnRef {
+                id,
+                data_type: column_type,
+                ..
+            }), Expr::Constant(Constant { scalar, .. })] = args.as_slice()
+            {
+                if let Some(pattern) = scalar.as_string() {
+                    match generate_like_pattern(pattern.as_bytes(), 1) {
+                        LikePattern::StartOfPercent(v) | LikePattern::EndOfPercent(v) => {
+                            let string = String::from_utf8_lossy(v.as_ref()).to_string();
 
-                                result = self.0.enter_target(
-                                    *span,
-                                    id,
-                                    &Scalar::String(string),
-                                    column_type,
-                                    return_type,
-                                    true,
-                                )?;
-                            }
-                            LikePattern::SurroundByPercent(v) => {
-                                let string = String::from_utf8_lossy(v.needle()).to_string();
-
-                                result = self.0.enter_target(
-                                    *span,
-                                    id,
-                                    &Scalar::String(string),
-                                    column_type,
-                                    return_type,
-                                    true,
-                                )?;
-                            }
-                            _ => (),
+                            result = self.0.enter_target(
+                                *span,
+                                id,
+                                &Scalar::String(string),
+                                column_type,
+                                return_type,
+                                true,
+                            )?;
                         }
+                        LikePattern::SurroundByPercent(v) => {
+                            let string = String::from_utf8_lossy(v.needle()).to_string();
+
+                            result = self.0.enter_target(
+                                *span,
+                                id,
+                                &Scalar::String(string),
+                                column_type,
+                                return_type,
+                                true,
+                            )?;
+                        }
+                        _ => (),
                     }
                 }
-                _ => (),
             }
         } else {
             result = match args.as_slice() {

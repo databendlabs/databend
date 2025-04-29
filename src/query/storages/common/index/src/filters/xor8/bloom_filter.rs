@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -200,9 +201,9 @@ impl Filter for BloomFilter {
 }
 
 impl BloomFilter {
-    pub fn with_item_count(filter_size: usize, item_count: usize, seed: u64) -> Self {
+    pub fn with_item_count(filter_size: usize, mut item_count: usize, seed: u64) -> Self {
         assert!(filter_size > 0, "filter_size must be > 0");
-        assert!(item_count > 0, "item_count must be > 0");
+        item_count = max(item_count, 1);
 
         let ln2 = std::f64::consts::LN_2;
         let k = ((filter_size as f64 / item_count as f64) * ln2).ceil() as usize;
@@ -214,8 +215,7 @@ impl BloomFilter {
     pub fn with_params(size: usize, hashes: usize, seed: u64) -> Self {
         assert_ne!(size, 0);
         assert_ne!(hashes, 0);
-        let words =
-            (size + std::mem::size_of::<UnderType>() - 1) / std::mem::size_of::<UnderType>();
+        let words = size.div_ceil(std::mem::size_of::<UnderType>());
         Self {
             size,
             hashes,
@@ -227,8 +227,7 @@ impl BloomFilter {
 
     pub fn resize(&mut self, size: usize) {
         self.size = size;
-        self.words =
-            (size + std::mem::size_of::<UnderType>() - 1) / std::mem::size_of::<UnderType>();
+        self.words = size.div_ceil(std::mem::size_of::<UnderType>());
         self.filter.resize(self.words, 0);
     }
 
