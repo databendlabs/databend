@@ -33,7 +33,6 @@ pub mod marked_deleted_table_index_id;
 pub mod marked_deleted_table_index_ident;
 pub mod table_lock_ident;
 pub mod table_niv;
-pub mod virtual_column_ident;
 
 mod create_option;
 mod database;
@@ -45,7 +44,6 @@ mod lock;
 mod ownership;
 mod sequence;
 mod table;
-mod virtual_column;
 
 pub use catalog::*;
 pub use catalog_id_ident::CatalogIdIdent;
@@ -141,10 +139,3 @@ pub use table::UpsertTableCopiedFileReq;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
 pub use table_lock_ident::TableLockIdent;
-pub use virtual_column::CreateVirtualColumnReq;
-pub use virtual_column::DropVirtualColumnReq;
-pub use virtual_column::ListVirtualColumnsReq;
-pub use virtual_column::UpdateVirtualColumnReq;
-pub use virtual_column::VirtualColumnMeta;
-pub use virtual_column::VirtualField;
-pub use virtual_column_ident::VirtualColumnIdent;
