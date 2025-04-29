@@ -30,7 +30,7 @@ const DEFAULT_BATCH_SIZE: usize = 1024;
 
 pub struct QueryTimeSeriesProfile {
     pub global_count: AtomicUsize,
-    pub plans_profiles: Vec<Arc<TimeSeriesProfiles>>,
+    pub plans_profiles: Vec<(u32, Arc<TimeSeriesProfiles>)>,
     pub query_id: String,
 }
 
@@ -47,6 +47,7 @@ impl QueryTimeSeriesProfile {
                             if global_profile.global_count.fetch_add(1, SeqCst)
                                 == DEFAULT_BATCH_SIZE - 1
                             {
+                                global_profile.global_count.store(0, SeqCst);
                                 // flush the global profile
                                 global_profile.flush(false);
                             }
@@ -71,15 +72,18 @@ impl QueryTimeSeriesProfile {
         }
         let mut quota = DEFAULT_BATCH_SIZE as i32;
         let mut plans = Vec::with_capacity(self.plans_profiles.len());
-        for (plan_id, plan_profile) in self.plans_profiles.iter().enumerate() {
+        for (plan_id, plan_profile) in self.plans_profiles.iter() {
             if quota == 0 && !finish {
                 break;
             }
             let profile_time_series_vec = plan_profile.flush(finish, &mut quota);
             plans.push(PlanTimeSeries {
-                plan_id: plan_id as u32,
+                plan_id: *plan_id,
                 data: profile_time_series_vec,
             });
+        }
+        if quota == DEFAULT_BATCH_SIZE as i32 {
+            return;
         }
         let query_time_series = QueryTimeSeries {
             query_id: self.query_id.clone(),
@@ -120,11 +124,15 @@ impl QueryTimeSeriesProfileBuilder {
         }
     }
 
-    pub fn build(self) -> QueryTimeSeriesProfile {
+    pub fn build(&self) -> QueryTimeSeriesProfile {
         QueryTimeSeriesProfile {
             global_count: AtomicUsize::new(0),
-            plans_profiles: self.plans_profile.into_values().collect(),
-            query_id: self.query_id,
+            plans_profiles: self
+                .plans_profile
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect(),
+            query_id: self.query_id.clone(),
         }
     }
 }

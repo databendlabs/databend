@@ -154,10 +154,11 @@ impl TimeSeriesProfiles {
             }
             if finish {
                 // if flush called by finish, we need to flush the last record
+                let last_timestamp = profile.last_check_timestamp.load(SeqCst);
                 let last_value = profile.value.swap(0, SeqCst);
-                let _ = profile
-                    .points
-                    .push((profile.last_check_timestamp.load(SeqCst), last_value));
+                if last_value != 0 && last_timestamp != 0 {
+                    let _ = profile.points.push((last_timestamp, last_value));
+                }
             }
             let mut points = Vec::with_capacity(profile.points.len());
             while let Ok(point) = profile.points.pop() {

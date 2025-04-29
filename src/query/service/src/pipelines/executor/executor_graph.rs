@@ -190,7 +190,9 @@ impl ExecutingGraph {
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
-        Self::init_graph(&mut pipeline, &mut graph, &query_id);
+        let mut time_series_profile_builder =
+            QueryTimeSeriesProfileBuilder::new(query_id.to_string());
+        Self::init_graph(&mut pipeline, &mut graph, &mut time_series_profile_builder);
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
@@ -211,9 +213,10 @@ impl ExecutingGraph {
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
-
+        let mut time_series_profile_builder =
+            QueryTimeSeriesProfileBuilder::new(query_id.to_string());
         for pipeline in &mut pipelines {
-            Self::init_graph(pipeline, &mut graph, &query_id);
+            Self::init_graph(pipeline, &mut graph, &mut time_series_profile_builder);
         }
 
         Ok(ExecutingGraph {
@@ -232,7 +235,7 @@ impl ExecutingGraph {
     fn init_graph(
         pipeline: &mut Pipeline,
         graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
-        query_id: &str,
+        time_series_profile_builder: &mut QueryTimeSeriesProfileBuilder,
     ) {
         #[derive(Debug)]
         struct Edge {
@@ -243,7 +246,6 @@ impl ExecutingGraph {
         }
 
         let mut pipes_edges: Vec<Vec<Edge>> = Vec::new();
-        let mut time_series_builder = QueryTimeSeriesProfileBuilder::new(query_id.to_string());
         for pipe in &pipeline.pipes {
             assert_eq!(
                 pipe.input_length,
@@ -258,7 +260,7 @@ impl ExecutingGraph {
                 let time_series_profile = if let Some(scope) = pipe.scope.as_ref() {
                     let plan_id = scope.id;
                     let time_series_profile =
-                        time_series_builder.register_time_series_profile(plan_id);
+                        time_series_profile_builder.register_time_series_profile(plan_id);
                     Some(time_series_profile)
                 } else {
                     None
@@ -297,7 +299,7 @@ impl ExecutingGraph {
 
             pipes_edges.push(pipe_edges);
         }
-        let query_time_series = Arc::new(time_series_builder.build());
+        let query_time_series = Arc::new(time_series_profile_builder.build());
         let node_indices: Vec<_> = graph.node_indices().collect();
         for node_index in node_indices {
             // we are sure that the node is only have one reference in the graph
