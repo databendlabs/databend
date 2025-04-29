@@ -47,6 +47,7 @@ impl ParquetRSTable {
                     .list(&self.operator, thread_num, None)
                     .await?
                     .into_iter()
+                    .filter(|f| f.size > 0)
                     .map(|f| (f.path.clone(), f.size, f.dedup_key()))
                     .collect::<Vec<_>>(),
             }
