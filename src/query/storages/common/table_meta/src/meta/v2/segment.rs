@@ -169,6 +169,7 @@ pub struct BlockMeta {
     #[serde(default)]
     pub bloom_filter_index_size: u64,
     pub inverted_index_size: Option<u64>,
+    pub ngram_filter_index_size: Option<u64>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
     pub compression: Compression,
@@ -190,6 +191,7 @@ impl BlockMeta {
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
         inverted_index_size: Option<u64>,
+        ngram_filter_index_size: Option<u64>,
         virtual_block_meta: Option<VirtualBlockMeta>,
         compression: Compression,
         create_on: Option<DateTime<Utc>>,
@@ -205,6 +207,7 @@ impl BlockMeta {
             bloom_filter_index_location,
             bloom_filter_index_size,
             inverted_index_size,
+            ngram_filter_index_size,
             virtual_block_meta,
             compression,
             create_on,
@@ -367,6 +370,7 @@ impl BlockMeta {
             inverted_index_size: None,
             virtual_block_meta: None,
             create_on: None,
+            ngram_filter_index_size: None,
         }
     }
 
@@ -392,6 +396,7 @@ impl BlockMeta {
             inverted_index_size: None,
             virtual_block_meta: None,
             create_on: None,
+            ngram_filter_index_size: None,
         }
     }
 }

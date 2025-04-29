@@ -27,6 +27,7 @@ use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::ShowCreateTablePlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -242,9 +243,14 @@ impl ShowCreateTableInterpreter {
                     let option = format!("{} = '{}'", key, value);
                     options.push(option);
                 }
+                let index_type = match index_field.index_type {
+                    TableIndexType::Inverted => "INVERTED",
+                    TableIndexType::Ngram => "NGRAM",
+                };
                 let mut index_str = format!(
-                    "  {} INVERTED INDEX {} ({})",
+                    "  {} {} INDEX {} ({})",
                     sync,
+                    index_type,
                     display_ident(
                         &index_field.name,
                         force_quoted_ident,

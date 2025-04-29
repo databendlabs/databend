@@ -65,8 +65,11 @@ pub struct BloomPrunerCreator {
     /// the expression that would be evaluate
     filter_expression: Expr<String>,
 
-    /// pre calculated digest for constant Scalar
-    scalar_map: HashMap<Scalar, u64>,
+    /// pre calculated digest for constant Scalar for eq conditions
+    eq_scalar_map: HashMap<Scalar, u64>,
+
+    /// pre calculated digest for constant Scalar for like conditions
+    like_scalar_map: HashMap<Scalar, Vec<u64>>,
 
     /// Ngram args aligned with BloomColumn using Ngram
     ngram_args: Vec<NgramArgs>,
@@ -107,28 +110,25 @@ impl BloomPrunerCreator {
         }
 
         // convert to filter column names
-        let mut scalar_map = HashMap::<Scalar, u64>::new();
+        let mut eq_scalar_map = HashMap::<Scalar, u64>::new();
         for (_, scalar, ty) in result.bloom_scalars.into_iter() {
-            if let Entry::Vacant(e) = scalar_map.entry(scalar) {
+            if let Entry::Vacant(e) = eq_scalar_map.entry(scalar) {
                 let digest = BloomIndex::calculate_scalar_digest(&func_ctx, e.key(), &ty)?;
                 e.insert(digest);
             }
         }
+        let mut like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
         for (i, scalar) in result.ngram_scalars.into_iter() {
-            let gram_size = ngram_args[i].gram_size();
-            let bitmap_size = ngram_args[i].bitmap_size();
-            for words in BloomIndex::calculate_ngram_nullable_column(
-                Value::Scalar(scalar),
-                gram_size,
-                bitmap_size,
-                |word, _| word.to_string(),
-            ) {
-                for word in words {
-                    let hash1 = BloomIndex::ngram_hash(&word, bitmap_size);
-                    if let Entry::Vacant(e) = scalar_map.entry(Scalar::String(word)) {
-                        e.insert(hash1);
-                    }
-                }
+            let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
+                Value::Scalar(scalar.clone()),
+                ngram_args[i].gram_size(),
+                BloomIndex::ngram_hash,
+            )
+            .next() else {
+                continue;
+            };
+            if let Entry::Vacant(e) = like_scalar_map.entry(scalar) {
+                e.insert(digests);
             }
         }
         let mut index_fields = result.bloom_fields;
@@ -138,7 +138,8 @@ impl BloomPrunerCreator {
             func_ctx,
             index_fields,
             filter_expression: expr.clone(),
-            scalar_map,
+            eq_scalar_map,
+            like_scalar_map,
             ngram_args,
             dal,
             data_schema: schema.clone(),
@@ -169,7 +170,6 @@ impl BloomPrunerCreator {
                     acc.push(BloomIndex::build_filter_ngram_name(
                         field,
                         ngram_arg.gram_size(),
-                        ngram_arg.bitmap_size(),
                     ));
                 }
                 Ok::<_, ErrorCode>(acc)
@@ -222,7 +222,8 @@ impl BloomPrunerCreator {
             )?
             .apply(
                 self.filter_expression.clone(),
-                &self.scalar_map,
+                &self.eq_scalar_map,
+                &self.like_scalar_map,
                 &self.ngram_args,
                 column_stats,
                 self.data_schema.clone(),

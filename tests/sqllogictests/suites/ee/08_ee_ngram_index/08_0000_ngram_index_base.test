@@ -56,6 +56,11 @@ select name, type, original, definition from system.indexes;
 ----
 idx1 NGRAM (empty) t1(content)gram_size='5'
 
+query T
+show create table t1;
+----
+t1 CREATE TABLE t1 (     id INT NULL,     content VARCHAR NULL,     SYNC NGRAM INDEX idx1 (content) gram_size = '5'   ) ENGINE=FUSE
+
 statement ok
 use default
 

@@ -226,6 +226,8 @@ impl BlockBuilder {
             inverted_index_size,
             virtual_block_meta: None,
             create_on: Some(Utc::now()),
+            // TODO(kould): ngram index
+            ngram_filter_index_size: None,
         };
 
         let serialized = BlockSerialization {

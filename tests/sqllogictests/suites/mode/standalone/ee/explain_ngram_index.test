@@ -85,7 +85,6 @@ Filter
     ├── push downs: [filters: [is_true(like(t1.content (#1), '%your eggs%'))], limit: NONE]
     └── estimated rows: 16.00
 
-
 query T
 EXPLAIN SELECT id, content FROM t1 WHERE content LIKE '%your eggs'
 ----

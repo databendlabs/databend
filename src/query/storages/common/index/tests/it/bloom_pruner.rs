@@ -539,13 +539,14 @@ fn eval_index_expr(
         .collect::<Vec<_>>();
     let result = BloomIndex::filter_index_field(&expr, bloom_fields, ngram_fields).unwrap();
 
-    let mut scalar_map = HashMap::<Scalar, u64>::new();
+    let mut eq_scalar_map = HashMap::<Scalar, u64>::new();
     for (_, scalar, ty) in result.bloom_scalars.into_iter() {
-        scalar_map.entry(scalar).or_insert_with_key(|scalar| {
+        eq_scalar_map.entry(scalar).or_insert_with_key(|scalar| {
             BloomIndex::calculate_scalar_digest(&func_ctx, scalar, &ty).unwrap()
         });
     }
 
+    let mut like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
     for (field, (_, scalar)) in result
         .ngram_fields
         .iter()
@@ -554,18 +555,15 @@ fn eval_index_expr(
         let Some(ngram_arg) = ngram_args.iter().find(|arg| arg.field() == field) else {
             continue;
         };
-        for words in BloomIndex::calculate_ngram_nullable_column(
-            Value::Scalar(scalar),
+        let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
+            Value::Scalar(scalar.clone()),
             ngram_arg.gram_size(),
-            ngram_arg.bitmap_size(),
-            |w, _| w.to_string(),
-        ) {
-            for word in words {
-                let hash = BloomIndex::ngram_hash(&word, ngram_arg.bitmap_size());
-
-                scalar_map.entry(Scalar::String(word)).or_insert(hash);
-            }
-        }
+            BloomIndex::ngram_hash,
+        )
+        .next() else {
+            continue;
+        };
+        like_scalar_map.entry(scalar).or_insert(digests);
     }
 
     let mut builder =
@@ -596,7 +594,14 @@ fn eval_index_expr(
         .collect();
 
     let (expr, domains) = index
-        .rewrite_expr(expr, &scalar_map, ngram_args, &column_stats, schema)
+        .rewrite_expr(
+            expr,
+            &eq_scalar_map,
+            &like_scalar_map,
+            ngram_args,
+            &column_stats,
+            schema,
+        )
         .unwrap();
     let result =
         match ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0 {

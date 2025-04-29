@@ -30,7 +30,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_index::filters::Xor8Filter;
+use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -154,7 +154,7 @@ async fn load_column_bloom_filter<'a>(
     index_path: &'a str,
     dal: &'a Operator,
     bloom_index_schema_desc: SchemaDescPtr,
-) -> Result<Arc<Xor8Filter>> {
+) -> Result<Arc<FilterImpl>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
         let column_data_reader = BloomColumnFilterReader::new(

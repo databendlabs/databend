@@ -700,11 +700,11 @@ impl FuseTable {
                 None => 3,
                 Some(s) => s.parse::<usize>()?,
             };
-            let bitmap_size = match index.options.get("bitmap_size") {
+            let bloom_size = match index.options.get("bloom_size") {
                 None => 1024,
                 Some(s) => s.parse::<usize>()?,
             };
-            ngram_index_args.push(NgramArgs::new(pos, field.clone(), gram_size, bitmap_size));
+            ngram_index_args.push(NgramArgs::new(pos, field.clone(), gram_size, bloom_size));
         }
         Ok(ngram_index_args)
     }
