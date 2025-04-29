@@ -82,3 +82,25 @@ fn test_compress_time_point_no_consecutive() {
     ]];
     assert_eq!(compress_time_point(&input), expected);
 }
+
+#[test]
+fn test_finish_flush() {
+    let profile = TimeSeriesProfiles::new();
+
+    profile.record(TimeSeriesProfileName::OutputBytes, 2000);
+    profile.record(TimeSeriesProfileName::OutputRows, 1000);
+
+    thread::sleep(Duration::from_secs(1));
+
+    // Finish flush will read this from `profile.value` and append it to the points
+    profile.record(TimeSeriesProfileName::OutputBytes, 2);
+    profile.record(TimeSeriesProfileName::OutputRows, 1);
+
+    let batch = profile.flush(true, &mut 4);
+
+    assert_eq!(batch.len(), 2);
+    // [[timestamp, 1000, 1]]
+    assert_eq!(batch[0].1[0].len(), 3);
+    // [[timestamp, 2000, 2]]
+    assert_eq!(batch[1].1[0].len(), 3);
+}
