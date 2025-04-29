@@ -139,6 +139,9 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 100.00
 
+statement ok
+set enable_runtime_filter=1
+
 query T
 explain select * from t, t2, t1 where t.a = t1.a and t1.a = t2.a
 ----
