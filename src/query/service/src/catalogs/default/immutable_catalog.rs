@@ -513,7 +513,6 @@ impl Catalog for ImmutableCatalog {
         unimplemented!()
     }
 
-
     #[async_backtrace::framed]
     async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
