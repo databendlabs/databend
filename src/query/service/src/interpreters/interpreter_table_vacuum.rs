@@ -115,7 +115,6 @@ impl Interpreter for VacuumTableInterpreter {
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();
         let tbl_name = self.plan.table.clone();
-        let ctx = self.ctx.clone();
         let table = self
             .ctx
             .get_table(&catalog_name, &db_name, &tbl_name)
@@ -125,17 +124,12 @@ impl Interpreter for VacuumTableInterpreter {
         table.check_mutable()?;
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let duration = fuse_table.get_data_retention_period(ctx.as_ref())?;
-
-        let retention_time = chrono::Utc::now() - duration;
-        let ctx = self.ctx.clone();
 
         let handler = get_vacuum_handler();
         let purge_files_opt = handler
             .do_vacuum(
                 fuse_table,
-                ctx,
-                retention_time,
+                self.ctx.clone(),
                 self.plan.option.dry_run.is_some(),
             )
             .await?;

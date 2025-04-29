@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use chrono::DateTime;
-use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
@@ -38,10 +36,9 @@ impl VacuumHandler for RealVacuumHandler {
         &self,
         table: &dyn Table,
         ctx: Arc<dyn TableContext>,
-        retention_time: DateTime<Utc>,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        do_vacuum(table, ctx, retention_time, dry_run).await
+        do_vacuum(table, ctx, dry_run).await
     }
 
     async fn do_vacuum2(
