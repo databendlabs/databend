@@ -142,8 +142,7 @@ impl TimeSeriesProfiles {
     pub fn record(&self, name: TimeSeriesProfileName, value: usize) -> bool {
         let profile = &self.profiles[name as usize];
         let now = chrono::Local::now().timestamp_millis() as usize / DEFAULT_INTERVAL;
-        let is_record = profile.record_time_slot(now, value);
-        is_record
+        profile.record_time_slot(now, value)
     }
 
     pub fn flush(&self, finish: bool, quota: &mut i32) -> Vec<Vec<Vec<usize>>> {
