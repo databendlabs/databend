@@ -76,10 +76,11 @@ fn test_compress_time_point_basic() {
 }
 
 #[test]
-fn test_compress_time_point_special_duplicate() {
+fn test_compress_time_point_special_duplicate_merge() {
     let input = vec![
         (1744971865, 100),
         (1744971866, 200),
+        // same timestamp, we will merge
         (1744971867, 50),
         (1744971867, 123),
         (1744971868, 150),
@@ -89,6 +90,27 @@ fn test_compress_time_point_special_duplicate() {
     let expected = vec![vec![1744971865, 100, 200, 50 + 123, 150], vec![
         1744971870, 20, 40,
     ]];
+    assert_eq!(compress_time_point(&input), expected);
+}
+
+#[test]
+fn test_compress_time_point_special_invalid() {
+    let input = vec![
+        (1744971865, 100),
+        (1744971866, 200),
+        (1744971867, 50),
+        // extreme case, we not merge it
+        (1744971865, 123),
+        (1744971868, 150),
+        (1744971870, 20),
+        (1744971871, 40),
+    ];
+    let expected = vec![
+        vec![1744971865, 100, 200, 50],
+        vec![1744971865, 123],
+        vec![1744971868, 150],
+        vec![1744971870, 20, 40],
+    ];
     assert_eq!(compress_time_point(&input), expected);
 }
 
@@ -118,9 +140,9 @@ fn test_finish_flush() {
 
     assert_eq!(batch.len(), 2);
     // [[timestamp, 1000, 1]]
-    assert_eq!(batch[0].1[0].len(), 3);
+    assert_eq!(batch[0][0].len(), 3);
     // [[timestamp, 2000, 2]]
-    assert_eq!(batch[1].1[0].len(), 3);
+    assert_eq!(batch[1][0].len(), 3);
 }
 
 #[test]
@@ -150,7 +172,6 @@ fn test_record_inner_basic() -> Result<()> {
 #[test]
 fn test_record_inner_special() -> Result<()> {
     // Simulate concurrently recording but one thread is late
-
     let points = ProfilePoints::new();
     let now = 1000000001 as usize;
     for i in 0..10 {
@@ -168,6 +189,28 @@ fn test_record_inner_special() -> Result<()> {
     );
 
     assert_eq!(points.value.load(SeqCst), 789);
+    Ok(())
+}
 
+#[test]
+fn test_record_inner_special_invalid() -> Result<()> {
+    // Simulate concurrently recording but one thread is later than 1 second
+    let points = ProfilePoints::new();
+    let now = 1000000001 as usize;
+    for i in 0..10 {
+        points.record_time_slot(now, i);
+    }
+    points.record_time_slot(now + 1, 123);
+    points.record_time_slot(now - 2, 456);
+    points.record_time_slot(now + 2, 789);
+
+    let v = points.points.try_iter().collect::<Vec<_>>();
+
+    assert_eq!(
+        format!("{:?}", v),
+        "[(1000000001, 45), (999999999, 456), (1000000002, 123)]"
+    );
+
+    assert_eq!(points.value.load(SeqCst), 789);
     Ok(())
 }

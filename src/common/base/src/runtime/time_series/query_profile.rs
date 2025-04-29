@@ -36,18 +36,25 @@ pub struct QueryTimeSeriesProfile {
 
 impl QueryTimeSeriesProfile {
     pub fn record_time_series_profile(name: TimeSeriesProfileName, value: usize) {
-        ThreadTracker::with(|x| match x.borrow().payload.time_series_profile.as_ref() {
-            None => {}
-            Some((plan_id, profile)) => {
-                if let Some(p) = profile.plans_profiles.get(*plan_id as usize) {
-                    if p.record(name, value)
-                        && profile.global_count.fetch_add(1, SeqCst) == DEFAULT_BATCH_SIZE - 1
-                    {
-                        profile.flush(false);
+        ThreadTracker::with(
+            |x| match x.borrow().payload.local_time_series_profile.as_ref() {
+                None => {}
+                Some(profile) => {
+                    if profile.record(name, value) {
+                        if let Some(global_profile) =
+                            x.borrow().payload.time_series_profile.as_ref()
+                        {
+                            if global_profile.global_count.fetch_add(1, SeqCst)
+                                == DEFAULT_BATCH_SIZE - 1
+                            {
+                                // flush the global profile
+                                global_profile.flush(false);
+                            }
+                        }
                     }
                 }
-            }
-        })
+            },
+        )
     }
 
     pub fn flush(&self, finish: bool) {
@@ -60,21 +67,15 @@ impl QueryTimeSeriesProfile {
         #[derive(Serialize)]
         struct PlanTimeSeries {
             plan_id: u32,
-            data: Vec<ProfileTimeSeries>,
+            data: Vec<Vec<Vec<usize>>>,
         }
-        #[derive(Serialize)]
-        struct ProfileTimeSeries(u32, Vec<Vec<usize>>);
         let mut quota = DEFAULT_BATCH_SIZE as i32;
         let mut plans = Vec::with_capacity(self.plans_profiles.len());
         for (plan_id, plan_profile) in self.plans_profiles.iter().enumerate() {
             if quota == 0 && !finish {
                 break;
             }
-            let profile_time_series_vec: Vec<ProfileTimeSeries> = plan_profile
-                .flush(finish, &mut quota)
-                .into_iter()
-                .map(|(id, points)| ProfileTimeSeries(id, points))
-                .collect();
+            let profile_time_series_vec = plan_profile.flush(finish, &mut quota);
             plans.push(PlanTimeSeries {
                 plan_id: plan_id as u32,
                 data: profile_time_series_vec,
@@ -109,10 +110,13 @@ impl QueryTimeSeriesProfileBuilder {
         }
     }
 
-    pub fn register_time_series_profile(&mut self, plan_id: u32) {
+    pub fn register_time_series_profile(&mut self, plan_id: u32) -> Arc<TimeSeriesProfiles> {
         if !self.plans_profile.contains_key(&plan_id) {
-            self.plans_profile
-                .insert(plan_id, Arc::new(TimeSeriesProfiles::new()));
+            let profile = Arc::new(TimeSeriesProfiles::new());
+            self.plans_profile.insert(plan_id, profile.clone());
+            profile
+        } else {
+            self.plans_profile.get(&plan_id).unwrap().clone()
         }
     }
 

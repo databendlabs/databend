@@ -100,18 +100,13 @@ impl ProfilePoints {
                 }
                 Err(last_record) => {
                     if now < last_record {
-                        // for concurrent situation, now could be earlier than last_record
+                        // for concurrent situation, `now` could be earlier than `last_record`
                         // that means we are missing the time slot, it is already push into
-                        // the points queue. We just need to push a same timestamp tuple
-                        // we will merge them in the flush
-                        if now == last_record - 1 {
-                            let _ = self.points.push((now, value));
-                            // should avoid adding value into this time slot
-                            return true;
-                        } else {
-                            // missing the time slot for 2 seconds or more, it cannot happen
-                            return false;
-                        }
+                        // the points queue. We just need to push the value into the queue again.
+                        // will merge them in the flush
+                        let _ = self.points.push((now, value));
+                        // early return, should avoid adding value into this time slot
+                        return true;
                     }
                     current_last_check = last_record;
                 }
@@ -151,9 +146,9 @@ impl TimeSeriesProfiles {
         is_record
     }
 
-    pub fn flush(&self, finish: bool, quota: &mut i32) -> Vec<(u32, Vec<Vec<usize>>)> {
+    pub fn flush(&self, finish: bool, quota: &mut i32) -> Vec<Vec<Vec<usize>>> {
         let mut batch = Vec::with_capacity(self.profiles.len());
-        for (profile_name, profile) in self.profiles.iter().enumerate() {
+        for profile in self.profiles.iter() {
             if *quota == 0 && !finish {
                 break;
             }
@@ -172,7 +167,7 @@ impl TimeSeriesProfiles {
                     break;
                 }
             }
-            batch.push((profile_name as u32, compress_time_point(&points)));
+            batch.push(compress_time_point(&points));
         }
         batch
     }
@@ -197,6 +192,12 @@ impl Default for TimeSeriesProfiles {
 ///   `[(1744971865,100), (1744971866,200), (1744971867,50), (1744971868,150), (1744971870,20), (1744971871,40)]`
 ///   the compressed result will be:
 ///   `[[1744971865, 100, 200, 50, 150], [1744971870, 20, 40]]`
+///
+/// Note:
+///   Why convert to `[timestamp, value0, value1, value2]` instead of `[timestamp, (value0, value1, value2)]`:
+///   Rust serde_json will convert a tuple to a list. [timestamp, (value0, value1, value2)] will be converted to
+///   `[timestamp, value0, value1, value2]` after serialization.
+///   See: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3c153dfcfdde3032c80c05f4010f3d0f
 pub fn compress_time_point(points: &[DataPoint]) -> Vec<Vec<usize>> {
     let mut result = Vec::new();
     let mut i = 0;
