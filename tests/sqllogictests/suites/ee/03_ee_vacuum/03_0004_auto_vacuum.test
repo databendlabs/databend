@@ -145,12 +145,84 @@ select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
 ----
 1
 
-# ---------------------------------------------
 
-# We do not check default retention period works as expected, i.e. by default table historical data
-# will be cleaned according to the retention period settings. As tests of streams will check it implicitly
+#################################################
+# Test autovacuum policy `ByNumSnapshotsToKeep` #
+#################################################
+
+# CASE 1: Create table with data_retention_num_snapshots_to_keep table option
+statement ok
+create or replace table t (c int) 'fs:///tmp/auto_vacuum_case3/' data_retention_num_snapshots_to_keep = 3;
+
+statement ok
+create or replace stage stage_av url = 'fs:///tmp/auto_vacuum_case3/';
+
+statement ok
+set enable_auto_vacuum = 1;
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t values(2);
+
+statement ok
+insert into t values(3);
+
+statement ok
+insert into t values(4);
 
 
+# Insert 4 time, but only 3 snapshots will be kept
+onlyif mysql
+query I
+select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
+----
+3
+
+# CASE 2: Alter table option
+statement ok
+alter table t set options(data_retention_num_snapshots_to_keep = 1);
+
+statement ok
+insert into t values(5);
+
+statement ok
+optimize table t compact;
+
+onlyif mysql
+query I
+select count() from list_stage(location=> '@stage_av') where name like '%_sg%';
+----
+1
+
+onlyif mysql
+query I
+select count() from list_stage(location=> '@stage_av') where name like '%\/_b\/%';
+----
+1
+
+onlyif mysql
+query I
+select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
+----
+1
+
+query I
+select * from t order by c;
+----
+1
+2
+3
+4
+5
+
+
+# CASE 3: Create table with invalid data_retention_num_snapshots_to_keep table option
+
+# data_retention_num_snapshots_to_keep must be greater than 0
+statement error
+create or replace table t (c int) 'fs:///tmp/auto_vacuum_case3/' data_retention_num_snapshots_to_keep = 0;
 
 statement ok
 remove @stage_av;

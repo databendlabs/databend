@@ -417,7 +417,7 @@ pub enum TruncateMode {
     // Delete the data, used for delete operation.
     Delete,
     // Truncate and purge the historical data.
-    Purge,
+    DropAll,
 }
 
 /// Undrop.
