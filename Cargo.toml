@@ -453,7 +453,7 @@ reqwest = { version = "0.12", default-features = false, features = [
 reqwest-hickory-resolver = "0.2"
 ringbuffer = "0.14.2"
 rmp-serde = "1.1.1"
-roaring = { version = "0.10.1", features = ["serde"] }
+roaring = { version = "^0.10", features = ["serde"] }
 rotbl = { version = "0.1.2", features = [] }
 rust_decimal = "1.26"
 rustix = "0.38.37"

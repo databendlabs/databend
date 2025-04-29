@@ -89,7 +89,7 @@ async fn test_merge() {
     let gap0 = InMemoryRowGroup::new(path, op.clone(), &meta, None, ReadSettings {
         max_gap_size: 0,
         max_range_size: 0,
-        parquet_fast_read_bytes: u64::MAX,
+        parquet_fast_read_bytes: 1,
         enable_cache: false,
     });
 
@@ -97,7 +97,7 @@ async fn test_merge() {
     let gap10 = InMemoryRowGroup::new(path, op, &meta, None, ReadSettings {
         max_gap_size: 10,
         max_range_size: 200,
-        parquet_fast_read_bytes: u64::MAX,
+        parquet_fast_read_bytes: 1,
         enable_cache: false,
     });
     let ranges = [(1..10), (15..30), (40..50)];
