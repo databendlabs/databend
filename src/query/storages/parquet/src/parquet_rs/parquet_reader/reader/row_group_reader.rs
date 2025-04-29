@@ -23,6 +23,7 @@ use opendal::Operator;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
 use parquet::format::PageLocation;
+use parquet::schema::types::SchemaDescPtr;
 
 use crate::parquet_rs::parquet_reader::policy::PolicyBuilders;
 use crate::parquet_rs::parquet_reader::policy::PolicyType;
@@ -39,6 +40,7 @@ pub struct ParquetRSRowGroupReader {
     pub(super) default_policy: PolicyType,
     pub(super) policy_builders: PolicyBuilders,
 
+    pub(super) schema_desc: SchemaDescPtr,
     // Options
     pub(super) batch_size: usize,
 }
@@ -46,6 +48,10 @@ pub struct ParquetRSRowGroupReader {
 impl ParquetRSRowGroupReader {
     pub fn operator<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
         Ok(self.op_registry.get_operator_path(location)?)
+    }
+
+    pub fn schema_desc(&self) -> &SchemaDescPtr {
+        &self.schema_desc
     }
 
     /// Read a row group and return a reader with certain policy.

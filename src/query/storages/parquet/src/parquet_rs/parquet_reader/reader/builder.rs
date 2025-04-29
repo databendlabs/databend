@@ -289,6 +289,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         Ok(ParquetRSRowGroupReader {
             op_registry: self.op_registry.clone(),
             batch_size,
+            schema_desc: self.schema_desc.clone(),
             policy_builders,
             default_policy,
         })

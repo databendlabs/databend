@@ -41,6 +41,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 
+use super::meta::check_parquet_schema;
 use super::parquet_reader::policy::ReadPolicyImpl;
 use super::read_metadata_async_cached;
 use super::ParquetRSRowGroupPart;
@@ -222,6 +223,13 @@ impl Processor for ParquetSource {
                                 &part.dedup_key,
                             )
                             .await?;
+
+                            check_parquet_schema(
+                                self.row_group_reader.schema_desc(),
+                                meta.file_metadata().schema_descr(),
+                                "first_file",
+                                part.file.as_str(),
+                            )?;
 
                             let mut start_row = 0;
                             let mut readers = VecDeque::with_capacity(meta.num_row_groups());

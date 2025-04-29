@@ -114,6 +114,7 @@ pub(crate) fn check_parquet_schema(
     schema_from: &str,
 ) -> Result<()> {
     if expect.root_schema() != actual.root_schema() {
+        // TODO: better print the differs for large schema
         return Err(ErrorCode::TableSchemaMismatch(format!(
             "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
             schema_from, path, expect, actual
