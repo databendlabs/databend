@@ -3,6 +3,7 @@ use std::thread;
 use std::time::Duration;
 
 use databend_common_base::runtime::compress_time_point;
+use databend_common_base::runtime::ProfilePoints;
 use databend_common_base::runtime::TimeSeriesProfileName;
 use databend_common_base::runtime::TimeSeriesProfiles;
 // Copyright 2021 Datafuse Labs
@@ -75,6 +76,23 @@ fn test_compress_time_point_basic() {
 }
 
 #[test]
+fn test_compress_time_point_special_duplicate() {
+    let input = vec![
+        (1744971865, 100),
+        (1744971866, 200),
+        (1744971867, 50),
+        (1744971867, 123),
+        (1744971868, 150),
+        (1744971870, 20),
+        (1744971871, 40),
+    ];
+    let expected = vec![vec![1744971865, 100, 200, 50 + 123, 150], vec![
+        1744971870, 20, 40,
+    ]];
+    assert_eq!(compress_time_point(&input), expected);
+}
+
+#[test]
 fn test_compress_time_point_no_consecutive() {
     let input = vec![(1744971865, 10), (1744971867, 20), (1744971869, 30)];
     let expected = vec![vec![1744971865, 10], vec![1744971867, 20], vec![
@@ -103,4 +121,53 @@ fn test_finish_flush() {
     assert_eq!(batch[0].1[0].len(), 3);
     // [[timestamp, 2000, 2]]
     assert_eq!(batch[1].1[0].len(), 3);
+}
+
+#[test]
+fn test_record_inner_basic() -> Result<()> {
+    let points = ProfilePoints::new();
+    let now = chrono::Utc::now().timestamp() as usize;
+
+    // Simulate recording in the same time slot
+    for i in 0..10 {
+        points.record_time_slot(now, i);
+    }
+    assert_eq!(points.points.len(), 0);
+    assert_eq!(points.value.load(SeqCst), (0..10).sum::<usize>());
+
+    // Next time slot
+    for i in 0..100 {
+        points.record_time_slot(now + 1, i);
+    }
+    assert_eq!(points.points.len(), 1);
+    let x = points.points.pop().unwrap();
+    assert_eq!(x.0, now);
+    assert_eq!(x.1, (0..10).sum::<usize>());
+    assert_eq!(points.value.load(SeqCst), (0..100).sum::<usize>());
+    Ok(())
+}
+
+#[test]
+fn test_record_inner_special() -> Result<()> {
+    // Simulate concurrently recording but one thread is late
+
+    let points = ProfilePoints::new();
+    let now = 1000000001 as usize;
+    for i in 0..10 {
+        points.record_time_slot(now, i);
+    }
+    points.record_time_slot(now + 1, 123);
+    points.record_time_slot(now, 456);
+    points.record_time_slot(now + 2, 789);
+
+    let v = points.points.try_iter().collect::<Vec<_>>();
+
+    assert_eq!(
+        format!("{:?}", v),
+        "[(1000000001, 45), (1000000001, 456), (1000000002, 123)]"
+    );
+
+    assert_eq!(points.value.load(SeqCst), 789);
+
+    Ok(())
 }

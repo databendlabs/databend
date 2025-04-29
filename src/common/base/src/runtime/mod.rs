@@ -63,6 +63,7 @@ pub use thread::Thread;
 pub use thread::ThreadJoinHandle;
 pub use time_series::compress_time_point;
 pub use time_series::get_time_series_profile_desc;
+pub use time_series::ProfilePoints;
 pub use time_series::QueryTimeSeriesProfile;
 pub use time_series::QueryTimeSeriesProfileBuilder;
 pub use time_series::TimeSeriesProfileDesc;

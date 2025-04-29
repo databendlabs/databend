@@ -27,16 +27,6 @@ const DEFAULT_INTERVAL: usize = 1000;
 // DataPoint is a tuple of (timestamp, value)
 type DataPoint = (usize, usize);
 
-pub struct ProfilePoints {
-    pub points: ConcurrentQueue<DataPoint>,
-    pub value: AtomicUsize,
-    pub last_record_timestamp: AtomicUsize,
-}
-
-pub struct TimeSeriesProfiles {
-    pub profiles: Vec<ProfilePoints>,
-}
-
 pub enum TimeSeriesProfileName {
     OutputRows,
     OutputBytes,
@@ -66,6 +56,78 @@ pub fn get_time_series_profile_desc() -> Arc<Vec<TimeSeriesProfileDesc>> {
         .clone()
 }
 
+pub struct ProfilePoints {
+    pub points: ConcurrentQueue<DataPoint>,
+    pub value: AtomicUsize,
+    pub last_check_timestamp: AtomicUsize,
+}
+
+pub struct TimeSeriesProfiles {
+    pub profiles: Vec<ProfilePoints>,
+}
+
+impl ProfilePoints {
+    pub fn new() -> Self {
+        ProfilePoints {
+            points: ConcurrentQueue::unbounded(),
+            last_check_timestamp: AtomicUsize::new(0),
+            value: AtomicUsize::new(0),
+        }
+    }
+    pub fn record_time_slot(&self, now: usize, value: usize) -> bool {
+        let mut is_record = false;
+        let mut current_last_check = 0;
+        loop {
+            match self.last_check_timestamp.compare_exchange_weak(
+                current_last_check,
+                now,
+                SeqCst,
+                SeqCst,
+            ) {
+                Ok(_) => {
+                    if current_last_check == 0 {
+                        // the first time, we will record it in next time slot
+                        break;
+                    }
+                    if now == current_last_check {
+                        // still in the same slot
+                        break;
+                    }
+                    let last_value = self.value.swap(0, SeqCst);
+                    let _ = self.points.push((current_last_check, last_value));
+                    is_record = true;
+                    break;
+                }
+                Err(last_record) => {
+                    if now < last_record {
+                        // for concurrent situation, now could be earlier than last_record
+                        // that means we are missing the time slot, it is already push into
+                        // the points queue. We just need to push a same timestamp tuple
+                        // we will merge them in the flush
+                        if now == last_record - 1 {
+                            let _ = self.points.push((now, value));
+                            // should avoid adding value into this time slot
+                            return true;
+                        } else {
+                            // missing the time slot for 2 seconds or more, it cannot happen
+                            return false;
+                        }
+                    }
+                    current_last_check = last_record;
+                }
+            }
+        }
+        self.value.fetch_add(value, SeqCst);
+        is_record
+    }
+}
+
+impl Default for ProfilePoints {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TimeSeriesProfiles {
     pub fn new() -> Self {
         let type_num = mem::variant_count::<TimeSeriesProfileName>();
@@ -77,11 +139,7 @@ impl TimeSeriesProfiles {
     fn create_profiles(type_num: usize) -> Vec<ProfilePoints> {
         let mut profiles = Vec::with_capacity(type_num);
         for _ in 0..type_num {
-            profiles.push(ProfilePoints {
-                points: ConcurrentQueue::unbounded(),
-                last_record_timestamp: AtomicUsize::new(0),
-                value: AtomicUsize::new(0),
-            });
+            profiles.push(ProfilePoints::new());
         }
         profiles
     }
@@ -89,35 +147,7 @@ impl TimeSeriesProfiles {
     pub fn record(&self, name: TimeSeriesProfileName, value: usize) -> bool {
         let profile = &self.profiles[name as usize];
         let now = chrono::Local::now().timestamp_millis() as usize / DEFAULT_INTERVAL;
-        let mut current_last_record = now;
-        let mut is_record = false;
-        loop {
-            match profile.last_record_timestamp.compare_exchange_weak(
-                current_last_record,
-                now,
-                SeqCst,
-                SeqCst,
-            ) {
-                Ok(_) => {
-                    if current_last_record == 0 {
-                        // the first time, we will record it in next time slot
-                        break;
-                    }
-                    if now == current_last_record {
-                        // still in the same slot
-                        break;
-                    }
-                    let last_value = profile.value.swap(0, SeqCst);
-                    let _ = profile.points.push((current_last_record, last_value));
-                    is_record = true;
-                    break;
-                }
-                Err(last_record) => {
-                    current_last_record = last_record;
-                }
-            }
-        }
-        profile.value.fetch_add(value, SeqCst);
+        let is_record = profile.record_time_slot(now, value);
         is_record
     }
 
@@ -132,7 +162,7 @@ impl TimeSeriesProfiles {
                 let last_value = profile.value.swap(0, SeqCst);
                 let _ = profile
                     .points
-                    .push((profile.last_record_timestamp.load(SeqCst), last_value));
+                    .push((profile.last_check_timestamp.load(SeqCst), last_value));
             }
             let mut points = Vec::with_capacity(profile.points.len());
             while let Ok(point) = profile.points.pop() {
@@ -176,8 +206,14 @@ pub fn compress_time_point(points: &[DataPoint]) -> Vec<Vec<usize>> {
         group.push(start_time);
         group.push(value);
         let mut j = i + 1;
-        while j < points.len() && points[j].0 == points[j - 1].0 + 1 {
-            group.push(points[j].1);
+        while j < points.len()
+            && (points[j].0 == points[j - 1].0 + 1 || points[j].0 == points[j - 1].0)
+        {
+            let mut v = points[j].1;
+            if points[j].0 == points[j - 1].0 {
+                v += group.pop().unwrap();
+            }
+            group.push(v);
             j += 1;
         }
         result.push(group);
