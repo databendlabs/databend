@@ -513,30 +513,6 @@ impl Catalog for ImmutableCatalog {
         unimplemented!()
     }
 
-
-    #[async_backtrace::framed]
-    async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn update_virtual_column(&self, _req: UpdateVirtualColumnReq) -> Result<()> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_virtual_column(&self, _req: DropVirtualColumnReq) -> Result<()> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_virtual_columns(
-        &self,
-        _req: ListVirtualColumnsReq,
-    ) -> Result<Vec<VirtualColumnMeta>> {
-        unimplemented!()
-    }
-
     async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
         unimplemented!()
     }

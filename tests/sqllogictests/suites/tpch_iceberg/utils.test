@@ -23,9 +23,9 @@ ctl
 query T
 show databases from ctl;
 ----
-test
 information_schema
 system
+test
 tpch
 
 statement error 1003
@@ -86,12 +86,9 @@ show databases;
 ----
 abc
 ef123
-<<<<<<< HEAD
-test
-=======
 information_schema
 system
->>>>>>> e56df8aa51 (refactor(query): iceberg catalog support information_shcema/system database)
+test
 tpch
 
 statement ok
@@ -101,12 +98,9 @@ query T rowsort
 show databases from ctl;
 ----
 abc
-<<<<<<< HEAD
-test
-=======
 information_schema
 system
->>>>>>> e56df8aa51 (refactor(query): iceberg catalog support information_shcema/system database)
+test
 tpch
 
 statement ok

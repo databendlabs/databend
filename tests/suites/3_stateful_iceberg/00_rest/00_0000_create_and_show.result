@@ -3,9 +3,6 @@ iceberg_rest	iceberg	ADDRESS
 http://localhost:8181
 WAREHOUSE
 s3://warehouse/demo/
-s3://icebergdata/demo
-information_schema
-system
 default
 t
 t
