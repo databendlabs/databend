@@ -417,6 +417,13 @@ impl DefaultSettings {
                 }),
                 ("enable_bloom_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
+                    desc: "Enables bloom runtime filter optimization for JOIN.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_runtime_filter", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
