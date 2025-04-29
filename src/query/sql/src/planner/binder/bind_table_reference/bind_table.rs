@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Identifier;
@@ -402,12 +403,13 @@ impl Binder {
                 if index == 0 {
                     let is_created = true;
 
+                    let path = Self::convert_array_index(&virtual_field.name)?;
                     index = self.metadata.write().add_virtual_column(
                         &base_column,
                         column_id,
                         name.clone(),
                         table_data_type,
-                        Scalar::String(name.clone()),
+                        Scalar::String(path),
                         None,
                         is_created,
                     );
@@ -418,6 +420,92 @@ impl Binder {
                         .build();
                 bind_context.columns.push(virtual_column_binding);
             }
+        }
+
+        Ok(())
+    }
+
+    fn convert_array_index(input: &str) -> Result<String> {
+        let mut chars = input.chars().peekable();
+        let mut path = "{".to_string();
+
+        while chars.peek().is_some() {
+            if chars.next() != Some('[') {
+                return Err(ErrorCode::InvalidArgument("Expected '['".to_string()));
+            }
+            if let Some('\'') = chars.peek() {
+                let _ = chars.next();
+                path.push('"');
+
+                let mut is_empty = true;
+                for c in chars.by_ref() {
+                    is_empty = false;
+                    if c == '\'' {
+                        break;
+                    }
+                    path.write_char(c)?;
+                }
+                if is_empty {
+                    let _ = path.pop();
+                } else {
+                    path.push('"')
+                }
+                if chars.next() != Some(']') {
+                    return Err(ErrorCode::InvalidArgument("Expected ']' after string"));
+                }
+            } else {
+                while let Some(&c) = chars.peek() {
+                    if c == ']' {
+                        break;
+                    }
+                    path.write_char(c)?;
+                    chars.next();
+                }
+                if chars.next() != Some(']') {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Expected ']' after index".to_string(),
+                    ));
+                }
+            };
+
+            path.write_char(',')?;
+        }
+        if path.len() > 1 {
+            let _ = path.pop();
+        }
+        path.write_char('}')?;
+
+        if chars.next().is_some() {
+            return Err(ErrorCode::InvalidArgument("Unexpected trailing characters"));
+        }
+        Ok(path)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use databend_common_exception::Result;
+
+    use crate::Binder;
+
+    #[test]
+    fn test_convert_array_index() -> Result<()> {
+        let success = vec![
+            ("['a']", "{\"a\"}"),
+            ("['a'][0]", "{\"a\",0}"),
+            ("['a']['b']", "{\"a\",\"b\"}"),
+            ("['a']['some_word']", "{\"a\",\"some_word\"}"),
+            ("['a'][42]['long_string']", "{\"a\",42,\"long_string\"}"),
+            ("['a'][0]['b']['c']", "{\"a\",0,\"b\",\"c\"}"),
+            ("['key']['value'][123]", "{\"key\",\"value\",123}"),
+            ("[0]", "{0}"),
+        ];
+        let failure = vec!["invalid", "['a'", "['a']extra"];
+        for (case, result) in success {
+            assert_eq!(result, Binder::convert_array_index(case)?);
+        }
+        for case in failure {
+            assert!(Binder::convert_array_index(case).is_err());
         }
 
         Ok(())

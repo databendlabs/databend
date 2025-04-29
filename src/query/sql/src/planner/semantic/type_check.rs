@@ -598,33 +598,10 @@ impl<'a> TypeChecker<'a> {
                 // as we cast JSON null to SQL NULL.
                 let target_type = if data_type.remove_nullable() == DataType::Variant {
                     let target_type = checked_expr.data_type().nest_wrap_nullable();
-                    if let ScalarExpr::BoundColumnRef(column) = &mut scalar {
-                        let mut guard = self.metadata.write();
-                        if let ColumnEntry::VirtualColumn(virtual_column) =
-                            guard.column(column.column.index).clone()
-                        {
-                            if let ColumnEntry::BaseTableColumn(source_column) =
-                                guard.column(virtual_column.source_column_index).clone()
-                            {
-                                if let Some(table_ty) = Option::<TableDataType>::from(&target_type)
-                                {
-                                    // Tips: column id from source virtual_column
-                                    column.column.index = guard.add_virtual_column(
-                                        &source_column,
-                                        virtual_column.column_id,
-                                        virtual_column.column_name,
-                                        table_ty,
-                                        virtual_column.key_paths,
-                                        Some(virtual_column.column_index),
-                                        virtual_column.is_created,
-                                    );
-                                    column.column.data_type = Box::new(target_type.clone());
-                                    return Ok(Box::new((scalar, target_type)));
-                                }
-                            }
-                        }
-                    }
 
+                    if self.try_rewrite_virtual_column_cast(&mut scalar, &target_type) {
+                        return Ok(Box::new((scalar, target_type)));
+                    }
                     target_type
                 // if the source type is nullable, cast target type should also be nullable.
                 } else if data_type.is_nullable_or_null() {
@@ -1197,6 +1174,44 @@ impl<'a> TypeChecker<'a> {
             }
         };
         Ok(Box::new((scalar, data_type)))
+    }
+
+    fn try_rewrite_virtual_column_cast(
+        &mut self,
+        scalar: &mut ScalarExpr,
+        target_type: &DataType,
+    ) -> bool {
+        let ScalarExpr::BoundColumnRef(column) = scalar else {
+            return false;
+        };
+        let mut guard = self.metadata.write();
+        if column.column.table_index.is_none() {
+            return false;
+        }
+        let ColumnEntry::VirtualColumn(virtual_column) = guard.column(column.column.index).clone()
+        else {
+            return false;
+        };
+        let ColumnEntry::BaseTableColumn(source_column) =
+            guard.column(virtual_column.source_column_index).clone()
+        else {
+            return false;
+        };
+        if let Some(table_ty) = Option::<TableDataType>::from(target_type) {
+            // Tips: column id from source virtual_column
+            column.column.index = guard.add_virtual_column(
+                &source_column,
+                virtual_column.column_id,
+                virtual_column.column_name,
+                table_ty,
+                virtual_column.key_paths,
+                Some(virtual_column.column_index),
+                virtual_column.is_created,
+            );
+            column.column.data_type = Box::new(target_type.clone());
+            return true;
+        }
+        false
     }
 
     // TODO: remove this function

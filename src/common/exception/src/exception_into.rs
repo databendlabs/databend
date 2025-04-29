@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::error::Error;
+use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -428,5 +429,11 @@ impl From<sqlx::Error> for ErrorCode {
 impl From<redis::RedisError> for ErrorCode {
     fn from(error: redis::RedisError) -> Self {
         ErrorCode::DictionarySourceError(format!("Dictionary Redis Error, cause: {}", error))
+    }
+}
+
+impl From<fmt::Error> for ErrorCode {
+    fn from(error: fmt::Error) -> Self {
+        ErrorCode::from_std_error(error)
     }
 }
