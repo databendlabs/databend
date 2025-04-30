@@ -26,6 +26,7 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::HilbertPartition;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
@@ -41,7 +42,6 @@ use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::MergeExchange;
 use crate::servers::flight::v1::exchange::ShuffleDataExchange;
 use crate::sessions::QueryContext;
-use crate::sql::executor::physical_plans::Mutation;
 use crate::sql::executor::PhysicalPlan;
 
 /// Visitor to split a `PhysicalPlan` into fragments.
@@ -67,6 +67,7 @@ enum State {
     Compact,
     Recluster,
     Other,
+    HilbertRecluster,
 }
 
 impl Fragmenter {
@@ -170,14 +171,6 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::MutationSource(plan.clone()))
     }
 
-    fn replace_mutation(&mut self, plan: &Mutation) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Mutation(Box::new(Mutation {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
-    }
-
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         self.state = State::ReplaceInto;
@@ -207,6 +200,11 @@ impl PhysicalPlanReplacer for Fragmenter {
     fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
         self.state = State::Recluster;
         Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
+    }
+
+    fn replace_hilbert_serialize(&mut self, plan: &HilbertPartition) -> Result<PhysicalPlan> {
+        self.state = State::HilbertRecluster;
+        Ok(PhysicalPlan::HilbertPartition(Box::new(plan.clone())))
     }
 
     fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
@@ -310,6 +308,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
             State::Recluster => FragmentType::Recluster,
+            State::HilbertRecluster => FragmentType::HilbertRecluster,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(self.ctx.clone(), &plan)?;
