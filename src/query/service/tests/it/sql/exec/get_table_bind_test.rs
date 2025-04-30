@@ -31,8 +31,8 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
-use databend_common_catalog::runtime_filter_info::RuntimeFiltersForScan;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::ContextError;
@@ -924,7 +924,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFiltersForScan)) {
+    fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFilterInfo)) {
         todo!()
     }
 

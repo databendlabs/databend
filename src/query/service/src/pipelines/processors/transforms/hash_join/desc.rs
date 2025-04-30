@@ -117,7 +117,7 @@ impl HashJoinDesc {
             from_correlated_subquery: join.from_correlated_subquery,
             broadcast: join.broadcast,
             single_to_inner: join.single_to_inner.clone(),
-            runtime_filter: (&join.runtime_filter_plan).into(),
+            runtime_filter: (&join.runtime_filter).into(),
         })
     }
 

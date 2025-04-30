@@ -107,7 +107,7 @@ pub struct HashJoin {
     // a HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
     pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
 
-    pub runtime_filter_plan: PhysicalRuntimeFilters,
+    pub runtime_filter: PhysicalRuntimeFilters,
 }
 
 impl HashJoin {
@@ -815,7 +815,7 @@ impl PhysicalPlanBuilder {
         probe_to_build: Vec<(usize, (bool, bool))>,
         output_schema: DataSchemaRef,
         build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
-        runtime_filter_plan: PhysicalRuntimeFilters,
+        runtime_filter: PhysicalRuntimeFilters,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::HashJoin(HashJoin {
@@ -839,7 +839,7 @@ impl PhysicalPlanBuilder {
             broadcast: is_broadcast,
             single_to_inner: join.single_to_inner.clone(),
             build_side_cache_info,
-            runtime_filter_plan,
+            runtime_filter,
         }))
     }
 
@@ -915,7 +915,7 @@ impl PhysicalPlanBuilder {
         let non_equi_conditions = self.process_non_equi_conditions(join, &merged_schema)?;
 
         // Step 11: Build runtime filter
-        let runtime_filter_desc = self
+        let runtime_filter = self
             .build_runtime_filter(
                 join,
                 s_expr,
@@ -941,7 +941,7 @@ impl PhysicalPlanBuilder {
             probe_to_build,
             output_schema,
             build_side_cache_info,
-            runtime_filter_desc,
+            runtime_filter,
             stat_info,
         )
     }

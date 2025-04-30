@@ -1523,7 +1523,7 @@ fn hash_join_to_format_tree(
     profs: &HashMap<u32, PlanProfile>,
     context: &mut FormatContext,
 ) -> Result<FormatTreeNode<String>> {
-    for rf in plan.runtime_filter_plan.filters.iter() {
+    for rf in plan.runtime_filter.filters.iter() {
         context
             .scan_id_to_runtime_filters
             .entry(rf.scan_id)
@@ -1557,7 +1557,7 @@ fn hash_join_to_format_tree(
     probe_child.payload = format!("{}(Probe)", probe_child.payload);
 
     let mut build_runtime_filters = vec![];
-    for rf in plan.runtime_filter_plan.filters.iter() {
+    for rf in plan.runtime_filter.filters.iter() {
         let mut s = format!(
             "filter id:{}, build key:{}, probe key:{}, filter type:",
             rf.id,

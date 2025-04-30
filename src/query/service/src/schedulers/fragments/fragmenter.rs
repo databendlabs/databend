@@ -246,7 +246,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
             build_side_cache_info: plan.build_side_cache_info.clone(),
-            runtime_filter_plan: plan.runtime_filter_plan.clone(),
+            runtime_filter: plan.runtime_filter.clone(),
         }))
     }
 
