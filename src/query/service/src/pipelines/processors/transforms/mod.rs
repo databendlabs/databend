@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod aggregator;
+#[allow(dead_code)]
 mod broadcast;
 mod hash_join;
 pub(crate) mod range_join;
