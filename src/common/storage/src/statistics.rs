@@ -156,6 +156,16 @@ impl Datum {
         matches!(self, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
     }
 
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Datum::Bool(_) => "Boolean",
+            Datum::Int(_) => "Integer",
+            Datum::UInt(_) => "Unsigned Integer",
+            Datum::Float(_) => "Float",
+            Datum::Bytes(_) => "String",
+        }
+    }
+
     pub fn compare(&self, other: &Self) -> Result<std::cmp::Ordering> {
         match (self, other) {
             (Datum::Bool(l), Datum::Bool(r)) => Ok(l.cmp(r)),
