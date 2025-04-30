@@ -97,15 +97,16 @@ impl Filter for FilterImpl {
             FilterImpl::Xor(filter) => filter.to_bytes()?,
             FilterImpl::Ngram(filter) => {
                 let mut bytes = filter.to_bytes()?;
-                bytes.splice(0..0, "bloom".as_bytes().iter().cloned());
+                // major ranges from [0, 7] is Xor8Filter
+                bytes.insert(0, b'n');
                 bytes
             }
         })
     }
 
     fn from_bytes(buf: &[u8]) -> Result<(Self, usize), Self::CodecError> {
-        Ok(if buf.starts_with("bloom".as_bytes()) {
-            BloomFilter::from_bytes(&buf[5..])
+        Ok(if buf[0] == b'n' {
+            BloomFilter::from_bytes(&buf[1..])
                 .map(|(filter, len)| (FilterImpl::Ngram(filter), len))?
         } else {
             Xor8Filter::from_bytes(buf).map(|(filter, len)| (FilterImpl::Xor(filter), len))?
