@@ -206,11 +206,11 @@ pub struct Join {
 impl Default for Join {
     fn default() -> Self {
         Self {
-            equi_conditions: Default::default(),
-            non_equi_conditions: Default::default(),
+            equi_conditions: Vec::new(),
+            non_equi_conditions: Vec::new(),
             join_type: JoinType::Cross,
-            marker_index: Default::default(),
-            from_correlated_subquery: Default::default(),
+            marker_index: None,
+            from_correlated_subquery: false,
             need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
@@ -480,6 +480,16 @@ impl Join {
         self.build_side_cache_info = None;
 
         Ok(())
+    }
+
+    pub fn has_subquery(&self) -> bool {
+        self.equi_conditions
+            .iter()
+            .any(|condition| condition.left.has_subquery() || condition.right.has_subquery())
+            || self
+                .non_equi_conditions
+                .iter()
+                .any(|expr| expr.has_subquery())
     }
 }
 
