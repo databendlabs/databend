@@ -13,34 +13,33 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_sql::executor::physical_plans::RuntimeFilterSink;
-use databend_common_sql::executor::physical_plans::RuntimeFilterSource;
+use databend_common_sql::executor::physical_plans::BroadcastSink;
+use databend_common_sql::executor::physical_plans::BroadcastSource;
 use databend_common_storages_fuse::TableContext;
 
-use crate::pipelines::processors::transforms::RuntimeFilterSinkProcessor;
-use crate::pipelines::processors::transforms::RuntimeFilterSourceProcessor;
+use crate::pipelines::processors::transforms::BroadcastSinkProcessor;
+use crate::pipelines::processors::transforms::BroadcastSourceProcessor;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn build_runtime_filter_source(
-        &mut self,
-        _source: &RuntimeFilterSource,
-    ) -> Result<()> {
-        let receiver = self.ctx.rf_src_recv(_source.join_id);
+    pub(crate) fn build_broadcast_source(&mut self, source: &BroadcastSource) -> Result<()> {
+        let receiver = self.ctx.broadcast_source_receiver(source.broadcast_id);
         self.main_pipeline.add_source(
-            |output| {
-                RuntimeFilterSourceProcessor::create(self.ctx.clone(), receiver.clone(), output)
-            },
+            |output| BroadcastSourceProcessor::create(self.ctx.clone(), receiver.clone(), output),
             1,
         )
     }
 
-    pub(crate) fn build_runtime_filter_sink(&mut self, sink: &RuntimeFilterSink) -> Result<()> {
+    pub(crate) fn build_broadcast_sink(&mut self, sink: &BroadcastSink) -> Result<()> {
         self.build_pipeline(&sink.input)?;
         self.main_pipeline.resize(1, true)?;
         let node_num = self.ctx.get_cluster().nodes.len();
         self.main_pipeline.add_sink(|input| {
-            RuntimeFilterSinkProcessor::create(input, node_num, self.ctx.rf_sink_send(sink.join_id))
+            BroadcastSinkProcessor::create(
+                input,
+                node_num,
+                self.ctx.broadcast_sink_sender(sink.broadcast_id),
+            )
         })
     }
 }

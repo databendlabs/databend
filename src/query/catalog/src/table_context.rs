@@ -74,8 +74,8 @@ use crate::plan::PartInfoPtr;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
+use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::runtime_filter_info::RuntimeFilterReady;
-use crate::runtime_filter_info::RuntimeFiltersForScan;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
@@ -324,7 +324,7 @@ pub trait TableContext: Send + Sync {
 
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
-    fn set_runtime_filter(&self, filters: (usize, RuntimeFiltersForScan));
+    fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
 
     fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>);
 
@@ -416,6 +416,8 @@ pub trait TableContext: Send + Sync {
     fn set_pruned_partitions_stats(&self, _partitions: PartStatistics) {
         unimplemented!()
     }
+
+    fn get_next_broadcast_id(&self) -> u32;
 }
 
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;

@@ -1,0 +1,110 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::sync::Arc;
+
+use async_channel::Receiver;
+use async_channel::Sender;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sinks::AsyncSink;
+use databend_common_pipeline_sinks::AsyncSinker;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
+
+pub struct BroadcastSourceProcessor {
+    pub receiver: Receiver<BlockMetaInfoPtr>,
+}
+
+impl BroadcastSourceProcessor {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        receiver: Receiver<BlockMetaInfoPtr>,
+        output_port: Arc<OutputPort>,
+    ) -> Result<ProcessorPtr> {
+        AsyncSourcer::create(ctx, output_port, Self { receiver })
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for BroadcastSourceProcessor {
+    const NAME: &'static str = "BroadcastSource";
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
+
+    #[async_backtrace::framed]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        let start = std::time::Instant::now();
+        log::info!("BroadcastSource recv() start");
+        let received = self.receiver.recv().await;
+        log::info!(
+            "BroadcastSource recv() take {:?}, received: {:?}",
+            start.elapsed(),
+            received
+        );
+        match received {
+            Ok(meta) => Ok(Some(DataBlock::empty_with_meta(meta))),
+            Err(_) => {
+                // The channel is closed, we should return None to stop generating
+                Ok(None)
+            }
+        }
+    }
+}
+
+pub struct BroadcastSinkProcessor {
+    expect_num: usize,
+    received: Vec<BlockMetaInfoPtr>,
+    sender: Sender<Vec<BlockMetaInfoPtr>>,
+}
+
+impl BroadcastSinkProcessor {
+    pub fn create(
+        input: Arc<InputPort>,
+        node_num: usize,
+        sender: Sender<Vec<BlockMetaInfoPtr>>,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(AsyncSinker::create(input, Self {
+            expect_num: node_num,
+            received: vec![],
+            sender,
+        })))
+    }
+}
+
+impl BroadcastSinkProcessor {}
+
+#[async_trait::async_trait]
+impl AsyncSink for BroadcastSinkProcessor {
+    const NAME: &'static str = "BroadcastSink";
+
+    async fn on_finish(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
+        let meta = data_block
+            .take_meta()
+            .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to BroadcastMeta"))?;
+        log::info!("BroadcastSinkProcessor recv meta: {:?}", meta);
+        self.received.push(meta);
+        let all_recv = self.expect_num == self.received.len();
+        Ok(all_recv)
+    }
+}

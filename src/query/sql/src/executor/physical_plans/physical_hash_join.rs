@@ -27,8 +27,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use super::physical_join_filter::build_runtime_filter_plan;
-use super::physical_join_filter::RemoteRuntimeFiltersDesc;
+use super::physical_join_filter::PhysicalRuntimeFilters;
 use super::JoinRuntimeFilter;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
@@ -108,9 +107,7 @@ pub struct HashJoin {
     // a HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
     pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
 
-    pub runtime_filter_desc: RemoteRuntimeFiltersDesc,
-    pub runtime_filter_plan: Option<Box<PhysicalPlan>>,
-    pub join_id: u32,
+    pub runtime_filter_plan: PhysicalRuntimeFilters,
 }
 
 impl HashJoin {
@@ -818,9 +815,7 @@ impl PhysicalPlanBuilder {
         probe_to_build: Vec<(usize, (bool, bool))>,
         output_schema: DataSchemaRef,
         build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
-        runtime_filter_desc: RemoteRuntimeFiltersDesc,
-        runtime_filter_plan: Option<Box<PhysicalPlan>>,
-        join_id: u32,
+        runtime_filter_plan: PhysicalRuntimeFilters,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::HashJoin(HashJoin {
@@ -844,9 +839,7 @@ impl PhysicalPlanBuilder {
             broadcast: is_broadcast,
             single_to_inner: join.single_to_inner.clone(),
             build_side_cache_info,
-            runtime_filter_desc,
             runtime_filter_plan,
-            join_id,
         }))
     }
 
@@ -932,18 +925,6 @@ impl PhysicalPlanBuilder {
             )
             .await?;
 
-        let join_id = self.next_hash_join_id;
-        self.next_hash_join_id += 1;
-
-        let runtime_filter_plan = if !runtime_filter_desc.filters.is_empty()
-            && !self.ctx.get_cluster().is_empty()
-            && !is_broadcast
-        {
-            Some(build_runtime_filter_plan(join_id)?)
-        } else {
-            None
-        };
-
         // Step 12: Create and return the HashJoin
         self.create_hash_join(
             join,
@@ -961,8 +942,6 @@ impl PhysicalPlanBuilder {
             output_schema,
             build_side_cache_info,
             runtime_filter_desc,
-            runtime_filter_plan,
-            join_id,
             stat_info,
         )
     }
@@ -974,8 +953,8 @@ impl PhysicalPlanBuilder {
         is_broadcast: bool,
         build_keys: &[RemoteExpr],
         probe_keys: Vec<Option<(RemoteExpr<String>, usize, usize)>>,
-    ) -> Result<RemoteRuntimeFiltersDesc> {
-        JoinRuntimeFilter::build_runtime_filter_desc(
+    ) -> Result<PhysicalRuntimeFilters> {
+        JoinRuntimeFilter::build_runtime_filter(
             self.ctx.clone(),
             &self.metadata,
             join,

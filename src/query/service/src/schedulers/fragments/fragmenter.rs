@@ -124,7 +124,7 @@ impl Fragmenter {
     pub fn build_fragment(mut self, plan: &PhysicalPlan) -> Result<PlanFragment> {
         let root = self.replace(plan)?;
         let fragment_type = match plan {
-            PhysicalPlan::RuntimeFilterSink(_) => FragmentType::Intermediate,
+            PhysicalPlan::BroadcastSink(_) => FragmentType::Intermediate,
             _ => FragmentType::Root,
         };
         let mut root_fragment = PlanFragment {
@@ -223,10 +223,6 @@ impl PhysicalPlanReplacer for Fragmenter {
         let probe_input = self.replace(plan.probe.as_ref())?;
         fragments.append(&mut self.fragments);
 
-        let runtime_filter_plan = match &plan.runtime_filter_plan {
-            Some(runtime_filter_plan) => Some(Box::new(self.replace(runtime_filter_plan)?)),
-            None => None,
-        };
         self.fragments = fragments;
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
@@ -250,9 +246,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
             build_side_cache_info: plan.build_side_cache_info.clone(),
-            runtime_filter_desc: plan.runtime_filter_desc.clone(),
-            runtime_filter_plan,
-            join_id: plan.join_id,
+            runtime_filter_plan: plan.runtime_filter_plan.clone(),
         }))
     }
 

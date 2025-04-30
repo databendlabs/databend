@@ -27,7 +27,6 @@ use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
-use crate::pipelines::processors::transforms::RuntimeFilterChannels;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
 use crate::pipelines::processors::HashJoinDesc;
@@ -36,83 +35,42 @@ use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 
 impl PipelineBuilder {
-    pub(crate) fn build_range_join(&mut self, range_join: &RangeJoin) -> Result<()> {
-        let state = Arc::new(RangeJoinState::new(self.ctx.clone(), range_join));
-        self.expand_right_side_pipeline(range_join, state.clone())?;
-        self.build_left_side(range_join, state)?;
-        Ok(())
-    }
-
-    fn build_left_side(
-        &mut self,
-        range_join: &RangeJoin,
-        state: Arc<RangeJoinState>,
-    ) -> Result<()> {
-        self.build_pipeline(&range_join.left)?;
-        let max_threads = self.settings.get_max_threads()? as usize;
-        self.main_pipeline.try_resize(max_threads)?;
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformRangeJoinLeft::create(
-                input,
-                output,
-                state.clone(),
-            )))
-        })?;
-        Ok(())
-    }
-
-    fn expand_right_side_pipeline(
-        &mut self,
-        range_join: &RangeJoin,
-        state: Arc<RangeJoinState>,
-    ) -> Result<()> {
-        let right_side_context = QueryContext::create_from(self.ctx.as_ref());
-        let mut right_side_builder = PipelineBuilder::create(
+    // Create a new pipeline builder with the same context as the current builder
+    fn create_sub_pipeline_builder(&self) -> PipelineBuilder {
+        let sub_context = QueryContext::create_from(self.ctx.as_ref());
+        let mut sub_builder = PipelineBuilder::create(
             self.func_ctx.clone(),
             self.settings.clone(),
-            right_side_context,
+            sub_context,
             self.main_pipeline.get_scopes(),
         );
-        right_side_builder.hash_join_states = self.hash_join_states.clone();
-
-        let mut right_res = right_side_builder.finalize(&range_join.right)?;
-        right_res.main_pipeline.add_sink(|input| {
-            Ok(ProcessorPtr::create(
-                Sinker::<TransformRangeJoinRight>::create(
-                    input,
-                    TransformRangeJoinRight::create(state.clone()),
-                ),
-            ))
-        })?;
-        self.pipelines.push(right_res.main_pipeline.finalize());
-        self.pipelines.extend(right_res.sources_pipelines);
-        Ok(())
+        sub_builder.hash_join_states = self.hash_join_states.clone();
+        sub_builder
     }
 
-    pub(crate) fn build_join(&mut self, join: &HashJoin) -> Result<()> {
-        // for merge into target table as build side.
-        let (enable_merge_into_optimization, merge_into_is_distributed) =
-            self.merge_into_get_optimization_flag(join);
+    pub(crate) fn build_hash_join(&mut self, join: &HashJoin) -> Result<()> {
+        // Get optimization flags for merge-into operations
+        let (enable_optimization, is_distributed) = self.merge_into_get_optimization_flag(join);
 
-        let state = self.build_join_state(
-            join,
-            merge_into_is_distributed,
-            enable_merge_into_optimization,
-        )?;
+        // Create the join state with optimization flags
+        let state = self.build_hash_join_state(join, is_distributed, enable_optimization)?;
         if let Some((build_cache_index, _)) = join.build_side_cache_info {
             self.hash_join_states
                 .insert(build_cache_index, state.clone());
         }
 
-        self.expand_build_side_pipeline(&join.build, join, state.clone())?;
-        self.build_join_probe(join, state)?;
+        // Build both phases of the Hash Join
+        self.build_hash_join_build_side(&join.build, join, state.clone())?;
+        self.build_hash_join_probe_side(join, state)?;
 
-        // In the case of spilling, we need to share state among multiple threads. Quickly fetch all data from this round to quickly start the next round.
+        // In the case of spilling, we need to share state among multiple threads
+        // Quickly fetch all data from this round to quickly start the next round
         self.main_pipeline
             .resize(self.main_pipeline.output_len(), true)
     }
 
-    fn build_join_state(
+    // Create the Hash Join state
+    fn build_hash_join_state(
         &mut self,
         join: &HashJoin,
         merge_into_is_distributed: bool,
@@ -130,20 +88,14 @@ impl PipelineBuilder {
         )
     }
 
-    fn expand_build_side_pipeline(
+    // Build the build-side pipeline for Hash Join
+    fn build_hash_join_build_side(
         &mut self,
         build: &PhysicalPlan,
         hash_join_plan: &HashJoin,
         join_state: Arc<HashJoinState>,
     ) -> Result<()> {
-        let build_side_context = QueryContext::create_from(self.ctx.as_ref());
-        let mut build_side_builder = PipelineBuilder::create(
-            self.func_ctx.clone(),
-            self.settings.clone(),
-            build_side_context,
-            self.main_pipeline.get_scopes(),
-        );
-        build_side_builder.hash_join_states = self.hash_join_states.clone();
+        let build_side_builder = self.create_sub_pipeline_builder();
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
@@ -155,13 +107,6 @@ impl PipelineBuilder {
             &hash_join_plan.build_projections,
             join_state.clone(),
             output_len,
-            hash_join_plan
-                .runtime_filter_plan
-                .as_ref()
-                .map(|_| RuntimeFilterChannels {
-                    rf_src_send: self.ctx.rf_src_send(hash_join_plan.join_id),
-                    rf_sink_recv: self.ctx.rf_sink_recv(hash_join_plan.join_id),
-                }),
         )?;
         build_state.add_runtime_filter_ready();
 
@@ -171,7 +116,7 @@ impl PipelineBuilder {
                 build_state.clone(),
             )?))
         };
-        // for distributed merge into when source as build side.
+        // For distributed merge-into when source as build side
         if hash_join_plan.need_hold_hash_table {
             self.join_state = Some(build_state.clone())
         }
@@ -182,7 +127,12 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_join_probe(&mut self, join: &HashJoin, state: Arc<HashJoinState>) -> Result<()> {
+    // Build the probe-side pipeline for Hash Join
+    fn build_hash_join_probe_side(
+        &mut self,
+        join: &HashJoin,
+        state: Arc<HashJoinState>,
+    ) -> Result<()> {
         self.build_pipeline(&join.probe)?;
 
         let max_block_size = self.settings.get_max_block_size()? as usize;
@@ -212,16 +162,66 @@ impl PipelineBuilder {
             )?))
         })?;
 
+        // For merge-into operations that need to hold the hash table
         if join.need_hold_hash_table {
-            let mut projected_probe_fields = vec![];
+            // Extract projected fields from probe schema
+            let mut projected_fields = vec![];
             for (i, field) in probe_state.probe_schema.fields().iter().enumerate() {
                 if probe_state.probe_projections.contains(&i) {
-                    projected_probe_fields.push(field.clone());
+                    projected_fields.push(field.clone());
                 }
             }
-            self.merge_into_probe_data_fields = Some(projected_probe_fields);
+            self.merge_into_probe_data_fields = Some(projected_fields);
         }
 
+        Ok(())
+    }
+
+    pub(crate) fn build_range_join(&mut self, range_join: &RangeJoin) -> Result<()> {
+        let state = Arc::new(RangeJoinState::new(self.ctx.clone(), range_join));
+        self.build_range_join_right_side(range_join, state.clone())?;
+        self.build_range_join_left_side(range_join, state)?;
+        Ok(())
+    }
+
+    // Build the left-side pipeline for Range Join
+    fn build_range_join_left_side(
+        &mut self,
+        range_join: &RangeJoin,
+        state: Arc<RangeJoinState>,
+    ) -> Result<()> {
+        self.build_pipeline(&range_join.left)?;
+        let max_threads = self.settings.get_max_threads()? as usize;
+        self.main_pipeline.try_resize(max_threads)?;
+        self.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(TransformRangeJoinLeft::create(
+                input,
+                output,
+                state.clone(),
+            )))
+        })?;
+        Ok(())
+    }
+
+    // Build the right-side pipeline for Range Join
+    fn build_range_join_right_side(
+        &mut self,
+        range_join: &RangeJoin,
+        state: Arc<RangeJoinState>,
+    ) -> Result<()> {
+        let right_side_builder = self.create_sub_pipeline_builder();
+
+        let mut right_res = right_side_builder.finalize(&range_join.right)?;
+        right_res.main_pipeline.add_sink(|input| {
+            Ok(ProcessorPtr::create(
+                Sinker::<TransformRangeJoinRight>::create(
+                    input,
+                    TransformRangeJoinRight::create(state.clone()),
+                ),
+            ))
+        })?;
+        self.pipelines.push(right_res.main_pipeline.finalize());
+        self.pipelines.extend(right_res.sources_pipelines);
         Ok(())
     }
 }

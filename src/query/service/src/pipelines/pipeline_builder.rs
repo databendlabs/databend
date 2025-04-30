@@ -177,7 +177,7 @@ impl PipelineBuilder {
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
             PhysicalPlan::Limit(limit) => self.build_limit(limit),
             PhysicalPlan::RowFetch(row_fetch) => self.build_row_fetch(row_fetch),
-            PhysicalPlan::HashJoin(join) => self.build_join(join),
+            PhysicalPlan::HashJoin(join) => self.build_hash_join(join),
             PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
             PhysicalPlan::UnionAll(union_all) => self.build_union_all(union_all),
@@ -258,8 +258,8 @@ impl PipelineBuilder {
             PhysicalPlan::ColumnMutation(column_mutation) => {
                 self.build_column_mutation(column_mutation)
             }
-            PhysicalPlan::RuntimeFilterSource(source) => self.build_runtime_filter_source(source),
-            PhysicalPlan::RuntimeFilterSink(sink) => self.build_runtime_filter_sink(sink),
+            PhysicalPlan::BroadcastSource(source) => self.build_broadcast_source(source),
+            PhysicalPlan::BroadcastSink(sink) => self.build_broadcast_sink(sink),
         }?;
 
         self.is_exchange_neighbor = is_exchange_neighbor;

@@ -15,6 +15,8 @@
 use databend_common_exception::Result;
 
 use super::physical_plans::AddStreamColumn;
+use super::physical_plans::BroadcastSink;
+use super::physical_plans::BroadcastSource;
 use super::physical_plans::CacheScan;
 use super::physical_plans::ExpressionScan;
 use super::physical_plans::HilbertPartition;
@@ -22,8 +24,6 @@ use super::physical_plans::MutationManipulate;
 use super::physical_plans::MutationOrganize;
 use super::physical_plans::MutationSplit;
 use super::physical_plans::RecursiveCteScan;
-use super::physical_plans::RuntimeFilterSink;
-use super::physical_plans::RuntimeFilterSource;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -122,23 +122,20 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ChunkAppendData(plan) => self.replace_chunk_append_data(plan),
             PhysicalPlan::ChunkMerge(plan) => self.replace_chunk_merge(plan),
             PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
-            PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
-            PhysicalPlan::RuntimeFilterSink(plan) => self.replace_runtime_filter_sink(plan),
+            PhysicalPlan::BroadcastSource(plan) => self.replace_runtime_filter_source(plan),
+            PhysicalPlan::BroadcastSink(plan) => self.replace_runtime_filter_sink(plan),
         }
     }
 
-    fn replace_runtime_filter_source(
-        &mut self,
-        plan: &RuntimeFilterSource,
-    ) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::RuntimeFilterSource(plan.clone()))
+    fn replace_runtime_filter_source(&mut self, plan: &BroadcastSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::BroadcastSource(plan.clone()))
     }
 
-    fn replace_runtime_filter_sink(&mut self, plan: &RuntimeFilterSink) -> Result<PhysicalPlan> {
+    fn replace_runtime_filter_sink(&mut self, plan: &BroadcastSink) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::RuntimeFilterSink(RuntimeFilterSink {
+        Ok(PhysicalPlan::BroadcastSink(BroadcastSink {
             plan_id: plan.plan_id,
-            join_id: plan.join_id,
+            broadcast_id: plan.broadcast_id,
             input: Box::new(input),
         }))
     }
@@ -273,12 +270,6 @@ pub trait PhysicalPlanReplacer {
         let build = self.replace(&plan.build)?;
         let probe = self.replace(&plan.probe)?;
 
-        let runtime_filter_plan = if let Some(runtime_filter_plan) = &plan.runtime_filter_plan {
-            Some(Box::new(self.replace(runtime_filter_plan)?))
-        } else {
-            None
-        };
-
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: plan.plan_id,
             projections: plan.projections.clone(),
@@ -297,12 +288,10 @@ pub trait PhysicalPlanReplacer {
             output_schema: plan.output_schema.clone(),
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
-            runtime_filter_desc: plan.runtime_filter_desc.clone(),
+            runtime_filter_plan: plan.runtime_filter_plan.clone(),
             broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
             build_side_cache_info: plan.build_side_cache_info.clone(),
-            runtime_filter_plan,
-            join_id: plan.join_id,
         }))
     }
 
@@ -675,7 +664,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::MutationSource(_)
-                | PhysicalPlan::RuntimeFilterSource(_) => {}
+                | PhysicalPlan::BroadcastSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -801,7 +790,7 @@ impl PhysicalPlan {
                 PhysicalPlan::ChunkCommitInsert(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::RuntimeFilterSink(plan) => {
+                PhysicalPlan::BroadcastSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }

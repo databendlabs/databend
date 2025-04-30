@@ -17,6 +17,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_sql::executor::build_broadcast_plans;
 use databend_common_sql::planner::QueryExecutor;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
@@ -100,7 +101,7 @@ pub async fn build_distributed_pipeline(
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
-    for plan in collect_runtime_filter_broadcast_plans(plan)?
+    for plan in build_broadcast_plans(ctx.get_next_broadcast_id())?
         .iter()
         .chain(std::iter::once(plan))
     {
@@ -125,27 +126,6 @@ pub async fn build_distributed_pipeline(
             Err(error)
         }
     }
-}
-
-fn collect_runtime_filter_broadcast_plans(plan: &PhysicalPlan) -> Result<Vec<PhysicalPlan>> {
-    let mut runtime_filter_broadcast_plans = Vec::new();
-
-    let mut collect_runtime_filter_broadcast_plans = |plan: &PhysicalPlan| {
-        if let PhysicalPlan::HashJoin(hash_join) = plan {
-            if let Some(runtime_filter_plan) = &hash_join.runtime_filter_plan {
-                runtime_filter_broadcast_plans.push(runtime_filter_plan.as_ref().clone());
-            }
-        }
-    };
-
-    PhysicalPlan::traverse(
-        plan,
-        &mut |_| true,
-        &mut collect_runtime_filter_broadcast_plans,
-        &mut |_| {},
-    );
-
-    Ok(runtime_filter_broadcast_plans)
 }
 
 pub struct ServiceQueryExecutor {

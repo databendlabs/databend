@@ -13,9 +13,9 @@
 // limitations under the License.
 
 pub mod aggregator;
+mod broadcast;
 mod hash_join;
 pub(crate) mod range_join;
-mod runtime_filter;
 mod runtime_pool;
 mod transform_add_computed_columns;
 mod transform_add_const_columns;
@@ -41,10 +41,9 @@ mod transform_udf_script;
 mod transform_udf_server;
 mod window;
 
+pub use broadcast::BroadcastSinkProcessor;
+pub use broadcast::BroadcastSourceProcessor;
 pub use hash_join::*;
-pub use runtime_filter::RemoteRuntimeFilters;
-pub use runtime_filter::RuntimeFilterSinkProcessor;
-pub use runtime_filter::RuntimeFilterSourceProcessor;
 pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;
 pub use transform_add_internal_columns::TransformAddInternalColumns;
