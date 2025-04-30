@@ -173,14 +173,7 @@ impl RelOperator {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::CompactBlock(_) => false,
-            RelOperator::Join(op) => {
-                op.equi_conditions.iter().any(|condition| {
-                    condition.left.has_subquery() || condition.right.has_subquery()
-                }) || op
-                    .non_equi_conditions
-                    .iter()
-                    .any(|expr| expr.has_subquery())
-            }
+            RelOperator::Join(op) => op.has_subquery(),
             RelOperator::EvalScalar(op) => op.items.iter().any(|expr| expr.scalar.has_subquery()),
             RelOperator::Filter(op) => op.predicates.iter().any(|expr| expr.has_subquery()),
             RelOperator::Aggregate(op) => {

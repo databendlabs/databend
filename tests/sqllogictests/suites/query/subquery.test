@@ -1136,4 +1136,78 @@ where t.total_m = any (
 1 30
 
 statement ok
+create or replace table t1 as
+select * from (values 
+    (5, 7), 
+    (8, 6), 
+    (9, 9), 
+    (10, 1),
+    (11, 2)
+) t(a, b);
+
+statement ok
+create or replace table t2 as
+select * from (values 
+    (5, 1), 
+    (9, 2), 
+    (8, 3)
+) t(a, b);
+
+statement ok
+create or replace table t3 as
+select * from (values 
+    (5, 1), 
+    (8, 3)
+) t(a, b);
+
+query IIII
+select * from t1 full join t2 on t1.a = ( select a from t3 where b = t2.b ) order by t1.a;
+----
+5 7 5 1
+8 6 8 3
+9 9 NULL NULL
+10 1 NULL NULL
+11 2 NULL NULL
+NULL NULL 9 2
+
+query IIII
+select * from t1 left join t2 on t1.a = ( select a from t3 where b = t2.b ) order by t1.a;
+----
+5 7 5 1
+8 6 8 3
+9 9 NULL NULL
+10 1 NULL NULL
+11 2 NULL NULL
+
+query IIII
+select * from t1 right join t2 on t1.a = ( select a from t3 where b = t2.b ) order by t1.a;
+----
+5 7 5 1
+8 6 8 3
+NULL NULL 9 2
+
+query IIII
+select * from t1 join t2 on t1.a = ( select a from t3 where b = t2.b ) order by t1.a;
+----
+5 7 5 1
+8 6 8 3
+
+query IIII
+select * from t1 join t2 on t1.a - 1 = ( select a from t3 where b = t2.b ) + 1  order by t1.a;
+----
+10 1 8 3
+
+query IIII
+select * from t1 join t2 on ( select a from t3 where b = t2.b ) = ( select a from t3 where a = t1.a ) order by t1.a;
+----
+5 7 5 1
+8 6 8 3
+
+query IIII
+select * from t1 join t2 on exists ( select a from t3 where a = t1.a and b = t2.b ) order by t1.a;
+----
+5 7 5 1
+8 6 8 3
+
+statement ok
 drop database d_subquery;
