@@ -152,18 +152,18 @@ explain select a, get(get(v, 'a'), 0), get(get(v, 'b'), 'c') from t2;
 ----
 TableScan
 ├── table: default.test_virtual_db.t2
-├── output columns: [a (#0), v['a'][0] (#2)]
+├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]
 ├── read rows: 1
 ├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 ├── push downs: [filters: [], limit: NONE]
-├── virtual columns: [v['a'][0]]
+├── virtual columns: [v['a'][0], v['b']['c']]
 └── estimated rows: 1.00
 
 query T
-select v['d']::string, v['d']::int from t2;
+explain select v['d']::string, v['d']::int from t2;
 ----
 EvalScalar
 ├── output columns: [t2.v['d'] (#6), v['d']::Int32 (#7)]
@@ -180,6 +180,11 @@ EvalScalar
     ├── push downs: [filters: [], limit: NONE]
     ├── virtual columns: [v['d']]
     └── estimated rows: 1.00
+
+query T
+select v['d']::string, v['d']::int from t2;
+----
+20 20
 
 query T
 explain select a, get_string(v, 'd') from t2 where get_string(v, 'd') like '%20%'
