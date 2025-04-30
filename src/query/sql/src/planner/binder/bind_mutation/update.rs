@@ -29,7 +29,6 @@ use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::SExpr;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
@@ -322,17 +321,14 @@ impl Binder {
 
         let aggr_expr =
             self.bind_aggregate(&mut mutation.bind_context, s_expr.unary_child().clone())?;
+
         let input = if eval_scalar.items.is_empty() {
             aggr_expr
         } else {
-            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(aggr_expr))
+            aggr_expr.build_unary(Arc::new(eval_scalar.into()))
         };
 
-        let s_expr = Box::new(SExpr::create_unary(
-            Arc::new(RelOperator::Mutation(mutation)),
-            Arc::new(input.into()),
-        ));
-
+        let s_expr = Box::new(input.build_unary(Arc::new(mutation.into())));
         let Plan::DataMutation {
             schema, metadata, ..
         } = plan
