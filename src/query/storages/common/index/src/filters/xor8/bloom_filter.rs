@@ -205,11 +205,16 @@ impl BloomFilter {
         assert!(filter_size > 0, "filter_size must be > 0");
         item_count = max(item_count, 1);
 
-        let ln2 = std::f64::consts::LN_2;
-        let k = ((filter_size as f64 / item_count as f64) * ln2).ceil() as usize;
-        let k = k.max(1);
+        let k = Self::optimal_k(filter_size, item_count);
 
         Self::with_params(filter_size, k, seed)
+    }
+
+    #[inline]
+    fn optimal_k(filter_size: usize, item_count: usize) -> usize {
+        let ln2 = std::f64::consts::LN_2;
+        let k = ((filter_size as f64 / item_count as f64) * ln2).ceil() as usize;
+        k.max(1)
     }
 
     pub fn with_params(size: usize, hashes: usize, seed: u64) -> Self {
@@ -284,5 +289,67 @@ impl BloomBuildingError {
 impl From<BloomBuildingError> for ErrorCode {
     fn from(e: BloomBuildingError) -> Self {
         ErrorCode::Internal(e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_block_insert_and_check() {
+        for i in 0..1_000_000 {
+            let mut filter = BloomFilter::with_params(10, 1, 0);
+            filter.add(i);
+            assert!(filter.find(i));
+        }
+    }
+
+    #[test]
+    fn test_sbbf_insert_and_check() {
+        let item_count = 1_000_000;
+        let mut filter = BloomFilter::with_item_count(10 * 1024, item_count, 0);
+        for i in 0..item_count as u64 {
+            let key = format!("key_{}", i);
+            filter.add(i);
+            assert!(filter.find(i));
+        }
+    }
+
+    #[test]
+    fn test_encode_and_decode() {
+        let mut hashes = Vec::new();
+        for i in 0..500000 {
+            let key = format!("key_{}", i);
+            hashes.push(i);
+        }
+        let mut filter = BloomFilter::with_params(10 * 1024, 1, 0);
+        for hash in hashes.iter() {
+            filter.add(*hash);
+        }
+        assert!(hashes.iter().all(|hash| filter.find(*hash)));
+        let mut buf = filter.to_bytes().unwrap();
+        let (decode_filter, _) = BloomFilter::from_bytes(&buf).unwrap();
+        filter
+            .filter
+            .iter()
+            .zip(decode_filter.filter.iter())
+            .for_each(|(a, b)| {
+                assert_eq!(a, b);
+            });
+        assert!(hashes.iter().all(|hash| decode_filter.find(*hash)));
+    }
+
+    #[test]
+    fn test_optimal_k() {
+        assert_eq!(BloomFilter::optimal_k(1000, 100), 7); // (1000/100)*ln(2) ≈ 6.93 → ceil → 7
+        assert_eq!(BloomFilter::optimal_k(1024, 128), 6); // (1024/128)*ln(2) ≈ 5.545 → ceil → 6
+        assert_eq!(BloomFilter::optimal_k(100, 1000), 1); // (100/1000)*ln(2) ≈ 0.069 → ceil → 1
+        assert_eq!(BloomFilter::optimal_k(100, 100), 1); // (100/100)*ln(2) ≈ 0.693 → ceil → 1
+        assert_eq!(BloomFilter::optimal_k(1, 1), 1); // (1/1)*ln(2) ≈ 0.693 → ceil → 1
+        assert_eq!(BloomFilter::optimal_k(1, 1000), 1); // (1/1000)*ln(2) ≈ 0.0007 → ceil → 1
+        assert_eq!(BloomFilter::optimal_k(100, 50), 2); // (100/50)*ln(2) ≈ 1.386 → ceil → 2
+        assert_eq!(BloomFilter::optimal_k(101, 50), 2); // (101/50)*ln(2) ≈ 1.400 → ceil → 2
+        assert_eq!(BloomFilter::optimal_k(1_000_000, 10_000), 70); // (1e6/1e4)*ln(2) ≈ 69.31 → ceil → 70
     }
 }
