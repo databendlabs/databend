@@ -291,13 +291,22 @@ impl QueryContext {
     pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
         self.shared.broadcast_source_receiver(broadcast_id)
     }
+
+    /// Get a sender to broadcast data
+    ///
+    /// Note: The channel must be closed by calling close() after data transmission is completed
     pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
         self.shared.broadcast_source_sender(broadcast_id)
     }
 
+    /// A receiver to receive broadcast data
+    ///
+    /// Note: receive() can be called repeatedly until an Error is returned, indicating
+    /// that the upstream channel has been closed
     pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
         self.shared.broadcast_sink_receiver(broadcast_id)
     }
+
     pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
         self.shared.broadcast_sink_sender(broadcast_id)
     }

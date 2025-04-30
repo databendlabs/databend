@@ -419,6 +419,9 @@ pub trait TableContext: Send + Sync {
         unimplemented!()
     }
 
+    /// Calling this function will automatically create a pipeline for broadcast data in `build_distributed_pipeline()`
+    ///
+    /// The returned id can be used to get sender and receiver for broadcasting data.
     fn get_next_broadcast_id(&self) -> u32;
 
     fn reset_broadcast_id(&self) {
