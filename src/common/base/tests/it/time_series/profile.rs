@@ -222,17 +222,17 @@ fn test_should_flush() -> Result<()> {
     let global_count = AtomicUsize::new(0);
     for _i in 0..1023 {
         let query_profile = QueryTimeSeriesProfile::should_flush(&global_count);
-        assert_eq!(query_profile, false);
+        assert!(!query_profile);
     }
     let query_profile = QueryTimeSeriesProfile::should_flush(&global_count);
-    assert_eq!(query_profile, true);
+    assert!(query_profile);
     assert_eq!(global_count.load(SeqCst), 0);
     for _i in 0..1023 {
         let query_profile = QueryTimeSeriesProfile::should_flush(&global_count);
-        assert_eq!(query_profile, false);
+        assert!(!query_profile);
     }
     let query_profile = QueryTimeSeriesProfile::should_flush(&global_count);
-    assert_eq!(query_profile, true);
+    assert!(query_profile);
     assert_eq!(global_count.load(SeqCst), 0);
 
     Ok(())
