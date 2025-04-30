@@ -99,6 +99,9 @@ use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
 
+const DEFAULT_GRAM_SIZE: usize = 3;
+const DEFAULT_BLOOM_SIZE: u64 = 1024 * 1024;
+
 impl FuseTable {
     #[fastrace::trace]
     #[async_backtrace::framed]
@@ -697,12 +700,12 @@ impl FuseTable {
                 continue;
             };
             let gram_size = match index.options.get("gram_size") {
-                None => 3,
+                None => DEFAULT_GRAM_SIZE,
                 Some(s) => s.parse::<usize>()?,
             };
             let bloom_size = match index.options.get("bloom_size") {
-                None => 1024,
-                Some(s) => s.parse::<usize>()?,
+                None => DEFAULT_BLOOM_SIZE,
+                Some(s) => s.parse::<u64>()?,
             };
             ngram_index_args.push(NgramArgs::new(pos, field.clone(), gram_size, bloom_size));
         }

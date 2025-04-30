@@ -14,7 +14,6 @@
 
 mod block_filter;
 mod block_filter_versions;
-mod bloom_filter;
 mod xor8_filter;
 
 use std::hash::Hash;
@@ -22,13 +21,13 @@ use std::hash::Hash;
 pub use block_filter::BlockFilter;
 pub use block_filter_versions::BlockBloomFilterIndexVersion;
 pub use block_filter_versions::V2BloomBlock;
-pub use bloom_filter::BloomBuilder;
-pub use bloom_filter::BloomFilter;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 pub use xor8_filter::Xor8Builder;
 pub use xor8_filter::Xor8Filter;
 
+pub use crate::filters::bloom_filter::BloomBuilder;
+pub use crate::filters::bloom_filter::BloomFilter;
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
 

@@ -562,13 +562,13 @@ impl BloomIndex {
 
 pub struct BloomIndexBuilder {
     func_ctx: FunctionContext,
-    columns: Vec<ColumnFilterBuilder>,
+    bloom_columns: Vec<ColumnFilterBuilder>,
+    ngram_columns: Vec<ColumnFilterBuilder>,
 }
 
 struct ColumnFilterBuilder {
     index: FieldIndex,
     field: TableField,
-    is_ngram: bool,
     gram_size: usize,
     builder: FilterImplBuilder,
 }
@@ -578,11 +578,11 @@ pub struct NgramArgs {
     index: FieldIndex,
     field: TableField,
     gram_size: usize,
-    bloom_size: usize,
+    bloom_size: u64,
 }
 
 impl NgramArgs {
-    pub fn new(index: FieldIndex, field: TableField, gram_size: usize, bloom_size: usize) -> Self {
+    pub fn new(index: FieldIndex, field: TableField, gram_size: usize, bloom_size: u64) -> Self {
         Self {
             index,
             field,
@@ -599,7 +599,7 @@ impl NgramArgs {
         self.gram_size
     }
 
-    pub fn bloom_size(&self) -> usize {
+    pub fn bloom_size(&self) -> u64 {
         self.bloom_size
     }
 }
@@ -610,21 +610,20 @@ impl BloomIndexBuilder {
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
         ngram_args: &[NgramArgs],
     ) -> Result<Self> {
-        let mut bloom_columns = Vec::with_capacity(bloom_columns_map.len() + ngram_args.len());
+        let mut bloom_columns = Vec::with_capacity(bloom_columns_map.len());
+        let mut ngram_columns = Vec::with_capacity(ngram_args.len());
         for (&index, field) in bloom_columns_map.iter() {
             bloom_columns.push(ColumnFilterBuilder {
                 index,
                 field: field.clone(),
-                is_ngram: false,
                 gram_size: 0,
                 builder: FilterImplBuilder::Xor(Xor8Builder::create()),
             });
         }
         for arg in ngram_args.iter() {
-            bloom_columns.push(ColumnFilterBuilder {
+            ngram_columns.push(ColumnFilterBuilder {
                 index: arg.index,
                 field: arg.field.clone(),
-                is_ngram: true,
                 gram_size: arg.gram_size,
                 builder: FilterImplBuilder::Ngram(BloomBuilder::create(
                     arg.bloom_size,
@@ -635,7 +634,8 @@ impl BloomIndexBuilder {
 
         Ok(Self {
             func_ctx,
-            columns: bloom_columns,
+            bloom_columns,
+            ngram_columns,
         })
     }
 }
@@ -649,18 +649,12 @@ impl BloomIndexBuilder {
             return Ok(());
         }
 
-        let mut keys_to_remove = Vec::with_capacity(self.columns.len());
+        let mut bloom_keys_to_remove = Vec::with_capacity(self.bloom_columns.len());
 
-        let (bloom_iter, ngram_iter): (Vec<_>, Vec<_>) = self
-            .columns
-            .iter_mut()
-            .enumerate()
-            .partition(|(_, column)| !column.is_ngram);
-
-        for (index, index_column) in bloom_iter {
+        for (index, index_column) in self.bloom_columns.iter_mut().enumerate() {
             let field_type = &block.get_by_offset(index_column.index).data_type;
             if !Xor8Filter::supported_type(field_type) {
-                keys_to_remove.push(index);
+                bloom_keys_to_remove.push(index);
                 continue;
             }
 
@@ -708,14 +702,14 @@ impl BloomIndexBuilder {
                         }
                         let str_column = builder.build();
                         if BloomIndex::check_large_string(&str_column) {
-                            keys_to_remove.push(index);
+                            bloom_keys_to_remove.push(index);
                             continue;
                         }
                         let str_type = DataType::Nullable(Box::new(DataType::String));
                         (str_column, str_type)
                     } else {
                         if BloomIndex::check_large_string(&column) {
-                            keys_to_remove.push(index);
+                            bloom_keys_to_remove.push(index);
                             continue;
                         }
                         (column, val_type)
@@ -723,7 +717,7 @@ impl BloomIndexBuilder {
                 }
                 _ => {
                     if BloomIndex::check_large_string(&column) {
-                        keys_to_remove.push(index);
+                        bloom_keys_to_remove.push(index);
                         continue;
                     }
                     (column, field_type.clone())
@@ -749,7 +743,7 @@ impl BloomIndexBuilder {
                 index_column.builder.add_digests(column.deref());
             }
         }
-        for (_, index_column) in ngram_iter {
+        for index_column in self.ngram_columns.iter_mut() {
             let field_type = &block.get_by_offset(index_column.index).data_type;
             let column = match &block.get_by_offset(index_column.index).value {
                 Value::Scalar(s) => {
@@ -770,36 +764,40 @@ impl BloomIndexBuilder {
                 index_column.builder.add_digests(digests.iter())
             }
         }
-        for k in keys_to_remove {
-            self.columns.remove(k);
+        for k in bloom_keys_to_remove {
+            self.bloom_columns.remove(k);
         }
         Ok(())
     }
 
     pub fn finalize(&mut self) -> Result<Option<BloomIndex>> {
-        let mut column_distinct_count = HashMap::with_capacity(self.columns.len());
-        let mut filters = Vec::with_capacity(self.columns.len());
-        let mut filter_fields = Vec::with_capacity(self.columns.len());
-        for column in self.columns.iter_mut() {
-            let filter = column.builder.build()?;
-            let filter_name = if column.is_ngram {
-                BloomIndex::build_filter_ngram_name(&column.field, column.gram_size)
-            } else {
-                if let Some(len) = filter.len() {
-                    if !matches!(
-                        column.field.data_type().remove_nullable(),
-                        TableDataType::Map(_) | TableDataType::Variant
-                    ) {
-                        column_distinct_count.insert(column.field.column_id, len);
-                        // Not need to generate bloom index,
-                        // it will never be used since range index is checked first.
-                        if len < 2 {
-                            continue;
-                        }
+        let mut column_distinct_count = HashMap::with_capacity(self.columns_len());
+        let mut filters = Vec::with_capacity(self.columns_len());
+        let mut filter_fields = Vec::with_capacity(self.columns_len());
+        for bloom_column in self.bloom_columns.iter_mut() {
+            let filter = bloom_column.builder.build()?;
+            if let Some(len) = filter.len() {
+                if !matches!(
+                    bloom_column.field.data_type().remove_nullable(),
+                    TableDataType::Map(_) | TableDataType::Variant
+                ) {
+                    column_distinct_count.insert(bloom_column.field.column_id, len);
+                    // Not need to generate bloom index,
+                    // it will never be used since range index is checked first.
+                    if len < 2 {
+                        continue;
                     }
                 }
-                BloomIndex::build_filter_bloom_name(BlockFilter::VERSION, &column.field)?
-            };
+            }
+            let filter_name =
+                BloomIndex::build_filter_bloom_name(BlockFilter::VERSION, &bloom_column.field)?;
+            filter_fields.push(TableField::new(&filter_name, TableDataType::Binary));
+            filters.push(Arc::new(filter));
+        }
+        for ngram_column in self.ngram_columns.iter_mut() {
+            let filter = ngram_column.builder.build()?;
+            let filter_name =
+                BloomIndex::build_filter_ngram_name(&ngram_column.field, ngram_column.gram_size);
             filter_fields.push(TableField::new(&filter_name, TableDataType::Binary));
             filters.push(Arc::new(filter));
         }
@@ -815,6 +813,10 @@ impl BloomIndexBuilder {
             filters,
             column_distinct_count,
         }))
+    }
+
+    pub fn columns_len(&self) -> usize {
+        self.bloom_columns.len() + self.ngram_columns.len()
     }
 }
 
@@ -1042,6 +1044,9 @@ trait EqVisitor {
         return_type: &DataType,
         is_like: bool,
     ) -> ResultRewrite {
+        if is_like {
+            return Ok(ControlFlow::Continue(None));
+        }
         match &args[0] {
             Expr::ColumnRef(ColumnRef { id, data_type, .. })
             | Expr::Cast(Cast {
@@ -1172,6 +1177,9 @@ impl EqVisitor for RewriteVisitor<'_> {
         constant: &Constant,
         is_like: bool,
     ) -> ResultRewrite {
+        if is_like {
+            return Ok(ControlFlow::Continue(None));
+        }
         let Expr::Cast(Cast {
             span,
             is_try: false,
@@ -1283,6 +1291,9 @@ impl EqVisitor for ShortListVisitor {
         constant: &Constant,
         is_like: bool,
     ) -> ResultRewrite {
+        if is_like {
+            return Ok(ControlFlow::Continue(None));
+        }
         let Expr::Cast(Cast {
             is_try: false,
             expr:
@@ -1302,9 +1313,6 @@ impl EqVisitor for ShortListVisitor {
             let Some((i, field)) = Self::found_field(&self.ngram_fields, id) else {
                 return Ok(ControlFlow::Break(None));
             };
-            if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
-                return Ok(ControlFlow::Break(None));
-            }
 
             let Some(s) = cast_const(
                 &FunctionContext::default(),

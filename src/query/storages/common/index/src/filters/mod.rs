@@ -14,6 +14,7 @@
 
 //! Probabilistic filters
 
+mod bloom_filter;
 mod filter;
 mod xor8;
 

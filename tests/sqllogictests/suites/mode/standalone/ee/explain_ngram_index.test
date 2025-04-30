@@ -149,11 +149,11 @@ Filter
 └── TableScan
     ├── table: default.test_ngram_index_db.t1
     ├── output columns: [id (#0), content (#1)]
-    ├── read rows: 4
+    ├── read rows: 2
     ├── read size: < 1 KiB
     ├── partitions total: 8
-    ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 2>]
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 1>]
     ├── push downs: [filters: [is_true(like(t1.content (#1), '%月无声%'))], limit: NONE]
     └── estimated rows: 16.00
 
@@ -272,11 +272,11 @@ EXPLAIN SELECT id, content FROM t2 WHERE content LIKE '%月无声%'
 TableScan
 ├── table: default.test_ngram_index_db.t2
 ├── output columns: [id (#0), content (#1)]
-├── read rows: 4
+├── read rows: 2
 ├── read size: < 1 KiB
 ├── partitions total: 8
-├── partitions scanned: 2
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 2>]
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 1>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%月无声%'))], limit: NONE]
 └── estimated rows: 4.00
 

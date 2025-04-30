@@ -27,29 +27,16 @@ use crate::filters::Filter;
 use crate::filters::FilterBuilder;
 use crate::Index;
 
-// Copyright 2021 Datafuse Labs
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 type UnderType = u64;
 
 pub struct BloomBuilder {
-    bloom_size: usize,
+    bloom_size: u64,
     seed: u64,
     inner: HashSet<u64>,
 }
 
 impl BloomBuilder {
-    pub fn create(bloom_size: usize, seed: u64) -> Self {
+    pub fn create(bloom_size: u64, seed: u64) -> Self {
         Self {
             bloom_size,
             seed,
@@ -104,10 +91,10 @@ impl FilterBuilder for BloomBuilder {
 
 #[derive(Clone)]
 pub struct BloomFilter {
-    size: usize,
-    hashes: usize,
+    size: u64,
+    hashes: u64,
     seed: u64,
-    words: usize,
+    words: u64,
     filter: Vec<UnderType>,
 }
 
@@ -154,17 +141,6 @@ impl Filter for BloomFilter {
     fn from_bytes(buf: &[u8]) -> Result<(Self, usize), Self::CodecError> {
         let mut offset = 0;
 
-        fn read_usize(data: &[u8], offset: &mut usize) -> Result<usize, BloomCodecError> {
-            if *offset + 8 > data.len() {
-                return Err(BloomCodecError {
-                    msg: "Unexpected end of data".into(),
-                });
-            }
-            let value = usize::from_le_bytes(data[*offset..*offset + 8].try_into().unwrap());
-            *offset += 8;
-            Ok(value)
-        }
-
         fn read_u64(data: &[u8], offset: &mut usize) -> Result<u64, BloomCodecError> {
             if *offset + 8 > data.len() {
                 return Err(BloomCodecError {
@@ -176,10 +152,10 @@ impl Filter for BloomFilter {
             Ok(value)
         }
 
-        let size = read_usize(buf, &mut offset)?;
-        let hashes = read_usize(buf, &mut offset)?;
+        let size = read_u64(buf, &mut offset)?;
+        let hashes = read_u64(buf, &mut offset)?;
         let seed = read_u64(buf, &mut offset)?;
-        let words = read_usize(buf, &mut offset)?;
+        let words = read_u64(buf, &mut offset)?;
         let filter_len = read_u64(buf, &mut offset)? as usize;
 
         let mut filter = Vec::with_capacity(filter_len);
@@ -201,7 +177,7 @@ impl Filter for BloomFilter {
 }
 
 impl BloomFilter {
-    pub fn with_item_count(filter_size: usize, mut item_count: usize, seed: u64) -> Self {
+    pub fn with_item_count(filter_size: u64, mut item_count: usize, seed: u64) -> Self {
         assert!(filter_size > 0, "filter_size must be > 0");
         item_count = max(item_count, 1);
 
@@ -211,35 +187,34 @@ impl BloomFilter {
     }
 
     #[inline]
-    fn optimal_k(filter_size: usize, item_count: usize) -> usize {
+    fn optimal_k(filter_size: u64, item_count: usize) -> u64 {
         let ln2 = std::f64::consts::LN_2;
-        let k = ((filter_size as f64 / item_count as f64) * ln2).ceil() as usize;
+        let k = ((filter_size as f64 / item_count as f64) * ln2).ceil() as u64;
         k.max(1)
     }
 
-    pub fn with_params(size: usize, hashes: usize, seed: u64) -> Self {
+    pub fn with_params(size: u64, hashes: u64, seed: u64) -> Self {
         assert_ne!(size, 0);
         assert_ne!(hashes, 0);
-        let words = size.div_ceil(std::mem::size_of::<UnderType>());
+        let words = size.div_ceil(std::mem::size_of::<UnderType>() as u64);
         Self {
             size,
             hashes,
             seed,
             words,
-            filter: vec![0; words],
+            filter: vec![0; words as usize],
         }
     }
 
-    pub fn resize(&mut self, size: usize) {
+    pub fn resize(&mut self, size: u64) {
         self.size = size;
-        self.words = size.div_ceil(std::mem::size_of::<UnderType>());
-        self.filter.resize(self.words, 0);
+        self.words = size.div_ceil(std::mem::size_of::<UnderType>() as u64);
+        self.filter.resize(self.words as usize, 0);
     }
 
     pub fn find(&self, hash: u64) -> bool {
         for i in 0..self.hashes {
-            let pos =
-                hash.wrapping_add(i as u64).wrapping_add((i * i) as u64) % (8 * self.size) as u64;
+            let pos = hash.wrapping_add(i).wrapping_add(i * i) % (8 * self.size);
             let bit_pos = pos as usize % (8 * std::mem::size_of::<UnderType>());
             let word_index = pos as usize / (8 * std::mem::size_of::<UnderType>());
             if self.filter[word_index] & (1 << bit_pos) == 0 {
@@ -251,8 +226,7 @@ impl BloomFilter {
 
     pub fn add(&mut self, hash: u64) {
         for i in 0..self.hashes {
-            let pos =
-                hash.wrapping_add(i as u64).wrapping_add((i * i) as u64) % (8 * self.size) as u64;
+            let pos = hash.wrapping_add(i).wrapping_add(i * i) % (8 * self.size);
             let bit_pos = pos as usize % (8 * std::mem::size_of::<UnderType>());
             let word_index = pos as usize / (8 * std::mem::size_of::<UnderType>());
             self.filter[word_index] |= 1 << bit_pos;
@@ -310,7 +284,6 @@ mod tests {
         let item_count = 1_000_000;
         let mut filter = BloomFilter::with_item_count(10 * 1024, item_count, 0);
         for i in 0..item_count as u64 {
-            let key = format!("key_{}", i);
             filter.add(i);
             assert!(filter.find(i));
         }
@@ -320,7 +293,6 @@ mod tests {
     fn test_encode_and_decode() {
         let mut hashes = Vec::new();
         for i in 0..500000 {
-            let key = format!("key_{}", i);
             hashes.push(i);
         }
         let mut filter = BloomFilter::with_params(10 * 1024, 1, 0);
@@ -328,7 +300,7 @@ mod tests {
             filter.add(*hash);
         }
         assert!(hashes.iter().all(|hash| filter.find(*hash)));
-        let mut buf = filter.to_bytes().unwrap();
+        let buf = filter.to_bytes().unwrap();
         let (decode_filter, _) = BloomFilter::from_bytes(&buf).unwrap();
         filter
             .filter

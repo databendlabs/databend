@@ -65,7 +65,8 @@ use crate::MetadataRef;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
-const MAXIMUM_BLOOM_SIZE: usize = 1 << 30;
+const MAXIMUM_BLOOM_SIZE: u64 = 10 * 1024 * 1024;
+const MINIMUM_BLOOM_SIZE: u64 = 512;
 
 // valid values for inverted index option tokenizer
 static INDEX_TOKENIZER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
@@ -599,12 +600,17 @@ impl Binder {
                     options.insert("gram_size".to_string(), value);
                 }
                 "bloom_size" => {
-                    match value.parse::<usize>() {
+                    match value.parse::<u64>() {
                         Ok(num) => {
                             if num == 0 {
                                 return Err(ErrorCode::IndexOptionInvalid(
                                     "`bloom_size` cannot be 0",
                                 ));
+                            }
+                            if num < MINIMUM_BLOOM_SIZE {
+                                return Err(ErrorCode::IndexOptionInvalid(format!(
+                                    "bloom_size: `{num}` is too small (bloom_size is minimum: {MINIMUM_BLOOM_SIZE})",
+                                )));
                             }
                             if num > MAXIMUM_BLOOM_SIZE {
                                 return Err(ErrorCode::IndexOptionInvalid(format!(
