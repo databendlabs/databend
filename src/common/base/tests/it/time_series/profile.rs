@@ -1,9 +1,11 @@
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::thread;
 use std::time::Duration;
 
 use databend_common_base::runtime::compress_time_point;
 use databend_common_base::runtime::ProfilePoints;
+use databend_common_base::runtime::QueryTimeSeriesProfile;
 use databend_common_base::runtime::TimeSeriesProfileName;
 use databend_common_base::runtime::TimeSeriesProfiles;
 // Copyright 2021 Datafuse Labs
@@ -212,5 +214,26 @@ fn test_record_inner_special_invalid() -> Result<()> {
     );
 
     assert_eq!(points.value.load(SeqCst), 789);
+    Ok(())
+}
+
+#[test]
+fn test_should_flush() -> Result<()> {
+    let global_count = AtomicUsize::new(0);
+    for _i in 0..1023 {
+        let query_profile = QueryTimeSeriesProfile::should_flush(&global_count);
+        assert_eq!(query_profile, false);
+    }
+    let query_profile = QueryTimeSeriesProfile::should_flush(&global_count);
+    assert_eq!(query_profile, true);
+    assert_eq!(global_count.load(SeqCst), 0);
+    for _i in 0..1023 {
+        let query_profile = QueryTimeSeriesProfile::should_flush(&global_count);
+        assert_eq!(query_profile, false);
+    }
+    let query_profile = QueryTimeSeriesProfile::should_flush(&global_count);
+    assert_eq!(query_profile, true);
+    assert_eq!(global_count.load(SeqCst), 0);
+
     Ok(())
 }

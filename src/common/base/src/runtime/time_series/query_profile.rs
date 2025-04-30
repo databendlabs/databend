@@ -44,11 +44,8 @@ impl QueryTimeSeriesProfile {
                         if let Some(global_profile) =
                             x.borrow().payload.time_series_profile.as_ref()
                         {
-                            if global_profile.global_count.fetch_add(1, SeqCst)
-                                == DEFAULT_BATCH_SIZE - 1
-                            {
-                                global_profile.global_count.store(0, SeqCst);
-                                // flush the global profile
+                            let should_flush = Self::should_flush(&global_profile.global_count);
+                            if should_flush {
                                 global_profile.flush(false);
                             }
                         }
@@ -56,6 +53,28 @@ impl QueryTimeSeriesProfile {
                 }
             },
         )
+    }
+
+    pub fn should_flush(global_count: &AtomicUsize) -> bool {
+        let mut prev = 0;
+        loop {
+            let next = if prev == DEFAULT_BATCH_SIZE - 1 {
+                0
+            } else {
+                prev + 1
+            };
+            match global_count.compare_exchange_weak(prev, next, SeqCst, SeqCst) {
+                Ok(_) => {
+                    if next == 0 {
+                        return true;
+                    }
+                    return false;
+                }
+                Err(next_prev) => {
+                    prev = next_prev;
+                }
+            }
+        }
     }
 
     pub fn flush(&self, finish: bool) {
