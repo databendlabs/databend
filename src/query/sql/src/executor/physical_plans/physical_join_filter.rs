@@ -145,6 +145,11 @@ impl JoinRuntimeFilter {
         build_keys: &[RemoteExpr],
         probe_keys: Vec<Option<(RemoteExpr<String>, usize, usize)>>,
     ) -> Result<PhysicalRuntimeFilters> {
+        // Early return if runtime filter is disabled in settings
+        if !ctx.get_settings().get_enable_join_runtime_filter()? {
+            return Ok(Default::default());
+        }
+
         // Early return if runtime filters are not supported for this join type
         if !Self::supported_join_type_for_runtime_filter(&join.join_type) {
             return Ok(Default::default());
