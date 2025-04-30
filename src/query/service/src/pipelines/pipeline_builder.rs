@@ -220,6 +220,8 @@ impl PipelineBuilder {
             }
             PhysicalPlan::Shuffle(shuffle) => self.build_shuffle(shuffle),
             PhysicalPlan::Duplicate(duplicate) => self.build_duplicate(duplicate),
+            PhysicalPlan::BroadcastSource(source) => self.build_broadcast_source(source),
+            PhysicalPlan::BroadcastSink(sink) => self.build_broadcast_sink(sink),
 
             // ==============================
             // 4. Data Modification Operations
