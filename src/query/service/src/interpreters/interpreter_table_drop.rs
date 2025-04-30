@@ -164,7 +164,7 @@ impl Interpreter for DropTableInterpreter {
                     .do_truncate(
                         self.ctx.clone(),
                         &mut build_res.main_pipeline,
-                        TruncateMode::Purge,
+                        TruncateMode::DropAll,
                     )
                     .await?
             } else {

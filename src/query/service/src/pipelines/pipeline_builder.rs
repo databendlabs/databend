@@ -163,50 +163,79 @@ impl PipelineBuilder {
         self.is_exchange_neighbor |= self.is_exchange_neighbor(plan);
 
         match plan {
+            // ==============================
+            // 1. Data Source Plans
+            // ==============================
+            // Basic table scans - retrieve data from tables
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
             PhysicalPlan::ConstantTableScan(scan) => self.build_constant_table_scan(scan),
-            PhysicalPlan::Filter(filter) => self.build_filter(filter),
-            PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
-            PhysicalPlan::AggregateExpand(aggregate) => self.build_aggregate_expand(aggregate),
-            PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
-            PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
-            PhysicalPlan::Window(window) => self.build_window(window),
-            PhysicalPlan::WindowPartition(window_partition) => {
-                self.build_window_partition(window_partition)
-            }
-            PhysicalPlan::Sort(sort) => self.build_sort(sort),
-            PhysicalPlan::Limit(limit) => self.build_limit(limit),
-            PhysicalPlan::RowFetch(row_fetch) => self.build_row_fetch(row_fetch),
-            PhysicalPlan::HashJoin(join) => self.build_hash_join(join),
-            PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
-            PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
-            PhysicalPlan::UnionAll(union_all) => self.build_union_all(union_all),
-            PhysicalPlan::DistributedInsertSelect(insert_select) => {
-                self.build_distributed_insert_select(insert_select)
-            }
-            PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
-            PhysicalPlan::Udf(udf) => self.build_udf(udf),
-            PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
-                "Invalid physical plan with PhysicalPlan::Exchange",
-            )),
-            PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::CacheScan(cache_scan) => self.build_cache_scan(cache_scan),
             PhysicalPlan::ExpressionScan(expression_scan) => {
                 self.build_expression_scan(expression_scan)
             }
+            PhysicalPlan::RecursiveCteScan(scan) => self.build_recursive_cte_scan(scan),
 
-            // Copy into.
+            // Special source operations
+            PhysicalPlan::MutationSource(mutation_source) => {
+                self.build_mutation_source(mutation_source)
+            }
+
+            // ==============================
+            // 2. Relational Operators
+            // ==============================
+            // Filtering and projection
+            PhysicalPlan::Filter(filter) => self.build_filter(filter),
+            PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
+            PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
+
+            // Sorting and limiting
+            PhysicalPlan::Sort(sort) => self.build_sort(sort),
+            PhysicalPlan::Limit(limit) => self.build_limit(limit),
+            PhysicalPlan::RowFetch(row_fetch) => self.build_row_fetch(row_fetch),
+
+            // Join operations
+            PhysicalPlan::HashJoin(join) => self.build_hash_join(join),
+            PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
+
+            // Aggregation operations
+            PhysicalPlan::AggregateExpand(aggregate) => self.build_aggregate_expand(aggregate),
+            PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
+            PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
+
+            // Window functions
+            PhysicalPlan::Window(window) => self.build_window(window),
+            PhysicalPlan::WindowPartition(window_partition) => {
+                self.build_window_partition(window_partition)
+            }
+
+            PhysicalPlan::UnionAll(union_all) => self.build_union_all(union_all),
+
+            // ==============================
+            // 3. Data Distribution
+            // ==============================
+            PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
+            PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
+            PhysicalPlan::DistributedInsertSelect(insert_select) => {
+                self.build_distributed_insert_select(insert_select)
+            }
+            PhysicalPlan::Shuffle(shuffle) => self.build_shuffle(shuffle),
+            PhysicalPlan::Duplicate(duplicate) => self.build_duplicate(duplicate),
+
+            // ==============================
+            // 4. Data Modification Operations
+            // ==============================
+            // Copy operations
             PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
             PhysicalPlan::CopyIntoLocation(copy) => self.build_copy_into_location(copy),
 
-            // Replace.
+            // Replace operations
             PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => {
                 self.build_async_sourcer(async_sourcer)
             }
             PhysicalPlan::ReplaceDeduplicate(deduplicate) => self.build_deduplicate(deduplicate),
             PhysicalPlan::ReplaceInto(replace) => self.build_replace_into(replace),
 
-            // Mutation.
+            // Mutation operations (DELETE/UPDATE)
             PhysicalPlan::Mutation(mutation) => self.build_mutation(mutation),
             PhysicalPlan::MutationSplit(mutation_split) => {
                 self.build_mutation_split(mutation_split)
@@ -220,19 +249,14 @@ impl PipelineBuilder {
             PhysicalPlan::AddStreamColumn(add_stream_column) => {
                 self.build_add_stream_column(add_stream_column)
             }
+            PhysicalPlan::ColumnMutation(column_mutation) => {
+                self.build_column_mutation(column_mutation)
+            }
 
-            // Commit.
+            // Commit operations
             PhysicalPlan::CommitSink(plan) => self.build_commit_sink(plan),
 
-            // Compact.
-            PhysicalPlan::CompactSource(compact) => self.build_compact_source(compact),
-
-            // Recluster.
-            PhysicalPlan::Recluster(recluster) => self.build_recluster(recluster),
-            PhysicalPlan::HilbertPartition(partition) => self.build_hilbert_partition(partition),
-
-            PhysicalPlan::Duplicate(duplicate) => self.build_duplicate(duplicate),
-            PhysicalPlan::Shuffle(shuffle) => self.build_shuffle(shuffle),
+            // MERGE INTO chunk processing operations
             PhysicalPlan::ChunkFilter(chunk_filter) => self.build_chunk_filter(chunk_filter),
             PhysicalPlan::ChunkEvalScalar(chunk_project) => {
                 self.build_chunk_eval_scalar(chunk_project)
@@ -250,16 +274,27 @@ impl PipelineBuilder {
             PhysicalPlan::ChunkCommitInsert(chunk_commit_insert) => {
                 self.build_chunk_commit_insert(chunk_commit_insert)
             }
+
+            // ==============================
+            // 5. Data Maintenance Operations
+            // ==============================
+            PhysicalPlan::CompactSource(compact) => self.build_compact_source(compact),
+            PhysicalPlan::Recluster(recluster) => self.build_recluster(recluster),
+            PhysicalPlan::HilbertPartition(partition) => self.build_hilbert_partition(partition),
+
+            // ==============================
+            // 6. Special Processing Operations
+            // ==============================
+            // User-defined functions and async operations
+            PhysicalPlan::Udf(udf) => self.build_udf(udf),
             PhysicalPlan::AsyncFunction(async_func) => self.build_async_function(async_func),
-            PhysicalPlan::RecursiveCteScan(scan) => self.build_recursive_cte_scan(scan),
-            PhysicalPlan::MutationSource(mutation_source) => {
-                self.build_mutation_source(mutation_source)
-            }
-            PhysicalPlan::ColumnMutation(column_mutation) => {
-                self.build_column_mutation(column_mutation)
-            }
-            PhysicalPlan::BroadcastSource(source) => self.build_broadcast_source(source),
-            PhysicalPlan::BroadcastSink(sink) => self.build_broadcast_sink(sink),
+
+            // ==============================
+            // 7. Invalid Plans
+            // ==============================
+            PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
+                "Invalid physical plan with PhysicalPlan::Exchange",
+            )),
         }?;
 
         self.is_exchange_neighbor = is_exchange_neighbor;

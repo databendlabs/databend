@@ -157,6 +157,40 @@ where
             tree.children.extend(stats);
         }
 
+        let subquerys = op.get_subquery(vec![]);
+        if !subquerys.is_empty() {
+            let subquerys = subquerys
+                .into_iter()
+                .map(|subquery| {
+                    let children = vec![
+                        subquery
+                            .compare_op
+                            .map(|compare| FormatTreeNode::new(format!("compare_op: {compare:?}"))),
+                        Some(FormatTreeNode::new(format!(
+                            "output_column: {}",
+                            self.id_humanizer
+                                .humanize_column_id(subquery.output_column.index)
+                        ))),
+                        subquery.projection_index.map(|id| {
+                            FormatTreeNode::new(format!(
+                                "projection_index: {}",
+                                self.id_humanizer.humanize_column_id(id)
+                            ))
+                        }),
+                        Some(subquery.subquery.to_format_tree(self.id_humanizer)?),
+                    ];
+                    Ok(FormatTreeNode::with_children(
+                        format!("Subquery ({:?})", subquery.typ),
+                        children.into_iter().flatten().collect(),
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            tree.children.push(FormatTreeNode::with_children(
+                "subquerys".to_string(),
+                subquerys,
+            ));
+        }
+
         let children = s_expr
             .children()
             .map(|s_expr| self.humanize_s_expr(s_expr))

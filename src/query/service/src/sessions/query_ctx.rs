@@ -1549,6 +1549,11 @@ impl TableContext for QueryContext {
         }
     }
 
+    fn clear_table_meta_timestamps_cache(&self) {
+        let cache = self.shared.get_table_meta_timestamps();
+        cache.lock().clear();
+    }
+
     fn get_read_block_thresholds(&self) -> BlockThresholds {
         *self.block_threshold.read()
     }
@@ -1653,6 +1658,7 @@ impl TableContext for QueryContext {
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
+                    copy_into_location_ordered: false,
                 };
                 OrcTable::try_create(info).await
             }
@@ -1672,6 +1678,7 @@ impl TableContext for QueryContext {
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
+                    copy_into_location_ordered: false,
                 };
                 StageTable::try_create(info)
             }
@@ -1709,6 +1716,7 @@ impl TableContext for QueryContext {
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
+                    copy_into_location_ordered: false,
                 };
                 StageTable::try_create(info)
             }
