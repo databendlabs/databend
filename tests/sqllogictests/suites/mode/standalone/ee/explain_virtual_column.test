@@ -148,7 +148,7 @@ Filter
     └── estimated rows: 1.00
 
 query T
-explain select a, get(get(v, 'a'), 0) from t2;
+explain select a, get(get(v, 'a'), 0), get(get(v, 'b'), 'c') from t2;
 ----
 TableScan
 ├── table: default.test_virtual_db.t2
@@ -163,7 +163,7 @@ TableScan
 └── estimated rows: 1.00
 
 query T
-explain select v['d']::string, v['d']::int from t2;
+select v['d']::string, v['d']::int from t2;
 ----
 EvalScalar
 ├── output columns: [t2.v['d'] (#6), v['d']::Int32 (#7)]

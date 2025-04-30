@@ -572,6 +572,12 @@ impl PhysicalPlanBuilder {
                             let dest_type = DataType::from(&cast_ty.remove_nullable());
                             get_simple_cast_function(*is_try, &DataType::Variant, &dest_type)
                         });
+                let data_type = virtual_column
+                    .cast_type
+                    .as_ref()
+                    .map(|(ty, _)| ty)
+                    .unwrap_or(&virtual_column.data_type)
+                    .clone();
                 let virtual_column_field = VirtualColumnField {
                     source_column_id: virtual_column.source_column_id,
                     source_name: virtual_column.source_column_name.clone(),
@@ -579,7 +585,7 @@ impl PhysicalPlanBuilder {
                     name: virtual_column.column_name.clone(),
                     key_paths: virtual_column.key_paths.clone(),
                     cast_func_name,
-                    data_type: Box::new(virtual_column.data_type.clone()),
+                    data_type: Box::new(data_type),
                 };
                 column_and_indices.push((virtual_column_field, *index));
             }
