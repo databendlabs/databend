@@ -69,19 +69,13 @@ impl AsyncSource for BroadcastSourceProcessor {
 }
 
 pub struct BroadcastSinkProcessor {
-    expect_num: usize,
     received: Vec<BlockMetaInfoPtr>,
-    sender: Sender<Vec<BlockMetaInfoPtr>>,
+    sender: Sender<BlockMetaInfoPtr>,
 }
 
 impl BroadcastSinkProcessor {
-    pub fn create(
-        input: Arc<InputPort>,
-        node_num: usize,
-        sender: Sender<Vec<BlockMetaInfoPtr>>,
-    ) -> Result<ProcessorPtr> {
+    pub fn create(input: Arc<InputPort>, sender: Sender<BlockMetaInfoPtr>) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(input, Self {
-            expect_num: node_num,
             received: vec![],
             sender,
         })))
@@ -95,6 +89,7 @@ impl AsyncSink for BroadcastSinkProcessor {
     const NAME: &'static str = "BroadcastSink";
 
     async fn on_finish(&mut self) -> Result<()> {
+        self.sender.close();
         Ok(())
     }
 
@@ -103,8 +98,10 @@ impl AsyncSink for BroadcastSinkProcessor {
             .take_meta()
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to BroadcastMeta"))?;
         log::info!("BroadcastSinkProcessor recv meta: {:?}", meta);
-        self.received.push(meta);
-        let all_recv = self.expect_num == self.received.len();
-        Ok(all_recv)
+        self.sender
+            .send(meta)
+            .await
+            .map_err(|_| ErrorCode::Internal("BroadcastSinkProcessor send error"))?;
+        Ok(false)
     }
 }

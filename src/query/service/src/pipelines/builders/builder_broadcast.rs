@@ -15,7 +15,6 @@
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::BroadcastSink;
 use databend_common_sql::executor::physical_plans::BroadcastSource;
-use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::transforms::BroadcastSinkProcessor;
 use crate::pipelines::processors::transforms::BroadcastSourceProcessor;
@@ -33,13 +32,8 @@ impl PipelineBuilder {
     pub(crate) fn build_broadcast_sink(&mut self, sink: &BroadcastSink) -> Result<()> {
         self.build_pipeline(&sink.input)?;
         self.main_pipeline.resize(1, true)?;
-        let node_num = self.ctx.get_cluster().nodes.len();
         self.main_pipeline.add_sink(|input| {
-            BroadcastSinkProcessor::create(
-                input,
-                node_num,
-                self.ctx.broadcast_sink_sender(sink.broadcast_id),
-            )
+            BroadcastSinkProcessor::create(input, self.ctx.broadcast_sink_sender(sink.broadcast_id))
         })
     }
 }

@@ -295,10 +295,10 @@ impl QueryContext {
         self.shared.broadcast_source_sender(broadcast_id)
     }
 
-    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<Vec<BlockMetaInfoPtr>> {
+    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
         self.shared.broadcast_sink_receiver(broadcast_id)
     }
-    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<Vec<BlockMetaInfoPtr>> {
+    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
         self.shared.broadcast_sink_sender(broadcast_id)
     }
 

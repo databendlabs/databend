@@ -183,8 +183,8 @@ pub struct QueryContextShared {
 pub struct BroadcastChannel {
     pub source_sender: Option<Sender<BlockMetaInfoPtr>>,
     pub source_receiver: Option<Receiver<BlockMetaInfoPtr>>,
-    pub sink_sender: Option<Sender<Vec<BlockMetaInfoPtr>>>,
-    pub sink_receiver: Option<Receiver<Vec<BlockMetaInfoPtr>>>,
+    pub sink_sender: Option<Sender<BlockMetaInfoPtr>>,
+    pub sink_receiver: Option<Receiver<BlockMetaInfoPtr>>,
 }
 
 impl QueryContextShared {
@@ -285,7 +285,7 @@ impl QueryContextShared {
         }
     }
 
-    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<Vec<BlockMetaInfoPtr>> {
+    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
         let mut broadcast_channels = self.broadcast_channels.lock();
         let entry = broadcast_channels.entry(broadcast_id).or_default();
         match entry.sink_receiver.take() {
@@ -297,7 +297,7 @@ impl QueryContextShared {
             }
         }
     }
-    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<Vec<BlockMetaInfoPtr>> {
+    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
         let mut broadcast_channels = self.broadcast_channels.lock();
         let entry = broadcast_channels.entry(broadcast_id).or_default();
         match entry.sink_sender.take() {
