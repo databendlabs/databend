@@ -42,6 +42,7 @@ use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
+use databend_common_storages_parquet::ParquetSourceType;
 
 const RESULT_SCAN: &str = "result_scan";
 
@@ -161,6 +162,7 @@ impl Table for ResultScan {
             |output| {
                 ParquetSource::create(
                     ctx.clone(),
+                    ParquetSourceType::ResultCache,
                     output,
                     row_group_reader.clone(),
                     Arc::new(None),

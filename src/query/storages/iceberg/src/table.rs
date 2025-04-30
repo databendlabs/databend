@@ -47,6 +47,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
+use databend_common_storages_parquet::ParquetSourceType;
 use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use iceberg::arrow::schema_to_arrow_schema;
@@ -309,6 +310,7 @@ impl IcebergTable {
             |output| {
                 ParquetSource::create(
                     ctx.clone(),
+                    ParquetSourceType::Iceberg,
                     output,
                     row_group_reader.clone(),
                     topk.clone(),

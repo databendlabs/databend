@@ -55,7 +55,16 @@ enum State {
     ReadRowGroup(VecDeque<(ReadPolicyImpl, u64)>, String),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ParquetSourceType {
+    StageTable,
+    ResultCache,
+    Iceberg,
+    // DeltaLake,
+}
+
 pub struct ParquetSource {
+    source_type: ParquetSourceType,
     // Source processor related fields.
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
@@ -83,6 +92,7 @@ pub struct ParquetSource {
 impl ParquetSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
+        source_type: ParquetSourceType,
         output: Arc<OutputPort>,
         row_group_reader: Arc<ParquetRSRowGroupReader>,
         topk: Arc<Option<TopK>>,
@@ -98,6 +108,7 @@ impl ParquetSource {
             .map(|t| TopKSorter::new(t.limit, t.asc));
 
         Ok(ProcessorPtr::create(Box::new(Self {
+            source_type,
             output,
             scan_progress,
             ctx,
@@ -224,12 +235,14 @@ impl Processor for ParquetSource {
                             )
                             .await?;
 
-                            check_parquet_schema(
-                                self.row_group_reader.schema_desc(),
-                                meta.file_metadata().schema_descr(),
-                                "first_file",
-                                part.file.as_str(),
-                            )?;
+                            if matches!(self.source_type, ParquetSourceType::StageTable) {
+                                check_parquet_schema(
+                                    self.row_group_reader.schema_desc(),
+                                    meta.file_metadata().schema_descr(),
+                                    "first_file",
+                                    part.file.as_str(),
+                                )?;
+                            }
 
                             let mut start_row = 0;
                             let mut readers = VecDeque::with_capacity(meta.num_row_groups());

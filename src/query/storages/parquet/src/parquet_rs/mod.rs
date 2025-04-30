@@ -38,5 +38,6 @@ pub use parquet_table::ParquetRSTable;
 pub use partition::ParquetRSRowGroupPart;
 pub use pruning::ParquetRSPruner;
 pub use source::ParquetSource;
+pub use source::ParquetSourceType;
 pub use statistics::collect_row_group_stats;
 pub use statistics::collect_single_row_group_stats;

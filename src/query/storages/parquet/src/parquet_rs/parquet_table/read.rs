@@ -28,6 +28,7 @@ use crate::utils::calc_parallelism;
 use crate::ParquetPart;
 use crate::ParquetRSPruner;
 use crate::ParquetRSReaderBuilder;
+use crate::ParquetSourceType;
 
 impl ParquetRSTable {
     #[inline]
@@ -101,6 +102,7 @@ impl ParquetRSTable {
             |output| {
                 ParquetSource::create(
                     ctx.clone(),
+                    ParquetSourceType::StageTable,
                     output,
                     row_group_reader.clone(),
                     topk.clone(),
