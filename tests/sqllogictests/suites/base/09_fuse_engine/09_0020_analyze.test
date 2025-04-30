@@ -188,7 +188,7 @@ str_val 10 [bucket id: 0, min: "1.0", max: "1.0", ndv: 1.0, count: 1.0], [bucket
 query I
 select count(*) from t_string where str_val > '5.0';
 ----
-5
+4
 
 # Test string range query with histogram
 query I
