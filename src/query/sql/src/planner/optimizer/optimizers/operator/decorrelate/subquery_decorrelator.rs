@@ -47,6 +47,7 @@ use crate::plans::Limit;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::Sort;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::UDAFCall;
@@ -175,107 +176,152 @@ impl SubqueryDecorrelatorOptimizer {
             return Ok(s_expr.clone());
         }
 
-        match s_expr.plan().clone() {
-            RelOperator::EvalScalar(mut plan) => {
-                let mut input = self.optimize_sync(s_expr.child(0)?)?;
-
-                for item in plan.items.iter_mut() {
-                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
-                    input = res.1;
-                    item.scalar = res.0;
+        match s_expr.plan() {
+            RelOperator::EvalScalar(eval) => {
+                let mut outer = self.optimize_sync(s_expr.unary_child())?;
+                let mut eval = eval.clone();
+                for item in eval.items.iter_mut() {
+                    (item.scalar, outer) = self.try_rewrite_subquery(&item.scalar, outer, false)?;
                 }
-
-                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
+                Ok(SExpr::create_unary(Arc::new(eval.into()), Arc::new(outer)))
             }
-            RelOperator::Filter(mut plan) => {
-                let mut input = self.optimize_sync(s_expr.child(0)?)?;
+
+            RelOperator::Filter(plan) => {
+                let mut plan = plan.clone();
+                let mut outer = self.optimize_sync(s_expr.unary_child())?;
                 for pred in plan.predicates.iter_mut() {
-                    let res = self.try_rewrite_subquery(pred, &input, true)?;
-                    input = res.1;
-                    *pred = res.0;
+                    (*pred, outer) = self.try_rewrite_subquery(pred, outer, true)?;
                 }
-
-                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
+                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(outer)))
             }
-            RelOperator::ProjectSet(mut plan) => {
-                let mut input = self.optimize_sync(s_expr.child(0)?)?;
+
+            RelOperator::ProjectSet(plan) => {
+                let mut plan = plan.clone();
+                let mut outer = self.optimize_sync(s_expr.unary_child())?;
                 for item in plan.srfs.iter_mut() {
-                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
-                    input = res.1;
-                    item.scalar = res.0
+                    (item.scalar, outer) = self.try_rewrite_subquery(&item.scalar, outer, false)?;
                 }
-
-                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
+                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(outer)))
             }
-            RelOperator::Aggregate(mut plan) => {
-                let mut input = self.optimize_sync(s_expr.child(0)?)?;
 
+            RelOperator::Aggregate(plan) => {
+                let mut plan = plan.clone();
+                let mut outer = self.optimize_sync(s_expr.unary_child())?;
                 for item in plan.group_items.iter_mut() {
-                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
-                    input = res.1;
-                    item.scalar = res.0;
+                    (item.scalar, outer) = self.try_rewrite_subquery(&item.scalar, outer, false)?;
                 }
-
                 for item in plan.aggregate_functions.iter_mut() {
-                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
-                    input = res.1;
-                    item.scalar = res.0;
+                    (item.scalar, outer) = self.try_rewrite_subquery(&item.scalar, outer, false)?;
                 }
-
-                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
+                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(outer)))
             }
 
-            RelOperator::Window(mut plan) => {
-                let mut input = self.optimize_sync(s_expr.child(0)?)?;
+            RelOperator::Window(plan) => {
+                let mut plan = plan.clone();
+                let mut outer = self.optimize_sync(s_expr.unary_child())?;
 
                 for item in plan.partition_by.iter_mut() {
-                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
-                    input = res.1;
-                    item.scalar = res.0;
+                    (item.scalar, outer) = self.try_rewrite_subquery(&item.scalar, outer, false)?;
                 }
 
                 for item in plan.order_by.iter_mut() {
-                    let res =
-                        self.try_rewrite_subquery(&item.order_by_item.scalar, &input, false)?;
-                    input = res.1;
-                    item.order_by_item.scalar = res.0;
+                    (item.order_by_item.scalar, outer) =
+                        self.try_rewrite_subquery(&item.order_by_item.scalar, outer, false)?;
                 }
 
                 if let WindowFuncType::Aggregate(agg) = &mut plan.function {
                     for item in agg.exprs_mut() {
-                        let res = self.try_rewrite_subquery(item, &input, false)?;
-                        input = res.1;
-                        *item = res.0;
+                        (*item, outer) = self.try_rewrite_subquery(item, outer, false)?;
                     }
                 }
 
-                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
+                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(outer)))
             }
 
-            RelOperator::Sort(mut sort) => {
-                let mut input = self.optimize_sync(s_expr.child(0)?)?;
+            RelOperator::Sort(sort) => {
+                let mut outer = self.optimize_sync(s_expr.unary_child())?;
 
-                if let Some(window) = &mut sort.window_partition {
-                    for item in window.partition_by.iter_mut() {
-                        let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
-                        input = res.1;
-                        item.scalar = res.0;
-                    }
+                let Some(mut window) = sort.window_partition.clone() else {
+                    return Ok(SExpr::create_unary(s_expr.plan.clone(), Arc::new(outer)));
+                };
+
+                for item in window.partition_by.iter_mut() {
+                    (item.scalar, outer) = self.try_rewrite_subquery(&item.scalar, outer, false)?;
+                }
+                let sort = Sort {
+                    window_partition: Some(window),
+                    ..sort.clone()
+                };
+
+                Ok(SExpr::create_unary(Arc::new(sort.into()), Arc::new(outer)))
+            }
+
+            RelOperator::Join(join) => {
+                let mut left = self.optimize_sync(s_expr.left_child())?;
+                let mut right = self.optimize_sync(s_expr.right_child())?;
+                if !join.has_subquery() {
+                    return Ok(SExpr::create_binary(
+                        s_expr.plan.clone(),
+                        Arc::new(left),
+                        Arc::new(right),
+                    ));
                 }
 
-                Ok(SExpr::create_unary(Arc::new(sort.into()), Arc::new(input)))
+                let mut equi_conditions = join.equi_conditions.clone();
+                for condition in equi_conditions.iter_mut() {
+                    (condition.left, left) =
+                        self.try_rewrite_subquery(&condition.left, left, false)?;
+                    (condition.right, right) =
+                        self.try_rewrite_subquery(&condition.right, right, false)?;
+                }
+
+                // todo: non_equi_conditions for other join_type
+                if join.join_type != JoinType::Inner
+                    || join
+                        .non_equi_conditions
+                        .iter()
+                        .all(|condition| !condition.has_subquery())
+                {
+                    let join = Join {
+                        equi_conditions,
+                        ..join.clone()
+                    };
+                    return Ok(SExpr::create_binary(
+                        Arc::new(join.into()),
+                        Arc::new(left),
+                        Arc::new(right),
+                    ));
+                }
+
+                let mut predicates = join.non_equi_conditions.clone();
+                let join = Join {
+                    equi_conditions,
+                    non_equi_conditions: vec![],
+                    ..join.clone()
+                };
+                let mut outer =
+                    SExpr::create_binary(Arc::new(join.into()), Arc::new(left), Arc::new(right));
+
+                for pred in predicates.iter_mut() {
+                    (*pred, outer) = self.try_rewrite_subquery(pred, outer, true)?;
+                }
+                let filter = Filter { predicates };
+                return Ok(SExpr::create_unary(
+                    Arc::new(filter.into()),
+                    Arc::new(outer),
+                ));
             }
 
-            RelOperator::Join(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
-                Arc::new(s_expr.plan().clone()),
-                Arc::new(self.optimize_sync(s_expr.child(0)?)?),
-                Arc::new(self.optimize_sync(s_expr.child(1)?)?),
+            RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
+                s_expr.plan.clone(),
+                Arc::new(self.optimize_sync(s_expr.left_child())?),
+                Arc::new(self.optimize_sync(s_expr.right_child())?),
             )),
 
             RelOperator::Limit(_) | RelOperator::Udf(_) | RelOperator::AsyncFunction(_) => {
                 Ok(SExpr::create_unary(
-                    Arc::new(s_expr.plan().clone()),
-                    Arc::new(self.optimize_sync(s_expr.child(0)?)?),
+                    s_expr.plan.clone(),
+                    Arc::new(self.optimize_sync(s_expr.unary_child())?),
                 ))
             }
 
@@ -293,60 +339,81 @@ impl SubqueryDecorrelatorOptimizer {
     }
 
     /// Try to extract subquery from a scalar expression. Returns replaced scalar expression
-    /// and the subqueries.
+    /// and the outer s_expr.
     fn try_rewrite_subquery(
         &mut self,
         scalar: &ScalarExpr,
-        s_expr: &SExpr,
+        mut outer: SExpr,
         is_conjunctive_predicate: bool,
     ) -> Result<(ScalarExpr, SExpr)> {
         match scalar {
-            ScalarExpr::AsyncFunctionCall(_) => Ok((scalar.clone(), s_expr.clone())),
-            ScalarExpr::BoundColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
-            ScalarExpr::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
-            ScalarExpr::TypedConstantExpr(_, _) => Ok((scalar.clone(), s_expr.clone())),
-            ScalarExpr::WindowFunction(_) => Ok((scalar.clone(), s_expr.clone())),
-            ScalarExpr::AggregateFunction(_) => Ok((scalar.clone(), s_expr.clone())),
-            ScalarExpr::LambdaFunction(_) => Ok((scalar.clone(), s_expr.clone())),
-            ScalarExpr::FunctionCall(func) => {
-                let mut args = vec![];
-                let mut s_expr = s_expr.clone();
-                for arg in func.arguments.iter() {
-                    let res = self.try_rewrite_subquery(arg, &s_expr, false)?;
-                    s_expr = res.1;
-                    args.push(res.0);
-                }
+            ScalarExpr::AsyncFunctionCall(_)
+            | ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::ConstantExpr(_)
+            | ScalarExpr::TypedConstantExpr(_, _)
+            | ScalarExpr::WindowFunction(_)
+            | ScalarExpr::AggregateFunction(_)
+            | ScalarExpr::LambdaFunction(_) => Ok((scalar.clone(), outer)),
 
-                let expr: ScalarExpr = FunctionCall {
-                    span: func.span,
-                    params: func.params.clone(),
-                    arguments: args,
-                    func_name: func.func_name.clone(),
-                }
-                .into();
-
-                Ok((expr, s_expr))
-            }
             ScalarExpr::CastExpr(cast) => {
-                let (scalar, s_expr) = self.try_rewrite_subquery(&cast.argument, s_expr, false)?;
-                Ok((
-                    CastExpr {
-                        span: cast.span,
-                        is_try: cast.is_try,
-                        argument: Box::new(scalar),
-                        target_type: cast.target_type.clone(),
-                    }
-                    .into(),
-                    s_expr,
-                ))
+                let (argument, outer) = self.try_rewrite_subquery(&cast.argument, outer, false)?;
+                let cast = CastExpr {
+                    argument: Box::new(argument),
+                    ..cast.clone()
+                };
+                Ok((cast.into(), outer))
             }
+            ScalarExpr::UDFLambdaCall(udf) => {
+                let (scalar, outer) = self.try_rewrite_subquery(&udf.scalar, outer, false)?;
+                let expr = UDFLambdaCall {
+                    scalar: Box::new(scalar),
+                    ..udf.clone()
+                };
+                Ok((expr.into(), outer))
+            }
+
+            ScalarExpr::FunctionCall(func) => {
+                let mut arguments = func.arguments.clone();
+                for arg in arguments.iter_mut() {
+                    (*arg, outer) = self.try_rewrite_subquery(arg, outer, false)?;
+                }
+                let expr = FunctionCall {
+                    arguments,
+                    ..func.clone()
+                };
+                Ok((expr.into(), outer))
+            }
+            ScalarExpr::UDFCall(udf) => {
+                let mut arguments = udf.arguments.clone();
+                for arg in arguments.iter_mut() {
+                    (*arg, outer) = self.try_rewrite_subquery(arg, outer, false)?;
+                }
+                let expr = UDFCall {
+                    arguments,
+                    ..udf.clone()
+                };
+                Ok((expr.into(), outer))
+            }
+            ScalarExpr::UDAFCall(udaf) => {
+                let mut arguments = udaf.arguments.clone();
+                for arg in arguments.iter_mut() {
+                    (*arg, outer) = self.try_rewrite_subquery(arg, outer, false)?;
+                }
+                let expr = UDAFCall {
+                    arguments,
+                    ..udaf.clone()
+                };
+
+                Ok((expr.into(), outer))
+            }
+
             ScalarExpr::SubqueryExpr(subquery) => {
                 // Rewrite subquery recursively
                 let mut subquery = subquery.clone();
                 subquery.subquery = Box::new(self.optimize_sync(&subquery.subquery)?);
 
                 if let Some(constant_subquery) = self.try_fold_constant_subquery(&subquery)? {
-                    return Ok((constant_subquery, s_expr.clone()));
+                    return Ok((constant_subquery, outer));
                 }
 
                 // Check if the subquery is a correlated subquery.
@@ -356,16 +423,16 @@ impl SubqueryDecorrelatorOptimizer {
                 let mut flatten_info = FlattenInfo {
                     from_count_func: false,
                 };
-                let (s_expr, result) = if prop.outer_columns.is_empty() {
+                let (outer, result) = if prop.outer_columns.is_empty() {
                     self.try_rewrite_uncorrelated_subquery(
-                        s_expr,
+                        outer,
                         &subquery,
                         is_conjunctive_predicate,
                     )?
                 } else {
                     // todo: optimize outer before decorrelate subquery
                     self.try_decorrelate_subquery(
-                        s_expr,
+                        &outer,
                         &subquery,
                         &mut flatten_info,
                         is_conjunctive_predicate,
@@ -392,7 +459,7 @@ impl SubqueryDecorrelatorOptimizer {
                             value: Scalar::Boolean(true),
                         })
                     };
-                    return Ok((scalar_expr, s_expr));
+                    return Ok((scalar_expr, outer));
                 }
 
                 let data_type = if subquery.typ == SubqueryType::Scalar {
@@ -486,95 +553,26 @@ impl SubqueryDecorrelatorOptimizer {
                 };
                 // After finishing rewriting subquery, we should clear the derived columns.
                 self.derived_columns.clear();
-                Ok((scalar, s_expr))
-            }
-            ScalarExpr::UDFCall(udf) => {
-                let mut args = vec![];
-                let mut s_expr = s_expr.clone();
-                for arg in udf.arguments.iter() {
-                    let res = self.try_rewrite_subquery(arg, &s_expr, false)?;
-                    s_expr = res.1;
-                    args.push(res.0);
-                }
-
-                let expr: ScalarExpr = UDFCall {
-                    span: udf.span,
-                    name: udf.name.clone(),
-                    handler: udf.handler.clone(),
-                    headers: udf.headers.clone(),
-                    display_name: udf.display_name.clone(),
-                    udf_type: udf.udf_type.clone(),
-                    arg_types: udf.arg_types.clone(),
-                    return_type: udf.return_type.clone(),
-                    arguments: args,
-                }
-                .into();
-
-                Ok((expr, s_expr))
-            }
-            ScalarExpr::UDFLambdaCall(udf) => {
-                let mut s_expr = s_expr.clone();
-                let res = self.try_rewrite_subquery(&udf.scalar, &s_expr, false)?;
-                s_expr = res.1;
-
-                let expr: ScalarExpr = UDFLambdaCall {
-                    span: udf.span,
-                    func_name: udf.func_name.clone(),
-                    scalar: Box::new(res.0),
-                }
-                .into();
-
-                Ok((expr, s_expr))
-            }
-            ScalarExpr::UDAFCall(udaf) => {
-                let mut args = vec![];
-                let mut s_expr = s_expr.clone();
-                for arg in udaf.arguments.iter() {
-                    let res = self.try_rewrite_subquery(arg, &s_expr, false)?;
-                    s_expr = res.1;
-                    args.push(res.0);
-                }
-
-                let expr: ScalarExpr = UDAFCall {
-                    span: udaf.span,
-                    name: udaf.name.clone(),
-                    display_name: udaf.display_name.clone(),
-                    udf_type: udaf.udf_type.clone(),
-                    arg_types: udaf.arg_types.clone(),
-                    state_fields: udaf.state_fields.clone(),
-                    return_type: udaf.return_type.clone(),
-                    arguments: args,
-                }
-                .into();
-
-                Ok((expr, s_expr))
+                Ok((scalar, outer))
             }
         }
     }
 
     fn try_rewrite_uncorrelated_subquery(
         &mut self,
-        left: &SExpr,
+        outer: SExpr,
         subquery: &SubqueryExpr,
         is_conjunctive_predicate: bool,
     ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
             SubqueryType::Scalar => {
                 let join_plan = Join {
-                    non_equi_conditions: vec![],
                     join_type: JoinType::LeftSingle,
-                    marker_index: None,
-                    from_correlated_subquery: false,
-                    equi_conditions: vec![],
-                    need_hold_hash_table: false,
-                    is_lateral: false,
-                    single_to_inner: None,
-                    build_side_cache_info: None,
-                }
-                .into();
+                    ..Join::default()
+                };
                 let s_expr = SExpr::create_binary(
-                    Arc::new(join_plan),
-                    Arc::new(left.clone()),
+                    Arc::new(join_plan.into()),
+                    Arc::new(outer),
                     Arc::new(*subquery.subquery.clone()),
                 );
                 Ok((s_expr, UnnestResult::SingleJoin))
@@ -588,20 +586,20 @@ impl SubqueryDecorrelatorOptimizer {
                     before_exchange: false,
                 };
                 subquery_expr =
-                    SExpr::create_unary(Arc::new(limit.into()), Arc::new(subquery_expr.clone()));
+                    SExpr::create_unary(Arc::new(limit.into()), Arc::new(subquery_expr));
 
                 // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
-                let agg_func = AggregateCountFunction::try_create("", vec![], vec![], vec![])?;
-                let agg_func_index = self.metadata.write().add_derived_column(
+                let count_type = AggregateCountFunction::try_create("", vec![], vec![], vec![])?
+                    .return_type()?;
+                let count_func_index = self.metadata.write().add_derived_column(
                     "count(*)".to_string(),
-                    agg_func.return_type()?,
+                    count_type.clone(),
                     None,
                 );
 
                 let agg = Aggregate {
-                    group_items: vec![],
                     aggregate_functions: vec![ScalarItem {
                         scalar: AggregateFunction {
                             span: subquery.span,
@@ -610,11 +608,11 @@ impl SubqueryDecorrelatorOptimizer {
                             distinct: false,
                             params: vec![],
                             args: vec![],
-                            return_type: Box::new(agg_func.return_type()?),
+                            return_type: Box::new(count_type.clone()),
                             sort_descs: vec![],
                         }
                         .into(),
-                        index: agg_func_index,
+                        index: count_func_index,
                     }],
                     ..Default::default()
                 };
@@ -632,8 +630,8 @@ impl SubqueryDecorrelatorOptimizer {
                             span: subquery.span,
                             column: ColumnBindingBuilder::new(
                                 "count(*)".to_string(),
-                                agg_func_index,
-                                Box::new(agg_func.return_type()?),
+                                count_func_index,
+                                Box::new(count_type),
                                 Visibility::Visible,
                             )
                             .build(),
@@ -676,21 +674,14 @@ impl SubqueryDecorrelatorOptimizer {
                 };
 
                 let cross_join = Join {
-                    equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),
-                    non_equi_conditions: vec![],
                     join_type: JoinType::Cross,
-                    marker_index: None,
-                    from_correlated_subquery: false,
-                    need_hold_hash_table: false,
-                    is_lateral: false,
-                    single_to_inner: None,
-                    build_side_cache_info: None,
-                }
-                .into();
+                    equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),
+                    ..Join::default()
+                };
                 Ok((
                     SExpr::create_binary(
-                        Arc::new(cross_join),
-                        Arc::new(left.clone()),
+                        Arc::new(cross_join.into()),
+                        Arc::new(outer),
                         Arc::new(rewritten_subquery),
                     ),
                     UnnestResult::SimpleJoin { output_index },
@@ -767,16 +758,11 @@ impl SubqueryDecorrelatorOptimizer {
                     non_equi_conditions,
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
-                    from_correlated_subquery: false,
-                    need_hold_hash_table: false,
-                    is_lateral: false,
-                    single_to_inner: None,
-                    build_side_cache_info: None,
-                }
-                .into();
+                    ..Join::default()
+                };
                 let s_expr = SExpr::create_binary(
-                    Arc::new(mark_join),
-                    Arc::new(left.clone()),
+                    Arc::new(mark_join.into()),
+                    Arc::new(outer),
                     Arc::new(*subquery.subquery.clone()),
                 );
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
