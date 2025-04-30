@@ -15,6 +15,7 @@
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
@@ -22,6 +23,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::executor::physical_plans::HilbertPartition;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::operations::TransformBlockWriter;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
@@ -43,10 +45,12 @@ impl PipelineBuilder {
             .ctx
             .build_table_by_table_info(&partition.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+        let enable_stream_writer = self.ctx.get_settings().get_enable_block_stream_write()?
+            && table.storage_format_as_parquet();
 
         self.main_pipeline.exchange(
             num_processors,
-            HilbertPartitionExchange::create(partition.num_partitions),
+            HilbertPartitionExchange::create(partition.range_start, partition.range_width),
         );
 
         let settings = self.ctx.get_settings();
@@ -77,26 +81,43 @@ impl PipelineBuilder {
                     &settings,
                     processor_id.fetch_add(1, atomic::Ordering::AcqRel),
                     num_processors,
-                    partition.num_partitions,
+                    partition.range_width,
                     window_spill_settings.clone(),
                     disk_spill.clone(),
-                    CompactStrategy::new(partition.rows_per_block, max_bytes_per_block),
+                    CompactStrategy::new(
+                        partition.rows_per_block,
+                        max_bytes_per_block,
+                        enable_stream_writer,
+                    ),
                 )?,
             )))
         })?;
 
-        self.main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                let proc = TransformSerializeBlock::try_create(
+        if enable_stream_writer {
+            self.main_pipeline.add_transform(|input, output| {
+                TransformBlockWriter::try_create(
                     self.ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
+                    input,
+                    output,
                     table,
-                    ClusterStatsGenerator::default(),
-                    MutationKind::Recluster,
                     partition.table_meta_timestamps,
-                )?;
-                proc.into_processor()
+                    false,
+                )
             })
+        } else {
+            self.main_pipeline
+                .add_transform(|transform_input_port, transform_output_port| {
+                    let proc = TransformSerializeBlock::try_create(
+                        self.ctx.clone(),
+                        transform_input_port,
+                        transform_output_port,
+                        table,
+                        ClusterStatsGenerator::default(),
+                        MutationKind::Recluster,
+                        partition.table_meta_timestamps,
+                    )?;
+                    proc.into_processor()
+                })
+        }
     }
 }
