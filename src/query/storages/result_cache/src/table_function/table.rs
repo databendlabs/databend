@@ -165,6 +165,7 @@ impl Table for ResultScan {
                     ParquetSourceType::ResultCache,
                     output,
                     row_group_reader.clone(),
+                    None,
                     Arc::new(None),
                     vec![],
                 )

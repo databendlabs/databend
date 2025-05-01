@@ -30,6 +30,7 @@ use crate::parquet_rs::ParquetRSRowGroupPart;
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum ParquetPart {
     ParquetFile(ParquetFilePart),
+    ParquetSmallFiles(Vec<ParquetFilePart>),
     ParquetRSRowGroup(ParquetRSRowGroupPart),
 }
 
@@ -37,6 +38,7 @@ impl ParquetPart {
     pub fn uncompressed_size(&self) -> u64 {
         match self {
             ParquetPart::ParquetFile(p) => p.uncompressed_size(),
+            ParquetPart::ParquetSmallFiles(p) => p.iter().map(|p| p.uncompressed_size()).sum(),
             ParquetPart::ParquetRSRowGroup(p) => p.uncompressed_size(),
         }
     }
@@ -44,6 +46,7 @@ impl ParquetPart {
     pub fn compressed_size(&self) -> u64 {
         match self {
             ParquetPart::ParquetFile(p) => p.compressed_size(),
+            ParquetPart::ParquetSmallFiles(p) => p.iter().map(|p| p.compressed_size()).sum(),
             ParquetPart::ParquetRSRowGroup(p) => p.compressed_size(),
         }
     }
@@ -81,6 +84,13 @@ impl PartInfo for ParquetPart {
     fn hash(&self) -> u64 {
         let path = match self {
             ParquetPart::ParquetFile(p) => &p.file,
+            ParquetPart::ParquetSmallFiles(p) => {
+                let mut s = DefaultHasher::new();
+                for part in p.iter() {
+                    part.file.hash(&mut s);
+                }
+                return s.finish();
+            }
             ParquetPart::ParquetRSRowGroup(p) => &p.location,
         };
         let mut s = DefaultHasher::new();
@@ -94,6 +104,69 @@ impl ParquetPart {
         info.as_any()
             .downcast_ref::<ParquetPart>()
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to ParquetPart."))
+    }
+}
+
+/// files smaller than setting fast_read_part_bytes is small file,
+/// which is load in one read, without reading its meta in advance.
+/// some considerations:
+/// 1. to fully utilize the IO, multiple small files are loaded in one part.
+/// 2. to avoid OOM, the total size of small files in one part is limited,
+///    and we need compression_ratio to estimate the uncompressed size.
+pub(crate) fn collect_small_file_parts(
+    small_files: Vec<(String, u64, String)>,
+    mut max_compression_ratio: f64,
+    mut max_compressed_size: u64,
+    partitions: &mut Partitions,
+    stats: &mut PartStatistics,
+    num_columns_to_read: usize,
+) {
+    if max_compression_ratio <= 0.0 || max_compression_ratio >= 1.0 {
+        // just incase
+        max_compression_ratio = 1.0;
+    }
+    if max_compressed_size == 0 {
+        // there are no large files, so we choose a default value.
+        max_compressed_size = ((128usize << 20) as f64 / max_compression_ratio) as u64;
+    }
+    let mut num_small_files = small_files.len();
+    stats.read_rows += num_small_files;
+    let mut small_part = vec![];
+    let mut part_size = 0;
+
+    let max_files = num_columns_to_read * 2;
+    let total_len = small_files.len();
+    for (i, (path, size, dedup_key)) in small_files.into_iter().enumerate() {
+        small_part.push((path.clone(), size, dedup_key));
+        stats.read_bytes += size as usize;
+        part_size += size;
+        let is_last = i + 1 == total_len;
+
+        if !small_part.is_empty()
+            && (part_size > max_compressed_size || small_part.len() >= max_files || is_last)
+        {
+            // turn small_parts into ParquetPart::ParquetSmallFiles
+            num_small_files -= small_part.len();
+
+            let files = small_part
+                .iter()
+                .cloned()
+                .map(|(path, size, dedup_key)| ParquetFilePart {
+                    file: path,
+                    compressed_size: size,
+                    estimated_uncompressed_size: (size as f64 / max_compression_ratio) as u64,
+                    dedup_key,
+                })
+                .collect::<Vec<_>>();
+
+            partitions.partitions.push(Arc::new(
+                Box::new(ParquetPart::ParquetSmallFiles(files)) as Box<dyn PartInfo>
+            ));
+            stats.partitions_scanned += 1;
+            stats.partitions_total += 1;
+            part_size = 0;
+            small_part.clear();
+        }
     }
 }
 

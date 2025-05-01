@@ -71,9 +71,15 @@ impl StageFileInfo {
         if let Some(md5) = &self.md5 {
             md5.clone()
         } else {
+            let last_modified = self
+                .last_modified
+                .as_ref()
+                .map(|x| x.to_string())
+                .unwrap_or_default();
+
             self.etag
                 .clone()
-                .unwrap_or(format!("{}/{}", self.path, self.size))
+                .unwrap_or(format!("{}/{last_modified}/{}", self.path, self.size))
         }
     }
 }

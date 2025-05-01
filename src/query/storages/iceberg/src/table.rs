@@ -313,6 +313,7 @@ impl IcebergTable {
                     ParquetSourceType::Iceberg,
                     output,
                     row_group_reader.clone(),
+                    None,
                     topk.clone(),
                     internal_columns.clone(),
                 )

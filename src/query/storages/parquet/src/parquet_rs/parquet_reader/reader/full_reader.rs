@@ -172,8 +172,7 @@ impl ParquetRSFullReader {
     }
 
     /// Read a [`DataBlock`] from bytes.
-    pub fn read_blocks_from_binary(&self, raw: Vec<u8>, path: &str) -> Result<Vec<DataBlock>> {
-        let bytes = Bytes::from(raw);
+    pub fn read_blocks_from_binary(&self, bytes: Bytes, path: &str) -> Result<Vec<DataBlock>> {
         let mut builder = ParquetRecordBatchReaderBuilder::try_new_with_options(
             bytes,
             ArrowReaderOptions::new(),

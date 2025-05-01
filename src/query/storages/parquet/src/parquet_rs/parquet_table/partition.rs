@@ -24,6 +24,8 @@ use databend_common_exception::Result;
 
 use super::table::ParquetRSTable;
 use crate::parquet_part::collect_file_parts;
+use crate::parquet_part::collect_small_file_parts;
+use crate::ParquetPart;
 
 impl ParquetRSTable {
     #[inline]
@@ -80,14 +82,49 @@ impl ParquetRSTable {
         let mut partitions = Partitions::default();
         let mut stats = PartStatistics::default();
 
+        let fast_read_bytes = ctx.get_settings().get_parquet_fast_read_bytes()?;
+        let mut large_files = vec![];
+        let mut large_file_indices = vec![];
+        let mut small_file_indices = vec![];
+        let mut small_files = vec![];
+        for (index, (location, size, dedup_key)) in file_locations.into_iter().enumerate() {
+            if size > fast_read_bytes {
+                large_files.push((location, size, dedup_key));
+                large_file_indices.push(index);
+            } else if size > 0 {
+                small_files.push((location, size, dedup_key));
+                small_file_indices.push(index);
+            }
+        }
+
         collect_file_parts(
-            file_locations,
+            large_files,
             self.compression_ratio,
             &mut partitions,
             &mut stats,
             num_columns_to_read,
             self.schema().num_fields(),
         );
+
+        if !small_files.is_empty() {
+            let mut max_compression_ratio = self.compression_ratio;
+            let mut max_compressed_size = 0u64;
+            for part in partitions.partitions.iter() {
+                let p = part.as_any().downcast_ref::<ParquetPart>().unwrap();
+                max_compression_ratio = max_compression_ratio
+                    .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);
+                max_compressed_size = max_compressed_size.max(p.compressed_size());
+            }
+
+            collect_small_file_parts(
+                small_files,
+                max_compression_ratio,
+                max_compressed_size,
+                &mut partitions,
+                &mut stats,
+                num_columns_to_read,
+            );
+        }
 
         Ok((stats, partitions))
     }
