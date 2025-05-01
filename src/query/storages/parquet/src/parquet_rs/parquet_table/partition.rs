@@ -84,16 +84,12 @@ impl ParquetRSTable {
 
         let fast_read_bytes = ctx.get_settings().get_parquet_fast_read_bytes()?;
         let mut large_files = vec![];
-        let mut large_file_indices = vec![];
-        let mut small_file_indices = vec![];
         let mut small_files = vec![];
-        for (index, (location, size, dedup_key)) in file_locations.into_iter().enumerate() {
+        for (location, size, dedup_key) in file_locations.into_iter() {
             if size > fast_read_bytes {
                 large_files.push((location, size, dedup_key));
-                large_file_indices.push(index);
             } else if size > 0 {
                 small_files.push((location, size, dedup_key));
-                small_file_indices.push(index);
             }
         }
 
@@ -122,7 +118,6 @@ impl ParquetRSTable {
                 max_compressed_size,
                 &mut partitions,
                 &mut stats,
-                num_columns_to_read,
             );
         }
 

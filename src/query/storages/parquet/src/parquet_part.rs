@@ -119,7 +119,6 @@ pub(crate) fn collect_small_file_parts(
     mut max_compressed_size: u64,
     partitions: &mut Partitions,
     stats: &mut PartStatistics,
-    num_columns_to_read: usize,
 ) {
     if max_compression_ratio <= 0.0 || max_compression_ratio >= 1.0 {
         // just incase
@@ -134,8 +133,9 @@ pub(crate) fn collect_small_file_parts(
     let mut small_part = vec![];
     let mut part_size = 0;
 
-    let max_files = num_columns_to_read * 2;
     let total_len = small_files.len();
+    let max_files = 8;
+
     for (i, (path, size, dedup_key)) in small_files.into_iter().enumerate() {
         small_part.push((path.clone(), size, dedup_key));
         stats.read_bytes += size as usize;

@@ -278,7 +278,7 @@ impl Processor for ParquetSource {
                                         &op,
                                         path,
                                         part.compressed_size as _,
-                                        true,
+                                        false,
                                     )
                                     .await?;
                                     Ok::<_, ErrorCode>((bs, path.to_owned()))
