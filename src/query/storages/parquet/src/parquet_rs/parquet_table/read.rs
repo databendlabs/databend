@@ -54,13 +54,13 @@ impl ParquetRSTable {
         // If there is a `ParquetFilePart`, we should create pruner for it.
         // Although `ParquetFilePart`s are always staying at the end of `parts` when `do_read_partitions`,
         // but parts are reshuffled when `redistribute_source_fragment`, so let us check all of them.
-        let has_files_part = plan.parts.partitions.iter().any(|p| {
+        let has_file_part = plan.parts.partitions.iter().any(|p| {
             matches!(
                 p.as_any().downcast_ref::<ParquetPart>().unwrap(),
-                ParquetPart::ParquetFile(_)
+                ParquetPart::ParquetSmallFiles(_) | ParquetPart::ParquetFile(_)
             )
         });
-        let pruner = if has_files_part {
+        let pruner = if has_file_part {
             Some(ParquetRSPruner::try_create(
                 ctx.get_function_context()?,
                 table_schema.clone(),
@@ -96,7 +96,7 @@ impl ParquetRSTable {
         }
 
         let row_group_reader = Arc::new(builder.build_row_group_reader(need_row_number)?);
-        let full_file_reader = if has_files_part {
+        let full_file_reader = if has_file_part {
             Some(Arc::new(builder.build_full_reader(need_row_number)?))
         } else {
             None
