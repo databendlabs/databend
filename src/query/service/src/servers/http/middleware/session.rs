@@ -19,6 +19,7 @@ use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
+use databend_common_base::headers::HEADER_FORWARDED_FOR;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_STICKY;
@@ -448,6 +449,11 @@ impl<E> HTTPSessionEndpoint<E> {
         let opentelemetry_baggage = extract_baggage_from_headers(req.headers());
         let client_host = get_client_ip(req);
 
+        let forwarded_for = req
+            .headers()
+            .get(HEADER_FORWARDED_FOR)
+            .map(|id| id.to_str().unwrap().to_string());
+
         let node_id = GlobalConfig::instance().query.node_id.clone();
 
         Ok(HttpQueryContext {
@@ -465,6 +471,7 @@ impl<E> HTTPSessionEndpoint<E> {
             client_host,
             client_session_id,
             user_name,
+            forwarded_for,
         })
     }
 }
@@ -488,8 +495,12 @@ pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
     uri: &str,
     body: T,
     method: Method,
-    headers: HeaderMap,
+    mut headers: HeaderMap,
 ) -> PoemResult<Response> {
+    if let Ok(forward_from) = HeaderValue::from_str(&GlobalConfig::instance().query.node_id) {
+        headers.insert(HEADER_FORWARDED_FOR, forward_from);
+    }
+
     let addr = node.http_address.clone();
     let config = GlobalConfig::instance();
     let scheme = if config.query.http_handler_tls_server_key.is_empty()

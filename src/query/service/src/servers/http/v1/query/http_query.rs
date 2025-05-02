@@ -364,6 +364,7 @@ pub struct HttpQuery {
 
     pub(crate) is_txn_mgr_saved: AtomicBool,
 
+    pub(crate) forwarded_for: Option<String>,
     pub(crate) has_temp_table_before_run: bool,
     pub(crate) has_temp_table_after_run: Mutex<Option<bool>>,
     pub(crate) is_session_handle_refreshed: AtomicBool,
@@ -554,6 +555,7 @@ impl HttpQuery {
             has_temp_table_after_run: Default::default(),
             is_session_handle_refreshed: Default::default(),
             query_mem_stat: ctx.get_query_memory_tracking(),
+            forwarded_for: http_ctx.forwarded_for.clone(),
         })
     }
 
@@ -685,7 +687,8 @@ impl HttpQuery {
         let has_temp_table =
             (*self.has_temp_table_after_run.lock()).unwrap_or(self.has_temp_table_before_run);
 
-        let need_sticky = txn_state != TxnState::AutoCommit || has_temp_table;
+        let need_sticky =
+            self.forwarded_for.is_some() || txn_state != TxnState::AutoCommit || has_temp_table;
         let need_keep_alive = need_sticky || has_temp_table;
 
         Ok(HttpSessionConf {
