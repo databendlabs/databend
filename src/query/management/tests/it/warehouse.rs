@@ -860,6 +860,64 @@ async fn test_unassign_nodes_for_warehouse() -> Result<()> {
 
     assert_eq!(nodes.len(), 1);
     assert!(nodes[0].id == node_1.id || nodes[0].id == node_2.id);
+
+    let add_warehouse_cluster = warehouse_manager.add_warehouse_cluster(
+        String::from("test_warehouse"),
+        String::from("cluster_name_1"),
+        vec![SelectedNode::Random(None), SelectedNode::Random(None)],
+    );
+
+    add_warehouse_cluster.await?;
+
+    let unassign_warehouse_nodes = warehouse_manager.unassign_warehouse_nodes(
+        "test_warehouse",
+        HashMap::from([(String::from("cluster_name_1"), vec![SelectedNode::Random(
+            Some(String::from("test_node_group")),
+        )])]),
+    );
+
+    unassign_warehouse_nodes.await?;
+
+    let nodes = warehouse_manager
+        .list_warehouse_cluster_nodes("test_warehouse", "cluster_name_1")
+        .await?;
+
+    assert_eq!(nodes.len(), 1);
+
+    let mut node_3 = system_managed_node(&GlobalUniqName::unique());
+    node_3.node_group = Some(String::from("test_node_group_1"));
+    warehouse_manager.start_node(node_3.clone()).await?;
+
+    let mut node_4 = system_managed_node(&GlobalUniqName::unique());
+    node_4.node_group = Some(String::from("test_node_group_1"));
+    warehouse_manager.start_node(node_4.clone()).await?;
+
+    // eprintln!("{:?}", warehouse_manager.list_online_nodes().await?);
+    let add_warehouse_cluster = warehouse_manager.add_warehouse_cluster(
+        String::from("test_warehouse"),
+        String::from("cluster_name_2"),
+        vec![
+            SelectedNode::Random(Some(String::from("test_node_group_1"))),
+            SelectedNode::Random(Some(String::from("test_node_group_1"))),
+        ],
+    );
+
+    add_warehouse_cluster.await?;
+
+    let unassign_warehouse_nodes = warehouse_manager.unassign_warehouse_nodes(
+        "test_warehouse",
+        HashMap::from([(String::from("cluster_name_2"), vec![SelectedNode::Random(
+            None,
+        )])]),
+    );
+
+    unassign_warehouse_nodes.await?;
+    let nodes = warehouse_manager
+        .list_warehouse_cluster_nodes("test_warehouse", "cluster_name_2")
+        .await?;
+
+    assert_eq!(nodes.len(), 1);
+
     Ok(())
 }
 
