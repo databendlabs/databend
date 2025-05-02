@@ -2217,7 +2217,7 @@ impl SystemManagedWarehouse {
 
         // 1. assign node group == unassign node group
         for node in unassign {
-            if cluster.nodes.remove_first(&node).is_none() {
+            if cluster.nodes.remove_first(node).is_none() {
                 match node {
                     SelectedNode::Random(None) => {
                         match_any.push(node);
