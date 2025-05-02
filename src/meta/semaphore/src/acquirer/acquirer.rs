@@ -16,6 +16,8 @@ use std::future::Future;
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use codeq::Encode;
 use databend_common_base::runtime::spawn_named;
@@ -41,6 +43,19 @@ use crate::queue::PermitEvent;
 use crate::PermitEntry;
 use crate::PermitKey;
 
+#[derive(Clone, Debug)]
+pub(crate) enum SeqPolicy {
+    /// Use a sequence number generator to ensure globally unique sequence numbers.
+    ///
+    /// Retry if the seq generator is updated by other process.
+    GeneratorKey { generator_key: String },
+
+    /// Use the current timestamp as the sequence number.
+    ///
+    /// Retry if duplicated
+    TimeBased,
+}
+
 /// The acquirer is responsible for acquiring a semaphore permit.
 ///
 /// It is used to acquire a semaphore by creating a new [`PermitEntry`] in the meta-service.
@@ -61,12 +76,12 @@ pub(crate) struct Acquirer {
     /// For example, the [`Acquirer`] crashed abnormally.
     pub(crate) lease: Duration,
 
-    /// The key of the permit sequence number generator.
+    /// The way to generate sequence number for a [`PermitKey`].
     ///
     /// It is used to generate a globally unique sequence number for each [`Permit`].
     /// [`Permit`] will be sorted in meta-service by this sequence number
     /// and to determine the order to be acquired.
-    pub(crate) seq_generator_key: String,
+    pub(crate) seq_policy: SeqPolicy,
 
     /// The meta client to interact with the meta-service.
     pub(crate) meta_client: Arc<ClientHandle>,
@@ -88,9 +103,6 @@ pub(crate) struct Acquirer {
 impl Acquirer {
     /// Acquires a new semaphore permit and returns a [`Permit`] handle.
     pub async fn acquire(mut self) -> Result<Permit, AcquireError> {
-        let mut sleep_time = Duration::from_millis(10);
-        let max_sleep_time = Duration::from_secs(1);
-
         self.stat.start();
 
         let permit_entry = PermitEntry {
@@ -101,66 +113,21 @@ impl Acquirer {
             .encode_to_vec()
             .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.ctx))?;
 
-        // The sem_key is the key of the semaphore entry.
-        let permit_key = loop {
-            // Step 1: Get a new globally unique sequence number.
-            let sem_seq = self.next_global_unique_seq().await?;
+        // Step 1: Create a new semaphore entry with the key format `{prefix}/queue/{seq:020}`.
 
-            self.stat.on_finish_get_seq();
-
-            // Step 2: Create a new semaphore entry with the key format `{prefix}/queue/{seq:020}`.
-            //         We use a transaction to ensure the entry is only inserted if the sequence number
-            //         hasn't changed since we obtained it. This guarantees that semaphore entries are
-            //         inserted in the same order as their sequence numbers, which is critical for
-            //         consistent acquisition order across distributed processes.
-            //         If the transaction fails, we retry with a new sequence number.
-            //
-            //         See the lib doc for more details.
-            let sem_key = PermitKey::new(self.prefix.clone(), sem_seq);
-            let sem_key_str = sem_key.format_key();
-
-            let txn = pb::TxnRequest::default();
-
-            let cond = pb::TxnCondition::eq_seq(&self.seq_generator_key, sem_seq);
-            let op = pb::TxnOp::put_with_ttl(&sem_key_str, val_bytes.clone(), Some(self.lease));
-            let txn = txn.push_if_then([cond], [op]);
-
-            let txn_reply = self.meta_client.transaction(txn).await.map_err(|e| {
-                conn_io_error(
-                    e,
-                    format!(
-                        "insert semaphore (seq={} entry={}) in transaction",
-                        &sem_key, &permit_entry
-                    ),
-                )
-                .context(&self.ctx)
-            })?;
-
-            self.stat.on_finish_try_insert_seq();
-
-            if txn_reply.success {
-                info!(
-                    "acquire semaphore: enqueue done: acquirer_id: {}, sem_seq: {}",
-                    self.acquirer_id, sem_seq
-                );
-                self.stat.on_insert_seq(sem_key.seq);
-                break sem_key;
-            } else {
-                info!(
-                    "acquire semaphore: enqueue conflict: acquirer: {}, sem_seq: {}; sleep {:?} and retry",
-                    self.acquirer_id, sem_seq, sleep_time
-                );
-
-                tokio::time::sleep(sleep_time).await;
-                sleep_time = std::cmp::min(sleep_time * 3 / 2, max_sleep_time);
+        let permit_key = match self.seq_policy.clone() {
+            SeqPolicy::GeneratorKey { generator_key } => {
+                self.enqueue_permit_entry(&permit_entry, &generator_key)
+                    .await?
             }
+            SeqPolicy::TimeBased => self.enqueue_time_based_permit_entry(&permit_entry).await?,
         };
 
-        // Step 3: The sem entry is inserted, keep it alive by extending the lease.
+        // Step 2: The sem entry is inserted, keep it alive by extending the lease.
 
         let leaser_cancel_tx = self.spawn_extend_lease_task(permit_key.clone(), val_bytes);
 
-        // Step 4: Wait for the semaphore to be acquired or removed.
+        // Step 3: Wait for the semaphore to be acquired or removed.
 
         while let Some(sem_event) = self.permit_event_rx.recv().await {
             info!(
@@ -211,13 +178,144 @@ impl Acquirer {
         Ok(permit)
     }
 
+    /// Add a new semaphore entry to the `<prefix>/queue` in the meta-service.
+    ///
+    /// In this method, the sequence number is generated in meta-service, by updating a generator key.
+    /// The semaphore entry is inserted with this seq number as key.
+    async fn enqueue_permit_entry(
+        &mut self,
+        permit_entry: &PermitEntry,
+        seq_generator_key: &str,
+    ) -> Result<PermitKey, ConnectionClosed> {
+        let mut sleep_time = Duration::from_millis(50);
+        let max_sleep_time = Duration::from_secs(2);
+
+        let val_bytes = permit_entry
+            .encode_to_vec()
+            .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.ctx))?;
+
+        loop {
+            // Step 1: Get a new globally unique sequence number.
+            let sem_seq = self.next_global_unique_seq(seq_generator_key).await?;
+
+            self.stat.on_finish_get_seq();
+
+            // Step 2: Create a new semaphore entry with the key format `{prefix}/queue/{seq:020}`.
+            //         We use a transaction to ensure the entry is only inserted if the sequence number
+            //         hasn't changed since we obtained it. This guarantees that semaphore entries are
+            //         inserted in the same order as their sequence numbers, which is critical for
+            //         consistent acquisition order across distributed processes.
+            //         If the transaction fails, we retry with a new sequence number.
+            //
+            //         See the lib doc for more details.
+            let sem_key = PermitKey::new(self.prefix.clone(), sem_seq);
+            let sem_key_str = sem_key.format_key();
+
+            let txn = pb::TxnRequest::default();
+
+            let cond = pb::TxnCondition::eq_seq(seq_generator_key, sem_seq);
+            let op = pb::TxnOp::put_with_ttl(&sem_key_str, val_bytes.clone(), Some(self.lease));
+            let txn = txn.push_if_then([cond], [op]);
+
+            let txn_reply = self.meta_client.transaction(txn).await.map_err(|e| {
+                conn_io_error(
+                    e,
+                    format!(
+                        "insert semaphore (seq={} entry={}) in transaction",
+                        &sem_key, &permit_entry
+                    ),
+                )
+                .context(&self.ctx)
+            })?;
+
+            self.stat.on_finish_try_insert_seq();
+
+            if txn_reply.success {
+                info!(
+                    "acquire semaphore: enqueue done: acquirer_id: {}, sem_seq: {}",
+                    self.acquirer_id, sem_seq
+                );
+                self.stat.on_insert_seq(sem_key.seq);
+                return Ok(sem_key);
+            } else {
+                info!(
+                    "acquire semaphore: enqueue conflict: acquirer: {}, sem_seq: {}; sleep {:?} and retry",
+                    self.acquirer_id, sem_seq, sleep_time
+                );
+
+                tokio::time::sleep(sleep_time).await;
+                sleep_time = std::cmp::min(sleep_time * 3 / 2, max_sleep_time);
+            }
+        }
+    }
+
+    /// Add a new semaphore entry to the `<prefix>/queue` in the meta-service.
+    ///
+    /// In this method, the sequence number is generated with current timestamp,
+    /// which means it may not be globally unique, on which case it will be retried,
+    /// and it may not be in strict order, meaning more semaphore entries than the `capacity` may be acquired.
+    async fn enqueue_time_based_permit_entry(
+        &mut self,
+        permit_entry: &PermitEntry,
+    ) -> Result<PermitKey, ConnectionClosed> {
+        let val_bytes = permit_entry
+            .encode_to_vec()
+            .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.ctx))?;
+
+        loop {
+            let sem_seq = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_micros() as u64;
+
+            self.stat.on_finish_get_seq();
+
+            // Create a new semaphore entry with the key format `{prefix}/queue/{seq:020}`.
+            let sem_key = PermitKey::new(self.prefix.clone(), sem_seq);
+            let sem_key_str = sem_key.format_key();
+
+            let upsert = UpsertKV::insert(&sem_key_str, &val_bytes).with_ttl(self.lease);
+
+            let res = self.meta_client.upsert_kv(upsert).await;
+            let resp = res.map_err(|e| {
+                conn_io_error(
+                    e,
+                    format!(
+                        "insert semaphore (seq={} entry={}) in transaction",
+                        &sem_key, &permit_entry
+                    ),
+                )
+                .context(&self.ctx)
+            })?;
+
+            self.stat.on_finish_try_insert_seq();
+
+            if resp.result.is_some() {
+                info!(
+                    "acquire semaphore: enqueue done: acquirer_id: {}, sem_seq: {}",
+                    self.acquirer_id, sem_seq
+                );
+                self.stat.on_insert_seq(sem_key.seq);
+                return Ok(sem_key);
+            } else {
+                info!(
+                    "acquire semaphore: enqueue failed(duplicated key): acquirer: {}, sem_seq: {}; retry at once",
+                    self.acquirer_id, sem_seq
+                );
+            }
+        }
+    }
+
     /// Gets a new globally unique sequence number by updating a key in the meta-service.
     ///
     /// This method uses the meta client to perform an upsert operation on the sequence
     /// generator key, which atomically increments the sequence number and returns the
     /// new value.
-    async fn next_global_unique_seq(&self) -> Result<u64, ConnectionClosed> {
-        let upsert = UpsertKV::update(&self.seq_generator_key, b"");
+    async fn next_global_unique_seq(
+        &self,
+        seq_generator_key: &str,
+    ) -> Result<u64, ConnectionClosed> {
+        let upsert = UpsertKV::update(seq_generator_key, b"");
 
         let res = self.meta_client.upsert_kv(upsert).await;
         let resp = res.map_err(|e| {

@@ -26,9 +26,9 @@ use tokio::task::JoinHandle;
 
 use crate::acquirer::Acquirer;
 use crate::acquirer::Permit;
+use crate::acquirer::SeqPolicy;
 use crate::acquirer::SharedAcquirerStat;
 use crate::errors::AcquireError;
-use crate::errors::ConnectionClosed;
 use crate::meta_event_subscriber::MetaEventSubscriber;
 use crate::meta_event_subscriber::Processor;
 use crate::queue::PermitEvent;
@@ -39,6 +39,14 @@ pub struct Semaphore {
     ///
     /// Such as `foo`, not `foo/`
     prefix: String,
+
+    /// Whether to generate seq number based on time.
+    ///
+    /// Which is less accurate but more efficient,
+    /// because it does lead to transaction conflict when CAS the seq_generator key.
+    ///
+    /// By default, it is `false`,
+    time_based_seq: bool,
 
     /// The metadata client to interact with the remote meta-service.
     meta_client: Arc<ClientHandle>,
@@ -88,7 +96,19 @@ impl Semaphore {
         id: impl ToString,
         lease: Duration,
     ) -> Result<Permit, AcquireError> {
-        let sem = Self::new(meta_client, prefix, capacity).await?;
+        let sem = Self::new(meta_client, prefix, capacity).await;
+        sem.acquire(id, lease).await
+    }
+
+    pub async fn new_acquired_by_time(
+        meta_client: Arc<ClientHandle>,
+        prefix: impl ToString,
+        capacity: u64,
+        id: impl ToString,
+        lease: Duration,
+    ) -> Result<Permit, AcquireError> {
+        let mut sem = Self::new(meta_client, prefix, capacity).await;
+        sem.set_time_based_seq(true);
         sem.acquire(id, lease).await
     }
 
@@ -105,11 +125,7 @@ impl Semaphore {
     ///
     /// This method spawns a background task to subscribe to the meta-service key value change events.
     /// The task will be notified to quit when this instance is dropped.
-    pub async fn new(
-        meta_client: Arc<ClientHandle>,
-        prefix: impl ToString,
-        capacity: u64,
-    ) -> Result<Self, ConnectionClosed> {
+    pub async fn new(meta_client: Arc<ClientHandle>, prefix: impl ToString, capacity: u64) -> Self {
         let mut prefix = prefix.to_string();
 
         // strip the trailing '/'
@@ -125,6 +141,7 @@ impl Semaphore {
 
         let mut sem = Semaphore {
             prefix,
+            time_based_seq: false,
             meta_client,
             subscriber_task_handle: None,
             subscriber_cancel_tx: cancel_tx,
@@ -133,9 +150,14 @@ impl Semaphore {
         };
 
         sem.spawn_meta_event_subscriber(tx, capacity, cancel_rx)
-            .await?;
+            .await;
 
-        Ok(sem)
+        sem
+    }
+
+    /// Set the time-based sequence number generation policy.
+    pub fn set_time_based_seq(&mut self, time_based_seq: bool) {
+        self.time_based_seq = time_based_seq;
     }
 
     /// Acquires a semaphore with a given id and ttl.
@@ -179,7 +201,7 @@ impl Semaphore {
             prefix: self.prefix.clone(),
             acquirer_id: id.to_string(),
             lease,
-            seq_generator_key: self.seq_generator_key(),
+            seq_policy: self.seq_policy(),
             meta_client: self.meta_client.clone(),
             subscriber_cancel_tx: self.subscriber_cancel_tx,
             permit_event_rx: self.sem_event_rx.take().unwrap(),
@@ -207,7 +229,7 @@ impl Semaphore {
         tx: mpsc::Sender<PermitEvent>,
         capacity: u64,
         cancel_rx: oneshot::Receiver<()>,
-    ) -> Result<(), ConnectionClosed> {
+    ) {
         let (left, right) = self.queue_key_range();
 
         let ctx = format!("{}-watcher", self);
@@ -224,8 +246,16 @@ impl Semaphore {
 
         let handle = spawn_named(fu, task_name);
         self.subscriber_task_handle = Some(handle);
+    }
 
-        Ok(())
+    fn seq_policy(&self) -> SeqPolicy {
+        if self.time_based_seq {
+            SeqPolicy::TimeBased
+        } else {
+            SeqPolicy::GeneratorKey {
+                generator_key: self.seq_generator_key(),
+            }
+        }
     }
 
     /// The key to store the permit sequence number generator.

@@ -351,6 +351,10 @@ struct SemaphoreConfig {
     /// The capacity of resource in the semaphore.
     capacity: u64,
 
+    /// Whether to generate a sem seq with the current timestamp,
+    /// which reduce the conflict when enqueueing the permits.
+    time_based: bool,
+
     /// The ttl if lease is not extended.
     ttl_ms: Option<u64>,
 
@@ -363,6 +367,7 @@ impl Default for SemaphoreConfig {
         Self {
             semaphores: 1,
             capacity: 100,
+            time_based: false,
             ttl_ms: None,
             hold_ms: None,
         }
@@ -403,8 +408,10 @@ async fn benchmark_semaphore(
 
     let permit_str = format!("({sem_key}, id={id})");
 
-    let permit_res =
-        Semaphore::new_acquired(client.clone(), &sem_key, param.capacity, &id, param.ttl()).await;
+    let mut sem = Semaphore::new(client.clone(), &sem_key, param.capacity).await;
+    sem.set_time_based_seq(param.time_based);
+
+    let permit_res = sem.acquire(&id, param.ttl()).await;
 
     print_sem_res(i, format!("sem-acquired: {permit_str}",), &permit_res);
 
