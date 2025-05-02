@@ -87,6 +87,12 @@ def test_query():
     resp = requests.get(next_uri, auth=auth, headers=headers)
     assert resp.status_code == 400, resp.text
 
+def test_forward_query():
+    resp = do_query("begin").json()
+    assert resp.get("session").get("need_sticky"), resp
+    node_id = resp.get("node_id")
+    initial_resp = do_query("select * from numbers(10)", node_id = node_id).json()
+    assert resp.get("session").get("need_sticky")
 
 def test_initial_response():
     sql = "select * from numbers(1000000000000) ignore_result"
@@ -105,6 +111,7 @@ def main():
 
     test_query()
     test_txn()
+    test_forward_query()
 
 
 if __name__ == "__main__":
