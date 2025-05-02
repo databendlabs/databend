@@ -75,8 +75,6 @@ impl BroadcastSinkProcessor {
     }
 }
 
-impl BroadcastSinkProcessor {}
-
 #[async_trait::async_trait]
 impl AsyncSink for BroadcastSinkProcessor {
     const NAME: &'static str = "BroadcastSink";
