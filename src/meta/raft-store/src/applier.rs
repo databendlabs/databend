@@ -96,7 +96,11 @@ where SM: StateMachineApi + 'static
         let log_id = &entry.log_id;
         let log_time_ms = Self::get_log_time(entry);
 
-        debug!("apply: entry: {}, log_time_ms: {}", entry, log_time_ms);
+        debug!(
+            "apply: entry: {}, log_time_ms: {}",
+            entry,
+            Duration::from_millis(log_time_ms).display_unix_timestamp_short()
+        );
 
         self.cmd_ctx = CmdContext::from_millis(log_time_ms);
 
@@ -544,7 +548,10 @@ where SM: StateMachineApi + 'static
             return Ok(());
         }
 
-        debug!("to clean expired kvs, log_time_ts: {}", log_time_ms);
+        debug!(
+            "to clean expired kvs, log_time_ts: {}",
+            Duration::from_millis(log_time_ms).display_unix_timestamp_short()
+        );
 
         let mut to_clean = vec![];
         let mut strm = self.sm.list_expire_index(log_time_ms).await?;
@@ -608,7 +615,7 @@ where SM: StateMachineApi + 'static
                 Some(ms) => {
                     debug!(
                         "apply: raft-log time: {}",
-                        Duration::from_millis(ms).display_unix_timestamp()
+                        Duration::from_millis(ms).display_unix_timestamp_short()
                     );
                     ms
                 }

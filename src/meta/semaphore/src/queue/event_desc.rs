@@ -12,11 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod acquirer;
-mod permit;
-mod stat;
+use std::fmt;
 
-pub(crate) use acquirer::Acquirer;
-pub use permit::Permit;
-pub use stat::SharedAcquirerStat;
+use crate::PermitSeq;
+
+/// A simple description of a received event.
+///
+/// Includes the type of the event and the sequence number of the permit in the event.
+#[derive(Debug, Clone)]
+pub struct EventDesc {
+    pub typ: &'static str,
+    pub seq: PermitSeq,
+}
+
+impl fmt::Display for EventDesc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}-{}", self.typ, self.seq)
+    }
+}
+
+impl EventDesc {
+    pub fn new(typ: &'static str, seq: PermitSeq) -> Self {
+        Self { typ, seq }
+    }
+}

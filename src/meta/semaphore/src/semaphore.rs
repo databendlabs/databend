@@ -19,12 +19,14 @@ use std::time::Duration;
 use databend_common_base::runtime::spawn_named;
 use databend_common_meta_client::ClientHandle;
 use futures::FutureExt;
+use log::info;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::acquirer::Acquirer;
 use crate::acquirer::Permit;
+use crate::acquirer::SharedAcquirerStat;
 use crate::errors::AcquireError;
 use crate::errors::ConnectionClosed;
 use crate::meta_event_subscriber::MetaEventSubscriber;
@@ -170,6 +172,8 @@ impl Semaphore {
     ) -> Result<Permit, AcquireError> {
         let id = id.to_string();
 
+        let stat = SharedAcquirerStat::new();
+
         let ctx = format!("{}-Acquirer(id={})", self, id);
         let acquirer = Acquirer {
             prefix: self.prefix.clone(),
@@ -179,10 +183,15 @@ impl Semaphore {
             meta_client: self.meta_client.clone(),
             subscriber_cancel_tx: self.subscriber_cancel_tx,
             permit_event_rx: self.sem_event_rx.take().unwrap(),
-            ctx,
+            stat: stat.clone(),
+            ctx: ctx.clone(),
         };
 
-        acquirer.acquire().await
+        let res = acquirer.acquire().await;
+
+        info!("{}: acquire-result: {:?}; stat: {}", ctx, res, stat);
+
+        res
     }
 
     /// Spawns a background task to subscribe to the meta-service key value change events.

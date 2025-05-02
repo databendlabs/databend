@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
+use display_more::DisplayOptionExt;
 use futures::FutureExt;
 use futures::Stream;
 use futures::TryStreamExt;
@@ -112,7 +113,7 @@ impl MetaEventSubscriber {
         loop {
             let watch_result = futures::select! {
                 _ = c.as_mut().fuse() => {
-                    info!("Semaphore loop canceled by user");
+                    info!("Semaphore Subscriber loop canceled by user");
                     return Ok(());
                 }
 
@@ -121,10 +122,18 @@ impl MetaEventSubscriber {
                 }
             };
 
-            info!(
-                "{} received event from watch-stream: {:?}",
-                self.ctx, watch_result
-            );
+            match &watch_result {
+                Ok(t) => {
+                    info!(
+                        "{} received event from watch-stream: Ok({})",
+                        self.ctx,
+                        t.display()
+                    );
+                }
+                Err(e) => {
+                    info!("{} received event from watch-stream: Err({})", self.ctx, e);
+                }
+            }
 
             let Some(watch_response) = watch_result? else {
                 // TODO: add retry connecting.

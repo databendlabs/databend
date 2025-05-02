@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use crate::queue::event_desc::EventDesc;
 use crate::PermitEntry;
 use crate::PermitSeq;
 
@@ -48,5 +49,13 @@ impl PermitEvent {
 
     pub(crate) fn new_acquired(seq: PermitSeq, entry: PermitEntry) -> Self {
         PermitEvent::Acquired((seq, entry))
+    }
+
+    /// Returns the type of the event and the sequence number.
+    pub fn desc(&self) -> EventDesc {
+        match self {
+            PermitEvent::Removed((seq, _)) => EventDesc::new("D", *seq),
+            PermitEvent::Acquired((seq, _)) => EventDesc::new("A", *seq),
+        }
     }
 }

@@ -53,6 +53,7 @@ use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
+use display_more::DisplayOptionExt;
 use fastrace::func_name;
 use fastrace::func_path;
 use fastrace::prelude::*;
@@ -61,6 +62,7 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
 use log::error;
+use log::info;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -420,6 +422,8 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::WatchStream>, Status> {
         let watch = request.into_inner();
 
+        info!("{}: Received WatchRequest: {}", func_name!(), watch);
+
         let key_range =
             build_key_range(&watch.key, &watch.key_end).map_err(Status::invalid_argument)?;
         let flush = watch.initial_flush;
@@ -428,7 +432,9 @@ impl MetaService for MetaServiceImpl {
 
         let mn = self.try_get_meta_node()?;
 
+        // TODO: send add-watcher and flush in one request
         let weak_sender = mn.add_watcher(watch, tx.clone()).await?;
+        let sender_str = weak_sender.upgrade().map(|s| s.to_string());
 
         let weak_handle = Arc::downgrade(&mn.dispatcher_handle);
         let on_drop = move || {
@@ -458,6 +464,11 @@ impl MetaService for MetaServiceImpl {
 
                 let fu = try_forward(strm, snk, ctx);
                 let fu = Box::pin(fu);
+
+                info!(
+                    "sending initial flush Future to watcher {} via Dispatcher",
+                    sender_str.display()
+                );
 
                 sender.send_future(fu);
             };
@@ -578,7 +589,7 @@ fn try_remove_sender(
     weak_handle: Weak<DispatcherHandle>,
     ctx: &str,
 ) {
-    debug!("{ctx}: try removing:  {:?}", weak_sender);
+    info!("{ctx}: try removing:  {:?}", weak_sender);
 
     let Some(d) = weak_handle.upgrade() else {
         debug!(
