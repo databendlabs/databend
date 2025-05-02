@@ -50,14 +50,7 @@ impl AsyncSource for BroadcastSourceProcessor {
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        let start = std::time::Instant::now();
-        log::info!("BroadcastSource recv() start");
         let received = self.receiver.recv().await;
-        log::info!(
-            "BroadcastSource recv() take {:?}, received: {:?}",
-            start.elapsed(),
-            received
-        );
         match received {
             Ok(meta) => Ok(Some(DataBlock::empty_with_meta(meta))),
             Err(_) => {
