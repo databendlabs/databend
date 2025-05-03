@@ -92,6 +92,7 @@ pub enum Distribution {
     Serial,
     Broadcast,
     Hash(Vec<ScalarExpr>),
+    Modulo(Box<ScalarExpr>),
 }
 
 impl Default for Distribution {
@@ -110,10 +111,14 @@ impl Distribution {
             | (Distribution::Random, _)
             | (Distribution::Serial, Distribution::Serial)
             | (Distribution::Broadcast, Distribution::Broadcast)
-            | (Distribution::Hash(_), Distribution::Broadcast) => true,
+            | (Distribution::Hash(_), Distribution::Broadcast)
+            | (Distribution::Modulo(_), Distribution::Broadcast) => true,
 
             (Distribution::Hash(ref keys), Distribution::Hash(ref other_keys)) => {
                 keys == other_keys
+            }
+            (Distribution::Modulo(ref key), Distribution::Modulo(ref other_key)) => {
+                key == other_key
             }
             _ => false,
         }
@@ -135,6 +140,7 @@ impl Display for Distribution {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Distribution::Modulo(ref key) => write!(f, "Modulo({})", key.as_raw_expr()),
         }
     }
 }

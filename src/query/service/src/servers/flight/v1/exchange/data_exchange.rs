@@ -19,6 +19,7 @@ pub enum DataExchange {
     Merge(MergeExchange),
     Broadcast(BroadcastExchange),
     ShuffleDataExchange(ShuffleDataExchange),
+    Modulo(ModuloExchange),
 }
 
 impl DataExchange {
@@ -27,6 +28,7 @@ impl DataExchange {
             DataExchange::Merge(exchange) => vec![exchange.destination_id.clone()],
             DataExchange::Broadcast(exchange) => exchange.destination_ids.clone(),
             DataExchange::ShuffleDataExchange(exchange) => exchange.destination_ids.clone(),
+            DataExchange::Modulo(exchange) => exchange.destination_ids.clone(),
         }
     }
 }
@@ -75,5 +77,20 @@ pub struct BroadcastExchange {
 impl BroadcastExchange {
     pub fn create(destination_ids: Vec<String>) -> DataExchange {
         DataExchange::Broadcast(BroadcastExchange { destination_ids })
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ModuloExchange {
+    pub destination_ids: Vec<String>,
+    pub shuffle_key: RemoteExpr,
+}
+
+impl ModuloExchange {
+    pub fn create(destination_ids: Vec<String>, shuffle_key: RemoteExpr) -> DataExchange {
+        DataExchange::Modulo(ModuloExchange {
+            destination_ids,
+            shuffle_key,
+        })
     }
 }

@@ -1639,6 +1639,14 @@ fn exchange_to_format_tree(
             ),
             FragmentKind::Expansive => "Broadcast".to_string(),
             FragmentKind::Merge => "Merge".to_string(),
+            FragmentKind::Modulo => format!(
+                "Modulo({})",
+                plan.keys
+                    .iter()
+                    .map(|key| { key.as_expr(&BUILTIN_FUNCTIONS).sql_display() })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         })),
         to_format_tree(&plan.input, metadata, profs, context)?,
     ]))

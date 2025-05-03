@@ -467,7 +467,7 @@ impl ReclusterTableInterpreter {
             plan = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: plan,
-                kind: FragmentKind::Normal,
+                kind: FragmentKind::Modulo,
                 keys: vec![expr],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,

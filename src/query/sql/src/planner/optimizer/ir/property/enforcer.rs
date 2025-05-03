@@ -73,6 +73,7 @@ impl Enforcer for DistributionEnforcer {
             Distribution::Random | Distribution::Any => Err(ErrorCode::Internal(
                 "Cannot enforce random or any distribution",
             )),
+            Distribution::Modulo(key) => Ok(Exchange::Modulo(key.clone()).into()),
         }
     }
 }

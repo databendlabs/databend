@@ -24,11 +24,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
+use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
@@ -37,6 +39,8 @@ use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::StreamBlockBuilder;
 use crate::io::StreamBlockProperties;
+use crate::operations::MutationLogEntry;
+use crate::operations::MutationLogs;
 use crate::FuseTable;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
@@ -54,6 +58,7 @@ pub struct TransformBlockWriter {
     state: State,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
+    kind: MutationKind,
 
     properties: Arc<StreamBlockProperties>,
 
@@ -76,6 +81,7 @@ impl TransformBlockWriter {
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        kind: MutationKind,
         table: &FuseTable,
         table_meta_timestamps: TableMetaTimestamps,
         with_tid: bool,
@@ -89,6 +95,7 @@ impl TransformBlockWriter {
             state: State::Consume,
             input,
             output,
+            kind,
             properties,
             builder: None,
             dal: table.get_operator(),
@@ -273,7 +280,20 @@ impl Processor for TransformBlockWriter {
                     });
                 }
 
-                self.output_data = Some(DataBlock::empty_with_meta(Box::new(extended_block_meta)));
+                let output = if matches!(self.kind, MutationKind::Insert) {
+                    DataBlock::empty_with_meta(Box::new(extended_block_meta))
+                } else {
+                    if matches!(self.kind, MutationKind::Recluster) {
+                        metrics_inc_recluster_write_block_nums();
+                    }
+
+                    DataBlock::empty_with_meta(Box::new(MutationLogs {
+                        entries: vec![MutationLogEntry::AppendBlock {
+                            block_meta: Arc::new(extended_block_meta),
+                        }],
+                    }))
+                };
+                self.output_data = Some(output);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

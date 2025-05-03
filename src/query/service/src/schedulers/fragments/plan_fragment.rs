@@ -597,7 +597,9 @@ struct ReplaceHilbert {
 
 impl PhysicalPlanReplacer for ReplaceHilbert {
     fn replace_hilbert_serialize(&mut self, plan: &HilbertPartition) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
+            input: Box::new(input),
             range_width: self.range_width,
             range_start: self.range_start,
             ..plan.clone()
