@@ -29,6 +29,7 @@ use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::scatter::BroadcastFlightScatter;
 use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
+use crate::servers::flight::v1::scatter::ModFlightScatter;
 use crate::sessions::QueryContext;
 
 pub trait ExchangeInjector: Send + Sync + 'static {
@@ -100,6 +101,11 @@ impl ExchangeInjector for DefaultExchangeInjector {
                     local_pos,
                 )?
             }
+            DataExchange::Modulo(exchange) => ModFlightScatter::try_create(
+                ctx.get_function_context()?,
+                &exchange.shuffle_key,
+                exchange.destination_ids.len(),
+            )?,
         }))
     }
 
