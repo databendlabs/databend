@@ -57,6 +57,7 @@ impl FuseTable {
                     ctx.clone(),
                     input,
                     output,
+                    MutationKind::Insert,
                     self,
                     table_meta_timestamps,
                     false,

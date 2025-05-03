@@ -99,6 +99,7 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     input,
                     output,
+                    MutationKind::Recluster,
                     table,
                     partition.table_meta_timestamps,
                     false,

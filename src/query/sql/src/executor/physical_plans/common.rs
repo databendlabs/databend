@@ -67,6 +67,8 @@ pub enum FragmentKind {
     // Broadcast
     Expansive,
     Merge,
+    // Partitioned by a specified expression % node_nums
+    Modulo,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy)]
