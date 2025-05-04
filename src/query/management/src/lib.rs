@@ -30,6 +30,7 @@ mod warehouse;
 mod client_session;
 pub mod errors;
 mod procedure;
+mod workload;
 
 pub use client_session::ClientSessionMgr;
 pub use connection::ConnectionMgr;
@@ -55,3 +56,7 @@ pub use warehouse::SystemManagedWarehouse;
 pub use warehouse::WarehouseApi;
 pub use warehouse::WarehouseInfo;
 pub use warehouse::WarehouseMgr;
+pub use workload::QuotaValue;
+pub use workload::WorkloadApi;
+pub use workload::WorkloadGroup;
+pub use workload::WorkloadMgr;
