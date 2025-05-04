@@ -272,7 +272,7 @@ impl MetaGrpcClient {
         loop {
             let recv_res = req_rx.recv().await;
             let Some(mut worker_request) = recv_res else {
-                warn!("{} handle closed. worker quit", self);
+                info!("{} handle closed. worker quit", self);
                 return;
             };
 

@@ -160,12 +160,14 @@ impl fmt::Display for SharedAcquirerStat {
         }
 
         if let Some(end) = window_end {
-            write!(
-                f,
-                ")=({:.1?}-{:.1?})",
-                window_start.unwrap().duration_since(base),
-                end.duration_since(base)
-            )?;
+            if let Some(start) = window_start {
+                write!(
+                    f,
+                    ")=({:.1?}-{:.1?})",
+                    start.duration_since(base),
+                    end.duration_since(base)
+                )?;
+            }
         }
 
         write!(f, "], ")?;
