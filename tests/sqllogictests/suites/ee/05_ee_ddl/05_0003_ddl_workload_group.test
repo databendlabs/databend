@@ -12,6 +12,8 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+control sortmode rowsort
+
 statement ok
 SHOW WORKLOAD GROUPS
 
@@ -66,8 +68,8 @@ RENAME WORKLOAD GROUP new_valid_mem to valid_timeout;
 query T
 SHOW WORKLOAD GROUPS;
 ----
-valid_timeout (empty) (empty) 900s (empty) (empty)
 new_valid_mem (empty) 4294967296 (empty) (empty) (empty)
+valid_timeout (empty) (empty) 900s (empty) (empty)
 
 statement error 3142
 ALTER WORKLOAD GROUP xxx SET cpu_quota = '50%';
@@ -81,8 +83,8 @@ ALTER WORKLOAD GROUP valid_timeout SET query_queued_timeout = '15min', max_concu
 query T
 SHOW WORKLOAD GROUPS;
 ----
-valid_timeout 50% 20% 960s 10 900s
 new_valid_mem (empty) 4294967296 (empty) (empty) (empty)
+valid_timeout 50% 20% 960s 10 900s
 
 statement ok
 drop workload group valid_timeout;
