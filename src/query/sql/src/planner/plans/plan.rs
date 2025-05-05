@@ -43,6 +43,7 @@ use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
 use crate::plans::AlterVirtualColumnPlan;
+use crate::plans::AlterWorkloadGroupPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CallProcedurePlan;
@@ -71,6 +72,7 @@ use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::CreateWarehousePlan;
+use crate::plans::CreateWorkloadGroupPlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
@@ -106,6 +108,7 @@ use crate::plans::DropViewPlan;
 use crate::plans::DropVirtualColumnPlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
+use crate::plans::DropWorkloadGroupPlan;
 use crate::plans::Exchange;
 use crate::plans::ExecuteImmediatePlan;
 use crate::plans::ExecuteTaskPlan;
@@ -134,6 +137,7 @@ use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RenameWarehouseClusterPlan;
 use crate::plans::RenameWarehousePlan;
+use crate::plans::RenameWorkloadGroupPlan;
 use crate::plans::Replace;
 use crate::plans::ResumeWarehousePlan;
 use crate::plans::RevertTablePlan;
@@ -226,6 +230,13 @@ pub enum Plan {
     RenameWarehouseCluster(Box<RenameWarehouseClusterPlan>),
     AssignWarehouseNodes(Box<AssignWarehouseNodesPlan>),
     UnassignWarehouseNodes(Box<UnassignWarehouseNodesPlan>),
+
+    // Workloads
+    ShowWorkloadGroups,
+    CreateWorkloadGroup(Box<CreateWorkloadGroupPlan>),
+    DropWorkloadGroup(Box<DropWorkloadGroupPlan>),
+    RenameWorkloadGroup(Box<RenameWorkloadGroupPlan>),
+    AlterWorkloadGroup(Box<AlterWorkloadGroupPlan>),
 
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
