@@ -16,6 +16,19 @@ fn main() {
     divan::main()
 }
 
+// Timer precision: 10 ns
+// bench                fastest       │ slowest       │ median        │ mean          │ samples │ iters
+// ╰─ dummy                           │               │               │               │         │
+//    ├─ native_deser                 │               │               │               │         │
+//    │  ├─ LZ4         588.9 ms      │ 588.9 ms      │ 588.9 ms      │ 588.9 ms      │ 1       │ 1
+//    │  │              3.873 GB/s    │ 3.873 GB/s    │ 3.873 GB/s    │ 3.873 GB/s    │         │
+//    │  ╰─ Zstd        832.1 ms      │ 832.1 ms      │ 832.1 ms      │ 832.1 ms      │ 1       │ 1
+//    │                 1.942 GB/s    │ 1.942 GB/s    │ 1.942 GB/s    │ 1.942 GB/s    │         │
+//    ╰─ parquet_deser                │               │               │               │         │
+//       ├─ LZ4         807.5 ms      │ 807.5 ms      │ 807.5 ms      │ 807.5 ms      │ 1       │ 1
+//       │              3.176 GB/s    │ 3.176 GB/s    │ 3.176 GB/s    │ 3.176 GB/s    │         │
+//       ╰─ Zstd        1.009 s       │ 1.009 s       │ 1.009 s       │ 1.009 s       │ 1       │ 1
+//                      1.425 GB/s    │ 1.425 GB/s    │ 1.425 GB/s    │ 1.425 GB/s    │         │
 #[divan::bench_group(max_time = 3)]
 mod dummy {
     use std::sync::Arc;
@@ -31,6 +44,7 @@ mod dummy {
     use databend_common_storages_fuse::io::WriteSettings;
     use databend_common_storages_fuse::FuseStorageFormat;
     use databend_storages_common_table_meta::table::TableCompression;
+    use divan::counter::BytesCount;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
     const NUM_ROWS: usize = 6001215;
@@ -66,6 +80,10 @@ mod dummy {
         // use deserialize_chunk to read back into block
         bencher
             .with_inputs(|| prepare_format_file(FuseStorageFormat::Parquet, compression))
+            .input_counter(|(a, _)| {
+                // Changes based on input.
+                BytesCount::usize(a.len())
+            })
             .bench_refs(|(a, _)| {
                 let reader = ParquetRecordBatchReaderBuilder::try_new(a.clone())
                     .unwrap()
@@ -86,6 +104,10 @@ mod dummy {
         // use deserialize_chunk to read back into block
         bencher
             .with_inputs(|| prepare_format_file(FuseStorageFormat::Native, compression))
+            .input_counter(|(a, _)| {
+                // Changes based on input.
+                BytesCount::usize(a.len())
+            })
             .bench_refs(|(a, schema)| {
                 let mut seek_a = std::io::Cursor::new(a.clone());
                 let metas = databend_common_native::read::reader::read_meta(&mut seek_a).unwrap();
@@ -128,6 +150,7 @@ mod dummy {
         let schema = Arc::new(schema);
         let mut buffer = Vec::new();
         let _ = serialize_block(&write_settings, &schema, datablock, &mut buffer).unwrap();
+
         (buffer.into(), schema)
     }
 }

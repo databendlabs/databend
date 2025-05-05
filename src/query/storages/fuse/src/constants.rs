@@ -20,6 +20,8 @@ pub const FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD: &str = "row_avg_depth_threshold"
 pub const FUSE_OPT_KEY_FILE_SIZE: &str = "file_size";
 
 pub const FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS: &str = "data_retention_period_in_hours";
+pub const FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP: &str =
+    "data_retention_num_snapshots_to_keep";
 
 pub const FUSE_OPT_KEY_ATTACH_COLUMN_IDS: &str = "attach_column_ids";
 
@@ -35,8 +37,7 @@ pub const FUSE_TBL_VIRTUAL_BLOCK_PREFIX: &str = "_vb";
 pub const FUSE_TBL_AGG_INDEX_PREFIX: &str = "_i_a";
 pub const FUSE_TBL_INVERTED_INDEX_PREFIX: &str = "_i_i";
 
-pub const DEFAULT_ROW_PER_PAGE: usize = 131072;
-pub const DEFAULT_ROW_PER_PAGE_FOR_BLOCKING: usize = 2048;
+pub const DEFAULT_ROW_PER_PAGE: usize = 8192;
 pub const DEFAULT_ROW_PER_INDEX: usize = 100000;
 
 pub const DEFAULT_AVG_DEPTH_THRESHOLD: f64 = 0.001;

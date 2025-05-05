@@ -15,6 +15,7 @@
 use std::future;
 use std::io;
 use std::ops::RangeBounds;
+use std::time::Duration;
 
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::Expirable;
@@ -23,6 +24,7 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::UpsertKV;
+use display_more::DisplayUnixTimeStampExt;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::debug;
@@ -71,6 +73,13 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         let expire_ms = kv_meta.expires_at_ms();
         if expire_ms < self.get_expire_cursor().time_ms {
+            warn!(
+                "upsert_kv_primary_index: expired key inserted: {} < expire-cursor: {}; key: {}",
+                Duration::from_millis(expire_ms).display_unix_timestamp_short(),
+                Duration::from_millis(self.get_expire_cursor().time_ms)
+                    .display_unix_timestamp_short(),
+                upsert_kv.key
+            );
             // The record has expired, delete it at once.
             //
             // Note that it must update first then delete,

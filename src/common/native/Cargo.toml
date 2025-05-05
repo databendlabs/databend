@@ -18,7 +18,6 @@ bytemuck = { workspace = true }
 byteorder = { workspace = true }
 bytes = { workspace = true }
 env_logger = { workspace = true }
-ethnum = { workspace = true }
 hashbrown_v0_14 = { workspace = true }
 log = { workspace = true }
 lz4 = { workspace = true }

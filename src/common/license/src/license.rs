@@ -71,12 +71,14 @@ pub enum Feature {
     StorageQuota(StorageQuota),
     #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
     AmendTable,
-    #[serde(alias = "system_management", alias = "SYSTEM_MANAGEMENT")]
-    SystemManagement,
     #[serde(alias = "hilbert_clustering", alias = "HILBERT_CLUSTERING")]
     HilbertClustering,
+    #[serde(alias = "system_management", alias = "SYSTEM_MANAGEMENT")]
+    SystemManagement,
     #[serde(alias = "ngram_index", alias = "NGRAM_INDEX")]
     NgramIndex,
+    #[serde(alias = "workload_group", alias = "WORKLOAD_GROUP")]
+    WorkloadGroup,
     #[serde(other)]
     Unknown,
 }
@@ -125,6 +127,7 @@ impl fmt::Display for Feature {
             Feature::SystemManagement => write!(f, "system_management"),
             Feature::HilbertClustering => write!(f, "hilbert_clustering"),
             Feature::NgramIndex => write!(f, "ngram_index"),
+            Feature::WorkloadGroup => write!(f, "workload_group"),
             Feature::Unknown => write!(f, "unknown"),
         }
     }

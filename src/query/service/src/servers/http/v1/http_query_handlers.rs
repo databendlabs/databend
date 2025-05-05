@@ -21,6 +21,8 @@ use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
@@ -51,6 +53,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::query::ExecuteStateKind;
+use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::RemoveReason;
@@ -354,39 +357,58 @@ async fn query_page_handler(
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
-    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
-    let _t = SlowRequestLogTracker::new(ctx);
+    // tracing in middleware
 
-    async {
-        let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.get_query(&query_id) {
-            Some(query) => {
-                if query.user_name != ctx.user_name {
-                    return Err(poem::error::Error::from_string(
-                        format!(
-                            "wrong user, query {} expect {}, got {}",
-                            query_id, query.user_name, ctx.user_name
-                        ),
-                        StatusCode::UNAUTHORIZED,
-                    ));
-                }
-                query.check_client_session_id(&ctx.client_session_id)?;
-                if let Some(reason) = query.check_removed() {
-                    Err(query_id_removed(&query_id, reason))
-                } else {
-                    query.update_expire_time(true).await;
-                    let resp = query.get_response_page(page_no).await.map_err(|err| {
-                        poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
-                    })?;
-                    query.update_expire_time(false).await;
-                    Ok(QueryResponse::from_internal(query_id, resp, false))
-                }
+    let http_query_manager = HttpQueryManager::instance();
+
+    let Some(query) = http_query_manager.get_query(&query_id) else {
+        return Err(query_id_not_found(&query_id, &ctx.node_id));
+    };
+
+    let query_mem_stat = query.query_mem_stat.clone();
+
+    let query_page_handle = {
+        let query_id = query_id.clone();
+        async move {
+            if query.user_name != ctx.user_name {
+                return Err(poem::error::Error::from_string(
+                    format!(
+                        "wrong user, query {} expect {}, got {}",
+                        query_id, query.user_name, ctx.user_name
+                    ),
+                    StatusCode::UNAUTHORIZED,
+                ));
             }
-            None => Err(query_id_not_found(&query_id, &ctx.node_id)),
+
+            query.check_client_session_id(&ctx.client_session_id)?;
+            if let Some(reason) = query.check_removed() {
+                Err(query_id_removed(&query_id, reason))
+            } else {
+                query.update_expire_time(true).await;
+                let resp = query.get_response_page(page_no).await.map_err(|err| {
+                    poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
+                })?;
+                query.update_expire_time(false).await;
+                Ok(QueryResponse::from_internal(query_id, resp, false))
+            }
         }
-    }
-    .in_span(root)
-    .await
+    };
+
+    let query_page_handle = {
+        let root = get_http_tracing_span(func_path!(), ctx, &query_id);
+        let _t = SlowRequestLogTracker::new(ctx);
+        query_page_handle.in_span(root)
+    };
+
+    let query_page_handle = {
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.mem_stat = query_mem_stat;
+        tracking_payload.query_id = Some(query_id.clone());
+        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+        ThreadTracker::tracking_future(query_page_handle)
+    };
+
+    query_page_handle.await
 }
 
 #[poem::handler]
@@ -395,32 +417,58 @@ pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    let root = get_http_tracing_span(func_path!(), ctx, &ctx.query_id);
-    let _t = SlowRequestLogTracker::new(ctx);
+    let query_handle = async {
+        let agent_info = ctx
+            .user_agent
+            .as_ref()
+            .map(|s| format!("(from {s})"))
+            .unwrap_or("".to_string());
 
-    async {
-        let agent_info = ctx.user_agent.as_ref().map(|s|(format!("(from {s})"))).unwrap_or("".to_string());
-        let client_session_id_info = ctx.client_session_id.as_ref().map(|s|(format!("(client_session_id={s})"))).unwrap_or("".to_string());
-        info!("http query new request{}{}: {}", agent_info, client_session_id_info, mask_connection_info(&format!("{:?}", req)));
-        let http_query_manager = HttpQueryManager::instance();
+        let client_session_id_info = ctx
+            .client_session_id
+            .as_ref()
+            .map(|s| format!("(client_session_id={s})"))
+            .unwrap_or("".to_string());
+        info!(
+            "http query new request{}{}: {}",
+            agent_info,
+            client_session_id_info,
+            mask_connection_info(&format!("{:?}", req))
+        );
         let sql = req.sql.clone();
 
-        let query = http_query_manager
-            .try_create_query(ctx, req.clone())
-            .await
-            .map_err(|err| err.display_with_sql(&sql));
-        match query {
-            Ok(query) => {
+        match HttpQuery::try_create(ctx, req.clone()).await {
+            Err(err) => {
+                let err = err.display_with_sql(&sql);
+                error!("http query fail to start sql, error: {:?}", err);
+                ctx.set_fail();
+                Ok(req.fail_to_start_sql(err).into_response())
+            }
+            Ok(mut query) => {
+                if let Err(err) = query.start_query(sql.clone()).await {
+                    let err = err.display_with_sql(&sql);
+                    error!("http query fail to start sql, error: {:?}", err);
+                    ctx.set_fail();
+                    return Ok(req.fail_to_start_sql(err).into_response());
+                }
+
+                let http_query_manager = HttpQueryManager::instance();
+                let query = http_query_manager.add_query(query).await;
+
                 query.update_expire_time(true).await;
                 // tmp workaround to tolerant old clients
                 let resp = query
                     .get_response_page(0)
                     .await
                     .map_err(|err| err.display_with_sql(&sql))
-                    .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
+                    .map_err(|err| {
+                        poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
+                    })?;
+
                 if matches!(resp.state.state, ExecuteStateKind::Failed) {
                     ctx.set_fail();
                 }
+
                 let (rows, next_page) = match &resp.data {
                     None => (0, None),
                     Some(p) => (p.page.data.num_rows(), p.next_page_no),
@@ -431,15 +479,25 @@ pub(crate) async fn query_handler(
                 query.update_expire_time(false).await;
                 Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
             }
-            Err(e) => {
-                error!("http query fail to start sql, error: {:?}", e);
-                ctx.set_fail();
-                Ok(req.fail_to_start_sql(e).into_response())
-            }
         }
-    }
-        .in_span(root)
-        .await
+    };
+
+    let query_handle = {
+        let root = get_http_tracing_span(func_path!(), ctx, &ctx.query_id);
+        let _t = SlowRequestLogTracker::new(ctx);
+        query_handle.in_span(root)
+    };
+
+    let query_handle = {
+        let query_mem_stat = MemStat::create(format!("Query-{}", ctx.query_id));
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.query_id = Some(ctx.query_id.clone());
+        tracking_payload.mem_stat = Some(query_mem_stat.clone());
+        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+        ThreadTracker::tracking_future(query_handle)
+    };
+
+    query_handle.await
 }
 
 #[derive(Deserialize, Serialize, Debug)]

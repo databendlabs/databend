@@ -16,32 +16,47 @@ import time
 def dd(*args):
     print(" === ", *args)
 
+
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments and return the args object.
-    
+
     Returns:
         argparse.Namespace: Parsed command line arguments
     """
     parser = argparse.ArgumentParser(
         description="Assert that latest query being compatible with an old version query on fuse-table format"
     )
-    parser.add_argument("--writer-version", required=True,
-                       help="The version that writes data to test compatibility with")
-    parser.add_argument("--reader-version", required=True,
-                       help="The version that reads data from test compatibility with")
-    parser.add_argument("--meta-versions", required=True, nargs="+",
-                       help="The databend-meta version(s) to run; the first one will be used as the writer's meta, the last one will be used as the reader's meta. The others used to upgrade ondisk meta data")
-    parser.add_argument("--logictest-path", default="./base",
-                       help="Default sqllogic test suite is 'tests/compat_fuse/compat-logictest/'")
+    parser.add_argument(
+        "--writer-version",
+        required=True,
+        help="The version that writes data to test compatibility with",
+    )
+    parser.add_argument(
+        "--reader-version",
+        required=True,
+        help="The version that reads data from test compatibility with",
+    )
+    parser.add_argument(
+        "--meta-versions",
+        required=True,
+        nargs="+",
+        help="The databend-meta version(s) to run; the first one will be used as the writer's meta, the last one will be used as the reader's meta. The others used to upgrade ondisk meta data",
+    )
+    parser.add_argument(
+        "--logictest-path",
+        default="./base",
+        help="Default sqllogic test suite is 'tests/compat_fuse/compat-logictest/'",
+    )
 
     args = parser.parse_args()
     dd(f"args: {args}")
 
     return args
 
+
 def download_query_config(version: str) -> None:
     """Download config.toml for a specific version of query.
-    
+
     Args:
         version: Version string without prefix 'v' or '-nightly'
         repo_local_dir: Local directory to store the config
@@ -57,7 +72,9 @@ def download_query_config(version: str) -> None:
 
     dd(f"Download query config.toml from {version}:{query_config_dir}")
 
-    git_partial_clone(bend_repo_url, f"v{version}-nightly", query_config_dir, repo_local_dir)
+    git_partial_clone(
+        bend_repo_url, f"v{version}-nightly", query_config_dir, repo_local_dir
+    )
 
 
 def binary_url(ver: str) -> str:
@@ -67,6 +84,7 @@ def binary_url(ver: str) -> str:
 def bin_path(ver: str, bin_name: str) -> str:
     return f"./bins/{ver}/bin/databend-{bin_name}"
 
+
 def query_config_path(ver: str) -> str:
     relative_path = query_rel_config_path()
 
@@ -74,6 +92,7 @@ def query_config_path(ver: str) -> str:
         return relative_path
     else:
         return f"v{ver}_config/{relative_path}"
+
 
 def query_rel_config_path():
     relative_path = "scripts/ci/deploy/config/databend-query-node-1.toml"
@@ -116,6 +135,7 @@ def download_binary(version: str) -> None:
                     raise
                 dd(f"Download attempt {attempt + 1} failed: {e}")
                 import time
+
                 time.sleep(1)
 
     # Create directory and extract
@@ -130,9 +150,12 @@ def download_binary(version: str) -> None:
     for binary in bin_dir.glob("*"):
         binary.chmod(0o755)
 
-def run_test(writer_ver: str, reader_ver: str,  meta_versions: List[str], logictest_path: str) -> None:
+
+def run_test(
+    writer_ver: str, reader_ver: str, meta_versions: List[str], logictest_path: str
+) -> None:
     """Test fuse-data compatibility between an old version query and the current version query.
-    
+
     Args:
         writer_ver: Writer query version
         reader_ver: Reader query version
@@ -144,7 +167,9 @@ def run_test(writer_ver: str, reader_ver: str,  meta_versions: List[str], logict
     for ver in meta_versions:
         dd("metasrv for writer query version")
         try:
-            subprocess.run([bin_path(ver, "meta"), "--single", "--cmd", "ver"], check=True)
+            subprocess.run(
+                [bin_path(ver, "meta"), "--single", "--cmd", "ver"], check=True
+            )
         except subprocess.CalledProcessError:
             dd("no version yet")
 
@@ -211,7 +236,9 @@ def run_test(writer_ver: str, reader_ver: str,  meta_versions: List[str], logict
     time.sleep(1)
 
 
-def git_partial_clone(repo_url: str, branch: str, path: str, repo_local_dir: str) -> None:
+def git_partial_clone(
+    repo_url: str, branch: str, path: str, repo_local_dir: str
+) -> None:
     """Clone only specified dir or file in the specified commit.
 
     Args:
@@ -229,25 +256,34 @@ def git_partial_clone(repo_url: str, branch: str, path: str, repo_local_dir: str
         dd(f"Removed existing {repo_local_dir}")
 
     # Clone repository
-    subprocess.run([
-        "git", "clone",
-        "-b", branch,
-        "--depth", "1",
-        "--quiet",
-        "--filter=blob:none",
-        "--sparse",
-        repo_url,
-        repo_local_dir
-    ], check=True)
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "-b",
+            branch,
+            "--depth",
+            "1",
+            "--quiet",
+            "--filter=blob:none",
+            "--sparse",
+            repo_url,
+            repo_local_dir,
+        ],
+        check=True,
+    )
 
     dd(f"Checkout: {path}")
 
-    subprocess.run(["git", "sparse-checkout", "set", path], check=True, cwd=repo_local_dir)
+    subprocess.run(
+        ["git", "sparse-checkout", "set", path], check=True, cwd=repo_local_dir
+    )
 
     dd(f"Done clone from {repo_url}@{branch}:{path}")
     dd("Cloned files:")
     for f in Path(repo_local_dir, path).glob("*"):
         dd(f"    {f}")
+
 
 def kill_proc(name: str) -> None:
     dd(f"Kill {name} ...")
@@ -278,7 +314,9 @@ def start_metasrv(ver: str) -> subprocess.Popen:
     dd(f"Start {metasrv_path} databend-meta...")
 
     with open(stdout_file, "w") as f:
-        meta_process = subprocess.Popen([metasrv_path, "--single", "--log-level=DEBUG"], stdout=f, stderr=f)
+        meta_process = subprocess.Popen(
+            [metasrv_path, "--single", "--log-level=DEBUG"], stdout=f, stderr=f
+        )
 
     if not tcp_ping(9191, 20):
         dd("Fail to connect to :{}".format(9191))
@@ -293,6 +331,7 @@ def start_metasrv(ver: str) -> subprocess.Popen:
 
     return meta_process
 
+
 def start_query(ver: str) -> subprocess.Popen:
     query_path = bin_path(ver, "query")
     config_path = query_config_path(ver)
@@ -301,11 +340,19 @@ def start_query(ver: str) -> subprocess.Popen:
     dd(f"Start {query_path} databend-query... config: {config_path}")
 
     with open(stdout_file, "w") as f:
-        query_process = subprocess.Popen([
-            query_path,
-            "-c", config_path,
-            "--log-level", "DEBUG",
-            "--meta-endpoints", "0.0.0.0:9191"], stdout=f, stderr=f)
+        query_process = subprocess.Popen(
+            [
+                query_path,
+                "-c",
+                config_path,
+                "--log-level",
+                "DEBUG",
+                "--meta-endpoints",
+                "0.0.0.0:9191",
+            ],
+            stdout=f,
+            stderr=f,
+        )
 
     if not tcp_ping(3307, 20):
         dd("Fail to connect to :{}".format(3307))
@@ -320,21 +367,27 @@ def start_query(ver: str) -> subprocess.Popen:
 
     return query_process
 
-def run_sqllogictests(logictest_path: str, run_file: str) -> None:
 
+def run_sqllogictests(logictest_path: str, run_file: str) -> None:
     dd(f"Run test: {run_file}")
 
     sqllogictests = "./bins/current/bin/databend-sqllogictests"
 
-    subprocess.run([
-        sqllogictests,
-        "--handlers", "mysql",
-        "--suites", f"tests/compat_fuse/compat-logictest/{logictest_path}",
-        "--run_file", run_file
-    ], check=True)
+    subprocess.run(
+        [
+            sqllogictests,
+            "--handlers",
+            "mysql",
+            "--suites",
+            f"tests/compat_fuse/compat-logictest/{logictest_path}",
+            "--run_file",
+            run_file,
+        ],
+        check=True,
+    )
+
 
 def tcp_ping(port, timeout) -> bool:
-
     now = time.time()
 
     while time.time() - now < timeout:
@@ -351,6 +404,7 @@ def tcp_ping(port, timeout) -> bool:
 
     return False
 
+
 def main():
     args = parse_args()
 
@@ -359,11 +413,16 @@ def main():
 
     for meta_ver in args.meta_versions:
         download_binary(meta_ver)
-    
+
     download_binary(args.writer_version)
 
-    run_test(args.writer_version, args.reader_version, args.meta_versions, args.logictest_path)
+    run_test(
+        args.writer_version,
+        args.reader_version,
+        args.meta_versions,
+        args.logictest_path,
+    )
 
 
 if __name__ == "__main__":
-    main() 
+    main()

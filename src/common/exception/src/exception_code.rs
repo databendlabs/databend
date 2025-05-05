@@ -404,6 +404,11 @@ build_exceptions! {
     UnknownProcedure(3130),
     ProcedureAlreadyExists(3131),
     IllegalProcedureFormat(3132),
+    // Workload
+    InvalidWorkload(3140),
+    AlreadyExistsWorkload(3141),
+    UnknownWorkload(3142),
+    WorkloadOperateConflict(3143),
 }
 
 // Storage errors [3001, 4000].

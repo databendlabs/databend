@@ -115,13 +115,14 @@ impl ExecuteState {
 
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) sender: SizedChannelSender<DataBlock>,
 }
 
 pub struct ExecuteRunning {
     // used to kill query
     session: Arc<Session>,
     // mainly used to get progress for now
-    ctx: Arc<QueryContext>,
+    pub(crate) ctx: Arc<QueryContext>,
     schema: Vec<QueryResponseField>,
     has_result_set: bool,
     #[allow(dead_code)]
@@ -238,7 +239,7 @@ impl Executor {
 
     pub fn get_query_duration_ms(&self) -> i64 {
         match &self.state {
-            Starting(ExecuteStarting { ctx }) | Running(ExecuteRunning { ctx, .. }) => {
+            Starting(ExecuteStarting { ctx, .. }) | Running(ExecuteRunning { ctx, .. }) => {
                 ctx.get_query_duration_ms()
             }
             Stopped(f) => f.query_duration_ms,

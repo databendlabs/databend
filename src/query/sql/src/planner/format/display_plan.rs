@@ -252,6 +252,11 @@ impl Plan {
             Plan::AddWarehouseCluster(_) => Ok("AddWarehouseCluster".to_string()),
             Plan::AssignWarehouseNodes(_) => Ok("AddWarehouseClusterNode".to_string()),
             Plan::UnassignWarehouseNodes(_) => Ok("DropWarehouseClusterNode".to_string()),
+            Plan::ShowWorkloadGroups => Ok("ShowWorkloadGroups".to_string()),
+            Plan::CreateWorkloadGroup(_) => Ok("CreateWorkloadGroup".to_string()),
+            Plan::DropWorkloadGroup(_) => Ok("DropWorkloadGroup".to_string()),
+            Plan::RenameWorkloadGroup(_) => Ok("RenameWorkloadGroup".to_string()),
+            Plan::AlterWorkloadGroup(_) => Ok("AlterWorkloadGroup".to_string()),
         }
     }
 }

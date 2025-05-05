@@ -29,6 +29,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_semaphore::acquirer::Permit;
+use databend_common_meta_semaphore::acquirer::SharedAcquirerStat;
 use databend_common_meta_semaphore::errors::AcquireError;
 use databend_common_meta_semaphore::errors::ConnectionClosed;
 use databend_common_meta_semaphore::Semaphore;
@@ -108,6 +109,7 @@ impl MetaStore {
 
                 match acquire_res.acquire_owned().await {
                     Ok(guard) => Ok(Permit {
+                        stat: SharedAcquirerStat::new(),
                         fu: Box::pin(async move {
                             let _guard = guard;
                             Ok(())
@@ -120,6 +122,44 @@ impl MetaStore {
             }
             MetaStore::R(grpc_client) => {
                 Semaphore::new_acquired(grpc_client.clone(), prefix, capacity, id, lease).await
+            }
+        }
+    }
+
+    pub async fn new_acquired_by_time(
+        &self,
+        prefix: impl ToString,
+        capacity: u64,
+        id: impl ToString,
+        lease: Duration,
+    ) -> Result<Permit, AcquireError> {
+        match self {
+            MetaStore::L(v) => {
+                let mut local_lock_map = v.locks.lock().await;
+
+                let acquire_res = match local_lock_map.entry(prefix.to_string()) {
+                    Entry::Occupied(v) => v.get().clone(),
+                    Entry::Vacant(v) => v
+                        .insert(Arc::new(TokioSemaphore::new(capacity as usize)))
+                        .clone(),
+                };
+
+                match acquire_res.acquire_owned().await {
+                    Ok(guard) => Ok(Permit {
+                        stat: SharedAcquirerStat::new(),
+                        fu: Box::pin(async move {
+                            let _guard = guard;
+                            Ok(())
+                        }),
+                    }),
+                    Err(_e) => Err(AcquireError::ConnectionClosed(ConnectionClosed::new_str(
+                        "",
+                    ))),
+                }
+            }
+            MetaStore::R(grpc_client) => {
+                Semaphore::new_acquired_by_time(grpc_client.clone(), prefix, capacity, id, lease)
+                    .await
             }
         }
     }

@@ -156,7 +156,15 @@ impl DefaultExprBinder {
 
     pub fn parse_and_bind(&mut self, field: &DataField) -> Result<ScalarExpr> {
         if let Some(default_expr) = field.default_expr() {
-            let ast = self.parse(default_expr)?;
+            let ast = self.parse(default_expr).map_err(|e| {
+                format!(
+                    "fail to parse default expr `{}` (string length = {}) of field {}, {}",
+                    default_expr,
+                    default_expr.len(),
+                    field.name(),
+                    e
+                )
+            })?;
             self.bind(&ast, field.data_type())
         } else {
             Ok(ScalarExpr::ConstantExpr(ConstantExpr {

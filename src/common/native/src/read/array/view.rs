@@ -23,6 +23,7 @@ use databend_common_expression::types::Buffer;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
+use crate::compression::integer::decompress_integer;
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;
@@ -112,22 +113,21 @@ fn read_view_col<R: NativeReadBuf>(
     data_type: TableDataType,
     validity: Option<Bitmap>,
 ) -> Result<Column> {
-    let mut scratch = vec![0; 9];
-    let (_c, _compressed_size, _uncompressed_size) = read_compress_header(reader, &mut scratch)?;
+    let mut scratch = Vec::new();
+    let mut views: Vec<i128> = Vec::with_capacity(length);
+    decompress_integer(reader, length, &mut views, &mut scratch)?;
 
-    let mut buffer = vec![View::default(); length];
-    let temp_data =
-        unsafe { std::slice::from_raw_parts_mut(buffer.as_mut_ptr() as *mut u8, length * 16) };
-    reader.read_exact(temp_data)?;
-    let views = Buffer::from(buffer);
+    let views: Buffer<i128> = views.into();
+    let views = unsafe { std::mem::transmute::<Buffer<i128>, Buffer<View>>(views) };
 
     let buffer_len = reader.read_u32::<LittleEndian>()?;
-    let mut buffers = Vec::with_capacity(buffer_len as _);
+    let mut buffers = Vec::with_capacity(buffer_len as usize);
 
     for _ in 0..buffer_len {
         scratch.clear();
         let (compression, compressed_size, uncompressed_size) =
             read_compress_header(reader, &mut scratch)?;
+
         let c = CommonCompression::try_from(&compression)?;
         let mut buffer = vec![];
         c.decompress_common_binary(
@@ -137,6 +137,7 @@ fn read_view_col<R: NativeReadBuf>(
             &mut buffer,
             &mut scratch,
         )?;
+
         buffers.push(Buffer::from(buffer));
     }
 

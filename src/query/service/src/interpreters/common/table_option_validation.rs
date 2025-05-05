@@ -25,6 +25,7 @@ use databend_common_settings::Settings;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
@@ -60,6 +61,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
+    r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
@@ -116,6 +118,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
+    r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r
 });
@@ -179,6 +182,17 @@ pub fn is_valid_data_retention_period(
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "Invalid data_retention_period_in_hours {:?}, it should not be larger than {:?}",
                 new_duration, default_max_duration
+            )));
+        }
+    }
+
+    if let Some(value) = options.get(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP) {
+        let new_val = value.parse::<u64>()?;
+
+        if new_val < 1 {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "Invalid value of the table option [{FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP}]: {:?}, it should be larger than 0",
+                new_val
             )));
         }
     }

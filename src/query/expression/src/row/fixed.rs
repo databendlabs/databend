@@ -14,10 +14,10 @@
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::types::months_days_micros;
-use ethnum::i256;
 
 use super::row_converter::null_sentinel;
 use crate::types::binary::BinaryColumnBuilder;
+use crate::types::i256;
 use crate::types::F32;
 use crate::types::F64;
 

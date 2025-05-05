@@ -101,7 +101,7 @@ evaluation:
 | Row 3  | '-32768'                                                  | '-32768'                |
 | Row 4  | '1234.5678'                                               | '1234.5678'             |
 | Row 5  | '1.912e2'                                                 | '191.2'                 |
-| Row 6  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'         |
+| Row 6  | '"\\\\\\"abc\\\\\\""'                                     | '"\\\\\\"abc\\\\\\""'   |
 | Row 7  | '"databend"'                                              | '"databend"'            |
 | Row 8  | '{"k":"v","a":"b"}'                                       | '{"a":"b","k":"v"}'     |
 | Row 9  | '[1,2,3,["a","b","c"]]'                                   | '[1,2,3,["a","b","c"]]' |
@@ -234,7 +234,7 @@ evaluation:
 | Row 3  | '-32768'                                                  | '-32768'                |
 | Row 4  | '1234.5678'                                               | '1234.5678'             |
 | Row 5  | '1.912e2'                                                 | '191.2'                 |
-| Row 6  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'         |
+| Row 6  | '"\\\\\\"abc\\\\\\""'                                     | '"\\\\\\"abc\\\\\\""'   |
 | Row 7  | '"databend"'                                              | '"databend"'            |
 | Row 8  | '{"k":"v","a":"b"}'                                       | '{"a":"b","k":"v"}'     |
 | Row 9  | '[1,2,3,["a","b","c"]]'                                   | '[1,2,3,["a","b","c"]]' |
@@ -1064,6 +1064,42 @@ output domain  : Undefined
 output         : '{"a":"b"}'
 
 
+ast            : as_binary(to_binary('abcd')::variant)
+raw expr       : as_binary(CAST(to_binary('abcd') AS Variant))
+checked expr   : as_binary<Variant>(CAST<Binary>(CAST<String>("abcd" AS Binary) AS Variant))
+optimized expr : 61626364
+output type    : Binary NULL
+output domain  : Undefined
+output         : 61626364
+
+
+ast            : as_date(to_date('2025-10-11')::variant)
+raw expr       : as_date(CAST(to_date('2025-10-11') AS Variant))
+checked expr   : as_date<Variant>(CAST<Date>(CAST<String>("2025-10-11" AS Date) AS Variant))
+optimized expr : 20372
+output type    : Date NULL
+output domain  : {20372..=20372}
+output         : '2025-10-11'
+
+
+ast            : as_timestamp(to_timestamp('2025-05-01 10:00:00')::variant)
+raw expr       : as_timestamp(CAST(to_timestamp('2025-05-01 10:00:00') AS Variant))
+checked expr   : as_timestamp<Variant>(CAST<Timestamp>(CAST<String>("2025-05-01 10:00:00" AS Timestamp) AS Variant))
+optimized expr : 1746093600000000
+output type    : Timestamp NULL
+output domain  : {1746093600000000..=1746093600000000}
+output         : '2025-05-01 10:00:00.000000'
+
+
+ast            : as_interval(to_interval('1 year 2 month')::variant)
+raw expr       : as_interval(CAST(to_interval('1 year 2 month') AS Variant))
+checked expr   : as_interval<Variant>(CAST<Interval>(CAST<String>("1 year 2 month" AS Interval) AS Variant))
+optimized expr : 1 year 2 months
+output type    : Interval NULL
+output domain  : SimpleDomain { min: months_days_micros(1109194275199700726309615304704), max: months_days_micros(1109194275199700726309615304704) }
+output         : '1 year 2 months'
+
+
 ast            : as_boolean(parse_json(s))
 raw expr       : as_boolean(parse_json(s::String))
 checked expr   : as_boolean<Variant>(CAST<String>(s AS Variant))
@@ -1340,6 +1376,42 @@ output         : false
 ast            : is_object(parse_json('{"a":"b"}'))
 raw expr       : is_object(parse_json('{"a":"b"}'))
 checked expr   : is_object<Variant>(CAST<String>("{\"a\":\"b\"}" AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_binary(to_binary('abcd')::variant)
+raw expr       : is_binary(CAST(to_binary('abcd') AS Variant))
+checked expr   : is_binary<Variant>(CAST<Binary>(CAST<String>("abcd" AS Binary) AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_date(to_date('2025-10-11')::variant)
+raw expr       : is_date(CAST(to_date('2025-10-11') AS Variant))
+checked expr   : is_date<Variant>(CAST<Date>(CAST<String>("2025-10-11" AS Date) AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_timestamp(to_timestamp('2025-05-01 10:00:00')::variant)
+raw expr       : is_timestamp(CAST(to_timestamp('2025-05-01 10:00:00') AS Variant))
+checked expr   : is_timestamp<Variant>(CAST<Timestamp>(CAST<String>("2025-05-01 10:00:00" AS Timestamp) AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_interval(to_interval('1 year 2 month')::variant)
+raw expr       : is_interval(CAST(to_interval('1 year 2 month') AS Variant))
+checked expr   : is_interval<Variant>(CAST<Interval>(CAST<String>("1 year 2 month" AS Interval) AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -2807,14 +2879,7 @@ checked expr   : json_pretty<Variant>(CAST<String>("[1, 2, 3, 4, 5, 6]" AS Varia
 optimized expr : "[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]"
 output type    : String
 output domain  : {"[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]"..="[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]"}
-output         : '[
-  1,
-  2,
-  3,
-  4,
-  5,
-  6
-]'
+output         : '[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6\n]'
 
 
 ast            : json_pretty(parse_json('{"k1":123, "k2":"abc"}'))
@@ -2823,10 +2888,7 @@ checked expr   : json_pretty<Variant>(CAST<String>("{\"k1\":123, \"k2\":\"abc\"}
 optimized expr : "{\n  \"k1\": 123,\n  \"k2\": \"abc\"\n}"
 output type    : String
 output domain  : {"{\n  \"k1\": 123,\n  \"k2\": \"abc\"\n}"..="{\n  \"k1\": 123,\n  \"k2\": \"abc\"\n}"}
-output         : '{
-  "k1": 123,
-  "k2": "abc"
-}'
+output         : '{\n  "k1": 123,\n  "k2": "abc"\n}'
 
 
 ast            : json_pretty(parse_json('{"a":1,"b":true,"c":["1","2","3"],"d":{"a":1,"b":[1,2,3],"c":{"a":1,"b":2}}}'))
@@ -2835,27 +2897,7 @@ checked expr   : json_pretty<Variant>(CAST<String>("{\"a\":1,\"b\":true,\"c\":[\
 optimized expr : "{\n  \"a\": 1,\n  \"b\": true,\n  \"c\": [\n    \"1\",\n    \"2\",\n    \"3\"\n  ],\n  \"d\": {\n    \"a\": 1,\n    \"b\": [\n      1,\n      2,\n      3\n    ],\n    \"c\": {\n      \"a\": 1,\n      \"b\": 2\n    }\n  }\n}"
 output type    : String
 output domain  : {"{\n  \"a\": 1,\n  \"b\": true,\n  \"c\": [\n    \"1\",\n    \"2\",\n    \"3\"\n  ],\n  \"d\": {\n    \"a\": 1,\n    \"b\": [\n      1,\n      2,\n      3\n    ],\n    \"c\": {\n      \"a\": 1,\n      \"b\": 2\n    }\n  }\n}"..="{\n  \"a\": 1,\n  \"b\": true,\n  \"c\": [\n    \"1\",\n    \"2\",\n    \"3\"\n  ],\n  \"d\": {\n    \"a\": 1,\n    \"b\": [\n      1,\n      2,\n      3\n    ],\n    \"c\": {\n      \"a\": 1,\n      \"b\": 2\n    }\n  }\n}"}
-output         : '{
-  "a": 1,
-  "b": true,
-  "c": [
-    "1",
-    "2",
-    "3"
-  ],
-  "d": {
-    "a": 1,
-    "b": [
-      1,
-      2,
-      3
-    ],
-    "c": {
-      "a": 1,
-      "b": 2
-    }
-  }
-}'
+output         : '{\n  "a": 1,\n  "b": true,\n  "c": [\n    "1",\n    "2",\n    "3"\n  ],\n  "d": {\n    "a": 1,\n    "b": [\n      1,\n      2,\n      3\n    ],\n    "c": {\n      "a": 1,\n      "b": 2\n    }\n  }\n}'
 
 
 ast            : json_strip_nulls(parse_json('true'))

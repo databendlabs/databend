@@ -30,7 +30,6 @@ databend-storages-common-cache = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-ethnum = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }

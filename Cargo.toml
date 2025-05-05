@@ -306,7 +306,7 @@ enquote = "1.1.0"
 enum-as-inner = "0.6"
 enum_dispatch = "0.3.13"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
-ethnum = { version = "1.5.0" }
+ethnum = { version = "1.5.1" }
 faststr = "0.2"
 feature-set = { version = "0.1.1" }
 flatbuffers = "24" # Must use the same version with arrow-ipc
@@ -350,7 +350,7 @@ jaq-core = "1.5.1"
 jaq-interpret = "1.5.0"
 jaq-parse = "1.0.3"
 jaq-std = "1.6.0"
-jiff = { version = "0.2.1", features = ["serde", "tzdb-bundle-always"] }
+jiff = { version = "0.2.10", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.1"
 jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
@@ -523,7 +523,7 @@ url = "2.5.4"
 uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
 volo-thrift = "0.10"
 walkdir = "2.3.2"
-watcher = { version = "0.1.1" }
+watcher = { version = "0.2.0" }
 wiremock = "0.6"
 wkt = "0.11.1"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
@@ -636,8 +636,8 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
-display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.1.2" }
-ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
+display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.1.3" }
+jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "dcaf261" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.3" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
@@ -647,5 +647,5 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
-watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.1.1" }
+watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.2.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

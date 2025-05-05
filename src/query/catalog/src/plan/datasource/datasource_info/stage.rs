@@ -30,10 +30,14 @@ use databend_common_storage::StageFilesInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
+    // common
+    pub stage_root: String,
+    pub stage_info: StageInfo,
+
+    // copy into table only
     pub schema: TableSchemaRef,
     pub default_exprs: Option<Vec<RemoteDefaultExpr>>,
     pub files_info: StageFilesInfo,
-    pub stage_info: StageInfo,
     pub files_to_copy: Option<Vec<StageFileInfo>>,
     // files that
     // - are listed as candidates to be copied
@@ -42,9 +46,11 @@ pub struct StageTableInfo {
     // - may need to be purged as well (depends on the copy options)
     pub duplicated_files_detected: Vec<String>,
     pub is_select: bool,
-    pub copy_into_location_options: CopyIntoLocationOptions,
     pub copy_into_table_options: CopyIntoTableOptions,
-    pub stage_root: String,
+
+    // copy into location only
+    pub copy_into_location_ordered: bool,
+    pub copy_into_location_options: CopyIntoLocationOptions,
 }
 
 impl StageTableInfo {

@@ -193,6 +193,7 @@ impl<T> SizedChannelReceiver<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct SizedChannelSender<T> {
     chan: Arc<SizedChannel<T>>,
 }

@@ -530,6 +530,7 @@ mod test {
     use apache_avro::Decimal;
     use apache_avro::Schema;
     use apache_avro::Writer;
+    use databend_common_expression::types::i256;
     use databend_common_expression::types::DecimalDataType;
     use databend_common_expression::types::DecimalScalar;
     use databend_common_expression::types::DecimalSize;
@@ -541,7 +542,6 @@ mod test {
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
     use databend_common_expression::TableSchemaRef;
-    use ethnum::i256;
     use num_bigint::BigInt;
     use serde_json::json;
 

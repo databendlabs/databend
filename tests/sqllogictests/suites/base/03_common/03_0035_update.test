@@ -244,3 +244,6 @@ select * from t;
 
 statement ok
 DROP DATABASE db1
+
+statement ok
+use default;

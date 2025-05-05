@@ -342,14 +342,20 @@ pub struct PersistentLogConfig {
     pub stage_name: String,
     pub level: String,
     pub retention: usize,
+    pub retention_interval: usize,
 }
 
 impl Display for PersistentLogConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, interval={}, stage_name={}, level={}, retention={}",
-            self.on, self.interval, self.stage_name, self.level, self.retention
+            "enabled={}, interval={}, stage_name={}, level={}, retention={}, retention_interval={}",
+            self.on,
+            self.interval,
+            self.stage_name,
+            self.level,
+            self.retention,
+            self.retention_interval
         )
     }
 }
@@ -359,9 +365,13 @@ impl Default for PersistentLogConfig {
         Self {
             on: false,
             interval: 2,
+            // The default value of stage name uses an uuid to avoid conflicts with existing stages
             stage_name: "log_1f93b76af0bd4b1d8e018667865fbc65".to_string(),
-            retention: 72,
             level: "WARN".to_string(),
+            // Data older than 72 hours will be deleted during retention tasks
+            retention: 72,
+            // Trigger the retention task every 24 hours
+            retention_interval: 24,
         }
     }
 }

@@ -230,7 +230,7 @@ impl BlockReader {
                 ));
                 match nums_rows {
                     Some(rows) => {
-                        debug_assert_eq!(rows, column.len(), "Column  lengths are not equal")
+                        debug_assert_eq!(rows, column.len(), "Column lengths are not equal")
                     }
                     None => nums_rows = Some(column.len()),
                 }

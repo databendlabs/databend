@@ -90,7 +90,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     table: Arc<dyn Table>,
     copied_files: Option<UpsertTableCopiedFileReq>,
     snapshot_gen: F,
-    purge: bool,
+    purge_mode: Option<PurgeMode>,
     retries: u64,
     max_retry_elapsed: Option<Duration>,
     backoff: ExponentialBackoff,
@@ -106,6 +106,11 @@ pub struct CommitSink<F: SnapshotGenerator> {
     table_meta_timestamps: TableMetaTimestamps,
     prefer_vacuum2: bool,
     vacuum_handler: Option<Arc<VacuumHandlerWrapper>>,
+}
+
+enum PurgeMode {
+    PurgeAllHistory,
+    PurgeAccordingToRetention,
 }
 
 impl<F> CommitSink<F>
@@ -124,9 +129,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<ProcessorPtr> {
-        let purge = Self::need_purge(table, &snapshot_gen)
-            || ctx.get_settings().get_enable_auto_vacuum()?;
-
+        let purge_mode = Self::purge_mode(ctx.as_ref(), table, &snapshot_gen)?;
         let prefer_vacuum2 = ctx
             .get_settings()
             .get_enable_use_vacuum2_to_purge_transient_table_data()?;
@@ -149,7 +152,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             table: Arc::new(table.clone()),
             copied_files,
             snapshot_gen,
-            purge,
+            purge_mode,
             backoff: ExponentialBackoff::default(),
             retries: 0,
             max_retry_elapsed,
@@ -167,6 +170,21 @@ where F: SnapshotGenerator + Send + Sync + 'static
         })))
     }
 
+    fn purge_mode(
+        ctx: &dyn TableContext,
+        table: &FuseTable,
+        snapshot_gen: &F,
+    ) -> Result<Option<PurgeMode>> {
+        let mode = if Self::need_to_purge_all_history(table, snapshot_gen) {
+            Some(PurgeMode::PurgeAllHistory)
+        } else if ctx.get_settings().get_enable_auto_vacuum()? {
+            Some(PurgeMode::PurgeAccordingToRetention)
+        } else {
+            None
+        };
+        Ok(mode)
+    }
+
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
         let code = e.code();
         // When prev_snapshot_id is some, means it is an alter table column modification or truncate.
@@ -176,7 +194,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         }
 
         code == ErrorCode::TABLE_VERSION_MISMATCHED
-            || (self.purge && code == ErrorCode::STORAGE_NOT_FOUND)
+            || (self.purge_mode.is_some() && code == ErrorCode::STORAGE_NOT_FOUND)
     }
 
     fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
@@ -217,7 +235,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         Ok(Event::Async)
     }
 
-    fn need_purge(table: &FuseTable, snapshot_gen: &F) -> bool {
+    fn need_to_purge_all_history(table: &FuseTable, snapshot_gen: &F) -> bool {
         if table.is_transient() {
             return true;
         }
@@ -225,7 +243,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         snapshot_gen
             .as_any()
             .downcast_ref::<TruncateGenerator>()
-            .is_some_and(|gen| matches!(gen.mode(), TruncateMode::Purge))
+            .is_some_and(|gen| matches!(gen.mode(), TruncateMode::DropAll))
     }
 
     fn need_truncate(&self) -> bool {
@@ -242,25 +260,55 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .is_some()
     }
 
-    async fn purge(&self, tbl: &FuseTable) -> Result<()> {
+    async fn exec_auto_purge(&self, tbl: &FuseTable, purge_mode: &PurgeMode) -> Result<()> {
         let keep_last_snapshot = true;
-        let snapshot_files = tbl.list_snapshot_files().await?;
-        if let Err(e) = tbl
-            .do_purge(&self.ctx, snapshot_files, None, keep_last_snapshot, false)
-            .await
-        {
-            // Errors of GC, if any, are ignored, since GC task can be picked up
-            warn!(
-                "GC of table not success (this is not a permanent error). the error : {}",
-                e
-            );
-        } else {
-            info!("GC of table done");
+        match purge_mode {
+            PurgeMode::PurgeAllHistory => {
+                // Purge all history, using current table snapshot as gc root.
+
+                let snapshot_files = tbl.list_snapshot_files().await?;
+                if let Err(e) = tbl
+                    .do_purge(&self.ctx, snapshot_files, None, keep_last_snapshot, false)
+                    .await
+                {
+                    // Errors of GC, if any, are ignored, since GC task can be picked up
+                    warn!(
+                        "GC of table not success (this is not a permanent error). the error : {}",
+                        e
+                    );
+                } else {
+                    info!("GC of table done");
+                }
+            }
+            PurgeMode::PurgeAccordingToRetention => {
+                // Navigate to the retention point, and purge history before that point
+
+                let is_dry_run = false;
+                // Using setting or table option, no customized navigation point
+                let navigation_point = None;
+                // Do not limit the number of snapshots that could be removed
+                let num_snapshot_removal_limit = None;
+
+                let purged_files = tbl
+                    .purge(
+                        self.ctx.clone(),
+                        navigation_point,
+                        num_snapshot_removal_limit,
+                        keep_last_snapshot,
+                        is_dry_run,
+                    )
+                    .await?;
+                // `Files::delete_files` should have logged detail information of delete actions.
+                info!(
+                    "auto vacuum, {} files cleared",
+                    purged_files.map(|purged| purged.len()).unwrap_or(0)
+                );
+            }
         }
         Ok(())
     }
 
-    async fn vacuum2(&self, tbl: &FuseTable, vacuum_handler: &VacuumHandlerWrapper) {
+    async fn exec_auto_vacuum2(&self, tbl: &FuseTable, vacuum_handler: &VacuumHandlerWrapper) {
         warn!(
             "Vacuuming table: {}, ident: {}",
             tbl.table_info.name, tbl.table_info.ident
@@ -277,7 +325,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         }
     }
 
-    async fn clean_history(&self) -> Result<()> {
+    async fn clean_history(&self, purge_mode: &PurgeMode) -> Result<()> {
         {
             let table_info = self.table.get_table_info();
             info!(
@@ -291,12 +339,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
         if self.prefer_vacuum2 {
             if let Some(vacuum_handler) = &self.vacuum_handler {
-                self.vacuum2(tbl, vacuum_handler.as_ref()).await;
+                self.exec_auto_vacuum2(tbl, vacuum_handler.as_ref()).await;
                 return Ok(());
             }
         }
 
-        self.purge(tbl).await?;
+        self.exec_auto_purge(tbl, purge_mode).await?;
 
         Ok(())
     }
@@ -508,8 +556,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
                                 .await?;
                         }
 
-                        if self.purge {
-                            self.clean_history().await?;
+                        if let Some(purge_mode) = &self.purge_mode {
+                            self.clean_history(purge_mode).await?;
                         }
 
                         metrics_inc_commit_mutation_success();

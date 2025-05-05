@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use chrono::Utc;
@@ -42,6 +43,7 @@ use databend_common_meta_client::required;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnRequest;
@@ -52,6 +54,7 @@ use databend_common_tracing::StderrConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::time::sleep;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
 #[clap(about, version = & * * METASRV_COMMIT_VERSION, author)]
@@ -152,6 +155,8 @@ async fn main() {
                     benchmark_get_table(&client, prefix, client_num, i).await;
                 } else if cmd == "table_copy_file" {
                     benchmark_table_copy_file(&client, prefix, client_num, i, &param).await;
+                } else if cmd == "semaphore" {
+                    benchmark_semaphore(&client, prefix, client_num, i, &param).await;
                 } else {
                     unreachable!("Invalid config.rpc: {}", rpc);
                 }
@@ -337,6 +342,98 @@ async fn benchmark_table_copy_file(
 
     print_res(i, "table_copy_file", &res);
     res.unwrap();
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct SemaphoreConfig {
+    semaphores: u64,
+
+    /// The capacity of resource in the semaphore.
+    capacity: u64,
+
+    /// Whether to generate a sem seq with the current timestamp,
+    /// which reduce the conflict when enqueueing the permits.
+    time_based: bool,
+
+    /// The ttl if lease is not extended.
+    ttl_ms: Option<u64>,
+
+    /// The time a permit is held by the application for simulation
+    hold_ms: Option<u64>,
+}
+
+impl Default for SemaphoreConfig {
+    fn default() -> Self {
+        Self {
+            semaphores: 1,
+            capacity: 100,
+            time_based: false,
+            ttl_ms: None,
+            hold_ms: None,
+        }
+    }
+}
+
+impl SemaphoreConfig {
+    pub fn ttl(&self) -> Duration {
+        Duration::from_millis(self.ttl_ms.unwrap_or(3_000))
+    }
+
+    pub fn hold(&self) -> Duration {
+        Duration::from_millis(self.hold_ms.unwrap_or(100))
+    }
+}
+
+/// Benchmark semaphore acquire.
+///
+/// - `key_prefix` is used to distribut the load to separate key spaces.
+/// - `client_num` is number of concurrent clients.
+/// - `i` is the index of the current client.
+/// - `param` is a json string of bench specific config.
+async fn benchmark_semaphore(
+    client: &Arc<ClientHandle>,
+    key_prefix: u64,
+    client_num: u64,
+    i: u64,
+    param: &str,
+) {
+    let param = if param.is_empty() {
+        SemaphoreConfig::default()
+    } else {
+        serde_json::from_str(param).unwrap()
+    };
+
+    let sem_key = format!("sem-{}-{}", key_prefix, client_num % param.semaphores);
+    let id = format!("cli-{client_num}-{i}th");
+
+    let permit_str = format!("({sem_key}, id={id})");
+
+    let mut sem = Semaphore::new(client.clone(), &sem_key, param.capacity).await;
+    sem.set_time_based_seq(param.time_based);
+
+    let permit_res = sem.acquire(&id, param.ttl()).await;
+
+    print_sem_res(i, format!("sem-acquired: {permit_str}",), &permit_res);
+
+    let permit = match permit_res {
+        Ok(permit) => permit,
+        Err(e) => {
+            println!("ERROR: Failed to acquire semaphore: {permit_str}: {}", e);
+            return;
+        }
+    };
+
+    sleep(param.hold()).await;
+
+    print_sem_res(
+        i,
+        format!("sem-released: {permit_str}, {}", permit.stat()),
+        &permit,
+    );
+
+    fn print_sem_res<D: Debug>(i: u64, typ: impl Display, res: &D) {
+        println!("{:>10}-th {} result: {:?}", i, typ, res);
+    }
 }
 
 fn print_res<D: Debug>(i: u64, typ: impl Display, res: &D) {

@@ -14,7 +14,9 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::time::Duration;
 
+use display_more::DisplayUnixTimeStampExt;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -48,8 +50,12 @@ impl Display for LogEntry {
         if let Some(txid) = &self.txid {
             write!(f, "txid: {:?}", txid)?;
         }
-        if let Some(time) = &self.time_ms {
-            write!(f, "time: {} ms", time)?;
+        if let Some(time_ms) = &self.time_ms {
+            write!(
+                f,
+                "time: {}",
+                Duration::from_millis(*time_ms).display_unix_timestamp_short()
+            )?;
         }
 
         write!(f, " cmd: {}", self.cmd)

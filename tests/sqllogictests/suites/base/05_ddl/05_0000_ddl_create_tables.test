@@ -313,7 +313,7 @@ statement error 1301
 create table t(a int) seed='123'
 
 statement ok
-create table t_random(a int) engine=RANDOM seed='123'
+create or replace table t_random(a int) engine=RANDOM seed='123'
 
 statement error 1301
 create table t(a int) snapshot_loc='xxx'
@@ -583,7 +583,7 @@ statement error 1081.*is not deterministic
 create table t(a string) cluster by (a+uuid())
 
 statement ok
-create table tt(a tuple(x int, y int), b string, c int) cluster by (b);
+create or replace table tt(a tuple(x int, y int), b string, c int) cluster by (b);
 
 statement ok
 insert into tt(b,c) values ('1',2);
@@ -664,3 +664,14 @@ drop table if exists b;
 
 statement error 1301
 create table a (c1 decimal(38), c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"='33554432');
+
+statement ok
+create or replace table t (a string default '\'0\'', b int);
+
+statement ok
+insert into t(b)  values (1)
+
+query
+select '\'0\'' = a from t
+----
+1
