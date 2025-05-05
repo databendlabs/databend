@@ -2,7 +2,9 @@
 requires = ["maturin>1.1.0"]
 build-backend = "maturin"
 
+
 [project]
+version = "0.1.0"
 name = "databend"
 requires-python = ">=3.12"
 description = "Databend Python Binding"

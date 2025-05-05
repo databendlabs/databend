@@ -272,16 +272,19 @@ impl ParquetFileReader {
 }
 
 impl AsyncFileReader for ParquetFileReader {
-    fn get_bytes(&mut self, range: Range<usize>) -> BoxFuture<'_, parquet::errors::Result<Bytes>> {
+    fn get_bytes(&mut self, range: Range<u64>) -> BoxFuture<'_, parquet::errors::Result<Bytes>> {
         Box::pin(
             self.r
-                .read(range.start as u64..range.end as u64)
+                .read(range.start..range.end)
                 .map_ok(|v| v.to_bytes())
                 .map_err(|err| parquet::errors::ParquetError::External(Box::new(err))),
         )
     }
 
-    fn get_metadata(&mut self) -> BoxFuture<'_, parquet::errors::Result<Arc<ParquetMetaData>>> {
+    fn get_metadata(
+        &mut self,
+        _options: Option<&'_ ArrowReaderOptions>,
+    ) -> BoxFuture<'_, parquet::errors::Result<Arc<ParquetMetaData>>> {
         Box::pin(async move {
             let size = self.size as usize;
             #[allow(deprecated)]

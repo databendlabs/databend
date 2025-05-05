@@ -29,7 +29,7 @@ databend-query = { workspace = true, features = [
     "simd",
     "disable_initial_exec_tls",
 ], default-features = false }
-pyo3 = { version = "0.20", features = ["extension-module", "abi3", "abi3-py37"] }
+pyo3 = { version = "^0.23", features = ["extension-module", "abi3", "abi3-py37"] }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
 uuid = { workspace = true }

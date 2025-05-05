@@ -54,7 +54,7 @@ ctx = SessionContext(tenant = "a")
 Setup virtualenv:
 
 ```shell
-python -m venv .venv
+uv sync
 ```
 
 Activate venv:

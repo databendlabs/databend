@@ -44,6 +44,7 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
     env::set_var("META_EMBEDDED_DIR", path.join("_meta"));
     let mut conf: InnerConfig = Config::load(true).unwrap().try_into().unwrap();
     conf.storage.allow_insecure = true;
+    conf.query.cluster_id = "local_test".to_string();
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         root: path.join("_data").to_str().unwrap().to_owned(),
     });
@@ -51,7 +52,6 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
     GlobalServices::init(&conf, false).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
-
     // Cluster register.
     ClusterDiscovery::instance()
         .register_to_metastore(&conf)
