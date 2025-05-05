@@ -143,9 +143,8 @@ impl Binder {
             false,
             true,
             None,
-            &mut bind_context.virtual_column_context,
-            &mut bind_context.columns,
-        )?;
+            bind_context.allow_virtual_column,
+        );
 
         let (s_expr, mut bind_context) =
             self.bind_base_table(bind_context, "system", table_index, None, &None)?;
@@ -188,7 +187,7 @@ impl Binder {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
-            virtual_column_context: Default::default(),
+            allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -411,6 +410,8 @@ impl Binder {
                         Box::new(DataType::from(data_type)),
                         Visibility::InVisible,
                     )
+                    .table_name(Some(table_name.to_string()))
+                    .database_name(Some(database_name.to_string()))
                     .table_index(Some(*table_index))
                     .build();
                     bind_context.add_column_binding(column_binding);

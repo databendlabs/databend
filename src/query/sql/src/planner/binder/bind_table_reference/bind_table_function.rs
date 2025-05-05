@@ -152,9 +152,8 @@ impl Binder {
                 false,
                 false,
                 None,
-                &mut bind_context.virtual_column_context,
-                &mut bind_context.columns,
-            )?;
+                false,
+            );
 
             let (s_expr, mut bind_context) =
                 self.bind_base_table(bind_context, "system", table_index, None, sample)?;
@@ -216,9 +215,8 @@ impl Binder {
                 false,
                 false,
                 None,
-                &mut bind_context.virtual_column_context,
-                &mut bind_context.columns,
-            )?;
+                false,
+            );
 
             let (s_expr, mut bind_context) =
                 self.bind_base_table(bind_context, "system", table_index, None, &None)?;

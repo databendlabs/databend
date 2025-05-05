@@ -162,9 +162,8 @@ impl Binder {
                     bind_context.planning_agg_index,
                     false,
                     None,
-                    &mut bind_context.virtual_column_context,
-                    &mut bind_context.columns,
-                )?;
+                    false,
+                );
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
                     database.as_str(),
@@ -249,9 +248,8 @@ impl Binder {
                         false,
                         false,
                         None,
-                        &mut bind_context.virtual_column_context,
-                        &mut bind_context.columns,
-                    )?;
+                        bind_context.allow_virtual_column,
+                    );
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query)?;
                     if let Some(alias) = alias {
@@ -283,9 +281,8 @@ impl Binder {
                     bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
-                    &mut bind_context.virtual_column_context,
-                    &mut bind_context.columns,
-                )?;
+                    bind_context.allow_virtual_column,
+                );
 
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,

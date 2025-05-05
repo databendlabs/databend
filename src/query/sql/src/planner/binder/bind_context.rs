@@ -15,7 +15,6 @@
 use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::collections::HashSet;
 use std::hash::Hash;
 
 use dashmap::DashMap;
@@ -106,29 +105,6 @@ pub enum NameResolutionResult {
     Alias { alias: String, scalar: ScalarExpr },
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Debug)]
-pub struct VirtualColumnContext {
-    /// Whether allow rewrite as virtual column and pushdown.
-    pub allow_pushdown: bool,
-    /// The table indics of the virtual column has been readded,
-    /// used to avoid repeated reading
-    pub table_indices: HashSet<IndexType>,
-}
-
-impl VirtualColumnContext {
-    fn with_parent(parent: &VirtualColumnContext) -> VirtualColumnContext {
-        VirtualColumnContext {
-            allow_pushdown: parent.allow_pushdown,
-            table_indices: HashSet::new(),
-        }
-    }
-
-    pub(crate) fn merge(&mut self, other: &VirtualColumnContext) {
-        self.allow_pushdown = self.allow_pushdown || other.allow_pushdown;
-        self.table_indices.extend(other.table_indices.clone());
-    }
-}
-
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
 #[derive(Clone, Debug)]
 pub struct BindContext {
@@ -167,7 +143,8 @@ pub struct BindContext {
 
     pub inverted_index_map: Box<IndexMap<IndexType, InvertedIndexInfo>>,
 
-    pub virtual_column_context: VirtualColumnContext,
+    /// Whether allow rewrite as virtual column and pushdown.
+    pub allow_virtual_column: bool,
 
     pub expr_context: ExprContext,
 
@@ -240,7 +217,7 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
-            virtual_column_context: VirtualColumnContext::default(),
+            allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -284,9 +261,7 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
-            virtual_column_context: VirtualColumnContext::with_parent(
-                &parent.virtual_column_context,
-            ),
+            allow_virtual_column: parent.allow_virtual_column,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -456,10 +431,6 @@ impl BindContext {
                     internal_column,
                 };
                 result.push(NameResolutionResult::InternalColumn(column_binding));
-            }
-
-            if !result.is_empty() {
-                return;
             }
 
             if !result.is_empty() {

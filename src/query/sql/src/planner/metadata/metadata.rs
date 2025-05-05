@@ -14,10 +14,10 @@
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::fmt::Write;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
@@ -25,22 +25,15 @@ use databend_common_ast::ast::Literal;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use parking_lot::RwLock;
 
-use crate::binder::VirtualColumnContext;
 use crate::optimizer::ir::SExpr;
-use crate::ColumnBinding;
-use crate::ColumnBindingBuilder;
 use crate::ScalarExpr;
-use crate::Visibility;
 
 /// Planner use [`usize`] as it's index type.
 ///
@@ -299,44 +292,26 @@ impl Metadata {
 
     pub fn add_virtual_column(
         &mut self,
-        base_column: &BaseTableColumn,
+        table_index: IndexType,
+        source_column_name: String,
+        source_column_id: u32,
         column_id: u32,
         column_name: String,
         data_type: TableDataType,
-        cast_type: Option<(TableDataType, bool)>,
-        key_paths: Scalar,
-        old_index: Option<IndexType>,
+        is_try: bool,
     ) -> IndexType {
-        let table_index = base_column.table_index;
-        let source_column_name = base_column.column_name.clone();
-        let source_column_index = base_column.column_index;
-        // The type of source column is variant, not a nested type, must have `column_id`.
-        let source_column_id = base_column.column_id.unwrap();
-
-        // If the function that generates the virtual column already has an index,
-        // we can use that index and avoid generate a new one.
-        let column_index = if let Some(old_index) = old_index {
-            old_index
-        } else {
-            self.columns.len()
-        };
+        let column_index = self.columns.len();
         let column = ColumnEntry::VirtualColumn(VirtualColumn {
             table_index,
             source_column_name,
-            source_column_index,
             source_column_id,
             column_id,
             column_index,
             column_name,
             data_type,
-            cast_type,
-            key_paths,
+            is_try,
         });
-        if old_index.is_some() {
-            self.columns[column_index] = column;
-        } else {
-            self.columns.push(column);
-        }
+        self.columns.push(column);
         column_index
     }
 
@@ -366,9 +341,8 @@ impl Metadata {
         source_of_index: bool,
         source_of_stage: bool,
         cte_suffix_name: Option<String>,
-        virtual_column_context: &mut VirtualColumnContext,
-        column_bindings: &mut Vec<ColumnBinding>,
-    ) -> Result<IndexType> {
+        allow_virtual_column: bool,
+    ) -> IndexType {
         let table_name = table_meta.name().to_string();
         let table_name = Self::remove_cte_suffix(table_name, cte_suffix_name);
 
@@ -464,92 +438,66 @@ impl Metadata {
                 );
             }
         }
-        self.add_virtual_columns(
-            &table_meta,
-            virtual_column_context,
-            column_bindings,
-            table_index,
-        )?;
-
-        Ok(table_index)
-    }
-
-    fn add_virtual_columns(
-        &mut self,
-        table_meta: &Arc<dyn Table>,
-        virtual_column_context: &mut VirtualColumnContext,
-        column_bindings: &mut Vec<ColumnBinding>,
-        table_index: IndexType,
-    ) -> Result<()> {
-        if !virtual_column_context.allow_pushdown {
-            return Ok(());
+        if allow_virtual_column {
+            self.add_virtual_columns(&table_meta, table_index);
         }
 
+        table_index
+    }
+
+    fn add_virtual_columns(&mut self, table_meta: &Arc<dyn Table>, table_index: IndexType) {
         // Ignore tables that do not support virtual columns
         if !table_meta.support_virtual_columns() {
-            return Ok(());
+            return;
         }
 
         let table_meta = &table_meta.get_table_info().meta;
         let Some(ref virtual_schema) = table_meta.virtual_schema else {
-            return Ok(());
+            return;
         };
 
-        if !virtual_column_context.table_indices.contains(&table_index) {
-            virtual_column_context.table_indices.insert(table_index);
-            for virtual_field in virtual_schema.fields.iter() {
-                let Some(base_column) = ({
-                    self.columns_by_table_index(table_index)
-                        .iter()
-                        .find_map(|column| {
-                            if let ColumnEntry::BaseTableColumn(base_column) = column {
-                                if base_column.column_id == Some(virtual_field.source_column_id) {
-                                    return Some(base_column.clone());
-                                }
-                            }
-                            None
-                        })
-                }) else {
-                    continue;
-                };
-
-                let name = format!("{}{}", base_column.column_name, virtual_field.name);
-                let mut index = 0;
-                // Check for duplicate virtual columns
-                for table_column in self.virtual_columns_by_table_index(table_index) {
-                    if table_column.name() == name {
-                        index = table_column.index();
-                        break;
+        let source_column_ids = virtual_schema
+            .fields
+            .iter()
+            .map(|field| field.source_column_id)
+            .collect::<HashSet<_>>();
+        let mut base_column_map = HashMap::new();
+        for column in self.columns_by_table_index(table_index).iter() {
+            if let ColumnEntry::BaseTableColumn(base_column) = column {
+                if let Some(column_id) = base_column.column_id {
+                    if source_column_ids.contains(&column_id) {
+                        base_column_map.insert(column_id, base_column.clone());
                     }
                 }
-                let column_id = virtual_field.column_id;
-
-                // It's not possible to determine the actual type based on the type of generated virtual columns,
-                // as fields in non-leaf nodes are not generated with virtual columns,
-                // and these ungenerated nodes may have inconsistent types.
-                let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
-                let data_type = Box::new(DataType::from(&table_data_type));
-
-                if index == 0 {
-                    let path = Self::convert_array_index(&virtual_field.name)?;
-                    index = self.add_virtual_column(
-                        &base_column,
-                        column_id,
-                        name.clone(),
-                        table_data_type,
-                        None,
-                        Scalar::String(path),
-                        None,
-                    );
-                }
-                let virtual_column_binding =
-                    ColumnBindingBuilder::new(name, index, data_type, Visibility::InVisible)
-                        .table_index(Some(table_index))
-                        .build();
-                column_bindings.push(virtual_column_binding);
             }
         }
-        Ok(())
+
+        for virtual_field in virtual_schema.fields.iter() {
+            let Some(base_column) = base_column_map.get(&virtual_field.source_column_id) else {
+                continue;
+            };
+
+            let name = format!("{}{}", base_column.column_name, virtual_field.name);
+            let column_id = virtual_field.column_id;
+
+            // It's not possible to determine the actual type based on the type of generated virtual columns,
+            // as fields in non-leaf nodes are not generated with virtual columns,
+            // and these ungenerated nodes may have inconsistent types.
+            let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
+
+            // The type of source column is variant, not a nested type, must have `column_id`.
+            let source_column_id = base_column.column_id.unwrap();
+
+            self.add_virtual_column(
+                base_column.table_index,
+                base_column.column_name.clone(),
+                source_column_id,
+                column_id,
+                name.clone(),
+                table_data_type,
+                true,
+            );
+        }
     }
 
     pub fn change_derived_column_alias(&mut self, index: IndexType, alias: String) {
@@ -603,62 +551,6 @@ impl Metadata {
         for entry in self.tables.iter_mut() {
             entry.table = table.clone();
         }
-    }
-
-    fn convert_array_index(input: &str) -> databend_common_exception::Result<String> {
-        let mut chars = input.chars().peekable();
-        let mut path = "{".to_string();
-
-        while chars.peek().is_some() {
-            if chars.next() != Some('[') {
-                return Err(ErrorCode::InvalidArgument("Expected '['".to_string()));
-            }
-            if let Some('\'') = chars.peek() {
-                let _ = chars.next();
-                path.push('"');
-
-                let mut is_empty = true;
-                for c in chars.by_ref() {
-                    is_empty = false;
-                    if c == '\'' {
-                        break;
-                    }
-                    path.write_char(c)?;
-                }
-                if is_empty {
-                    let _ = path.pop();
-                } else {
-                    path.push('"')
-                }
-                if chars.next() != Some(']') {
-                    return Err(ErrorCode::InvalidArgument("Expected ']' after string"));
-                }
-            } else {
-                while let Some(&c) = chars.peek() {
-                    if c == ']' {
-                        break;
-                    }
-                    path.write_char(c)?;
-                    chars.next();
-                }
-                if chars.next() != Some(']') {
-                    return Err(ErrorCode::InvalidArgument(
-                        "Expected ']' after index".to_string(),
-                    ));
-                }
-            };
-
-            path.write_char(',')?;
-        }
-        if path.len() > 1 {
-            let _ = path.pop();
-        }
-        path.write_char('}')?;
-
-        if chars.next().is_some() {
-            return Err(ErrorCode::InvalidArgument("Unexpected trailing characters"));
-        }
-        Ok(path)
     }
 }
 
@@ -799,17 +691,13 @@ pub struct TableInternalColumn {
 pub struct VirtualColumn {
     pub table_index: IndexType,
     pub source_column_name: String,
-    pub source_column_index: IndexType,
     pub source_column_id: u32,
     pub column_id: u32,
     pub column_index: IndexType,
     pub column_name: String,
     pub data_type: TableDataType,
-    /// cast to TableDataType and is_try
-    pub cast_type: Option<(TableDataType, bool)>,
-
-    /// Paths to generate virtual column from source column
-    pub key_paths: Scalar,
+    /// try cast to target type or not
+    pub is_try: bool,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -886,34 +774,4 @@ pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) ->
         && args
             .iter()
             .all(|expr| matches!(expr, Expr::Literal { value,.. } if *value != Literal::Null))
-}
-
-#[cfg(test)]
-mod test {
-    use databend_common_exception::Result;
-
-    use crate::Metadata;
-
-    #[test]
-    fn test_convert_array_index() -> Result<()> {
-        let success = vec![
-            ("['a']", "{\"a\"}"),
-            ("['a'][0]", "{\"a\",0}"),
-            ("['a']['b']", "{\"a\",\"b\"}"),
-            ("['a']['some_word']", "{\"a\",\"some_word\"}"),
-            ("['a'][42]['long_string']", "{\"a\",42,\"long_string\"}"),
-            ("['a'][0]['b']['c']", "{\"a\",0,\"b\",\"c\"}"),
-            ("['key']['value'][123]", "{\"key\",\"value\",123}"),
-            ("[0]", "{0}"),
-        ];
-        let failure = vec!["invalid", "['a'", "['a']extra"];
-        for (case, result) in success {
-            assert_eq!(result, Metadata::convert_array_index(case)?);
-        }
-        for case in failure {
-            assert!(Metadata::convert_array_index(case).is_err());
-        }
-
-        Ok(())
-    }
 }

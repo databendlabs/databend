@@ -95,7 +95,7 @@ explain select a, get_by_keypath(v, '{"a",0}') from t2 where get_by_keypath(v, '
 ----
 Filter
 ├── output columns: [t2.a (#0), t2.v['a'][0] (#2)]
-├── filters: [is_true(TRY_CAST(v['b']['c'] (#5) AS UInt8 NULL) = 10)]
+├── filters: [is_true(TRY_CAST(t2.v['b']['c'] (#5) AS UInt8 NULL) = 10)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.test_virtual_db.t2
@@ -105,7 +105,7 @@ Filter
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(TRY_CAST(v['b']['c'] (#5) AS UInt8 NULL) = 10)], limit: NONE]
+    ├── push downs: [filters: [is_true(TRY_CAST(t2.v['b']['c'] (#5) AS UInt8 NULL) = 10)], limit: NONE]
     ├── virtual columns: [v['a'][0], v['b']['c']]
     └── estimated rows: 1.00
 
@@ -113,27 +113,28 @@ query T
 explain select a, get_by_keypath_string(v, '{"a",0}') from t2 where get_by_keypath_string(v, '{"b","c"}') like '%10%'
 ----
 Filter
-├── output columns: [t2.a (#0), t2.v['a'][0] (#2)]
-├── filters: [is_true(like(v['b']['c'] (#5), '%10%'))]
+├── output columns: [t2.a (#0), t2.v['a'][0]::string (#7)]
+├── filters: [is_true(like(t2.v['b']['c']::string (#8), '%10%'))]
 ├── estimated rows: 0.50
 └── TableScan
     ├── table: default.test_virtual_db.t2
-    ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]
+    ├── output columns: [a (#0), v['a'][0]::string (#7), v['b']['c']::string (#8)]
     ├── read rows: 1
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(like(v['b']['c'] (#5), '%10%'))], limit: NONE]
-    ├── virtual columns: [v['a'][0], v['b']['c']]
+    ├── push downs: [filters: [is_true(like(t2.v['b']['c']::string (#8), '%10%'))], limit: NONE]
+    ├── virtual columns: [v['a'][0]::string, v['b']['c']::string]
     └── estimated rows: 1.00
+
 
 query T
 explain select a, get(v, 'd') from t2 where get(v, 'd') = 20
 ----
 Filter
 ├── output columns: [t2.a (#0), t2.v['d'] (#6)]
-├── filters: [is_true(TRY_CAST(v['d'] (#6) AS UInt8 NULL) = 20)]
+├── filters: [is_true(TRY_CAST(t2.v['d'] (#6) AS UInt8 NULL) = 20)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.test_virtual_db.t2
@@ -143,7 +144,7 @@ Filter
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(TRY_CAST(v['d'] (#6) AS UInt8 NULL) = 20)], limit: NONE]
+    ├── push downs: [filters: [is_true(TRY_CAST(t2.v['d'] (#6) AS UInt8 NULL) = 20)], limit: NONE]
     ├── virtual columns: [v['d']]
     └── estimated rows: 1.00
 
@@ -165,21 +166,17 @@ TableScan
 query T
 explain select v['d']::string, v['d']::int from t2;
 ----
-EvalScalar
-├── output columns: [t2.v['d'] (#6), v['d']::Int32 (#7)]
-├── expressions: [CAST(get_by_keypath(v (#1), '{"d"}') AS Int32 NULL)]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.test_virtual_db.t2
-    ├── output columns: [v (#1), v['d'] (#6)]
-    ├── read rows: 1
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [], limit: NONE]
-    ├── virtual columns: [v['d']]
-    └── estimated rows: 1.00
+TableScan
+├── table: default.test_virtual_db.t2
+├── output columns: [v['d']::string (#7), v['d']::int32 (#8)]
+├── read rows: 1
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['d']::int32, v['d']::string]
+└── estimated rows: 1.00
 
 query T
 select v['d']::string, v['d']::int from t2;
@@ -190,53 +187,19 @@ query T
 explain select a, get_string(v, 'd') from t2 where get_string(v, 'd') like '%20%'
 ----
 Filter
-├── output columns: [t2.a (#0), t2.v['d'] (#6)]
-├── filters: [is_true(like(v['d'] (#6), '%20%'))]
+├── output columns: [t2.a (#0), t2.v['d']::string (#7)]
+├── filters: [is_true(like(t2.v['d']::string (#7), '%20%'))]
 ├── estimated rows: 0.50
 └── TableScan
     ├── table: default.test_virtual_db.t2
-    ├── output columns: [a (#0), v['d'] (#6)]
+    ├── output columns: [a (#0), v['d']::string (#7)]
     ├── read rows: 1
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(like(v['d'] (#6), '%20%'))], limit: NONE]
-    ├── virtual columns: [v['d']]
-    └── estimated rows: 1.00
-
-query T
-explain select v['b']['c']::int from t2;
-----
-TableScan
-├── table: default.test_virtual_db.t2
-├── output columns: [v['b']['c'] (#5)]
-├── read rows: 1
-├── read size: < 1 KiB
-├── partitions total: 1
-├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-├── push downs: [filters: [], limit: NONE]
-├── virtual columns: [v['b']['c']]
-└── estimated rows: 1.00
-
-query T
-explain select a, v['a'][0] from t2 where v['b']['c'] = 10
-----
-Filter
-├── output columns: [t2.a (#0), t2.v['a'][0] (#2)]
-├── filters: [is_true(TRY_CAST(v['b']['c'] (#5) AS UInt8 NULL) = 10)]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.test_virtual_db.t2
-    ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]
-    ├── read rows: 1
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(TRY_CAST(v['b']['c'] (#5) AS UInt8 NULL) = 10)], limit: NONE]
-    ├── virtual columns: [v['a'][0], v['b']['c']]
+    ├── push downs: [filters: [is_true(like(t2.v['d']::string (#7), '%20%'))], limit: NONE]
+    ├── virtual columns: [v['d']::string]
     └── estimated rows: 1.00
 
 query T
@@ -250,7 +213,7 @@ EvalScalar
     ├── output columns: [t2.a (#0), t2.v (#1)]
     ├── join type: LEFT OUTER
     ├── build keys: [t1.a (#7)]
-    ├── probe keys: [CAST(v['b']['c'] (#5) AS Int32 NULL)]
+    ├── probe keys: [CAST(t2.v['b']['c'] (#5) AS Int32 NULL)]
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
@@ -283,16 +246,16 @@ explain select t2.a, t2.v['b']['c'] from t2 left outer join t1 on t2.v['b']['c']
 HashJoin
 ├── output columns: [t2.a (#0), t2.v['b']['c'] (#5)]
 ├── join type: RIGHT OUTER
-├── build keys: [CAST(v['b']['c'] (#5) AS Int32 NULL)]
+├── build keys: [CAST(t2.v['b']['c'] (#5) AS Int32 NULL)]
 ├── probe keys: [t1.a (#7)]
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:CAST(v['b']['c'] (#5) AS Int32 NULL), probe key:t1.a (#7), filter type:inlist,min_max
+│   └── filter id:0, build key:CAST(t2.v['b']['c'] (#5) AS Int32 NULL), probe key:t1.a (#7), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#0), t2.v['b']['c'] (#5)]
-│   ├── filters: [is_true(TRY_CAST(v['a'][0] (#2) AS UInt8 NULL) = 1)]
+│   ├── filters: [is_true(TRY_CAST(t2.v['a'][0] (#2) AS UInt8 NULL) = 1)]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
@@ -302,7 +265,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [is_true(TRY_CAST(v['a'][0] (#2) AS UInt8 NULL) = 1)], limit: NONE]
+│       ├── push downs: [filters: [is_true(TRY_CAST(t2.v['a'][0] (#2) AS UInt8 NULL) = 1)], limit: NONE]
 │       ├── virtual columns: [v['a'][0], v['b']['c']]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
@@ -331,7 +294,7 @@ HashJoin
 ├── estimated rows: 0.20
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.v (#3)]
-│   ├── filters: [is_true(TRY_CAST(v['b']['c'] (#7) AS Int32 NULL) = t2.a (#2))]
+│   ├── filters: [is_true(TRY_CAST(t2.v['b']['c'] (#7) AS Int32 NULL) = t2.a (#2))]
 │   ├── estimated rows: 0.20
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
@@ -341,7 +304,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [is_true(TRY_CAST(v['b']['c'] (#7) AS Int32 NULL) = t2.a (#2))], limit: NONE]
+│       ├── push downs: [filters: [is_true(TRY_CAST(t2.v['b']['c'] (#7) AS Int32 NULL) = t2.a (#2))], limit: NONE]
 │       ├── virtual columns: [v['b']['c']]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
@@ -369,7 +332,7 @@ HashJoin
 ├── estimated rows: 0.20
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.v (#3)]
-│   ├── filters: [is_true(TRY_CAST(v['b']['c'] (#7) AS Int32 NULL) > t2.a (#2))]
+│   ├── filters: [is_true(TRY_CAST(t2.v['b']['c'] (#7) AS Int32 NULL) > t2.a (#2))]
 │   ├── estimated rows: 0.20
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
@@ -379,7 +342,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [is_true(TRY_CAST(v['b']['c'] (#7) AS Int32 NULL) > t2.a (#2))], limit: NONE]
+│       ├── push downs: [filters: [is_true(TRY_CAST(t2.v['b']['c'] (#7) AS Int32 NULL) > t2.a (#2))], limit: NONE]
 │       ├── virtual columns: [v['b']['c']]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
@@ -409,7 +372,7 @@ AggregateFinal
         ├── output columns: [t2.v['b']['c'] (#5), t1.a (#7)]
         ├── join type: INNER
         ├── build keys: [t1.a (#7)]
-        ├── probe keys: [CAST(v['b']['c'] (#5) AS Int32 NULL)]
+        ├── probe keys: [CAST(t2.v['b']['c'] (#5) AS Int32 NULL)]
         ├── keys is null equal: [false]
         ├── filters: []
         ├── build join filters:

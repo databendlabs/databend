@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
-use std::fmt::Write;
 use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -602,9 +601,12 @@ impl<'a> TypeChecker<'a> {
                 let target_type = if data_type.remove_nullable() == DataType::Variant {
                     let target_type = checked_expr.data_type().nest_wrap_nullable();
 
-                    if let Some(new_scalar) =
-                        self.try_rewrite_virtual_column_cast(&scalar, &target_type)
-                    {
+                    if let Some(new_scalar) = self.try_rewrite_virtual_column_cast(
+                        expr.span(),
+                        &scalar,
+                        &target_type,
+                        false,
+                    ) {
                         return Ok(Box::new((new_scalar, target_type)));
                     }
                     target_type
@@ -655,7 +657,17 @@ impl<'a> TypeChecker<'a> {
                 // cast variant to other type should nest wrap nullable,
                 // as we cast JSON null to SQL NULL.
                 let target_type = if data_type.remove_nullable() == DataType::Variant {
-                    checked_expr.data_type().nest_wrap_nullable()
+                    let target_type = checked_expr.data_type().nest_wrap_nullable();
+
+                    if let Some(new_scalar) = self.try_rewrite_virtual_column_cast(
+                        expr.span(),
+                        &scalar,
+                        &target_type,
+                        true,
+                    ) {
+                        return Ok(Box::new((new_scalar, target_type)));
+                    }
+                    target_type
                 } else {
                     checked_expr.data_type().clone()
                 };
@@ -1183,76 +1195,97 @@ impl<'a> TypeChecker<'a> {
 
     fn try_rewrite_virtual_column_cast(
         &mut self,
+        span: Span,
         scalar: &ScalarExpr,
         target_type: &DataType,
+        is_try: bool,
     ) -> Option<ScalarExpr> {
         let Ok(cast_ty) = infer_schema_type(target_type) else {
             return None;
         };
-        let ScalarExpr::BoundColumnRef(column) = scalar else {
+        let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar else {
             return None;
         };
-        column.column.table_index?;
-        let mut guard = self.metadata.write();
-        let ColumnEntry::VirtualColumn(virtual_column) = guard.column(column.column.index).clone()
-        else {
-            return None;
-        };
-        // If VirtualColumn has been cast to another type, the rewrite of this cast is canceled.
-        if let Some((source_cast_ty, _)) = virtual_column.cast_type {
-            if source_cast_ty == cast_ty {
-                return Some(scalar.clone());
-            }
-            let source_column_binding = ColumnBindingBuilder::new(
-                virtual_column.source_column_name,
-                virtual_column.source_column_index,
-                Box::new(DataType::Nullable(Box::new(DataType::Variant))),
-                Visibility::Visible,
-            )
-            .build();
-            return Some(ScalarExpr::CastExpr(CastExpr {
-                span: scalar.span(),
-                is_try: false,
-                argument: Box::new(ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "get_by_keypath".to_string(),
-                    params: vec![],
-                    arguments: vec![
-                        ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: scalar.span(),
-                            column: source_column_binding,
-                        }),
-                        ScalarExpr::ConstantExpr(ConstantExpr {
-                            span: scalar.span(),
-                            value: virtual_column.key_paths,
-                        }),
-                    ],
-                })),
-                target_type: Box::new(target_type.clone()),
-            }));
-        }
-        let ColumnEntry::BaseTableColumn(source_column) =
-            guard.column(virtual_column.source_column_index).clone()
-        else {
-            return None;
-        };
-        if let Ok(column_ty) = infer_schema_type(column.column.data_type.as_ref()) {
-            let mut column = column.clone();
+        let table_index = column.table_index?;
 
-            // Tips: column id from source virtual_column
-            column.column.index = guard.add_virtual_column(
-                &source_column,
-                virtual_column.column_id,
-                virtual_column.column_name,
-                column_ty,
-                Some((cast_ty, true)),
-                virtual_column.key_paths,
-                Some(virtual_column.column_index),
-            );
-            column.column.data_type = Box::new(target_type.clone());
-            return Some(ScalarExpr::BoundColumnRef(column));
+        if column.index >= self.metadata.read().columns().len() {
+            return None;
         }
-        None
+        let column_entry = self.metadata.read().column(column.index).clone();
+        let ColumnEntry::VirtualColumn(virtual_column) = column_entry else {
+            return None;
+        };
+
+        let virtual_column_name = if is_try {
+            format!(
+                "try_cast({} as {})",
+                column.column_name,
+                target_type.remove_nullable().to_string().to_lowercase()
+            )
+        } else {
+            format!(
+                "{}::{}",
+                column.column_name,
+                target_type.remove_nullable().to_string().to_lowercase()
+            )
+        };
+
+        // Try resolve the virtual column with the cast type.
+        if let Ok(box (new_scalar, _)) = self.resolve(&Expr::ColumnRef {
+            span,
+            column: ColumnRef {
+                database: column
+                    .database_name
+                    .as_ref()
+                    .map(|name| Identifier::from_name(span, name)),
+                table: column
+                    .table_name
+                    .as_ref()
+                    .map(|name| Identifier::from_name(span, name)),
+                column: ColumnID::Name(Identifier::from_name(span, &virtual_column_name)),
+            },
+        }) {
+            return Some(new_scalar);
+        }
+
+        // Rewrite the virtual column as the cast type down to avoid additional type cast.
+        let database_name = column.database_name.clone();
+        let table_name = column.table_name.clone();
+
+        let mut guard = self.metadata.write();
+        let new_column_index = guard.add_virtual_column(
+            virtual_column.table_index,
+            virtual_column.source_column_name.clone(),
+            virtual_column.source_column_id,
+            virtual_column.column_id,
+            virtual_column_name.clone(),
+            cast_ty,
+            is_try,
+        );
+
+        let new_column_binding = ColumnBindingBuilder::new(
+            virtual_column_name,
+            new_column_index,
+            Box::new(target_type.clone()),
+            Visibility::InVisible,
+        )
+        .table_name(table_name)
+        .database_name(database_name)
+        .table_index(Some(table_index))
+        .build();
+        self.bind_context
+            .add_column_binding(new_column_binding.clone());
+
+        if let Some(scan_id) = guard.base_column_scan_id(virtual_column.column_index) {
+            let mut base_column_scan_id = HashMap::new();
+            base_column_scan_id.insert(new_column_index, scan_id);
+            guard.add_base_column_scan_id(base_column_scan_id);
+        }
+
+        Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span,
+            column: new_column_binding,
+        }))
     }
 
     // TODO: remove this function
@@ -2940,9 +2973,9 @@ impl<'a> TypeChecker<'a> {
             return rewritten_func_func;
         }
         if let Some(rewritten_variant_expr) =
-            self.try_rewrite_variant_function(span, func_name, &mut args, &mut arg_types)?
+            self.try_rewrite_variant_function(span, func_name, &args, &arg_types)
         {
-            return Ok(rewritten_variant_expr);
+            return rewritten_variant_expr;
         }
 
         self.resolve_scalar_function_call(span, func_name, params, args)
@@ -3918,6 +3951,70 @@ impl<'a> TypeChecker<'a> {
                     "Variable name must be a constant string",
                 )))
             }
+            ("get" | "get_string", &[arg_x, arg_y]) => {
+                if !self.bind_context.allow_virtual_column {
+                    return None;
+                }
+
+                let mut expr = arg_x;
+                let mut path_exprs = VecDeque::new();
+                path_exprs.push_back(arg_y);
+                while let Expr::FunctionCall { func, .. } = expr {
+                    let func_name =
+                        normalize_identifier(&func.name, self.name_resolution_ctx).to_string();
+                    let func_name = func_name.as_str();
+                    if func_name == "get" && func.args.len() == 2 {
+                        expr = &func.args[0];
+                        path_exprs.push_back(&func.args[1]);
+                    } else {
+                        return None;
+                    }
+                }
+                let mut paths = VecDeque::with_capacity(path_exprs.len());
+                while let Some(path_expr) = path_exprs.pop_back() {
+                    if let Expr::Literal { span, value } = path_expr {
+                        if matches!(value, Literal::UInt64(_) | Literal::String(_)) {
+                            paths.push_back((*span, value.clone()));
+                        } else {
+                            return Some(Err(ErrorCode::SemanticError(format!(
+                                "Unsupported argument: {:?}",
+                                value
+                            ))
+                            .set_span(*span)));
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+                if func_name == "get_string" {
+                    if let Ok(box (scalar, data_type)) = self.resolve_map_access(span, expr, paths)
+                    {
+                        if data_type.remove_nullable() == DataType::Variant {
+                            let target_type = DataType::Nullable(Box::new(DataType::String));
+                            let new_scalar = if let Some(new_scalar) = self
+                                .try_rewrite_virtual_column_cast(
+                                    scalar.span(),
+                                    &scalar,
+                                    &target_type,
+                                    false,
+                                ) {
+                                new_scalar
+                            } else {
+                                ScalarExpr::CastExpr(CastExpr {
+                                    span: scalar.span(),
+                                    is_try: false,
+                                    argument: Box::new(scalar),
+                                    target_type: Box::new(target_type.clone()),
+                                })
+                            };
+                            return Some(Ok(Box::new((new_scalar, target_type))));
+                        }
+                    }
+                    None
+                } else {
+                    Some(self.resolve_map_access(span, expr, paths))
+                }
+            }
             _ => None,
         }
     }
@@ -4009,8 +4106,6 @@ impl<'a> TypeChecker<'a> {
 
     fn rewritable_variant_functions() -> &'static [Ascii<&'static str>] {
         static VARIANT_FUNCTIONS: &[Ascii<&'static str>] = &[
-            Ascii::new("get"),
-            Ascii::new("get_string"),
             Ascii::new("get_by_keypath"),
             Ascii::new("get_by_keypath_string"),
         ];
@@ -4021,101 +4116,68 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         func_name: &str,
-        args: &mut [ScalarExpr],
-        arg_types: &mut [DataType],
-    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
-        if !Self::rewritable_variant_functions().contains(&Ascii::new(func_name))
+        args: &[ScalarExpr],
+        arg_types: &[DataType],
+    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
+        if !self.bind_context.allow_virtual_column
+            || !Self::rewritable_variant_functions().contains(&Ascii::new(func_name))
             || arg_types.is_empty()
             || arg_types[0].remove_nullable() != DataType::Variant
         {
-            return Ok(None);
+            return None;
         }
-        let name = if matches!(func_name, "get" | "get_string") {
-            let mut name = String::new();
-            Self::merge_fn_get(args, &mut name)?;
-            name
-        } else {
-            let ScalarExpr::BoundColumnRef(column_ref) = &args[0] else {
-                return Ok(None);
-            };
-            // only rewrite when arg[1] is path
-            let ScalarExpr::ConstantExpr(ConstantExpr {
-                value: Scalar::String(path),
-                ..
-            }) = &args[1]
-            else {
-                return Ok(None);
-            };
-            let Ok(key_paths) = parse_key_paths(path.as_bytes()) else {
-                return Ok(None);
-            };
-            Self::keypaths_to_name(&column_ref.column.column_name, &key_paths)
+        let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = &args[0] else {
+            return None;
         };
-        let mut expr = Expr::ColumnRef {
-            span,
-            column: ColumnRef {
-                database: None,
-                table: None,
-                column: ColumnID::Name(Identifier::from_name(span, name)),
-            },
-        };
-        if func_name.ends_with("_string") {
-            expr = Expr::Cast {
-                span,
-                expr: Box::new(expr),
-                target_type: TypeName::String,
-                pg_style: false,
-            }
-        }
-        let Ok(result) = self.resolve(&expr) else {
-            return Ok(None);
-        };
-
-        let mut target_type = match func_name {
-            "get_by_keypath" | "get" => DataType::Variant,
-            "get_by_keypath_string" | "get_string" => DataType::String,
-            _ => return Ok(None),
-        };
-        if result.as_ref().1.is_nullable() {
-            target_type = DataType::Nullable(Box::new(target_type));
-        }
-        if target_type != result.as_ref().1 {
-            let box (rewrite_expr, _) = result;
-            return Ok(Some(Box::new((
-                ScalarExpr::CastExpr(CastExpr {
-                    span,
-                    is_try: false,
-                    argument: Box::new(rewrite_expr),
-                    target_type: Box::new(target_type.clone()),
-                }),
-                target_type,
-            ))));
-        }
-        Ok(Some(result))
-    }
-
-    fn merge_fn_get(args: &[ScalarExpr], name: &mut String) -> Result<()> {
-        match &args[0] {
-            ScalarExpr::BoundColumnRef(column) => {
-                *name = column.column.column_name.to_string();
-            }
-            ScalarExpr::FunctionCall(func_call) => {
-                // without 'get_string'
-                if matches!(func_call.func_name.as_str(), "get") {
-                    Self::merge_fn_get(&func_call.arguments, name)?;
-                }
-            }
-            _ => return Ok(()),
+        if column.index >= self.metadata.read().columns().len() {
+            return None;
         }
         // only rewrite when arg[1] is path
         let ScalarExpr::ConstantExpr(ConstantExpr {
-            value: scalar_expr, ..
+            value: Scalar::String(path),
+            ..
         }) = &args[1]
         else {
-            return Ok(());
+            return None;
         };
-        write!(name, "[{}]", scalar_expr)?;
-        Ok(())
+        let Ok(keypaths) = parse_key_paths(path.as_bytes()) else {
+            return None;
+        };
+
+        // try rewrite as virtual column and pushdown to storage layer.
+        let column_entry = self.metadata.read().column(column.index).clone();
+        if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
+            if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(
+                span,
+                &column.database_name,
+                &column.table_name,
+                &base_column.column_name,
+                &keypaths,
+            ) {
+                if func_name == "get_by_keypath_string" {
+                    let target_type = DataType::Nullable(Box::new(DataType::String));
+                    let new_scalar = if let Some(new_scalar) = self.try_rewrite_virtual_column_cast(
+                        scalar.span(),
+                        &scalar,
+                        &target_type,
+                        false,
+                    ) {
+                        new_scalar
+                    } else {
+                        ScalarExpr::CastExpr(CastExpr {
+                            span: scalar.span(),
+                            is_try: false,
+                            argument: Box::new(scalar),
+                            target_type: Box::new(target_type.clone()),
+                        })
+                    };
+                    return Some(Ok(Box::new((new_scalar, target_type))));
+                } else {
+                    return Some(Ok(Box::new((scalar, data_type))));
+                }
+            }
+        }
+        None
     }
 
     fn resolve_trim_function(
@@ -5192,18 +5254,24 @@ impl<'a> TypeChecker<'a> {
     fn try_rewrite_virtual_column(
         &mut self,
         span: Span,
-        base_column: &BaseTableColumn,
+        database_name: &Option<String>,
+        table_name: &Option<String>,
+        column_name: &str,
         keypaths: &KeyPaths,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
-        if !self.bind_context.virtual_column_context.allow_pushdown {
+        if !self.bind_context.allow_virtual_column {
             return None;
         }
-        let name = Self::keypaths_to_name(&base_column.column_name, keypaths);
+        let name = Self::keypaths_to_name(column_name, keypaths);
         self.resolve(&Expr::ColumnRef {
             span,
             column: ColumnRef {
-                database: None,
-                table: None,
+                database: database_name
+                    .as_ref()
+                    .map(|name| Identifier::from_name(span, name)),
+                table: table_name
+                    .as_ref()
+                    .map(|name| Identifier::from_name(span, name)),
                 column: ColumnID::Name(Identifier::from_name(span, name)),
             },
         })
@@ -5264,9 +5332,13 @@ impl<'a> TypeChecker<'a> {
             if column.index < self.metadata.read().columns().len() {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
-                    if let Some(box (scalar, data_type)) =
-                        self.try_rewrite_virtual_column(span, &base_column, &keypaths)
-                    {
+                    if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(
+                        span,
+                        &column.database_name,
+                        &column.table_name,
+                        &base_column.column_name,
+                        &keypaths,
+                    ) {
                         return Ok(Box::new((scalar, data_type)));
                     }
                 }
