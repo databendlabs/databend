@@ -1,0 +1,94 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+SHOW WORKLOAD GROUPS
+
+statement ok
+CREATE WORKLOAD GROUP valid_cpu WITH cpu_quota = '50%';
+
+statement ok
+CREATE WORKLOAD GROUP valid_mem WITH memory_quota = '4GB';
+
+statement ok
+CREATE WORKLOAD GROUP valid_timeout WITH query_timeout = '15min';
+
+statement error 1005
+CREATE WORKLOAD GROUP invalid_cpu WITH cpu_quota = '150%';
+
+statement error 1005
+CREATE WORKLOAD GROUP invalid_mem WITH memory_quota = '1.2.3GB';
+
+statement error 1005
+CREATE WORKLOAD GROUP invalid_concurrency WITH max_concurrency = '0';
+
+statement error 1005
+CREATE WORKLOAD GROUP mixed_group WITH cpu_quota = '50%', memory_quota = 'invalid', query_timeout = '1day';
+
+statement error 3141
+CREATE WORKLOAD GROUP valid_cpu WITH cpu_quota = '50%';
+
+statement ok
+CREATE WORKLOAD GROUP IF NOT EXISTS valid_cpu WITH cpu_quota = '50%';
+
+statement error 1005
+CREATE WORKLOAD GROUP valid_cpu WITH xxx = '50%';
+
+statement ok
+DROP WORKLOAD GROUP valid_cpu;
+
+statement error 3142
+DROP WORKLOAD GROUP valid_cpu;
+
+statement ok
+DROP WORKLOAD GROUP IF EXISTS valid_cpu;
+
+statement ok
+RENAME WORKLOAD GROUP valid_mem to new_valid_mem;
+
+statement error 3142
+RENAME WORKLOAD GROUP valid_mem to new_valid_mem;
+
+statement error 3140
+RENAME WORKLOAD GROUP new_valid_mem to valid_timeout;
+
+query T
+SHOW WORKLOAD GROUPS;
+----
+valid_timeout (empty) (empty) 900s (empty) (empty)
+new_valid_mem (empty) 4294967296 (empty) (empty) (empty)
+
+statement error 3142
+ALTER WORKLOAD GROUP xxx SET cpu_quota = '50%';
+
+statement ok
+ALTER WORKLOAD GROUP valid_timeout SET cpu_quota = '50%', memory_quota = '20%', query_timeout = '16min';
+
+statement ok
+ALTER WORKLOAD GROUP valid_timeout SET query_queued_timeout = '15min', max_concurrency = 10;
+
+query T
+SHOW WORKLOAD GROUPS;
+----
+valid_timeout 50% 20% 960s 10 900s
+new_valid_mem (empty) 4294967296 (empty) (empty) (empty)
+
+statement ok
+drop workload group valid_timeout;
+
+statement ok
+drop workload group new_valid_mem;
+
+
+

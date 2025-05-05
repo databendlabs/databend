@@ -555,6 +555,14 @@ impl Plan {
                 DataField::new("version", DataType::String),
             ]),
             Plan::DescProcedure(plan) => plan.schema(),
+            Plan::ShowWorkloadGroups => DataSchemaRefExt::create(vec![
+                DataField::new("name", DataType::String),
+                DataField::new("cpu_quota", DataType::String),
+                DataField::new("memory_quota", DataType::String),
+                DataField::new("query_timeout", DataType::String),
+                DataField::new("max_concurrency", DataType::String),
+                DataField::new("query_queued_timeout", DataType::String),
+            ]),
             _ => Arc::new(DataSchema::empty()),
         }
     }

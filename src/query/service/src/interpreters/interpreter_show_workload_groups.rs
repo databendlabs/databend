@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
@@ -61,7 +62,8 @@ impl Interpreter for ShowWorkloadGroupsInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
 
         let workloads = GlobalInstance::get::<Arc<WorkloadMgr>>().get_all().await?;
-        let mut workload_id = ColumnBuilder::with_capacity(&DataType::String, workloads.len());
+
+        let mut conflict_name = HashSet::with_capacity(workloads.len());
         let mut workload_name = ColumnBuilder::with_capacity(&DataType::String, workloads.len());
         let mut workload_cpu_quota =
             ColumnBuilder::with_capacity(&DataType::String, workloads.len());
@@ -75,8 +77,12 @@ impl Interpreter for ShowWorkloadGroupsInterpreter {
             ColumnBuilder::with_capacity(&DataType::String, workloads.len());
 
         for workload in workloads {
-            workload_id.push(Scalar::String(workload.id.clone()).as_ref());
-            workload_name.push(Scalar::String(workload.name.clone()).as_ref());
+            let name = match conflict_name.insert(workload.name.clone()) {
+                true => workload.name.clone(),
+                false => format!("{}({})", workload.name, workload.id),
+            };
+
+            workload_name.push(Scalar::String(name).as_ref());
             workload_cpu_quota.push(Scalar::as_ref(&match workload.get_quota(CPU_QUOTA_KEY) {
                 None => Scalar::String(String::new()),
                 Some(v) => Scalar::String(format!("{}", v)),
@@ -108,7 +114,6 @@ impl Interpreter for ShowWorkloadGroupsInterpreter {
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            workload_id.build(),
             workload_name.build(),
             workload_cpu_quota.build(),
             workload_mem_quota.build(),
