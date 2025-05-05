@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod default;
-mod iceberg;
+mod iceberg_catalog;
 
-pub use databend_common_catalog::catalog::Catalog;
-pub use databend_common_storages_hive as hive;
-pub use default::table_memory_meta::InMemoryMetas;
-pub use default::DatabaseCatalog;
-pub use iceberg::IcebergCreator;
+pub use iceberg_catalog::IcebergCreator;

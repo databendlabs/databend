@@ -118,11 +118,11 @@ use crate::IcebergTable;
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
 #[derive(Debug)]
-pub struct IcebergCreator;
+pub struct IcebergMutableCreator;
 
-impl CatalogCreator for IcebergCreator {
+impl CatalogCreator for IcebergMutableCreator {
     fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
-        let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(info)?);
+        let catalog: Arc<dyn Catalog> = Arc::new(IcebergMutableCatalog::try_create(info)?);
         Ok(catalog)
     }
 }
@@ -135,7 +135,7 @@ impl CatalogCreator for IcebergCreator {
 /// - Table metadata are saved in external Iceberg storage
 #[derive(Clone, Educe)]
 #[educe(Debug)]
-pub struct IcebergCatalog {
+pub struct IcebergMutableCatalog {
     /// info of this iceberg table.
     info: Arc<CatalogInfo>,
 
@@ -143,7 +143,7 @@ pub struct IcebergCatalog {
     ctl: Arc<dyn iceberg::Catalog>,
 }
 
-impl IcebergCatalog {
+impl IcebergMutableCatalog {
     /// create a new iceberg catalog from the endpoint_address
     #[fastrace::trace]
     pub fn try_create(info: Arc<CatalogInfo>) -> Result<Self> {
@@ -228,7 +228,7 @@ impl IcebergCatalog {
 }
 
 #[async_trait]
-impl Catalog for IcebergCatalog {
+impl Catalog for IcebergMutableCatalog {
     fn name(&self) -> String {
         self.info.name_ident.catalog_name.clone()
     }
@@ -386,7 +386,7 @@ impl Catalog for IcebergCatalog {
         _get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
-            "Cannot get tables name by ids in HIVE catalog",
+            "Cannot get tables name by ids in ICEBERG catalog",
         ))
     }
 

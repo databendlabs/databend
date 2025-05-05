@@ -37,9 +37,12 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_fuse::operations::acquire_task_permit;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -49,6 +52,7 @@ use log::warn;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
+use crate::util::generate_catalog_meta;
 
 pub type FullStreamsTable = StreamsTable<true>;
 pub type TerseStreamsTable = StreamsTable<false>;
@@ -74,12 +78,15 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
         let tenant = ctx.get_tenant();
 
         let catalog_mgr = CatalogManager::instance();
-        let ctls = catalog_mgr
-            .list_catalogs(&tenant, ctx.session_state())
-            .await?
-            .iter()
-            .map(|e| (e.name(), e.clone()))
-            .collect::<Vec<_>>();
+        let ctl = catalog_mgr
+            .get_catalog(
+                tenant.tenant_name(),
+                self.table_info.catalog(),
+                ctx.session_state(),
+            )
+            .await?;
+        let ctl_name = ctl.name();
+
         let visibility_checker = ctx.get_visibility_checker(false).await?;
         let user_api = UserApiProvider::instance();
 
@@ -102,222 +109,217 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads));
         let runtime = GlobalIORuntime::instance();
 
-        for (ctl_name, ctl) in ctls.iter() {
-            let mut dbs = Vec::new();
-            if let Some(push_downs) = &push_downs {
-                let mut db_name = Vec::new();
-                if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
-                    let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                    find_eq_filter(&expr, &mut |col_name, scalar| {
-                        if col_name == "database" {
-                            if let Scalar::String(database) = scalar {
-                                if !db_name.contains(database) {
-                                    db_name.push(database.clone());
-                                }
+        let mut dbs = Vec::new();
+        if let Some(push_downs) = &push_downs {
+            let mut db_name = Vec::new();
+            if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
+                let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                find_eq_filter(&expr, &mut |col_name, scalar| {
+                    if col_name == "database" {
+                        if let Scalar::String(database) = scalar {
+                            if !db_name.contains(database) {
+                                db_name.push(database.clone());
                             }
                         }
-                        Ok(())
-                    });
-                    for db in db_name {
-                        match ctl.get_database(&tenant, db.as_str()).await {
-                            Ok(database) => dbs.push(database),
-                            Err(err) => {
-                                let msg = format!("Failed to get database: {}, {}", db, err);
-                                warn!("{}", msg);
-                                ctx.push_warning(msg);
-                            }
+                    }
+                    Ok(())
+                });
+                for db in db_name {
+                    match ctl.get_database(&tenant, db.as_str()).await {
+                        Ok(database) => dbs.push(database),
+                        Err(err) => {
+                            let msg = format!("Failed to get database: {}, {}", db, err);
+                            warn!("{}", msg);
+                            ctx.push_warning(msg);
                         }
                     }
                 }
             }
+        }
 
-            if dbs.is_empty() {
-                dbs = match ctl.list_databases(&tenant).await {
-                    Ok(dbs) => dbs,
-                    Err(err) => {
-                        let msg =
-                            format!("List databases failed on catalog {}: {}", ctl.name(), err);
-                        warn!("{}", msg);
-                        ctx.push_warning(msg);
+        if dbs.is_empty() {
+            dbs = match ctl.list_databases(&tenant).await {
+                Ok(dbs) => dbs,
+                Err(err) => {
+                    let msg = format!("List databases failed on catalog {}: {}", ctl.name(), err);
+                    warn!("{}", msg);
+                    ctx.push_warning(msg);
 
-                        vec![]
-                    }
+                    vec![]
                 }
             }
+        }
 
-            let final_dbs = dbs
-                .into_iter()
-                .filter(|db| {
-                    visibility_checker.check_database_visibility(
-                        ctl_name,
-                        db.name(),
-                        db.get_db_info().database_id.db_id,
-                    )
-                })
-                .collect::<Vec<_>>();
+        let final_dbs = dbs
+            .into_iter()
+            .filter(|db| {
+                visibility_checker.check_database_visibility(
+                    &ctl_name,
+                    db.name(),
+                    db.get_db_info().database_id.db_id,
+                )
+            })
+            .collect::<Vec<_>>();
 
-            let ownership = if T {
-                user_api.list_ownerships(&tenant).await.unwrap_or_default()
-            } else {
-                HashMap::new()
+        let ownership = if T {
+            user_api.list_ownerships(&tenant).await.unwrap_or_default()
+        } else {
+            HashMap::new()
+        };
+
+        let mut source_db_id_set = HashSet::new();
+        let mut source_tb_id_set = HashSet::new();
+        let mut source_db_tb_ids = vec![];
+        for db in final_dbs {
+            let db_id = db.get_db_info().database_id.db_id;
+            let db_name = db.name();
+            let tables = match ctl.list_tables(&tenant, db_name).await {
+                Ok(tables) => tables,
+                Err(err) => {
+                    // Swallow the errors related with sharing. Listing tables in a shared database
+                    // is easy to get errors with invalid configs, but system.streams is better not
+                    // to be affected by it.
+                    let msg = format!("Failed to list tables in database: {}, {}", db_name, err);
+                    warn!("{}", msg);
+                    ctx.push_warning(msg);
+
+                    continue;
+                }
             };
 
-            let mut source_db_id_set = HashSet::new();
-            let mut source_tb_id_set = HashSet::new();
-            let mut source_db_tb_ids = vec![];
-            for db in final_dbs {
-                let db_id = db.get_db_info().database_id.db_id;
-                let db_name = db.name();
-                let tables = match ctl.list_tables(&tenant, db_name).await {
-                    Ok(tables) => tables,
-                    Err(err) => {
-                        // Swallow the errors related with sharing. Listing tables in a shared database
-                        // is easy to get errors with invalid configs, but system.streams is better not
-                        // to be affected by it.
-                        let msg =
-                            format!("Failed to list tables in database: {}, {}", db_name, err);
-                        warn!("{}", msg);
-                        ctx.push_warning(msg);
+            let mut handlers = Vec::new();
+            for table in tables {
+                // If db1 is visible, do not mean db1.table1 is visible. A user may have a grant about db1.table2, so db1 is visible
+                // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
+                let t_id = table.get_id();
+                if visibility_checker.check_table_visibility(
+                    &ctl_name,
+                    db.name(),
+                    table.name(),
+                    db_id,
+                    t_id,
+                ) && table.is_stream()
+                {
+                    let stream_info = table.get_table_info();
+                    let stream_table = StreamTable::try_from_table(table.as_ref())?;
 
-                        continue;
+                    let source_db_id = stream_table.source_database_id(ctl.as_ref()).await.ok();
+                    if let Some(source_db_id) = source_db_id {
+                        source_db_id_set.insert(source_db_id);
                     }
-                };
-
-                let mut handlers = Vec::new();
-                for table in tables {
-                    // If db1 is visible, do not mean db1.table1 is visible. A user may have a grant about db1.table2, so db1 is visible
-                    // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
-                    let t_id = table.get_id();
-                    if visibility_checker.check_table_visibility(
-                        ctl_name,
-                        db.name(),
-                        table.name(),
-                        db_id,
-                        t_id,
-                    ) && table.is_stream()
-                    {
-                        let stream_info = table.get_table_info();
-                        let stream_table = StreamTable::try_from_table(table.as_ref())?;
-
-                        let source_db_id = stream_table.source_database_id(ctl.as_ref()).await.ok();
-                        if let Some(source_db_id) = source_db_id {
-                            source_db_id_set.insert(source_db_id);
+                    let source_tb_id = stream_table.source_table_id().ok();
+                    if let Some(source_tb_id) = source_tb_id {
+                        source_tb_id_set.insert(source_tb_id);
+                    }
+                    match (source_db_id, source_tb_id) {
+                        (Some(source_db_id), Some(source_tb_id)) => {
+                            source_db_tb_ids.push(Some((source_db_id, source_tb_id)));
                         }
-                        let source_tb_id = stream_table.source_table_id().ok();
-                        if let Some(source_tb_id) = source_tb_id {
-                            source_tb_id_set.insert(source_tb_id);
+                        (_, _) => {
+                            source_db_tb_ids.push(None);
                         }
-                        match (source_db_id, source_tb_id) {
-                            (Some(source_db_id), Some(source_tb_id)) => {
-                                source_db_tb_ids.push(Some((source_db_id, source_tb_id)));
-                            }
-                            (_, _) => {
-                                source_db_tb_ids.push(None);
-                            }
+                    }
+                    catalogs.push(ctl_name.as_str());
+                    databases.push(db_name.to_owned());
+                    names.push(stream_table.name().to_string());
+                    mode.push(stream_table.mode().to_string());
+
+                    if T {
+                        stream_id.push(stream_info.ident.table_id);
+                        created_on.push(stream_info.meta.created_on.timestamp_micros());
+                        updated_on.push(stream_info.meta.updated_on.timestamp_micros());
+
+                        if ownership.is_empty() {
+                            owner.push(None);
+                        } else {
+                            owner.push(
+                                ownership
+                                    .get(&OwnershipObject::Table {
+                                        catalog_name: ctl_name.to_string(),
+                                        db_id,
+                                        table_id: t_id,
+                                    })
+                                    .map(|role| role.to_string()),
+                            );
                         }
-                        catalogs.push(ctl_name.as_str());
-                        databases.push(db_name.to_owned());
-                        names.push(stream_table.name().to_string());
-                        mode.push(stream_table.mode().to_string());
+                        comment.push(stream_info.meta.comment.clone());
 
-                        if T {
-                            stream_id.push(stream_info.ident.table_id);
-                            created_on.push(stream_info.meta.created_on.timestamp_micros());
-                            updated_on.push(stream_info.meta.updated_on.timestamp_micros());
+                        table_version.push(stream_table.offset().ok());
+                        table_id.push(source_tb_id);
+                        snapshot_location.push(stream_table.snapshot_loc());
 
-                            if ownership.is_empty() {
-                                owner.push(None);
-                            } else {
-                                owner.push(
-                                    ownership
-                                        .get(&OwnershipObject::Table {
-                                            catalog_name: ctl_name.to_string(),
-                                            db_id,
-                                            table_id: t_id,
-                                        })
-                                        .map(|role| role.to_string()),
-                                );
-                            }
-                            comment.push(stream_info.meta.comment.clone());
-
-                            table_version.push(stream_table.offset().ok());
-                            table_id.push(source_tb_id);
-                            snapshot_location.push(stream_table.snapshot_loc());
-
-                            let permit = acquire_task_permit(io_request_semaphore.clone()).await?;
-                            let ctx = ctx.clone();
-                            let table = table.clone();
-                            let handler = runtime.spawn(async move {
-                                let mut reason = "".to_string();
-                                // safe unwrap.
-                                let stream_table =
-                                    StreamTable::try_from_table(table.as_ref()).unwrap();
-                                match stream_table.source_table(ctx).await {
-                                    Ok(source) => {
-                                        // safe unwrap, has been checked in source_table.
-                                        let fuse_table =
-                                            FuseTable::try_from_table(source.as_ref()).unwrap();
-                                        if let Some(location) = stream_table.snapshot_loc() {
-                                            reason = fuse_table
-                                                .changes_read_offset_snapshot(&location)
-                                                .await
-                                                .err()
-                                                .map_or("".to_string(), |e| e.display_text());
-                                        }
-                                    }
-                                    Err(e) => {
-                                        reason = e.display_text();
+                        let permit = acquire_task_permit(io_request_semaphore.clone()).await?;
+                        let ctx = ctx.clone();
+                        let table = table.clone();
+                        let handler = runtime.spawn(async move {
+                            let mut reason = "".to_string();
+                            // safe unwrap.
+                            let stream_table = StreamTable::try_from_table(table.as_ref()).unwrap();
+                            match stream_table.source_table(ctx).await {
+                                Ok(source) => {
+                                    // safe unwrap, has been checked in source_table.
+                                    let fuse_table =
+                                        FuseTable::try_from_table(source.as_ref()).unwrap();
+                                    if let Some(location) = stream_table.snapshot_loc() {
+                                        reason = fuse_table
+                                            .changes_read_offset_snapshot(&location)
+                                            .await
+                                            .err()
+                                            .map_or("".to_string(), |e| e.display_text());
                                     }
                                 }
-                                drop(permit);
-                                reason
-                            });
-                            handlers.push(handler);
-                        }
+                                Err(e) => {
+                                    reason = e.display_text();
+                                }
+                            }
+                            drop(permit);
+                            reason
+                        });
+                        handlers.push(handler);
                     }
                 }
-
-                let mut joint = futures::future::try_join_all(handlers)
-                    .await
-                    .unwrap_or_default();
-                invalid_reason.append(&mut joint);
             }
 
-            let mut source_db_ids = source_db_id_set.into_iter().collect::<Vec<u64>>();
-            source_db_ids.sort();
-            let source_db_names = ctl
-                .mget_database_names_by_ids(&tenant, &source_db_ids)
-                .await?;
-            let source_db_map = source_db_ids
-                .into_iter()
-                .zip(source_db_names.into_iter())
-                .filter(|(_, db_name)| db_name.is_some())
-                .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
-                .collect::<HashMap<_, _>>();
+            let mut joint = futures::future::try_join_all(handlers)
+                .await
+                .unwrap_or_default();
+            invalid_reason.append(&mut joint);
+        }
 
-            let mut source_tb_ids = source_tb_id_set.into_iter().collect::<Vec<u64>>();
-            source_tb_ids.sort();
-            let source_tb_names = ctl
-                .mget_table_names_by_ids(&tenant, &source_tb_ids, false)
-                .await?;
-            let source_tb_map = source_tb_ids
-                .into_iter()
-                .zip(source_tb_names.into_iter())
-                .filter(|(_, tb_name)| tb_name.is_some())
-                .map(|(tb_id, tb_name)| (tb_id, tb_name.unwrap()))
-                .collect::<HashMap<_, _>>();
+        let mut source_db_ids = source_db_id_set.into_iter().collect::<Vec<u64>>();
+        source_db_ids.sort();
+        let source_db_names = ctl
+            .mget_database_names_by_ids(&tenant, &source_db_ids)
+            .await?;
+        let source_db_map = source_db_ids
+            .into_iter()
+            .zip(source_db_names.into_iter())
+            .filter(|(_, db_name)| db_name.is_some())
+            .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
+            .collect::<HashMap<_, _>>();
 
-            for source_db_tb_id in source_db_tb_ids.into_iter() {
-                if let Some((db_id, tb_id)) = source_db_tb_id {
-                    if let Some(db) = source_db_map.get(&db_id) {
-                        if let Some(tb) = source_tb_map.get(&tb_id) {
-                            table_name.push(Some(format!("{db}.{tb}")));
-                            continue;
-                        }
+        let mut source_tb_ids = source_tb_id_set.into_iter().collect::<Vec<u64>>();
+        source_tb_ids.sort();
+        let source_tb_names = ctl
+            .mget_table_names_by_ids(&tenant, &source_tb_ids, false)
+            .await?;
+        let source_tb_map = source_tb_ids
+            .into_iter()
+            .zip(source_tb_names.into_iter())
+            .filter(|(_, tb_name)| tb_name.is_some())
+            .map(|(tb_id, tb_name)| (tb_id, tb_name.unwrap()))
+            .collect::<HashMap<_, _>>();
+
+        for source_db_tb_id in source_db_tb_ids.into_iter() {
+            if let Some((db_id, tb_id)) = source_db_tb_id {
+                if let Some(db) = source_db_map.get(&db_id) {
+                    if let Some(tb) = source_tb_map.get(&tb_id) {
+                        table_name.push(Some(format!("{db}.{tb}")));
+                        continue;
                     }
                 }
-                table_name.push(None);
             }
+            table_name.push(None);
         }
 
         if T {
@@ -401,7 +403,7 @@ impl<const T: bool> StreamsTable<T> {
         }
     }
 
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
         let name = if T { "streams" } else { "streams_terse" };
         let table_info = TableInfo {
             desc: format!("'system'.'{name}'"),
@@ -412,6 +414,11 @@ impl<const T: bool> StreamsTable<T> {
                 engine: "SystemStreams".to_string(),
                 ..Default::default()
             },
+            catalog_info: Arc::new(CatalogInfo {
+                name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
+                meta: generate_catalog_meta(ctl_name),
+                ..Default::default()
+            }),
             ..Default::default()
         };
         AsyncOneBlockSystemTable::create(StreamsTable::<T> { table_info })

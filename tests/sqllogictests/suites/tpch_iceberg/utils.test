@@ -23,6 +23,8 @@ ctl
 query T
 show databases from ctl;
 ----
+information_schema
+system
 tpch
 
 statement error 1003
@@ -83,6 +85,8 @@ show databases;
 ----
 abc
 ef123
+information_schema
+system
 tpch
 
 statement ok
@@ -92,6 +96,8 @@ query T rowsort
 show databases from ctl;
 ----
 abc
+information_schema
+system
 tpch
 
 statement ok
