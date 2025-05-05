@@ -1422,6 +1422,10 @@ pub enum TokenKind {
     UNASSIGN,
     #[token("ONLINE", ignore(ascii_case))]
     ONLINE,
+    #[token("WORKLOAD", ignore(ascii_case))]
+    WORKLOAD,
+    #[token("GROUPS", ignore(ascii_case))]
+    GROUPS,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

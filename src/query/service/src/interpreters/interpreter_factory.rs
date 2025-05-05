@@ -39,6 +39,7 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_add_warehouse_cluster::AddWarehouseClusterInterpreter;
+use crate::interpreters::interpreter_alter_workload_group::AlterWorkloadGroupInterpreter;
 use crate::interpreters::interpreter_assign_warehouse_nodes::AssignWarehouseNodesInterpreter;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
 use crate::interpreters::interpreter_connection_create::CreateConnectionInterpreter;
@@ -48,8 +49,10 @@ use crate::interpreters::interpreter_connection_show::ShowConnectionsInterpreter
 use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_create_warehouses::CreateWarehouseInterpreter;
+use crate::interpreters::interpreter_create_workload_group::CreateWorkloadGroupInterpreter;
 use crate::interpreters::interpreter_drop_warehouse_cluster::DropWarehouseClusterInterpreter;
 use crate::interpreters::interpreter_drop_warehouses::DropWarehouseInterpreter;
+use crate::interpreters::interpreter_drop_workload_group::DropWorkloadGroupInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
@@ -66,10 +69,12 @@ use crate::interpreters::interpreter_refresh_database_cache::RefreshDatabaseCach
 use crate::interpreters::interpreter_refresh_table_cache::RefreshTableCacheInterpreter;
 use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterpreter;
 use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
+use crate::interpreters::interpreter_rename_workload_group::RenameWorkloadGroupInterpreter;
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_show_online_nodes::ShowOnlineNodesInterpreter;
 use crate::interpreters::interpreter_show_warehouses::ShowWarehousesInterpreter;
+use crate::interpreters::interpreter_show_workload_groups::ShowWorkloadGroupsInterpreter;
 use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
@@ -722,6 +727,23 @@ impl InterpreterFactory {
                 Ok(Arc::new(DescProcedureInterpreter::try_create(*p.clone())?))
             }
             Plan::CallProcedure(p) => Ok(Arc::new(CallProcedureInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ShowWorkloadGroups => {
+                Ok(Arc::new(ShowWorkloadGroupsInterpreter::try_create(ctx)?))
+            }
+            Plan::CreateWorkloadGroup(p) => Ok(Arc::new(
+                CreateWorkloadGroupInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::DropWorkloadGroup(p) => Ok(Arc::new(DropWorkloadGroupInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::RenameWorkloadGroup(p) => Ok(Arc::new(
+                RenameWorkloadGroupInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::AlterWorkloadGroup(p) => Ok(Arc::new(AlterWorkloadGroupInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),

@@ -30,6 +30,11 @@ use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::statements::warehouse::ShowWarehousesStmt;
+use crate::ast::statements::workload::AlterWorkloadGroupStmt;
+use crate::ast::statements::workload::CreateWorkloadGroupStmt;
+use crate::ast::statements::workload::DropWorkloadGroupStmt;
+use crate::ast::statements::workload::RenameWorkloadGroupStmt;
+use crate::ast::statements::workload::ShowWorkloadGroupsStmt;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
@@ -145,6 +150,13 @@ pub enum Statement {
     RenameWarehouseCluster(RenameWarehouseClusterStmt),
     AssignWarehouseNodes(AssignWarehouseNodesStmt),
     UnassignWarehouseNodes(UnassignWarehouseNodesStmt),
+
+    // Workloads
+    ShowWorkloadGroups(ShowWorkloadGroupsStmt),
+    CreateWorkloadGroup(CreateWorkloadGroupStmt),
+    DropWorkloadGroup(DropWorkloadGroupStmt),
+    RenameWorkloadGroup(RenameWorkloadGroupStmt),
+    AlterWorkloadGroup(AlterWorkloadGroupStmt),
 
     // Databases
     ShowDatabases(ShowDatabasesStmt),
@@ -578,7 +590,12 @@ impl Statement {
             | Statement::AssignWarehouseNodes(..)
             | Statement::UnassignWarehouseNodes(..)
             | Statement::ResumeWarehouse(..)
-            | Statement::SuspendWarehouse(..) => false,
+            | Statement::SuspendWarehouse(..)
+            | Statement::ShowWorkloadGroups(..)
+            | Statement::CreateWorkloadGroup(..)
+            | Statement::DropWorkloadGroup(..)
+            | Statement::RenameWorkloadGroup(..)
+            | Statement::AlterWorkloadGroup(..) => false,
             Statement::StatementWithSettings { stmt, settings: _ } => {
                 stmt.allowed_in_multi_statement()
             }
@@ -1022,6 +1039,11 @@ impl Display for Statement {
             Statement::RenameWarehouseCluster(stmt) => write!(f, "{stmt}")?,
             Statement::AssignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
             Statement::UnassignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowWorkloadGroups(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateWorkloadGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::DropWorkloadGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameWorkloadGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterWorkloadGroup(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }
