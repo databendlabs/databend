@@ -123,7 +123,7 @@ select name, session_parameters from system.task_history where name = 'sessionTa
 ----
 sessionTask {}
 
-statement ok
+statement error 2801
 ALTER TASK sessionTask
   SET
   DATABASE = 'db2', TIMEZONE = 'Pacific/Honolulu'
