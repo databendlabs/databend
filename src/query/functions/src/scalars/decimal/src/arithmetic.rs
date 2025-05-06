@@ -122,22 +122,31 @@ macro_rules! binary_decimal {
             let scale_b = $right.scale();
 
             let scale_mul = scale_a + scale_b - $size.scale;
-            let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
-                match a.do_round_mul(b, scale_mul as u32) {
-                    Some(t) => result.push(t),
-                    None => {
-                        ctx.set_error(
-                            result.len(),
-                            concat!("Decimal multiply overflow at line : ", line!()),
-                        );
-                        result.push(one);
-                    }
-                }
-            };
 
-            vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
-                a, b, $ctx,
-            )
+            if scale_mul == 0 {
+                let func = |a: T, b: T, _ctx: &mut EvalContext| a * b;
+                vectorize_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
+                    a, b, $ctx,
+                )
+            } else {
+                let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
+                    match a.do_round_mul(b, scale_mul as u32, overflow) {
+                        Some(t) => result.push(t),
+                        None => {
+                            ctx.set_error(
+                                result.len(),
+                                concat!("Decimal multiply overflow at line : ", line!()),
+                            );
+                            result.push(one);
+                        }
+                    }
+                };
+
+                vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
+                    a, b, $ctx,
+                )
+            }
+
         }  else {
             if overflow {
                 let min_for_precision = T::min_for_precision($size.precision);

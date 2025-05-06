@@ -243,10 +243,42 @@ impl SampleSet for UniformSampleSet {
                 Ok(Datum::Float(upper_bound))
             }
 
+            // Handle Bytes type for histogram calculation by converting to strings first
+            (Datum::Bytes(min_bytes), Datum::Bytes(max_bytes)) => {
+                // Convert bytes to strings for comparison
+                let min_str = String::from_utf8_lossy(min_bytes);
+                let max_str = String::from_utf8_lossy(max_bytes);
+
+                // For boundary cases, return the exact values
+                if min_str == max_str {
+                    return Ok(Datum::Bytes(min_bytes.clone()));
+                }
+
+                if bucket_index == 0 {
+                    return Ok(Datum::Bytes(min_bytes.clone()));
+                } else if bucket_index >= num_buckets {
+                    return Ok(Datum::Bytes(max_bytes.clone()));
+                }
+
+                // For intermediate buckets, use a simple approach based on string comparison
+                // Just divide the range into equal parts based on bucket_index
+
+                // If bucket_index is in the first half, return min
+                // If bucket_index is in the second half, return max
+                // This preserves the string ordering semantics
+                let mid_bucket = num_buckets / 2;
+
+                if bucket_index <= mid_bucket {
+                    Ok(Datum::Bytes(min_bytes.clone()))
+                } else {
+                    Ok(Datum::Bytes(max_bytes.clone()))
+                }
+            }
+
             _ => Err(format!(
-                "Unsupported datum type: {:?}, {:?}",
-                self.min, self.max
-            )),
+                "Unsupported datum type for histogram calculation: {} (type: {}), {} (type: {}). Only numeric types are supported.",
+                self.min, self.min.type_name(), self.max, self.max.type_name()
+            ))
         }
     }
 }

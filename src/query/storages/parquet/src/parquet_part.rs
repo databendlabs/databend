@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::mem;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfo;
@@ -30,35 +29,40 @@ use crate::parquet_rs::ParquetRSRowGroupPart;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum ParquetPart {
-    ParquetFiles(ParquetFilesPart),
+    ParquetFile(ParquetFilePart),
+    ParquetSmallFiles(Vec<ParquetFilePart>),
     ParquetRSRowGroup(ParquetRSRowGroupPart),
 }
 
 impl ParquetPart {
     pub fn uncompressed_size(&self) -> u64 {
         match self {
-            ParquetPart::ParquetFiles(p) => p.uncompressed_size(),
+            ParquetPart::ParquetFile(p) => p.uncompressed_size(),
+            ParquetPart::ParquetSmallFiles(p) => p.iter().map(|p| p.uncompressed_size()).sum(),
             ParquetPart::ParquetRSRowGroup(p) => p.uncompressed_size(),
         }
     }
 
     pub fn compressed_size(&self) -> u64 {
         match self {
-            ParquetPart::ParquetFiles(p) => p.compressed_size(),
+            ParquetPart::ParquetFile(p) => p.compressed_size(),
+            ParquetPart::ParquetSmallFiles(p) => p.iter().map(|p| p.compressed_size()).sum(),
             ParquetPart::ParquetRSRowGroup(p) => p.compressed_size(),
         }
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
-pub struct ParquetFilesPart {
-    pub files: Vec<(String, u64)>,
+pub struct ParquetFilePart {
+    pub file: String,
+    pub compressed_size: u64,
     pub estimated_uncompressed_size: u64,
+    pub dedup_key: String,
 }
 
-impl ParquetFilesPart {
+impl ParquetFilePart {
     pub fn compressed_size(&self) -> u64 {
-        self.files.iter().map(|(_, s)| *s).sum()
+        self.compressed_size
     }
     pub fn uncompressed_size(&self) -> u64 {
         self.estimated_uncompressed_size
@@ -79,7 +83,14 @@ impl PartInfo for ParquetPart {
 
     fn hash(&self) -> u64 {
         let path = match self {
-            ParquetPart::ParquetFiles(p) => &p.files[0].0,
+            ParquetPart::ParquetFile(p) => &p.file,
+            ParquetPart::ParquetSmallFiles(p) => {
+                let mut s = DefaultHasher::new();
+                for part in p.iter() {
+                    part.file.hash(&mut s);
+                }
+                return s.finish();
+            }
             ParquetPart::ParquetRSRowGroup(p) => &p.location,
         };
         let mut s = DefaultHasher::new();
@@ -103,12 +114,11 @@ impl ParquetPart {
 /// 2. to avoid OOM, the total size of small files in one part is limited,
 ///    and we need compression_ratio to estimate the uncompressed size.
 pub(crate) fn collect_small_file_parts(
-    small_files: Vec<(String, u64)>,
+    small_files: Vec<(String, u64, String)>,
     mut max_compression_ratio: f64,
     mut max_compressed_size: u64,
     partitions: &mut Partitions,
     stats: &mut PartStatistics,
-    num_columns_to_read: usize,
 ) {
     if max_compression_ratio <= 0.0 || max_compression_ratio >= 1.0 {
         // just incase
@@ -122,32 +132,73 @@ pub(crate) fn collect_small_file_parts(
     stats.read_rows += num_small_files;
     let mut small_part = vec![];
     let mut part_size = 0;
-    let mut make_small_files_part = |files: Vec<(String, u64)>, part_size| {
-        let estimated_uncompressed_size = (part_size as f64 / max_compression_ratio) as u64;
-        num_small_files -= files.len();
+
+    let total_len = small_files.len();
+    let max_files = 8;
+
+    for (i, (path, size, dedup_key)) in small_files.into_iter().enumerate() {
+        small_part.push((path.clone(), size, dedup_key));
+        stats.read_bytes += size as usize;
+        part_size += size;
+        let is_last = i + 1 == total_len;
+
+        if !small_part.is_empty()
+            && (part_size > max_compressed_size || small_part.len() >= max_files || is_last)
+        {
+            // turn small_parts into ParquetPart::ParquetSmallFiles
+            num_small_files -= small_part.len();
+
+            let files = small_part
+                .iter()
+                .cloned()
+                .map(|(path, size, dedup_key)| ParquetFilePart {
+                    file: path,
+                    compressed_size: size,
+                    estimated_uncompressed_size: (size as f64 / max_compression_ratio) as u64,
+                    dedup_key,
+                })
+                .collect::<Vec<_>>();
+
+            partitions.partitions.push(Arc::new(
+                Box::new(ParquetPart::ParquetSmallFiles(files)) as Box<dyn PartInfo>
+            ));
+            stats.partitions_scanned += 1;
+            stats.partitions_total += 1;
+            part_size = 0;
+            small_part.clear();
+        }
+    }
+}
+
+pub(crate) fn collect_file_parts(
+    files: Vec<(String, u64, String)>,
+    compress_ratio: f64,
+    partitions: &mut Partitions,
+    stats: &mut PartStatistics,
+    num_columns_to_read: usize,
+    total_columns_to_read: usize,
+) {
+    for (file, size, dedup_key) in files.into_iter() {
+        stats.read_bytes += size as usize;
+        let estimated_read_rows: f64 = size as f64 / (total_columns_to_read * 8) as f64;
+        let read_bytes =
+            (size as f64) * (num_columns_to_read as f64) / (total_columns_to_read as f64);
+
+        let estimated_uncompressed_size = read_bytes * compress_ratio;
+
         partitions.partitions.push(Arc::new(
-            Box::new(ParquetPart::ParquetFiles(ParquetFilesPart {
-                files,
-                estimated_uncompressed_size,
+            Box::new(ParquetPart::ParquetFile(ParquetFilePart {
+                file,
+                compressed_size: size,
+                estimated_uncompressed_size: estimated_uncompressed_size as u64,
+                dedup_key,
             })) as Box<dyn PartInfo>,
         ));
+
+        stats.read_bytes += read_bytes as usize;
+        stats.read_rows += estimated_read_rows as usize;
+        stats.is_exact = false;
         stats.partitions_scanned += 1;
         stats.partitions_total += 1;
-    };
-    let max_files = num_columns_to_read * 2;
-    for (path, size) in small_files.into_iter() {
-        stats.read_bytes += size as usize;
-        if !small_part.is_empty()
-            && (part_size + size > max_compressed_size || small_part.len() + 1 >= max_files)
-        {
-            make_small_files_part(mem::take(&mut small_part), part_size);
-            part_size = 0;
-        }
-        small_part.push((path, size));
-        part_size += size;
     }
-    if !small_part.is_empty() {
-        make_small_files_part(mem::take(&mut small_part), part_size);
-    }
-    assert_eq!(num_small_files, 0);
 }

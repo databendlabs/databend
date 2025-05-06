@@ -61,8 +61,9 @@ impl MergeIOReader {
             .collect::<Vec<_>>();
         let range_merger = RangeMerger::from_iter(
             ranges,
-            read_settings.storage_io_min_bytes_for_seek,
-            read_settings.storage_io_max_page_bytes_for_read,
+            read_settings.max_gap_size,
+            read_settings.max_range_size,
+            Some(read_settings.parquet_fast_read_bytes),
         );
         let merged_ranges = range_merger.ranges();
 
@@ -144,8 +145,9 @@ impl MergeIOReader {
             .collect::<Vec<_>>();
         let range_merger = RangeMerger::from_iter(
             ranges,
-            read_settings.storage_io_min_bytes_for_seek,
-            read_settings.storage_io_max_page_bytes_for_read,
+            read_settings.max_gap_size,
+            read_settings.max_range_size,
+            Some(read_settings.parquet_fast_read_bytes),
         );
         let merged_ranges = range_merger.ranges();
 

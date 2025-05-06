@@ -32,7 +32,7 @@ impl fmt::Display for Array {
 fn test_range_merger() -> Result<()> {
     let v = [3..6, 1..5, 7..11, 8..9, 9..12, 4..8, 13..15, 18..20];
 
-    let mr = RangeMerger::from_iter(v, 0, 100);
+    let mr = RangeMerger::from_iter(v, 0, 100, None);
     let actual = format!("{}", Array(mr.ranges()));
     let expect = "[1,12] [13,15] [18,20] ";
     assert_eq!(actual, expect);
@@ -47,7 +47,7 @@ fn test_range_merger_with_gap() -> Result<()> {
 
     // max_gap_size = 1
     {
-        let mr = RangeMerger::from_iter(v.clone(), 1, 100);
+        let mr = RangeMerger::from_iter(v.clone(), 1, 100, None);
         let actual = format!("{}", Array(mr.ranges()));
         let expect = "[1,15] [18,20] ";
         assert_eq!(actual, expect);
@@ -65,7 +65,7 @@ fn test_range_merger_with_gap() -> Result<()> {
 
     // max_gap_size = 2
     {
-        let mr = RangeMerger::from_iter(v.clone(), 2, 100);
+        let mr = RangeMerger::from_iter(v.clone(), 2, 100, None);
         let actual = format!("{}", Array(mr.ranges()));
         let expect = "[1,15] [18,20] ";
         assert_eq!(actual, expect);
@@ -83,7 +83,7 @@ fn test_range_merger_with_gap() -> Result<()> {
 
     // max_gap_size = 3
     {
-        let mr = RangeMerger::from_iter(v.clone(), 3, 100);
+        let mr = RangeMerger::from_iter(v.clone(), 3, 100, None);
         let actual = format!("{}", Array(mr.ranges()));
         let expect = "[1,20] ";
         assert_eq!(actual, expect);
@@ -101,7 +101,7 @@ fn test_range_merger_with_gap() -> Result<()> {
 
     // max_gap_size = 3, max_range_size = 5
     {
-        let mr = RangeMerger::from_iter(v.clone(), 3, 4);
+        let mr = RangeMerger::from_iter(v.clone(), 3, 4, None);
         let actual = format!("{}", Array(mr.ranges()));
         let expect = "[1,5] [3,8] [7,11] [8,12] [13,20] ";
         assert_eq!(actual, expect);

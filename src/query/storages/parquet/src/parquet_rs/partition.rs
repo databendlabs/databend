@@ -101,6 +101,7 @@ pub struct ParquetRSRowGroupPart {
     pub uncompressed_size: u64,
     pub compressed_size: u64,
     pub sort_min_max: Option<(Scalar, Scalar)>,
+    // `omit_filter` = true means that the row group is filtered out by the filter.
     pub omit_filter: bool,
 
     pub schema_index: usize,
