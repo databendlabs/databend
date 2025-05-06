@@ -88,7 +88,6 @@ impl AsyncSink for BroadcastSinkProcessor {
         let meta = data_block
             .take_meta()
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to BroadcastMeta"))?;
-        log::info!("BroadcastSinkProcessor recv meta: {:?}", meta);
         self.sender
             .send(meta)
             .await
