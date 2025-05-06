@@ -28,6 +28,7 @@ use crate::utils::calc_parallelism;
 use crate::ParquetPart;
 use crate::ParquetRSPruner;
 use crate::ParquetRSReaderBuilder;
+use crate::ParquetSourceType;
 
 impl ParquetRSTable {
     #[inline]
@@ -50,16 +51,16 @@ impl ParquetRSTable {
         let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
 
         let table_schema: TableSchemaRef = self.table_info.schema();
-        // If there is a `ParquetFilesPart`, we should create pruner for it.
-        // Although `ParquetFilesPart`s are always staying at the end of `parts` when `do_read_partitions`,
+        // If there is a `ParquetFilePart`, we should create pruner for it.
+        // Although `ParquetFilePart`s are always staying at the end of `parts` when `do_read_partitions`,
         // but parts are reshuffled when `redistribute_source_fragment`, so let us check all of them.
-        let has_files_part = plan.parts.partitions.iter().any(|p| {
+        let has_file_part = plan.parts.partitions.iter().any(|p| {
             matches!(
                 p.as_any().downcast_ref::<ParquetPart>().unwrap(),
-                ParquetPart::ParquetFiles(_)
+                ParquetPart::ParquetSmallFiles(_) | ParquetPart::ParquetFile(_)
             )
         });
-        let pruner = if has_files_part {
+        let pruner = if has_file_part {
             Some(ParquetRSPruner::try_create(
                 ctx.get_function_context()?,
                 table_schema.clone(),
@@ -81,7 +82,7 @@ impl ParquetRSTable {
 
         let mut builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx.clone(),
-            self.operator.clone(),
+            Arc::new(self.operator.clone()),
             table_schema.clone(),
             self.schema_descr.clone(),
             Some(self.arrow_schema.clone()),
@@ -95,7 +96,7 @@ impl ParquetRSTable {
         }
 
         let row_group_reader = Arc::new(builder.build_row_group_reader(need_row_number)?);
-        let full_file_reader = if has_files_part {
+        let full_file_reader = if has_file_part {
             Some(Arc::new(builder.build_full_reader(need_row_number)?))
         } else {
             None
@@ -106,6 +107,7 @@ impl ParquetRSTable {
             |output| {
                 ParquetSource::create(
                     ctx.clone(),
+                    ParquetSourceType::StageTable,
                     output,
                     row_group_reader.clone(),
                     full_file_reader.clone(),

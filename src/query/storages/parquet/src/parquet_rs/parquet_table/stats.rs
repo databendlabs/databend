@@ -19,31 +19,42 @@ use databend_common_catalog::plan::FullParquetMeta;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::ParquetTableColumnStatisticsProvider;
 
+// let's just read the first parquet meta and predict the whole stats
 pub fn create_stats_provider(
-    metas: &[Arc<FullParquetMeta>],
+    sample_metas: &[Arc<FullParquetMeta>],
+    total_files: usize,
     num_columns: usize,
 ) -> ParquetTableColumnStatisticsProvider {
     let mut num_rows = 0;
     let mut basic_column_stats = vec![BasicColumnStatistics::new_null(); num_columns];
 
-    for meta in metas {
+    for meta in sample_metas {
         num_rows += meta
             .meta
             .row_groups()
             .iter()
             .map(|r| r.num_rows() as u64)
             .sum::<u64>();
-        if let Some(stats) = &meta.row_group_level_stats {
-            for rg_stat in stats {
-                for (column_id, col_stat) in rg_stat {
-                    let column_id = *column_id as usize;
-                    let col_stat = col_stat.clone().into();
-                    basic_column_stats[column_id].merge(col_stat);
+
+        if total_files == sample_metas.len() {
+            if let Some(stats) = &meta.row_group_level_stats {
+                for rg_stat in stats {
+                    for (column_id, col_stat) in rg_stat {
+                        let column_id = *column_id as usize;
+                        let col_stat = col_stat.clone().into();
+                        basic_column_stats[column_id].merge(col_stat);
+                    }
                 }
             }
         }
     }
+    let ratio = if total_files > 0 {
+        sample_metas.len() as f64 / total_files as f64
+    } else {
+        1.0
+    };
 
+    num_rows = (num_rows as f64 / ratio) as u64;
     let mut column_stats = HashMap::with_capacity(basic_column_stats.len());
     for (column_id, col_stat) in basic_column_stats.into_iter().enumerate() {
         column_stats.insert(column_id as u32, col_stat.get_useful_stat(num_rows));

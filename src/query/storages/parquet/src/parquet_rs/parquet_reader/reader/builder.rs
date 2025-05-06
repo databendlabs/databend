@@ -22,7 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
-use opendal::Operator;
+use databend_common_storage::OperatorRegistry;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescPtr;
@@ -48,7 +48,7 @@ use crate::ParquetRSPruner;
 
 pub struct ParquetRSReaderBuilder<'a> {
     ctx: Arc<dyn TableContext>,
-    op: Operator,
+    op_registry: Arc<dyn OperatorRegistry>,
     table_schema: TableSchemaRef,
     schema_desc: SchemaDescPtr,
     schema_desc_from: Option<String>,
@@ -76,7 +76,7 @@ pub struct ParquetRSReaderBuilder<'a> {
 impl<'a> ParquetRSReaderBuilder<'a> {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        op: Operator,
+        op_registry: Arc<dyn OperatorRegistry>,
         table_schema: TableSchemaRef,
         arrow_schema: arrow_schema::Schema,
     ) -> Result<ParquetRSReaderBuilder<'a>> {
@@ -85,7 +85,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
 
         Ok(Self::create_with_parquet_schema(
             ctx,
-            op,
+            op_registry,
             table_schema,
             schema_desc,
             Some(arrow_schema),
@@ -95,7 +95,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
 
     pub fn create_with_parquet_schema(
         ctx: Arc<dyn TableContext>,
-        op: Operator,
+        op_registry: Arc<dyn OperatorRegistry>,
         table_schema: TableSchemaRef,
         schema_desc: SchemaDescPtr,
         arrow_schema: Option<arrow_schema::Schema>,
@@ -103,7 +103,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
     ) -> ParquetRSReaderBuilder<'a> {
         ParquetRSReaderBuilder {
             ctx,
-            op,
+            op_registry,
             table_schema,
             schema_desc,
             arrow_schema,
@@ -229,7 +229,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
 
         let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
         Ok(ParquetRSFullReader {
-            op: self.op.clone(),
+            op_registry: self.op_registry.clone(),
             expect_file_schema: self
                 .schema_desc_from
                 .as_ref()
@@ -287,8 +287,9 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         };
 
         Ok(ParquetRSRowGroupReader {
-            op: self.op.clone(),
+            op_registry: self.op_registry.clone(),
             batch_size,
+            schema_desc: self.schema_desc.clone(),
             policy_builders,
             default_policy,
         })
