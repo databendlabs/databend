@@ -356,12 +356,13 @@ pub async fn cached_range_read(
             } else {
                 None
             };
+            let root = op.info().root();
             let location = location.to_owned();
             let f = move || -> Result<HashMap<Range<u64>, Bytes>> {
                 merged_ranges
                     .into_iter()
                     .map(|range| {
-                        let key = format!("{}_{location}_{range:?}", op.info().root());
+                        let key = format!("{root}_{location}_{range:?}");
 
                         if let Some(buffer) = column_data_cache
                             .as_ref()
