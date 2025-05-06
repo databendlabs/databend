@@ -789,7 +789,7 @@ impl RunningGraph {
             true => Ok(()),
             false => Err(ErrorCode::Internal(format!(
                 "Pipeline graph is not finished, details: {}",
-                self.format_graph_nodes()
+                self.format_graph_nodes(true)
             ))),
         }
     }
@@ -855,7 +855,7 @@ impl RunningGraph {
         self.0.finished_notify.clone()
     }
 
-    pub fn format_graph_nodes(&self) -> String {
+    pub fn format_graph_nodes(&self, pretty: bool) -> String {
         pub struct NodeDisplay {
             id: usize,
             name: String,
@@ -955,7 +955,11 @@ impl RunningGraph {
             }
         }
 
-        format!("{:?}", nodes_display)
+        if pretty {
+            format!("{:#?}", nodes_display)
+        } else {
+            format!("{:?}", nodes_display)
+        }
     }
 
     /// Change the priority
