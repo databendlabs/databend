@@ -154,5 +154,50 @@ analyze table t1;
 statement ok
 DROP TABLE t
 
+# Test case for string histogram functionality
+statement ok
+create or replace table t_string(id int, str_val varchar);
+
+statement ok
+insert into t_string values
+    (1, '1.0'),
+    (2, '2.0'),
+    (3, '3.0'),
+    (4, '4.0'),
+    (5, '5.0'),
+    (6, '6.0'),
+    (7, '7.0'),
+    (8, '8.0'),
+    (9, '9.0'),
+    (10, '10.0');
+
+statement ok
+set enable_analyze_histogram=1;
+
+statement ok
+analyze table t_string;
+
+# Verify that histogram was created for string column
+query IIT
+select * from fuse_statistic('db_09_0020', 't_string') order by column_name asc;
+----
+id 10 [bucket id: 0, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "3", max: "3", ndv: 1.0, count: 1.0], [bucket id: 3, min: "4", max: "4", ndv: 1.0, count: 1.0], [bucket id: 4, min: "5", max: "5", ndv: 1.0, count: 1.0], [bucket id: 5, min: "6", max: "6", ndv: 1.0, count: 1.0], [bucket id: 6, min: "7", max: "7", ndv: 1.0, count: 1.0], [bucket id: 7, min: "8", max: "8", ndv: 1.0, count: 1.0], [bucket id: 8, min: "9", max: "9", ndv: 1.0, count: 1.0], [bucket id: 9, min: "10", max: "10", ndv: 1.0, count: 1.0]
+str_val 10 [bucket id: 0, min: "1.0", max: "1.0", ndv: 1.0, count: 1.0], [bucket id: 1, min: "10.0", max: "10.0", ndv: 1.0, count: 1.0], [bucket id: 2, min: "2.0", max: "2.0", ndv: 1.0, count: 1.0], [bucket id: 3, min: "3.0", max: "3.0", ndv: 1.0, count: 1.0], [bucket id: 4, min: "4.0", max: "4.0", ndv: 1.0, count: 1.0], [bucket id: 5, min: "5.0", max: "5.0", ndv: 1.0, count: 1.0], [bucket id: 6, min: "6.0", max: "6.0", ndv: 1.0, count: 1.0], [bucket id: 7, min: "7.0", max: "7.0", ndv: 1.0, count: 1.0], [bucket id: 8, min: "8.0", max: "8.0", ndv: 1.0, count: 1.0], [bucket id: 9, min: "9.0", max: "9.0", ndv: 1.0, count: 1.0]
+
+# Test string comparison with histogram
+query I
+select count(*) from t_string where str_val > '5.0';
+----
+4
+
+# Test string range query with histogram
+query I
+select count(*) from t_string where str_val between '3.0' and '7.0';
+----
+5
+
+statement ok
+DROP TABLE t_string
+
 statement ok
 DROP DATABASE db_09_0020
