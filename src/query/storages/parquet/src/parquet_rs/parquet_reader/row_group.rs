@@ -361,7 +361,7 @@ pub async fn cached_range_read(
                 merged_ranges
                     .into_iter()
                     .map(|range| {
-                        let key = format!("{location}_{range:?}");
+                        let key = format!("{}_{location}_{range:?}", op.info().root());
 
                         if let Some(buffer) = column_data_cache
                             .as_ref()
@@ -389,7 +389,7 @@ pub async fn cached_range_read(
             let mut handles = Vec::with_capacity(merged_ranges.len());
             for range in merged_ranges {
                 let fut_read = op.read_with(location);
-                let key = format!("{location}_{range:?}");
+                let key = format!("{}_{location}_{range:?}", op.info().root());
                 handles.push(async move {
                     let column_data_cache = if enable_cache {
                         CacheManager::instance().get_column_data_cache()
