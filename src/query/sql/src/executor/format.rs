@@ -26,7 +26,7 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
 use super::physical_plans::AddStreamColumn;
-use super::PhysicalRuntimeFilter;
+use super::physical_plans::PhysicalRuntimeFilter;
 use crate::binder::MutationType;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
@@ -520,6 +520,12 @@ fn to_format_tree(
         }
         PhysicalPlan::AsyncFunction(plan) => {
             async_function_to_format_tree(plan, metadata, profs, context)
+        }
+        PhysicalPlan::BroadcastSource(_plan) => {
+            Ok(FormatTreeNode::new("RuntimeFilterSource".to_string()))
+        }
+        PhysicalPlan::BroadcastSink(_plan) => {
+            Ok(FormatTreeNode::new("RuntimeFilterSink".to_string()))
         }
     }
 }

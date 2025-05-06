@@ -1037,6 +1037,10 @@ impl TableContext for CtxDelegation {
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         todo!()
     }
+
+    fn get_next_broadcast_id(&self) -> u32 {
+        self.ctx.get_next_broadcast_id()
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

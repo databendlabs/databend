@@ -159,11 +159,6 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterExchangeSeriali
     fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<Vec<DataBlock>> {
         let mut new_blocks = Vec::with_capacity(meta.blocks.len());
         for (index, block) in meta.blocks.into_iter().enumerate() {
-            if block.is_empty() {
-                new_blocks.push(block);
-                continue;
-            }
-
             new_blocks.push(match self.local_pos == index {
                 true => block,
                 false => serialize_block(0, block, &self.options)?,
