@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
@@ -29,7 +30,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_index::filters::Xor8Filter;
+use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -95,11 +96,11 @@ async fn load_bloom_filter_by_columns<'a>(
     let column_needed: HashSet<&String> = HashSet::from_iter(column_needed);
     // 2.2 collects the column metas and their column ids
     let index_column_chunk_metas = &bloom_index_meta.columns;
-    let mut col_metas = Vec::with_capacity(column_needed.len());
+    let mut col_metas = BTreeMap::new();
     for column_name in column_needed {
         for (idx, (name, column_meta)) in index_column_chunk_metas.iter().enumerate() {
             if name == column_name {
-                col_metas.push((idx as ColumnId, (name, column_meta)));
+                col_metas.insert(idx as ColumnId, (name, column_meta));
                 break;
             }
         }
@@ -118,7 +119,7 @@ async fn load_bloom_filter_by_columns<'a>(
     let futs = col_metas
         .iter()
         .map(|(idx, (_, col_chunk_meta))| {
-            load_column_xor8_filter(
+            load_column_bloom_filter(
                 *idx,
                 col_chunk_meta,
                 index_path,
@@ -147,13 +148,13 @@ async fn load_bloom_filter_by_columns<'a>(
 /// Loads bytes and index of the given column.
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
-async fn load_column_xor8_filter<'a>(
+async fn load_column_bloom_filter<'a>(
     idx: ColumnId,
     col_chunk_meta: &'a SingleColumnMeta,
     index_path: &'a str,
     dal: &'a Operator,
     bloom_index_schema_desc: SchemaDescPtr,
-) -> Result<Arc<Xor8Filter>> {
+) -> Result<Arc<FilterImpl>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
         let column_data_reader = BloomColumnFilterReader::new(

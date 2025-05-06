@@ -39,6 +39,7 @@ use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -139,6 +140,7 @@ pub struct BlockBuilder {
     pub write_settings: WriteSettings,
     pub cluster_stats_gen: ClusterStatsGenerator,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+    pub ngram_args: Vec<NgramArgs>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
@@ -159,6 +161,7 @@ impl BlockBuilder {
             &data_block,
             bloom_index_location,
             self.bloom_columns_map.clone(),
+            &self.ngram_args,
         )?;
         let column_distinct_count = bloom_index_state
             .as_ref()

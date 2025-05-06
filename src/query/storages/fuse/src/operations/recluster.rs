@@ -249,6 +249,7 @@ impl FuseTable {
             None,
             vec![],
             BloomIndexColumns::None,
+            vec![],
             max_concurrency,
             bloom_index_builder,
         )?;

@@ -56,6 +56,7 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
+use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use goldenfile::Mint;
 
@@ -135,7 +136,10 @@ fn test_base(file: &mut impl Write) {
         ),
         DataBlock::new_from_columns(vec![
             UInt8Type::from_data(vec![2, 3]),
-            StringType::from_data(vec!["b", "c"]),
+            StringType::from_data(vec![
+                "The quick brown fox jumps over the lazy dog",
+                "The early bird catches the worm",
+            ]),
             Column::Map(Box::new(
                 ArrayColumn::<KvPair<AnyType, AnyType>>::new(
                     KvColumn {
@@ -164,6 +168,7 @@ fn test_base(file: &mut impl Write) {
     ];
     let block = DataBlock::concat(&blocks).unwrap();
     let bloom_columns = bloom_columns_map(&schema, &[0, 1, 2, 3]);
+    let ngram_args = ngram_args(&schema, &[1]);
 
     for v in [0, 1, 2] {
         eval_index(
@@ -173,11 +178,13 @@ fn test_base(file: &mut impl Write) {
             DataType::Number(NumberDataType::UInt8),
             &block,
             &bloom_columns,
+            &ngram_args,
             schema.clone(),
+            false,
         );
     }
 
-    for v in ["a", "b", "d"] {
+    for v in ["%fox jumps%", "%bird catches%", "%the doctor%"] {
         eval_index(
             file,
             "1",
@@ -185,7 +192,27 @@ fn test_base(file: &mut impl Write) {
             DataType::String,
             &block,
             &bloom_columns,
+            &ngram_args,
             schema.clone(),
+            true,
+        );
+    }
+
+    for v in [
+        "The quick brown fox jumps over the lazy dog",
+        "The early bird catches the worm",
+        "d",
+    ] {
+        eval_index(
+            file,
+            "1",
+            Scalar::String(v.to_string()),
+            DataType::String,
+            &block,
+            &bloom_columns,
+            &ngram_args,
+            schema.clone(),
+            false,
         );
     }
 
@@ -200,6 +227,7 @@ fn test_base(file: &mut impl Write) {
             DataType::String,
             &block,
             &bloom_columns,
+            &ngram_args,
             schema.clone(),
         );
     }
@@ -220,6 +248,7 @@ fn test_base(file: &mut impl Write) {
             v_type,
             &block,
             &bloom_columns,
+            &ngram_args,
             schema.clone(),
         );
     }
@@ -233,20 +262,42 @@ fn test_specify(file: &mut impl Write) {
 
     let blocks = [DataBlock::new_from_columns(vec![
         UInt8Type::from_data(vec![1, 2]),
-        StringType::from_data(vec!["a", "b"]),
+        StringType::from_data(vec![
+            "The quick brown fox jumps over the lazy dog",
+            "The early bird catches the worm",
+        ]),
     ])];
     let block = DataBlock::concat(&blocks).unwrap();
-    let bloom_columns = bloom_columns_map(&schema, &[0]);
+    {
+        let bloom_columns = bloom_columns_map(&schema, &[0]);
 
-    eval_index(
-        file,
-        "1",
-        Scalar::String("d".to_string()),
-        DataType::String,
-        &block,
-        &bloom_columns,
-        schema,
-    );
+        eval_index(
+            file,
+            "1",
+            Scalar::String("d".to_string()),
+            DataType::String,
+            &block,
+            &bloom_columns,
+            &[],
+            schema.clone(),
+            false,
+        );
+    }
+    {
+        let ngram_args = ngram_args(&schema, &[0]);
+
+        eval_index(
+            file,
+            "1",
+            Scalar::String("d".to_string()),
+            DataType::String,
+            &block,
+            &BTreeMap::new(),
+            &ngram_args,
+            schema,
+            true,
+        );
+    }
 }
 
 fn test_long_string(file: &mut impl Write) {
@@ -272,7 +323,9 @@ fn test_long_string(file: &mut impl Write) {
         DataType::String,
         &block,
         &bloom_columns,
+        &[],
         schema,
+        false,
     );
 }
 
@@ -441,6 +494,7 @@ fn eval_text(
         .collect();
     let schema = Arc::new(TableSchema::new(fields));
     let bloom_columns = bloom_columns_map(&schema, cols);
+    let ngram_args = ngram_args(&schema, cols);
     let block =
         DataBlock::new_from_columns(columns.iter().map(|(_, _, col)| col.clone()).collect());
 
@@ -455,13 +509,14 @@ fn eval_text(
     let expr = type_check::rewrite_function_to_cast(expr);
     let expr = expr.project_column_ref(|i| columns[*i].0.to_string());
 
-    eval_index_expr(file, &block, &bloom_columns, schema, expr);
+    eval_index_expr(file, &block, &bloom_columns, &ngram_args, schema, expr);
 }
 
 fn eval_index_expr(
     file: &mut impl Write,
     block: &DataBlock,
     bloom_columns: &BTreeMap<usize, TableField>,
+    ngram_args: &[NgramArgs],
     schema: Arc<TableSchema>,
     expr: Expr<String>,
 ) {
@@ -477,17 +532,42 @@ fn eval_index_expr(
         expr
     };
 
-    let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
-    let (_, scalars) = BloomIndex::filter_index_field(&expr, &fields).unwrap();
+    let bloom_fields = bloom_columns.values().cloned().collect::<Vec<_>>();
+    let ngram_fields = ngram_args
+        .iter()
+        .map(|arg| arg.field().clone())
+        .collect::<Vec<_>>();
+    let result = BloomIndex::filter_index_field(&expr, bloom_fields, ngram_fields).unwrap();
 
-    let mut scalar_map = HashMap::<Scalar, u64>::new();
-    for (scalar, ty) in scalars.into_iter() {
-        scalar_map.entry(scalar).or_insert_with_key(|scalar| {
+    let mut eq_scalar_map = HashMap::<Scalar, u64>::new();
+    for (_, scalar, ty) in result.bloom_scalars.into_iter() {
+        eq_scalar_map.entry(scalar).or_insert_with_key(|scalar| {
             BloomIndex::calculate_scalar_digest(&func_ctx, scalar, &ty).unwrap()
         });
     }
 
-    let mut builder = BloomIndexBuilder::create(func_ctx.clone(), bloom_columns.clone());
+    let mut like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
+    for (field, (_, scalar)) in result
+        .ngram_fields
+        .iter()
+        .zip(result.ngram_scalars.into_iter())
+    {
+        let Some(ngram_arg) = ngram_args.iter().find(|arg| arg.field() == field) else {
+            continue;
+        };
+        let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
+            Value::Scalar(scalar.clone()),
+            ngram_arg.gram_size(),
+            BloomIndex::ngram_hash,
+        )
+        .next() else {
+            continue;
+        };
+        like_scalar_map.entry(scalar).or_insert(digests);
+    }
+
+    let mut builder =
+        BloomIndexBuilder::create(func_ctx.clone(), bloom_columns.clone(), ngram_args).unwrap();
     builder.add_block(block).unwrap();
     let index = builder.finalize().unwrap().unwrap();
 
@@ -514,7 +594,14 @@ fn eval_index_expr(
         .collect();
 
     let (expr, domains) = index
-        .rewrite_expr(expr, &scalar_map, &column_stats, schema)
+        .rewrite_expr(
+            expr,
+            &eq_scalar_map,
+            &like_scalar_map,
+            ngram_args,
+            &column_stats,
+            schema,
+        )
         .unwrap();
     let result =
         match ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0 {
@@ -539,11 +626,13 @@ fn eval_index(
     ty: DataType,
     block: &DataBlock,
     bloom_columns: &BTreeMap<usize, TableField>,
+    ngram_args: &[NgramArgs],
     schema: Arc<TableSchema>,
+    is_like: bool,
 ) {
     let expr = check_function(
         None,
-        "eq",
+        if is_like { "like" } else { "eq" },
         &[],
         &[
             Expr::ColumnRef(ColumnRef {
@@ -562,7 +651,7 @@ fn eval_index(
     )
     .unwrap();
 
-    eval_index_expr(file, block, bloom_columns, schema, expr)
+    eval_index_expr(file, block, bloom_columns, ngram_args, schema, expr)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -576,6 +665,7 @@ fn eval_map_index(
     ty: DataType,
     block: &DataBlock,
     bloom_columns: &BTreeMap<usize, TableField>,
+    ngram_args: &[NgramArgs],
     schema: Arc<TableSchema>,
 ) {
     let fields = schema.fields.clone();
@@ -611,7 +701,7 @@ fn eval_map_index(
         check_function(None, "eq", &[], &[get_expr, const_expr], &BUILTIN_FUNCTIONS).unwrap();
     let expr = check_function(None, "is_true", &[], &[eq_expr], &BUILTIN_FUNCTIONS).unwrap();
 
-    eval_index_expr(file, block, bloom_columns, schema, expr);
+    eval_index_expr(file, block, bloom_columns, ngram_args, schema, expr);
 }
 
 fn bloom_columns_map(
@@ -627,4 +717,16 @@ fn bloom_columns_map(
         }
     }
     bloom_columns_map
+}
+
+fn ngram_args(schema: &TableSchema, cols: &[FieldIndex]) -> Vec<NgramArgs> {
+    let mut ngram_args = Vec::new();
+    for &i in cols {
+        let table_field = schema.field(i);
+        let data_type = DataType::from(table_field.data_type());
+        if Xor8Filter::supported_type(&data_type) {
+            ngram_args.push(NgramArgs::new(i, table_field.clone(), 3, 1024))
+        }
+    }
+    ngram_args
 }
