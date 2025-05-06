@@ -2324,24 +2324,26 @@ fn get_by_keypath_fn(
                     match json_row {
                         ScalarRef::Variant(v) => {
                             match RawJsonb::new(v).get_by_keypath(path.paths.iter()) {
-                                Ok(Some(res)) => {
-                                    match &mut builder {
-                                        ColumnBuilder::String(builder) => {
-                                            let raw_jsonb = res.as_raw();
-                                            if let Ok(Some(s)) = raw_jsonb.as_str() {
-                                                builder.put_str(&s);
-                                            } else {
-                                                let json_str = raw_jsonb.to_string();
-                                                builder.put_str(&json_str);
-                                            }
+                                Ok(Some(res)) => match &mut builder {
+                                    ColumnBuilder::String(builder) => {
+                                        let raw_jsonb = res.as_raw();
+                                        if raw_jsonb.is_null().unwrap_or_default() {
+                                            validity.push(false);
+                                        } else if let Ok(Some(s)) = raw_jsonb.as_str() {
+                                            builder.put_str(&s);
+                                            validity.push(true);
+                                        } else {
+                                            let json_str = raw_jsonb.to_string();
+                                            builder.put_str(&json_str);
+                                            validity.push(true);
                                         }
-                                        ColumnBuilder::Variant(builder) => {
-                                            builder.put_slice(res.as_ref());
-                                        }
-                                        _ => unreachable!(),
                                     }
-                                    validity.push(true);
-                                }
+                                    ColumnBuilder::Variant(builder) => {
+                                        builder.put_slice(res.as_ref());
+                                        validity.push(true);
+                                    }
+                                    _ => unreachable!(),
+                                },
                                 _ => validity.push(false),
                             }
                         }
