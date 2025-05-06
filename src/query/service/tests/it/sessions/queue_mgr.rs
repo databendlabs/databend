@@ -179,6 +179,8 @@ async fn test_concurrent_acquire() -> Result<()> {
             % 5) as usize
             + 5;
 
+        let ctx = format!("count={test_count}");
+
         let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
         let queue = QueueManager::<TestData>::create(2, metastore, is_global);
         let mut join_handles = Vec::with_capacity(test_count);
@@ -190,6 +192,12 @@ async fn test_concurrent_acquire() -> Result<()> {
                 let barrier = barrier.clone();
                 databend_common_base::runtime::spawn(async move {
                     barrier.wait().await;
+
+                    // Time based semaphore is sensitive to time accuracy.
+                    // Lower timestamp semaphore being inserted after higher timestamp semaphore results in both acquired.
+                    // Thus, we have to make the gap between timestamp large enough.
+                    tokio::time::sleep(Duration::from_millis(300 * index as u64)).await;
+
                     let _guard = queue
                         .acquire(TestData {
                             lock_id: String::from("test_concurrent_acquire"),
@@ -207,8 +215,22 @@ async fn test_concurrent_acquire() -> Result<()> {
             let _ = join_handle.await;
         }
 
-        assert!(instant.elapsed() >= Duration::from_secs((test_count / 2) as u64));
-        assert!(instant.elapsed() < Duration::from_secs((test_count) as u64));
+        let elapsed = instant.elapsed();
+        let total = Duration::from_secs((test_count) as u64);
+        assert!(
+            elapsed >= total / 2,
+            "{ctx}: expect: elapsed: {:?} >= {:?}, ",
+            elapsed,
+            total / 2,
+        );
+        let delta = Duration::from_millis(300) * test_count as u32;
+        assert!(
+            elapsed < total + delta,
+            "{ctx}: expect: elapsed: {:?} < {:?} + {:?}, ",
+            elapsed,
+            total,
+            delta,
+        );
 
         assert_eq!(queue.length(), 0);
     }
