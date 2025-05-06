@@ -132,6 +132,12 @@ async fn test_serial_acquire() -> Result<()> {
                 let barrier = barrier.clone();
                 databend_common_base::runtime::spawn(async move {
                     barrier.wait().await;
+
+                    // Time based semaphore is sensitive to time accuracy.
+                    // Lower timestamp semaphore being inserted after higher timestamp semaphore results in both acquired.
+                    // Thus, we have to make the gap between timestamp large enough.
+                    tokio::time::sleep(Duration::from_millis(300 * index as u64)).await;
+
                     let _guard = queue
                         .acquire(TestData {
                             lock_id: String::from("test_serial_acquire"),
@@ -223,6 +229,12 @@ async fn test_list_acquire() -> Result<()> {
                 let barrier = barrier.clone();
                 databend_common_base::runtime::spawn(async move {
                     barrier.wait().await;
+
+                    // Time based semaphore is sensitive to time accuracy.
+                    // Lower timestamp semaphore being inserted after higher timestamp semaphore results in both acquired.
+                    // Thus, we have to make the gap between timestamp large enough.
+                    tokio::time::sleep(Duration::from_millis(300 * index as u64)).await;
+
                     let _guard = queue
                         .acquire(TestData {
                             lock_id: String::from("test_list_acquire"),
