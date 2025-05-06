@@ -33,6 +33,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
+use opendal::services::Fs;
 use opendal::Buffer;
 use opendal::Operator;
 use parking_lot::RwLock;
@@ -73,8 +74,23 @@ pub struct SpillerConfig {
 
 #[derive(Clone)]
 pub struct SpillerDiskConfig {
-    pub temp_dir: Arc<TempDir>,
-    pub local_operator: Option<Operator>,
+    temp_dir: Arc<TempDir>,
+    local_operator: Option<Operator>,
+}
+
+impl SpillerDiskConfig {
+    pub fn new(temp_dir: Arc<TempDir>, enable_dio: bool) -> Result<SpillerDiskConfig> {
+        let local_operator = if !enable_dio {
+            let builder = Fs::default().root(temp_dir.path().to_str().unwrap());
+            Some(Operator::new(builder)?.finish())
+        } else {
+            None
+        };
+        Ok(SpillerDiskConfig {
+            temp_dir,
+            local_operator,
+        })
+    }
 }
 
 /// Spiller is a unified framework for operators which need to spill data from memory.

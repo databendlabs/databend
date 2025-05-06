@@ -490,6 +490,10 @@ impl Settings {
         Ok(self.try_get_u64("sort_spilling_memory_ratio")? as usize)
     }
 
+    pub fn get_sort_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
+    }
+
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("group_by_shuffle_mode")
     }
