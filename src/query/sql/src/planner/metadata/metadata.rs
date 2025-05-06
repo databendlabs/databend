@@ -462,11 +462,11 @@ impl Metadata {
             .map(|field| field.source_column_id)
             .collect::<HashSet<_>>();
         let mut base_column_map = HashMap::new();
-        for column in self.columns_by_table_index(table_index).iter() {
+        for column in self.columns_by_table_index(table_index).into_iter() {
             if let ColumnEntry::BaseTableColumn(base_column) = column {
                 if let Some(column_id) = base_column.column_id {
                     if source_column_ids.contains(&column_id) {
-                        base_column_map.insert(column_id, base_column.clone());
+                        base_column_map.insert(column_id, base_column);
                     }
                 }
             }

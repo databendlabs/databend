@@ -1212,6 +1212,9 @@ impl<'a> TypeChecker<'a> {
         if column.index >= self.metadata.read().columns().len() {
             return None;
         }
+
+        // Change the type of virtual column to user specified cast type avoids additional casting overhead,
+        // since the user usually knows the real type.
         let column_entry = self.metadata.read().column(column.index).clone();
         let ColumnEntry::VirtualColumn(virtual_column) = column_entry else {
             return None;
@@ -1249,7 +1252,7 @@ impl<'a> TypeChecker<'a> {
             return Some(new_scalar);
         }
 
-        // Rewrite the virtual column as the cast type down to avoid additional type cast.
+        // Generate a new virtual column with the cast type.
         let database_name = column.database_name.clone();
         let table_name = column.table_name.clone();
 
@@ -1274,6 +1277,7 @@ impl<'a> TypeChecker<'a> {
         .database_name(database_name)
         .table_index(Some(table_index))
         .build();
+        // Add virtual column with the cast type to the context.
         self.bind_context
             .add_column_binding(new_column_binding.clone());
 
