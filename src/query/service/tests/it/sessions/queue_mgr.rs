@@ -136,7 +136,7 @@ async fn test_serial_acquire() -> Result<()> {
                     // Time based semaphore is sensitive to time accuracy.
                     // Lower timestamp semaphore being inserted after higher timestamp semaphore results in both acquired.
                     // Thus, we have to make the gap between timestamp large enough.
-                    tokio::time::sleep(Duration::from_millis(300 * index as u64)).await;
+                    tokio::time::sleep(Duration::from_millis(500 * index as u64)).await;
 
                     let _guard = queue
                         .acquire(TestData {
@@ -144,7 +144,8 @@ async fn test_serial_acquire() -> Result<()> {
                             acquire_id: format!("TestData{}", index),
                         })
                         .await?;
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+
+                    tokio::time::sleep(Duration::from_millis(1_000)).await;
                     Result::<()>::Ok(())
                 })
             })
@@ -154,7 +155,14 @@ async fn test_serial_acquire() -> Result<()> {
             let _ = join_handle.await;
         }
 
-        assert!(instant.elapsed() >= Duration::from_secs(test_count as u64));
+        let elapsed = instant.elapsed();
+        let expected = Duration::from_secs(test_count as u64);
+        assert!(
+            elapsed >= expected,
+            "expect: elapsed: {:?} >= {:?}, ",
+            elapsed,
+            expected,
+        );
         assert_eq!(queue.length(), 0);
     }
     Ok(())
@@ -233,7 +241,7 @@ async fn test_list_acquire() -> Result<()> {
                     // Time based semaphore is sensitive to time accuracy.
                     // Lower timestamp semaphore being inserted after higher timestamp semaphore results in both acquired.
                     // Thus, we have to make the gap between timestamp large enough.
-                    tokio::time::sleep(Duration::from_millis(300 * index as u64)).await;
+                    tokio::time::sleep(Duration::from_millis(800 * index as u64)).await;
 
                     let _guard = queue
                         .acquire(TestData {
@@ -242,13 +250,13 @@ async fn test_list_acquire() -> Result<()> {
                         })
                         .await?;
 
-                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    tokio::time::sleep(Duration::from_secs(15)).await;
                     Result::<()>::Ok(())
                 })
             })
         }
 
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(10)).await;
         assert_eq!(queue.length(), test_count - 1);
     }
 
