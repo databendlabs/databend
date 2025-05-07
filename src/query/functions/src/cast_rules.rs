@@ -49,7 +49,15 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     for func_name in ALL_STRING_FUNC_NAMES {
         registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
-        registry.register_additional_cast_rules(func_name, CAST_FROM_STRING_RULES.iter().cloned());
+        if ["concat", "concat_ws"].contains(func_name) {
+            registry.register_additional_cast_rules(
+                func_name,
+                get_cast_int_to_string_rules().into_iter(),
+            )
+        } else {
+            registry
+                .register_additional_cast_rules(func_name, CAST_FROM_STRING_RULES.iter().cloned());
+        }
         registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
         registry.register_additional_cast_rules(func_name, CAST_INT_TO_UINT64.iter().cloned());
     }
@@ -366,3 +374,10 @@ pub const CAST_INT_TO_UINT64: AutoCastRules = &[
         DataType::Number(NumberDataType::UInt64),
     ),
 ];
+
+pub fn get_cast_int_to_string_rules() -> Vec<(DataType, DataType)> {
+    ALL_NUMERICS_TYPES
+        .iter()
+        .map(|ty| (DataType::Number(*ty), DataType::String))
+        .collect()
+}
