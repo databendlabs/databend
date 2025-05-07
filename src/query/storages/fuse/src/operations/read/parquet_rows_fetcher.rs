@@ -97,33 +97,58 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
             .enumerate()
             .map(|(i, p)| (*p, (i, 0)))
             .collect::<HashMap<_, _>>();
-
-        const MAX_FETCH_SIZE: u64 = 256 * 1024 * 1024;
-        let mut blocks = Vec::new();
-        for batch in part_set.iter().batching(|it| {
-            let mut chunk = Vec::new();
-            let mut fetch_size = 0;
-            for part in it {
-                let fuse_part = FuseBlockPartInfo::from_part(&self.part_map[part]).unwrap();
-                let in_memory_size = fuse_part.in_memory_size().unwrap_or_default();
-                fetch_size += in_memory_size;
-                chunk.push(*part);
-                if fetch_size > MAX_FETCH_SIZE {
-                    return Some(chunk);
-                }
-            }
-            if chunk.is_empty() {
-                None
+        // parts_per_thread = num_parts / max_threads
+        // remain = num_parts % max_threads
+        // task distribution:
+        //   Part number of each task   |       Task number
+        // ------------------------------------------------------
+        //    parts_per_thread + 1      |         remain
+        //      parts_per_thread        |   max_threads - remain
+        let num_parts = part_set.len();
+        let mut tasks = Vec::with_capacity(self.max_threads);
+        // Fetch blocks in parallel.
+        let part_size = num_parts / self.max_threads;
+        let remainder = num_parts % self.max_threads;
+        let mut begin = 0;
+        for i in 0..self.max_threads {
+            let end = if i < remainder {
+                begin + part_size + 1
             } else {
-                Some(chunk)
+                begin + part_size
+            };
+            if begin == end {
+                break;
             }
-        }) {
-            let fetch_blocks = self
-                .fetch_blocks_in_parallel(&batch, &mut block_row_indices)
-                .await?;
-            blocks.extend(fetch_blocks);
+            let parts = part_set[begin..end]
+                .iter()
+                .map(|idx| self.part_map[idx].clone())
+                .collect::<Vec<_>>();
+            let block_row_indices = part_set[begin..end]
+                .iter()
+                .map(|idx| block_row_indices.remove(idx).unwrap())
+                .collect::<Vec<_>>();
+            tasks.push(Self::fetch_blocks(
+                self.reader.clone(),
+                parts,
+                self.settings,
+                block_row_indices,
+            ));
+            begin = end;
         }
 
+        let num_task = tasks.len();
+        let blocks = execute_futures_in_parallel(
+            tasks,
+            num_task,
+            num_task * 2,
+            "parqeut rows fetch".to_string(),
+        )
+        .await?
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
         // Take result rows from blocks.
         let indices = row_set
             .iter()
@@ -259,68 +284,6 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
                 blocks.push(block);
             }
         }
-        Ok(blocks)
-    }
-
-    #[async_backtrace::framed]
-    async fn fetch_blocks_in_parallel(
-        &self,
-        part_set: &[u64],
-        block_row_indices: &mut HashMap<u64, Vec<BlockRowIndex>>,
-    ) -> Result<Vec<DataBlock>> {
-        // parts_per_thread = num_parts / max_threads
-        // remain = num_parts % max_threads
-        // task distribution:
-        //   Part number of each task   |       Task number
-        // ------------------------------------------------------
-        //    parts_per_thread + 1      |         remain
-        //      parts_per_thread        |   max_threads - remain
-        let num_parts = part_set.len();
-        let mut tasks = Vec::with_capacity(self.max_threads);
-        // Fetch blocks in parallel.
-        let part_size = num_parts / self.max_threads;
-        let remainder = num_parts % self.max_threads;
-        let mut begin = 0;
-        for i in 0..self.max_threads {
-            let end = if i < remainder {
-                begin + part_size + 1
-            } else {
-                begin + part_size
-            };
-            if begin == end {
-                break;
-            }
-            let parts = part_set[begin..end]
-                .iter()
-                .map(|idx| self.part_map[idx].clone())
-                .collect::<Vec<_>>();
-            let block_row_indices = part_set[begin..end]
-                .iter()
-                .map(|idx| block_row_indices.remove(idx).unwrap())
-                .collect::<Vec<_>>();
-            tasks.push(Self::fetch_blocks(
-                self.reader.clone(),
-                parts,
-                self.settings,
-                block_row_indices,
-            ));
-            begin = end;
-        }
-
-        let num_task = tasks.len();
-        let blocks = execute_futures_in_parallel(
-            tasks,
-            num_task,
-            num_task * 2,
-            "parqeut rows fetch".to_string(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-
         Ok(blocks)
     }
 

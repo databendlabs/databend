@@ -121,12 +121,6 @@ impl FuseBlockPartInfo {
             .map(|meta| meta.page_size)
             .unwrap_or(self.nums_rows)
     }
-
-    pub fn in_memory_size(&self) -> Option<u64> {
-        self.columns_stat
-            .as_ref()
-            .map(|stats| stats.iter().map(|(_, stat)| stat.in_memory_size).sum())
-    }
 }
 
 /// Fuse table lazy partition information.
