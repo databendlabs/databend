@@ -47,7 +47,11 @@ impl fmt::Display for SeqV {
             write!(f, " []")?;
         }
 
-        write!(f, " [{}])", String::from_utf8_lossy(&self.data),)
+        if let Ok(x) = std::str::from_utf8(&self.data) {
+            write!(f, " '{}')", x,)
+        } else {
+            write!(f, " {:?})", &self.data,)
+        }
     }
 }
 
@@ -74,7 +78,7 @@ mod tests {
             meta: Some(KvMeta::default()),
             data: vec![],
         };
-        assert_eq!(seqv.to_string(), "(seq=1 [] [])");
+        assert_eq!(seqv.to_string(), "(seq=1 [] '')");
 
         let seqv = SeqV {
             seq: 1,
@@ -85,7 +89,19 @@ mod tests {
         };
         assert_eq!(
             seqv.to_string(),
-            "(seq=1 [expire=2024-08-08T07:40:19.000] [ABC])"
+            "(seq=1 [expire=2024-08-08T07:40:19.000] 'ABC')"
+        );
+
+        let seqv = SeqV {
+            seq: 1,
+            meta: Some(KvMeta {
+                expire_at: Some(1723102819),
+            }),
+            data: vec![0, 159, 146, 150],
+        };
+        assert_eq!(
+            seqv.to_string(),
+            "(seq=1 [expire=2024-08-08T07:40:19.000] [0, 159, 146, 150])"
         );
     }
 }

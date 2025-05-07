@@ -15,6 +15,9 @@
 #[allow(clippy::module_inception)]
 mod acquirer;
 mod permit;
+mod stat;
 
 pub(crate) use acquirer::Acquirer;
+pub(crate) use acquirer::SeqPolicy;
 pub use permit::Permit;
+pub use stat::SharedAcquirerStat;

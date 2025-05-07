@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+use std::fmt::Formatter;
 use std::time::Duration;
 
 use deepsize::Context;
+use display_more::DisplayUnixTimeStampExt;
 
 use crate::cmd::CmdContext;
 use crate::seq_value::KVMeta;
@@ -45,6 +48,26 @@ pub struct MetaSpec {
 impl deepsize::DeepSizeOf for MetaSpec {
     fn deep_size_of_children(&self, _context: &mut Context) -> usize {
         0
+    }
+}
+
+impl fmt::Display for MetaSpec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "MetaSpec(",)?;
+
+        if let Some(expire_at_seq) = self.expire_at {
+            write!(
+                f,
+                "expire_at: {} ",
+                Duration::from_secs(expire_at_seq).display_unix_timestamp_short()
+            )?;
+        }
+        if let Some(ttl) = &self.ttl {
+            write!(f, "ttl: {:?} ", Duration::from_millis(ttl.millis()))?;
+        }
+
+        write!(f, ")")?;
+        Ok(())
     }
 }
 

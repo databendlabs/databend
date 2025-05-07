@@ -65,6 +65,9 @@ use crate::MetadataRef;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
+const MAXIMUM_BLOOM_SIZE: u64 = 10 * 1024 * 1024;
+const MINIMUM_BLOOM_SIZE: u64 = 512;
+
 // valid values for inverted index option tokenizer
 static INDEX_TOKENIZER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
@@ -580,12 +583,48 @@ impl Binder {
             let value = val.to_lowercase();
             match key.as_str() {
                 "gram_size" => {
-                    if value.parse::<u32>().is_err() {
-                        return Err(ErrorCode::IndexOptionInvalid(format!(
-                            "value `{value}` is not a legal number",
-                        )));
+                    match value.parse::<usize>() {
+                        Ok(num) => {
+                            if num == 0 {
+                                return Err(ErrorCode::IndexOptionInvalid(
+                                    "`gram_size` cannot be 0",
+                                ));
+                            }
+                        }
+                        Err(_) => {
+                            return Err(ErrorCode::IndexOptionInvalid(format!(
+                                "value `{value}` is not a legal number",
+                            )));
+                        }
                     }
                     options.insert("gram_size".to_string(), value);
+                }
+                "bloom_size" => {
+                    match value.parse::<u64>() {
+                        Ok(num) => {
+                            if num == 0 {
+                                return Err(ErrorCode::IndexOptionInvalid(
+                                    "`bloom_size` cannot be 0",
+                                ));
+                            }
+                            if num < MINIMUM_BLOOM_SIZE {
+                                return Err(ErrorCode::IndexOptionInvalid(format!(
+                                    "bloom_size: `{num}` is too small (bloom_size is minimum: {MINIMUM_BLOOM_SIZE})",
+                                )));
+                            }
+                            if num > MAXIMUM_BLOOM_SIZE {
+                                return Err(ErrorCode::IndexOptionInvalid(format!(
+                                    "bloom_size: `{num}` is too large (bloom_size is maximum: {MAXIMUM_BLOOM_SIZE})",
+                                )));
+                            }
+                        }
+                        Err(_) => {
+                            return Err(ErrorCode::IndexOptionInvalid(format!(
+                                "value `{value}` is not a legal number",
+                            )));
+                        }
+                    }
+                    options.insert("bloom_size".to_string(), value);
                 }
                 _ => {
                     return Err(ErrorCode::IndexOptionInvalid(format!(

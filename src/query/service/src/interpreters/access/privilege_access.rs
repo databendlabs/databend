@@ -1376,6 +1376,12 @@ impl AccessChecker for PrivilegeAccess {
             Plan::UnassignWarehouseNodes(plan) => {
                 self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
             }
+            // TODO: rbac for workload
+            Plan::ShowWorkloadGroups => {}
+            Plan::CreateWorkloadGroup(_) => {}
+            Plan::DropWorkloadGroup(_) => {}
+            Plan::RenameWorkloadGroup(_) => {}
+            Plan::AlterWorkloadGroup(_) => {}
         }
 
         Ok(())

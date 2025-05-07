@@ -43,6 +43,7 @@ pub use operator::build_operator;
 pub use operator::check_operator;
 pub use operator::init_operator;
 pub use operator::DataOperator;
+pub use operator::OperatorRegistry;
 
 pub mod metrics;
 pub use crate::metrics::StorageMetrics;

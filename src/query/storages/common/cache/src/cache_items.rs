@@ -17,7 +17,7 @@ pub use databend_common_catalog::plan::PartStatistics;
 pub use databend_common_catalog::plan::Partitions;
 pub use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
-pub use databend_storages_common_index::filters::Xor8Filter;
+pub use databend_storages_common_index::filters::FilterImpl;
 pub use databend_storages_common_index::BloomIndexMeta;
 pub use databend_storages_common_index::InvertedIndexFile;
 pub use databend_storages_common_index::InvertedIndexMeta;
@@ -34,6 +34,10 @@ use crate::HybridCache;
 pub struct ColumnData(Bytes);
 
 impl ColumnData {
+    pub fn from_bytes(bytes: Bytes) -> Self {
+        ColumnData(bytes)
+    }
+
     pub fn from_merge_io_read_result(bytes: Bytes) -> Self {
         // Bytes are from merge read result, may refer to a large chunk of memory;
         // Caching this large buffer wastes memory, so we need to copy it out.

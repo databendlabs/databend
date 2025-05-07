@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::time::Duration;
 
 use databend_common_base::base::escape_for_key;
@@ -139,7 +140,7 @@ fn map_condition(k: &str, seq: MatchSeq) -> TxnCondition {
     }
 }
 
-struct NodeInfoSnapshot {
+pub struct NodeInfoSnapshot {
     node_seq: u64,
     cluster_seq: u64,
     node_info: NodeInfo,
@@ -1998,7 +1999,7 @@ impl WarehouseApi for WarehouseMgr {
         }
 
         for _idx in 0..10 {
-            let mut nodes = nodes.clone();
+            let mut removed_nodes = HashSet::new();
             let mut drop_cluster_node_txn = TxnRequest::default();
 
             let mut warehouse_snapshot = self.warehouse_snapshot(warehouse).await?;
@@ -2009,11 +2010,11 @@ impl WarehouseApi for WarehouseMgr {
                     warehouse
                 ))),
                 WarehouseInfo::SystemManaged(mut info) => {
-                    for (cluster, nodes) in &nodes {
-                        let Some(cluster) = info.clusters.get_mut(cluster) else {
+                    for (cluster_id, nodes) in &nodes {
+                        let Some(cluster) = info.clusters.get_mut(cluster_id) else {
                             return Err(ErrorCode::WarehouseClusterNotExists(format!(
                                 "Warehouse cluster {:?}.{:?} not exists",
-                                warehouse, cluster
+                                warehouse, cluster_id
                             )));
                         };
 
@@ -2024,14 +2025,7 @@ impl WarehouseApi for WarehouseMgr {
                             )));
                         }
 
-                        for remove_node in nodes {
-                            if cluster.nodes.remove_first(remove_node).is_none() {
-                                return Err(ErrorCode::ClusterUnknownNode(format!(
-                                    "Warehouse cluster {:?}.{:?} unknown node {:?}",
-                                    warehouse, cluster, remove_node
-                                )));
-                            }
-                        }
+                        removed_nodes = info.remove_nodes(cluster_id, nodes, &warehouse_snapshot.snapshot_nodes)?;
                     }
 
 
@@ -2070,22 +2064,17 @@ impl WarehouseApi for WarehouseMgr {
                     MatchSeq::Exact(node_snapshot.cluster_seq),
                 ));
 
-                if let Some(v) = nodes.get_mut(&node_snapshot.node_info.cluster_id) {
-                    let runtime_node_group = node_snapshot.node_info.runtime_node_group.clone();
-                    if v.remove_first(&SelectedNode::Random(runtime_node_group))
-                        .is_some()
-                    {
-                        let node = node_snapshot.node_info.leave_warehouse();
+                if removed_nodes.contains(&node_snapshot.node_info.id) {
+                    let node = node_snapshot.node_info.leave_warehouse();
 
-                        drop_cluster_node_txn
-                            .if_then
-                            .push(TxnOp::delete(cluster_node_key));
-                        drop_cluster_node_txn.if_then.push(TxnOp::put_with_ttl(
-                            node_key,
-                            serde_json::to_vec(&node)?,
-                            Some(self.lift_time * 4),
-                        ));
-                    }
+                    drop_cluster_node_txn
+                        .if_then
+                        .push(TxnOp::delete(cluster_node_key));
+                    drop_cluster_node_txn.if_then.push(TxnOp::put_with_ttl(
+                        node_key,
+                        serde_json::to_vec(&node)?,
+                        Some(self.lift_time * 4),
+                    ));
                 }
             }
 
@@ -2208,6 +2197,110 @@ impl WarehouseApi for WarehouseMgr {
             None => Ok(None),
             Some(seq) => Ok(Some(serde_json::from_slice(&seq.data)?)),
         }
+    }
+}
+
+impl SystemManagedWarehouse {
+    pub fn remove_nodes(
+        &mut self,
+        cluster_id: &String,
+        unassign: &[SelectedNode],
+        nodes: &[NodeInfoSnapshot],
+    ) -> Result<HashSet<String>> {
+        let mut final_removed_nodes = HashSet::new();
+        let mut match_any = Vec::with_capacity(unassign.len());
+        let mut match_node_group = Vec::with_capacity(unassign.len());
+
+        let Some(cluster) = self.clusters.get_mut(cluster_id) else {
+            unreachable!()
+        };
+
+        // 1. assign node group == unassign node group
+        for node in unassign {
+            if cluster.nodes.remove_first(node).is_none() {
+                match node {
+                    SelectedNode::Random(None) => {
+                        match_any.push(node);
+                    }
+                    SelectedNode::Random(Some(node)) => {
+                        match_node_group.push(Some(node.clone()));
+                    }
+                }
+
+                continue;
+            }
+
+            for node_snapshot in nodes {
+                if &node_snapshot.node_info.cluster_id != cluster_id {
+                    continue;
+                }
+
+                match (&node, &node_snapshot.node_info.runtime_node_group) {
+                    (SelectedNode::Random(None), None) => {
+                        if !final_removed_nodes.contains(&node_snapshot.node_info.id) {
+                            final_removed_nodes.insert(node_snapshot.node_info.id.clone());
+                            break;
+                        }
+                    }
+                    (SelectedNode::Random(Some(left)), Some(right)) if left == right => {
+                        if !final_removed_nodes.contains(&node_snapshot.node_info.id) {
+                            final_removed_nodes.insert(node_snapshot.node_info.id.clone());
+                            break;
+                        }
+                    }
+                    _ => {
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // 2. unassign Some(node group), assign None
+        'match_node_group: for node_group in match_node_group {
+            for node_snapshot in nodes {
+                if &node_snapshot.node_info.cluster_id != cluster_id {
+                    continue;
+                }
+
+                if node_snapshot.node_info.node_group == node_group
+                    && !final_removed_nodes.contains(&node_snapshot.node_info.id)
+                {
+                    final_removed_nodes.insert(node_snapshot.node_info.id.clone());
+                    cluster.nodes.remove_first(&SelectedNode::Random(
+                        node_snapshot.node_info.runtime_node_group.clone(),
+                    ));
+                    continue 'match_node_group;
+                }
+            }
+
+            return Err(ErrorCode::ClusterUnknownNode(format!(
+                "Cannot found {:?} node group node in {:?}",
+                node_group, cluster
+            )));
+        }
+
+        // 3. assign Some(node group) and unassign None
+        'match_any: for _index in 0..match_any.len() {
+            for node_snapshot in nodes {
+                if &node_snapshot.node_info.cluster_id != cluster_id {
+                    continue;
+                }
+
+                if !final_removed_nodes.contains(&node_snapshot.node_info.id) {
+                    final_removed_nodes.insert(node_snapshot.node_info.id.clone());
+                    cluster.nodes.remove_first(&SelectedNode::Random(
+                        node_snapshot.node_info.runtime_node_group.clone(),
+                    ));
+                    continue 'match_any;
+                }
+            }
+
+            return Err(ErrorCode::ClusterUnknownNode(
+                "Cannot unassign empty warehouse cluster",
+            ));
+        }
+
+        Ok(final_removed_nodes)
     }
 }
 

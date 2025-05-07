@@ -15,6 +15,8 @@
 use databend_common_exception::Result;
 
 use super::physical_plans::AddStreamColumn;
+use super::physical_plans::BroadcastSink;
+use super::physical_plans::BroadcastSource;
 use super::physical_plans::CacheScan;
 use super::physical_plans::ExpressionScan;
 use super::physical_plans::HilbertPartition;
@@ -120,7 +122,22 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ChunkAppendData(plan) => self.replace_chunk_append_data(plan),
             PhysicalPlan::ChunkMerge(plan) => self.replace_chunk_merge(plan),
             PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
+            PhysicalPlan::BroadcastSource(plan) => self.replace_runtime_filter_source(plan),
+            PhysicalPlan::BroadcastSink(plan) => self.replace_runtime_filter_sink(plan),
         }
+    }
+
+    fn replace_runtime_filter_source(&mut self, plan: &BroadcastSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::BroadcastSource(plan.clone()))
+    }
+
+    fn replace_runtime_filter_sink(&mut self, plan: &BroadcastSink) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::BroadcastSink(BroadcastSink {
+            plan_id: plan.plan_id,
+            broadcast_id: plan.broadcast_id,
+            input: Box::new(input),
+        }))
     }
 
     fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
@@ -646,7 +663,8 @@ impl PhysicalPlan {
                 | PhysicalPlan::HilbertPartition(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
-                | PhysicalPlan::MutationSource(_) => {}
+                | PhysicalPlan::MutationSource(_)
+                | PhysicalPlan::BroadcastSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -770,6 +788,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ChunkCommitInsert(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::BroadcastSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }

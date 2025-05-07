@@ -1006,6 +1006,10 @@ impl TableContext for CtxDelegation {
         self.ctx.get_table_meta_timestamps(table, previous_snapshot)
     }
 
+    fn clear_table_meta_timestamps_cache(&self) {
+        self.ctx.clear_table_meta_timestamps_cache();
+    }
+
     fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }
@@ -1032,6 +1036,10 @@ impl TableContext for CtxDelegation {
 
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         todo!()
+    }
+
+    fn get_next_broadcast_id(&self) -> u32 {
+        self.ctx.get_next_broadcast_id()
     }
 }
 

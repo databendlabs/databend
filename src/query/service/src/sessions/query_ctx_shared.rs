@@ -16,6 +16,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -23,6 +24,8 @@ use std::sync::Weak;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use async_channel::Receiver;
+use async_channel::Sender;
 use dashmap::DashMap;
 use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
@@ -43,6 +46,7 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
@@ -170,6 +174,17 @@ pub struct QueryContextShared {
     pub(in crate::sessions) selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
 
     pub(in crate::sessions) pruned_partitions_stats: Arc<RwLock<Option<PartStatistics>>>,
+
+    pub(in crate::sessions) next_broadcast_id: AtomicU32,
+    pub(in crate::sessions) broadcast_channels: Arc<Mutex<HashMap<u32, BroadcastChannel>>>,
+}
+
+#[derive(Default)]
+pub struct BroadcastChannel {
+    pub source_sender: Option<Sender<BlockMetaInfoPtr>>,
+    pub source_receiver: Option<Receiver<BlockMetaInfoPtr>>,
+    pub sink_sender: Option<Sender<BlockMetaInfoPtr>>,
+    pub sink_receiver: Option<Receiver<BlockMetaInfoPtr>>,
 }
 
 impl QueryContextShared {
@@ -236,7 +251,59 @@ impl QueryContextShared {
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             selected_segment_locs: Default::default(),
             pruned_partitions_stats: Arc::new(RwLock::new(None)),
+            next_broadcast_id: AtomicU32::new(0),
+            broadcast_channels: Arc::new(Mutex::new(HashMap::new())),
         }))
+    }
+
+    pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
+        let mut broadcast_channels = self.broadcast_channels.lock();
+        let entry = broadcast_channels.entry(broadcast_id).or_default();
+        match entry.source_receiver.take() {
+            Some(receiver) => receiver,
+            None => {
+                let (sender, receiver) = async_channel::unbounded();
+                entry.source_sender = Some(sender);
+                receiver
+            }
+        }
+    }
+    pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
+        let mut broadcast_channels = self.broadcast_channels.lock();
+        let entry = broadcast_channels.entry(broadcast_id).or_default();
+        match entry.source_sender.take() {
+            Some(sender) => sender,
+            None => {
+                let (sender, receiver) = async_channel::unbounded();
+                entry.source_receiver = Some(receiver);
+                sender
+            }
+        }
+    }
+
+    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
+        let mut broadcast_channels = self.broadcast_channels.lock();
+        let entry = broadcast_channels.entry(broadcast_id).or_default();
+        match entry.sink_receiver.take() {
+            Some(receiver) => receiver,
+            None => {
+                let (sender, receiver) = async_channel::unbounded();
+                entry.sink_sender = Some(sender);
+                receiver
+            }
+        }
+    }
+    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
+        let mut broadcast_channels = self.broadcast_channels.lock();
+        let entry = broadcast_channels.entry(broadcast_id).or_default();
+        match entry.sink_sender.take() {
+            Some(sender) => sender,
+            None => {
+                let (sender, receiver) = async_channel::unbounded();
+                entry.sink_receiver = Some(receiver);
+                sender
+            }
+        }
     }
 
     pub fn set_error<C>(&self, err: ErrorCode<C>) {

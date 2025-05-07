@@ -127,9 +127,8 @@ impl Rule for RulePushDownFilterWindowTopN {
             s_expr.plan.clone(),
             SExpr::create_unary(
                 window_expr.plan.clone(),
-                sort_expr.replace_plan(Arc::new(sort.into())).into(),
-            )
-            .into(),
+                sort_expr.replace_plan(Arc::new(sort.into())),
+            ),
         );
         result.set_applied_rule(&self.id);
 

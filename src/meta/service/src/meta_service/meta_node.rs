@@ -1161,14 +1161,14 @@ impl MetaNode {
     ) -> Result<Weak<WatchStreamSender<WatchTypes>>, Status> {
         let stream_sender = self
             .dispatcher_handle
-            .request_blocking(move |d: &mut Dispatcher<WatchTypes>| {
+            .request_blocking(move |dispatcher: &mut Dispatcher<WatchTypes>| {
                 let key_range = match build_key_range(&request.key, &request.key_end) {
                     Ok(kr) => kr,
                     Err(e) => return Err(Status::invalid_argument(e.to_string())),
                 };
 
                 let interested = event_filter_from_filter_type(request.filter_type());
-                Ok(d.add_watcher(key_range, interested, tx))
+                Ok(dispatcher.add_watcher(key_range, interested, tx))
             })
             .await
             .map_err(|_e| Status::internal("watch-event-Dispatcher closed"))??;

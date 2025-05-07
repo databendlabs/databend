@@ -205,7 +205,7 @@ where
         if SHOULD_CHECK_OVERFLOW && (value > T::Scalar::MAX || value < T::Scalar::MIN) {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
-                self.value,
+                value,
                 T::Scalar::MIN,
                 T::Scalar::MAX,
             )));

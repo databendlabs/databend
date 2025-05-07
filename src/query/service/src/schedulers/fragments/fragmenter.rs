@@ -123,9 +123,13 @@ impl Fragmenter {
 
     pub fn build_fragment(mut self, plan: &PhysicalPlan) -> Result<PlanFragment> {
         let root = self.replace(plan)?;
+        let fragment_type = match plan {
+            PhysicalPlan::BroadcastSink(_) => FragmentType::Intermediate,
+            _ => FragmentType::Root,
+        };
         let mut root_fragment = PlanFragment {
             plan: root,
-            fragment_type: FragmentType::Root,
+            fragment_type,
             fragment_id: self.ctx.get_fragment_id(),
             exchange: None,
             query_id: self.query_id.clone(),
@@ -218,6 +222,7 @@ impl PhysicalPlanReplacer for Fragmenter {
         fragments.append(&mut self.fragments);
         let probe_input = self.replace(plan.probe.as_ref())?;
         fragments.append(&mut self.fragments);
+
         self.fragments = fragments;
 
         Ok(PhysicalPlan::HashJoin(HashJoin {

@@ -130,7 +130,8 @@ impl<'a> BlockWriter<'a> {
         let bloom_index_cols = BloomIndexColumns::All;
         let bloom_columns_map =
             bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
-        let mut builder = BloomIndexBuilder::create(FunctionContext::default(), bloom_columns_map);
+        let mut builder =
+            BloomIndexBuilder::create(FunctionContext::default(), bloom_columns_map, &[])?;
         builder.add_block(block)?;
         let maybe_bloom_index = builder.finalize()?;
         if let Some(bloom_index) = maybe_bloom_index {
