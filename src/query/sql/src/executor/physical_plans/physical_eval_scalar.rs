@@ -106,12 +106,11 @@ impl PhysicalPlanBuilder {
             self.build(s_expr.child(0)?, required).await
         } else {
             let child = s_expr.child(0)?;
-            let input =
-                if let Some(new_child) = self.try_eliminate_flatten_columns(&used, child)? {
-                    self.build(&new_child, required).await?
-                } else {
-                    self.build(child, required).await?
-                };
+            let input = if let Some(new_child) = self.try_eliminate_flatten_columns(&used, child)? {
+                self.build(&new_child, required).await?
+            } else {
+                self.build(child, required).await?
+            };
 
             let column_projections: HashSet<usize> = column_projections
                 .union(self.metadata.read().get_retained_column())
