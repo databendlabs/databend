@@ -234,6 +234,10 @@ impl Settings {
         self.try_get_u64("data_retention_time_in_days")
     }
 
+    pub fn get_data_retention_num_snapshots_to_keep(&self) -> Result<u64> {
+        self.try_get_u64("data_retention_num_snapshots_to_keep")
+    }
+
     pub fn get_max_storage_io_requests(&self) -> Result<u64> {
         self.try_get_u64("max_storage_io_requests")
     }
