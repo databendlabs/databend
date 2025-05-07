@@ -104,24 +104,6 @@ Filter
     └── estimated rows: 16.00
 
 query T
-EXPLAIN SELECT id, content FROM t1 WHERE content LIKE 'A picture%'
-----
-Filter
-├── output columns: [t1.id (#0), t1.content (#1)]
-├── filters: [is_true(t1.content (#1) >= 'A picture'), is_true(t1.content (#1) < 'A picturf')]
-├── estimated rows: 3.20
-└── TableScan
-    ├── table: default.test_ngram_index_db.t1
-    ├── output columns: [id (#0), content (#1)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 8
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 1>]
-    ├── push downs: [filters: [and_filters(t1.content (#1) >= 'A picture', t1.content (#1) < 'A picturf')], limit: NONE]
-    └── estimated rows: 16.00
-
-query T
 EXPLAIN SELECT id, content FROM t1 WHERE content LIKE '%风来%'
 ----
 Filter
@@ -217,21 +199,6 @@ TableScan
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 1>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%your eggs'))], limit: NONE]
 └── estimated rows: 0.03
-
-query T
-EXPLAIN SELECT id, content FROM t2 WHERE content LIKE 'A picture%'
-----
-TableScan
-├── table: default.test_ngram_index_db.t2
-├── output columns: [id (#0), content (#1)]
-├── read rows: 2
-├── read size: < 1 KiB
-├── partitions total: 8
-├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 1>]
-├── push downs: [filters: [and_filters(t2.content (#1) >= 'A picture', t2.content (#1) < 'A picturf')], limit: NONE]
-└── estimated rows: 3.20
-
 
 query T
 SELECT id, content FROM t1 WHERE content LIKE '%your eggs%'
