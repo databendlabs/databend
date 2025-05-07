@@ -21,6 +21,7 @@ use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -416,13 +417,24 @@ pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    let root = get_http_tracing_span(func_path!(), ctx, &ctx.query_id);
-    let _t = SlowRequestLogTracker::new(ctx);
+    let query_handle = async {
+        let agent_info = ctx
+            .user_agent
+            .as_ref()
+            .map(|s| format!("(from {s})"))
+            .unwrap_or("".to_string());
 
-    async {
-        let agent_info = ctx.user_agent.as_ref().map(|s| (format!("(from {s})"))).unwrap_or("".to_string());
-        let client_session_id_info = ctx.client_session_id.as_ref().map(|s| (format!("(client_session_id={s})"))).unwrap_or("".to_string());
-        info!("http query new request{}{}: {}", agent_info, client_session_id_info, mask_connection_info(&format!("{:?}", req)));
+        let client_session_id_info = ctx
+            .client_session_id
+            .as_ref()
+            .map(|s| format!("(client_session_id={s})"))
+            .unwrap_or("".to_string());
+        info!(
+            "http query new request{}{}: {}",
+            agent_info,
+            client_session_id_info,
+            mask_connection_info(&format!("{:?}", req))
+        );
         let sql = req.sql.clone();
 
         match HttpQuery::try_create(ctx, req.clone()).await {
@@ -449,10 +461,14 @@ pub(crate) async fn query_handler(
                     .get_response_page(0)
                     .await
                     .map_err(|err| err.display_with_sql(&sql))
-                    .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
+                    .map_err(|err| {
+                        poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
+                    })?;
+
                 if matches!(resp.state.state, ExecuteStateKind::Failed) {
                     ctx.set_fail();
                 }
+
                 let (rows, next_page) = match &resp.data {
                     None => (0, None),
                     Some(p) => (p.page.data.num_rows(), p.next_page_no),
@@ -464,9 +480,24 @@ pub(crate) async fn query_handler(
                 Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
             }
         }
-    }
-        .in_span(root)
-        .await
+    };
+
+    let query_handle = {
+        let root = get_http_tracing_span(func_path!(), ctx, &ctx.query_id);
+        let _t = SlowRequestLogTracker::new(ctx);
+        query_handle.in_span(root)
+    };
+
+    let query_handle = {
+        let query_mem_stat = MemStat::create(format!("Query-{}", ctx.query_id));
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.query_id = Some(ctx.query_id.clone());
+        tracking_payload.mem_stat = Some(query_mem_stat.clone());
+        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+        ThreadTracker::tracking_future(query_handle)
+    };
+
+    query_handle.await
 }
 
 #[derive(Deserialize, Serialize, Debug)]

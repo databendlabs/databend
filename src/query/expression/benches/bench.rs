@@ -19,7 +19,9 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::DecimalType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -132,73 +134,94 @@ fn serialize_string_view(bencher: divan::Bencher, length: usize) {
 
 // bench                                               fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ├─ function_buffer_index_unchecked_iterator                       │               │               │               │         │
-// │  ├─ 10240                                         3.455 µs      │ 17.62 µs      │ 3.545 µs      │ 3.82 µs       │ 100     │ 100
-// │  ╰─ 102400                                        34.37 µs      │ 132.9 µs      │ 35.23 µs      │ 37.37 µs      │ 100     │ 100
+// │  ├─ 10240                                         18.17 µs      │ 76.9 µs       │ 18.54 µs      │ 19.24 µs      │ 100     │ 100
+// │  ╰─ 102400                                        183.1 µs      │ 508.8 µs      │ 186.8 µs      │ 194.7 µs      │ 100     │ 100
 // ├─ function_buffer_index_unchecked_push                           │               │               │               │         │
-// │  ├─ 10240                                         3.118 µs      │ 6.772 µs      │ 3.259 µs      │ 3.283 µs      │ 100     │ 100
-// │  ╰─ 102400                                        34.83 µs      │ 93.95 µs      │ 36.12 µs      │ 36.77 µs      │ 100     │ 100
+// │  ├─ 10240                                         18.52 µs      │ 20.83 µs      │ 18.55 µs      │ 18.64 µs      │ 100     │ 100
+// │  ╰─ 102400                                        187.6 µs      │ 439.7 µs      │ 191.2 µs      │ 192.8 µs      │ 100     │ 100
 // ├─ function_buffer_scalar_index_unchecked_iterator                │               │               │               │         │
-// │  ├─ 10240                                         3.523 µs      │ 4.753 µs      │ 3.803 µs      │ 3.788 µs      │ 100     │ 100
-// │  ╰─ 102400                                        34.36 µs      │ 124.2 µs      │ 37.84 µs      │ 41.13 µs      │ 100     │ 100
+// │  ├─ 10240                                         11.58 µs      │ 12.94 µs      │ 11.6 µs       │ 11.63 µs      │ 100     │ 100
+// │  ╰─ 102400                                        115.9 µs      │ 492.3 µs      │ 118.3 µs      │ 122.3 µs      │ 100     │ 100
+// ├─ function_iterator_iterator_ref                                 │               │               │               │         │
+// │  ├─ 10240                                         6.301 µs      │ 6.859 µs      │ 6.318 µs      │ 6.325 µs      │ 100     │ 100
+// │  ╰─ 102400                                        77.07 µs      │ 390.6 µs      │ 77.27 µs      │ 81.39 µs      │ 100     │ 100
 // ├─ function_iterator_iterator_v1                                  │               │               │               │         │
-// │  ├─ 10240                                         4.246 µs      │ 4.557 µs      │ 4.258 µs      │ 4.263 µs      │ 100     │ 100
-// │  ╰─ 102400                                        44.09 µs      │ 121.5 µs      │ 44.12 µs      │ 45.47 µs      │ 100     │ 100
+// │  ├─ 10240                                         9.502 µs      │ 14.74 µs      │ 9.535 µs      │ 9.694 µs      │ 100     │ 100
+// │  ╰─ 102400                                        100.9 µs      │ 344.6 µs      │ 101 µs        │ 103.9 µs      │ 100     │ 100
 // ╰─ function_iterator_iterator_v2                                  │               │               │               │         │
-//    ├─ 10240                                         2.186 µs      │ 3.375 µs      │ 2.306 µs      │ 2.374 µs      │ 100     │ 100
-//    ╰─ 102400                                        23.62 µs      │ 88.92 µs      │ 24.78 µs      │ 25.38 µs      │ 100     │ 100
+//    ├─ 10240                                         6.307 µs      │ 6.447 µs      │ 6.322 µs      │ 6.324 µs      │ 100     │ 100
+//    ╰─ 102400                                        77.49 µs      │ 317.6 µs      │ 77.73 µs      │ 80.28 µs      │ 100     │ 100
 #[divan::bench(args = [10240, 102400])]
 fn function_iterator_iterator_v1(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
-    let (left, right) = generate_random_int_data(&mut rng, length);
+    let (left, right) = generate_random_i128_data(&mut rng, length);
 
     bencher.bench(|| {
         let left = left.clone();
         let right = right.clone();
 
-        let _c = left
-            .into_iter()
-            .zip(right)
-            .map(|(a, b)| a + b)
-            .collect::<Vec<i32>>();
+        divan::black_box(
+            left.into_iter()
+                .zip(right)
+                .map(|(a, b)| a * b)
+                .collect::<Vec<i128>>(),
+        )
+    });
+}
+
+#[divan::bench(args = [10240, 102400])]
+fn function_iterator_iterator_ref(bencher: divan::Bencher, length: usize) {
+    let mut rng = StdRng::seed_from_u64(0);
+    let (left, right) = generate_random_i128_data(&mut rng, length);
+
+    bencher.bench(|| {
+        divan::black_box(
+            left.iter()
+                .zip(right.iter())
+                .map(|(a, b)| *a * *b)
+                .collect::<Vec<i128>>(),
+        )
     });
 }
 
 #[divan::bench(args = [10240, 102400])]
 fn function_iterator_iterator_v2(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
-    let (left, right) = generate_random_int_data(&mut rng, length);
+    let (left, right) = generate_random_i128_data(&mut rng, length);
 
     bencher.bench(|| {
-        let _c = left
+        let iter = left
             .iter()
             .cloned()
             .zip(right.iter().cloned())
-            .map(|(a, b)| a + b)
-            .collect::<Vec<i32>>();
+            .map(|(a, b)| a * b);
+        divan::black_box(DecimalType::<i128>::column_from_iter(iter, &[]))
     });
 }
 
 #[divan::bench(args = [10240, 102400])]
 fn function_buffer_index_unchecked_iterator(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
-    let (left, right) = generate_random_int_data(&mut rng, length);
+    let (left, right) = generate_random_i128_data(&mut rng, length);
 
     bencher.bench(|| {
-        let _c = (0..length)
-            .map(|i| unsafe { left.get_unchecked(i) + right.get_unchecked(i) })
-            .collect::<Vec<i32>>();
+        divan::black_box(
+            (0..length)
+                .map(|i| unsafe { left.get_unchecked(i) * right.get_unchecked(i) })
+                .collect::<Vec<i128>>(),
+        )
     });
 }
 
 #[divan::bench(args = [10240, 102400])]
 fn function_buffer_index_unchecked_push(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
-    let (left, right) = generate_random_int_data(&mut rng, length);
+    let (left, right) = generate_random_i128_data(&mut rng, length);
 
     bencher.bench(|| {
         let mut c = Vec::with_capacity(length);
         for i in 0..length {
-            unsafe { c.push_unchecked(left.get_unchecked(i) + right.get_unchecked(i)) };
+            unsafe { c.push_unchecked(left.get_unchecked(i) * right.get_unchecked(i)) };
         }
     });
 }
@@ -206,14 +229,16 @@ fn function_buffer_index_unchecked_push(bencher: divan::Bencher, length: usize) 
 #[divan::bench(args = [10240, 102400])]
 fn function_buffer_scalar_index_unchecked_iterator(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
-    let (left, right) = generate_random_int_data(&mut rng, length);
+    let (left, right) = generate_random_i128_data(&mut rng, length);
     let left_scalar = ScalarBuffer::from_iter(left.iter().cloned());
     let right_scalar = ScalarBuffer::from_iter(right.iter().cloned());
 
     bencher.bench(|| {
-        let _c = (0..length)
-            .map(|i| unsafe { left_scalar.get_unchecked(i) + right_scalar.get_unchecked(i) })
-            .collect::<Vec<i32>>();
+        divan::black_box(
+            (0..length)
+                .map(|i| unsafe { left_scalar.get_unchecked(i) * right_scalar.get_unchecked(i) })
+                .collect::<Vec<i128>>(),
+        )
     });
 }
 
@@ -273,9 +298,9 @@ fn generate_random_string_data(rng: &mut StdRng, length: usize) -> (Vec<String>,
     (iter_str, iter_binary)
 }
 
-fn generate_random_int_data(rng: &mut StdRng, length: usize) -> (Buffer<i32>, Buffer<i32>) {
-    let s: Buffer<i32> = (0..length).map(|_| rng.gen_range(-1000..1000)).collect();
-    let b: Buffer<i32> = (0..length).map(|_| rng.gen_range(-1000..1000)).collect();
+fn generate_random_i128_data(rng: &mut StdRng, length: usize) -> (Buffer<i128>, Buffer<i128>) {
+    let s: Buffer<i128> = (0..length).map(|_| rng.gen_range(-1000..1000)).collect();
+    let b: Buffer<i128> = (0..length).map(|_| rng.gen_range(-1000..1000)).collect();
     (s, b)
 }
 

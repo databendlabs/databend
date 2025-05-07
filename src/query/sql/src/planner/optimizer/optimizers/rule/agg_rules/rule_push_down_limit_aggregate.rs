@@ -119,7 +119,7 @@ impl RulePushDownRankLimitAggregate {
             Arc::new(RelOperator::Aggregate(agg_limit)),
             Arc::new(agg.child(0)?.clone()),
         );
-        let sort = SExpr::create_unary(Arc::new(RelOperator::Sort(sort)), agg.into());
+        let sort = SExpr::create_unary(Arc::new(RelOperator::Sort(sort)), agg);
         let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
 
         result.set_applied_rule(&self.id);

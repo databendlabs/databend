@@ -357,6 +357,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
     }
 
+    pub fn get_enable_join_runtime_filter(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_join_runtime_filter")? != 0)
+    }
+
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("prefer_broadcast_join")? != 0)
     }
@@ -484,6 +488,10 @@ impl Settings {
 
     pub fn get_sort_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("sort_spilling_memory_ratio")? as usize)
+    }
+
+    pub fn get_sort_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
     }
 
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {

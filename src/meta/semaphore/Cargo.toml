@@ -21,6 +21,7 @@ databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
 display-more = { workspace = true }
 futures = { workspace = true }
+itertools = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

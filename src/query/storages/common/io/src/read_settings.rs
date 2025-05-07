@@ -19,19 +19,19 @@ use databend_common_exception::Result;
 
 #[derive(Clone, Copy)]
 pub struct ReadSettings {
-    pub storage_io_min_bytes_for_seek: u64,
-    pub storage_io_max_page_bytes_for_read: u64,
+    pub max_gap_size: u64,
+    pub max_range_size: u64,
+    pub parquet_fast_read_bytes: u64,
 }
 
 impl ReadSettings {
     pub fn from_ctx(ctx: &Arc<dyn TableContext>) -> Result<ReadSettings> {
         Ok(ReadSettings {
-            storage_io_min_bytes_for_seek: ctx
-                .get_settings()
-                .get_storage_io_min_bytes_for_seek()?,
-            storage_io_max_page_bytes_for_read: ctx
+            max_gap_size: ctx.get_settings().get_storage_io_min_bytes_for_seek()?,
+            max_range_size: ctx
                 .get_settings()
                 .get_storage_io_max_page_bytes_for_read()?,
+            parquet_fast_read_bytes: ctx.get_settings().get_parquet_fast_read_bytes()?,
         })
     }
 }

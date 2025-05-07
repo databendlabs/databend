@@ -74,6 +74,7 @@ use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::VirtualColumn;
 
 impl Binder {
     pub fn bind_dummy_table(
@@ -108,7 +109,7 @@ impl Binder {
     pub(crate) async fn bind_stage_table(
         &mut self,
         table_ctx: Arc<dyn TableContext>,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stage_info: StageInfo,
         files_info: StageFilesInfo,
         alias: &Option<TableAlias>,
@@ -142,6 +143,7 @@ impl Binder {
             false,
             true,
             None,
+            bind_context.allow_virtual_column,
         );
 
         let (s_expr, mut bind_context) =
@@ -185,7 +187,7 @@ impl Binder {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
-            virtual_column_context: Default::default(),
+            allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -391,6 +393,26 @@ impl Binder {
                     .table_index(Some(*table_index))
                     .column_position(*column_position)
                     .virtual_expr(virtual_expr.clone())
+                    .build();
+                    bind_context.add_column_binding(column_binding);
+                    base_column_scan_id.insert(*column_index, scan_id);
+                }
+                ColumnEntry::VirtualColumn(VirtualColumn {
+                    table_index,
+                    column_index,
+                    column_name,
+                    data_type,
+                    ..
+                }) => {
+                    let column_binding = ColumnBindingBuilder::new(
+                        column_name.clone(),
+                        *column_index,
+                        Box::new(DataType::from(data_type)),
+                        Visibility::InVisible,
+                    )
+                    .table_name(Some(table_name.to_string()))
+                    .database_name(Some(database_name.to_string()))
+                    .table_index(Some(*table_index))
                     .build();
                     bind_context.add_column_binding(column_binding);
                     base_column_scan_id.insert(*column_index, scan_id);

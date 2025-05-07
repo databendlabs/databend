@@ -99,12 +99,8 @@ impl Binder {
         let mut right_column_bindings = right_context.columns.clone();
 
         let mut bind_context = bind_context.replace();
-        bind_context
-            .virtual_column_context
-            .merge(&left_context.virtual_column_context);
-        bind_context
-            .virtual_column_context
-            .merge(&right_context.virtual_column_context);
+        bind_context.allow_virtual_column =
+            left_context.allow_virtual_column || right_context.allow_virtual_column;
 
         self.check_table_name_and_condition(
             &left_column_bindings,
@@ -817,9 +813,6 @@ impl<'a> JoinConditionResolver<'a> {
                 non_equi_conditions.push(predicate);
             }
         }
-        self.join_context
-            .virtual_column_context
-            .merge(&join_context.virtual_column_context);
         Ok(())
     }
 

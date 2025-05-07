@@ -354,6 +354,8 @@ pub trait TableContext: Send + Sync {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps>;
 
+    fn clear_table_meta_timestamps_cache(&self);
+
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
 
@@ -414,6 +416,15 @@ pub trait TableContext: Send + Sync {
         unimplemented!()
     }
     fn set_pruned_partitions_stats(&self, _partitions: PartStatistics) {
+        unimplemented!()
+    }
+
+    /// Calling this function will automatically create a pipeline for broadcast data in `build_distributed_pipeline()`
+    ///
+    /// The returned id can be used to get sender and receiver for broadcasting data.
+    fn get_next_broadcast_id(&self) -> u32;
+
+    fn reset_broadcast_id(&self) {
         unimplemented!()
     }
 }

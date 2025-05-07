@@ -396,6 +396,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_next_broadcast_id(&self) -> u32 {
+        self.ctx.get_next_broadcast_id()
+    }
+
     fn txn_mgr(&self) -> TxnManagerRef {
         self.ctx.txn_mgr()
     }
@@ -894,6 +898,10 @@ impl TableContext for CtxDelegation {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         self.ctx.get_table_meta_timestamps(table, previous_snapshot)
+    }
+
+    fn clear_table_meta_timestamps_cache(&self) {
+        self.ctx.clear_table_meta_timestamps_cache();
     }
 }
 

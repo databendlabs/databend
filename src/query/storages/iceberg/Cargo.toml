@@ -34,7 +34,6 @@ iceberg-catalog-rest = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-typetag = { workspace = true }
 uuid = { workspace = true }
 
 [lints]

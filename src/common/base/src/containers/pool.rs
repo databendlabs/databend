@@ -133,7 +133,7 @@ where
             if let Ok(itm) = check_res {
                 return Ok(itm);
             } else {
-                warn!("RaftNetwork check reused item failed: {:?}", key);
+                warn!("Pool check reused item failed: {:?}", key);
                 // mark broken conn as deleted
                 *guard = None;
             }

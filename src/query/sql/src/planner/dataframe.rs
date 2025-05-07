@@ -102,6 +102,7 @@ impl Dataframe {
                 false,
                 false,
                 None,
+                false,
             );
 
             binder.bind_base_table(&bind_context, database, table_index, None, &None)

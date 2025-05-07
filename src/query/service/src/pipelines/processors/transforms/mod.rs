@@ -13,6 +13,8 @@
 // limitations under the License.
 
 pub mod aggregator;
+#[allow(dead_code)]
+mod broadcast;
 mod hash_join;
 pub(crate) mod range_join;
 mod runtime_pool;
@@ -40,6 +42,8 @@ mod transform_udf_script;
 mod transform_udf_server;
 mod window;
 
+pub use broadcast::BroadcastSinkProcessor;
+pub use broadcast::BroadcastSourceProcessor;
 pub use hash_join::*;
 pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;

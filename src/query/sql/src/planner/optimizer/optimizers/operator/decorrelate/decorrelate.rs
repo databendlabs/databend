@@ -57,7 +57,7 @@ impl SubqueryDecorrelatorOptimizer {
     // 1. If the subquery is correlated, we will try to decorrelate it into `SemiJoin`
     pub fn try_decorrelate_simple_subquery(
         &self,
-        input: &SExpr,
+        outer: &SExpr,
         subquery: &SubqueryExpr,
     ) -> Result<Option<SExpr>> {
         if subquery.outer_columns.is_empty() {
@@ -80,7 +80,7 @@ impl SubqueryDecorrelatorOptimizer {
         //         EvalScalar
         //          \
         //           Get
-        let matchers = vec![
+        let matchers = [
             Matcher::MatchOp {
                 op_type: RelOp::EvalScalar,
                 children: vec![Matcher::MatchOp {
@@ -105,32 +105,23 @@ impl SubqueryDecorrelatorOptimizer {
                 }],
             },
         ];
-        let mut matched = false;
-        for matcher in matchers {
-            if matcher.matches(&subquery.subquery) {
-                matched = true;
-                break;
-            }
-        }
-        if !matched {
+        if !matchers
+            .iter()
+            .any(|matcher| matcher.matches(&subquery.subquery))
+        {
             return Ok(None);
         }
 
         let filter_tree = subquery
             .subquery // EvalScalar
-            .child(0)?; // Filter
+            .unary_child(); // Filter
+        let filter: Filter = filter_tree.plan().clone().try_into()?;
         let filter_expr = RelExpr::with_s_expr(filter_tree);
-        let filter: Filter = subquery
-            .subquery // EvalScalar
-            .child(0)? // Filter
-            .plan()
-            .clone()
-            .try_into()?;
+
         let filter_prop = filter_expr.derive_relational_prop()?;
         let filter_child_prop = filter_expr.derive_relational_prop_child(0)?;
 
-        let input_expr = RelExpr::with_s_expr(input);
-        let input_prop = input_expr.derive_relational_prop()?;
+        let outer_prop = outer.derive_relational_prop()?;
 
         // First, we will check if all the outer columns are in the filter.
         if !filter_child_prop.outer_columns.is_empty() {
@@ -145,7 +136,7 @@ impl SubqueryDecorrelatorOptimizer {
         let mut left_filters = vec![];
         let mut right_filters = vec![];
         for pred in filter.predicates.iter() {
-            let join_condition = JoinPredicate::new(pred, &input_prop, &filter_prop);
+            let join_condition = JoinPredicate::new(pred, &outer_prop, &filter_prop);
             match join_condition {
                 JoinPredicate::Left(filter) | JoinPredicate::ALL(filter) => {
                     left_filters.push(filter.clone());
@@ -197,7 +188,7 @@ impl SubqueryDecorrelatorOptimizer {
         };
 
         // Rewrite plan to semi-join.
-        let mut left_child = input.clone();
+        let mut left_child = outer.clone();
         if !left_filters.is_empty() {
             left_child = SExpr::create_unary(
                 Arc::new(

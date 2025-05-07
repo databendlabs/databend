@@ -172,8 +172,7 @@ impl Processor for DeltaTableSource {
         } else if let Some(part) = self.ctx.get_partition() {
             let part = DeltaPartInfo::from_part(&part)?;
             match &part.data {
-                ParquetPart::ParquetFiles(files) => {
-                    assert_eq!(files.files.len(), 1);
+                ParquetPart::ParquetFile(f) => {
                     let partition_fields = self
                         .partition_fields
                         .iter()
@@ -188,11 +187,7 @@ impl Processor for DeltaTableSource {
                         .collect::<Vec<_>>();
                     let stream = self
                         .parquet_reader
-                        .prepare_data_stream(
-                            &files.files[0].0,
-                            files.files[0].1,
-                            Some(&partition_fields),
-                        )
+                        .prepare_data_stream(&f.file, f.compressed_size, Some(&partition_fields))
                         .await?;
                     self.stream = Some(stream);
                 }

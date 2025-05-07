@@ -420,6 +420,23 @@ impl ScalarExpr {
         has_subquery.visit(self).unwrap();
         has_subquery.has_subquery
     }
+
+    pub fn get_subquery(&self, result: Vec<SubqueryExpr>) -> Vec<SubqueryExpr> {
+        struct GetSubquery {
+            subquerys: Vec<SubqueryExpr>,
+        }
+
+        impl<'a> Visitor<'a> for GetSubquery {
+            fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
+                self.subquerys.push(subquery.clone());
+                Ok(())
+            }
+        }
+
+        let mut get_subquery = GetSubquery { subquerys: result };
+        get_subquery.visit(self).unwrap();
+        get_subquery.subquerys
+    }
 }
 
 impl From<BoundColumnRef> for ScalarExpr {

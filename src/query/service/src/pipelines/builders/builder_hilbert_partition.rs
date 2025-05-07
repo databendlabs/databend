@@ -27,8 +27,6 @@ use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_storages_common_cache::TempDirManager;
-use opendal::services::Fs;
-use opendal::Operator;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::CompactStrategy;
@@ -56,21 +54,10 @@ impl PipelineBuilder {
         let temp_dir_manager = TempDirManager::instance();
 
         let enable_dio = settings.get_enable_dio()?;
-        let disk_spill =
-            match temp_dir_manager.get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id()) {
-                Some(temp_dir) if !enable_dio => {
-                    let builder = Fs::default().root(temp_dir.path().to_str().unwrap());
-                    Some(SpillerDiskConfig {
-                        temp_dir,
-                        local_operator: Some(Operator::new(builder)?.finish()),
-                    })
-                }
-                Some(temp_dir) => Some(SpillerDiskConfig {
-                    temp_dir,
-                    local_operator: None,
-                }),
-                None => None,
-            };
+        let disk_spill = temp_dir_manager
+            .get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id())
+            .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
+            .transpose()?;
 
         let window_spill_settings = MemorySettings::from_window_settings(&self.ctx)?;
         let processor_id = AtomicUsize::new(0);

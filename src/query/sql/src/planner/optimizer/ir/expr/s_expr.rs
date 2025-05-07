@@ -68,14 +68,14 @@ pub struct SExpr {
 impl SExpr {
     pub fn create(
         plan: Arc<RelOperator>,
-        children: impl IntoIterator<Item = Arc<SExpr>>,
+        children: impl Into<Vec<Arc<SExpr>>>,
         original_group: Option<IndexType>,
         rel_prop: Option<Arc<RelationalProperty>>,
         stat_info: Option<Arc<StatInfo>>,
     ) -> Self {
         SExpr {
             plan,
-            children: children.into_iter().collect(),
+            children: children.into(),
             original_group,
             rel_prop: Arc::new(Mutex::new(rel_prop)),
             stat_info: Arc::new(Mutex::new(stat_info)),
@@ -83,20 +83,36 @@ impl SExpr {
         }
     }
 
-    pub fn create_unary(plan: Arc<RelOperator>, child: Arc<SExpr>) -> Self {
-        Self::create(plan, vec![child], None, None, None)
+    pub fn create_unary(plan: Arc<RelOperator>, child: impl Into<Arc<SExpr>>) -> Self {
+        Self::create(plan, [child.into()], None, None, None)
     }
 
     pub fn create_binary(
         plan: Arc<RelOperator>,
-        left_child: Arc<SExpr>,
-        right_child: Arc<SExpr>,
+        left_child: impl Into<Arc<SExpr>>,
+        right_child: impl Into<Arc<SExpr>>,
     ) -> Self {
-        Self::create(plan, vec![left_child, right_child], None, None, None)
+        Self::create(
+            plan,
+            [left_child.into(), right_child.into()],
+            None,
+            None,
+            None,
+        )
     }
 
     pub fn create_leaf(plan: Arc<RelOperator>) -> Self {
-        Self::create(plan, vec![], None, None, None)
+        Self::create(plan, [], None, None, None)
+    }
+
+    pub fn build_unary(self, plan: Arc<RelOperator>) -> Self {
+        debug_assert_eq!(plan.arity(), 1);
+        Self::create(plan, [self.into()], None, None, None)
+    }
+
+    pub fn ref_build_unary(self: &Arc<SExpr>, plan: Arc<RelOperator>) -> Self {
+        debug_assert_eq!(plan.arity(), 1);
+        Self::create(plan, [self.clone()], None, None, None)
     }
 
     pub fn plan(&self) -> &RelOperator {
@@ -175,10 +191,7 @@ impl SExpr {
     /// Check if contain subquery
     #[recursive::recursive]
     pub(crate) fn has_subquery(&self) -> bool {
-        if !self.plan.has_subquery() {
-            return self.children.iter().any(|child| child.has_subquery());
-        }
-        true
+        self.plan.has_subquery() || self.children.iter().any(|child| child.has_subquery())
     }
 
     //

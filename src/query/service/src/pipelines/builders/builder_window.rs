@@ -27,8 +27,6 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_storages_common_cache::TempDirManager;
-use opendal::services::Fs;
-use opendal::Operator;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::FrameBound;
@@ -192,25 +190,13 @@ impl PipelineBuilder {
             );
         }
 
-        let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;
         let temp_dir_manager = TempDirManager::instance();
-
+        let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;
         let enable_dio = settings.get_enable_dio()?;
-        let disk_spill =
-            match temp_dir_manager.get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id()) {
-                Some(temp_dir) if !enable_dio => {
-                    let builder = Fs::default().root(temp_dir.path().to_str().unwrap());
-                    Some(SpillerDiskConfig {
-                        temp_dir,
-                        local_operator: Some(Operator::new(builder)?.finish()),
-                    })
-                }
-                Some(temp_dir) => Some(SpillerDiskConfig {
-                    temp_dir,
-                    local_operator: None,
-                }),
-                None => None,
-            };
+        let disk_spill = temp_dir_manager
+            .get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id())
+            .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
+            .transpose()?;
 
         let have_order_col = window_partition.after_exchange.unwrap_or(false);
         let window_spill_settings = MemorySettings::from_window_settings(&self.ctx)?;

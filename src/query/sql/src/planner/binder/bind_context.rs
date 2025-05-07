@@ -15,8 +15,6 @@
 use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::hash::Hash;
 
 use dashmap::DashMap;
@@ -33,7 +31,6 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::TableDataType;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -108,45 +105,6 @@ pub enum NameResolutionResult {
     Alias { alias: String, scalar: ScalarExpr },
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Debug)]
-pub struct VirtualColumnContext {
-    /// Whether allow rewrite as virtual column and pushdown.
-    pub allow_pushdown: bool,
-    /// The table indics of the virtual column has been readded,
-    /// used to avoid repeated reading
-    pub table_indices: HashSet<IndexType>,
-    /// Mapping: (table index) -> (derived virtual column indices)
-    /// This is used to add virtual column indices to Scan plan
-    pub virtual_column_indices: HashMap<IndexType, Vec<IndexType>>,
-    /// Mapping: (table index) -> (virtual column names and data types)
-    /// This is used to check whether the virtual column has be created
-    pub virtual_column_names: HashMap<IndexType, HashMap<String, (TableDataType, ColumnId)>>,
-    /// virtual column alias names
-    pub virtual_columns: Vec<ColumnBinding>,
-}
-
-impl VirtualColumnContext {
-    fn with_parent(parent: &VirtualColumnContext) -> VirtualColumnContext {
-        VirtualColumnContext {
-            allow_pushdown: parent.allow_pushdown,
-            table_indices: HashSet::new(),
-            virtual_column_indices: HashMap::new(),
-            virtual_column_names: HashMap::new(),
-            virtual_columns: Vec::new(),
-        }
-    }
-
-    pub(crate) fn merge(&mut self, other: &VirtualColumnContext) {
-        self.allow_pushdown = self.allow_pushdown || other.allow_pushdown;
-        self.table_indices.extend(other.table_indices.clone());
-        self.virtual_column_indices
-            .extend(other.virtual_column_indices.clone());
-        self.virtual_column_names
-            .extend(other.virtual_column_names.clone());
-        self.virtual_columns.extend(other.virtual_columns.clone());
-    }
-}
-
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
 #[derive(Clone, Debug)]
 pub struct BindContext {
@@ -185,7 +143,8 @@ pub struct BindContext {
 
     pub inverted_index_map: Box<IndexMap<IndexType, InvertedIndexInfo>>,
 
-    pub virtual_column_context: VirtualColumnContext,
+    /// Whether allow rewrite as virtual column and pushdown.
+    pub allow_virtual_column: bool,
 
     pub expr_context: ExprContext,
 
@@ -258,7 +217,7 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
-            virtual_column_context: VirtualColumnContext::default(),
+            allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -302,9 +261,7 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
-            virtual_column_context: VirtualColumnContext::with_parent(
-                &parent.virtual_column_context,
-            ),
+            allow_virtual_column: parent.allow_virtual_column,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -474,17 +431,6 @@ impl BindContext {
                     internal_column,
                 };
                 result.push(NameResolutionResult::InternalColumn(column_binding));
-            }
-
-            if !result.is_empty() {
-                return;
-            }
-
-            // look up virtual column alias names
-            for column_binding in bind_context.virtual_column_context.virtual_columns.iter() {
-                if Self::match_column_binding(database, table, column, column_binding) {
-                    result.push(NameResolutionResult::Column(column_binding.clone()));
-                }
             }
 
             if !result.is_empty() {
