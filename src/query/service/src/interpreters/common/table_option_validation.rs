@@ -216,20 +216,12 @@ pub fn is_valid_bloom_index_columns(
 pub fn is_valid_change_tracking(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
-    //    if let Some(value) = options.get(OPT_KEY_CHANGE_TRACKING) {
-    //        value.to_lowercase().parse::<bool>()?;
-    //    }
-    //    Ok(())
     is_valid_option_of_type::<bool>(options, OPT_KEY_CHANGE_TRACKING)
 }
 
 pub fn is_valid_random_seed(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
-    // if let Some(value) = options.get(OPT_KEY_RANDOM_SEED) {
-    //    value.parse::<u64>()?;
-    //}
-    // Ok(())
     is_valid_option_of_type::<u64>(options, OPT_KEY_RANDOM_SEED)
 }
 
