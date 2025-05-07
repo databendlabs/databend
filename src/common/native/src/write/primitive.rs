@@ -31,7 +31,7 @@ pub(crate) fn write_primitive<T: NativeType, W: Write>(
     w: &mut W,
     col: &Buffer<T>,
     validity: Option<Bitmap>,
-    write_options: WriteOptions,
+    write_options: &WriteOptions,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
     scratch.clear();
