@@ -3431,7 +3431,6 @@ dependencies = [
  "databend-common-functions",
  "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-meta-embedded",
  "databend-common-meta-kvapi",
  "databend-common-meta-store",
  "databend-common-meta-types",
@@ -3594,21 +3593,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "url",
-]
-
-[[package]]
-name = "databend-common-meta-embedded"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "databend-common-base",
- "databend-common-meta-api",
- "databend-common-meta-kvapi",
- "databend-common-meta-raft-store",
- "databend-common-tracing",
- "fastrace",
- "test-harness",
 ]
 
 [[package]]
