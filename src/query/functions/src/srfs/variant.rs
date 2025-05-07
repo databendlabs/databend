@@ -768,7 +768,11 @@ impl FlattenGenerator {
     ) {
         if let Ok(Some(vals)) = input.array_values() {
             for (i, val) in vals.into_iter().enumerate() {
-                let inner_path = format!("{}[{}]", path, i);
+                let inner_path = if path_builder.is_some() {
+                    format!("{}[{}]", path, i)
+                } else {
+                    "".to_string()
+                };
 
                 if let Some(key_builder) = key_builder {
                     key_builder.push_null();
@@ -822,10 +826,14 @@ impl FlattenGenerator {
                 if let Some(key_builder) = key_builder {
                     key_builder.push(key.as_ref());
                 }
-                let inner_path = if !path.is_empty() {
-                    format!("{}.{}", path, key)
+                let inner_path = if path_builder.is_some() {
+                    if !path.is_empty() {
+                        format!("{}.{}", path, key)
+                    } else {
+                        key
+                    }
                 } else {
-                    key
+                    "".to_string()
                 };
                 if let Some(path_builder) = path_builder {
                     path_builder.put_and_commit(&inner_path);

@@ -127,6 +127,13 @@ running 1
 swimming 1
 writing 1
 
+query ITT
+SELECT u.user_id, f.value::STRING, f.path AS activity FROM
+    user_activities u,
+    LATERAL FLATTEN(input => u.activities) f WHERE f.value = 'reading'
+----
+1 reading [0]
+
 statement ok
 CREATE TABLE persons(id int, c variant)
 
