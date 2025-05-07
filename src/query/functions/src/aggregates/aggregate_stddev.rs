@@ -223,7 +223,7 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
             >::try_create(
                 display_name, return_type, params, arguments[0].clone()
             )
-            .with_function_data(Box::new(DecimalFuncData { scale: s.scale }));
+            .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
             Ok(Arc::new(func))
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
@@ -234,7 +234,7 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
             >::try_create(
                 display_name, return_type, params, arguments[0].clone()
             )
-            .with_function_data(Box::new(DecimalFuncData { scale: s.scale }));
+            .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
             Ok(Arc::new(func))
         }
         _ => Err(ErrorCode::BadDataValueType(format!(

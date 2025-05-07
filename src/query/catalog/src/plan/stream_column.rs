@@ -117,10 +117,7 @@ impl StreamColumnMeta {
     pub fn build_origin_block_id(&self) -> Value<AnyType> {
         Value::Scalar(Scalar::Decimal(DecimalScalar::Decimal128(
             self.block_id,
-            DecimalSize {
-                precision: 38,
-                scale: 0,
-            },
+            DecimalSize::new_unchecked(38, 0),
         )))
     }
 }
@@ -170,12 +167,11 @@ impl StreamColumn {
             StreamColumnType::OriginVersion => {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64)))
             }
-            StreamColumnType::OriginBlockId => TableDataType::Nullable(Box::new(
-                TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                    precision: 38,
-                    scale: 0,
-                })),
-            )),
+            StreamColumnType::OriginBlockId => {
+                TableDataType::Nullable(Box::new(TableDataType::Decimal(
+                    DecimalDataType::Decimal128(DecimalSize::new_unchecked(38, 0)),
+                )))
+            }
             StreamColumnType::OriginRowNum => {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64)))
             }
@@ -206,10 +202,7 @@ impl StreamColumn {
             StreamColumnType::OriginVersion | StreamColumnType::RowVersion => unreachable!(),
             StreamColumnType::OriginBlockId => BlockEntry::new(
                 DataType::Nullable(Box::new(DataType::Decimal(DecimalDataType::Decimal128(
-                    DecimalSize {
-                        precision: 38,
-                        scale: 0,
-                    },
+                    DecimalSize::new_unchecked(38, 0),
                 )))),
                 meta.build_origin_block_id(),
             ),

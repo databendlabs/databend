@@ -59,10 +59,8 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let decimal_size = DecimalSize {
-            precision: params[0].get_i64()? as _,
-            scale: params[1].get_i64()? as _,
-        };
+        let decimal_size =
+            DecimalSize::new_unchecked(params[0].get_i64()? as _, params[1].get_i64()? as _);
 
         let decimal_type = DecimalDataType::from_size(decimal_size).ok()?;
 
@@ -127,8 +125,8 @@ pub fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegistry) {
                     DecimalDomain::DECIMAL_TYPE(d, size) => {
                         FunctionDomain::Domain(Domain::Number(NumberDomain::Float32(
                             SimpleDomain {
-                                min: OrderedFloat(d.min.to_float32(size.scale)),
-                                max: OrderedFloat(d.max.to_float32(size.scale)),
+                                min: OrderedFloat(d.min.to_float32(size.scale())),
+                                max: OrderedFloat(d.max.to_float32(size.scale())),
                             },
                         )))
                     }
@@ -140,8 +138,8 @@ pub fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegistry) {
                     DecimalDomain::DECIMAL_TYPE(d, size) => {
                         FunctionDomain::Domain(Domain::Number(NumberDomain::Float64(
                             SimpleDomain {
-                                min: OrderedFloat(d.min.to_float64(size.scale)),
-                                max: OrderedFloat(d.max.to_float64(size.scale)),
+                                min: OrderedFloat(d.min.to_float64(size.scale())),
+                                max: OrderedFloat(d.max.to_float64(size.scale())),
                             },
                         )))
                     }
@@ -226,12 +224,12 @@ pub fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
                 calc_domain: Box::new(|ctx, d| {
                     let res_fn = move || match d[0].as_decimal().unwrap() {
                         DecimalDomain::Decimal128(d, size) => Some(SimpleDomain::<T> {
-                            min: d.min.to_int(size.scale, ctx.rounding_mode)?,
-                            max: d.max.to_int(size.scale, ctx.rounding_mode)?,
+                            min: d.min.to_int(size.scale(), ctx.rounding_mode)?,
+                            max: d.max.to_int(size.scale(), ctx.rounding_mode)?,
                         }),
                         DecimalDomain::Decimal256(d, size) => Some(SimpleDomain::<T> {
-                            min: d.min.to_int(size.scale, ctx.rounding_mode)?,
-                            max: d.max.to_int(size.scale, ctx.rounding_mode)?,
+                            min: d.min.to_int(size.scale(), ctx.rounding_mode)?,
+                            max: d.max.to_int(size.scale(), ctx.rounding_mode)?,
                         }),
                     };
 
@@ -314,13 +312,13 @@ fn decimal_to_string(
                 Value::Column(col) => {
                     let mut builder = StringColumnBuilder::with_capacity(col.len());
                     for x in DecimalType::<DECIMAL_TYPE>::iter_column(&col) {
-                        builder.put_str(&DECIMAL_TYPE::display(x, from_size.scale));
+                        builder.put_str(&DECIMAL_TYPE::display(x, from_size.scale()));
                         builder.commit_row();
                     }
                     Value::Column(Column::String(builder.build()))
                 }
                 Value::Scalar(x) => Value::Scalar(Scalar::String(
-                    DECIMAL_TYPE::display(x, from_size.scale).into(),
+                    DECIMAL_TYPE::display(x, from_size.scale()).into(),
                 )),
             }
         }
@@ -345,7 +343,7 @@ pub fn convert_to_decimal(
                     let arg = arg.try_downcast().unwrap();
                     vectorize_1_arg::<BooleanType, DecimalType<T>>(|a: bool, _| {
                         if a {
-                            T::e(size.scale as u32)
+                            T::e(size.scale() as u32)
                         } else {
                             T::zero()
                         }
@@ -495,10 +493,10 @@ where
     S: ArgType,
     for<'a> S::ScalarRef<'a>: Number + AsPrimitive<i128>,
 {
-    let multiplier = T::e(size.scale as u32);
+    let multiplier = T::e(size.scale() as u32);
 
-    let min_for_precision = T::min_for_precision(size.precision);
-    let max_for_precision = T::max_for_precision(size.precision);
+    let min_for_precision = T::min_for_precision(size.precision());
+    let max_for_precision = T::max_for_precision(size.precision());
     let mut never_overflow = true;
 
     for x in [
@@ -551,10 +549,10 @@ fn float_to_decimal<T: Decimal, S: ArgType>(
 where
     for<'a> S::ScalarRef<'a>: Number + AsPrimitive<f64>,
 {
-    let multiplier: f64 = (10_f64).powi(size.scale as i32).as_();
+    let multiplier: f64 = (10_f64).powi(size.scale() as i32).as_();
 
-    let min_for_precision = T::min_for_precision(size.precision);
-    let max_for_precision = T::max_for_precision(size.precision);
+    let min_for_precision = T::min_for_precision(size.precision());
+    let max_for_precision = T::max_for_precision(size.precision());
 
     let f = |x: S::ScalarRef<'_>, builder: &mut Vec<T>, ctx: &mut EvalContext| {
         let mut x = x.as_() * multiplier;
@@ -600,12 +598,12 @@ fn decimal_256_to_128(
     dest_size: DecimalSize,
     ctx: &mut EvalContext,
 ) -> Value<DecimalType<i128>> {
-    let max = i128::max_for_precision(dest_size.precision);
-    let min = i128::min_for_precision(dest_size.precision);
+    let max = i128::max_for_precision(dest_size.precision());
+    let min = i128::min_for_precision(dest_size.precision());
 
     let buffer = buffer.try_downcast::<DecimalType<i256>>().unwrap();
-    if dest_size.scale >= from_size.scale {
-        let factor = i256::e((dest_size.scale - from_size.scale) as u32);
+    if dest_size.scale() >= from_size.scale() {
+        let factor = i256::e((dest_size.scale() - from_size.scale()) as u32);
 
         vectorize_with_builder_1_arg::<DecimalType<i256>, DecimalType<i128>>(
             |x: i256, builder: &mut Vec<i128>, ctx: &mut EvalContext| match x.checked_mul(factor) {
@@ -620,9 +618,9 @@ fn decimal_256_to_128(
             },
         )(buffer, ctx)
     } else {
-        let scale_diff = (from_size.scale - dest_size.scale) as u32;
+        let scale_diff = (from_size.scale() - dest_size.scale()) as u32;
         let factor = i256::e(scale_diff);
-        let source_factor = i256::e(from_size.scale as u32);
+        let source_factor = i256::e(from_size.scale() as u32);
 
         vectorize_with_builder_1_arg::<DecimalType<i256>, DecimalType<i128>>(
             |x: i256, builder: &mut Vec<i128>, ctx: &mut EvalContext| {
@@ -658,8 +656,8 @@ macro_rules! m_decimal_to_decimal {
 
         let buffer: Value<DecimalType<F>> = $value.try_downcast().unwrap();
         // faster path
-        let result: Value<DecimalType<T>> = if $from_size.scale == $dest_size.scale
-            && $from_size.precision <= $dest_size.precision
+        let result: Value<DecimalType<T>> = if $from_size.scale() == $dest_size.scale()
+            && $from_size.precision() <= $dest_size.precision()
         {
             if F::MAX == T::MAX {
                 // 128 -> 128 or 256 -> 256
@@ -670,13 +668,13 @@ macro_rules! m_decimal_to_decimal {
                     T::from(x)
                 })(buffer, $ctx)
             }
-        } else if $from_size.scale > $dest_size.scale {
-            let scale_diff = ($from_size.scale - $dest_size.scale) as u32;
+        } else if $from_size.scale() > $dest_size.scale() {
+            let scale_diff = ($from_size.scale() - $dest_size.scale()) as u32;
             let factor = T::e(scale_diff);
-            let max = T::max_for_precision($dest_size.precision);
-            let min = T::min_for_precision($dest_size.precision);
+            let max = T::max_for_precision($dest_size.precision());
+            let min = T::min_for_precision($dest_size.precision());
 
-            let source_factor = T::e($from_size.scale as u32);
+            let source_factor = T::e($from_size.scale() as u32);
 
             vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
                 |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| {
@@ -703,9 +701,9 @@ macro_rules! m_decimal_to_decimal {
                 },
             )(buffer, $ctx)
         } else {
-            let factor = T::e(($dest_size.scale - $from_size.scale) as u32);
-            let min = T::min_for_precision($dest_size.precision);
-            let max = T::max_for_precision($dest_size.precision);
+            let factor = T::e(($dest_size.scale() - $from_size.scale()) as u32);
+            let min = T::min_for_precision($dest_size.precision());
+            let max = T::max_for_precision($dest_size.precision());
 
             vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
                 |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| {
@@ -802,7 +800,7 @@ where
     let result = with_decimal_mapped_type!(|DECIMAL_TYPE| match from_type {
         DecimalDataType::DECIMAL_TYPE(from_size) => {
             let value = arg.try_downcast().unwrap();
-            let scale = from_size.scale as i32;
+            let scale = from_size.scale() as i32;
             vectorize_1_arg::<DecimalType<DECIMAL_TYPE>, NumberType<T>>(
                 |x, _ctx: &mut EvalContext| T::convert(x, scale),
             )(value, ctx)
@@ -824,7 +822,7 @@ fn decimal_to_int<T: Number>(
             let value = arg.try_downcast().unwrap();
             vectorize_with_builder_1_arg::<DecimalType<DECIMAL_TYPE>, NumberType<T>>(
                 |x, builder: &mut Vec<T>, ctx: &mut EvalContext| match x
-                    .to_int(from_size.scale, ctx.func_ctx.rounding_mode)
+                    .to_int(from_size.scale(), ctx.func_ctx.rounding_mode)
                 {
                     Some(x) => builder.push(x),
                     None => {

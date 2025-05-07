@@ -22,9 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::decimal::Decimal;
-use databend_common_expression::types::decimal::DecimalType;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
@@ -350,10 +347,7 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
         }
 
         DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-            let decimal_size = DecimalSize {
-                precision: s.precision,
-                scale: s.scale,
-            };
+            let decimal_size = DecimalSize::new_unchecked(s.precision(), s.scale());
             let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<
@@ -383,10 +377,7 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
             }
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-            let decimal_size = DecimalSize {
-                precision: s.precision,
-                scale: s.scale,
-            };
+            let decimal_size = DecimalSize::new_unchecked(s.precision(), s.scale());
             let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<

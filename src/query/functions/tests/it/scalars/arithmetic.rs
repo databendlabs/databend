@@ -46,20 +46,14 @@ fn test_arithmetic() {
             "e",
             Column::Decimal(DecimalColumn::Decimal128(
                 vec![31, 335, 1888].into(),
-                DecimalSize {
-                    precision: 10,
-                    scale: 1,
-                },
+                DecimalSize::new_unchecked(10, 1),
             )),
         ),
         (
             "f",
             Column::Decimal(DecimalColumn::Decimal256(
                 vec![i256::from(50), i256::from(92), i256::from(1234)].into(),
-                DecimalSize {
-                    precision: 76,
-                    scale: 2,
-                },
+                DecimalSize::new_unchecked(76, 2),
             )),
         ),
         ("g", Int64Type::from_data(vec![i64::MAX, i64::MIN, 0])),

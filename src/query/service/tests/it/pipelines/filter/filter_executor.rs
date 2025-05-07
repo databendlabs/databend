@@ -101,14 +101,12 @@ fn get_filter_data_types() -> Vec<DataType> {
         DataType::Number(NumberDataType::Int64),
         DataType::Number(NumberDataType::Float32),
         DataType::Number(NumberDataType::Float64),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 10,
-            scale: 2,
-        })),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 35,
-            scale: 3,
-        })),
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+            10, 2,
+        ))),
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+            35, 3,
+        ))),
         DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Null,
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
@@ -120,10 +118,9 @@ fn get_filter_data_types() -> Vec<DataType> {
             DataType::Tuple(vec![
                 DataType::Nullable(Box::new(DataType::String)),
                 DataType::Number(NumberDataType::UInt32),
-                DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                    precision: 10,
-                    scale: 2,
-                })),
+                DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+                    10, 2,
+                ))),
             ]),
         ]),
     ]

@@ -79,10 +79,9 @@ fn test_fixed_width() {
 #[test]
 fn test_decimal128() {
     let converter = RowConverter::new(vec![SortField::new(
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 38,
-            scale: 7,
-        }))
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+            38, 7,
+        )))
         .wrap_nullable(),
     )])
     .unwrap();
@@ -96,10 +95,7 @@ fn test_decimal128() {
             Some(5456_i128),
             Some(i128::MAX),
         ],
-        DecimalSize {
-            precision: 38,
-            scale: 7,
-        },
+        DecimalSize::new_unchecked(38, 7),
     );
 
     let num_rows = col.len();
@@ -115,10 +111,9 @@ fn test_decimal128() {
 #[test]
 fn test_decimal256() {
     let converter = RowConverter::new(vec![SortField::new(
-        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-            precision: 76,
-            scale: 7,
-        }))
+        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new_unchecked(
+            76, 7,
+        )))
         .wrap_nullable(),
     )])
     .unwrap();
@@ -134,10 +129,7 @@ fn test_decimal256() {
             Some(i256::from_words(46_i128, 5)),
             Some(i256::MAX),
         ],
-        DecimalSize {
-            precision: 76,
-            scale: 7,
-        },
+        DecimalSize::new_unchecked(76, 7),
     );
 
     let num_rows = col.len();

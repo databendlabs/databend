@@ -626,9 +626,9 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         databend_common_ast::ast::TypeName::Int64 => DataType::Number(NumberDataType::Int64),
         databend_common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
         databend_common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
-        databend_common_ast::ast::TypeName::Decimal { precision, scale } => {
-            DataType::Decimal(DecimalDataType::from_size(DecimalSize { precision, scale }).unwrap())
-        }
+        databend_common_ast::ast::TypeName::Decimal { precision, scale } => DataType::Decimal(
+            DecimalDataType::from_size(DecimalSize::new_unchecked(precision, scale)).unwrap(),
+        ),
         databend_common_ast::ast::TypeName::Binary => DataType::Binary,
         databend_common_ast::ast::TypeName::String => DataType::String,
         databend_common_ast::ast::TypeName::Timestamp => DataType::Timestamp,
@@ -663,10 +663,10 @@ fn transform_literal(lit: ASTLiteral) -> Scalar {
             value,
             precision,
             scale,
-        } => Scalar::Decimal(DecimalScalar::Decimal256(i256(value), DecimalSize {
-            precision,
-            scale,
-        })),
+        } => Scalar::Decimal(DecimalScalar::Decimal256(
+            i256(value),
+            DecimalSize::new_unchecked(precision, scale),
+        )),
         ASTLiteral::String(s) => Scalar::String(s),
         ASTLiteral::Boolean(b) => Scalar::Boolean(b),
         ASTLiteral::Null => Scalar::Null,
