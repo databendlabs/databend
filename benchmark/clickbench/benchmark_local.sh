@@ -70,6 +70,8 @@ token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-meta
 instance_type=$(curl -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/instance-type)
 echo "Instance type: ${instance_type}"
 
+echo "CREATE STAGE IF NOT EXISTS datasets url = 's3://repo.databend.rs' CONNECTION =(region='us-east-2');" | bendsql
+
 # Load data
 echo "Loading data..."
 load_start=$(date +%s)
