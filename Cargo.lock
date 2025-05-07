@@ -3747,16 +3747,20 @@ dependencies = [
 name = "databend-common-meta-store"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "databend-common-base",
  "databend-common-grpc",
  "databend-common-meta-client",
- "databend-common-meta-embedded",
  "databend-common-meta-kvapi",
  "databend-common-meta-semaphore",
  "databend-common-meta-types",
+ "databend-meta",
  "log",
+ "tempfile",
+ "tokio",
  "tokio-stream",
+ "tonic",
 ]
 
 [[package]]

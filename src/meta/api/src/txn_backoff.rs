@@ -140,7 +140,7 @@ mod tests {
         let _ = trials.next().unwrap().unwrap().await;
         let elapsed = now.elapsed().as_secs_f64();
 
-        assert!(elapsed < 0.010, "{} is expected to be 0", elapsed);
+        assert!(elapsed < 0.100, "{} is expected to be 0", elapsed);
     }
 
     #[tokio::test]

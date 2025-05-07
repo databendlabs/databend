@@ -260,6 +260,7 @@ impl<Data: QueueData> QueueManager<Data> {
     }
 }
 
+#[derive(Debug)]
 pub enum AcquireQueueGuard {
     Global(Option<Permit>),
     Local(Option<OwnedSemaphorePermit>),
