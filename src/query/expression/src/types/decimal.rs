@@ -276,27 +276,36 @@ pub struct DecimalSize {
 }
 
 impl DecimalSize {
-    pub fn new(precision: u8, scale: u8) -> Result<DecimalSize> {
-        if precision < 1 || precision > MAX_DECIMAL256_PRECISION {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal precision must be between 1 and {}",
-                MAX_DECIMAL256_PRECISION
-            )));
-        }
-
-        if scale > precision {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal scale must be between 0 and precision {}",
-                precision
-            )));
-        }
-
-        Ok(DecimalSize { precision, scale })
-    }
-
-    /// Creates a new DecimalSize without validation
     pub fn new_unchecked(precision: u8, scale: u8) -> DecimalSize {
         DecimalSize { precision, scale }
+    }
+
+    pub fn new(precision: u8, scale: u8) -> Result<DecimalSize> {
+        let size = DecimalSize { precision, scale };
+        size.validate()?;
+
+        Ok(size)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.precision < 1 || self.precision > MAX_DECIMAL256_PRECISION {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal precision must be between 1 and {MAX_DECIMAL256_PRECISION}",
+            )));
+        }
+
+        if self.scale > self.precision {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal scale must be between 0 and precision {}",
+                self.precision
+            )));
+        }
+
+        Ok(())
+    }
+
+    pub fn default_128() -> DecimalSize {
+        i128::default_decimal_size()
     }
 
     pub fn precision(&self) -> u8 {
@@ -946,19 +955,7 @@ pub static MAX_DECIMAL256_PRECISION: u8 = 76;
 
 impl DecimalDataType {
     pub fn from_size(size: DecimalSize) -> Result<DecimalDataType> {
-        if size.precision() < 1 || size.precision() > MAX_DECIMAL256_PRECISION {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal precision must be between 1 and {}",
-                MAX_DECIMAL256_PRECISION
-            )));
-        }
-
-        if size.scale() > size.precision() {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal scale must be between 0 and precision {}",
-                size.precision()
-            )));
-        }
+        size.validate()?;
         if size.precision() <= MAX_DECIMAL128_PRECISION {
             Ok(DecimalDataType::Decimal128(size))
         } else {

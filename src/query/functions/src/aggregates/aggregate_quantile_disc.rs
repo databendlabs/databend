@@ -200,8 +200,7 @@ pub fn try_create_aggregate_quantile_disc_function(
                 }
             })
         }
-        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-            let decimal_size = DecimalSize::new_unchecked(s.precision(), s.scale());
+        DataType::Decimal(DecimalDataType::Decimal128(decimal_size)) => {
             let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<
@@ -230,8 +229,7 @@ pub fn try_create_aggregate_quantile_disc_function(
                 Ok(Arc::new(func))
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-            let decimal_size = DecimalSize::new_unchecked(s.precision(), s.scale());
+        DataType::Decimal(DecimalDataType::Decimal256(decimal_size)) => {
             let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<

@@ -314,8 +314,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         }
                     })
                 }
-                DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-                    let decimal_size = DecimalSize::new_unchecked(s.precision(), s.scale());
+                DataType::Decimal(DecimalDataType::Decimal128(decimal_size)) => {
                     let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
                     AggregateUnaryFunction::<
                         MinMaxAnyDecimalState<DecimalType<i128>, CMP>,
@@ -325,8 +324,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         display_name, return_type, params, data_type
                     )
                 }
-                DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-                    let decimal_size = DecimalSize::new_unchecked(s.precision(), s.scale());
+                DataType::Decimal(DecimalDataType::Decimal256(decimal_size)) => {
                     let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
                     AggregateUnaryFunction::<
                         MinMaxAnyDecimalState<DecimalType<i256>, CMP>,

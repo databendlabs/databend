@@ -1889,13 +1889,11 @@ impl<'a> TypeChecker<'a> {
                 }
             }
             DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-                let p = MAX_DECIMAL128_PRECISION;
-                let decimal_size = DecimalSize::new_unchecked(p, s.scale());
+                let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
                 DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
             }
             DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-                let p = MAX_DECIMAL256_PRECISION;
-                let decimal_size = DecimalSize::new_unchecked(p, s.scale());
+                let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale());
                 DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
             }
             DataType::Null => DataType::Null,
