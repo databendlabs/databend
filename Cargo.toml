@@ -97,7 +97,6 @@ members = [
     "src/meta/client",
     "src/meta/control",
     "src/meta/ee",
-    "src/meta/embedded",
     "src/meta/kvapi",
     "src/meta/process",
     "src/meta/proto-conv",
@@ -146,7 +145,6 @@ databend-common-meta-app-types = { path = "src/meta/app-types" }
 databend-common-meta-cache = { path = "src/meta/cache" }
 databend-common-meta-client = { path = "src/meta/client" }
 databend-common-meta-control = { path = "src/meta/control" }
-databend-common-meta-embedded = { path = "src/meta/embedded" }
 databend-common-meta-kvapi = { path = "src/meta/kvapi" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/raft-store" }
