@@ -1856,8 +1856,9 @@ impl Binder {
     }
 }
 
-const VERIFICATION_KEY: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d";
-const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del";
+const VERIFICATION_KEY: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d/";
+const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del/";
+// This is compatible with the old way
 
 // verify that essential privileges has granted for accessing external location
 //
