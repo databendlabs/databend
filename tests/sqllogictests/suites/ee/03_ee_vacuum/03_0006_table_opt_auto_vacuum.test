@@ -1,0 +1,82 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+create or replace database auto_vacuum_tbl_opt;
+
+statement ok
+use auto_vacuum_tbl_opt;
+
+statement ok
+create or replace table t (c int) 'fs:///tmp/tbl_auto_vacuum/' data_retention_num_snapshots_to_keep = 1;
+
+statement ok
+create or replace stage stage_av url = 'fs:///tmp/tbl_auto_vacuum/';
+
+# CASE1: By default, no auto vacuum should be triggered
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t values(2);
+
+onlyif mysql
+query I
+select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
+----
+2
+
+# CASE 2: Table level option should have higher priority than settings
+
+# CASE 2.1: Enable auto_vacuum at table level
+# make sure auto_vacuum is disabled at session setting level
+statement ok
+set enable_auto_vacuum = 0;
+
+statement ok
+alter table t set options(enable_auto_vacuum = 1);
+
+statement ok
+insert into t values(3);
+
+# Auto vacuum should be triggered
+onlyif mysql
+query I
+select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
+----
+1
+
+# CASE 2.1: Disable auto_vacuum at table level
+statement ok
+set enable_auto_vacuum = 1;
+
+statement ok
+alter table t set options(enable_auto_vacuum = 0);
+
+statement ok
+insert into t values(3);
+
+# Auto vacuum should NOT be triggered
+onlyif mysql
+query I
+select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
+----
+2
+
+statement ok
+remove @stage_av;
+
+statement ok
+drop stage stage_av;
+
