@@ -69,6 +69,7 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
 
     fn clear_cache(&mut self) {
         self.part_map.clear();
+        self.segment_blocks_cache.clear();
     }
 
     #[async_backtrace::framed]
