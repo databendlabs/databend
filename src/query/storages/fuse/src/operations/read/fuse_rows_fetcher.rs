@@ -15,6 +15,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
@@ -49,6 +51,8 @@ pub fn row_fetch_processor(
     source: &DataSourcePlan,
     projection: Projection,
     need_wrap_nullable: bool,
+    semaphore: Arc<Semaphore>,
+    runtime: Arc<Runtime>,
 ) -> Result<RowFetcher> {
     let table = ctx.build_table_from_source_plan(source)?;
     let fuse_table = table
@@ -108,6 +112,8 @@ pub fn row_fetch_processor(
                             block_reader.clone(),
                             read_settings,
                             max_threads,
+                            semaphore.clone(),
+                            runtime.clone(),
                         ),
                         need_wrap_nullable,
                     )
@@ -123,6 +129,8 @@ pub fn row_fetch_processor(
                             block_reader.clone(),
                             read_settings,
                             max_threads,
+                            semaphore.clone(),
+                            runtime.clone(),
                         ),
                         need_wrap_nullable,
                     )

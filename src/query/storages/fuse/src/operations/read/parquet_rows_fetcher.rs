@@ -16,7 +16,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::block_idx_in_segment;
 use databend_common_catalog::plan::split_prefix;
 use databend_common_catalog::plan::split_row_id;
@@ -32,6 +33,7 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use futures_util::future;
 use itertools::Itertools;
 
 use super::fuse_rows_fetcher::RowsFetcher;
@@ -56,6 +58,9 @@ pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
 
     // To control the parallelism of fetching blocks.
     max_threads: usize,
+
+    semaphore: Arc<Semaphore>,
+    runtime: Arc<Runtime>,
 }
 
 #[async_trait::async_trait]
@@ -125,19 +130,25 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
             begin = end;
         }
 
-        let num_task = tasks.len();
-        let blocks = execute_futures_in_parallel(
-            tasks,
-            num_task,
-            num_task * 2,
-            "parqeut rows fetch".to_string(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
+        let tasks = tasks.into_iter().map(|v| {
+            |permit| async {
+                let r = v.await;
+                drop(permit);
+                r
+            }
+        });
+        let join_handlers = self
+            .runtime
+            .try_spawn_batch_with_owned_semaphore(self.semaphore.clone(), tasks)
+            .await?;
+
+        let joint = future::try_join_all(join_handlers).await?;
+        let blocks = joint
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
         // Take result rows from blocks.
         let indices = row_set
             .iter()
@@ -171,6 +182,8 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
         reader: Arc<BlockReader>,
         settings: ReadSettings,
         max_threads: usize,
+        semaphore: Arc<Semaphore>,
+        runtime: Arc<Runtime>,
     ) -> Self {
         let schema = table.schema();
         let segment_reader =
@@ -186,6 +199,8 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             part_map: HashMap::new(),
             segment_blocks_cache: HashMap::new(),
             max_threads,
+            semaphore,
+            runtime,
         }
     }
 
