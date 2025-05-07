@@ -356,8 +356,7 @@ pub fn try_create_aggregate_sum_function(
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
         DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-            let p = MAX_DECIMAL128_PRECISION;
-            let decimal_size = DecimalSize::new_unchecked(p, s.scale());
+            let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
 
             // DecimalWidth<int64_t> = 18
             let should_check_overflow = s.precision() > 18;
@@ -391,8 +390,7 @@ pub fn try_create_aggregate_sum_function(
             )
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-            let p = MAX_DECIMAL256_PRECISION;
-            let decimal_size = DecimalSize::new_unchecked(p, s.scale());
+            let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale());
 
             let should_check_overflow = s.precision() > 18;
             let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);

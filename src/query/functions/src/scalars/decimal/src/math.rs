@@ -46,12 +46,12 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             debug_assert!(matches!(round_mode, RoundMode::Ceil | RoundMode::Floor));
             0
         } else {
-            params[0].get_i64()?
+            params[0].get_i64()? as u8
         };
 
         let decimal_size = DecimalSize::new_unchecked(
             from_decimal_type.precision(),
-            scale.clamp(0, from_decimal_type.scale() as i64) as u8,
+            scale.clamp(0, from_decimal_type.scale()),
         );
 
         let dest_decimal_type = DecimalDataType::from_size(decimal_size).ok()?;

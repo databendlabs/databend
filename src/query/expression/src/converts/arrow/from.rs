@@ -66,105 +66,106 @@ impl TryFrom<&Field> for DataField {
 impl TryFrom<&Field> for TableField {
     type Error = ErrorCode;
     fn try_from(arrow_f: &Field) -> Result<TableField> {
-        let mut data_type =
-            match arrow_f
-                .metadata()
-                .get(EXTENSION_KEY)
-                .map(|x| x.as_str())
-                .unwrap_or("")
-            {
-                ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
-                ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
-                ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
-                ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
-                ARROW_EXT_TYPE_GEOMETRY => TableDataType::Geometry,
-                ARROW_EXT_TYPE_GEOGRAPHY => TableDataType::Geography,
-                ARROW_EXT_TYPE_INTERVAL => TableDataType::Interval,
-                _ => match arrow_f.data_type() {
-                    ArrowDataType::Null => TableDataType::Null,
-                    ArrowDataType::Boolean => TableDataType::Boolean,
-                    ArrowDataType::Int8 => TableDataType::Number(NumberDataType::Int8),
-                    ArrowDataType::Int16 => TableDataType::Number(NumberDataType::Int16),
-                    ArrowDataType::Int32 => TableDataType::Number(NumberDataType::Int32),
-                    ArrowDataType::Int64 => TableDataType::Number(NumberDataType::Int64),
-                    ArrowDataType::UInt8 => TableDataType::Number(NumberDataType::UInt8),
-                    ArrowDataType::UInt16 => TableDataType::Number(NumberDataType::UInt16),
-                    ArrowDataType::UInt32 => TableDataType::Number(NumberDataType::UInt32),
-                    ArrowDataType::UInt64 => TableDataType::Number(NumberDataType::UInt64),
-                    ArrowDataType::Float32 => TableDataType::Number(NumberDataType::Float32),
-                    ArrowDataType::Float64 => TableDataType::Number(NumberDataType::Float64),
+        let mut data_type = match arrow_f
+            .metadata()
+            .get(EXTENSION_KEY)
+            .map(|x| x.as_str())
+            .unwrap_or("")
+        {
+            ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
+            ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
+            ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
+            ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
+            ARROW_EXT_TYPE_GEOMETRY => TableDataType::Geometry,
+            ARROW_EXT_TYPE_GEOGRAPHY => TableDataType::Geography,
+            ARROW_EXT_TYPE_INTERVAL => TableDataType::Interval,
+            _ => match arrow_f.data_type() {
+                ArrowDataType::Null => TableDataType::Null,
+                ArrowDataType::Boolean => TableDataType::Boolean,
+                ArrowDataType::Int8 => TableDataType::Number(NumberDataType::Int8),
+                ArrowDataType::Int16 => TableDataType::Number(NumberDataType::Int16),
+                ArrowDataType::Int32 => TableDataType::Number(NumberDataType::Int32),
+                ArrowDataType::Int64 => TableDataType::Number(NumberDataType::Int64),
+                ArrowDataType::UInt8 => TableDataType::Number(NumberDataType::UInt8),
+                ArrowDataType::UInt16 => TableDataType::Number(NumberDataType::UInt16),
+                ArrowDataType::UInt32 => TableDataType::Number(NumberDataType::UInt32),
+                ArrowDataType::UInt64 => TableDataType::Number(NumberDataType::UInt64),
+                ArrowDataType::Float32 => TableDataType::Number(NumberDataType::Float32),
+                ArrowDataType::Float64 => TableDataType::Number(NumberDataType::Float64),
 
-                    ArrowDataType::FixedSizeBinary(_)
-                    | ArrowDataType::Binary
-                    | ArrowDataType::LargeBinary => TableDataType::Binary,
-                    ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 | ArrowDataType::Utf8View => {
-                        TableDataType::String
-                    }
-                    ArrowDataType::Decimal128(precision, scale) => {
-                        TableDataType::Decimal(DecimalDataType::Decimal128(
-                            DecimalSize::new_unchecked(*precision, *scale as u8),
-                        ))
-                    }
-                    ArrowDataType::Decimal256(precision, scale) => {
-                        TableDataType::Decimal(DecimalDataType::Decimal256(
-                            DecimalSize::new_unchecked(*precision, *scale as u8),
-                        ))
-                    }
-                    ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
-                    ArrowDataType::Date32 => TableDataType::Date,
-                    ArrowDataType::Date64 => TableDataType::Date,
-                    ArrowDataType::List(field) => {
-                        let inner_type = TableField::try_from(field.as_ref())?;
-                        TableDataType::Array(Box::new(inner_type.data_type))
-                    }
-                    ArrowDataType::LargeList(field) => {
-                        let inner_type = TableField::try_from(field.as_ref())?;
-                        TableDataType::Array(Box::new(inner_type.data_type))
-                    }
-                    ArrowDataType::Map(field, _) => {
-                        if let ArrowDataType::Struct(fields) = field.data_type() {
-                            let fields_name: Vec<String> =
-                                fields.iter().map(|f| f.name().clone()).collect();
-                            let fields_type: Vec<TableDataType> = fields
-                                .iter()
-                                .map(|f| TableField::try_from(f.as_ref()).map(|f| f.data_type))
-                                .collect::<Result<Vec<_>>>()?;
-                            TableDataType::Map(Box::new(TableDataType::Tuple {
-                                fields_name,
-                                fields_type,
-                            }))
-                        } else {
-                            return Err(ErrorCode::Internal(format!(
-                                "Invalid map field type: {:?}",
-                                field.data_type()
-                            )));
-                        }
-                    }
-                    ArrowDataType::Struct(fields) => {
+                ArrowDataType::FixedSizeBinary(_)
+                | ArrowDataType::Binary
+                | ArrowDataType::LargeBinary => TableDataType::Binary,
+                ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 | ArrowDataType::Utf8View => {
+                    TableDataType::String
+                }
+                ArrowDataType::Decimal128(precision, scale) if *scale >= 0 => {
+                    TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new(
+                        *precision,
+                        *scale as _,
+                    )?))
+                }
+                ArrowDataType::Decimal256(precision, scale) if *scale >= 0 => {
+                    TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new(
+                        *precision,
+                        *scale as _,
+                    )?))
+                }
+                ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
+                ArrowDataType::Date32 => TableDataType::Date,
+                ArrowDataType::Date64 => TableDataType::Date,
+                ArrowDataType::List(field) => {
+                    let inner_type = TableField::try_from(field.as_ref())?;
+                    TableDataType::Array(Box::new(inner_type.data_type))
+                }
+                ArrowDataType::LargeList(field) => {
+                    let inner_type = TableField::try_from(field.as_ref())?;
+                    TableDataType::Array(Box::new(inner_type.data_type))
+                }
+                ArrowDataType::Map(field, _) => {
+                    if let ArrowDataType::Struct(fields) = field.data_type() {
                         let fields_name: Vec<String> =
                             fields.iter().map(|f| f.name().clone()).collect();
                         let fields_type: Vec<TableDataType> = fields
                             .iter()
                             .map(|f| TableField::try_from(f.as_ref()).map(|f| f.data_type))
                             .collect::<Result<Vec<_>>>()?;
-                        TableDataType::Tuple {
+                        TableDataType::Map(Box::new(TableDataType::Tuple {
                             fields_name,
                             fields_type,
-                        }
-                    }
-                    ArrowDataType::Dictionary(_, b) => {
-                        let inner_f =
-                            Field::new(arrow_f.name(), b.as_ref().clone(), arrow_f.is_nullable());
-                        return Self::try_from(&inner_f);
-                    }
-                    arrow_type => {
+                        }))
+                    } else {
                         return Err(ErrorCode::Internal(format!(
-                            "Unsupported Arrow type: {:?}",
-                            arrow_type
+                            "Invalid map field type: {:?}",
+                            field.data_type()
                         )));
                     }
-                },
-            };
+                }
+                ArrowDataType::Struct(fields) => {
+                    let fields_name: Vec<String> =
+                        fields.iter().map(|f| f.name().clone()).collect();
+                    let fields_type: Vec<TableDataType> = fields
+                        .iter()
+                        .map(|f| TableField::try_from(f.as_ref()).map(|f| f.data_type))
+                        .collect::<Result<Vec<_>>>()?;
+                    TableDataType::Tuple {
+                        fields_name,
+                        fields_type,
+                    }
+                }
+                ArrowDataType::Dictionary(_, b) => {
+                    let inner_f =
+                        Field::new(arrow_f.name(), b.as_ref().clone(), arrow_f.is_nullable());
+                    return Self::try_from(&inner_f);
+                }
+                arrow_type => {
+                    return Err(ErrorCode::Internal(format!(
+                        "Unsupported Arrow type: {:?}",
+                        arrow_type
+                    )));
+                }
+            },
+        };
         if arrow_f.is_nullable() {
             data_type = data_type.wrap_nullable();
         }
