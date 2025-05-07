@@ -213,8 +213,8 @@ pub enum DecimalScalar {
 impl DecimalScalar {
     pub fn to_float64(&self) -> f64 {
         match self {
-            DecimalScalar::Decimal128(v, size) => i128::to_float64(*v, size.scale),
-            DecimalScalar::Decimal256(v, size) => i256::to_float64(*v, size.scale),
+            DecimalScalar::Decimal128(v, size) => i128::to_float64(*v, size.scale()),
+            DecimalScalar::Decimal256(v, size) => i256::to_float64(*v, size.scale()),
         }
     }
     pub fn is_positive(&self) -> bool {
@@ -271,8 +271,41 @@ impl DecimalDomain {
     BorshDeserialize,
 )]
 pub struct DecimalSize {
-    pub precision: u8,
-    pub scale: u8,
+    precision: u8,
+    scale: u8,
+}
+
+impl DecimalSize {
+    pub fn new(precision: u8, scale: u8) -> Result<DecimalSize> {
+        if precision < 1 || precision > MAX_DECIMAL256_PRECISION {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal precision must be between 1 and {}",
+                MAX_DECIMAL256_PRECISION
+            )));
+        }
+
+        if scale > precision {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal scale must be between 0 and precision {}",
+                precision
+            )));
+        }
+
+        Ok(DecimalSize { precision, scale })
+    }
+
+    /// Creates a new DecimalSize without validation
+    pub fn new_unchecked(precision: u8, scale: u8) -> DecimalSize {
+        DecimalSize { precision, scale }
+    }
+
+    pub fn precision(&self) -> u8 {
+        self.precision
+    }
+
+    pub fn scale(&self) -> u8 {
+        self.scale
+    }
 }
 
 pub trait Decimal:
@@ -360,9 +393,9 @@ pub trait Decimal:
     fn to_scalar(self, size: DecimalSize) -> DecimalScalar;
 
     fn with_size(&self, size: DecimalSize) -> Option<Self> {
-        let multiplier = Self::e(size.scale as u32);
-        let min_for_precision = Self::min_for_precision(size.precision);
-        let max_for_precision = Self::max_for_precision(size.precision);
+        let multiplier = Self::e(size.scale() as u32);
+        let min_for_precision = Self::min_for_precision(size.precision());
+        let max_for_precision = Self::max_for_precision(size.precision());
         self.checked_mul(multiplier).and_then(|v| {
             if v > max_for_precision || v < min_for_precision {
                 None
@@ -913,20 +946,20 @@ pub static MAX_DECIMAL256_PRECISION: u8 = 76;
 
 impl DecimalDataType {
     pub fn from_size(size: DecimalSize) -> Result<DecimalDataType> {
-        if size.precision < 1 || size.precision > MAX_DECIMAL256_PRECISION {
+        if size.precision() < 1 || size.precision() > MAX_DECIMAL256_PRECISION {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal precision must be between 1 and {}",
                 MAX_DECIMAL256_PRECISION
             )));
         }
 
-        if size.scale > size.precision {
+        if size.scale() > size.precision() {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal scale must be between 0 and precision {}",
-                size.precision
+                size.precision()
             )));
         }
-        if size.precision <= MAX_DECIMAL128_PRECISION {
+        if size.precision() <= MAX_DECIMAL128_PRECISION {
             Ok(DecimalDataType::Decimal128(size))
         } else {
             Ok(DecimalDataType::Decimal256(size))
@@ -947,19 +980,19 @@ impl DecimalDataType {
 
     pub fn scale(&self) -> u8 {
         crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => size.scale,
+            DecimalDataType::DECIMAL_TYPE(size) => size.scale(),
         })
     }
 
     pub fn precision(&self) -> u8 {
         crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => size.precision,
+            DecimalDataType::DECIMAL_TYPE(size) => size.precision(),
         })
     }
 
     pub fn leading_digits(&self) -> u8 {
         crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => size.precision - size.scale,
+            DecimalDataType::DECIMAL_TYPE(size) => size.precision() - size.scale(),
         })
     }
 
@@ -984,14 +1017,14 @@ impl DecimalDataType {
 
     // For div ops, a,b and return must belong to same width types
     pub fn div_common_type(a: &Self, b: &Self, return_size: DecimalSize) -> Result<(Self, Self)> {
-        let precision_a = if Self::belong_diff_precision(a.precision(), return_size.precision) {
-            return_size.precision
+        let precision_a = if Self::belong_diff_precision(a.precision(), return_size.precision()) {
+            return_size.precision()
         } else {
             a.precision()
         };
 
-        let precision_b = if Self::belong_diff_precision(b.precision(), return_size.precision) {
-            return_size.precision
+        let precision_b = if Self::belong_diff_precision(b.precision(), return_size.precision()) {
+            return_size.precision()
         } else {
             b.precision()
         };

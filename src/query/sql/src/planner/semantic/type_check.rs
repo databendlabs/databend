@@ -1890,18 +1890,12 @@ impl<'a> TypeChecker<'a> {
             }
             DataType::Decimal(DecimalDataType::Decimal128(s)) => {
                 let p = MAX_DECIMAL128_PRECISION;
-                let decimal_size = DecimalSize {
-                    precision: p,
-                    scale: s.scale,
-                };
+                let decimal_size = DecimalSize::new_unchecked(p, s.scale());
                 DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
             }
             DataType::Decimal(DecimalDataType::Decimal256(s)) => {
                 let p = MAX_DECIMAL256_PRECISION;
-                let decimal_size = DecimalSize {
-                    precision: p,
-                    scale: s.scale,
-                };
+                let decimal_size = DecimalSize::new_unchecked(p, s.scale());
                 DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
             }
             DataType::Null => DataType::Null,
@@ -4122,10 +4116,10 @@ impl<'a> TypeChecker<'a> {
                 value,
                 precision,
                 scale,
-            } => Scalar::Decimal(DecimalScalar::Decimal256(i256(*value), DecimalSize {
-                precision: *precision,
-                scale: *scale,
-            })),
+            } => Scalar::Decimal(DecimalScalar::Decimal256(
+                i256(*value),
+                DecimalSize::new_unchecked(*precision, *scale),
+            )),
             Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
             Literal::String(string) => Scalar::String(string.clone()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
@@ -5610,12 +5604,9 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
         TypeName::Int64 => TableDataType::Number(NumberDataType::Int64),
         TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
         TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
-        TypeName::Decimal { precision, scale } => {
-            TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
-                precision: *precision,
-                scale: *scale,
-            })?)
-        }
+        TypeName::Decimal { precision, scale } => TableDataType::Decimal(
+            DecimalDataType::from_size(DecimalSize::new_unchecked(*precision, *scale))?,
+        ),
         TypeName::Binary => TableDataType::Binary,
         TypeName::String => TableDataType::String,
         TypeName::Timestamp => TableDataType::Timestamp,

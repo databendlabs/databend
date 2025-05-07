@@ -347,13 +347,13 @@ impl<R: Rng> SqlGenerator<'_, R> {
             DataType::Decimal(decimal_type) => match decimal_type {
                 DecimalDataType::Decimal128(size) => Literal::Decimal256 {
                     value: I256::from(self.rng.gen_range(-2147483648..=2147483647)),
-                    precision: size.precision,
-                    scale: size.scale,
+                    precision: size.precision(),
+                    scale: size.scale(),
                 },
                 DecimalDataType::Decimal256(size) => Literal::Decimal256 {
                     value: I256::from(self.rng.gen_range(-2147483648..=2147483647)),
-                    precision: size.precision,
-                    scale: size.scale,
+                    precision: size.precision(),
+                    scale: size.scale(),
                 },
             },
             _ => Literal::Null,
@@ -903,12 +903,12 @@ fn convert_to_type_name(ty: &DataType) -> TypeName {
         DataType::Number(NumberDataType::Float32) => TypeName::Float32,
         DataType::Number(NumberDataType::Float64) => TypeName::Float64,
         DataType::Decimal(DecimalDataType::Decimal128(size)) => TypeName::Decimal {
-            precision: size.precision,
-            scale: size.scale,
+            precision: size.precision(),
+            scale: size.scale(),
         },
         DataType::Decimal(DecimalDataType::Decimal256(size)) => TypeName::Decimal {
-            precision: size.precision,
-            scale: size.scale,
+            precision: size.precision(),
+            scale: size.scale(),
         },
         DataType::Date => TypeName::Date,
         DataType::Timestamp => TypeName::Timestamp,

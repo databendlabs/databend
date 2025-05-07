@@ -110,10 +110,7 @@ fn test_decimal_with_size_text() -> Result<()> {
         ("15.0e-11#", 0i128),
     ];
 
-    let size = DecimalSize {
-        precision: 6,
-        scale: 3,
-    };
+    let size = DecimalSize::new_unchecked(6, 3);
 
     for (s, l) in cases {
         let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false, true);
@@ -142,14 +139,12 @@ fn test_decimal_common_type() {
     ];
 
     for (a, b, c) in cases {
-        let l = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: a.0,
-            scale: a.1,
-        }));
-        let expected = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: c.0,
-            scale: c.1,
-        }));
+        let l = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+            a.0, a.1,
+        )));
+        let expected = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+            c.0, c.1,
+        )));
         let r = common_super_type(l, b, &[]);
         assert_eq!(r, Some(expected));
     }

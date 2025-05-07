@@ -110,10 +110,10 @@ impl From<&TableField> for Field {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
             TableDataType::Decimal(DecimalDataType::Decimal128(size)) => {
-                ArrowDataType::Decimal128(size.precision, size.scale as i8)
+                ArrowDataType::Decimal128(size.precision(), size.scale() as i8)
             }
             TableDataType::Decimal(DecimalDataType::Decimal256(size)) => {
-                ArrowDataType::Decimal256(size.precision, size.scale as i8)
+                ArrowDataType::Decimal256(size.precision(), size.scale() as i8)
             }
             TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             TableDataType::Date => ArrowDataType::Date32,

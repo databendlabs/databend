@@ -76,7 +76,7 @@ macro_rules! binary_decimal {
     ($a: expr, $b: expr, $ctx: expr, $left: expr, $right: expr, $op: ident, $size: expr, $type_name: ty, $arithmetic_op: expr) => {{
         type T = $type_name;
 
-        let overflow = $size.precision == T::default_decimal_size().precision;
+        let overflow = $size.precision() == T::default_decimal_size().precision();
 
         let a = $a.try_downcast().unwrap();
         let b = $b.try_downcast().unwrap();
@@ -89,7 +89,7 @@ macro_rules! binary_decimal {
             let scale_b = $right.scale();
 
             // Note: the result scale is always larger than the left scale
-            let scale_mul = (scale_b + $size.scale - scale_a) as u32;
+            let scale_mul = (scale_b + $size.scale() - scale_a) as u32;
             let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
                 // We are using round div here which follow snowflake's behavior: https://docs.snowflake.com/sql-reference/operators-arithmetic
                 // For example:
@@ -121,7 +121,7 @@ macro_rules! binary_decimal {
             let scale_a = $left.scale();
             let scale_b = $right.scale();
 
-            let scale_mul = scale_a + scale_b - $size.scale;
+            let scale_mul = scale_a + scale_b - $size.scale();
 
             if scale_mul == 0 {
                 let func = |a: T, b: T, _ctx: &mut EvalContext| a * b;
@@ -149,8 +149,8 @@ macro_rules! binary_decimal {
 
         }  else {
             if overflow {
-                let min_for_precision = T::min_for_precision($size.precision);
-                let max_for_precision = T::max_for_precision($size.precision);
+                let min_for_precision = T::min_for_precision($size.precision());
+                let max_for_precision = T::max_for_precision($size.precision());
 
                 let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
                     let t = a.$op(b);
@@ -327,12 +327,12 @@ macro_rules! register_decimal_binary_op {
                                 (
                                     DecimalDomain::Decimal128(d1, _),
                                     DecimalDomain::Decimal128(d2, _),
-                                ) => $domain_op(&d1, &d2, size.precision)
+                                ) => $domain_op(&d1, &d2, size.precision())
                                     .map(|d| DecimalDomain::Decimal128(d, size)),
                                 (
                                     DecimalDomain::Decimal256(d1, _),
                                     DecimalDomain::Decimal256(d2, _),
-                                ) => $domain_op(&d1, &d2, size.precision)
+                                ) => $domain_op(&d1, &d2, size.precision())
                                     .map(|d| DecimalDomain::Decimal256(d, size)),
                                 _ => {
                                     unreachable!("unreachable decimal domain {:?} /{:?}", lhs, rhs)

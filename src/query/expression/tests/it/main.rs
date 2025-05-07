@@ -83,14 +83,12 @@ fn get_simple_types() -> Vec<DataType> {
         DataType::Number(NumberDataType::Int64),
         DataType::Number(NumberDataType::Float32),
         DataType::Number(NumberDataType::Float64),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 10,
-            scale: 2,
-        })),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 35,
-            scale: 3,
-        })),
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+            10, 2,
+        ))),
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+            35, 3,
+        ))),
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Nullable(Box::new(DataType::String)),
     ]
@@ -118,14 +116,12 @@ fn get_all_test_data_types() -> Vec<DataType> {
         DataType::Number(NumberDataType::Int64),
         DataType::Number(NumberDataType::Float32),
         DataType::Number(NumberDataType::Float64),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 10,
-            scale: 2,
-        })),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 35,
-            scale: 3,
-        })),
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+            10, 2,
+        ))),
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+            35, 3,
+        ))),
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Nullable(Box::new(DataType::String)),
         DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),

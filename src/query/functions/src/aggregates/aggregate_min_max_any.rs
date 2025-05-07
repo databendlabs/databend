@@ -20,9 +20,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::number::*;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
@@ -318,10 +315,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                     })
                 }
                 DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-                    let decimal_size = DecimalSize {
-                        precision: s.precision,
-                        scale: s.scale,
-                    };
+                    let decimal_size = DecimalSize::new_unchecked(s.precision(), s.scale());
                     let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
                     AggregateUnaryFunction::<
                         MinMaxAnyDecimalState<DecimalType<i128>, CMP>,
@@ -332,10 +326,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                     )
                 }
                 DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-                    let decimal_size = DecimalSize {
-                        precision: s.precision,
-                        scale: s.scale,
-                    };
+                    let decimal_size = DecimalSize::new_unchecked(s.precision(), s.scale());
                     let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
                     AggregateUnaryFunction::<
                         MinMaxAnyDecimalState<DecimalType<i256>, CMP>,

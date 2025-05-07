@@ -60,18 +60,12 @@ impl NumberClass {
             NumberClass::Int16 => DataType::Number(NumberDataType::Int16),
             NumberClass::Int32 => DataType::Number(NumberDataType::Int32),
             NumberClass::Int64 => DataType::Number(NumberDataType::Int64),
-            NumberClass::Decimal128 => {
-                DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                    precision: 38,
-                    scale: 0,
-                }))
-            }
-            NumberClass::Decimal256 => {
-                DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-                    precision: 38,
-                    scale: 0,
-                }))
-            }
+            NumberClass::Decimal128 => DataType::Decimal(DecimalDataType::Decimal128(
+                DecimalSize::new_unchecked(38, 0),
+            )),
+            NumberClass::Decimal256 => DataType::Decimal(DecimalDataType::Decimal256(
+                DecimalSize::new_unchecked(38, 0),
+            )),
             NumberClass::Float32 => DataType::Number(NumberDataType::Float32),
             NumberClass::Float64 => DataType::Number(NumberDataType::Float64),
         }

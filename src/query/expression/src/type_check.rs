@@ -643,8 +643,8 @@ pub fn can_auto_cast_to(
         }
         (DataType::Number(n), DataType::Decimal(d)) if !n.is_float() => {
             let properties = n.get_decimal_properties().unwrap();
-            properties.scale <= d.scale()
-                && properties.precision - properties.scale <= d.leading_digits()
+            properties.scale() <= d.scale()
+                && properties.precision() - properties.scale() <= d.leading_digits()
         }
         // Only available for decimal --> f64, otherwise `sqrt(1234.56789)` will have signature: `sqrt(1234.56789::Float32)`
         (DataType::Decimal(_), DataType::Number(n)) if n.is_float64() => true,
@@ -701,7 +701,7 @@ pub fn common_super_type(
             }
 
             Some(DataType::Decimal(
-                DecimalDataType::from_size(DecimalSize { precision, scale }).ok()?,
+                DecimalDataType::from_size(DecimalSize::new_unchecked(precision, scale)).ok()?,
             ))
         }
         (DataType::Number(num_ty), DataType::Decimal(decimal_ty))
@@ -723,7 +723,7 @@ pub fn common_super_type(
             }
 
             Some(DataType::Decimal(
-                DecimalDataType::from_size(DecimalSize { precision, scale }).ok()?,
+                DecimalDataType::from_size(DecimalSize::new_unchecked(precision, scale)).ok()?,
             ))
         }
         (DataType::Number(num_ty), DataType::Decimal(_))
