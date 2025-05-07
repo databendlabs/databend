@@ -613,14 +613,7 @@ impl Display for NumberDataType {
 
 impl Display for DecimalDataType {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match &self {
-            DecimalDataType::Decimal128(size) => {
-                write!(f, "Decimal({}, {})", size.precision(), size.scale())
-            }
-            DecimalDataType::Decimal256(size) => {
-                write!(f, "Decimal({}, {})", size.precision(), size.scale())
-            }
-        }
+        write!(f, "Decimal({}, {})", self.precision(), self.scale())
     }
 }
 

@@ -139,12 +139,8 @@ fn test_decimal_common_type() {
     ];
 
     for (a, b, c) in cases {
-        let l = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
-            a.0, a.1,
-        )));
-        let expected = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
-            c.0, c.1,
-        )));
+        let l = DataType::Decimal(DecimalDataType(DecimalSize::new_unchecked(a.0, a.1)));
+        let expected = DataType::Decimal(DecimalDataType(DecimalSize::new_unchecked(c.0, c.1)));
         let r = common_super_type(l, b, &[]);
         assert_eq!(r, Some(expected));
     }

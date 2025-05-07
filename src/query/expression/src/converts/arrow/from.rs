@@ -100,16 +100,16 @@ impl TryFrom<&Field> for TableField {
                     TableDataType::String
                 }
                 ArrowDataType::Decimal128(precision, scale) if *scale >= 0 => {
-                    TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new(
+                    TableDataType::Decimal(DecimalDataType::from_size(DecimalSize::new(
                         *precision,
                         *scale as _,
-                    )?))
+                    )?)?)
                 }
                 ArrowDataType::Decimal256(precision, scale) if *scale >= 0 => {
-                    TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new(
+                    TableDataType::Decimal(DecimalDataType::from_size(DecimalSize::new(
                         *precision,
                         *scale as _,
-                    )?))
+                    )?)?)
                 }
                 ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
                 ArrowDataType::Date32 => TableDataType::Date,

@@ -14,7 +14,6 @@
 
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::i256;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -129,13 +128,13 @@ fn convert_page_index_int32(
                     (Scalar::from(max as u32), Scalar::from(min as u32))
                 }
                 TableDataType::Date => (Scalar::Date(max), Scalar::Date(min)),
-                TableDataType::Decimal(DecimalDataType::Decimal128(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
+                TableDataType::Decimal(decimal) if decimal.is_128() => (
+                    Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), decimal.size())),
+                    Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), decimal.size())),
                 ),
-                TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), *size)),
+                TableDataType::Decimal(decimal) => (
+                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), decimal.size())),
+                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), decimal.size())),
                 ),
                 _ => unreachable!(),
             };
@@ -159,13 +158,13 @@ fn convert_page_index_int64(
                     (Scalar::from(max), Scalar::from(min))
                 }
                 TableDataType::Timestamp => (Scalar::Timestamp(max), Scalar::Timestamp(min)),
-                TableDataType::Decimal(DecimalDataType::Decimal128(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
+                TableDataType::Decimal(decimal) if decimal.is_128() => (
+                    Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), decimal.size())),
+                    Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), decimal.size())),
                 ),
-                TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), *size)),
+                TableDataType::Decimal(decimal) => (
+                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), decimal.size())),
+                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), decimal.size())),
                 ),
                 _ => unreachable!(),
             };
@@ -262,13 +261,13 @@ fn convert_page_index_fixed_len_byte_array(
     match (&index.min, &index.max, index.null_count) {
         (Some(min), Some(max), Some(null_count)) => {
             let (max, min) = match typ {
-                TableDataType::Decimal(DecimalDataType::Decimal128(size)) => (
-                    decode_decimal128_from_bytes(max, *size),
-                    decode_decimal128_from_bytes(min, *size),
+                TableDataType::Decimal(decimal) if decimal.is_128() => (
+                    decode_decimal128_from_bytes(max, decimal.size()),
+                    decode_decimal128_from_bytes(min, decimal.size()),
                 ),
-                TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                    decode_decimal256_from_bytes(max, *size),
-                    decode_decimal256_from_bytes(min, *size),
+                TableDataType::Decimal(decimal) => (
+                    decode_decimal256_from_bytes(max, decimal.size()),
+                    decode_decimal256_from_bytes(min, decimal.size()),
                 ),
                 _ => unreachable!(),
             };

@@ -53,9 +53,10 @@ pub trait ValueVisitor: Sized {
     }
 
     fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<(), Self::Error> {
-        with_decimal_type!(|DECIMAL_TYPE| match column {
-            DecimalColumn::DECIMAL_TYPE(b, size) => self.visit_decimal(b, size),
-        })
+        match column {
+            DecimalColumn::Decimal128(b, size) => self.visit_decimal(b, size),
+            DecimalColumn::Decimal256(b, size) => self.visit_decimal(b, size),
+        }
     }
 
     fn visit_decimal<T: Decimal>(

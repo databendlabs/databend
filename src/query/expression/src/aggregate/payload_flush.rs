@@ -237,14 +237,13 @@ impl Payload {
                 NumberDataType::NUM_TYPE =>
                     self.flush_type_column::<NumberType<NUM_TYPE>>(col_offset, state),
             }),
-            DataType::Decimal(v) => match v {
-                crate::types::DecimalDataType::Decimal128(s) => {
-                    self.flush_decimal_column::<i128>(col_offset, state, s)
+            DataType::Decimal(v) => {
+                if v.is_128() {
+                    self.flush_decimal_column::<i128>(col_offset, state, v.size())
+                } else {
+                    self.flush_decimal_column::<i256>(col_offset, state, v.size())
                 }
-                crate::types::DecimalDataType::Decimal256(s) => {
-                    self.flush_decimal_column::<i256>(col_offset, state, s)
-                }
-            },
+            }
             DataType::Timestamp => self.flush_type_column::<TimestampType>(col_offset, state),
             DataType::Date => self.flush_type_column::<DateType>(col_offset, state),
             DataType::Binary => Column::Binary(self.flush_binary_column(col_offset, state)),

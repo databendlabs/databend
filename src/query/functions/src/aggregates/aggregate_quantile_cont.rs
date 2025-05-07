@@ -346,8 +346,8 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
             }
         }
 
-        DataType::Decimal(DecimalDataType::Decimal128(decimal_size)) => {
-            let data_type = DataType::Decimal(DecimalDataType::from_size(*decimal_size)?);
+        DataType::Decimal(decimal) if decimal.is_128() => {
+            let data_type = DataType::Decimal(*decimal);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<
                     DecimalQuantileContState<DecimalType<i128>>,
@@ -375,8 +375,8 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                 Ok(Arc::new(func))
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal256(decimal_size)) => {
-            let data_type = DataType::Decimal(DecimalDataType::from_size(*decimal_size)?);
+        DataType::Decimal(decimal) => {
+            let data_type = DataType::Decimal(*decimal);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<
                     DecimalQuantileContState<DecimalType<i256>>,

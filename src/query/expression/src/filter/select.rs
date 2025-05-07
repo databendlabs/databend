@@ -18,22 +18,20 @@ use databend_common_exception::Result;
 use crate::arrow::and_validities;
 use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
-use crate::types::decimal::DecimalType;
-use crate::types::i256;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
 use crate::types::AnyType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
-use crate::types::DecimalDataType;
+use crate::types::Decimal128Type;
+use crate::types::Decimal256Type;
 use crate::types::EmptyArrayType;
 use crate::types::NullableType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::VariantType;
-use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::LikePattern;
@@ -113,8 +111,8 @@ impl Selector<'_> {
             }
 
             DataType::Decimal(ty) => {
-                with_decimal_mapped_type!(|T| match ty {
-                    DecimalDataType::T(_) => self.select_type_values_cmp::<DecimalType<T>>(
+                if ty.is_128() {
+                    self.select_type_values_cmp::<Decimal128Type>(
                         &op,
                         left,
                         right,
@@ -125,8 +123,21 @@ impl Selector<'_> {
                         mutable_false_idx,
                         select_strategy,
                         count,
-                    ),
-                })
+                    )
+                } else {
+                    self.select_type_values_cmp::<Decimal256Type>(
+                        &op,
+                        left,
+                        right,
+                        validity,
+                        true_selection,
+                        false_selection,
+                        mutable_true_idx,
+                        mutable_false_idx,
+                        select_strategy,
+                        count,
+                    )
+                }
             }
             DataType::Date => self.select_type_values_cmp::<DateType>(
                 &op,

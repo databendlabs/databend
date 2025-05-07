@@ -193,12 +193,9 @@ fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
     let size = DecimalSize::new_unchecked(precision, size.scale());
     let decimal_ty = DecimalDataType::from_size(size).unwrap();
 
-    match decimal_ty {
-        DecimalDataType::Decimal128(size) => {
-            Scalar::Decimal(DecimalScalar::Decimal128(decimal.as_i128(), size))
-        }
-        DecimalDataType::Decimal256(size) => {
-            Scalar::Decimal(DecimalScalar::Decimal256(decimal, size))
-        }
-    }
+    Scalar::Decimal(if decimal_ty.is_128() {
+        DecimalScalar::Decimal128(decimal.as_i128(), size)
+    } else {
+        DecimalScalar::Decimal256(decimal, size)
+    })
 }

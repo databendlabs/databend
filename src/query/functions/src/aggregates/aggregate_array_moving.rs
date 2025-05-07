@@ -527,7 +527,7 @@ pub fn try_create_aggregate_array_moving_avg_function(
                 0,
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+        DataType::Decimal(s) if s.is_128() => {
             let decimal_size =
                 DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale().max(4));
 
@@ -540,7 +540,7 @@ pub fn try_create_aggregate_array_moving_avg_function(
                 decimal_size.scale() - s.scale(),
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+        DataType::Decimal(s) => {
             let decimal_size =
                 DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale().max(4));
 
@@ -704,7 +704,7 @@ pub fn try_create_aggregate_array_moving_sum_function(
                 DataType::Array(Box::new(NumberType::<TSum>::data_type())),
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+        DataType::Decimal(s) if s.is_128() => {
             let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
 
             AggregateArrayMovingSumFunction::<DecimalArrayMovingSumState<i128>>::try_create(
@@ -715,7 +715,7 @@ pub fn try_create_aggregate_array_moving_sum_function(
                 )?))),
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+        DataType::Decimal(s) => {
             let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale());
 
             AggregateArrayMovingSumFunction::<DecimalArrayMovingSumState<i256>>::try_create(

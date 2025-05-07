@@ -41,33 +41,30 @@ enum ArithmeticOp {
 
 macro_rules! op_decimal {
     ($a: expr, $b: expr, $ctx: expr, $left: expr, $right: expr, $result_type: expr, $op: ident, $arithmetic_op: expr) => {
-        match $left {
-            DecimalDataType::Decimal128(_) => {
-                binary_decimal!(
-                    $a,
-                    $b,
-                    $ctx,
-                    $left,
-                    $right,
-                    $op,
-                    $result_type.size(),
-                    i128,
-                    $arithmetic_op
-                )
-            }
-            DecimalDataType::Decimal256(_) => {
-                binary_decimal!(
-                    $a,
-                    $b,
-                    $ctx,
-                    $left,
-                    $right,
-                    $op,
-                    $result_type.size(),
-                    i256,
-                    $arithmetic_op
-                )
-            }
+        if $left.is_128() {
+            binary_decimal!(
+                $a,
+                $b,
+                $ctx,
+                $left,
+                $right,
+                $op,
+                $result_type.size(),
+                i128,
+                $arithmetic_op
+            )
+        } else {
+            binary_decimal!(
+                $a,
+                $b,
+                $ctx,
+                $left,
+                $right,
+                $op,
+                $result_type.size(),
+                i256,
+                $arithmetic_op
+            )
         }
     };
 }

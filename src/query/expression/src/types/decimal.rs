@@ -268,12 +268,8 @@ impl<Num: Decimal> ArgType for DecimalType<Num> {
     Deserialize,
     BorshSerialize,
     BorshDeserialize,
-    EnumAsInner,
 )]
-pub enum DecimalDataType {
-    Decimal128(DecimalSize),
-    Decimal256(DecimalSize),
-}
+pub struct DecimalDataType(pub DecimalSize);
 
 #[derive(
     Clone,
@@ -748,7 +744,7 @@ impl Decimal for i128 {
     }
 
     fn data_type() -> DataType {
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+        DataType::Decimal(DecimalDataType(DecimalSize {
             precision: MAX_DECIMAL128_PRECISION,
             scale: 0,
         }))
@@ -1014,7 +1010,7 @@ impl Decimal for i256 {
     }
 
     fn data_type() -> DataType {
-        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+        DataType::Decimal(DecimalDataType(DecimalSize {
             precision: MAX_DECIMAL256_PRECISION,
             scale: 0,
         }))
@@ -1037,55 +1033,51 @@ pub static MAX_DECIMAL256_PRECISION: u8 = 76;
 impl DecimalDataType {
     pub fn from_size(size: DecimalSize) -> Result<DecimalDataType> {
         size.validate()?;
-        if size.precision() <= MAX_DECIMAL128_PRECISION {
-            Ok(DecimalDataType::Decimal128(size))
-        } else {
-            Ok(DecimalDataType::Decimal256(size))
-        }
+        Ok(DecimalDataType(size))
     }
 
     pub fn default_scalar(&self) -> DecimalScalar {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => DecimalScalar::DECIMAL_TYPE(0.into(), *size),
-        })
+        if self.precision() <= MAX_DECIMAL128_PRECISION {
+            DecimalScalar::Decimal128(0.into(), self.0)
+        } else {
+            DecimalScalar::Decimal256(0.into(), self.0)
+        }
+    }
+
+    pub fn is_128(&self) -> bool {
+        self.0.precision <= MAX_DECIMAL128_PRECISION
     }
 
     pub fn size(&self) -> DecimalSize {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => *size,
-        })
+        self.0
     }
 
     pub fn scale(&self) -> u8 {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => size.scale(),
-        })
+        self.0.scale
     }
 
     pub fn precision(&self) -> u8 {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => size.precision(),
-        })
+        self.0.precision
     }
 
     pub fn leading_digits(&self) -> u8 {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => size.precision() - size.scale(),
-        })
+        self.0.precision - self.0.scale
     }
 
     pub fn max_precision(&self) -> u8 {
-        match self {
-            DecimalDataType::Decimal128(_) => MAX_DECIMAL128_PRECISION,
-            DecimalDataType::Decimal256(_) => MAX_DECIMAL256_PRECISION,
+        if self.0.precision <= MAX_DECIMAL128_PRECISION {
+            MAX_DECIMAL128_PRECISION
+        } else {
+            MAX_DECIMAL256_PRECISION
         }
     }
 
     pub fn max_result_precision(&self, other: &Self) -> u8 {
-        if matches!(other, DecimalDataType::Decimal128(_)) {
-            return self.max_precision();
+        if other.0.precision <= MAX_DECIMAL128_PRECISION {
+            self.max_precision()
+        } else {
+            other.max_precision()
         }
-        other.max_precision()
     }
 
     pub fn belong_diff_precision(precision_a: u8, precision_b: u8) -> bool {
@@ -1192,15 +1184,22 @@ impl DecimalDataType {
 
 impl DecimalScalar {
     pub fn domain(&self) -> DecimalDomain {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalScalar::DECIMAL_TYPE(num, size) => DecimalDomain::DECIMAL_TYPE(
+        match self {
+            DecimalScalar::Decimal128(num, size) => DecimalDomain::Decimal128(
                 SimpleDomain {
                     min: *num,
                     max: *num,
                 },
-                *size
+                *size,
             ),
-        })
+            DecimalScalar::Decimal256(num, size) => DecimalDomain::Decimal256(
+                SimpleDomain {
+                    min: *num,
+                    max: *num,
+                },
+                *size,
+            ),
+        }
     }
 }
 
@@ -1329,10 +1328,11 @@ impl DecimalColumnBuilder {
     }
 
     pub fn repeat_default(ty: &DecimalDataType, n: usize) -> Self {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match ty {
-            DecimalDataType::DECIMAL_TYPE(size) =>
-                DecimalColumnBuilder::DECIMAL_TYPE(vec![0.into(); n], *size),
-        })
+        if ty.is_128() {
+            DecimalColumnBuilder::Decimal128(vec![0.into(); n], ty.size())
+        } else {
+            DecimalColumnBuilder::Decimal256(vec![0.into(); n], ty.size())
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -1342,10 +1342,11 @@ impl DecimalColumnBuilder {
     }
 
     pub fn with_capacity(ty: &DecimalDataType, capacity: usize) -> Self {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match ty {
-            DecimalDataType::DECIMAL_TYPE(size) =>
-                DecimalColumnBuilder::DECIMAL_TYPE(Vec::with_capacity(capacity), *size),
-        })
+        if ty.is_128() {
+            DecimalColumnBuilder::Decimal128(Vec::with_capacity(capacity), ty.size())
+        } else {
+            DecimalColumnBuilder::Decimal256(Vec::with_capacity(capacity), ty.size())
+        }
     }
 
     pub fn push(&mut self, item: DecimalScalar) {

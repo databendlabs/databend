@@ -657,7 +657,7 @@ mod test {
         };
         let value = make_value("12345");
         let decimal_size = DecimalSize::new_unchecked(7, 4);
-        let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
+        let table_field = TableDataType::Decimal(DecimalDataType(decimal_size));
         let expected =
             ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
         test_single_field(
@@ -670,7 +670,7 @@ mod test {
 
         // smaller leading digits (p - s)
         let decimal_size = DecimalSize::new_unchecked(6, 4);
-        let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
+        let table_field = TableDataType::Decimal(DecimalDataType(decimal_size));
         assert!(test_single_field(table_field, avro_schema, value, expected).is_err());
 
         Ok(())
@@ -689,7 +689,7 @@ mod test {
         };
         let value = make_value("12345");
         let decimal_size = DecimalSize::new_unchecked(7, 4);
-        let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
+        let table_field = TableDataType::Decimal(DecimalDataType(decimal_size));
         let expected =
             ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
         test_single_field(

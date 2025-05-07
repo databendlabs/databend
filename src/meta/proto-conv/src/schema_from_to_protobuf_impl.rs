@@ -402,23 +402,20 @@ impl FromToProto for ex::types::DecimalDataType {
 
         let x = match num {
             pb::decimal::Decimal::Decimal128(x) => {
-                ex::types::DecimalDataType::Decimal128(ex::types::decimal::DecimalSize::from_pb(x)?)
+                ex::types::DecimalDataType(ex::types::decimal::DecimalSize::from_pb(x)?)
             }
             pb::decimal::Decimal::Decimal256(x) => {
-                ex::types::DecimalDataType::Decimal256(ex::types::decimal::DecimalSize::from_pb(x)?)
+                ex::types::DecimalDataType(ex::types::decimal::DecimalSize::from_pb(x)?)
             }
         };
         Ok(x)
     }
 
     fn to_pb(&self) -> Result<pb::Decimal, Incompatible> {
-        let x = match self {
-            ex::types::DecimalDataType::Decimal128(x) => {
-                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(x)?)
-            }
-            ex::types::DecimalDataType::Decimal256(x) => {
-                pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(x)?)
-            }
+        let x = if self.is_128() {
+            pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(&self.size())?)
+        } else {
+            pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(&self.size())?)
         };
         Ok(pb::Decimal {
             ver: VER,

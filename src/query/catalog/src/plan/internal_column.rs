@@ -174,7 +174,7 @@ impl InternalColumn {
             InternalColumnType::SnapshotName => TableDataType::String,
             InternalColumnType::BaseRowId => TableDataType::String,
             InternalColumnType::BaseBlockIds => TableDataType::Array(Box::new(
-                TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::default_128())),
+                TableDataType::Decimal(DecimalDataType(DecimalSize::default_128())),
             )),
             InternalColumnType::SearchMatched => TableDataType::Boolean,
             InternalColumnType::SearchScore => TableDataType::Number(NumberDataType::Float32),
@@ -283,7 +283,7 @@ impl InternalColumn {
             InternalColumnType::BaseBlockIds => {
                 assert!(meta.base_block_ids.is_some());
                 BlockEntry::new(
-                    DataType::Array(Box::new(DataType::Decimal(DecimalDataType::Decimal128(
+                    DataType::Array(Box::new(DataType::Decimal(DecimalDataType(
                         DecimalSize::default_128(),
                     )))),
                     Value::Scalar(meta.base_block_ids.clone().unwrap()),

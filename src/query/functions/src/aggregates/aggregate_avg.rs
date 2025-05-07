@@ -225,7 +225,7 @@ pub fn try_create_aggregate_avg_function(
                 Float64Type,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
-        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+        DataType::Decimal(s) if s.is_128() => {
             let decimal_size =
                 DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale().max(4));
 
@@ -256,7 +256,7 @@ pub fn try_create_aggregate_avg_function(
                 Ok(Arc::new(func))
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+        DataType::Decimal(s) => {
             let decimal_size =
                 DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale().max(4));
 

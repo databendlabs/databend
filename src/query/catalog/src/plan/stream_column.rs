@@ -168,7 +168,7 @@ impl StreamColumn {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64)))
             }
             StreamColumnType::OriginBlockId => TableDataType::Nullable(Box::new(
-                TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::default_128())),
+                TableDataType::Decimal(DecimalDataType(DecimalSize::default_128())),
             )),
             StreamColumnType::OriginRowNum => {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64)))
@@ -199,7 +199,7 @@ impl StreamColumn {
         match &self.column_type {
             StreamColumnType::OriginVersion | StreamColumnType::RowVersion => unreachable!(),
             StreamColumnType::OriginBlockId => BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Decimal(DecimalDataType::Decimal128(
+                DataType::Nullable(Box::new(DataType::Decimal(DecimalDataType(
                     DecimalSize::default_128(),
                 )))),
                 meta.build_origin_block_id(),

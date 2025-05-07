@@ -690,9 +690,7 @@ fn test_estimated_scalar_repeat_size() {
             233,
             DecimalSize::new_unchecked(46, 6),
         ));
-        let ty = DataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new_unchecked(
-            46, 6,
-        )));
+        let ty = DataType::Decimal(DecimalDataType(DecimalSize::new_unchecked(46, 6)));
         assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
