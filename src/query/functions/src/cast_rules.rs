@@ -378,6 +378,6 @@ pub const CAST_INT_TO_UINT64: AutoCastRules = &[
 pub fn get_cast_int_to_string_rules() -> Vec<(DataType, DataType)> {
     ALL_NUMERICS_TYPES
         .iter()
-        .map(|ty| (DataType::Number(ty.clone()), DataType::String))
+        .map(|ty| (DataType::Number(*ty), DataType::String))
         .collect()
 }
