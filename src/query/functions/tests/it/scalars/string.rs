@@ -373,6 +373,7 @@ fn test_trim(file: &mut impl Write) {
 }
 
 fn test_concat(file: &mut impl Write) {
+    run_ast(file, "concat('5', 3, 4)", &[]);
     run_ast(file, "concat('5', '3', '4')", &[]);
     run_ast(file, "concat(NULL, '3', '4')", &[]);
     run_ast(

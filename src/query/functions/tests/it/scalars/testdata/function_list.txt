@@ -155,6 +155,8 @@ Functions overloads:
 0 array_indexof(NULL, NULL) :: NULL
 1 array_indexof(Array(T0), T0) :: UInt64
 2 array_indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL
+0 array_intersection(Array(T0), Array(T0)) :: Array(T0)
+1 array_intersection(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 0 array_kurtosis FACTORY
 0 array_max FACTORY
 0 array_median FACTORY
