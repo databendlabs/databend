@@ -145,7 +145,7 @@ impl WindowPartitionBuffer {
         while self.next_to_restore_partition_id + 1 < self.num_partitions as isize {
             self.next_to_restore_partition_id += 1;
             let partition_id = self.next_to_restore_partition_id as usize;
-            let result = self.restore_by_id(partition_id).await?;
+            let result = self.restore_by_id(partition_id, false).await?;
             if !result.is_empty() {
                 return Ok(result);
             }
@@ -153,7 +153,11 @@ impl WindowPartitionBuffer {
         Ok(vec![])
     }
 
-    pub async fn restore_by_id(&mut self, partition_id: usize) -> Result<Vec<DataBlock>> {
+    pub async fn restore_by_id(
+        &mut self,
+        partition_id: usize,
+        partial_restore: bool,
+    ) -> Result<Vec<DataBlock>> {
         // Restore large partitions from spilled files.
         let mut result = self.spiller.take_spilled_partition(&partition_id).await?;
 
@@ -171,7 +175,7 @@ impl WindowPartitionBuffer {
                 location,
                 partitions,
             } = merged_partitions;
-            if out_of_memory_limit || *partial_restored {
+            if out_of_memory_limit || *partial_restored || partial_restore {
                 if let Some(pos) = partitions.iter().position(|(id, _)| *id == partition_id) {
                     let data_block = self
                         .spiller
