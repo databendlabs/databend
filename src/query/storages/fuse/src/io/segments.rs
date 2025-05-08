@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -107,13 +108,32 @@ impl SegmentsIO {
 
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
         let permit_nums = threads_nums * 2;
-        execute_futures_in_parallel(
-            tasks,
-            threads_nums,
-            permit_nums,
-            "fuse-req-segments-worker".to_owned(),
-        )
-        .await
+
+        let use_global_runtime = self
+            .ctx
+            .get_settings()
+            .get_u64("fuse_segment_read_use_global_runtime")
+            .unwrap_or(0)
+            == 1;
+
+        if use_global_runtime {
+            GlobalIORuntime::instance()
+                .execute_futures_in_parallel(
+                    tasks,
+                    threads_nums,
+                    permit_nums,
+                    "fuse-req-segments-worker".to_owned(),
+                )
+                .await
+        } else {
+            execute_futures_in_parallel(
+                tasks,
+                threads_nums,
+                permit_nums,
+                "fuse-req-segments-worker".to_owned(),
+            )
+            .await
+        }
     }
 
     #[async_backtrace::framed]
