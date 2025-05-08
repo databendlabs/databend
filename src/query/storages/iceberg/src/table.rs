@@ -17,13 +17,13 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow_schema::Schema;
 use async_trait::async_trait;
 use chrono::Utc;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::ParquetReadOptions;
-use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -39,12 +39,16 @@ use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_storages_orc::ORCSource;
+use databend_common_storages_orc::StripeDecoder;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
@@ -57,6 +61,9 @@ use crate::partition::convert_file_scan_task;
 use crate::predicate::PredicateBuilder;
 use crate::statistics;
 use crate::statistics::IcebergStatistics;
+
+const ICEBERG_TABLE_FORMAT_OPT: &str = "write.format.default";
+const ICEBERG_TABLE_FORMAT_OPT_ORC: &str = "orc";
 
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
@@ -275,51 +282,78 @@ impl IcebergTable {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
         let table_schema = self.info.schema();
-        let arrow_schema = table_schema.as_ref().into();
+        let arrow_schema: Schema = table_schema.as_ref().into();
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let topk = plan
-            .push_downs
-            .as_ref()
-            .and_then(|p| p.top_k(&self.schema()));
+        let op = self.table.file_io();
+        if let Some(true) = self
+            .table
+            .metadata()
+            .properties()
+            .get(ICEBERG_TABLE_FORMAT_OPT)
+            .map(|format| format.as_str() == ICEBERG_TABLE_FORMAT_OPT_ORC)
+        {
+            let arrow_schema = Arc::new(arrow_schema);
+            let data_schema: DataSchema = table_schema.clone().into();
+            let data_schema = Arc::new(data_schema);
+            pipeline.add_source(
+                |output| {
+                    ORCSource::try_create(
+                        output,
+                        ctx.clone(),
+                        Arc::new(op.clone()),
+                        arrow_schema.clone(),
+                        None,
+                    )
+                },
+                max_threads,
+            )?;
+            pipeline.try_resize(max_threads)?;
+            pipeline.add_accumulating_transformer(|| {
+                StripeDecoder::new(ctx.clone(), data_schema.clone(), arrow_schema.clone())
+            });
+        } else {
+            let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
+            let topk = plan
+                .push_downs
+                .as_ref()
+                .and_then(|p| p.top_k(&self.schema()));
+            let read_options = ParquetReadOptions::default()
+                .with_prune_row_groups(true)
+                .with_prune_pages(false);
+            let mut builder = ParquetRSReaderBuilder::create(
+                ctx.clone(),
+                Arc::new(op.clone()),
+                table_schema.clone(),
+                arrow_schema,
+            )?
+            .with_options(read_options)
+            .with_push_downs(plan.push_downs.as_ref());
 
-        let read_options = ParquetReadOptions::default()
-            .with_prune_row_groups(true)
-            .with_prune_pages(false);
+            if !need_row_number {
+                builder = builder.with_topk(topk.as_ref());
+            }
 
-        let op = self.table.file_io().clone();
-        let mut builder = ParquetRSReaderBuilder::create(
-            ctx.clone(),
-            Arc::new(op),
-            table_schema.clone(),
-            arrow_schema,
-        )?
-        .with_options(read_options)
-        .with_push_downs(plan.push_downs.as_ref());
+            let row_group_reader = Arc::new(builder.build_row_group_reader(need_row_number)?);
 
-        if !need_row_number {
-            builder = builder.with_topk(topk.as_ref());
+            let topk = Arc::new(topk);
+            pipeline.add_source(
+                |output| {
+                    ParquetSource::create(
+                        ctx.clone(),
+                        ParquetSourceType::Iceberg,
+                        output,
+                        row_group_reader.clone(),
+                        None,
+                        topk.clone(),
+                        internal_columns.clone(),
+                    )
+                },
+                max_threads,
+            )?
         }
-
-        let row_group_reader = Arc::new(builder.build_row_group_reader(need_row_number)?);
-
-        let topk = Arc::new(topk);
-        pipeline.add_source(
-            |output| {
-                ParquetSource::create(
-                    ctx.clone(),
-                    ParquetSourceType::Iceberg,
-                    output,
-                    row_group_reader.clone(),
-                    None,
-                    topk.clone(),
-                    internal_columns.clone(),
-                )
-            },
-            max_threads,
-        )
+        Ok(())
     }
 
     #[fastrace::trace]
@@ -371,8 +405,7 @@ impl IcebergTable {
             .map(|v: iceberg::scan::FileScanTask| {
                 read_rows += v.record_count.unwrap_or_default() as usize;
                 read_bytes += v.length as usize;
-                let part = convert_file_scan_task(v);
-                Arc::new(Box::new(part) as Box<dyn PartInfo>)
+                Arc::new(convert_file_scan_task(v))
             })
             .collect();
 
