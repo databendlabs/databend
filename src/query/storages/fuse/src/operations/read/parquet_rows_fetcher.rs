@@ -26,6 +26,7 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockRowIndex;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
@@ -83,18 +84,23 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
         let num_rows = row_ids.len();
         let mut part_set = HashSet::new();
         let mut row_set = Vec::with_capacity(num_rows);
+        let mut block_row_indices = HashMap::new();
         for row_id in row_ids {
             let (prefix, idx) = split_row_id(*row_id);
             part_set.insert(prefix);
             row_set.push((prefix, idx));
+            block_row_indices
+                .entry(prefix)
+                .or_insert(Vec::new())
+                .push((0u32, idx as u32, 1usize));
         }
 
         // Read blocks in `prefix` order.
         let part_set = part_set.into_iter().sorted().collect::<Vec<_>>();
-        let idx_map = part_set
+        let mut idx_map = part_set
             .iter()
             .enumerate()
-            .map(|(i, p)| (*p, i))
+            .map(|(i, p)| (*p, (i, 0)))
             .collect::<HashMap<_, _>>();
         // parts_per_thread = num_parts / max_threads
         // remain = num_parts % max_threads
@@ -122,10 +128,15 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
                 .iter()
                 .map(|idx| self.part_map[idx].clone())
                 .collect::<Vec<_>>();
+            let block_row_indices = part_set[begin..end]
+                .iter()
+                .map(|idx| block_row_indices.remove(idx).unwrap())
+                .collect::<Vec<_>>();
             tasks.push(Self::fetch_blocks(
                 self.reader.clone(),
                 parts,
                 self.settings,
+                block_row_indices,
             ));
             begin = end;
         }
@@ -152,9 +163,11 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
         // Take result rows from blocks.
         let indices = row_set
             .iter()
-            .map(|(prefix, row_idx)| {
-                let block_idx = idx_map[prefix];
-                (block_idx as u32, *row_idx as u32, 1_usize)
+            .map(|(prefix, _)| {
+                let (block_idx, row_idx_in_block) = idx_map.get_mut(prefix).unwrap();
+                let row_idx = *row_idx_in_block;
+                *row_idx_in_block += 1;
+                (*block_idx as u32, row_idx as u32, 1_usize)
             })
             .collect::<Vec<_>>();
 
@@ -258,34 +271,35 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
         reader: Arc<BlockReader>,
         parts: Vec<PartInfoPtr>,
         settings: ReadSettings,
+        block_row_indices: Vec<Vec<BlockRowIndex>>,
     ) -> Result<Vec<DataBlock>> {
-        let mut chunks = Vec::with_capacity(parts.len());
+        let mut blocks = Vec::with_capacity(parts.len());
         if BLOCKING_IO {
-            for part in parts.iter() {
+            for (part, block_row_indices) in parts.iter().zip(block_row_indices.iter()) {
                 let chunk = reader.sync_read_columns_data_by_merge_io(&settings, part, &None)?;
-                chunks.push(chunk);
+                let block = Self::build_block(&reader, part, chunk)?;
+                let block =
+                    DataBlock::take_blocks(&[block], block_row_indices, block_row_indices.len());
+                blocks.push(block);
             }
         } else {
-            for part in parts.iter() {
-                let part = FuseBlockPartInfo::from_part(part)?;
+            for (part, block_row_indices) in parts.iter().zip(block_row_indices.iter()) {
+                let fuse_part = FuseBlockPartInfo::from_part(part)?;
                 let chunk = reader
                     .read_columns_data_by_merge_io(
                         &settings,
-                        &part.location,
-                        &part.columns_meta,
+                        &fuse_part.location,
+                        &fuse_part.columns_meta,
                         &None,
                     )
                     .await?;
-                chunks.push(chunk);
+                let block = Self::build_block(&reader, part, chunk)?;
+                let block =
+                    DataBlock::take_blocks(&[block], block_row_indices, block_row_indices.len());
+                blocks.push(block);
             }
         }
-        let fetched_blocks = chunks
-            .into_iter()
-            .zip(parts.iter())
-            .map(|(chunk, part)| Self::build_block(&reader, part, chunk))
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(fetched_blocks)
+        Ok(blocks)
     }
 
     fn build_block(
