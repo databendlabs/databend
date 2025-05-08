@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Semaphore;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -27,6 +28,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use fastrace::func_path;
 use fastrace::prelude::*;
+use futures::future::try_join_all;
 use opendal::Operator;
 
 use super::read::SegmentReader;
@@ -112,19 +114,14 @@ impl SegmentsIO {
         let use_global_runtime = self
             .ctx
             .get_settings()
-            .get_u64("fuse_segment_read_use_global_runtime")
-            .unwrap_or(0)
-            == 1;
+            .get_fuse_segment_read_use_global_runtime()
+            .unwrap_or(false);
 
         if use_global_runtime {
-            GlobalIORuntime::instance()
-                .execute_futures_in_parallel(
-                    tasks,
-                    threads_nums,
-                    permit_nums,
-                    "fuse-req-segments-worker".to_owned(),
-                )
-                .await
+            let semaphore = Semaphore::new(permit_nums);
+            let runtime = GlobalIORuntime::instance();
+            let join_handles = runtime.try_spawn_batch(semaphore, tasks).await?;
+            Ok(try_join_all(join_handles).await?)
         } else {
             execute_futures_in_parallel(
                 tasks,

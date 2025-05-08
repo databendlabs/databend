@@ -33,7 +33,7 @@ use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::sync::OwnedSemaphorePermit;
-use tokio::sync::Semaphore;
+pub use tokio::sync::Semaphore;
 
 use crate::runtime::catch_unwind::CatchUnwindFuture;
 use crate::runtime::drop_guard;

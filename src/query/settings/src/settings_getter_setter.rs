@@ -948,4 +948,8 @@ impl Settings {
     pub fn get_trace_sample_rate(&self) -> Result<u64> {
         self.try_get_u64("trace_sample_rate")
     }
+
+    pub fn get_fuse_segment_read_use_global_runtime(&self) -> Result<bool> {
+        Ok(self.try_get_u64("fuse_segment_read_use_global_runtime")? != 0)
+    }
 }
