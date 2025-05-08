@@ -323,12 +323,15 @@ impl ReclusterTableInterpreter {
         let total_rows = recluster_info.removed_statistics.row_count as usize;
         let total_compressed = recluster_info.removed_statistics.compressed_byte_size as usize;
 
-        // Determine rows per block based on data size and compression ratio
-        let rows_per_block =
-            block_thresholds.calc_rows_for_recluster(total_rows, total_bytes, total_compressed);
-
+        // Determine rows per block based on data size and compression ratio,
         // Calculate initial partition count based on data volume and block size
-        let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
+        let total_partitions = block_thresholds.calc_partitions_for_recluster(
+            total_rows,
+            total_bytes,
+            total_compressed,
+        );
+        let bytes_per_block = (total_bytes / total_partitions).max(1);
+        let rows_per_block = (total_rows / total_partitions).max(1);
 
         warn!(
             "Do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}",
@@ -487,6 +490,7 @@ impl ReclusterTableInterpreter {
             range_start: 0,
             range_width: total_partitions,
             table_meta_timestamps,
+            bytes_per_block,
             rows_per_block,
         }));
 

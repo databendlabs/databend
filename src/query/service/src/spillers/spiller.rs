@@ -386,6 +386,24 @@ impl Spiller {
         }
     }
 
+    #[async_backtrace::framed]
+    /// Read and remove spilled data with partition id
+    pub async fn take_spilled_partition(&mut self, p_id: &usize) -> Result<Vec<DataBlock>> {
+        if let Some(locs) = self.partition_location.remove(p_id) {
+            let mut spilled_data = Vec::with_capacity(locs.len());
+            for loc in locs {
+                let block = self.read_spilled_file(&loc).await?;
+
+                if block.num_rows() != 0 {
+                    spilled_data.push(block);
+                }
+            }
+            Ok(spilled_data)
+        } else {
+            Ok(vec![])
+        }
+    }
+
     pub async fn read_merged_partitions(
         &self,
         MergedPartition {
