@@ -57,9 +57,6 @@ pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
     part_map: HashMap<u64, PartInfoPtr>,
     segment_blocks_cache: HashMap<u64, Vec<Arc<BlockMeta>>>,
 
-    // To control the parallelism of fetching blocks.
-    max_threads: usize,
-
     semaphore: Arc<Semaphore>,
     runtime: Arc<Runtime>,
 }
@@ -102,43 +99,15 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
             .enumerate()
             .map(|(i, p)| (*p, (i, 0)))
             .collect::<HashMap<_, _>>();
-        // parts_per_thread = num_parts / max_threads
-        // remain = num_parts % max_threads
-        // task distribution:
-        //   Part number of each task   |       Task number
-        // ------------------------------------------------------
-        //    parts_per_thread + 1      |         remain
-        //      parts_per_thread        |   max_threads - remain
-        let num_parts = part_set.len();
-        let mut tasks = Vec::with_capacity(self.max_threads);
-        // Fetch blocks in parallel.
-        let part_size = num_parts / self.max_threads;
-        let remainder = num_parts % self.max_threads;
-        let mut begin = 0;
-        for i in 0..self.max_threads {
-            let end = if i < remainder {
-                begin + part_size + 1
-            } else {
-                begin + part_size
-            };
-            if begin == end {
-                break;
-            }
-            let parts = part_set[begin..end]
-                .iter()
-                .map(|idx| self.part_map[idx].clone())
-                .collect::<Vec<_>>();
-            let block_row_indices = part_set[begin..end]
-                .iter()
-                .map(|idx| block_row_indices.remove(idx).unwrap())
-                .collect::<Vec<_>>();
-            tasks.push(Self::fetch_blocks(
+
+        let mut tasks = Vec::with_capacity(part_set.len());
+        for part in &part_set {
+            tasks.push(Self::fetch_block(
                 self.reader.clone(),
-                parts,
+                self.part_map[part].clone(),
                 self.settings,
-                block_row_indices,
+                block_row_indices[part].clone(),
             ));
-            begin = end;
         }
 
         let tasks = tasks.into_iter().map(|v| {
@@ -154,12 +123,7 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
             .await?;
 
         let joint = future::try_join_all(join_handlers).await?;
-        let blocks = joint
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+        let blocks = joint.into_iter().collect::<Result<Vec<_>>>()?;
         // Take result rows from blocks.
         let indices = row_set
             .iter()
@@ -194,7 +158,6 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
         projection: Projection,
         reader: Arc<BlockReader>,
         settings: ReadSettings,
-        max_threads: usize,
         semaphore: Arc<Semaphore>,
         runtime: Arc<Runtime>,
     ) -> Self {
@@ -211,7 +174,6 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             settings,
             part_map: HashMap::new(),
             segment_blocks_cache: HashMap::new(),
-            max_threads,
             semaphore,
             runtime,
         }
@@ -267,39 +229,31 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
     }
 
     #[async_backtrace::framed]
-    async fn fetch_blocks(
+    async fn fetch_block(
         reader: Arc<BlockReader>,
-        parts: Vec<PartInfoPtr>,
+        part: PartInfoPtr,
         settings: ReadSettings,
-        block_row_indices: Vec<Vec<BlockRowIndex>>,
-    ) -> Result<Vec<DataBlock>> {
-        let mut blocks = Vec::with_capacity(parts.len());
-        if BLOCKING_IO {
-            for (part, block_row_indices) in parts.iter().zip(block_row_indices.iter()) {
-                let chunk = reader.sync_read_columns_data_by_merge_io(&settings, part, &None)?;
-                let block = Self::build_block(&reader, part, chunk)?;
-                let block =
-                    DataBlock::take_blocks(&[block], block_row_indices, block_row_indices.len());
-                blocks.push(block);
-            }
+        block_row_indices: Vec<BlockRowIndex>,
+    ) -> Result<DataBlock> {
+        let chunk = if BLOCKING_IO {
+            reader.sync_read_columns_data_by_merge_io(&settings, &part, &None)?
         } else {
-            for (part, block_row_indices) in parts.iter().zip(block_row_indices.iter()) {
-                let fuse_part = FuseBlockPartInfo::from_part(part)?;
-                let chunk = reader
-                    .read_columns_data_by_merge_io(
-                        &settings,
-                        &fuse_part.location,
-                        &fuse_part.columns_meta,
-                        &None,
-                    )
-                    .await?;
-                let block = Self::build_block(&reader, part, chunk)?;
-                let block =
-                    DataBlock::take_blocks(&[block], block_row_indices, block_row_indices.len());
-                blocks.push(block);
-            }
-        }
-        Ok(blocks)
+            let fuse_part = FuseBlockPartInfo::from_part(&part)?;
+            reader
+                .read_columns_data_by_merge_io(
+                    &settings,
+                    &fuse_part.location,
+                    &fuse_part.columns_meta,
+                    &None,
+                )
+                .await?
+        };
+        let block = Self::build_block(&reader, &part, chunk)?;
+        Ok(DataBlock::take_blocks(
+            &[block],
+            &block_row_indices,
+            block_row_indices.len(),
+        ))
     }
 
     fn build_block(
