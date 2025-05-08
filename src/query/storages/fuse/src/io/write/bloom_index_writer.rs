@@ -43,6 +43,7 @@ use crate::FuseStorageFormat;
 pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
+    pub(crate) ngram_size: Option<u64>,
     pub(crate) location: Location,
     pub(crate) column_distinct_count: HashMap<ColumnId, usize>,
 }
@@ -50,6 +51,25 @@ pub struct BloomIndexState {
 impl BloomIndexState {
     pub fn from_bloom_index(bloom_index: &BloomIndex, location: Location) -> Result<Self> {
         let index_block = bloom_index.serialize_to_data_block()?;
+        // Calculate ngram index size
+        let ngram_indexes = &bloom_index
+            .filter_schema
+            .fields()
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.name.starts_with("Ngram"))
+            .map(|(i, _)| i)
+            .collect::<Vec<_>>();
+        let ngram_size = if !ngram_indexes.is_empty() {
+            let mut ngram_size = 0;
+            for i in ngram_indexes {
+                let column = index_block.get_by_offset(*i);
+                ngram_size += column.value.memory_size() as u64;
+            }
+            Some(ngram_size)
+        } else {
+            None
+        };
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
         let _ = blocks_to_parquet(
             &bloom_index.filter_schema,
@@ -61,6 +81,7 @@ impl BloomIndexState {
         Ok(Self {
             data,
             size: data_size,
+            ngram_size,
             location,
             column_distinct_count: bloom_index.column_distinct_count.clone(),
         })
