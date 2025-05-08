@@ -211,7 +211,8 @@ impl Processor for TransformHilbertCollect {
             }
             State::Flush => {
                 if let Some((partition_id, data_block)) = self.immediate_output_blocks.pop() {
-                    let mut restored_data_blocks = self.buffer.restore_by_id(partition_id).await?;
+                    let mut restored_data_blocks =
+                        self.buffer.restore_by_id(partition_id, true).await?;
                     restored_data_blocks.push(data_block);
                     self.state = State::Concat(restored_data_blocks);
                 }
