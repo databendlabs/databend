@@ -27,8 +27,8 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_storage::OperatorRegistry;
 use databend_storages_common_stage::SingleFilePartition;
-use opendal::Operator;
 use orc_rust::async_arrow_reader::StripeFactory;
 use orc_rust::ArrowReaderBuilder;
 
@@ -38,27 +38,27 @@ use crate::utils::map_orc_error;
 
 pub struct ORCSource {
     table_ctx: Arc<dyn TableContext>,
-    op: Operator,
+    op_registry: Arc<dyn OperatorRegistry>,
     pub(crate) reader: Option<(String, Box<StripeFactory<OrcChunkReader>>, usize)>,
     scan_progress: Arc<Progress>,
 
     arrow_schema: arrow_schema::SchemaRef,
-    schema_from: String,
+    schema_from: Option<String>,
 }
 
 impl ORCSource {
     pub fn try_create(
         output: Arc<OutputPort>,
         table_ctx: Arc<dyn TableContext>,
-        op: Operator,
+        op_registry: Arc<dyn OperatorRegistry>,
         arrow_schema: arrow_schema::SchemaRef,
-        schema_from: String,
+        schema_from: Option<String>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = table_ctx.get_scan_progress();
 
         AsyncSourcer::create(table_ctx.clone(), output, ORCSource {
             table_ctx,
-            op,
+            op_registry,
             scan_progress,
             reader: None,
             arrow_schema,
@@ -69,8 +69,15 @@ impl ORCSource {
     fn check_file_schema(&self, arrow_schema: arrow_schema::SchemaRef, path: &str) -> Result<()> {
         if self.arrow_schema.fields != arrow_schema.fields {
             return Err(ErrorCode::TableSchemaMismatch(format!(
-                "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
-                self.schema_from, path, self.arrow_schema, arrow_schema
+                "{}get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
+                self.schema_from
+                    .as_ref()
+                    .map_or(String::new(), |schema_from| {
+                        format!("infer schema from '{}', but ", schema_from)
+                    }),
+                path,
+                self.arrow_schema,
+                arrow_schema
             )));
         }
         Ok(())
@@ -82,23 +89,23 @@ impl ORCSource {
             None => return Ok(false),
         };
         let file = SingleFilePartition::from_part(&part)?.clone();
-        let path = file.path.clone();
         let size = file.size;
 
+        let (operator, path) = self.op_registry.get_operator_path(&file.path)?;
         let file = OrcChunkReader {
-            operator: self.op.clone(),
+            operator,
             size: file.size as u64,
-            path: file.path,
+            path: path.to_string(),
         };
         let builder = ArrowReaderBuilder::try_new_async(file)
             .await
-            .map_err(|e| map_orc_error(e, &path))?;
+            .map_err(|e| map_orc_error(e, path))?;
         let reader = builder.build_async();
         let (factory, schema) = reader.into_parts();
         let factory = factory.unwrap();
-        self.check_file_schema(schema, &path)?;
+        self.check_file_schema(schema, path)?;
 
-        self.reader = Some((path, factory, size));
+        self.reader = Some((path.to_string(), factory, size));
         Ok(true)
     }
 }

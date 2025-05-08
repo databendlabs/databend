@@ -54,9 +54,9 @@ impl OrcTable {
                 ORCSource::try_create(
                     output,
                     ctx.clone(),
-                    operator.clone(),
+                    Arc::new(operator.clone()),
                     self.arrow_schema.clone(),
-                    self.schema_from.clone(),
+                    Some(self.schema_from.clone()),
                 )
             },
             num_source,
