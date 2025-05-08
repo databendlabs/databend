@@ -303,7 +303,7 @@ impl DataExchangeManager {
                         None,
                         Some(config.query.to_rpc_client_tls_config()),
                     )
-                        .await?,
+                    .await?,
                 ))),
                 false => Ok(FlightClient::new(FlightServiceClient::new(
                     ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
@@ -1011,8 +1011,8 @@ impl FragmentCoordinator {
                         .flight_scatter(&info.query_ctx, data_exchange)?,
                 }),
             )),
-            DataExchange::Modulo(exchange) => {
-                Ok(Some(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+            DataExchange::Modulo(exchange) => Ok(Some(ExchangeParams::ShuffleExchange(
+                ShuffleExchangeParams {
                     exchange_injector: exchange_injector.clone(),
                     schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
@@ -1021,9 +1021,8 @@ impl FragmentCoordinator {
                     destination_ids: exchange.destination_ids.to_owned(),
                     shuffle_scatter: exchange_injector
                         .flight_scatter(&info.query_ctx, data_exchange)?,
-                })
-                ))
-            }
+                },
+            ))),
         }
     }
 
