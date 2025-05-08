@@ -15,14 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::DropVirtualColumnReq;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReq;
-use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_virtual_column::VirtualColumnHandler;
@@ -35,42 +29,6 @@ pub struct RealVirtualColumnHandler {}
 
 #[async_trait::async_trait]
 impl VirtualColumnHandler for RealVirtualColumnHandler {
-    #[async_backtrace::framed]
-    async fn do_create_virtual_column(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: CreateVirtualColumnReq,
-    ) -> Result<()> {
-        catalog.create_virtual_column(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn do_update_virtual_column(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: UpdateVirtualColumnReq,
-    ) -> Result<()> {
-        catalog.update_virtual_column(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn do_drop_virtual_column(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: DropVirtualColumnReq,
-    ) -> Result<()> {
-        catalog.drop_virtual_column(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn do_list_virtual_columns(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: ListVirtualColumnsReq,
-    ) -> Result<Vec<VirtualColumnMeta>> {
-        catalog.list_virtual_columns(req).await
-    }
-
     async fn do_refresh_virtual_column(
         &self,
         ctx: Arc<dyn TableContext>,

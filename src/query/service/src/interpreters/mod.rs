@@ -163,9 +163,6 @@ mod interpreter_view_alter;
 mod interpreter_view_create;
 mod interpreter_view_describe;
 mod interpreter_view_drop;
-mod interpreter_virtual_column_alter;
-mod interpreter_virtual_column_create;
-mod interpreter_virtual_column_drop;
 mod interpreter_virtual_column_refresh;
 mod util;
 
@@ -264,7 +261,4 @@ pub use interpreter_vacuum_temporary_files::VacuumTemporaryFilesInterpreter;
 pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;
-pub use interpreter_virtual_column_alter::AlterVirtualColumnInterpreter;
-pub use interpreter_virtual_column_create::CreateVirtualColumnInterpreter;
-pub use interpreter_virtual_column_drop::DropVirtualColumnInterpreter;
 pub use interpreter_virtual_column_refresh::RefreshVirtualColumnInterpreter;
