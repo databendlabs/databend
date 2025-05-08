@@ -193,6 +193,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
                 }),
+                ("data_retention_num_snapshots_to_keep", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Specifies how many snapshots to retain during vacuum operations. Overrides 'data_retention_time_in_days'. If set to 0, this setting will be ignored.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=500)),
+                }),
                 ("max_spill_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_spill_io_requests),
                     desc: "Sets the maximum number of concurrent spill I/O requests.",
