@@ -18,7 +18,6 @@ use std::sync::atomic::AtomicUsize;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::executor::physical_plans::HilbertPartition;
@@ -27,12 +26,12 @@ use databend_common_storages_fuse::operations::TransformBlockWriter;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::CompactStrategy;
 use crate::pipelines::processors::transforms::HilbertPartitionExchange;
+use crate::pipelines::processors::transforms::TransformHilbertCollect;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::PipelineBuilder;
 use crate::spillers::SpillerDiskConfig;
@@ -65,35 +64,25 @@ impl PipelineBuilder {
 
         let window_spill_settings = MemorySettings::from_window_settings(&self.ctx)?;
         let processor_id = AtomicUsize::new(0);
-        let max_bytes_per_block = std::cmp::min(
-            4 * table.get_option(
-                FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-                DEFAULT_BLOCK_BUFFER_SIZE,
-            ),
-            400 * 1024 * 1024,
-        );
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(Box::new(
-                TransformWindowPartitionCollect::new(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    &settings,
-                    processor_id.fetch_add(1, atomic::Ordering::AcqRel),
-                    num_processors,
-                    partition.range_width,
-                    window_spill_settings.clone(),
-                    disk_spill.clone(),
-                    CompactStrategy::new(
-                        partition.rows_per_block,
-                        max_bytes_per_block,
-                        enable_stream_writer,
-                    ),
-                )?,
-            )))
-        })?;
 
         if enable_stream_writer {
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(Box::new(
+                    TransformHilbertCollect::new(
+                        self.ctx.clone(),
+                        input,
+                        output,
+                        &settings,
+                        processor_id.fetch_add(1, atomic::Ordering::AcqRel),
+                        num_processors,
+                        partition.range_width,
+                        window_spill_settings.clone(),
+                        disk_spill.clone(),
+                        partition.bytes_per_block,
+                    )?,
+                )))
+            })?;
+
             self.main_pipeline.add_transform(|input, output| {
                 TransformBlockWriter::try_create(
                     self.ctx.clone(),
@@ -103,9 +92,27 @@ impl PipelineBuilder {
                     table,
                     partition.table_meta_timestamps,
                     false,
+                    Some(partition.bytes_per_block),
                 )
             })
         } else {
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(Box::new(
+                    TransformWindowPartitionCollect::new(
+                        self.ctx.clone(),
+                        input,
+                        output,
+                        &settings,
+                        processor_id.fetch_add(1, atomic::Ordering::AcqRel),
+                        num_processors,
+                        partition.range_width,
+                        window_spill_settings.clone(),
+                        disk_spill.clone(),
+                        CompactStrategy::new(partition.rows_per_block, partition.bytes_per_block),
+                    )?,
+                )))
+            })?;
+
             self.main_pipeline
                 .add_transform(|transform_input_port, transform_output_port| {
                     let proc = TransformSerializeBlock::try_create(

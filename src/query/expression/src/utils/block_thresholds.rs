@@ -166,4 +166,53 @@ impl BlockThresholds {
         };
         total_rows.div_ceil(block_nums.max(1)).max(1)
     }
+
+    /// Calculates the optimal number of partitions (blocks) based on total data size and row count.
+    ///
+    /// # Parameters
+    /// - `total_rows`: The total number of rows in the data.
+    /// - `total_bytes`: The total uncompressed size of the data in bytes.
+    /// - `total_compressed`: The total compressed size of the data in bytes.
+    ///
+    /// # Returns
+    /// - The calculated number of partitions (blocks) needed.
+    #[inline]
+    pub fn calc_partitions_for_recluster(
+        &self,
+        total_rows: usize,
+        total_bytes: usize,
+        total_compressed: usize,
+    ) -> usize {
+        // If the data is already compact enough, return a single partition.
+        if self.check_for_compact(total_rows, total_bytes)
+            && total_compressed < 2 * self.min_compressed_per_block
+        {
+            return 1;
+        }
+
+        // Estimate the number of blocks based on row count and compressed size.
+        let by_rows = std::cmp::max(total_rows / self.max_rows_per_block, 1);
+        let by_compressed = total_compressed / self.max_compressed_per_block;
+        // If row-based block count is greater, use max rows per block as limit.
+        if by_rows >= by_compressed {
+            return by_rows;
+        }
+
+        // Adjust block count based on byte size thresholds.
+        let bytes_per_block = total_bytes.div_ceil(by_compressed);
+        let max_bytes = self.max_bytes_per_block.min(400 * 1024 * 1024);
+        let min_bytes = max_bytes / 2;
+        let total_partitions = if bytes_per_block > max_bytes {
+            // Block size is too large.
+            total_bytes / max_bytes
+        } else if bytes_per_block < min_bytes {
+            // Block size is too small.
+            total_bytes / min_bytes
+        } else {
+            // Block size is acceptable.
+            by_compressed
+        };
+
+        std::cmp::max(total_partitions, 1)
+    }
 }

@@ -27,19 +27,13 @@ pub trait DataProcessorStrategy: Send + Sync + 'static {
 pub struct CompactStrategy {
     max_bytes_per_block: usize,
     max_rows_per_block: usize,
-    enable_stream_writer: bool,
 }
 
 impl CompactStrategy {
-    pub fn new(
-        max_rows_per_block: usize,
-        max_bytes_per_block: usize,
-        enable_stream_writer: bool,
-    ) -> Self {
+    pub fn new(max_rows_per_block: usize, max_bytes_per_block: usize) -> Self {
         Self {
             max_bytes_per_block,
             max_rows_per_block,
-            enable_stream_writer,
         }
     }
 
@@ -56,10 +50,6 @@ impl DataProcessorStrategy for CompactStrategy {
     const NAME: &'static str = "Compact";
 
     fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        if self.enable_stream_writer {
-            return Ok(data_blocks);
-        }
-
         let blocks_num = data_blocks.len();
         if blocks_num < 2 {
             return Ok(data_blocks);
