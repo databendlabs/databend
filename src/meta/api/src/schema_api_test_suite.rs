@@ -337,6 +337,7 @@ impl SchemaApiTestSuite {
         suite.table_index_create_drop(&b.build().await).await?;
         suite.index_create_list_drop(&b.build().await).await?;
         suite.table_lock_revision(&b.build().await).await?;
+        suite.gc_dropped_db_after_undrop(&b.build().await).await?;
         suite.catalog_create_get_list_drop(&b.build().await).await?;
         suite.table_least_visible_time(&b.build().await).await?;
         suite
@@ -6942,6 +6943,95 @@ impl SchemaApiTestSuite {
             let res7 = mt.list_lock_revisions(req7).await?;
             assert_eq!(res7.len(), 0);
         }
+
+        Ok(())
+    }
+
+    async fn gc_dropped_db_after_undrop<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
+        self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "tenant1_gc_dropped_db_after_undrop";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        let db_name = "db1_gc_dropped_db_after_undrop";
+        let db_name_ident = DatabaseNameIdent::new(&tenant, db_name);
+
+        // 1. Create database
+        let req = CreateDatabaseReq {
+            create_option: CreateOption::Create,
+            name_ident: db_name_ident.clone(),
+            meta: DatabaseMeta {
+                engine: "does not matter".to_string(),
+                ..Default::default()
+            },
+        };
+
+        let res = mt.create_database(req).await?;
+        let db_id = res.db_id;
+        info!("Created database with ID: {}", db_id);
+
+        // 2. Drop database
+
+        mt.drop_database(DropDatabaseReq {
+            if_exists: false,
+            name_ident: DatabaseNameIdent::new(&tenant, db_name),
+        })
+        .await?;
+
+        // Delete the name to db mapping to simulate a dropped database
+        // delete_test_data(mt.as_kv_api(), &db_name_ident).await?;
+
+        // 2.1. Check database is dropped
+        let req = ListDroppedTableReq::new(&tenant);
+        let resp = mt.get_drop_table_infos(req).await?;
+
+        // Filter for our specific database ID
+        let drop_ids: Vec<DroppedId> = resp
+            .drop_ids
+            .into_iter()
+            .filter(|id| {
+                if let DroppedId::Db { db_id: id, .. } = id {
+                    *id == *db_id
+                } else {
+                    false
+                }
+            })
+            .collect();
+
+        assert!(
+            !drop_ids.is_empty(),
+            "Database being tested should be dropped"
+        );
+
+        // 3. Undrop the database
+        let undrop_req = UndropDatabaseReq {
+            name_ident: db_name_ident.clone(),
+        };
+        mt.undrop_database(undrop_req).await?;
+
+        let req = GcDroppedTableReq {
+            tenant: tenant.clone(),
+            drop_ids,
+        };
+
+        // 4. Check that gc_drop_tables operation has NOT removed database's meta data
+        mt.gc_drop_tables(req.clone()).await?;
+
+        // TODO more rigid check, but hard to impl as integration test:
+        // Check that the kv transaction performed by gc_drop_tables failed or not performed at all
+
+        // 5. Verify the database is still accessible
+        let get_req = GetDatabaseReq::new(tenant.clone(), db_name.to_string());
+        let db_info = mt.get_database(get_req).await?;
+        assert_eq!(
+            db_info.database_id.db_id, db_id.db_id,
+            "Database ID should match"
+        );
+        assert!(
+            db_info.meta.drop_on.is_none(),
+            "Database should not be marked as dropped"
+        );
 
         Ok(())
     }
