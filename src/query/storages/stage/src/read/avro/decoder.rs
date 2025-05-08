@@ -376,17 +376,16 @@ impl AvroDecoder {
                 if v_leading_digits <= (size.precision() - size.scale()) as i64
                     && v_scale <= size.scale() as i64
                 {
-                    if let Some(mut d1) = <D>::from_bigint(big_int) {
-                        let scale_diff = (size.scale() as i64) - v_scale;
-                        if scale_diff > 0 {
-                            d1 = d1
-                                .checked_mul(D::e(scale_diff as u32))
-                                .expect("rescale should not overflow");
-                        }
-                        column.push(d1);
-                    } else {
+                    let Some(mut d1) = <D>::from_bigint(big_int) else {
                         return Err(Error::default());
+                    };
+                    let scale_diff = (size.scale() as i64) - v_scale;
+                    if scale_diff > 0 {
+                        d1 = d1
+                            .checked_mul(D::e(scale_diff as u32))
+                            .expect("rescale should not overflow");
                     }
+                    column.push(d1);
                 } else {
                     return Err(Error::default());
                 }
@@ -687,11 +686,12 @@ mod test {
             let big_int = BigInt::from_str(s).unwrap();
             Value::BigDecimal(BigDecimal::new(big_int, 2))
         };
-        let value = make_value("12345");
         let decimal_size = DecimalSize::new_unchecked(7, 4);
         let table_field = TableDataType::Decimal(DecimalDataType(decimal_size));
+
+        let value = make_value("12345");
         let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
+            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
         test_single_field(
             table_field.clone(),
             avro_schema.clone(),
