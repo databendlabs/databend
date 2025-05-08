@@ -24,13 +24,13 @@ services:
       - AWS_REGION=us-east-1
       - CATALOG_CATOLOG__IMPL=org.apache.iceberg.jdbc.JdbcCatalog
       - CATALOG_URI=jdbc:sqlite:file:/tmp/iceberg_rest_mode=memory
-      - CATALOG_WAREHOUSE=s3://icebergdata/demo
+      - CATALOG_WAREHOUSE=s3://warehouse/demo
       - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
       - CATALOG_S3_ENDPOINT=http://minio:9000
     depends_on:
       - minio
     links:
-      - minio:icebergdata.minio
+      - minio:warehouse.minio
     expose:
       - 8181
     ports:
@@ -58,4 +58,21 @@ services:
       - AWS_SECRET_ACCESS_KEY=password
       - AWS_REGION=us-east-1
     entrypoint: >
-      /bin/sh -c " until (/usr/bin/mc config host add minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done; /usr/bin/mc rm -r --force minio/icebergdata; /usr/bin/mc mb minio/icebergdata; /usr/bin/mc policy set public minio/icebergdata; tail -f /dev/null "
+      /bin/sh -c " until (/usr/bin/mc config host add minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done; /usr/bin/mc rm -r --force minio/warehouse; /usr/bin/mc mb minio/warehouse; /usr/bin/mc policy set public minio/warehouse; tail -f /dev/null "
+
+  hive-metastore:
+    image: iceberg-hive-metastore
+    build: ./
+    platform: ${DOCKER_DEFAULT_PLATFORM}
+    ports:
+      - "9083:9083"
+    expose:
+      - 9083
+    environment:
+      SERVICE_NAME: "metastore"
+      SERVICE_OPTS: "-Dmetastore.warehouse.dir=s3a://warehouse/hive/"
+
+  moto:
+    image: motoserver/moto:5.0.3
+    expose:
+      - 5000

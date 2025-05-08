@@ -97,6 +97,14 @@ impl IcebergCatalogOption {
             IcebergCatalogOption::Glue(_) => IcebergCatalogType::Glue,
         }
     }
+
+    pub fn warehouse(&self) -> &str {
+        match self {
+            IcebergCatalogOption::Rest(c) => c.warehouse.as_str(),
+            IcebergCatalogOption::Hms(c) => c.warehouse.as_str(),
+            IcebergCatalogOption::Glue(c) => c.warehouse.as_str(),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
