@@ -257,19 +257,61 @@ impl<Num: Decimal> ArgType for DecimalType<Num> {
     }
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct DecimalDataType(pub DecimalSize);
+
+impl Serialize for DecimalDataType {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        if self.is_128() {
+            serializer.serialize_newtype_variant("DecimalDataType", 0, "Decimal128", &self.0)
+        } else {
+            serializer.serialize_newtype_variant("DecimalDataType", 1, "Decimal256", &self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for DecimalDataType {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        struct DecimalDataTypeVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for DecimalDataTypeVisitor {
+            type Value = DecimalDataType;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct DecimalDataType")
+            }
+
+            fn visit_enum<A>(self, data: A) -> std::result::Result<Self::Value, A::Error>
+            where A: serde::de::EnumAccess<'de> {
+                use serde::de::VariantAccess;
+                let (variant, value) = data.variant()?;
+                match variant {
+                    "Decimal128" => {
+                        // value.newtype_variant()
+                        let size: DecimalSize = value.newtype_variant()?;
+                        Ok(DecimalDataType(size))
+                    }
+                    "Decimal256" => {
+                        let size: DecimalSize = value.newtype_variant()?;
+                        Ok(DecimalDataType(size))
+                    }
+                    _ => Err(serde::de::Error::unknown_variant(variant, &[
+                        "Decimal128",
+                        "Decimal256",
+                    ])),
+                }
+            }
+        }
+
+        deserializer.deserialize_enum(
+            "DecimalDataType",
+            &["Decimal128", "Decimal256"],
+            DecimalDataTypeVisitor,
+        )
+    }
+}
 
 #[derive(
     Clone,
