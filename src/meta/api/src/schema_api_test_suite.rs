@@ -6972,15 +6972,11 @@ impl SchemaApiTestSuite {
         info!("Created database with ID: {}", db_id);
 
         // 2. Drop database
-
         mt.drop_database(DropDatabaseReq {
             if_exists: false,
             name_ident: DatabaseNameIdent::new(&tenant, db_name),
         })
         .await?;
-
-        // Delete the name to db mapping to simulate a dropped database
-        // delete_test_data(mt.as_kv_api(), &db_name_ident).await?;
 
         // 2.1. Check database is dropped
         let req = ListDroppedTableReq::new(&tenant);
@@ -7005,6 +7001,11 @@ impl SchemaApiTestSuite {
         );
 
         // 3. Undrop the database
+        //
+        // A more rigorous test would verify the race condition protection, but difficult to implement as an integration test:
+        // Ideally, we would undrop the database precisely after the `gc_drop_tables` process has verified
+        // that the database is marked as dropped, but before committing the kv transaction that removes the database metadata.
+
         let undrop_req = UndropDatabaseReq {
             name_ident: db_name_ident.clone(),
         };
@@ -7017,9 +7018,6 @@ impl SchemaApiTestSuite {
 
         // 4. Check that gc_drop_tables operation has NOT removed database's meta data
         mt.gc_drop_tables(req.clone()).await?;
-
-        // TODO more rigid check, but hard to impl as integration test:
-        // Check that the kv transaction performed by gc_drop_tables failed or not performed at all
 
         // 5. Verify the database is still accessible
         let get_req = GetDatabaseReq::new(tenant.clone(), db_name.to_string());
