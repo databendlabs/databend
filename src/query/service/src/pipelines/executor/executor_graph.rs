@@ -28,7 +28,9 @@ use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TimeSeriesProfiles;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
@@ -98,6 +100,7 @@ impl Node {
         processor: &ProcessorPtr,
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
+        time_series_profile: Option<Arc<TimeSeriesProfiles>>,
     ) -> Arc<Node> {
         let p_name = unsafe { processor.name() };
         let tracking_payload = {
@@ -123,6 +126,8 @@ impl Node {
 
             // Node tracking metrics
             tracking_payload.metrics = scope.as_ref().map(|x| x.metrics_registry.clone());
+
+            tracking_payload.local_time_series_profile = time_series_profile;
 
             tracking_payload
         };
@@ -185,7 +190,9 @@ impl ExecutingGraph {
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
-        Self::init_graph(&mut pipeline, &mut graph);
+        let mut time_series_profile_builder =
+            QueryTimeSeriesProfileBuilder::new(query_id.to_string());
+        Self::init_graph(&mut pipeline, &mut graph, &mut time_series_profile_builder);
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
@@ -206,9 +213,10 @@ impl ExecutingGraph {
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
-
+        let mut time_series_profile_builder =
+            QueryTimeSeriesProfileBuilder::new(query_id.to_string());
         for pipeline in &mut pipelines {
-            Self::init_graph(pipeline, &mut graph);
+            Self::init_graph(pipeline, &mut graph, &mut time_series_profile_builder);
         }
 
         Ok(ExecutingGraph {
@@ -224,7 +232,11 @@ impl ExecutingGraph {
         })
     }
 
-    fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, EdgeInfo>) {
+    fn init_graph(
+        pipeline: &mut Pipeline,
+        graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
+        time_series_profile_builder: &mut QueryTimeSeriesProfileBuilder,
+    ) {
         #[derive(Debug)]
         struct Edge {
             source_port: usize,
@@ -245,12 +257,21 @@ impl ExecutingGraph {
 
             for item in &pipe.items {
                 let pid = graph.node_count();
+                let time_series_profile = if let Some(scope) = pipe.scope.as_ref() {
+                    let plan_id = scope.id;
+                    let time_series_profile =
+                        time_series_profile_builder.register_time_series_profile(plan_id);
+                    Some(time_series_profile)
+                } else {
+                    None
+                };
                 let node = Node::create(
                     pid,
                     pipe.scope.clone(),
                     &item.processor,
                     &item.inputs_port,
                     &item.outputs_port,
+                    time_series_profile,
                 );
 
                 let graph_node_index = graph.add_node(node.clone());
@@ -277,6 +298,19 @@ impl ExecutingGraph {
             }
 
             pipes_edges.push(pipe_edges);
+        }
+        let query_time_series = Arc::new(time_series_profile_builder.build());
+        let node_indices: Vec<_> = graph.node_indices().collect();
+        for node_index in node_indices {
+            // we are sure that the node is only have one reference in the graph
+            let mut_node = Arc::get_mut(&mut graph[node_index]);
+            debug_assert!(
+                mut_node.is_some(),
+                "ExecutorGraph's node should only have one reference"
+            );
+            if let Some(mut_node) = mut_node {
+                mut_node.tracking_payload.time_series_profile = Some(query_time_series.clone());
+            }
         }
 
         // The last pipe cannot contain any output edge.

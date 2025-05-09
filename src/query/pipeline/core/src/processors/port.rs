@@ -19,6 +19,8 @@ use std::sync::Arc;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::QueryTimeSeriesProfile;
+use databend_common_base::runtime::TimeSeriesProfileName;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
@@ -234,8 +236,16 @@ impl OutputPort {
                         ProfileStatisticsName::OutputRows,
                         data_block.num_rows(),
                     );
+                    QueryTimeSeriesProfile::record_time_series_profile(
+                        TimeSeriesProfileName::OutputRows,
+                        data_block.num_rows(),
+                    );
                     Profile::record_usize_profile(
                         ProfileStatisticsName::OutputBytes,
+                        data_block.memory_size(),
+                    );
+                    QueryTimeSeriesProfile::record_time_series_profile(
+                        TimeSeriesProfileName::OutputBytes,
                         data_block.memory_size(),
                     );
                 }
