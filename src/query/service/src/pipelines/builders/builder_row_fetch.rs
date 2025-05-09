@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -31,12 +31,8 @@ use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub(crate) fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
         self.build_pipeline(&row_fetch.input)?;
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-        let row_fetch_runtime = Arc::new(Runtime::with_worker_threads(
-            max_threads,
-            Some("row-fetch-worker".to_owned()),
-        )?);
+        let row_fetch_runtime = GlobalIORuntime::instance();
         let row_fetch_semaphore = Arc::new(Semaphore::new(max_io_requests));
         let processor = row_fetch_processor(
             self.ctx.clone(),
