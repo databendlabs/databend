@@ -305,3 +305,5 @@ For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https
 - **Computing Model**: Our computing foundation is built upon apache arrow.
 
 - **Documentation Hosting**: The [Databend documentation website](https://docs.databend.com) proudly runs on [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
+
+Hello, world!
