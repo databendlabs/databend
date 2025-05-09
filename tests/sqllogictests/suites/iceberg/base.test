@@ -30,3 +30,11 @@ select * from t1_orc;
 1 1 b
 2 2 c
 3 3 d
+
+query II rowsort
+select c1, c3 from t1_orc;
+----
+0 a
+1 b
+2 c
+3 d

@@ -19,6 +19,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,6 +31,7 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_storage::OperatorRegistry;
 use databend_storages_common_stage::SingleFilePartition;
 use orc_rust::async_arrow_reader::StripeFactory;
+use orc_rust::projection::ProjectionMask;
 use orc_rust::ArrowReaderBuilder;
 
 use crate::chunk_reader_impl::OrcChunkReader;
@@ -44,6 +46,7 @@ pub struct ORCSource {
 
     arrow_schema: arrow_schema::SchemaRef,
     schema_from: Option<String>,
+    projection: Projection,
 }
 
 impl ORCSource {
@@ -53,6 +56,7 @@ impl ORCSource {
         op_registry: Arc<dyn OperatorRegistry>,
         arrow_schema: arrow_schema::SchemaRef,
         schema_from: Option<String>,
+        projection: Projection,
     ) -> Result<ProcessorPtr> {
         let scan_progress = table_ctx.get_scan_progress();
 
@@ -63,6 +67,7 @@ impl ORCSource {
             reader: None,
             arrow_schema,
             schema_from,
+            projection,
         })
     }
 
@@ -100,7 +105,15 @@ impl ORCSource {
         let builder = ArrowReaderBuilder::try_new_async(file)
             .await
             .map_err(|e| map_orc_error(e, path))?;
-        let reader = builder.build_async();
+        let projection = if let Projection::Columns(projection) = &self.projection {
+            ProjectionMask::roots(
+                builder.file_metadata().root_data_type(),
+                projection.iter().map(|index| index + 1),
+            )
+        } else {
+            ProjectionMask::all()
+        };
+        let reader = builder.with_projection(projection).build_async();
         let (factory, schema) = reader.into_parts();
         let factory = factory.unwrap();
         self.check_file_schema(schema, path)?;
