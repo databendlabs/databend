@@ -14,7 +14,6 @@
 
 use std::cmp::Ordering;
 use std::fmt::Display;
-use std::ops::Range;
 
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
@@ -23,11 +22,11 @@ use databend_common_io::Interval;
 use super::number::SimpleDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
+use crate::types::CopyType;
+use crate::types::CopyValueType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
-use crate::types::ValueType;
-use crate::utils::arrow::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -36,56 +35,46 @@ use crate::ScalarRef;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntervalType;
 
-impl ValueType for IntervalType {
+impl CopyValueType for IntervalType {}
+
+impl CopyType for IntervalType {
     type Scalar = months_days_micros;
-    type ScalarRef<'a> = months_days_micros;
-    type Column = Buffer<months_days_micros>;
     type Domain = SimpleDomain<months_days_micros>;
-    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, months_days_micros>>;
-    type ColumnBuilder = Vec<months_days_micros>;
 
-    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        scalar
-    }
-
-    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        *scalar
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn downcast_scalar(scalar: &ScalarRef) -> Option<Self::Scalar> {
         match scalar {
             ScalarRef::Interval(scalar) => Some(*scalar),
             _ => None,
         }
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+    fn downcast_column(col: &Column) -> Option<Buffer<Self::Scalar>> {
         match col {
             Column::Interval(column) => Some(column.clone()),
             _ => None,
         }
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<months_days_micros>> {
+    fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         domain.as_interval().cloned()
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {
         match builder {
             ColumnBuilder::Interval(builder) => Some(builder),
             _ => None,
         }
     }
 
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+    fn downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self::Scalar>> {
         match builder {
             ColumnBuilder::Interval(builder) => Some(builder),
             _ => None,
         }
     }
 
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
+    fn upcast_column_builder(
+        builder: Vec<Self::Scalar>,
         _decimal_size: Option<DecimalSize>,
     ) -> Option<ColumnBuilder> {
         Some(ColumnBuilder::Interval(builder))
@@ -95,102 +84,36 @@ impl ValueType for IntervalType {
         Scalar::Interval(scalar)
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
+    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
         Column::Interval(col)
     }
 
-    fn upcast_domain(domain: SimpleDomain<months_days_micros>) -> Domain {
+    fn upcast_domain(domain: Self::Domain) -> Domain {
         Domain::Interval(domain)
     }
 
-    fn column_len(col: &Self::Column) -> usize {
-        col.len()
-    }
-
-    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.get(index).cloned()
+    #[inline(always)]
+    fn compare(lhs: &Self::Scalar, rhs: &Self::Scalar) -> Ordering {
+        lhs.cmp(rhs)
     }
 
     #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        debug_assert!(index < col.len());
-
-        *col.get_unchecked(index)
-    }
-
-    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
-    }
-
-    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter().cloned()
-    }
-
-    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        buffer_into_mut(col)
-    }
-
-    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
-        builder.len()
-    }
-
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::Scalar) {
-        builder.push(item);
-    }
-
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        builder.resize(builder.len() + n, item);
-    }
-
-    fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push(Self::Scalar::default());
-    }
-
-    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
-        builder.extend_from_slice(other);
-    }
-
-    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        builder.into()
-    }
-
-    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(builder.len(), 1);
-        builder[0]
-    }
-
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(&rhs)
-    }
-
-    #[inline(always)]
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left == right
-    }
-
-    #[inline(always)]
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left != right
-    }
-
-    #[inline(always)]
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than(left: &Self::Scalar, right: &Self::Scalar) -> bool {
         left > right
     }
 
     #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn less_than(left: &Self::Scalar, right: &Self::Scalar) -> bool {
         left < right
     }
 
     #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than_equal(left: &Self::Scalar, right: &Self::Scalar) -> bool {
         left >= right
     }
 
     #[inline(always)]
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn less_than_equal(left: &Self::Scalar, right: &Self::Scalar) -> bool {
         left <= right
     }
 }

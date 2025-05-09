@@ -35,9 +35,10 @@ use serde::Serialize;
 use super::decimal::DecimalSize;
 use crate::property::Domain;
 use crate::types::ArgType;
+use crate::types::CopyType;
+use crate::types::CopyValueType;
 use crate::types::DataType;
 use crate::types::GenericMap;
-use crate::types::ValueType;
 use crate::utils::arrow::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -101,50 +102,40 @@ pub type UInt64Type = NumberType<u64>;
 pub type Float32Type = NumberType<F32>;
 pub type Float64Type = NumberType<F64>;
 
-impl<Num: Number> ValueType for NumberType<Num> {
+impl<Num: Number> CopyValueType for NumberType<Num> {}
+
+impl<Num: Number> CopyType for NumberType<Num> {
     type Scalar = Num;
-    type ScalarRef<'a> = Num;
-    type Column = Buffer<Num>;
     type Domain = SimpleDomain<Num>;
-    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, Num>>;
-    type ColumnBuilder = Vec<Num>;
 
-    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        scalar
-    }
-
-    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        *scalar
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn downcast_scalar(scalar: &ScalarRef) -> Option<Self::Scalar> {
         Num::try_downcast_scalar(scalar.as_number()?)
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+    fn downcast_column(col: &Column) -> Option<Buffer<Self::Scalar>> {
         Num::try_downcast_column(col.as_number()?)
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Num::try_downcast_domain(domain.as_number()?)
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {
         match builder {
             ColumnBuilder::Number(num) => Num::try_downcast_builder(num),
             _ => None,
         }
     }
 
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+    fn downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self::Scalar>> {
         match builder {
             ColumnBuilder::Number(num) => Num::try_downcast_owned_builder(num),
             _ => None,
         }
     }
 
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
+    fn upcast_column_builder(
+        builder: Vec<Self::Scalar>,
         _decimal_size: Option<DecimalSize>,
     ) -> Option<ColumnBuilder> {
         Num::try_upcast_column_builder(builder)
@@ -154,102 +145,35 @@ impl<Num: Number> ValueType for NumberType<Num> {
         Scalar::Number(Num::upcast_scalar(scalar))
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
+    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
         Column::Number(Num::upcast_column(col))
     }
 
-    fn upcast_domain(domain: SimpleDomain<Num>) -> Domain {
+    fn upcast_domain(domain: Self::Domain) -> Domain {
         Domain::Number(Num::upcast_domain(domain))
     }
 
-    fn column_len(col: &Self::Column) -> usize {
-        col.len()
-    }
-
-    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.get(index).cloned()
+    fn compare(lhs: &Self::Scalar, rhs: &Self::Scalar) -> Ordering {
+        lhs.cmp(rhs)
     }
 
     #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        debug_assert!(index < col.len(), "index: {} len: {}", index, col.len());
-
-        *col.get_unchecked(index)
-    }
-
-    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
-    }
-
-    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter().cloned()
-    }
-
-    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        buffer_into_mut(col)
-    }
-
-    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
-        builder.len()
-    }
-
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::Scalar) {
-        builder.push(item);
-    }
-
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        builder.resize(builder.len() + n, item);
-    }
-
-    fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push(Num::default());
-    }
-
-    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
-        builder.extend_from_slice(other);
-    }
-
-    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        builder.into()
-    }
-
-    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(builder.len(), 1);
-        builder[0]
-    }
-
-    #[inline(always)]
-    fn compare(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> Ordering {
-        left.cmp(&right)
-    }
-
-    #[inline(always)]
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left == right
-    }
-
-    #[inline(always)]
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left != right
-    }
-
-    #[inline(always)]
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than(left: &Self::Scalar, right: &Self::Scalar) -> bool {
         left > right
     }
 
     #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left >= right
-    }
-
-    #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn less_than(left: &Self::Scalar, right: &Self::Scalar) -> bool {
         left < right
     }
 
     #[inline(always)]
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than_equal(left: &Self::Scalar, right: &Self::Scalar) -> bool {
+        left >= right
+    }
+
+    #[inline(always)]
+    fn less_than_equal(left: &Self::Scalar, right: &Self::Scalar) -> bool {
         left <= right
     }
 }

@@ -228,25 +228,22 @@ impl ValueVisitor for FilterVisitor<'_> {
         Ok(())
     }
 
-    fn visit_number<T: Number>(
-        &mut self,
-        buffer: <NumberType<T> as ValueType>::Column,
-    ) -> Result<()> {
-        self.result = Some(Value::Column(NumberType::<T>::upcast_column(
+    fn visit_number<T: Number>(&mut self, buffer: Buffer<T>) -> Result<()> {
+        self.result = Some(Value::Column(<NumberType<T> as ValueType>::upcast_column(
             self.filter_primitive_types(buffer),
         )));
         Ok(())
     }
 
     fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
-        self.result = Some(Value::Column(TimestampType::upcast_column(
+        self.result = Some(Value::Column(<TimestampType as ValueType>::upcast_column(
             self.filter_primitive_types(buffer),
         )));
         Ok(())
     }
 
     fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<()> {
-        self.result = Some(Value::Column(DateType::upcast_column(
+        self.result = Some(Value::Column(<DateType as ValueType>::upcast_column(
             self.filter_primitive_types(buffer),
         )));
         Ok(())

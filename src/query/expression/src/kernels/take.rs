@@ -25,6 +25,7 @@ use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
+use crate::with_number_mapped_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -116,6 +117,19 @@ where I: databend_common_column::types::Index
         Ok(())
     }
 
+    fn visit_column(&mut self, column: Column) -> Result<()> {
+        match column {
+            Column::Date(buffer) => self.visit_copy_type::<DateType>(buffer),
+            Column::Timestamp(buffer) => self.visit_copy_type::<TimestampType>(buffer),
+            Column::Number(number) => {
+                with_number_mapped_type!(|NUM_TYPE| match number {
+                    NumberColumn::NUM_TYPE(b) => self.visit_copy_type::<NumberType<NUM_TYPE>>(b),
+                })
+            }
+            _ => Self::default_visit_column(column, self),
+        }
+    }
+
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
         self.visit_boolean(column.validity.clone())?;
         let validity =
@@ -146,25 +160,8 @@ where I: databend_common_column::types::Index
         Ok(())
     }
 
-    fn visit_number<T: Number>(
-        &mut self,
-        buffer: <NumberType<T> as ValueType>::Column,
-    ) -> Result<()> {
-        self.result = Some(Value::Column(NumberType::<T>::upcast_column(
-            self.take_primitive_types(buffer),
-        )));
-        Ok(())
-    }
-
-    fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
-        self.result = Some(Value::Column(TimestampType::upcast_column(
-            self.take_primitive_types(buffer),
-        )));
-        Ok(())
-    }
-
-    fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<()> {
-        self.result = Some(Value::Column(DateType::upcast_column(
+    fn visit_copy_type<T: CopyType>(&mut self, buffer: Buffer<T::Scalar>) -> Result<()> {
+        self.result = Some(Value::Column(T::upcast_column(
             self.take_primitive_types(buffer),
         )));
         Ok(())

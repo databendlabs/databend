@@ -23,23 +23,24 @@ use crate::types::*;
 use crate::*;
 
 pub trait ValueVisitor: Sized {
+    type U = ();
     type Error = ErrorCode;
 
-    fn visit_scalar(&mut self, _scalar: Scalar) -> Result<(), Self::Error>;
+    fn visit_scalar(&mut self, _scalar: Scalar) -> Result<Self::U, Self::Error>;
 
-    fn visit_null(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn visit_null(&mut self, len: usize) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<NullType>(len)
     }
 
-    fn visit_empty_array(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn visit_empty_array(&mut self, len: usize) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<EmptyArrayType>(len)
     }
 
-    fn visit_empty_map(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn visit_empty_map(&mut self, len: usize) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<EmptyMapType>(len)
     }
 
-    fn visit_any_number(&mut self, column: NumberColumn) -> Result<(), Self::Error> {
+    fn visit_any_number(&mut self, column: NumberColumn) -> Result<Self::U, Self::Error> {
         with_number_type!(|NUM_TYPE| match column {
             NumberColumn::NUM_TYPE(b) => self.visit_number(b),
         })
@@ -48,11 +49,11 @@ pub trait ValueVisitor: Sized {
     fn visit_number<T: Number>(
         &mut self,
         column: <NumberType<T> as ValueType>::Column,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<NumberType<T>>(column)
     }
 
-    fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<(), Self::Error> {
+    fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<Self::U, Self::Error> {
         with_decimal_type!(|DECIMAL_TYPE| match column {
             DecimalColumn::DECIMAL_TYPE(b, size) => self.visit_decimal(b, size),
         })
@@ -62,86 +63,92 @@ pub trait ValueVisitor: Sized {
         &mut self,
         column: Buffer<T>,
         _size: DecimalSize,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<DecimalType<T>>(column)
     }
 
-    fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<(), Self::Error> {
+    fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<BooleanType>(bitmap)
     }
 
-    fn visit_binary(&mut self, column: BinaryColumn) -> Result<(), Self::Error> {
+    fn visit_binary(&mut self, column: BinaryColumn) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<BinaryType>(column)
     }
 
-    fn visit_string(&mut self, column: StringColumn) -> Result<(), Self::Error> {
+    fn visit_string(&mut self, column: StringColumn) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<StringType>(column)
     }
 
-    fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<(), Self::Error> {
+    fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<TimestampType>(buffer)
     }
 
-    fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<(), Self::Error> {
+    fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<DateType>(buffer)
     }
 
-    fn visit_interval(&mut self, buffer: Buffer<months_days_micros>) -> Result<(), Self::Error> {
+    fn visit_interval(
+        &mut self,
+        buffer: Buffer<months_days_micros>,
+    ) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<IntervalType>(buffer)
     }
 
-    fn visit_array(&mut self, column: Box<ArrayColumn<AnyType>>) -> Result<(), Self::Error> {
+    fn visit_array(&mut self, column: Box<ArrayColumn<AnyType>>) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<AnyType>(Column::Array(column))
     }
 
-    fn visit_map(&mut self, column: Box<ArrayColumn<AnyType>>) -> Result<(), Self::Error> {
+    fn visit_map(&mut self, column: Box<ArrayColumn<AnyType>>) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<AnyType>(Column::Map(column))
     }
 
-    fn visit_tuple(&mut self, columns: Vec<Column>) -> Result<(), Self::Error> {
+    fn visit_tuple(&mut self, columns: Vec<Column>) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<AnyType>(Column::Tuple(columns))
     }
 
-    fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<(), Self::Error> {
+    fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<BitmapType>(column)
     }
 
-    fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<(), Self::Error> {
+    fn visit_nullable(
+        &mut self,
+        column: Box<NullableColumn<AnyType>>,
+    ) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<AnyType>(Column::Nullable(column))
     }
 
-    fn visit_variant(&mut self, column: BinaryColumn) -> Result<(), Self::Error> {
+    fn visit_variant(&mut self, column: BinaryColumn) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<VariantType>(column)
     }
 
-    fn visit_geometry(&mut self, column: BinaryColumn) -> Result<(), Self::Error> {
+    fn visit_geometry(&mut self, column: BinaryColumn) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<GeometryType>(column)
     }
 
-    fn visit_geography(&mut self, column: GeographyColumn) -> Result<(), Self::Error> {
+    fn visit_geography(&mut self, column: GeographyColumn) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<GeographyType>(column)
     }
 
     fn visit_typed_column<T: ValueType>(
         &mut self,
         column: <T as ValueType>::Column,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<Self::U, Self::Error>;
 
-    fn visit_value(&mut self, value: Value<AnyType>) -> Result<(), Self::Error> {
+    fn visit_value(&mut self, value: Value<AnyType>) -> Result<Self::U, Self::Error> {
         match value {
             Value::Scalar(c) => self.visit_scalar(c),
             Value::Column(c) => self.visit_column(c),
         }
     }
 
-    fn visit_column(&mut self, column: Column) -> Result<(), Self::Error> {
+    fn visit_column(&mut self, column: Column) -> Result<Self::U, Self::Error> {
         Self::default_visit_column(column, self)
     }
 
     fn default_visit_column<V: ValueVisitor>(
         column: Column,
         visitor: &mut V,
-    ) -> Result<(), V::Error> {
+    ) -> Result<V::U, V::Error> {
         match column {
             Column::Null { len } => visitor.visit_null(len),
             Column::EmptyArray { len } => visitor.visit_empty_array(len),
@@ -165,18 +172,10 @@ pub trait ValueVisitor: Sized {
         }
     }
 
-    fn try_visit_copy_type<V: ValueVisitor>(
-        column: Column,
-        visitor: &mut V,
-    ) -> Result<Option<Column>, V::Error> {
-        match column {
-            Column::Date(column) => visitor.visit_copy_type::<DateType>(column)?,
-            _ => return Ok(Some(column)),
-        }
-        Ok(None)
-    }
-
-    fn visit_copy_type<T: CopyType>(&mut self, _: T::Column) -> Result<(), Self::Error> {
+    fn visit_copy_type<T: CopyType>(
+        &mut self,
+        _: Buffer<T::Scalar>,
+    ) -> Result<Self::U, Self::Error> {
         unimplemented!()
     }
 }
