@@ -349,8 +349,8 @@ iceberg-catalog-s3tables = { version = "0.4.0", git = "https://github.com/databe
 aws-config = "1.5.18"
 aws-smithy-http = "0.61.1"
 aws-smithy-runtime = "1.7.8"
-aws-smithy-types = "1.2.13"
 aws-smithy-runtime-api = "1.7.3"
+aws-smithy-types = "1.2.13"
 
 indexmap = "2.0.0"
 indicatif = "0.17.5"
