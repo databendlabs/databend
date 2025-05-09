@@ -2969,6 +2969,15 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 //
 // This is a hack to parse large insert statements.
 pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
+    let streaming = map(
+        rule! {
+           #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)?
+        },
+        |(options, on_error_opt)| InsertSource::StreamingLoad {
+            format_options: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
+        },
+    );
     let values = map(
         rule! {
             VALUES ~ #rest_str
@@ -2987,21 +2996,11 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     rule!(
         #values
         | #query
+        | #streaming
     )(i)
 }
 
 pub fn mutation_source(i: Input) -> IResult<MutationSource> {
-    let streaming_v2 = map(
-        rule! {
-           #file_format_clause  ~ (ON_ERROR ~ ^"=" ~ ^#ident)? ~  #rest_str
-        },
-        |(options, on_error_opt, (_, start))| MutationSource::StreamingV2 {
-            settings: options,
-            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
-            start,
-        },
-    );
-
     let query = map(rule! {#query ~ #table_alias}, |(query, source_alias)| {
         MutationSource::Select {
             query: Box::new(query),
@@ -3021,8 +3020,7 @@ pub fn mutation_source(i: Input) -> IResult<MutationSource> {
     );
 
     rule!(
-          #streaming_v2
-        | #query
+        #query
         | #source_table
     )(i)
 }
