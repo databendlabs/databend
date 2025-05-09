@@ -463,7 +463,7 @@ roaring = { version = "^0.10", features = ["serde"] }
 rotbl = { version = "0.1.2", features = [] }
 rust_decimal = "1.26"
 rustix = "0.38.37"
-rustls = { version = "0.23.18", features = ["ring", "tls12"], default-features = false }
+rustls = { version = "0.23.27", features = ["ring", "tls12"], default-features = false }
 rustls-pemfile = "2"
 rustls-pki-types = "1"
 rustyline = "14"
