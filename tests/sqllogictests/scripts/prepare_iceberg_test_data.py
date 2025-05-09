@@ -4,7 +4,7 @@ spark = (
     SparkSession.builder.appName("CSV to Iceberg REST Catalog")
     .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog")
     .config("spark.sql.catalog.iceberg.type", "rest")
-    .config("spark.sql.catalog.iceberg.uri", "http://127.0.0.1:8182")
+    .config("spark.sql.catalog.iceberg.uri", "http://127.0.0.1:8181")
     .config("spark.sql.catalog.iceberg.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
     .config("spark.sql.catalog.iceberg.warehouse", "s3://iceberg-test/")
     .config("spark.sql.catalog.iceberg.s3.access-key-id", "admin")
