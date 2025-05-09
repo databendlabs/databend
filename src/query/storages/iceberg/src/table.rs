@@ -283,7 +283,6 @@ impl IcebergTable {
             })
             .unwrap_or_default();
         let table_schema = self.info.schema();
-        let arrow_schema: Schema = table_schema.as_ref().into();
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let op = self.table.file_io();
@@ -294,8 +293,8 @@ impl IcebergTable {
             .get(ICEBERG_TABLE_FORMAT_OPT)
             .map(|format| format.as_str() == ICEBERG_TABLE_FORMAT_OPT_ORC)
         {
-            let arrow_schema = Arc::new(arrow_schema);
             let data_schema: DataSchema = table_schema.clone().into();
+            let arrow_schema = Arc::new(Self::convert_schema(&Schema::from(&data_schema)));
             let data_schema = Arc::new(data_schema);
             pipeline.add_source(
                 |output| {
@@ -314,6 +313,7 @@ impl IcebergTable {
                 StripeDecoder::new(ctx.clone(), data_schema.clone(), arrow_schema.clone())
             });
         } else {
+            let arrow_schema: Schema = table_schema.as_ref().into();
             let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
             let topk = plan
                 .push_downs
@@ -413,6 +413,30 @@ impl IcebergTable {
             PartStatistics::new_exact(read_rows, read_bytes, parts.len(), total_files),
             Partitions::create(PartitionsShuffleKind::Mod, parts),
         ))
+    }
+
+    fn convert_schema(schema: &Schema) -> Schema {
+        let fields = schema
+            .fields()
+            .iter()
+            .map(|field| {
+                // orc-rust is not compatible with UTF8 View
+                if let arrow_schema::DataType::Utf8View = field.data_type() {
+                    Arc::new(
+                        arrow_schema::Field::new(
+                            field.name(),
+                            arrow_schema::DataType::Utf8,
+                            field.is_nullable(),
+                        )
+                        .with_metadata(field.metadata().clone()),
+                    )
+                } else {
+                    field.clone()
+                }
+            })
+            .collect::<Vec<_>>();
+
+        Schema::new(fields).with_metadata(schema.metadata().clone())
     }
 }
 
