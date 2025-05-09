@@ -1,0 +1,32 @@
+statement ok
+DROP CATALOG IF EXISTS ctl;
+
+statement ok
+CREATE CATALOG ctl
+TYPE=ICEBERG
+CONNECTION=(
+    TYPE='rest'
+    ADDRESS='http://127.0.0.1:8182'
+    WAREHOUSE='s3://iceberg-test'
+    "s3.region"='us-east-1'
+    "s3.endpoint"='http://127.0.0.1:9000'
+);
+
+statement ok
+use catalog ctl;
+
+query T
+show databases from ctl;
+----
+test
+
+statement ok
+use test;
+
+query II rowsort
+select * from t1_orc;
+----
+0 0 a
+1 1 b
+2 2 c
+3 3 d
