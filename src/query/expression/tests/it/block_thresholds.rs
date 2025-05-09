@@ -138,4 +138,3 @@ fn test_calc_partitions_for_recluster() {
     let result = t.calc_partitions_for_recluster(4_000, 10_000_000, 600_000);
     assert_eq!(result, 6);
 }
-
