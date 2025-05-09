@@ -63,7 +63,7 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
         let max_bytes_per_block = fuse_table.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,
-        );
+        ) * 2;
         let hilbert_min_bytes = std::cmp::max(
             hilbert_clustering_min_bytes,
             max_bytes_per_block * block_per_seg,
@@ -76,6 +76,7 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
         let mut checker = ReclusterChecker::new(
             cluster_key_id,
             hilbert_min_bytes,
+            block_per_seg,
             push_downs.as_ref().is_none_or(|v| v.filters.is_none()),
         );
         'FOR: for chunk in segment_locations.chunks(chunk_size) {
@@ -139,19 +140,29 @@ struct ReclusterChecker {
     hilbert_min_bytes: usize,
     total_bytes: usize,
 
+    hilbert_min_blocks: usize,
+    total_blocks: usize,
+
     finished: bool,
     // Whether the target segments is at the head of snapshot.
     head_of_snapshot: bool,
 }
 
 impl ReclusterChecker {
-    fn new(default_cluster_id: u32, hilbert_min_bytes: usize, head_of_snapshot: bool) -> Self {
+    fn new(
+        default_cluster_id: u32,
+        hilbert_min_bytes: usize,
+        hilbert_min_blocks: usize,
+        head_of_snapshot: bool,
+    ) -> Self {
         Self {
             segments: vec![],
             last_segment: None,
             default_cluster_id,
+            hilbert_min_blocks,
             hilbert_min_bytes,
             total_bytes: 0,
+            total_blocks: 0,
             finished: false,
             head_of_snapshot,
         }
@@ -164,10 +175,14 @@ impl ReclusterChecker {
 
         if segment_should_recluster || !self.head_of_snapshot {
             self.total_bytes += segment.summary.uncompressed_byte_size as usize;
+            self.total_blocks += segment.summary.block_count as usize;
             self.segments.push((location.clone(), segment.clone()));
         }
 
-        if !segment_should_recluster || self.total_bytes >= self.hilbert_min_bytes {
+        if !segment_should_recluster
+            || (self.total_bytes >= self.hilbert_min_bytes
+                && self.total_blocks >= self.hilbert_min_blocks)
+        {
             if self.check_for_recluster() {
                 self.finished = true;
                 return true;
@@ -208,6 +223,7 @@ impl ReclusterChecker {
 
     fn reset(&mut self) {
         self.total_bytes = 0;
+        self.total_blocks = 0;
         self.head_of_snapshot = false;
         self.segments.clear();
     }

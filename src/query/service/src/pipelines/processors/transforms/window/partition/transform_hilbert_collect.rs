@@ -73,6 +73,7 @@ impl TransformHilbertCollect {
         num_partitions: usize,
         memory_settings: MemorySettings,
         disk_spill: Option<SpillerDiskConfig>,
+        max_block_rows: usize,
         max_block_size: usize,
     ) -> Result<Self> {
         // Calculate the partition ids collected by the processor.
@@ -99,13 +100,10 @@ impl TransformHilbertCollect {
         let spiller = Spiller::create(ctx, operator, spill_config)?;
 
         // Create the window partition buffer.
-        let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
-        let buffer = WindowPartitionBuffer::new(
-            spiller,
-            partitions.len(),
-            sort_block_size,
-            memory_settings,
-        )?;
+        let max_block_rows =
+            max_block_rows.min(settings.get_window_partition_sort_block_size()? as usize);
+        let buffer =
+            WindowPartitionBuffer::new(spiller, partitions.len(), max_block_rows, memory_settings)?;
 
         Ok(Self {
             input,
