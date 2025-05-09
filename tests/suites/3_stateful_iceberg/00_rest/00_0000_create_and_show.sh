@@ -25,7 +25,7 @@ EOF
 
 cat <<EOF |  $BENDSQL_CLIENT_CONNECT
 CREATE CATALOG iceberg_glue TYPE = ICEBERG CONNECTION = (
-    TYPE = 'rest' ADDRESS = 'http://localhost:8181' warehouse = 's3://warehouse/glue/' "s3.endpoint" = 'http://localhost:9000' "s3.access-key-id" = 'admin' "s3.secret-access-key" = 'password' "s3.region" = 'us-east-1'
+    TYPE = 'glue' ADDRESS = 'http://localhost:5000'  warehouse = 's3a://warehouse/glue/' "aws_access_key_id" = 'my_access_id'  "aws_secret_access_key" = 'my_secret_key' "region_name" = 'us-east-1'  "s3.endpoint" = 'http://localhost:9000' "s3.access-key-id" = 'admin' "s3.secret-access-key" = 'password' "s3.region" = 'us-east-1'
 );
 EOF
 

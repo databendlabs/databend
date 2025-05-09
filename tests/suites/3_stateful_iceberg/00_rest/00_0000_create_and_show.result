@@ -22,9 +22,9 @@ iceberg_hms
 
 ===== Testing iceberg_glue =====
 iceberg_glue	iceberg	ADDRESS
-http://localhost:8181
+http://localhost:5000
 WAREHOUSE
-s3://warehouse/glue/
+s3a://warehouse/glue/
 default
 t
 t
