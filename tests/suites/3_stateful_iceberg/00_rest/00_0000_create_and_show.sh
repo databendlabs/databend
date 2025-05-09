@@ -9,7 +9,7 @@ echo "DROP CATALOG IF EXISTS iceberg_glue" | $BENDSQL_CLIENT_CONNECT
 
 
 ## hms
-hms_ip=`docker inspect -f  {{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}} it-iceberg-catalogs-hive-metastore-1`
+hms_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(docker ps -aq --filter "name=hive-metastore"))
 
 cat <<EOF |  $BENDSQL_CLIENT_CONNECT
 CREATE CATALOG iceberg_rest TYPE = ICEBERG CONNECTION = (
