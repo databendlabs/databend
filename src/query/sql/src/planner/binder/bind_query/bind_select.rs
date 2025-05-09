@@ -75,10 +75,14 @@ impl Binder {
         }
 
         // whether allow rewrite virtual column and pushdown
-        let allow_virtual_column = LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
-            .is_ok();
-        bind_context.allow_virtual_column = allow_virtual_column;
+        bind_context.allow_virtual_column = self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_virtual_column()
+            .unwrap_or_default()
+            && LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
+                .is_ok();
 
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             let select_list = &stmt.select_list;

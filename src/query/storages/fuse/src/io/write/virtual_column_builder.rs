@@ -76,6 +76,13 @@ impl VirtualColumnBuilder {
         ctx: Arc<dyn TableContext>,
         table_info: &TableInfo,
     ) -> Option<VirtualColumnBuilder> {
+        if !ctx
+            .get_settings()
+            .get_enable_experimental_virtual_column()
+            .unwrap_or_default()
+        {
+            return None;
+        }
         if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
             .is_err()
