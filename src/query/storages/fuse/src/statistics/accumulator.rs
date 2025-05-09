@@ -78,6 +78,13 @@ impl VirtualColumnAccumulator {
         schema: &Arc<TableSchema>,
         virtual_schema: &Option<VirtualDataSchema>,
     ) -> Option<VirtualColumnAccumulator> {
+        if !ctx
+            .get_settings()
+            .get_enable_experimental_virtual_column()
+            .unwrap_or_default()
+        {
+            return None;
+        }
         if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
             .is_err()

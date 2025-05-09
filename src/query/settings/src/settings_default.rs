@@ -1299,6 +1299,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("enable_experimental_virtual_column", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental virtual column",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

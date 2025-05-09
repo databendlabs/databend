@@ -952,4 +952,8 @@ impl Settings {
     pub fn get_trace_sample_rate(&self) -> Result<u64> {
         self.try_get_u64("trace_sample_rate")
     }
+
+    pub fn get_enable_experimental_virtual_column(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_virtual_column")? == 1)
+    }
 }
