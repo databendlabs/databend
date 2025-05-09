@@ -296,7 +296,7 @@ impl IcebergTable {
             let projection =
                 PushDownInfo::projection_of_push_downs(&table_schema, plan.push_downs.as_ref());
             let data_schema: DataSchema = Arc::new(projection.project_schema(&table_schema)).into();
-            let arrow_schema = Arc::new(Self::convert_schema(&Schema::from(&data_schema)));
+            let arrow_schema = Arc::new(Self::convert_orc_schema(&Schema::from(&data_schema)));
             let data_schema = Arc::new(data_schema);
             pipeline.add_source(
                 |output| {
@@ -418,7 +418,7 @@ impl IcebergTable {
         ))
     }
 
-    fn convert_schema(schema: &Schema) -> Schema {
+    fn convert_orc_schema(schema: &Schema) -> Schema {
         let fields = schema
             .fields()
             .iter()
