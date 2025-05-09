@@ -78,6 +78,7 @@ impl PipelineBuilder {
                         partition.range_width,
                         window_spill_settings.clone(),
                         disk_spill.clone(),
+                        partition.rows_per_block,
                         partition.bytes_per_block,
                     )?,
                 )))

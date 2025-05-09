@@ -15,7 +15,7 @@
 use databend_common_expression::BlockThresholds;
 
 fn default_thresholds() -> BlockThresholds {
-    BlockThresholds::new(1000, 1_000_000, 100_000, 4)
+    BlockThresholds::new(1_000, 1_000_000, 100_000, 4)
 }
 
 #[test]
@@ -101,14 +101,41 @@ fn test_calc_rows_for_recluster() {
     );
 
     // Case 1: If the block size is too bigger.
-    let result = t.calc_rows_for_recluster(4_000, 30_000_000, 600_000);
-    assert_eq!(result, 400);
+    let result = t.calc_rows_for_recluster(4_500, 30_000_000, 600_000);
+    assert_eq!(result, 300);
 
     // Case 2: If the block size is too smaller.
-    let result = t.calc_rows_for_recluster(4_000, 2_000_000, 600_000);
-    assert_eq!(result, 800);
+    let result = t.calc_rows_for_recluster(4_000, 4_000_000, 600_000);
+    assert_eq!(result, 1000);
 
     // Case 3: use the compressed-based block count.
     let result = t.calc_rows_for_recluster(4_000, 10_000_000, 600_000);
     assert_eq!(result, 667);
 }
+
+#[test]
+fn test_calc_partitions_for_recluster() {
+    let t = default_thresholds();
+
+    // compact enough to skip further calculations
+    assert_eq!(t.calc_partitions_for_recluster(1000, 500_000, 100_000), 1);
+
+    // row-based block count exceeds compressed-based block count, use max rows per block.
+    assert_eq!(
+        t.calc_partitions_for_recluster(10_000, 2_000_000, 100_000),
+        10
+    );
+
+    // Case 1: If the block size is too bigger.
+    let result = t.calc_partitions_for_recluster(4_500, 30_000_000, 600_000);
+    assert_eq!(result, 15);
+
+    // Case 2: If the block size is too smaller.
+    let result = t.calc_partitions_for_recluster(4_000, 4_000_000, 600_000);
+    assert_eq!(result, 4);
+
+    // Case 3: use the compressed-based block count.
+    let result = t.calc_partitions_for_recluster(4_000, 10_000_000, 600_000);
+    assert_eq!(result, 6);
+}
+
