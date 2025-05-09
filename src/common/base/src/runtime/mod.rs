@@ -51,6 +51,7 @@ pub use runtime::try_spawn_blocking;
 pub use runtime::Dropper;
 pub use runtime::JoinHandle;
 pub use runtime::Runtime;
+pub use runtime::Semaphore;
 pub use runtime::TrySpawn;
 pub use runtime::GLOBAL_TASK;
 pub use runtime_tracker::LimitMemGuard;
