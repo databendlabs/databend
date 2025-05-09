@@ -321,10 +321,8 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
         }
     }
 
-    let column_vec = data_types
-        .iter()
-        .enumerate()
-        .map(|(index, data_type)| {
+    let column_vec = (0..data_types.len())
+        .map(|index| {
             let columns = blocks
                 .iter()
                 .map(|block| {
@@ -336,7 +334,7 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
                         .unwrap()
                 })
                 .collect_vec();
-            Column::take_downcast_column_vec(&columns, data_type.clone())
+            Column::take_downcast_column_vec(&columns)
         })
         .collect_vec();
 

@@ -109,31 +109,27 @@ where T: Clone
         debug_assert!(!keys.is_empty());
 
         // faster path for single signed/unsigned integer to column
-        if group_items.len() == 1 {
-            if let DataType::Number(ty) = group_items[0].1 {
+        match group_items {
+            [(_, DataType::Number(ty))] => {
                 with_integer_mapped_type!(|NUM_TYPE| match ty {
                     NumberDataType::NUM_TYPE => {
                         let buffer: Buffer<T> = keys.into();
-                        let col =
-                            unsafe { std::mem::transmute::<Buffer<T>, Buffer<NUM_TYPE>>(buffer) };
+                        let col: Buffer<NUM_TYPE> = unsafe { std::mem::transmute(buffer) };
                         return Ok(vec![NumberType::<NUM_TYPE>::upcast_column(col)]);
                     }
                     _ => {}
                 })
             }
-
-            if matches!(group_items[0].1, DataType::Decimal(_)) {
-                with_decimal_mapped_type!(|DECIMAL_TYPE| match group_items[0].1 {
-                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(size)) => {
+            [(_, DataType::Decimal(decimal))] => {
+                with_decimal_mapped_type!(|DECIMAL_TYPE| match decimal {
+                    DecimalDataType::DECIMAL_TYPE(size) => {
                         let buffer: Buffer<T> = keys.into();
-                        let col = unsafe {
-                            std::mem::transmute::<Buffer<T>, Buffer<DECIMAL_TYPE>>(buffer)
-                        };
-                        return Ok(vec![DECIMAL_TYPE::upcast_column(col, size)]);
+                        let col: Buffer<DECIMAL_TYPE> = unsafe { std::mem::transmute(buffer) };
+                        return Ok(vec![DECIMAL_TYPE::upcast_column(col, *size)]);
                     }
-                    _ => {}
                 })
             }
+            _ => (),
         }
 
         let mut keys = keys;
