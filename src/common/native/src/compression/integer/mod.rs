@@ -48,12 +48,12 @@ use crate::write::WriteOptions;
 pub fn compress_integer<T: IntegerType>(
     col: &Buffer<T>,
     validity: Option<Bitmap>,
-    write_options: WriteOptions,
+    write_options: &WriteOptions,
     buf: &mut Vec<u8>,
 ) -> Result<()> {
     // choose compressor
     let stats = gen_stats(col, validity);
-    let compressor = choose_compressor(col, &stats, &write_options);
+    let compressor = choose_compressor(col, &stats, write_options);
 
     log::debug!(
         "choose integer compression : {:?}",
@@ -76,7 +76,7 @@ pub fn compress_integer<T: IntegerType>(
                     "Not support Extend compressor".to_string(),
                 ));
             }
-            c.compress(col, &stats, &write_options, buf)
+            c.compress(col, &stats, write_options, buf)
         }
     }?;
     buf[pos..pos + 4].copy_from_slice(&(compressed_size as u32).to_le_bytes());
