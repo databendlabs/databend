@@ -537,8 +537,10 @@ mod tests {
     use crate::runtime::GlobalStatBuffer;
     use crate::runtime::MemStat;
     use crate::runtime::MemStatBuffer;
+    use crate::runtime::ParentMemStat;
     use crate::runtime::Thread;
     use crate::runtime::ThreadTracker;
+    use crate::runtime::GLOBAL_QUERIES_MANAGER;
 
     fn with_mock_env<
         T: Allocator + Send + Sync + 'static,
@@ -550,7 +552,11 @@ mod tests {
         global: Arc<MemStat>,
     ) -> R {
         {
-            let mem_stat = MemStat::create(GlobalUniqName::unique());
+            let mem_stat = MemStat::create_child(
+                GlobalUniqName::unique(),
+                0,
+                ParentMemStat::Normal(global.clone()),
+            );
             let mut tracking_payload = ThreadTracker::new_tracking_payload();
             tracking_payload.mem_stat = Some(mem_stat.clone());
 
@@ -582,7 +588,7 @@ mod tests {
         with_mock_env(
             test_function,
             DefaultAllocator::default(),
-            Arc::new(MemStat::global()),
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
         );
     }
 
@@ -610,7 +616,7 @@ mod tests {
         with_mock_env(
             test_function,
             DefaultAllocator::default(),
-            Arc::new(MemStat::global()),
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
         );
     }
 
@@ -641,7 +647,7 @@ mod tests {
         with_mock_env(
             test_function,
             DefaultAllocator::default(),
-            Arc::new(MemStat::global()),
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
         );
     }
 
@@ -666,7 +672,11 @@ mod tests {
                 assert_eq!(GlobalStatBuffer::current().memory_usage, 0);
             };
 
-        with_mock_env(test_function, FailingAllocator, Arc::new(MemStat::global()));
+        with_mock_env(
+            test_function,
+            FailingAllocator,
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
+        );
     }
 
     #[test]
@@ -695,7 +705,7 @@ mod tests {
         with_mock_env(
             test_function,
             DefaultAllocator::default(),
-            Arc::new(MemStat::global()),
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
         );
     }
 
@@ -721,7 +731,7 @@ mod tests {
         with_mock_env(
             test_function,
             DefaultAllocator::default(),
-            Arc::new(MemStat::global()),
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
         );
     }
 
@@ -760,7 +770,11 @@ mod tests {
                 assert_eq!(GlobalStatBuffer::current().memory_usage, 0);
             };
 
-        with_mock_env(test_function, FailingAllocator, Arc::new(MemStat::global()));
+        with_mock_env(
+            test_function,
+            FailingAllocator,
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
+        );
     }
 
     #[test]
@@ -836,7 +850,7 @@ mod tests {
         with_mock_env(
             test_function,
             PartialFailingAllocator(DefaultAllocator::default()),
-            Arc::new(MemStat::global()),
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
         );
     }
 
@@ -914,7 +928,7 @@ mod tests {
         with_mock_env(
             test_function,
             GrowZeroedFailingAllocator(DefaultAllocator::default()),
-            Arc::new(MemStat::global()),
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
         );
     }
 
@@ -991,7 +1005,7 @@ mod tests {
         with_mock_env(
             test_function,
             ShrinkFailingAllocator(DefaultAllocator::default()),
-            Arc::new(MemStat::global()),
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
         );
     }
 
@@ -1204,7 +1218,7 @@ mod tests {
                 inner: DefaultAllocator::default(),
                 failure_rate: 0.3,
             },
-            Arc::new(MemStat::global()),
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
         );
     }
 
@@ -1241,13 +1255,13 @@ mod tests {
         with_mock_env(
             test_function,
             DefaultAllocator::default(),
-            Arc::new(MemStat::global()),
+            Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER)),
         );
     }
 
     #[test]
     fn test_dynamic_memstat_switch() {
-        let global = Arc::new(MemStat::global());
+        let global = Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER));
         let test_function = {
             let global = global.clone();
             move |mem_stat: Arc<MemStat>, _allocator: Arc<dyn Allocator + Send + Sync + 'static>| {
@@ -1311,7 +1325,7 @@ mod tests {
 
     #[test]
     fn test_thread_local_stat_isolation() {
-        let global_mem_stat = Arc::new(MemStat::global());
+        let global_mem_stat = Arc::new(MemStat::global(&GLOBAL_QUERIES_MANAGER));
 
         let test_function = {
             let global_mem_stat = global_mem_stat.clone();

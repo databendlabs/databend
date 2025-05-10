@@ -185,6 +185,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![String::from("throw"), String::from("spilling")])),
                 }),
+                ("allow_query_exceeded_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Allow queries to overshoot the configured memory limit, deferring error notification until memory contention is encountered.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("data_retention_time_in_days", DefaultSettingValue {
                     // unit of retention_period is day
                     value: UserSettingValue::UInt64(1),
