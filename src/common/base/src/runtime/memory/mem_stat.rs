@@ -35,7 +35,7 @@ pub static GLOBAL_MEM_STAT: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
 const MINIMUM_MEMORY_LIMIT: i64 = 256 * 1024 * 1024;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct MemoryLimit {
     limit: AtomicI64,
     set_limit: AtomicI64,
@@ -65,8 +65,6 @@ pub enum ParentMemStat {
 /// - A MemStat has at most one parent.
 pub struct MemStat {
     pub id: usize,
-    #[allow(unused)]
-    pub name: Option<String>,
 
     pub(crate) used: AtomicI64,
     pub(crate) peak_used: AtomicI64,
@@ -76,10 +74,9 @@ pub struct MemStat {
     exceeded_memory: AtomicBool,
 
     memory_requester: Option<String>,
-    queries_memory_manager: &'static QueriesMemoryManager,
+    pub(crate) queries_memory_manager: &'static QueriesMemoryManager,
 
-    #[allow(dead_code)]
-    priority: usize,
+    pub(crate) priority: usize,
 
     pub(crate) parent_memory_stat: ParentMemStat,
 }
@@ -88,7 +85,6 @@ impl MemStat {
     pub const fn global(queries_memory_manager: &'static QueriesMemoryManager) -> Self {
         Self {
             id: 0,
-            name: None,
             queries_memory_manager,
             used: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
@@ -102,22 +98,12 @@ impl MemStat {
     }
 
     pub fn create(name: String) -> Arc<MemStat> {
-        MemStat::create_child(name, 0, None, ParentMemStat::StaticRef(&GLOBAL_MEM_STAT))
-    }
-
-    pub fn create_terminable(name: String, tag: String) -> Arc<MemStat> {
-        MemStat::create_child(
-            name,
-            0,
-            Some(tag),
-            ParentMemStat::StaticRef(&GLOBAL_MEM_STAT),
-        )
+        MemStat::create_child(name, 0, ParentMemStat::StaticRef(&GLOBAL_MEM_STAT))
     }
 
     pub fn create_child(
         name: String,
         priority: usize,
-        resource_tag: Option<String>,
         parent_memory_stat: ParentMemStat,
     ) -> Arc<MemStat> {
         let id = match GlobalSequence::next() {
@@ -129,14 +115,13 @@ impl MemStat {
             id,
             priority,
             parent_memory_stat,
-            name: Some(name),
             used: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
             exceeded_mutex: Mutex::new(false),
-            queries_memory_manager: &GLOBAL_QUERIES_MANAGER,
             memory_limit: MemoryLimit::default(),
-            exceeded_memory: Default::default(),
-            memory_requester: resource_tag,
+            exceeded_memory: AtomicBool::new(false),
+            memory_requester: Some(name),
+            queries_memory_manager: &GLOBAL_QUERIES_MANAGER,
         })
     }
 
@@ -147,7 +132,7 @@ impl MemStat {
         }
 
         if set_water_height {
-            let water_height = size / 10 * 7;
+            let water_height = size / 10 * 4;
             self.memory_limit
                 .water_height
                 .store(water_height, Ordering::Relaxed);
@@ -165,20 +150,8 @@ impl MemStat {
         alloc_memory: i64,
         rollback_memory: i64,
     ) -> Result<(), OutOfLimit> {
-        self.record_memory_impl::<NEED_ROLLBACK>(alloc_memory, rollback_memory, None)
-    }
-
-    /// Feed memory usage stat to MemStat and return if it exceeds the limit.
-    ///
-    /// It feeds `state` to the this tracker and all of its ancestors, including GLOBAL_TRACKER.
-    #[inline]
-    pub fn terminable_record_memory<const NEED_ROLLBACK: bool>(
-        &self,
-        alloc_memory: i64,
-        rollback_memory: i64,
-    ) -> Result<(), OutOfLimit> {
         if let Err(cause) = self.record_memory_impl::<false>(alloc_memory, 0, None) {
-            if cause.can_ignore {
+            if !cause.export_error {
                 return Ok(());
             }
 
@@ -236,26 +209,28 @@ impl MemStat {
         {
             // neighbor may exceeded limit, wait release memory
             if alloc_memory > 0
-                && let Err(cause) = self.wait_memory(memory_requester, cause)
+                && let Err(mut cause) = self.wait_memory(memory_requester, cause)
             {
                 if NEED_ROLLBACK {
                     // We only roll back the memory that alloc failed
                     self.rollback(rollback_memory);
                 }
 
+                cause.export_error |= self.memory_requester.is_some();
                 return Err(cause);
             }
         }
 
-        if let Err(cause) = self.check_limit(used, memory_requester) {
+        if let Err(cause) = self.check_limit(used) {
             // parent has memory free, try exceeding limit.
-            if let Err(cause) = self.exceeding_limit(used, memory_requester, cause) {
+            if let Err(mut cause) = self.exceeding_limit(used, memory_requester, cause) {
                 if NEED_ROLLBACK {
                     // NOTE: we cannot rollback peak_used of parent mem stat in this case
                     // self.peak_used.store(peak_used, Ordering::Relaxed);
                     self.rollback(rollback_memory);
                 }
 
+                cause.export_error |= self.memory_requester.is_some();
                 return Err(cause);
             }
         }
@@ -271,12 +246,7 @@ impl MemStat {
         let _guard = LimitMemGuard::enter_unlimited();
 
         if id.is_some() {
-            if let Err(mut cause) = self.queries_memory_manager.wait_memory(self, id, oom) {
-                cause.can_ignore = id.is_some();
-                cause.allow_exceeded_limit = true;
-                return Err(cause);
-            }
-
+            self.queries_memory_manager.wait_memory(self, id, oom)?;
             return Ok(());
         }
 
@@ -323,7 +293,7 @@ impl MemStat {
         }
 
         // recheck limit
-        match self.check_limit(used, tag) {
+        match self.check_limit(used) {
             Ok(_) => Ok(()),
             Err(mut out_of_limit) => {
                 out_of_limit.allow_exceeded_limit = false;
@@ -344,7 +314,7 @@ impl MemStat {
 
     /// Check if used memory is out of the limit.
     #[inline]
-    fn check_limit(&self, used: i64, tag: Option<&String>) -> Result<(), OutOfLimit> {
+    fn check_limit(&self, used: i64) -> Result<(), OutOfLimit> {
         let limit = self.memory_limit.limit.load(Ordering::Relaxed);
         let water_height = self.memory_limit.water_height.load(Ordering::Relaxed);
 
@@ -355,7 +325,7 @@ impl MemStat {
         }
 
         #[allow(clippy::collapsible_if)]
-        if water_height != 0 && used <= water_height {
+        if water_height != 0 && used <= water_height && self.memory_requester.is_some() {
             if self.exceeded_memory.fetch_and(false, Ordering::SeqCst) {
                 let _guard = LimitMemGuard::enter_unlimited();
                 let revert_limit = self.memory_limit.set_limit.load(Ordering::Relaxed);
@@ -365,7 +335,8 @@ impl MemStat {
 
                 if *mutex {
                     *mutex = false;
-                    self.queries_memory_manager.release_memory(tag);
+                    self.queries_memory_manager
+                        .release_memory(self.memory_requester.as_ref());
                     self.memory_limit
                         .limit
                         .store(revert_limit, Ordering::Relaxed);
@@ -377,7 +348,7 @@ impl MemStat {
     }
 
     pub(crate) fn recheck_limit(&self) -> Result<(), OutOfLimit> {
-        self.check_limit(self.used.load(Ordering::Relaxed), None)
+        self.check_limit(self.used.load(Ordering::Relaxed))
     }
 
     #[inline]
@@ -396,16 +367,17 @@ impl MemStat {
 pub struct OutOfLimit<V = i64> {
     pub value: V,
     pub limit: V,
-    pub can_ignore: bool,
+    pub export_error: bool,
     pub allow_exceeded_limit: bool,
 }
 
 impl<V> OutOfLimit<V> {
-    pub const fn new(value: V, limit: V) -> Self {
+    pub fn new(value: V, limit: V) -> Self {
+        let _guard = LimitMemGuard::enter_unlimited();
         Self {
             value,
             limit,
-            can_ignore: false,
+            export_error: false,
             allow_exceeded_limit: false,
         }
     }
@@ -421,6 +393,13 @@ impl Debug for OutOfLimit<i64> {
             ByteSize::b(self.limit as u64),
             self.limit,
         )
+    }
+}
+
+impl Drop for MemStat {
+    fn drop(&mut self) {
+        self.queries_memory_manager
+            .drop_memory_stat(self.memory_requester.as_ref());
     }
 }
 
@@ -494,7 +473,6 @@ mod tests {
         let child_mem_stat = MemStat::create_child(
             "TEST_CHILD".to_string(),
             0,
-            None,
             ParentMemStat::Normal(mem_stat.clone()),
         );
 
@@ -522,7 +500,6 @@ mod tests {
         let child_mem_stat = MemStat::create_child(
             "TEST_CHILD".to_string(),
             0,
-            None,
             ParentMemStat::Normal(mem_stat.clone()),
         );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT, false);
@@ -556,7 +533,6 @@ mod tests {
         let child_mem_stat = MemStat::create_child(
             "TEST_CHILD".to_string(),
             0,
-            None,
             ParentMemStat::Normal(mem_stat.clone()),
         );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2, false);
@@ -573,7 +549,6 @@ mod tests {
         let child_mem_stat = MemStat::create_child(
             "TEST_CHILD".to_string(),
             0,
-            None,
             ParentMemStat::Normal(mem_stat.clone()),
         );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT, false);

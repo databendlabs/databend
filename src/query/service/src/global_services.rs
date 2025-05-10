@@ -188,5 +188,6 @@ pub fn memory_gc_handle(query_id: &String, _force: bool) -> bool {
     // TODO: page cache?
     // TODO: databend cache?
     // TODO: spill query?
-    sessions_manager.kill_by_query_id(query_id)
+    sessions_manager.kill_by_query_id(query_id);
+    true
 }

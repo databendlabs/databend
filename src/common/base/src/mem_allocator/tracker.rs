@@ -555,7 +555,6 @@ mod tests {
             let mem_stat = MemStat::create_child(
                 GlobalUniqName::unique(),
                 0,
-                None,
                 ParentMemStat::Normal(global.clone()),
             );
             let mut tracking_payload = ThreadTracker::new_tracking_payload();

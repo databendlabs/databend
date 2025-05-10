@@ -74,7 +74,7 @@ impl MemStatBuffer {
         self.cur_mem_stat_id = 0;
 
         if let Some(mem_stat) = self.cur_mem_stat.take() {
-            return mem_stat.terminable_record_memory::<FALLBACK>(memory_usage, alloc);
+            return mem_stat.record_memory::<FALLBACK>(memory_usage, alloc);
         }
 
         self.global_mem_stat
@@ -248,7 +248,6 @@ mod tests {
         let mem_stat = MemStat::create_child(
             String::from("test"),
             0,
-            None,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
         buffer.alloc(&mem_stat, 1)?;
@@ -278,13 +277,11 @@ mod tests {
         let mem_stat_1 = MemStat::create_child(
             String::from("test"),
             0,
-            None,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
         let mem_stat_2 = MemStat::create_child(
             String::from("test"),
             0,
-            None,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
         buffer.alloc(&mem_stat_1, 1)?;
@@ -313,7 +310,6 @@ mod tests {
         let mem_stat = MemStat::create_child(
             String::from("test"),
             0,
-            None,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
         let _shared = mem_stat.clone();
@@ -345,13 +341,11 @@ mod tests {
         let mem_stat_1 = MemStat::create_child(
             String::from("test"),
             0,
-            None,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
         let mem_stat_2 = MemStat::create_child(
             String::from("test"),
             0,
-            None,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
         let _shared = (mem_stat_1.clone(), mem_stat_2.clone());

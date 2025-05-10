@@ -201,10 +201,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
-        tracking_payload.mem_stat = Some(MemStat::create_terminable(
-            format!("Query-{}", query_id),
-            query_id.clone(),
-        ));
+        tracking_payload.mem_stat = Some(MemStat::create(query_id.clone()));
         let _guard = ThreadTracker::tracking(tracking_payload);
 
         ThreadTracker::tracking_future(async {
@@ -472,10 +469,7 @@ impl InteractiveWorkerBase {
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
-        tracking_payload.mem_stat = Some(MemStat::create_terminable(
-            format!("Query-{}", query_id),
-            query_id.clone(),
-        ));
+        tracking_payload.mem_stat = Some(MemStat::create(query_id.clone()));
         let _guard = ThreadTracker::tracking(tracking_payload);
 
         let do_query = ThreadTracker::tracking_future(self.do_query(query_id, &init_query)).await;

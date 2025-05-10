@@ -56,6 +56,7 @@ use crate::runtime::memory::MemStat;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::Profile;
 use crate::runtime::MemStatBuffer;
+use crate::runtime::OutOfLimit;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
@@ -112,6 +113,17 @@ pub struct TrackingPayload {
 
 pub struct TrackingGuard {
     saved: TrackingPayload,
+}
+
+impl TrackingGuard {
+    pub fn flush(&self) -> Result<(), OutOfLimit> {
+        if let Err(out_of_memory) = MemStatBuffer::current().flush::<false>(0) {
+            let _ = GlobalStatBuffer::current().flush::<false>(0);
+            return Err(out_of_memory);
+        }
+
+        GlobalStatBuffer::current().flush::<false>(0)
+    }
 }
 
 impl Drop for TrackingGuard {
