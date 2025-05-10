@@ -39,6 +39,7 @@ cluster_id = "${BENCHMARK_ID}"
 [[query.users]]
 name = "root"
 auth_type = "no_password"
+default_storage_format = 'parquet'
 [meta]
 endpoints = ["127.0.0.1:9191"]
 client_timeout_in_second = 60
@@ -61,7 +62,7 @@ export BENDSQL_DSN="databend://root:@localhost:8000/${BENCHMARK_DATASET}?sslmode
 
 # Create table
 if [[ -f "${BENCHMARK_DATASET}/create_local.sql" ]]; then
-    echo "Creating table for benchmark with native storage format..."
+    echo "Creating table for benchmark with parquet storage format..."
     bendsql <"${BENCHMARK_DATASET}/create_local.sql"
 fi
 
