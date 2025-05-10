@@ -37,26 +37,21 @@ use crate::spillers::SpillerType;
 
 enum State {
     Collect,
-    Flush,
     Spill,
     Restore,
-    Concat(Vec<DataBlock>),
 }
 
 pub struct TransformHilbertCollect {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    immediate_output_blocks: Vec<(usize, DataBlock)>,
     output_data_blocks: VecDeque<DataBlock>,
 
     // The partition id is used to map the partition id to the new partition id.
     partition_id: Vec<usize>,
-    partition_sizes: Vec<usize>,
     // The buffer is used to control the memory usage of the window operator.
     buffer: WindowPartitionBuffer,
 
-    max_block_size: usize,
     // Event variables.
     state: State,
 }
@@ -74,7 +69,6 @@ impl TransformHilbertCollect {
         memory_settings: MemorySettings,
         disk_spill: Option<SpillerDiskConfig>,
         max_block_rows: usize,
-        max_block_size: usize,
     ) -> Result<Self> {
         // Calculate the partition ids collected by the processor.
         let partitions: Vec<usize> = (0..num_partitions)
@@ -110,9 +104,6 @@ impl TransformHilbertCollect {
             output,
             partition_id,
             buffer,
-            immediate_output_blocks: vec![],
-            partition_sizes: vec![0; num_partitions],
-            max_block_size,
             output_data_blocks: VecDeque::new(),
             state: State::Collect,
         })
@@ -130,11 +121,7 @@ impl Processor for TransformHilbertCollect {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::Concat(_)) {
-            return Ok(Event::Sync);
-        }
-
-        if matches!(self.state, State::Flush | State::Spill | State::Restore) {
+        if matches!(self.state, State::Spill | State::Restore) {
             return Ok(Event::Async);
         }
 
@@ -157,11 +144,6 @@ impl Processor for TransformHilbertCollect {
             return Ok(Event::Async);
         }
 
-        if !self.immediate_output_blocks.is_empty() {
-            self.state = State::Flush;
-            return Ok(Event::Async);
-        }
-
         if self.input.is_finished() {
             if !self.buffer.is_empty() {
                 self.state = State::Restore;
@@ -179,26 +161,10 @@ impl Processor for TransformHilbertCollect {
                 self.state = State::Spill;
                 return Ok(Event::Async);
             }
-
-            if !self.immediate_output_blocks.is_empty() {
-                self.state = State::Flush;
-                return Ok(Event::Async);
-            }
         }
 
         self.input.set_need_data();
         Ok(Event::NeedData)
-    }
-
-    fn process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Collect) {
-            State::Concat(blocks) => {
-                let output = DataBlock::concat(&blocks)?;
-                self.output_data_blocks.push_back(output);
-            }
-            _ => unreachable!(),
-        }
-        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -206,14 +172,6 @@ impl Processor for TransformHilbertCollect {
         match std::mem::replace(&mut self.state, State::Collect) {
             State::Spill => {
                 self.buffer.spill().await?;
-            }
-            State::Flush => {
-                if let Some((partition_id, data_block)) = self.immediate_output_blocks.pop() {
-                    let mut restored_data_blocks =
-                        self.buffer.restore_by_id(partition_id, true).await?;
-                    restored_data_blocks.push(data_block);
-                    self.state = State::Concat(restored_data_blocks);
-                }
             }
             State::Restore => {
                 let restored_data_blocks = self.buffer.restore().await?;
@@ -234,12 +192,6 @@ impl TransformHilbertCollect {
         {
             for (partition_id, data_block) in meta.partitioned_data.into_iter() {
                 let new_id = self.partition_id[partition_id];
-                self.partition_sizes[new_id] += data_block.estimate_block_size();
-                if self.partition_sizes[new_id] >= self.max_block_size {
-                    self.immediate_output_blocks.push((new_id, data_block));
-                    self.partition_sizes[new_id] = 0;
-                    continue;
-                }
                 self.buffer.add_data_block(new_id, data_block);
             }
         }

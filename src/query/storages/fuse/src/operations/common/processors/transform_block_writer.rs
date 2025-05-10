@@ -85,14 +85,12 @@ impl TransformBlockWriter {
         table: &FuseTable,
         table_meta_timestamps: TableMetaTimestamps,
         with_tid: bool,
-        max_block_bytes: Option<usize>,
     ) -> Result<ProcessorPtr> {
         let max_block_rows = std::cmp::min(
             ctx.get_settings().get_max_block_size()? as usize,
             table.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT),
         );
-        let properties =
-            StreamBlockProperties::try_create(ctx, table, table_meta_timestamps, max_block_bytes)?;
+        let properties = StreamBlockProperties::try_create(ctx, table, table_meta_timestamps)?;
         Ok(ProcessorPtr::create(Box::new(TransformBlockWriter {
             state: State::Consume,
             input,
@@ -207,13 +205,9 @@ impl Processor for TransformBlockWriter {
                 block.check_valid()?;
                 self.input_data_size += block.estimate_block_size();
                 self.input_num_rows += block.num_rows();
-                if self.properties.max_block_bytes.is_some() {
-                    self.input_data.push_back(block);
-                } else {
-                    let max_rows_per_block = self.calc_max_block_rows(&block);
-                    let blocks = block.split_by_rows_no_tail(max_rows_per_block);
-                    self.input_data.extend(blocks);
-                }
+                let max_rows_per_block = self.calc_max_block_rows(&block);
+                let blocks = block.split_by_rows_no_tail(max_rows_per_block);
+                self.input_data.extend(blocks);
             }
             State::Serialize => {
                 while let Some(b) = self.input_data.pop_front() {

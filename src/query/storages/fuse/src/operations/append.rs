@@ -61,7 +61,6 @@ impl FuseTable {
                     self,
                     table_meta_timestamps,
                     false,
-                    None,
                 )
             })?;
         } else {

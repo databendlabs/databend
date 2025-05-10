@@ -79,7 +79,6 @@ impl PipelineBuilder {
                         window_spill_settings.clone(),
                         disk_spill.clone(),
                         partition.rows_per_block,
-                        partition.bytes_per_block,
                     )?,
                 )))
             })?;
@@ -93,7 +92,6 @@ impl PipelineBuilder {
                     table,
                     partition.table_meta_timestamps,
                     false,
-                    Some(partition.bytes_per_block),
                 )
             })
         } else {

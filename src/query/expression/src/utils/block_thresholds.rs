@@ -153,7 +153,7 @@ impl BlockThresholds {
         let bytes_per_block = total_bytes.div_ceil(block_num_by_compressed);
         // Adjust the number of blocks based on block size thresholds.
         let max_bytes_per_block = self.max_bytes_per_block.min(400 * 1024 * 1024);
-        let min_bytes_per_block = max_bytes_per_block / 2;
+        let min_bytes_per_block = max_bytes_per_block / 3;
         let block_nums = if bytes_per_block > max_bytes_per_block {
             // Case 1: If the block size is too bigger.
             total_bytes.div_ceil(max_bytes_per_block)
@@ -190,29 +190,11 @@ impl BlockThresholds {
             return 1;
         }
 
-        // Estimate the number of blocks based on row count and compressed size.
-        let by_rows = std::cmp::max(total_rows / self.max_rows_per_block, 1);
-        let by_compressed = total_compressed / self.max_compressed_per_block;
-        // If row-based block count is greater, use max rows per block as limit.
-        if by_rows >= by_compressed {
-            return by_rows;
-        }
-
-        // Adjust block count based on byte size thresholds.
-        let bytes_per_block = total_bytes.div_ceil(by_compressed);
-        let max_bytes = self.max_bytes_per_block.min(400 * 1024 * 1024);
-        let min_bytes = max_bytes / 2;
-        let total_partitions = if bytes_per_block > max_bytes {
-            // Block size is too large.
-            total_bytes / max_bytes
-        } else if bytes_per_block < min_bytes {
-            // Block size is too small.
-            total_bytes / min_bytes
-        } else {
-            // Block size is acceptable.
-            by_compressed
-        };
-
-        std::cmp::max(total_partitions, 1)
+        let by_rows = std::cmp::max(total_rows.div_ceil(65536), 1);
+        let by_bytes = std::cmp::max(
+            total_compressed.div_ceil(self.min_compressed_per_block),
+            total_bytes.div_ceil(self.min_bytes_per_block),
+        );
+        std::cmp::max(by_rows, by_bytes)
     }
 }
