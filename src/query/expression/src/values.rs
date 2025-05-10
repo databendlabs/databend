@@ -629,8 +629,7 @@ impl ScalarRef<'_> {
             ScalarRef::EmptyMap => DataType::EmptyMap,
             ScalarRef::Number(s) => DataType::Number(s.data_type()),
             ScalarRef::Decimal(s) => with_decimal_type!(|DECIMAL_TYPE| match s {
-                DecimalScalar::DECIMAL_TYPE(_, size) =>
-                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+                DecimalScalar::DECIMAL_TYPE(_, size) => DataType::Decimal(DecimalDataType(*size)),
             }),
             ScalarRef::Boolean(_) => DataType::Boolean,
             ScalarRef::Binary(_) => DataType::Binary,
@@ -686,7 +685,7 @@ impl ScalarRef<'_> {
                         DecimalScalar::DECIMAL_TYPE(_, size2),
                     ) => {
                         if size1 == size2 {
-                            Some(DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size1)))
+                            Some(DataType::Decimal(DecimalDataType(*size1)))
                         } else {
                             None
                         }
@@ -1266,8 +1265,7 @@ impl Column {
                 NumberColumn::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
             }),
             Column::Decimal(c) => with_decimal_type!(|DECIMAL_TYPE| match c {
-                DecimalColumn::DECIMAL_TYPE(_, size) =>
-                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+                DecimalColumn::DECIMAL_TYPE(_, size) => DataType::Decimal(DecimalDataType(*size)),
             }),
             Column::Boolean(_) => DataType::Boolean,
             Column::Binary(_) => DataType::Binary,
@@ -1397,20 +1395,20 @@ impl Column {
                     }
                 })
             }
-            DataType::Decimal(t) => match t {
-                DecimalDataType::Decimal128(size) => {
+            DataType::Decimal(t) => {
+                let size = t.size();
+                if t.is_128() {
                     let values = (0..len)
                         .map(|_| i128::from(rng.gen::<i16>()))
                         .collect::<Vec<i128>>();
-                    Column::Decimal(DecimalColumn::Decimal128(values.into(), *size))
-                }
-                DecimalDataType::Decimal256(size) => {
+                    Column::Decimal(DecimalColumn::Decimal128(values.into(), size))
+                } else {
                     let values = (0..len)
                         .map(|_| i256::from(rng.gen::<i16>()))
                         .collect::<Vec<i256>>();
-                    Column::Decimal(DecimalColumn::Decimal256(values.into(), *size))
+                    Column::Decimal(DecimalColumn::Decimal256(values.into(), size))
                 }
-            },
+            }
             DataType::Timestamp => TimestampType::from_data(
                 (0..len)
                     .map(|_| rng.gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
@@ -1861,7 +1859,7 @@ impl ColumnBuilder {
             }),
             ColumnBuilder::Decimal(col) => with_decimal_type!(|DECIMAL_TYPE| match col {
                 DecimalColumnBuilder::DECIMAL_TYPE(_, size) =>
-                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+                    DataType::Decimal(DecimalDataType(*size)),
             }),
             ColumnBuilder::Boolean(_) => DataType::Boolean,
             ColumnBuilder::Binary(_) => DataType::Binary,

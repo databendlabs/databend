@@ -454,7 +454,7 @@ pub fn try_create_aggregate_array_agg_function(
                 }
             })
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(decimal) if decimal.is_128() => {
             if is_nullable {
                 type State = NullableArrayAggState<DecimalType<i128>>;
                 AggregateArrayAggFunction::<DecimalType<i128>, State>::try_create(
@@ -469,7 +469,7 @@ pub fn try_create_aggregate_array_agg_function(
                 )
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             if is_nullable {
                 type State = NullableArrayAggState<DecimalType<i256>>;
                 AggregateArrayAggFunction::<DecimalType<i256>, State>::try_create(

@@ -402,23 +402,20 @@ impl FromToProto for ex::types::DecimalDataType {
 
         let x = match num {
             pb::decimal::Decimal::Decimal128(x) => {
-                ex::types::DecimalDataType::Decimal128(ex::types::decimal::DecimalSize::from_pb(x)?)
+                ex::types::DecimalDataType(ex::types::decimal::DecimalSize::from_pb(x)?)
             }
             pb::decimal::Decimal::Decimal256(x) => {
-                ex::types::DecimalDataType::Decimal256(ex::types::decimal::DecimalSize::from_pb(x)?)
+                ex::types::DecimalDataType(ex::types::decimal::DecimalSize::from_pb(x)?)
             }
         };
         Ok(x)
     }
 
     fn to_pb(&self) -> Result<pb::Decimal, Incompatible> {
-        let x = match self {
-            ex::types::DecimalDataType::Decimal128(x) => {
-                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(x)?)
-            }
-            ex::types::DecimalDataType::Decimal256(x) => {
-                pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(x)?)
-            }
+        let x = if self.is_128() {
+            pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(&self.size())?)
+        } else {
+            pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(&self.size())?)
         };
         Ok(pb::Decimal {
             ver: VER,
@@ -439,18 +436,18 @@ impl FromToProto for ex::types::decimal::DecimalSize {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(ex::types::decimal::DecimalSize {
-            precision: p.precision as u8,
-            scale: p.scale as u8,
-        })
+        Ok(ex::types::decimal::DecimalSize::new_unchecked(
+            p.precision as _,
+            p.scale as _,
+        ))
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         Ok(pb::DecimalSize {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            precision: self.precision as i32,
-            scale: self.scale as i32,
+            precision: self.precision() as i32,
+            scale: self.scale() as i32,
         })
     }
 }

@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::types::decimal::DecimalSize;
-use crate::types::DataType;
-use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
 
 pub enum NumberClass {
@@ -50,36 +47,18 @@ pub const ALL_NUMBER_CLASSES: &[NumberClass] = &[
 ];
 
 impl NumberClass {
-    pub fn get_repr_type(&self) -> DataType {
-        match self {
-            NumberClass::UInt8 => DataType::Number(NumberDataType::UInt8),
-            NumberClass::UInt16 => DataType::Number(NumberDataType::UInt16),
-            NumberClass::UInt32 => DataType::Number(NumberDataType::UInt32),
-            NumberClass::UInt64 => DataType::Number(NumberDataType::UInt64),
-            NumberClass::Int8 => DataType::Number(NumberDataType::Int8),
-            NumberClass::Int16 => DataType::Number(NumberDataType::Int16),
-            NumberClass::Int32 => DataType::Number(NumberDataType::Int32),
-            NumberClass::Int64 => DataType::Number(NumberDataType::Int64),
-            NumberClass::Decimal128 => {
-                DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                    precision: 38,
-                    scale: 0,
-                }))
-            }
-            NumberClass::Decimal256 => {
-                DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-                    precision: 38,
-                    scale: 0,
-                }))
-            }
-            NumberClass::Float32 => DataType::Number(NumberDataType::Float32),
-            NumberClass::Float64 => DataType::Number(NumberDataType::Float64),
-        }
-    }
-
     pub fn get_number_type(&self) -> Option<NumberDataType> {
-        match self.get_repr_type() {
-            DataType::Number(n) => Some(n),
+        match self {
+            NumberClass::UInt8 => Some(NumberDataType::UInt8),
+            NumberClass::UInt16 => Some(NumberDataType::UInt16),
+            NumberClass::UInt32 => Some(NumberDataType::UInt32),
+            NumberClass::UInt64 => Some(NumberDataType::UInt64),
+            NumberClass::Int8 => Some(NumberDataType::Int8),
+            NumberClass::Int16 => Some(NumberDataType::Int16),
+            NumberClass::Int32 => Some(NumberDataType::Int32),
+            NumberClass::Int64 => Some(NumberDataType::Int64),
+            NumberClass::Float32 => Some(NumberDataType::Float32),
+            NumberClass::Float64 => Some(NumberDataType::Float64),
             _ => None,
         }
     }

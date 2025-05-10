@@ -20,9 +20,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::number::*;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
@@ -321,12 +318,8 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         }
                     })
                 }
-                DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-                    let decimal_size = DecimalSize {
-                        precision: s.precision,
-                        scale: s.scale,
-                    };
-                    let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+                DataType::Decimal(decimal) if decimal.is_128() => {
+                    let return_type = DataType::Decimal(decimal);
                     AggregateUnaryFunction::<
                         MinMaxAnyDecimalState<DecimalType<i128>, CMP>,
                         DecimalType<i128>,
@@ -335,12 +328,8 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         display_name, return_type, params, data_type
                     )
                 }
-                DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-                    let decimal_size = DecimalSize {
-                        precision: s.precision,
-                        scale: s.scale,
-                    };
-                    let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+                DataType::Decimal(decimal) => {
+                    let return_type = DataType::Decimal(decimal);
                     AggregateUnaryFunction::<
                         MinMaxAnyDecimalState<DecimalType<i256>, CMP>,
                         DecimalType<i256>,

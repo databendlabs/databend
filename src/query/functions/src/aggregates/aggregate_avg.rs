@@ -225,16 +225,13 @@ pub fn try_create_aggregate_avg_function(
                 Float64Type,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
-        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-            let p = MAX_DECIMAL128_PRECISION;
-            let decimal_size = DecimalSize {
-                precision: p,
-                scale: s.scale.max(4),
-            };
+        DataType::Decimal(s) if s.is_128() => {
+            let decimal_size =
+                DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale().max(4));
 
             // DecimalWidth<int64_t> = 18
-            let overflow = s.precision > 18;
-            let scale_add = decimal_size.scale - s.scale;
+            let overflow = s.precision() > 18;
+            let scale_add = decimal_size.scale() - s.scale();
             let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
 
             if overflow {
@@ -259,15 +256,12 @@ pub fn try_create_aggregate_avg_function(
                 Ok(Arc::new(func))
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-            let p = MAX_DECIMAL256_PRECISION;
-            let decimal_size = DecimalSize {
-                precision: p,
-                scale: s.scale.max(4),
-            };
+        DataType::Decimal(s) => {
+            let decimal_size =
+                DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale().max(4));
 
-            let overflow = s.precision > 18;
-            let scale_add = decimal_size.scale - s.scale;
+            let overflow = s.precision() > 18;
+            let scale_add = decimal_size.scale() - s.scale();
             let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
 
             if overflow {

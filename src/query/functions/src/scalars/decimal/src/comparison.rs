@@ -72,8 +72,8 @@ macro_rules! register_decimal_compare_op {
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|ctx, d| {
                         let (s1, s2) = (
-                            d[0].as_decimal().unwrap().decimal_size().scale,
-                            d[1].as_decimal().unwrap().decimal_size().scale,
+                            d[0].as_decimal().unwrap().decimal_size().scale(),
+                            d[1].as_decimal().unwrap().decimal_size().scale(),
                         );
                         let (m1, m2) = compare_multiplier(s1, s2);
                         let new_domain = match (&d[0], &d[1]) {
@@ -125,10 +125,10 @@ macro_rules! register_decimal_compare_op {
                                 let d1 = convert_to_decimal_domain(
                                     ctx,
                                     d[0].clone(),
-                                    DecimalDataType::Decimal256(DecimalSize {
-                                        precision: MAX_DECIMAL256_PRECISION,
-                                        scale: s1,
-                                    }),
+                                    DecimalDataType(DecimalSize::new_unchecked(
+                                        MAX_DECIMAL256_PRECISION,
+                                        s1,
+                                    )),
                                 )
                                 .unwrap();
 
@@ -163,10 +163,10 @@ macro_rules! register_decimal_compare_op {
                                 let d2 = convert_to_decimal_domain(
                                     ctx,
                                     d[1].clone(),
-                                    DecimalDataType::Decimal256(DecimalSize {
-                                        precision: MAX_DECIMAL256_PRECISION,
-                                        scale: s2,
-                                    }),
+                                    DecimalDataType(DecimalSize::new_unchecked(
+                                        MAX_DECIMAL256_PRECISION,
+                                        s2,
+                                    )),
                                 )
                                 .unwrap();
                                 let d2 = d2.as_decimal256().unwrap().0;
@@ -221,14 +221,14 @@ macro_rules! op_decimal {
 
         let (m1, m2) = compare_multiplier(dt1.scale(), dt2.scale());
 
-        match (dt1, dt2) {
-            (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(_)) => {
+        match (dt1.is_128(), dt2.is_128()) {
+            (true, true) => {
                 let f = |a: i128, b: i128, _: &mut EvalContext| -> bool {
                     (a * 10_i128.pow(m1)).cmp(&(b * 10_i128.pow(m2))).$op()
                 };
                 compare_decimal($a, $b, f, $ctx)
             }
-            (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(_)) => {
+            (false, false) => {
                 let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
                     (a * i256::from(10).pow(m1))
                         .cmp(&(b * i256::from(10).pow(m2)))
@@ -236,15 +236,15 @@ macro_rules! op_decimal {
                 };
                 compare_decimal($a, $b, f, $ctx)
             }
-            (DecimalDataType::Decimal128(s1), DecimalDataType::Decimal256(_)) => {
-                let dest_type = DecimalDataType::Decimal256(DecimalSize {
-                    precision: MAX_DECIMAL256_PRECISION,
-                    scale: s1.scale,
-                });
+            (true, false) => {
+                let dest_type = DecimalDataType(DecimalSize::new_unchecked(
+                    MAX_DECIMAL256_PRECISION,
+                    dt1.scale(),
+                ));
                 let left = convert_to_decimal(
                     $a,
                     $ctx,
-                    &DataType::Decimal(DecimalDataType::Decimal128(*s1)),
+                    &DataType::Decimal(DecimalDataType(dt1.size())),
                     dest_type,
                 );
 
@@ -255,15 +255,15 @@ macro_rules! op_decimal {
                 };
                 compare_decimal(&left, $b, f, $ctx)
             }
-            (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(s2)) => {
-                let dest_type = DecimalDataType::Decimal256(DecimalSize {
-                    precision: MAX_DECIMAL256_PRECISION,
-                    scale: s2.scale,
-                });
+            (false, true) => {
+                let dest_type = DecimalDataType(DecimalSize::new_unchecked(
+                    MAX_DECIMAL256_PRECISION,
+                    dt2.scale(),
+                ));
                 let right = convert_to_decimal(
                     $b,
                     $ctx,
-                    &DataType::Decimal(DecimalDataType::Decimal128(*s2)),
+                    &DataType::Decimal(DecimalDataType(dt2.size())),
                     dest_type,
                 );
 

@@ -373,20 +373,19 @@ impl AvroDecoder {
                 let v_precision = v.digits() as i64;
                 let v_leading_digits = v_precision - v.fractional_digit_count();
                 let (big_int, v_scale) = v.into_bigint_and_exponent();
-                if v_leading_digits <= (size.precision - size.scale) as i64
-                    && v_scale <= size.scale as i64
+                if v_leading_digits <= (size.precision() - size.scale()) as i64
+                    && v_scale <= size.scale() as i64
                 {
-                    if let Some(mut d1) = <D>::from_bigint(big_int) {
-                        let scale_diff = (size.scale as i64) - v_scale;
-                        if scale_diff > 0 {
-                            d1 = d1
-                                .checked_mul(D::e(scale_diff as u32))
-                                .expect("rescale should not overflow");
-                        }
-                        column.push(d1);
-                    } else {
+                    let Some(mut d1) = <D>::from_bigint(big_int) else {
                         return Err(Error::default());
+                    };
+                    let scale_diff = (size.scale() as i64) - v_scale;
+                    if scale_diff > 0 {
+                        d1 = d1
+                            .checked_mul(D::e(scale_diff as u32))
+                            .expect("rescale should not overflow");
                     }
+                    column.push(d1);
                 } else {
                     return Err(Error::default());
                 }
@@ -656,11 +655,8 @@ mod test {
             Value::Decimal(Decimal::from(big_int.to_signed_bytes_be()))
         };
         let value = make_value("12345");
-        let decimal_size = DecimalSize {
-            precision: 7,
-            scale: 4,
-        };
-        let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
+        let decimal_size = DecimalSize::new_unchecked(7, 4);
+        let table_field = TableDataType::Decimal(DecimalDataType(decimal_size));
         let expected =
             ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
         test_single_field(
@@ -672,11 +668,8 @@ mod test {
         .unwrap();
 
         // smaller leading digits (p - s)
-        let decimal_size = DecimalSize {
-            precision: 6,
-            scale: 4,
-        };
-        let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
+        let decimal_size = DecimalSize::new_unchecked(6, 4);
+        let table_field = TableDataType::Decimal(DecimalDataType(decimal_size));
         assert!(test_single_field(table_field, avro_schema, value, expected).is_err());
 
         Ok(())
@@ -693,14 +686,12 @@ mod test {
             let big_int = BigInt::from_str(s).unwrap();
             Value::BigDecimal(BigDecimal::new(big_int, 2))
         };
+        let decimal_size = DecimalSize::new_unchecked(7, 4);
+        let table_field = TableDataType::Decimal(DecimalDataType(decimal_size));
+
         let value = make_value("12345");
-        let decimal_size = DecimalSize {
-            precision: 7,
-            scale: 4,
-        };
-        let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
         let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
+            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
         test_single_field(
             table_field.clone(),
             avro_schema.clone(),

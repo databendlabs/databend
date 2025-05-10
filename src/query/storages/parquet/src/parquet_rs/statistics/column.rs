@@ -14,7 +14,6 @@
 
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::i256;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -52,13 +51,13 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
                         (Scalar::from(max as u32), Scalar::from(min as u32))
                     }
                     TableDataType::Date => (Scalar::Date(max), Scalar::Date(min)),
-                    TableDataType::Decimal(DecimalDataType::Decimal128(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
+                    TableDataType::Decimal(decimal) if decimal.is_128() => (
+                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), decimal.size())),
+                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), decimal.size())),
                     ),
-                    TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), *size)),
+                    TableDataType::Decimal(decimal) => (
+                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), decimal.size())),
+                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), decimal.size())),
                     ),
                     _ => return None,
                 }
@@ -83,13 +82,13 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
                             Scalar::Timestamp(min * multi),
                         )
                     }
-                    TableDataType::Decimal(DecimalDataType::Decimal128(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
+                    TableDataType::Decimal(decimal) if decimal.is_128() => (
+                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), decimal.size())),
+                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), decimal.size())),
                     ),
-                    TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), *size)),
+                    TableDataType::Decimal(decimal) => (
+                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), decimal.size())),
+                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), decimal.size())),
                     ),
                     _ => return None,
                 }
@@ -115,13 +114,13 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
             Statistics::FixedLenByteArray(s) => {
                 let (max, min) = (s.max(), s.min());
                 match typ {
-                    TableDataType::Decimal(DecimalDataType::Decimal128(size)) => (
-                        decode_decimal128_from_bytes(max, *size),
-                        decode_decimal128_from_bytes(min, *size),
+                    TableDataType::Decimal(decimal) if decimal.is_128() => (
+                        decode_decimal128_from_bytes(max, decimal.size()),
+                        decode_decimal128_from_bytes(min, decimal.size()),
                     ),
-                    TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        decode_decimal256_from_bytes(max, *size),
-                        decode_decimal256_from_bytes(min, *size),
+                    TableDataType::Decimal(decimal) => (
+                        decode_decimal256_from_bytes(max, decimal.size()),
+                        decode_decimal256_from_bytes(min, decimal.size()),
                     ),
                     _ => return None,
                 }

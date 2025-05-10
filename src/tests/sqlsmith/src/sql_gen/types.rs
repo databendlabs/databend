@@ -56,12 +56,8 @@ impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_decimal_data_type(&mut self) -> DataType {
         let precision = self.rng.gen_range(1..=76);
         let scale = self.rng.gen_range(0..=precision);
-        let size = DecimalSize { precision, scale };
-        if precision <= 38 {
-            DataType::Decimal(DecimalDataType::Decimal128(size))
-        } else {
-            DataType::Decimal(DecimalDataType::Decimal256(size))
-        }
+        let size = DecimalSize::new_unchecked(precision, scale);
+        DataType::Decimal(DecimalDataType::from_size(size).unwrap())
     }
 
     pub(crate) fn gen_simple_common_data_type(&mut self) -> DataType {

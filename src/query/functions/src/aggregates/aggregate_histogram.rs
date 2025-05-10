@@ -124,22 +124,22 @@ where
             .clone()
             .into_decimal()
             .ok()
-            .and_then(|d| d.into_decimal128().ok());
+            .and_then(|d| if d.is_128() { Some(d) } else { None });
         let decimal_i256_size = histogram_data
             .data_type
             .clone()
             .into_decimal()
             .ok()
-            .and_then(|d| d.into_decimal256().ok());
+            .and_then(|d| if d.is_128() { None } else { Some(d) });
 
         let format_scalar = |scalar| {
             let scalar = T::upcast_scalar(scalar);
             let scalar = match scalar {
                 Scalar::Decimal(DecimalScalar::Decimal128(value, _)) => {
-                    i128::upcast_scalar(value, decimal_i128_size.unwrap())
+                    i128::upcast_scalar(value, decimal_i128_size.unwrap().size())
                 }
                 Scalar::Decimal(DecimalScalar::Decimal256(value, _)) => {
-                    i256::upcast_scalar(value, decimal_i256_size.unwrap())
+                    i256::upcast_scalar(value, decimal_i256_size.unwrap().size())
                 }
                 _ => scalar,
             };
@@ -191,7 +191,7 @@ pub fn try_create_aggregate_histogram_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(s) if s.is_128() => {
             let func = AggregateUnaryFunction::<
                 HistogramState<Decimal128Type>,
                 Decimal128Type,
@@ -206,7 +206,7 @@ pub fn try_create_aggregate_histogram_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             let func = AggregateUnaryFunction::<
                 HistogramState<Decimal256Type>,
                 Decimal256Type,

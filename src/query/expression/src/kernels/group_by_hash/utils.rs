@@ -19,7 +19,7 @@ use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::BinaryColumn;
 use crate::types::NumberColumn;
-use crate::with_decimal_mapped_type;
+use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::InputColumns;
@@ -58,7 +58,7 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
             }
         }),
         Column::Decimal(v) => {
-            with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
+            with_decimal_type!(|DECIMAL_TYPE| match v {
                 DecimalColumn::DECIMAL_TYPE(v, _) => {
                     row_space.store_value_uncheckd(&v[row]);
                 }

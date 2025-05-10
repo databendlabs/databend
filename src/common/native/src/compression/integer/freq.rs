@@ -83,7 +83,7 @@ impl<T: IntegerType> IntegerCompression<T> for Freq {
         write_options.forbidden_compressions.push(Compression::Freq);
 
         let exceptions = exceptions.into();
-        compress_integer(&exceptions, stats.validity.clone(), write_options, output)?;
+        compress_integer(&exceptions, stats.validity.clone(), &write_options, output)?;
 
         Ok(output.len() - size)
     }

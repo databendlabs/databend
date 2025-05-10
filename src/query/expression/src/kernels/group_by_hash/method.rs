@@ -137,10 +137,10 @@ impl HashMethodKind {
             HashMethodKind::KeysU32(_) => DataType::Number(NumberDataType::UInt32),
             HashMethodKind::KeysU64(_) => DataType::Number(NumberDataType::UInt64),
             HashMethodKind::KeysU128(_) => {
-                DataType::Decimal(DecimalDataType::Decimal128(i128::default_decimal_size()))
+                DataType::Decimal(DecimalDataType::from_size(i128::default_decimal_size()).unwrap())
             }
             HashMethodKind::KeysU256(_) => {
-                DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
+                DataType::Decimal(DecimalDataType::from_size(i256::default_decimal_size()).unwrap())
             }
         }
     }

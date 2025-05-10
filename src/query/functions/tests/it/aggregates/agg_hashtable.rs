@@ -185,10 +185,7 @@ fn test_agg_hashtable() {
 #[test]
 fn test_layout() {
     let factory = AggregateFunctionFactory::instance();
-    let decimal_type = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-        precision: 18,
-        scale: 2,
-    }));
+    let decimal_type = DataType::Decimal(DecimalDataType(DecimalSize::new_unchecked(18, 2)));
 
     let aggrs = factory
         .get("sum", vec![], vec![decimal_type], vec![])

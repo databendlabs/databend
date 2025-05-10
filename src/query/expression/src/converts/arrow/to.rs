@@ -38,7 +38,6 @@ use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
 use crate::infer_table_schema;
 use crate::types::DataType;
-use crate::types::DecimalDataType;
 use crate::types::GeographyColumn;
 use crate::types::NumberDataType;
 use crate::with_number_type;
@@ -109,12 +108,15 @@ impl From<&TableField> for Field {
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
-            TableDataType::Decimal(DecimalDataType::Decimal128(size)) => {
-                ArrowDataType::Decimal128(size.precision, size.scale as i8)
+
+            TableDataType::Decimal(decimal) => {
+                if decimal.is_128() {
+                    ArrowDataType::Decimal128(decimal.precision(), decimal.scale() as i8)
+                } else {
+                    ArrowDataType::Decimal256(decimal.precision(), decimal.scale() as i8)
+                }
             }
-            TableDataType::Decimal(DecimalDataType::Decimal256(size)) => {
-                ArrowDataType::Decimal256(size.precision, size.scale as i8)
-            }
+
             TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             TableDataType::Date => ArrowDataType::Date32,
             TableDataType::Nullable(ty) => {

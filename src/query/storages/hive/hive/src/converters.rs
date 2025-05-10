@@ -145,11 +145,8 @@ fn try_from_field_type_name(type_name: impl AsRef<str>) -> Result<TableDataType>
         Ok(TableDataType::Array(Box::new(sub_type.wrap_nullable())))
     } else {
         match name.as_str() {
-            "DECIMAL" | "NUMERIC" => Ok(TableDataType::Decimal(DecimalDataType::Decimal128(
-                DecimalSize {
-                    precision: 10,
-                    scale: 0,
-                },
+            "DECIMAL" | "NUMERIC" => Ok(TableDataType::Decimal(DecimalDataType(
+                DecimalSize::new_unchecked(10, 0),
             ))),
             _ => resolve_type_name_by_str(name.as_str(), false),
         }
