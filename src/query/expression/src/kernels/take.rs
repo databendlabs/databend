@@ -119,11 +119,11 @@ where I: databend_common_column::types::Index
 
     fn visit_column(&mut self, column: Column) -> Result<()> {
         match column {
-            Column::Date(buffer) => self.visit_copy_type::<DateType>(buffer),
-            Column::Timestamp(buffer) => self.visit_copy_type::<TimestampType>(buffer),
+            Column::Date(buffer) => self.visit_simple_type::<DateType>(buffer),
+            Column::Timestamp(buffer) => self.visit_simple_type::<TimestampType>(buffer),
             Column::Number(number) => {
                 with_number_mapped_type!(|NUM_TYPE| match number {
-                    NumberColumn::NUM_TYPE(b) => self.visit_copy_type::<NumberType<NUM_TYPE>>(b),
+                    NumberColumn::NUM_TYPE(b) => self.visit_simple_type::<NumberType<NUM_TYPE>>(b),
                 })
             }
             _ => Self::default_visit_column(column, self),
@@ -160,7 +160,7 @@ where I: databend_common_column::types::Index
         Ok(())
     }
 
-    fn visit_copy_type<T: CopyType>(&mut self, buffer: Buffer<T::Scalar>) -> Result<()> {
+    fn visit_simple_type<T: SimpleType>(&mut self, buffer: Buffer<T::Scalar>) -> Result<()> {
         self.result = Some(Value::Column(T::upcast_column(
             self.take_primitive_types(buffer),
         )));

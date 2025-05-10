@@ -49,11 +49,11 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::ArgType;
-use super::CopyType;
-use super::CopyValueType;
 use super::DataType;
 use super::GenericMap;
 use super::SimpleDomain;
+use super::SimpleType;
+use super::SimpleValueType;
 use crate::utils::arrow::buffer_into_mut;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -67,9 +67,9 @@ pub struct DecimalType<T: Decimal>(PhantomData<T>);
 pub type Decimal128Type = DecimalType<i128>;
 pub type Decimal256Type = DecimalType<i256>;
 
-impl<Num: Decimal> CopyValueType for DecimalType<Num> {}
+impl<Num: Decimal> SimpleValueType for DecimalType<Num> {}
 
-impl<Num: Decimal> CopyType for DecimalType<Num> {
+impl<Num: Decimal> SimpleType for DecimalType<Num> {
     type Scalar = Num;
     type Domain = SimpleDomain<Num>;
 

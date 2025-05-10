@@ -172,7 +172,7 @@ pub trait ValueVisitor: Sized {
         }
     }
 
-    fn visit_copy_type<T: CopyType>(
+    fn visit_simple_type<T: SimpleType>(
         &mut self,
         _: Buffer<T::Scalar>,
     ) -> Result<Self::U, Self::Error> {

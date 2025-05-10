@@ -35,10 +35,10 @@ use serde::Serialize;
 use super::decimal::DecimalSize;
 use crate::property::Domain;
 use crate::types::ArgType;
-use crate::types::CopyType;
-use crate::types::CopyValueType;
 use crate::types::DataType;
 use crate::types::GenericMap;
+use crate::types::SimpleType;
+use crate::types::SimpleValueType;
 use crate::utils::arrow::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -102,9 +102,9 @@ pub type UInt64Type = NumberType<u64>;
 pub type Float32Type = NumberType<F32>;
 pub type Float64Type = NumberType<F64>;
 
-impl<Num: Number> CopyValueType for NumberType<Num> {}
+impl<Num: Number> SimpleValueType for NumberType<Num> {}
 
-impl<Num: Number> CopyType for NumberType<Num> {
+impl<Num: Number> SimpleType for NumberType<Num> {
     type Scalar = Num;
     type Domain = SimpleDomain<Num>;
 

@@ -27,9 +27,7 @@ use crate::ColumnBuilder;
 use crate::Domain;
 use crate::ScalarRef;
 
-pub type CopiedSliceIter<'a, T> = std::iter::Copied<std::slice::Iter<'a, T>>;
-
-pub trait CopyType: Debug + Clone + PartialEq + Sized + 'static {
+pub trait SimpleType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + Copy + PartialEq + Eq + Default + Send + 'static;
     type Domain: Debug + Clone + Copy + PartialEq;
 
@@ -75,14 +73,14 @@ pub trait CopyType: Debug + Clone + PartialEq + Sized + 'static {
     }
 }
 
-pub trait CopyValueType: CopyType {}
+pub trait SimpleValueType: SimpleType {}
 
-impl<T: CopyValueType> ValueType for T {
+impl<T: SimpleValueType> ValueType for T {
     type Scalar = T::Scalar;
     type ScalarRef<'a> = T::Scalar;
     type Column = Buffer<T::Scalar>;
     type Domain = T::Domain;
-    type ColumnIterator<'a> = CopiedSliceIter<'a, T::Scalar>;
+    type ColumnIterator<'a> = std::iter::Copied<std::slice::Iter<'a, T::Scalar>>;
     type ColumnBuilder = Vec<Self::Scalar>;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {

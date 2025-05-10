@@ -29,11 +29,11 @@ use log::error;
 use super::number::SimpleDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
-use crate::types::CopyType;
-use crate::types::CopyValueType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
+use crate::types::SimpleType;
+use crate::types::SimpleValueType;
 use crate::utils::date_helper::DateConverter;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -66,9 +66,9 @@ pub fn clamp_timestamp(micros: &mut i64) {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimestampType;
 
-impl CopyValueType for TimestampType {}
+impl SimpleValueType for TimestampType {}
 
-impl CopyType for TimestampType {
+impl SimpleType for TimestampType {
     type Scalar = i64;
     type Domain = SimpleDomain<i64>;
 

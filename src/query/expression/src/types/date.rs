@@ -27,11 +27,11 @@ use num_traits::AsPrimitive;
 
 use super::number::SimpleDomain;
 use super::ArgType;
-use super::CopyType;
-use super::CopyValueType;
 use super::DataType;
 use super::DecimalSize;
 use super::GenericMap;
+use super::SimpleType;
+use super::SimpleValueType;
 use crate::date_helper::DateConverter;
 use crate::property::Domain;
 use crate::values::Column;
@@ -61,9 +61,9 @@ pub fn clamp_date(days: i64) -> i32 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DateType;
 
-impl CopyValueType for DateType {}
+impl SimpleValueType for DateType {}
 
-impl CopyType for DateType {
+impl SimpleType for DateType {
     type Scalar = i32;
     type Domain = SimpleDomain<i32>;
 

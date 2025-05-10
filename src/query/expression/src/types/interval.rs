@@ -22,11 +22,11 @@ use databend_common_io::Interval;
 use super::number::SimpleDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
-use crate::types::CopyType;
-use crate::types::CopyValueType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
+use crate::types::SimpleType;
+use crate::types::SimpleValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -35,9 +35,9 @@ use crate::ScalarRef;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntervalType;
 
-impl CopyValueType for IntervalType {}
+impl SimpleValueType for IntervalType {}
 
-impl CopyType for IntervalType {
+impl SimpleType for IntervalType {
     type Scalar = months_days_micros;
     type Domain = SimpleDomain<months_days_micros>;
 
