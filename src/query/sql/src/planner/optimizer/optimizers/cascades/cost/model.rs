@@ -158,7 +158,7 @@ impl DefaultCostModel {
         let exchange: Exchange = (*m_expr.plan.clone()).clone().try_into()?;
         let group = memo.group(m_expr.group_index)?;
         let cost = match exchange {
-            Exchange::Hash(_) => {
+            Exchange::Hash(_) | Exchange::Modulo(_) => {
                 group.stat_info.cardinality * self.network_per_row
                     + group.stat_info.cardinality * self.compute_per_row
             }

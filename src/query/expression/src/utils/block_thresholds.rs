@@ -152,8 +152,8 @@ impl BlockThresholds {
 
         let bytes_per_block = total_bytes.div_ceil(block_num_by_compressed);
         // Adjust the number of blocks based on block size thresholds.
-        let max_bytes_per_block = (4 * self.min_bytes_per_block).min(400 * 1024 * 1024);
-        let min_bytes_per_block = (self.min_bytes_per_block / 2).min(50 * 1024 * 1024);
+        let max_bytes_per_block = self.max_bytes_per_block.min(400 * 1024 * 1024);
+        let min_bytes_per_block = max_bytes_per_block / 3;
         let block_nums = if bytes_per_block > max_bytes_per_block {
             // Case 1: If the block size is too bigger.
             total_bytes.div_ceil(max_bytes_per_block)
@@ -165,5 +165,36 @@ impl BlockThresholds {
             block_num_by_compressed
         };
         total_rows.div_ceil(block_nums.max(1)).max(1)
+    }
+
+    /// Calculates the optimal number of partitions (blocks) based on total data size and row count.
+    ///
+    /// # Parameters
+    /// - `total_rows`: The total number of rows in the data.
+    /// - `total_bytes`: The total uncompressed size of the data in bytes.
+    /// - `total_compressed`: The total compressed size of the data in bytes.
+    ///
+    /// # Returns
+    /// - The calculated number of partitions (blocks) needed.
+    #[inline]
+    pub fn calc_partitions_for_recluster(
+        &self,
+        total_rows: usize,
+        total_bytes: usize,
+        total_compressed: usize,
+    ) -> usize {
+        // If the data is already compact enough, return a single partition.
+        if self.check_for_compact(total_rows, total_bytes)
+            && total_compressed < 2 * self.min_compressed_per_block
+        {
+            return 1;
+        }
+
+        let by_rows = std::cmp::max(total_rows.div_ceil(65536), 1);
+        let by_bytes = std::cmp::max(
+            total_compressed.div_ceil(self.min_compressed_per_block),
+            total_bytes.div_ceil(self.min_bytes_per_block),
+        );
+        std::cmp::max(by_rows, by_bytes)
     }
 }

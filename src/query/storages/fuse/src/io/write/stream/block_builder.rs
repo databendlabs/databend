@@ -237,7 +237,7 @@ impl StreamBlockBuilder {
         self.row_count >= self.properties.block_thresholds.min_rows_per_block
             || self.block_size >= self.properties.block_thresholds.max_bytes_per_block
             || (file_size >= self.properties.block_thresholds.min_compressed_per_block
-                && self.block_size >= self.properties.block_thresholds.min_bytes_per_block)
+                && self.block_size >= self.properties.block_thresholds.max_bytes_per_block / 4)
     }
 
     pub fn write(&mut self, block: DataBlock) -> Result<()> {
