@@ -77,7 +77,7 @@ impl BinaryCompression for Dict {
         // dict data use custom encoding
         let mut write_options = write_options.clone();
         write_options.forbidden_compressions.push(Compression::Dict);
-        compress_integer(&indices, stats.validity.clone(), write_options, output_buf)?;
+        compress_integer(&indices, stats.validity.clone(), &write_options, output_buf)?;
 
         // data page use plain encoding
         let sets = encoder.get_sets();
