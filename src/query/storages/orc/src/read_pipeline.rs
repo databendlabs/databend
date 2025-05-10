@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
@@ -47,6 +48,9 @@ impl OrcTable {
         let max_threads = settings.get_max_threads()? as usize;
         let num_source = max_threads.min(plan.parts.len());
         let operator = init_stage_operator(&self.stage_table_info.stage_info)?;
+        // No Projection
+        let projection =
+            PushDownInfo::projection_of_push_downs(&self.stage_table_info.schema, None);
         let data_schema: DataSchema = self.stage_table_info.schema.clone().into();
         let data_schema = Arc::new(data_schema);
         pipeline.add_source(
@@ -54,9 +58,10 @@ impl OrcTable {
                 ORCSource::try_create(
                     output,
                     ctx.clone(),
-                    operator.clone(),
+                    Arc::new(operator.clone()),
                     self.arrow_schema.clone(),
-                    self.schema_from.clone(),
+                    Some(self.schema_from.clone()),
+                    projection.clone(),
                 )
             },
             num_source,
