@@ -52,7 +52,7 @@ pub struct ParquetFileWriter {
     arrow_schema: Arc<Schema>,
     compression: Compression,
 
-    input_data: Vec<DataBlock>,
+    input_data: VecDeque<DataBlock>,
 
     input_bytes: usize,
     row_counts: usize,
@@ -150,7 +150,7 @@ impl ParquetFileWriter {
             unload_output,
             unload_output_blocks: None,
             writer,
-            input_data: Vec::new(),
+            input_data: VecDeque::new(),
             input_bytes: 0,
             file_to_write: None,
             data_accessor,
@@ -231,11 +231,11 @@ impl Processor for ParquetFileWriter {
         } else if self.input.has_data() {
             let block = self.input.pull_data().unwrap()?;
             if self.targe_file_size.is_none() {
-                self.input_data.push(block);
+                self.input_data.push_back(block);
             } else {
                 let block_meta = block.get_owned_meta().unwrap();
                 let blocks = BlockBatch::downcast_from(block_meta).unwrap();
-                self.input_data.extend_from_slice(&blocks.blocks);
+                self.input_data.extend(blocks.blocks);
             }
 
             self.input.set_not_need_data();
@@ -247,7 +247,7 @@ impl Processor for ParquetFileWriter {
     }
 
     fn process(&mut self) -> Result<()> {
-        while let Some(b) = self.input_data.pop() {
+        while let Some(b) = self.input_data.pop_front() {
             self.input_bytes += b.memory_size();
             self.row_counts += b.num_rows();
             let batch = b.to_record_batch(&self.table_info.schema)?;

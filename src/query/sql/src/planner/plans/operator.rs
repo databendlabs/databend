@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use educe::Educe;
 
 use super::MutationSource;
+use super::SubqueryExpr;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -172,14 +173,7 @@ impl RelOperator {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::CompactBlock(_) => false,
-            RelOperator::Join(op) => {
-                op.equi_conditions.iter().any(|condition| {
-                    condition.left.has_subquery() || condition.right.has_subquery()
-                }) || op
-                    .non_equi_conditions
-                    .iter()
-                    .any(|expr| expr.has_subquery())
-            }
+            RelOperator::Join(op) => op.has_subquery(),
             RelOperator::EvalScalar(op) => op.items.iter().any(|expr| expr.scalar.has_subquery()),
             RelOperator::Filter(op) => op.predicates.iter().any(|expr| expr.has_subquery()),
             RelOperator::Aggregate(op) => {
@@ -208,6 +202,76 @@ impl RelOperator {
             RelOperator::Udf(op) => op.items.iter().any(|expr| expr.scalar.has_subquery()),
             RelOperator::MutationSource(_) => false,
         }
+    }
+
+    pub fn get_subquery(&self, mut result: Vec<SubqueryExpr>) -> Vec<SubqueryExpr> {
+        match self {
+            RelOperator::Scan(_)
+            | RelOperator::Limit(_)
+            | RelOperator::Exchange(_)
+            | RelOperator::UnionAll(_)
+            | RelOperator::Sort(_)
+            | RelOperator::DummyTableScan(_)
+            | RelOperator::ConstantTableScan(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::CacheScan(_)
+            | RelOperator::AsyncFunction(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::Mutation(_)
+            | RelOperator::CompactBlock(_)
+            | RelOperator::MutationSource(_) => (),
+            RelOperator::Join(op) => {
+                for condition in &op.equi_conditions {
+                    result = condition.left.get_subquery(result);
+                    result = condition.right.get_subquery(result);
+                }
+                for expr in &op.non_equi_conditions {
+                    result = expr.get_subquery(result);
+                }
+            }
+            RelOperator::EvalScalar(op) => {
+                for item in &op.items {
+                    result = item.scalar.get_subquery(result);
+                }
+            }
+            RelOperator::Filter(op) => {
+                for pred in &op.predicates {
+                    result = pred.get_subquery(result);
+                }
+            }
+            RelOperator::Aggregate(op) => {
+                for item in &op.group_items {
+                    result = item.scalar.get_subquery(result);
+                }
+                for func in &op.aggregate_functions {
+                    result = func.scalar.get_subquery(result);
+                }
+            }
+            RelOperator::Window(op) => {
+                for order in &op.order_by {
+                    result = order.order_by_item.scalar.get_subquery(result);
+                }
+                for expr in &op.partition_by {
+                    result = expr.scalar.get_subquery(result);
+                }
+                if let WindowFuncType::Aggregate(agg) = &op.function {
+                    for expr in agg.exprs() {
+                        result = expr.get_subquery(result);
+                    }
+                }
+            }
+            RelOperator::ProjectSet(op) => {
+                for srf in &op.srfs {
+                    result = srf.scalar.get_subquery(result);
+                }
+            }
+            RelOperator::Udf(op) => {
+                for item in &op.items {
+                    result = item.scalar.get_subquery(result);
+                }
+            }
+        }
+        result
     }
 }
 

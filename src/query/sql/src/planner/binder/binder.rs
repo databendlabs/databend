@@ -377,9 +377,6 @@ impl<'a> Binder {
             }
 
             // Virtual Columns
-            Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
-            Statement::AlterVirtualColumn(stmt) => self.bind_alter_virtual_column(stmt).await?,
-            Statement::DropVirtualColumn(stmt) => self.bind_drop_virtual_column(stmt).await?,
             Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
             Statement::ShowVirtualColumns(stmt) => {
                 self.bind_show_virtual_columns(bind_context, stmt).await?
@@ -791,6 +788,11 @@ impl<'a> Binder {
             Statement::RenameWarehouseCluster(v) => self.bind_rename_warehouse_cluster(v)?,
             Statement::AssignWarehouseNodes(v) => self.bind_assign_warehouse_nodes(v)?,
             Statement::UnassignWarehouseNodes(v) => self.bind_unassign_warehouse_nodes(v)?,
+            Statement::ShowWorkloadGroups(v) => self.bind_show_workload_groups(v)?,
+            Statement::CreateWorkloadGroup(v) => self.bind_create_workload_group(v)?,
+            Statement::DropWorkloadGroup(v) => self.bind_drop_workload_group(v)?,
+            Statement::RenameWorkloadGroup(v) => self.bind_rename_workload_group(v)?,
+            Statement::AlterWorkloadGroup(v) => self.bind_alter_workload_group(v)?,
         };
 
         match &plan {

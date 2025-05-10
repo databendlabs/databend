@@ -31,6 +31,7 @@ pub struct CopyIntoLocationPlan {
     pub path: String,
     pub from: Box<Plan>,
     pub options: CopyIntoLocationOptions,
+    pub is_ordered: bool,
 }
 
 impl CopyIntoLocationPlan {

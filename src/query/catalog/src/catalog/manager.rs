@@ -38,6 +38,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::anyerror::func_name;
 use databend_storages_common_session::SessionState;
+use parking_lot::RwLock;
 
 use super::Catalog;
 use super::CatalogCreator;
@@ -54,6 +55,7 @@ pub struct CatalogManager {
 
     /// catalog_creators is the catalog creators that registered.
     pub catalog_creators: HashMap<CatalogType, Arc<dyn CatalogCreator>>,
+    pub catalog_caches: RwLock<HashMap<String, Arc<dyn Catalog>>>,
 }
 
 impl CatalogManager {
@@ -121,6 +123,7 @@ impl CatalogManager {
             default_catalog,
             external_catalogs,
             catalog_creators,
+            catalog_caches: Default::default(),
         };
 
         Ok(Arc::new(catalog_manager))
@@ -141,16 +144,33 @@ impl CatalogManager {
         session_state: SessionState,
     ) -> Result<Arc<dyn Catalog>> {
         let typ = info.meta.catalog_option.catalog_type();
-
         if typ == CatalogType::Default {
             return self.get_default_catalog(session_state);
         }
 
+        let tid = std::thread::current().id();
+        let key = format!(
+            "{:?}_{}_{:?}",
+            info.catalog_name(),
+            info.meta.created_on.timestamp(),
+            tid
+        );
+
+        {
+            let r = self.catalog_caches.read();
+            if let Some(v) = r.get(&key) {
+                return Ok(v.clone());
+            }
+        }
         let creator = self
             .catalog_creators
             .get(&typ)
             .ok_or_else(|| ErrorCode::BadArguments(format!("unknown catalog type: {:?}", typ)))?;
-        creator.try_create(info)
+
+        let v = creator.try_create(info)?;
+        let mut w = self.catalog_caches.write();
+        w.insert(key, v.clone());
+        Ok(v)
     }
 
     /// Get a catalog from manager.
@@ -174,10 +194,8 @@ impl CatalogManager {
         if let Some(ctl) = self.external_catalogs.get(catalog_name) {
             return Ok(ctl.clone());
         }
-
         let tenant = Tenant::new_or_err(tenant, func_name!())?;
         let ident = CatalogNameIdent::new(tenant, catalog_name);
-
         // Get catalog from metasrv.
         let info = self.meta.get_catalog(&ident).await?;
         self.build_catalog(info, session_state)

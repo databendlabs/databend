@@ -50,14 +50,8 @@ impl RowGroupReaderForCopy {
         read_settings: &ReadSettings,
         batch_size: usize,
     ) -> Result<Option<ReadPolicyImpl>> {
-        let row_group = InMemoryRowGroup::new(
-            &part.location,
-            op.clone(),
-            &part.meta,
-            None,
-            read_settings.max_gap_size,
-            read_settings.max_range_size,
-        );
+        let row_group =
+            InMemoryRowGroup::new(&part.location, op.clone(), &part.meta, None, *read_settings);
         let mut _sorter = None;
         self.row_group_reader_builder
             .build(row_group, None, &mut _sorter, batch_size)
@@ -114,7 +108,7 @@ impl RowGroupReaderForCopy {
         };
         let mut reader_builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx,
-            op,
+            Arc::new(op),
             parquet_table_schema,
             schema_descr,
             Some(arrow_schema),

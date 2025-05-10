@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod event_desc;
 mod semaphore_event;
 mod semaphore_queue;
 
+pub use event_desc::EventDesc;
 pub(crate) use semaphore_event::PermitEvent;
 pub use semaphore_queue::SemaphoreQueue;

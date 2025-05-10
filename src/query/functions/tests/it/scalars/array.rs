@@ -38,7 +38,7 @@ fn test_array() {
     test_array_append(file);
     test_array_indexof(file);
     test_array_unique(file);
-    test_array_distinct(file);
+    test_array_distinct_intersection(file);
     test_array_sum(file);
     test_array_avg(file);
     test_array_count(file);
@@ -316,7 +316,7 @@ fn test_array_unique(file: &mut impl Write) {
     ]);
 }
 
-fn test_array_distinct(file: &mut impl Write) {
+fn test_array_distinct_intersection(file: &mut impl Write) {
     run_ast(file, "array_distinct([])", &[]);
     run_ast(file, "array_distinct([1, 1, 2, 2, 3, NULL])", &[]);
     run_ast(
@@ -331,6 +331,12 @@ fn test_array_distinct(file: &mut impl Write) {
         ("c", Int16Type::from_data(vec![3i16, 1, 3, 4])),
         ("d", Int16Type::from_data(vec![4i16, 2, 3, 4])),
     ]);
+
+    run_ast(
+        file,
+        "array_intersection(['a', NULL, 'a', 'b', NULL, 'c', 'd'], ['a', 'd'])",
+        &[],
+    );
 }
 
 fn test_array_sum(file: &mut impl Write) {

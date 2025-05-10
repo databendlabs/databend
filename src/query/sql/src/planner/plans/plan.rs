@@ -42,7 +42,7 @@ use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
-use crate::plans::AlterVirtualColumnPlan;
+use crate::plans::AlterWorkloadGroupPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CallProcedurePlan;
@@ -69,8 +69,8 @@ use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
-use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::CreateWarehousePlan;
+use crate::plans::CreateWorkloadGroupPlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
@@ -103,9 +103,9 @@ use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
-use crate::plans::DropVirtualColumnPlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
+use crate::plans::DropWorkloadGroupPlan;
 use crate::plans::Exchange;
 use crate::plans::ExecuteImmediatePlan;
 use crate::plans::ExecuteTaskPlan;
@@ -134,6 +134,7 @@ use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RenameWarehouseClusterPlan;
 use crate::plans::RenameWarehousePlan;
+use crate::plans::RenameWorkloadGroupPlan;
 use crate::plans::Replace;
 use crate::plans::ResumeWarehousePlan;
 use crate::plans::RevertTablePlan;
@@ -227,6 +228,13 @@ pub enum Plan {
     AssignWarehouseNodes(Box<AssignWarehouseNodesPlan>),
     UnassignWarehouseNodes(Box<UnassignWarehouseNodesPlan>),
 
+    // Workloads
+    ShowWorkloadGroups,
+    CreateWorkloadGroup(Box<CreateWorkloadGroupPlan>),
+    DropWorkloadGroup(Box<DropWorkloadGroupPlan>),
+    RenameWorkloadGroup(Box<RenameWorkloadGroupPlan>),
+    AlterWorkloadGroup(Box<AlterWorkloadGroupPlan>),
+
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
@@ -302,9 +310,6 @@ pub enum Plan {
     RefreshTableIndex(Box<RefreshTableIndexPlan>),
 
     // Virtual Columns
-    CreateVirtualColumn(Box<CreateVirtualColumnPlan>),
-    AlterVirtualColumn(Box<AlterVirtualColumnPlan>),
-    DropVirtualColumn(Box<DropVirtualColumnPlan>),
     RefreshVirtualColumn(Box<RefreshVirtualColumnPlan>),
 
     // Account
@@ -544,6 +549,14 @@ impl Plan {
                 DataField::new("version", DataType::String),
             ]),
             Plan::DescProcedure(plan) => plan.schema(),
+            Plan::ShowWorkloadGroups => DataSchemaRefExt::create(vec![
+                DataField::new("name", DataType::String),
+                DataField::new("cpu_quota", DataType::String),
+                DataField::new("memory_quota", DataType::String),
+                DataField::new("query_timeout", DataType::String),
+                DataField::new("max_concurrency", DataType::String),
+                DataField::new("query_queued_timeout", DataType::String),
+            ]),
             _ => Arc::new(DataSchema::empty()),
         }
     }

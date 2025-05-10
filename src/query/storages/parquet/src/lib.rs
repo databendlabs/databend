@@ -31,7 +31,7 @@ mod parquet_rs;
 mod read_settings;
 mod utils;
 
-pub use parquet_part::ParquetFilesPart;
+pub use parquet_part::ParquetFilePart;
 pub use parquet_part::ParquetPart;
 pub use parquet_rs::*;
 pub use read_settings::ReadSettings;

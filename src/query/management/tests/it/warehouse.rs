@@ -23,8 +23,8 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
 use databend_common_management::*;
-use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_store::LocalMetaService;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
@@ -860,6 +860,64 @@ async fn test_unassign_nodes_for_warehouse() -> Result<()> {
 
     assert_eq!(nodes.len(), 1);
     assert!(nodes[0].id == node_1.id || nodes[0].id == node_2.id);
+
+    let add_warehouse_cluster = warehouse_manager.add_warehouse_cluster(
+        String::from("test_warehouse"),
+        String::from("cluster_name_1"),
+        vec![SelectedNode::Random(None), SelectedNode::Random(None)],
+    );
+
+    add_warehouse_cluster.await?;
+
+    let unassign_warehouse_nodes = warehouse_manager.unassign_warehouse_nodes(
+        "test_warehouse",
+        HashMap::from([(String::from("cluster_name_1"), vec![SelectedNode::Random(
+            Some(String::from("test_node_group")),
+        )])]),
+    );
+
+    unassign_warehouse_nodes.await?;
+
+    let nodes = warehouse_manager
+        .list_warehouse_cluster_nodes("test_warehouse", "cluster_name_1")
+        .await?;
+
+    assert_eq!(nodes.len(), 1);
+
+    let mut node_3 = system_managed_node(&GlobalUniqName::unique());
+    node_3.node_group = Some(String::from("test_node_group_1"));
+    warehouse_manager.start_node(node_3.clone()).await?;
+
+    let mut node_4 = system_managed_node(&GlobalUniqName::unique());
+    node_4.node_group = Some(String::from("test_node_group_1"));
+    warehouse_manager.start_node(node_4.clone()).await?;
+
+    // eprintln!("{:?}", warehouse_manager.list_online_nodes().await?);
+    let add_warehouse_cluster = warehouse_manager.add_warehouse_cluster(
+        String::from("test_warehouse"),
+        String::from("cluster_name_2"),
+        vec![
+            SelectedNode::Random(Some(String::from("test_node_group_1"))),
+            SelectedNode::Random(Some(String::from("test_node_group_1"))),
+        ],
+    );
+
+    add_warehouse_cluster.await?;
+
+    let unassign_warehouse_nodes = warehouse_manager.unassign_warehouse_nodes(
+        "test_warehouse",
+        HashMap::from([(String::from("cluster_name_2"), vec![SelectedNode::Random(
+            None,
+        )])]),
+    );
+
+    unassign_warehouse_nodes.await?;
+    let nodes = warehouse_manager
+        .list_warehouse_cluster_nodes("test_warehouse", "cluster_name_2")
+        .await?;
+
+    assert_eq!(nodes.len(), 1);
+
     Ok(())
 }
 
@@ -1503,7 +1561,9 @@ async fn nodes(lift: Duration, size: usize) -> Result<(MetaStore, WarehouseMgr, 
 }
 
 async fn new_cluster_api(lift: Duration) -> Result<(MetaStore, WarehouseMgr)> {
-    let test_api = MetaStore::L(Arc::new(MemMeta::default()));
+    let test_api = MetaStore::L(Arc::new(
+        LocalMetaService::new("management-test").await.unwrap(),
+    ));
     let cluster_manager = WarehouseMgr::create(test_api.clone(), "test-tenant-id", lift)?;
     Ok((test_api, cluster_manager))
 }

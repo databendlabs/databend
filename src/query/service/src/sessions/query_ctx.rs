@@ -28,6 +28,8 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use async_channel::Receiver;
+use async_channel::Sender;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
@@ -62,6 +64,7 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -283,6 +286,29 @@ impl QueryContext {
 
     pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
         self.shared.attach_table(catalog, database, name, table)
+    }
+
+    pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
+        self.shared.broadcast_source_receiver(broadcast_id)
+    }
+
+    /// Get a sender to broadcast data
+    ///
+    /// Note: The channel must be closed by calling close() after data transmission is completed
+    pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
+        self.shared.broadcast_source_sender(broadcast_id)
+    }
+
+    /// A receiver to receive broadcast data
+    ///
+    /// Note: receive() can be called repeatedly until an Error is returned, indicating
+    /// that the upstream channel has been closed
+    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
+        self.shared.broadcast_sink_receiver(broadcast_id)
+    }
+
+    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
+        self.shared.broadcast_sink_sender(broadcast_id)
     }
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
@@ -1532,6 +1558,11 @@ impl TableContext for QueryContext {
         }
     }
 
+    fn clear_table_meta_timestamps_cache(&self) {
+        let cache = self.shared.get_table_meta_timestamps();
+        cache.lock().clear();
+    }
+
     fn get_read_block_thresholds(&self) -> BlockThresholds {
         *self.block_threshold.read()
     }
@@ -1636,6 +1667,7 @@ impl TableContext for QueryContext {
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
+                    copy_into_location_ordered: false,
                 };
                 OrcTable::try_create(info).await
             }
@@ -1655,6 +1687,7 @@ impl TableContext for QueryContext {
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
+                    copy_into_location_ordered: false,
                 };
                 StageTable::try_create(info)
             }
@@ -1692,6 +1725,7 @@ impl TableContext for QueryContext {
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
+                    copy_into_location_ordered: false,
                 };
                 StageTable::try_create(info)
             }
@@ -1833,6 +1867,16 @@ impl TableContext for QueryContext {
 
     fn set_pruned_partitions_stats(&self, partitions: PartStatistics) {
         self.shared.set_pruned_partitions_stats(partitions);
+    }
+
+    fn get_next_broadcast_id(&self) -> u32 {
+        self.shared
+            .next_broadcast_id
+            .fetch_add(1, Ordering::Acquire)
+    }
+
+    fn reset_broadcast_id(&self) {
+        self.shared.next_broadcast_id.store(0, Ordering::Release);
     }
 }
 

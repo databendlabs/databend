@@ -121,9 +121,6 @@ impl Plan {
             Plan::RefreshTableIndex(_) => Ok("RefreshTableIndex".to_string()),
 
             // Virtual Columns
-            Plan::CreateVirtualColumn(_) => Ok("CreateVirtualColumn".to_string()),
-            Plan::AlterVirtualColumn(_) => Ok("AlterVirtualColumn".to_string()),
-            Plan::DropVirtualColumn(_) => Ok("DropVirtualColumn".to_string()),
             Plan::RefreshVirtualColumn(_) => Ok("RefreshVirtualColumn".to_string()),
 
             // Insert
@@ -252,6 +249,11 @@ impl Plan {
             Plan::AddWarehouseCluster(_) => Ok("AddWarehouseCluster".to_string()),
             Plan::AssignWarehouseNodes(_) => Ok("AddWarehouseClusterNode".to_string()),
             Plan::UnassignWarehouseNodes(_) => Ok("DropWarehouseClusterNode".to_string()),
+            Plan::ShowWorkloadGroups => Ok("ShowWorkloadGroups".to_string()),
+            Plan::CreateWorkloadGroup(_) => Ok("CreateWorkloadGroup".to_string()),
+            Plan::DropWorkloadGroup(_) => Ok("DropWorkloadGroup".to_string()),
+            Plan::RenameWorkloadGroup(_) => Ok("RenameWorkloadGroup".to_string()),
+            Plan::AlterWorkloadGroup(_) => Ok("AlterWorkloadGroup".to_string()),
         }
     }
 }

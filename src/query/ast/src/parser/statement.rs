@@ -658,6 +658,56 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let show_workload_groups = map(
+        rule! {
+            SHOW ~ WORKLOAD ~ GROUPS
+        },
+        |(_, _, _)| Statement::ShowWorkloadGroups(ShowWorkloadGroupsStmt {}),
+    );
+
+    let create_workload_group = map(
+        rule! {
+            CREATE ~ WORKLOAD ~ GROUP ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ WITH ~ #workload_quotas
+        },
+        |(_, _, _, if_not_exists, name, _, quotas)| {
+            Statement::CreateWorkloadGroup(CreateWorkloadGroupStmt {
+                name,
+                quotas,
+                if_not_exists: if_not_exists.is_some(),
+            })
+        },
+    );
+
+    let drop_workload_group = map(
+        rule! {
+            DROP ~ WORKLOAD ~ GROUP ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, _, if_exists, name)| {
+            Statement::DropWorkloadGroup(DropWorkloadGroupStmt {
+                name,
+                if_exists: if_exists.is_some(),
+            })
+        },
+    );
+
+    let rename_workload_group = map(
+        rule! {
+            RENAME ~ WORKLOAD ~ GROUP ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, _, name, _, new_name)| {
+            Statement::RenameWorkloadGroup(RenameWorkloadGroupStmt { name, new_name })
+        },
+    );
+
+    let alter_workload_group = map(
+        rule! {
+            ALTER ~ WORKLOAD ~ GROUP ~ #ident ~ SET ~ #workload_quotas
+        },
+        |(_, _, _, name, _, quotas)| {
+            Statement::AlterWorkloadGroup(AlterWorkloadGroupStmt { name, quotas })
+        },
+    );
+
     let show_databases = map(
         rule! {
             SHOW ~ FULL? ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
@@ -1493,68 +1543,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 sync_creation: opt_async.is_none(),
                 index_options: opt_index_options.unwrap_or_default(),
             }))
-        },
-    );
-
-    let create_virtual_column = map_res(
-        rule! {
-            CREATE
-            ~ ( OR ~ ^REPLACE )?
-            ~ VIRTUAL ~ COLUMN
-            ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ ^"(" ~ ^#comma_separated_list1(virtual_column) ~ ^")"
-            ~ FOR ~ #dot_separated_idents_1_to_3
-        },
-        |(
-            _,
-            opt_or_replace,
-            _,
-            _,
-            opt_if_not_exists,
-            _,
-            virtual_columns,
-            _,
-            _,
-            (catalog, database, table),
-        )| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
-                create_option,
-                catalog,
-                database,
-                table,
-                virtual_columns,
-            }))
-        },
-    );
-
-    let alter_virtual_column = map(
-        rule! {
-            ALTER ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(virtual_column) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
-        },
-        |(_, _, _, opt_if_exists, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
-                if_exists: opt_if_exists.is_some(),
-                catalog,
-                database,
-                table,
-                virtual_columns,
-            })
-        },
-    );
-
-    let drop_virtual_column = map(
-        rule! {
-            DROP ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ FOR ~ #dot_separated_idents_1_to_3
-        },
-        |(_, _, _, opt_if_exists, _, (catalog, database, table))| {
-            Statement::DropVirtualColumn(DropVirtualColumnStmt {
-                if_exists: opt_if_exists.is_some(),
-                catalog,
-                database,
-                table,
-            })
         },
     );
 
@@ -2549,6 +2537,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
             | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
         ),
+        // workload group
+        rule!(
+            #show_workload_groups: "`SHOW WORKLOAD GROUPS`"
+            | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
+            | #drop_workload_group: "`DROP WORKLOAD GROUP [IF EXISTS] <name>`"
+            | #rename_workload_group: "`RENAME WORKLOAD GROUP <old_name> TO <new_name>`"
+            | #alter_workload_group: "`ALTER WORKLOAD GROUP <name> set [<workload_group_quotas>]`"
+        ),
         // database
         rule!(
             #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
@@ -2645,11 +2641,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #refresh_inverted_index: "`REFRESH INVERTED INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #create_ngram_index: "`CREATE [OR REPLACE] NGRAM INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             | #drop_ngram_index: "`DROP NGRAM INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
-        ),
-        rule!(
-            #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
-            | #alter_virtual_column: "`ALTER VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
-            | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #sequence
@@ -4342,6 +4333,32 @@ pub fn warehouse_cluster_option(i: Input) -> IResult<BTreeMap<String, String>> {
     })(i)
 }
 
+pub fn workload_quotas(i: Input) -> IResult<BTreeMap<String, QuotaValueStmt>> {
+    let option = map(
+        rule! {
+           #ident ~ "=" ~ #option_to_string
+        },
+        |(k, _, v)| (k, v),
+    );
+
+    map_res(comma_separated_list1(option), |opts| {
+        let mut quotas = BTreeMap::new();
+        for (name, value) in opts {
+            let name = name.name.to_lowercase();
+            match QuotaValueStmt::new(&name, value) {
+                Ok(value) => {
+                    quotas.insert(name, value);
+                }
+                Err(error_desc) => {
+                    return Err(nom::Err::Failure(ErrorKind::Other(error_desc)));
+                }
+            }
+        }
+
+        Ok(quotas)
+    })(i)
+}
+
 pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
     let interval = map(
         rule! {
@@ -4477,6 +4494,7 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
         },
         |(k, _, v)| (k, v),
     );
+
     map(comma_separated_list1(option), |opts| {
         opts.into_iter()
             .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
@@ -5169,17 +5187,5 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
             | #comment
         },
         |opts| opts,
-    )(i)
-}
-
-pub fn virtual_column(i: Input) -> IResult<VirtualColumn> {
-    map(
-        rule! {
-            #expr ~ #alias_name?
-        },
-        |(expr, alias)| VirtualColumn {
-            expr: Box::new(expr),
-            alias,
-        },
     )(i)
 }

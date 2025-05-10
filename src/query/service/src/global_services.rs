@@ -24,9 +24,12 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::StackTrace;
+use databend_common_management::WorkloadMgr;
 use databend_common_meta_app::schema::CatalogType;
+use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
@@ -171,12 +174,29 @@ impl GlobalServices {
             DummyResourcesManagement::init()?;
         }
 
+        Self::init_workload_mgr(config).await?;
+
         if config.log.persistentlog.on {
             GlobalPersistentLog::init(config).await?;
         }
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
 
+        Ok(())
+    }
+
+    async fn init_workload_mgr(config: &InnerConfig) -> Result<()> {
+        let meta_api_provider = MetaStoreProvider::new(config.meta.to_meta_grpc_client_conf());
+        let meta_store = match meta_api_provider.create_meta_store().await {
+            Ok(meta_store) => Ok(meta_store),
+            Err(cause) => Err(ErrorCode::MetaServiceError(format!(
+                "Failed to create meta store: {}",
+                cause
+            ))),
+        }?;
+
+        let tenant = config.query.tenant_id.tenant_name().to_string();
+        GlobalInstance::set(Arc::new(WorkloadMgr::create(meta_store, &tenant)?));
         Ok(())
     }
 }

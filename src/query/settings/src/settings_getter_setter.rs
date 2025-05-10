@@ -234,6 +234,10 @@ impl Settings {
         self.try_get_u64("data_retention_time_in_days")
     }
 
+    pub fn get_data_retention_num_snapshots_to_keep(&self) -> Result<u64> {
+        self.try_get_u64("data_retention_num_snapshots_to_keep")
+    }
+
     pub fn get_max_storage_io_requests(&self) -> Result<u64> {
         self.try_get_u64("max_storage_io_requests")
     }
@@ -355,6 +359,10 @@ impl Settings {
 
     pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
+    }
+
+    pub fn get_enable_join_runtime_filter(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_join_runtime_filter")? != 0)
     }
 
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
@@ -484,6 +492,10 @@ impl Settings {
 
     pub fn get_sort_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("sort_spilling_memory_ratio")? as usize)
+    }
+
+    pub fn get_sort_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
     }
 
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
@@ -943,5 +955,13 @@ impl Settings {
 
     pub fn get_trace_sample_rate(&self) -> Result<u64> {
         self.try_get_u64("trace_sample_rate")
+    }
+
+    pub fn set_enable_experimental_virtual_column(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_experimental_virtual_column", val)
+    }
+
+    pub fn get_enable_experimental_virtual_column(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_virtual_column")? == 1)
     }
 }

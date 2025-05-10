@@ -28,15 +28,21 @@ use crate::binder::bind_mutation::bind::MutationStrategy;
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::Matcher;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
+use crate::plans::EvalScalar;
 use crate::plans::Plan;
+use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
 use crate::BindContext;
+use crate::ColumnBinding;
+use crate::ColumnBindingBuilder;
+use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Visibility;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -118,17 +124,19 @@ impl Binder {
         let Plan::DataMutation { box s_expr, .. } = &plan else {
             return Ok(plan);
         };
-        let RelOperator::Mutation(mutation) = &*s_expr.plan else {
+        let RelOperator::Mutation(mutation) = s_expr.plan() else {
             return Ok(plan);
         };
-        let filter_expr = &s_expr.children[0];
-        let RelOperator::Filter(_) = &*filter_expr.plan else {
-            return Ok(plan);
+        let matcher = Matcher::MatchOp {
+            op_type: RelOp::Filter,
+            children: vec![Matcher::MatchOp {
+                op_type: RelOp::Join,
+                children: vec![Matcher::Leaf, Matcher::Leaf],
+            }],
         };
-        let input = &filter_expr.children[0];
-        let RelOperator::Join(_) = &*input.plan else {
+        if !matcher.matches(s_expr.unary_child()) {
             return Ok(plan);
-        };
+        }
 
         let mut mutation = mutation.clone();
 
@@ -176,7 +184,6 @@ impl Binder {
                         .flat_map(|expr| expr.used_columns().into_iter())
                 })
             })
-            .chain(mutation.required_columns.iter().copied())
             .collect::<HashSet<_>>();
 
         let used_columns = used_columns
@@ -184,7 +191,13 @@ impl Binder {
             .copied()
             .collect::<HashSet<_>>();
 
-        let aggr_columns = used_columns
+        struct AnyColumn {
+            old: IndexType,
+            new: IndexType,
+            cast: Option<ScalarExpr>,
+        }
+
+        let mut any_columns = used_columns
             .iter()
             .copied()
             .filter_map(|i| {
@@ -201,7 +214,7 @@ impl Binder {
 
                 let display_name = format!("any({})", binding.index);
                 let old = binding.index;
-                let mut aggr_func = ScalarExpr::AggregateFunction(AggregateFunction {
+                let mut any_func: ScalarExpr = AggregateFunction {
                     span: None,
                     func_name: "any".to_string(),
                     distinct: false,
@@ -210,14 +223,15 @@ impl Binder {
                         span: None,
                         column: binding.clone(),
                     })],
-                    return_type: binding.data_type.clone(),
+                    return_type: Box::new(binding.data_type.wrap_nullable()),
                     sort_descs: vec![],
                     display_name: display_name.clone(),
-                });
+                }
+                .into();
 
                 let mut rewriter =
                     AggregateRewriter::new(&mut mutation.bind_context, self.metadata.clone());
-                rewriter.visit(&mut aggr_func).unwrap();
+                rewriter.visit(&mut any_func).unwrap();
 
                 let new = mutation
                     .bind_context
@@ -226,9 +240,47 @@ impl Binder {
                     .unwrap()
                     .index;
 
-                Some((aggr_func, old, new))
+                let (cast, new) = if !binding.data_type.is_nullable() {
+                    let ColumnBinding {
+                        column_name,
+                        data_type,
+                        ..
+                    } = binding;
+
+                    let column = ColumnBindingBuilder::new(
+                        column_name.clone(),
+                        new,
+                        data_type.clone(),
+                        Visibility::Visible,
+                    )
+                    .build();
+                    let column = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
+                    let cast = column.unify_to_data_type(&data_type);
+
+                    let index = self.metadata.write().add_derived_column(
+                        column_name,
+                        *data_type,
+                        Some(cast.clone()),
+                    );
+                    (Some(cast), index)
+                } else {
+                    (None, new)
+                };
+
+                Some(AnyColumn { old, new, cast })
             })
             .collect::<Vec<_>>();
+
+        let items = any_columns
+            .iter_mut()
+            .filter_map(|col| {
+                col.cast.take().map(|scalar| ScalarItem {
+                    scalar,
+                    index: col.new,
+                })
+            })
+            .collect();
+        let eval_scalar = EvalScalar { items };
 
         mutation.bind_context.aggregate_info.group_items = fields_bindings
             .into_iter()
@@ -241,55 +293,52 @@ impl Binder {
 
         for eval in &mut mutation.matched_evaluators {
             if let Some(expr) = &mut eval.condition {
-                for (_, old, new) in &aggr_columns {
-                    expr.replace_column(*old, *new)?
+                for col in &any_columns {
+                    expr.replace_column(col.old, col.new)?
                 }
             }
 
             if let Some(update) = &mut eval.update {
                 for (_, expr) in update.iter_mut() {
-                    for (_, old, new) in &aggr_columns {
-                        expr.replace_column(*old, *new)?
+                    for col in &any_columns {
+                        expr.replace_column(col.old, col.new)?
                     }
                 }
             }
         }
 
         for (_, column) in mutation.field_index_map.iter_mut() {
-            if let Some((_, _, index)) = aggr_columns
-                .iter()
-                .find(|(_, i, _)| i.to_string() == *column)
-            {
-                *column = index.to_string()
+            if let Some(col) = any_columns.iter().find(|c| c.old.to_string() == *column) {
+                *column = col.new.to_string()
             };
         }
 
         mutation.required_columns = Box::new(
             std::iter::once(mutation.row_id_index)
-                .chain(aggr_columns.into_iter().map(|(_, _, i)| i))
+                .chain(any_columns.into_iter().map(|c| c.new))
                 .collect(),
         );
 
-        let aggr_expr = self.bind_aggregate(&mut mutation.bind_context, (**filter_expr).clone())?;
+        let aggr_expr =
+            self.bind_aggregate(&mut mutation.bind_context, s_expr.unary_child().clone())?;
 
-        let s_expr = SExpr::create_unary(
-            Arc::new(RelOperator::Mutation(mutation)),
-            Arc::new(aggr_expr),
-        );
+        let input = if eval_scalar.items.is_empty() {
+            aggr_expr
+        } else {
+            aggr_expr.build_unary(Arc::new(eval_scalar.into()))
+        };
 
+        let s_expr = Box::new(input.build_unary(Arc::new(mutation.into())));
         let Plan::DataMutation {
             schema, metadata, ..
         } = plan
         else {
             unreachable!()
         };
-
-        let plan = Plan::DataMutation {
-            s_expr: Box::new(s_expr),
+        Ok(Plan::DataMutation {
+            s_expr,
             schema,
             metadata,
-        };
-
-        Ok(plan)
+        })
     }
 }

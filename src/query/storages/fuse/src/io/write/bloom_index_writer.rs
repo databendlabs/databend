@@ -29,6 +29,7 @@ use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
+use databend_storages_common_index::NgramArgs;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::meta::Location;
@@ -42,6 +43,7 @@ use crate::FuseStorageFormat;
 pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
+    pub(crate) ngram_size: Option<u64>,
     pub(crate) location: Location,
     pub(crate) column_distinct_count: HashMap<ColumnId, usize>,
 }
@@ -49,6 +51,25 @@ pub struct BloomIndexState {
 impl BloomIndexState {
     pub fn from_bloom_index(bloom_index: &BloomIndex, location: Location) -> Result<Self> {
         let index_block = bloom_index.serialize_to_data_block()?;
+        // Calculate ngram index size
+        let ngram_indexes = &bloom_index
+            .filter_schema
+            .fields()
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.name.starts_with("Ngram"))
+            .map(|(i, _)| i)
+            .collect::<Vec<_>>();
+        let ngram_size = if !ngram_indexes.is_empty() {
+            let mut ngram_size = 0;
+            for i in ngram_indexes {
+                let column = index_block.get_by_offset(*i);
+                ngram_size += column.value.memory_size() as u64;
+            }
+            Some(ngram_size)
+        } else {
+            None
+        };
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
         let _ = blocks_to_parquet(
             &bloom_index.filter_schema,
@@ -60,6 +81,7 @@ impl BloomIndexState {
         Ok(Self {
             data,
             size: data_size,
+            ngram_size,
             location,
             column_distinct_count: bloom_index.column_distinct_count.clone(),
         })
@@ -70,9 +92,11 @@ impl BloomIndexState {
         block: &DataBlock,
         location: Location,
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+        ngram_args: &[NgramArgs],
     ) -> Result<Option<Self>> {
         // write index
-        let mut builder = BloomIndexBuilder::create(ctx.get_function_context()?, bloom_columns_map);
+        let mut builder =
+            BloomIndexBuilder::create(ctx.get_function_context()?, bloom_columns_map, ngram_args)?;
         builder.add_block(block)?;
         let maybe_bloom_index = builder.finalize()?;
         if let Some(bloom_index) = maybe_bloom_index {
@@ -89,6 +113,7 @@ pub struct BloomIndexRebuilder {
     pub table_dal: Operator,
     pub storage_format: FuseStorageFormat,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+    pub ngram_args: Vec<NgramArgs>,
 }
 
 impl BloomIndexRebuilder {
@@ -132,7 +157,8 @@ impl BloomIndexRebuilder {
         let mut builder = BloomIndexBuilder::create(
             self.table_ctx.get_function_context()?,
             self.bloom_columns_map.clone(),
-        );
+            &self.ngram_args,
+        )?;
         builder.add_block(&data_block)?;
         let maybe_bloom_index = builder.finalize()?;
 

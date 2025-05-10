@@ -200,6 +200,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
                 }),
+                ("data_retention_num_snapshots_to_keep", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Specifies how many snapshots to retain during vacuum operations. Overrides 'data_retention_time_in_days'. If set to 0, this setting will be ignored.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=500)),
+                }),
                 ("max_spill_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_spill_io_requests),
                     desc: "Sets the maximum number of concurrent spill I/O requests.",
@@ -424,6 +431,13 @@ impl DefaultSettings {
                 }),
                 ("enable_bloom_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
+                    desc: "Enables bloom runtime filter optimization for JOIN.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_join_runtime_filter", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -605,6 +619,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("sort_spilling_to_disk_bytes_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of local disk in bytes that sorter can use before spilling data to storage during one query execution.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("sort_spilling_batch_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8 * 1024 * 1024),
                     desc: "Sets the uncompressed size that merge sorter will spill to storage",
@@ -634,8 +655,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("parquet_fast_read_bytes", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(16 * 1024 * 1024),
-                    desc: "Parquet file with smaller size will be read as a whole file, instead of column by column. Default value: 16MB",
+                    value: UserSettingValue::UInt64(1024 * 1024),
+                    desc: "Parquet file with smaller size will be read as a whole file, instead of column by column. Default value: 1MB",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -1284,6 +1305,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
+                }),
+                ("enable_experimental_virtual_column", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental virtual column",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
             ]);
 

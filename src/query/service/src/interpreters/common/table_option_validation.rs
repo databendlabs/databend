@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::type_name;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::str::FromStr;
 use std::sync::LazyLock;
 
 use chrono::Duration;
@@ -25,7 +27,9 @@ use databend_common_settings::Settings;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -60,6 +64,8 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
+    r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
+    r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
@@ -116,6 +122,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
+    r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r
 });
@@ -182,6 +189,17 @@ pub fn is_valid_data_retention_period(
             )));
         }
     }
+
+    if let Some(value) = options.get(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP) {
+        let new_val = value.parse::<u64>()?;
+
+        if new_val < 1 {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "Invalid value of the table option [{FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP}]: {:?}, it should be larger than 0",
+                new_val
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -198,17 +216,30 @@ pub fn is_valid_bloom_index_columns(
 pub fn is_valid_change_tracking(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
-    if let Some(value) = options.get(OPT_KEY_CHANGE_TRACKING) {
-        value.to_lowercase().parse::<bool>()?;
-    }
-    Ok(())
+    is_valid_option_of_type::<bool>(options, OPT_KEY_CHANGE_TRACKING)
 }
 
 pub fn is_valid_random_seed(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
-    if let Some(value) = options.get(OPT_KEY_RANDOM_SEED) {
-        value.parse::<u64>()?;
+    is_valid_option_of_type::<u64>(options, OPT_KEY_RANDOM_SEED)
+}
+
+pub fn is_valid_option_of_type<T: FromStr>(
+    options: &BTreeMap<String, String>,
+    option_name: &str,
+) -> databend_common_exception::Result<()>
+where
+    <T as FromStr>::Err: std::fmt::Display,
+{
+    if let Some(value) = options.get(option_name) {
+        value.parse::<T>().map_err(|e| {
+            let msg = format!(
+                "Failed to parse value [{value}] for table option '{option_name}' as type {}: {e}",
+                type_name::<T>(),
+            );
+            ErrorCode::TableOptionInvalid(msg)
+        })?;
     }
     Ok(())
 }

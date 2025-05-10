@@ -38,6 +38,7 @@ use databend_common_native::write::NativeWriter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::Index;
+use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -207,7 +208,8 @@ impl StreamBlockBuilder {
         let bloom_index_builder = BloomIndexBuilder::create(
             properties.ctx.get_function_context()?,
             properties.bloom_columns_map.clone(),
-        );
+            &properties.ngram_args,
+        )?;
 
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
@@ -356,6 +358,7 @@ pub struct StreamBlockProperties {
     stats_columns: Vec<ColumnId>,
     distinct_columns: Vec<ColumnId>,
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+    ngram_args: Vec<NgramArgs>,
     inverted_index_builders: Vec<InvertedIndexBuilder>,
     table_meta_timestamps: TableMetaTimestamps,
 }
@@ -385,6 +388,7 @@ impl StreamBlockProperties {
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
+        let ngram_args = FuseTable::create_ngram_index_args(&table.table_info.meta)?;
         let bloom_column_ids = bloom_columns_map
             .values()
             .map(|v| v.column_id())
@@ -420,6 +424,7 @@ impl StreamBlockProperties {
             stats_columns,
             distinct_columns,
             bloom_columns_map,
+            ngram_args,
             inverted_index_builders,
             table_meta_timestamps,
         }))

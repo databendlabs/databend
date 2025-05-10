@@ -12,25 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
+pub(crate) mod local;
+
+use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
 
-use databend_common_base::base::tokio::sync::Semaphore as TokioSemaphore;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::errors::AcquireError;
-use databend_common_meta_semaphore::errors::ConnectionClosed;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
@@ -38,6 +37,7 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
+pub use local::LocalMetaService;
 use log::info;
 use tokio_stream::Stream;
 
@@ -49,14 +49,25 @@ pub struct MetaStoreProvider {
     rpc_conf: RpcClientConf,
 }
 
-/// MetaStore is impl with either a local embedded meta store, or a grpc-client of metasrv
+/// MetaStore is impl with either a local meta-service, or a grpc-client of metasrv
 #[derive(Clone)]
 pub enum MetaStore {
-    L(Arc<MemMeta>),
+    L(Arc<LocalMetaService>),
     R(Arc<ClientHandle>),
 }
 
 impl MetaStore {
+    /// Create a local meta service for testing.
+    ///
+    /// It is required to assign a base port as the port number range.
+    pub async fn new_local_testing() -> Self {
+        MetaStore::L(Arc::new(
+            LocalMetaService::new("MetaStore-new-local-testing")
+                .await
+                .unwrap(),
+        ))
+    }
+
     pub fn arc(self) -> Arc<Self> {
         Arc::new(self)
     }
@@ -69,23 +80,23 @@ impl MetaStore {
     }
 
     pub async fn get_local_addr(&self) -> std::result::Result<Option<String>, MetaError> {
-        match self {
-            MetaStore::L(_) => Ok(None),
-            MetaStore::R(grpc_client) => {
-                let client_info = grpc_client.get_client_info().await?;
-                Ok(Some(client_info.client_addr))
-            }
-        }
+        let client = match self {
+            MetaStore::L(l) => l.deref().deref(),
+            MetaStore::R(grpc_client) => grpc_client,
+        };
+
+        let client_info = client.get_client_info().await?;
+        Ok(Some(client_info.client_addr))
     }
 
     pub async fn watch(&self, request: WatchRequest) -> Result<WatchStream, MetaError> {
-        match self {
-            MetaStore::L(_) => unreachable!(),
-            MetaStore::R(grpc_client) => {
-                let streaming = grpc_client.request(request).await?;
-                Ok(Box::pin(WatchResponseStream::create(streaming)))
-            }
-        }
+        let client = match self {
+            MetaStore::L(l) => l.deref(),
+            MetaStore::R(grpc_client) => grpc_client,
+        };
+
+        let streaming = client.request(request).await?;
+        Ok(Box::pin(WatchResponseStream::create(streaming)))
     }
 
     pub async fn new_acquired(
@@ -95,33 +106,27 @@ impl MetaStore {
         id: impl ToString,
         lease: Duration,
     ) -> Result<Permit, AcquireError> {
-        match self {
-            MetaStore::L(v) => {
-                let mut local_lock_map = v.locks.lock().await;
+        let client = match self {
+            MetaStore::L(l) => l.deref(),
+            MetaStore::R(grpc_client) => grpc_client,
+        };
 
-                let acquire_res = match local_lock_map.entry(prefix.to_string()) {
-                    Entry::Occupied(v) => v.get().clone(),
-                    Entry::Vacant(v) => v
-                        .insert(Arc::new(TokioSemaphore::new(capacity as usize)))
-                        .clone(),
-                };
+        Semaphore::new_acquired(client.clone(), prefix, capacity, id, lease).await
+    }
 
-                match acquire_res.acquire_owned().await {
-                    Ok(guard) => Ok(Permit {
-                        fu: Box::pin(async move {
-                            let _guard = guard;
-                            Ok(())
-                        }),
-                    }),
-                    Err(_e) => Err(AcquireError::ConnectionClosed(ConnectionClosed::new_str(
-                        "",
-                    ))),
-                }
-            }
-            MetaStore::R(grpc_client) => {
-                Semaphore::new_acquired(grpc_client.clone(), prefix, capacity, id, lease).await
-            }
-        }
+    pub async fn new_acquired_by_time(
+        &self,
+        prefix: impl ToString,
+        capacity: u64,
+        id: impl ToString,
+        lease: Duration,
+    ) -> Result<Permit, AcquireError> {
+        let client = match self {
+            MetaStore::L(l) => l.deref(),
+            MetaStore::R(grpc_client) => grpc_client,
+        };
+
+        Semaphore::new_acquired_by_time(client.clone(), prefix, capacity, id, lease).await
     }
 }
 
@@ -171,8 +176,11 @@ impl MetaStoreProvider {
             );
 
             // NOTE: This can only be used for test: data will be removed when program quit.
-            let meta_store = MemMeta::default();
-            Ok(MetaStore::L(Arc::new(meta_store)))
+            Ok(MetaStore::L(Arc::new(
+                LocalMetaService::new("MetaStoreProvider-created")
+                    .await
+                    .unwrap(),
+            )))
         } else {
             info!(conf :? =(&self.rpc_conf); "use remote meta");
             let client = MetaGrpcClient::try_new(&self.rpc_conf)?;

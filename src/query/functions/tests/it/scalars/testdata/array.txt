@@ -1206,6 +1206,15 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------+
 
 
+ast            : array_intersection(['a', NULL, 'a', 'b', NULL, 'c', 'd'], ['a', 'd'])
+raw expr       : array_intersection(array('a', NULL, 'a', 'b', NULL, 'c', 'd'), array('a', 'd'))
+checked expr   : array_intersection<T0=String NULL><Array(T0), Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0, T0>(CAST<String>("a" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("a" AS String NULL), CAST<String>("b" AS String NULL), CAST<NULL>(NULL AS String NULL), CAST<String>("c" AS String NULL), CAST<String>("d" AS String NULL)), CAST<Array(String)>(array<T0=String><T0, T0>("a", "d") AS Array(String NULL)))
+optimized expr : ['a', 'd']
+output type    : Array(String NULL)
+output domain  : [{"a"..="d"}]
+output         : ['a', 'd']
+
+
 ast            : array_sum([])
 raw expr       : array_sum(array())
 checked expr   : array_sum<Array(Nothing)>(array<>())

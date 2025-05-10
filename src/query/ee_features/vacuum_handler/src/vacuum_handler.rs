@@ -16,8 +16,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::DateTime;
-use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
@@ -35,7 +33,6 @@ pub trait VacuumHandler: Sync + Send {
         &self,
         table: &dyn Table,
         ctx: Arc<dyn TableContext>,
-        retention_time: DateTime<Utc>,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>>;
 
@@ -83,12 +80,9 @@ impl VacuumHandlerWrapper {
         &self,
         table: &dyn Table,
         ctx: Arc<dyn TableContext>,
-        retention_time: DateTime<Utc>,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        self.handler
-            .do_vacuum(table, ctx, retention_time, dry_run)
-            .await
+        self.handler.do_vacuum(table, ctx, dry_run).await
     }
 
     #[async_backtrace::framed]

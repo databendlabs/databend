@@ -95,7 +95,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -112,7 +111,6 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -136,7 +134,6 @@ use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListTableReq;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
@@ -170,11 +167,8 @@ use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::schema::VirtualColumnIdent;
-use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
@@ -218,7 +212,6 @@ use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
 use crate::name_id_value_api::NameIdValueApi;
-use crate::name_value_api::NameValueApi;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
@@ -923,107 +916,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             .collect::<Vec<_>>();
 
         Ok(index_metas)
-    }
-
-    // virtual column
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<(), KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let virtual_column_meta = VirtualColumnMeta {
-            table_id: req.name_ident.table_id(),
-            virtual_columns: req.virtual_columns.clone(),
-            created_on: Utc::now(),
-            updated_on: None,
-            auto_generated: req.auto_generated,
-        };
-
-        self.insert_name_value_with_create_option(
-            req.name_ident.clone(),
-            virtual_column_meta,
-            req.create_option,
-        )
-        .await?
-        .map_err(AppError::from)?;
-
-        Ok(())
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<(), KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let not_found = || {
-            if req.if_exists {
-                Ok(())
-            } else {
-                Err(AppError::from(req.name_ident.unknown_error(func_name!())))
-            }
-        };
-
-        self.crud_update_existing(
-            &req.name_ident,
-            |mut meta| {
-                meta.virtual_columns = req.virtual_columns.clone();
-                meta.updated_on = Some(Utc::now());
-                meta.auto_generated = req.auto_generated;
-                Some((meta, None))
-            },
-            not_found,
-        )
-        .await??;
-        Ok(())
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<(), KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let not_found = || {
-            if req.if_exists {
-                Ok(())
-            } else {
-                Err(AppError::from(req.name_ident.unknown_error(func_name!())))
-            }
-        };
-
-        self.crud_remove(&req.name_ident, not_found).await??;
-
-        Ok(())
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn list_virtual_columns(
-        &self,
-        req: ListVirtualColumnsReq,
-    ) -> Result<Vec<VirtualColumnMeta>, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        if let Some(table_id) = req.table_id {
-            let name_ident = VirtualColumnIdent::new(&req.tenant, table_id);
-
-            let seq_meta = self.get_pb(&name_ident).await?;
-            let x = seq_meta
-                .map(|seq_v| seq_v.data)
-                .into_iter()
-                .collect::<Vec<_>>();
-
-            return Ok(x);
-        }
-
-        // Get virtual columns list by `prefix_list` "<prefix>/<tenant>"
-        let ident = VirtualColumnIdent::new(&req.tenant, 0u64);
-        let dir = DirName::new(ident);
-
-        let strm = self.list_pb_values(&dir).await?;
-        let vs = strm.try_collect::<Vec<_>>().await?;
-
-        Ok(vs)
     }
 
     #[logcall::logcall]

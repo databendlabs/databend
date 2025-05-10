@@ -124,6 +124,7 @@ use crate::DEFAULT_ROW_PER_PAGE;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -462,7 +463,64 @@ impl FuseTable {
         }
     }
 
-    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<TimeDelta> {
+    /// Returns the data retention policy for this table.
+    /// Policy is determined in the following priority order:
+    ///   1. Number of snapshots to keep (from table option or setting)
+    ///   2. Time-based retention period (if snapshot count is not specified)
+    pub fn get_data_retention_policy(&self, ctx: &dyn TableContext) -> Result<RetentionPolicy> {
+        let policy =
+            // Try to get number of snapshots to keep
+            if let Some(num_snapshots) = self.try_get_policy_by_num_snapshots_to_keep(ctx)? {
+                RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots as usize)
+            } else {
+                // Fall back to time-based retention policy
+                let duration = self.get_data_retention_period(ctx)?;
+                RetentionPolicy::ByTimePeriod(duration)
+            };
+
+        Ok(policy)
+    }
+
+    /// Tries to retrieve the number of snapshots to keep for the retention policy.
+    /// Priority order:
+    ///   1. Table option (if set to a positive value)
+    ///   2. Global setting (if set to a positive value and table option is not applicable)
+    ///
+    /// Returns Some(value) if a valid positive value is found, None otherwise.
+    fn try_get_policy_by_num_snapshots_to_keep(
+        &self,
+        ctx: &dyn TableContext,
+    ) -> Result<Option<u64>> {
+        // Check table option first (highest priority).
+        //
+        // A positive value means we use this many snapshots for retention.
+        // If value of this table option is not set or is Some(0), we'll check the corresponding setting instead.
+        if let Some(tbl_opt) = self
+            .table_info
+            .meta
+            .options
+            .get(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP)
+        {
+            let num_snapshots = tbl_opt.parse::<u64>()?;
+            if num_snapshots > 0 {
+                return Ok(Some(num_snapshots));
+            }
+        }
+
+        // Check if there is a valid setting of num snapshots to keep:
+        // Only positive value of setting counts.
+        let settings_value = ctx
+            .get_settings()
+            .get_data_retention_num_snapshots_to_keep()?;
+        if settings_value > 0 {
+            return Ok(Some(settings_value));
+        }
+
+        // No valid num_snapshots_to_keep found
+        Ok(None)
+    }
+
+    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<Duration> {
         let retention_period = if let Some(v) = self
             .table_info
             .meta
@@ -1180,4 +1238,9 @@ impl Table for FuseTable {
         op.remove_file_in_batch(files).await?;
         Ok(len)
     }
+}
+
+pub enum RetentionPolicy {
+    ByTimePeriod(TimeDelta),
+    ByNumOfSnapshotsToKeep(usize),
 }

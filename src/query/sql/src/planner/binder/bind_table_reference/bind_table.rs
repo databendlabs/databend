@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
@@ -24,14 +21,12 @@ use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_with_options::check_with_opt_valid;
 use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableDataType;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
@@ -39,7 +34,6 @@ use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 use crate::BindContext;
-use crate::IndexType;
 
 impl Binder {
     /// Bind a base table.
@@ -162,12 +156,13 @@ impl Binder {
                 let table_index = self.metadata.write().add_table(
                     catalog,
                     database.clone(),
-                    table_meta,
+                    table_meta.clone(),
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
                     None,
+                    false,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
@@ -253,6 +248,7 @@ impl Binder {
                         false,
                         false,
                         None,
+                        bind_context.allow_virtual_column,
                     );
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query)?;
@@ -285,6 +281,7 @@ impl Binder {
                     bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
+                    bind_context.allow_virtual_column,
                 );
 
                 let (s_expr, mut bind_context) = self.bind_base_table(
@@ -297,8 +294,6 @@ impl Binder {
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
-
-                self.bind_table_virtual_column(&mut bind_context, table_meta.clone(), table_index)?;
 
                 Ok((s_expr, bind_context))
             }
@@ -326,60 +321,5 @@ impl Binder {
             },
             _ => Ok(()),
         }
-    }
-
-    fn bind_table_virtual_column(
-        &mut self,
-        bind_context: &mut BindContext,
-        table: Arc<dyn Table>,
-        table_index: IndexType,
-    ) -> Result<()> {
-        if !bind_context.virtual_column_context.allow_pushdown {
-            return Ok(());
-        }
-
-        // Ignore tables that do not support virtual columns
-        if !table.support_virtual_columns() {
-            return Ok(());
-        }
-
-        let source_schema = table.schema();
-        let table_meta = &table.get_table_info().meta;
-        let Some(ref virtual_schema) = table_meta.virtual_schema else {
-            return Ok(());
-        };
-
-        if !bind_context
-            .virtual_column_context
-            .table_indices
-            .contains(&table_index)
-        {
-            bind_context
-                .virtual_column_context
-                .table_indices
-                .insert(table_index);
-            let mut virtual_column_name_map = HashMap::with_capacity(virtual_schema.fields.len());
-            for virtual_field in virtual_schema.fields.iter() {
-                let Ok(source_field) =
-                    source_schema.field_of_column_id(virtual_field.source_column_id)
-                else {
-                    continue;
-                };
-                let name = format!("{}{}", source_field.name, virtual_field.name);
-                let column_id = virtual_field.column_id;
-
-                // It's not possible to determine the actual type based on the type of generated virtual columns,
-                // as fields in non-leaf nodes are not generated with virtual columns,
-                // and these ungenerated nodes may have inconsistent types.
-                let data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
-                virtual_column_name_map.insert(name, (data_type, column_id));
-            }
-            bind_context
-                .virtual_column_context
-                .virtual_column_names
-                .insert(table_index, virtual_column_name_map);
-        }
-
-        Ok(())
     }
 }

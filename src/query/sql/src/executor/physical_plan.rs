@@ -26,6 +26,8 @@ use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
 use super::physical_plans::AddStreamColumn;
+use super::physical_plans::BroadcastSink;
+use super::physical_plans::BroadcastSource;
 use super::physical_plans::HilbertPartition;
 use super::physical_plans::MutationManipulate;
 use super::physical_plans::MutationOrganize;
@@ -155,6 +157,10 @@ pub enum PhysicalPlan {
 
     // async function call
     AsyncFunction(AsyncFunction),
+
+    // broadcast
+    BroadcastSource(BroadcastSource),
+    BroadcastSink(BroadcastSink),
 }
 
 impl PhysicalPlan {
@@ -407,6 +413,15 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
+            PhysicalPlan::BroadcastSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::BroadcastSink(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
         }
     }
 
@@ -463,6 +478,8 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkMerge(v) => v.plan_id,
             PhysicalPlan::ChunkCommitInsert(v) => v.plan_id,
             PhysicalPlan::RecursiveCteScan(v) => v.plan_id,
+            PhysicalPlan::BroadcastSource(v) => v.plan_id,
+            PhysicalPlan::BroadcastSink(v) => v.plan_id,
         }
     }
 
@@ -508,6 +525,8 @@ impl PhysicalPlan {
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
             | PhysicalPlan::Recluster(_)
+            | PhysicalPlan::BroadcastSource(_)
+            | PhysicalPlan::BroadcastSink(_)
             | PhysicalPlan::HilbertPartition(_) => Ok(DataSchemaRef::default()),
             PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
             PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
@@ -579,6 +598,8 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(_) => "WriteData".to_string(),
             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".to_string(),
             PhysicalPlan::ChunkCommitInsert(_) => "Commit".to_string(),
+            PhysicalPlan::BroadcastSource(_) => "RuntimeFilterSource".to_string(),
+            PhysicalPlan::BroadcastSink(_) => "RuntimeFilterSink".to_string(),
         }
     }
 
@@ -591,7 +612,8 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
-            | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
+            | PhysicalPlan::RecursiveCteScan(_)
+            | PhysicalPlan::BroadcastSource(_) => Box::new(std::iter::empty()),
             PhysicalPlan::HilbertPartition(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -609,6 +631,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExpressionScan(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Exchange(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ExchangeSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::BroadcastSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::UnionAll(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -663,6 +686,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
+            | PhysicalPlan::BroadcastSource(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::HilbertPartition(plan) => Box::new(std::iter::once(plan.input.as_mut())),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_mut())),
@@ -723,6 +747,7 @@ impl PhysicalPlan {
                 CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v.as_mut())),
                 CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v.as_mut())),
             },
+            PhysicalPlan::BroadcastSink(plan) => Box::new(std::iter::once(plan.input.as_mut())),
         }
     }
 
@@ -778,7 +803,9 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkFillAndReorder(_)
             | PhysicalPlan::ChunkAppendData(_)
             | PhysicalPlan::ChunkMerge(_)
-            | PhysicalPlan::ChunkCommitInsert(_) => None,
+            | PhysicalPlan::ChunkCommitInsert(_)
+            | PhysicalPlan::BroadcastSource(_)
+            | PhysicalPlan::BroadcastSink(_) => None,
         }
     }
 

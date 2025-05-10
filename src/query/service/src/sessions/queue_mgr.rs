@@ -175,7 +175,7 @@ impl<Data: QueueData> QueueManager<Data> {
             let start_time = SystemTime::now();
             let acquire_res = match self.global_statement_queue {
                 true => {
-                    let semaphore_acquire = self.meta_store.new_acquired(
+                    let semaphore_acquire = self.meta_store.new_acquired_by_time(
                         data.get_lock_key(),
                         self.permits as u64,
                         data.get_key(), // ID of this acquirer
@@ -260,6 +260,7 @@ impl<Data: QueueData> QueueManager<Data> {
     }
 }
 
+#[derive(Debug)]
 pub enum AcquireQueueGuard {
     Global(Option<Permit>),
     Local(Option<OwnedSemaphorePermit>),

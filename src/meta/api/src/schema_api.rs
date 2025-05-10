@@ -37,7 +37,6 @@ use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DeleteLockRevReq;
@@ -47,7 +46,6 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
@@ -69,7 +67,6 @@ use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListTableReq;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -93,10 +90,8 @@ use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::seq_value::SeqV;
@@ -188,19 +183,6 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: ListIndexesReq,
     ) -> Result<Vec<(String, IndexId, IndexMeta)>, KVAppError>;
-
-    // virtual column
-
-    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<(), KVAppError>;
-
-    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<(), KVAppError>;
-
-    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<(), KVAppError>;
-
-    async fn list_virtual_columns(
-        &self,
-        req: ListVirtualColumnsReq,
-    ) -> Result<Vec<VirtualColumnMeta>, KVAppError>;
 
     // table
 

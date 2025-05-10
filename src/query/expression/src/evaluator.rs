@@ -125,7 +125,7 @@ impl<'a> Evaluator<'a> {
                 &column.data_type,
                 data_type,
                 "column data type mismatch at index: {index}, expr: {}",
-                expr.sql_display(),
+                expr.fmt_with_options(true)
             );
         }
     }

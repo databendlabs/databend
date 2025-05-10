@@ -224,6 +224,7 @@ impl Binder {
                 copy_into_location_options: Default::default(),
                 copy_into_table_options: stmt.options.clone(),
                 stage_root: "".to_string(),
+                copy_into_location_ordered: false,
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
@@ -239,7 +240,7 @@ impl Binder {
     #[async_backtrace::framed]
     async fn bind_copy_into_table_from_location(
         &mut self,
-        bind_ctx: &BindContext,
+        bind_ctx: &mut BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
         let use_query = matches!(&plan.stage_table_info.stage_info.file_format_params,
@@ -404,6 +405,7 @@ impl Binder {
                 copy_into_location_options: Default::default(),
                 copy_into_table_options: options,
                 stage_root: "".to_string(),
+                copy_into_location_ordered: false,
             },
             write_mode,
             query: None,
@@ -422,7 +424,7 @@ impl Binder {
     #[async_backtrace::framed]
     async fn bind_copy_from_query_into_table(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         mut plan: CopyIntoTablePlan,
         select_list: &[SelectTarget],
         alias: &Option<TableAlias>,

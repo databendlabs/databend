@@ -30,6 +30,11 @@ use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::statements::warehouse::ShowWarehousesStmt;
+use crate::ast::statements::workload::AlterWorkloadGroupStmt;
+use crate::ast::statements::workload::CreateWorkloadGroupStmt;
+use crate::ast::statements::workload::DropWorkloadGroupStmt;
+use crate::ast::statements::workload::RenameWorkloadGroupStmt;
+use crate::ast::statements::workload::ShowWorkloadGroupsStmt;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
@@ -146,6 +151,13 @@ pub enum Statement {
     AssignWarehouseNodes(AssignWarehouseNodesStmt),
     UnassignWarehouseNodes(UnassignWarehouseNodesStmt),
 
+    // Workloads
+    ShowWorkloadGroups(ShowWorkloadGroupsStmt),
+    CreateWorkloadGroup(CreateWorkloadGroupStmt),
+    DropWorkloadGroup(DropWorkloadGroupStmt),
+    RenameWorkloadGroup(RenameWorkloadGroupStmt),
+    AlterWorkloadGroup(AlterWorkloadGroupStmt),
+
     // Databases
     ShowDatabases(ShowDatabasesStmt),
     ShowDropDatabases(ShowDropDatabasesStmt),
@@ -212,9 +224,6 @@ pub enum Statement {
     DropNgramIndex(DropNgramIndexStmt),
 
     // VirtualColumns
-    CreateVirtualColumn(CreateVirtualColumnStmt),
-    AlterVirtualColumn(AlterVirtualColumnStmt),
-    DropVirtualColumn(DropVirtualColumnStmt),
     RefreshVirtualColumn(RefreshVirtualColumnStmt),
     ShowVirtualColumns(ShowVirtualColumnsStmt),
 
@@ -533,9 +542,6 @@ impl Statement {
             | Statement::DropInvertedIndex(..)
             | Statement::CreateNgramIndex(..)
             | Statement::DropNgramIndex(..)
-            | Statement::CreateVirtualColumn(..)
-            | Statement::AlterVirtualColumn(..)
-            | Statement::DropVirtualColumn(..)
             | Statement::CreateUser(..)
             | Statement::DropUser { .. }
             | Statement::CreateRole { .. }
@@ -578,7 +584,12 @@ impl Statement {
             | Statement::AssignWarehouseNodes(..)
             | Statement::UnassignWarehouseNodes(..)
             | Statement::ResumeWarehouse(..)
-            | Statement::SuspendWarehouse(..) => false,
+            | Statement::SuspendWarehouse(..)
+            | Statement::ShowWorkloadGroups(..)
+            | Statement::CreateWorkloadGroup(..)
+            | Statement::DropWorkloadGroup(..)
+            | Statement::RenameWorkloadGroup(..)
+            | Statement::AlterWorkloadGroup(..) => false,
             Statement::StatementWithSettings { stmt, settings: _ } => {
                 stmt.allowed_in_multi_statement()
             }
@@ -814,9 +825,6 @@ impl Display for Statement {
             Statement::CreateNgramIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropNgramIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshInvertedIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateVirtualColumn(stmt) => write!(f, "{stmt}")?,
-            Statement::AlterVirtualColumn(stmt) => write!(f, "{stmt}")?,
-            Statement::DropVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers { show_options } => {
@@ -1022,6 +1030,11 @@ impl Display for Statement {
             Statement::RenameWarehouseCluster(stmt) => write!(f, "{stmt}")?,
             Statement::AssignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
             Statement::UnassignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowWorkloadGroups(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateWorkloadGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::DropWorkloadGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameWorkloadGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterWorkloadGroup(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

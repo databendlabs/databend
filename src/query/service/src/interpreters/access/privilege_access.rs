@@ -945,15 +945,6 @@ impl AccessChecker for PrivilegeAccess {
             }
 
             // Virtual Column.
-            Plan::CreateVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Create, false, false).await?
-            }
-            Plan::AlterVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
-            }
-            Plan::DropVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Drop, plan.if_exists, false).await?
-            }
             Plan::RefreshVirtualColumn(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
@@ -1376,6 +1367,12 @@ impl AccessChecker for PrivilegeAccess {
             Plan::UnassignWarehouseNodes(plan) => {
                 self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
             }
+            // TODO: rbac for workload
+            Plan::ShowWorkloadGroups => {}
+            Plan::CreateWorkloadGroup(_) => {}
+            Plan::DropWorkloadGroup(_) => {}
+            Plan::RenameWorkloadGroup(_) => {}
+            Plan::AlterWorkloadGroup(_) => {}
         }
 
         Ok(())

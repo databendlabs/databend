@@ -22,3 +22,4 @@ mod stage;
 mod udf;
 mod user;
 mod warehouse;
+mod workload;

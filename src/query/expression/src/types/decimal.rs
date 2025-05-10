@@ -396,7 +396,7 @@ pub trait Decimal:
     fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self>;
 
     // mul two decimals and return a decimal with rounding option
-    fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self>;
+    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self>;
 
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
@@ -505,7 +505,22 @@ impl Decimal for i128 {
         self.checked_rem(rhs)
     }
 
-    fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self> {
+    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self> {
+        if shift_scale == 0 {
+            return Some(self);
+        }
+
+        if !overflow {
+            let div = i128::e(shift_scale);
+            let res = if self.is_negative() == rhs.is_negative() {
+                (self * rhs + div / 2) / div
+            } else {
+                (self * rhs - div / 2) / div
+            };
+
+            return Some(res);
+        }
+
         let div = i256::e(shift_scale);
         let res = if self.is_negative() == rhs.is_negative() {
             (i256::from(self) * i256::from(rhs) + div / i256::from(2)) / div
@@ -753,8 +768,21 @@ impl Decimal for i256 {
         self.0.checked_rem(rhs.0).map(Self)
     }
 
-    fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self> {
+    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self> {
+        if shift_scale == 0 {
+            return Some(self);
+        }
+
         let div = i256::e(shift_scale);
+        if !overflow {
+            let ret = if self.is_negative() == rhs.is_negative() {
+                (self * rhs + div / i256::from(2)) / div
+            } else {
+                (self * rhs - div / i256::from(2)) / div
+            };
+            return Some(ret);
+        }
+
         let ret: Option<i256> = if self.is_negative() == rhs.is_negative() {
             self.checked_mul(rhs)
                 .map(|x| (x + div / i256::from(2)) / div)
