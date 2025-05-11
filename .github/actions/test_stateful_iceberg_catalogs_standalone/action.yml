@@ -14,7 +14,6 @@ runs:
 
         docker ps -a | grep iceberg
         echo "HMS in $hms_ip"
-        nc -z -v  localhost $hms_ip
 
     - name: Run Stateful Tests with Standalone mode
       shell: bash

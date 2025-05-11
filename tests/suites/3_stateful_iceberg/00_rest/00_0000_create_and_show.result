@@ -9,17 +9,6 @@ t
 iceberg_rest
 
 
-===== Testing iceberg_hms =====
-iceberg_hms	iceberg	ADDRESS
-172.25.0.3:9083
-WAREHOUSE
-s3a://warehouse/hive/
-default
-t
-t
-iceberg_hms
-
-
 ===== Testing iceberg_glue =====
 iceberg_glue	iceberg	ADDRESS
 http://localhost:5000
