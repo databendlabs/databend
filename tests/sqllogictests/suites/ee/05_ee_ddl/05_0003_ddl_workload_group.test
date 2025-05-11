@@ -87,10 +87,49 @@ new_valid_mem (empty) 4294967296 (empty) (empty) (empty)
 valid_timeout 50% 20% 960s 10 900s
 
 statement ok
+create user test_user_workload_group identified by '123' with SET WORKLOAD GROUP='valid_timeout';
+
+query T
+select name, workload_groups from system.users where name='test_user_workload_group'
+----
+test_user_workload_group valid_timeout
+
+statement ok
+alter user test_user_workload_group with SET WORKLOAD GROUP='new_valid_mem';
+
+query T
+select name, workload_groups from system.users where name='test_user_workload_group'
+----
+test_user_workload_group new_valid_mem
+
+statement ok
+alter user test_user_workload_group with UNSET WORKLOAD GROUP;
+
+query B
+select workload_groups is null from system.users where name='test_user_workload_group'
+----
+1
+
+statement ok
+create user test_user_workload_group1 identified by '123' with SET WORKLOAD GROUP='new_valid_mem';
+
+query T
+select name, workload_groups from system.users where name='test_user_workload_group1'
+----
+test_user_workload_group1 new_valid_mem
+
+statement ok
 drop workload group valid_timeout;
 
 statement ok
 drop workload group new_valid_mem;
 
+statement error 3142
+create user test_user_workload_group2 identified by '123' with SET WORKLOAD GROUP='invalid_name';
 
+statement ok
+drop user test_user_workload_group1;
+
+statement ok
+drop user test_user_workload_group;
 
