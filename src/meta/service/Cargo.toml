@@ -58,6 +58,7 @@ serfig = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
+rustls = { workspace = true }
 tonic-reflection = { workspace = true }
 watcher = { workspace = true }
 
