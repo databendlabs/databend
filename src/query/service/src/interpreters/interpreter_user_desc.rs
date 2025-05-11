@@ -14,11 +14,14 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_management::WorkloadApi;
+use databend_common_management::WorkloadMgr;
 use databend_common_sql::plans::DescUserPlan;
 use databend_common_users::UserApiProvider;
 use itertools::Itertools;
@@ -67,6 +70,15 @@ impl Interpreter for DescUserInterpreter {
         let password_policies = vec![user.option.password_policy().cloned()];
         let must_change_passwords = vec![user.option.must_change_password().cloned()];
 
+        let workload_group = match user.option.workload_group() {
+            None => vec![None],
+            Some(w) => {
+                let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
+                let workload_group = workload_mgr.get_by_id(w).await?.name;
+                vec![Some(workload_group)]
+            }
+        };
+
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(hostnames),
@@ -77,6 +89,7 @@ impl Interpreter for DescUserInterpreter {
             StringType::from_opt_data(network_policies),
             StringType::from_opt_data(password_policies),
             BooleanType::from_opt_data(must_change_passwords),
+            StringType::from_opt_data(workload_group),
         ])])
     }
 }

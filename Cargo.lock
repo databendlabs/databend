@@ -3987,6 +3987,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-license",
+ "databend-common-management",
  "databend-common-meta-app",
  "databend-common-meta-types",
  "databend-common-metrics",

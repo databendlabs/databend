@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -26,6 +27,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_management::WorkloadApi;
+use databend_common_management::WorkloadMgr;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -56,6 +59,8 @@ impl AsyncSystemTable for UsersTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let users = UserApiProvider::instance().get_users(&tenant).await?;
+
+        let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
 
         let mut names: Vec<String> = users.iter().map(|x| x.name.clone()).collect();
         let mut hostnames: Vec<String> = users.iter().map(|x| x.hostname.clone()).collect();
@@ -97,6 +102,16 @@ impl AsyncSystemTable for UsersTable {
             .map(|user| Some(user.update_on.timestamp_micros()))
             .collect();
 
+        let mut workload_groups = vec![];
+        for user in users {
+            match user.option.workload_group() {
+                Some(w) => {
+                    let workload_group = workload_mgr.get_by_id(w).await?.name;
+                    workload_groups.push(Some(workload_group))
+                }
+                None => workload_groups.push(None),
+            }
+        }
         let configured_users = UserApiProvider::instance().get_configured_users();
         for (name, auth_info) in configured_users {
             names.push(name.clone());
@@ -111,6 +126,7 @@ impl AsyncSystemTable for UsersTable {
             must_change_passwords.push(None);
             created_on.push(None);
             update_on.push(None);
+            workload_groups.push(None);
         }
 
         // please note that do NOT display the auth_string field in the result, because there're risks of
@@ -128,6 +144,7 @@ impl AsyncSystemTable for UsersTable {
             BooleanType::from_opt_data(must_change_passwords),
             TimestampType::from_opt_data(created_on),
             TimestampType::from_opt_data(update_on),
+            StringType::from_opt_data(workload_groups),
         ]))
     }
 }
@@ -163,6 +180,10 @@ impl UsersTable {
             TableField::new(
                 "update_on",
                 TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
+            ),
+            TableField::new(
+                "workload_groups",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
         ]);
 
