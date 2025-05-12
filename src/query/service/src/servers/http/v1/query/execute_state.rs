@@ -267,7 +267,7 @@ impl Executor {
         let state = match &guard.state {
             Starting(s) => {
                 info!(
-                    "{}: http query begin changing state from Staring to Stopped, reason {:?}",
+                    "{}: http query begin changing state from Starting to Stopped, reason {:?}",
                     &guard.query_id, reason
                 );
                 if let Err(e) = &reason {

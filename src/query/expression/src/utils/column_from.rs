@@ -39,7 +39,7 @@ macro_rules! impl_from_data {
     ($T: ident) => {
         impl FromData<<$T as ValueType>::Scalar> for $T {
             fn from_data(d: Vec<<$T as ValueType>::Scalar>) -> Column {
-                $T::upcast_column($T::column_from_iter(d.into_iter(), &[]))
+                <$T as ValueType>::upcast_column($T::column_from_iter(d.into_iter(), &[]))
             }
 
             fn from_opt_data(d: Vec<Option<<$T as ValueType>::Scalar>>) -> Column {

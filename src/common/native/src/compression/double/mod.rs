@@ -45,12 +45,12 @@ use crate::write::WriteOptions;
 pub fn compress_double<T: DoubleType>(
     col: &Buffer<T>,
     validity: Option<Bitmap>,
-    write_options: WriteOptions,
+    write_options: &WriteOptions,
     buf: &mut Vec<u8>,
 ) -> Result<()> {
     // choose compressor
     let stats = gen_stats(col, validity);
-    let compressor = choose_compressor(col, &stats, &write_options);
+    let compressor = choose_compressor(col, &stats, write_options);
 
     log::debug!(
         "choose double compression : {:?}",
@@ -67,7 +67,7 @@ pub fn compress_double<T: DoubleType>(
             let input_buf = bytemuck::cast_slice(col.as_slice());
             c.compress(input_buf, buf)
         }
-        DoubleCompressor::Extend(c) => c.compress(col, &stats, &write_options, buf),
+        DoubleCompressor::Extend(c) => c.compress(col, &stats, write_options, buf),
     }?;
     buf[pos..pos + 4].copy_from_slice(&(compressed_size as u32).to_le_bytes());
     buf[pos + 4..pos + 8]
