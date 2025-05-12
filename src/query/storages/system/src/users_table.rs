@@ -106,8 +106,11 @@ impl AsyncSystemTable for UsersTable {
         for user in users {
             match user.option.workload_group() {
                 Some(w) => {
-                    let workload_group = workload_mgr.get_by_id(w).await?.name;
-                    workload_groups.push(Some(workload_group))
+                    let wg = workload_mgr
+                        .get_by_id(w)
+                        .await
+                        .map_or(None, |w| Some(w.name));
+                    workload_groups.push(wg)
                 }
                 None => workload_groups.push(None),
             }

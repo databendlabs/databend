@@ -27,10 +27,10 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v126_user_iption() -> anyhow::Result<()> {
-    let user_option_v126 = vec![
+fn test_decode_v127_user_iption() -> anyhow::Result<()> {
+    let user_option_v127 = vec![
         8, 1, 18, 5, 114, 111, 108, 101, 49, 26, 8, 109, 121, 112, 111, 108, 105, 99, 121, 58, 4,
-        109, 121, 119, 103, 160, 6, 126, 168, 6, 24,
+        109, 121, 119, 103, 160, 6, 127, 168, 6, 24,
     ];
 
     let want = || {
@@ -42,5 +42,5 @@ fn test_decode_v126_user_iption() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), user_option_v126.as_slice(), 126, want())
+    common::test_load_old(func_name!(), user_option_v127.as_slice(), 127, want())
 }

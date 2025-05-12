@@ -74,8 +74,10 @@ impl Interpreter for DescUserInterpreter {
             None => vec![None],
             Some(w) => {
                 let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
-                let workload_group = workload_mgr.get_by_id(w).await?.name;
-                vec![Some(workload_group)]
+                workload_mgr
+                    .get_by_id(w)
+                    .await
+                    .map_or(vec![None], |w| vec![Some(w.name)])
             }
         };
 

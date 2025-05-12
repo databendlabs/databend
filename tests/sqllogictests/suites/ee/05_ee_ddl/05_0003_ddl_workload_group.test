@@ -133,6 +133,11 @@ drop workload group new_valid_mem;
 statement error 3142
 create user test_user_workload_group2 identified by '123' with SET WORKLOAD GROUP='invalid_name';
 
+query T
+select name, workload_groups from system.users where name='test_user_workload_group'
+----
+test_user_workload_group NULL
+
 statement ok
 drop user test_user_workload_group1;
 
