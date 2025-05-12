@@ -35,7 +35,7 @@ use crate::common;
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_v126_add_glue_as_iceberg_catalog_option() -> anyhow::Result<()> {
-    let catalog_meta_v125 = vec![
+    let catalog_meta_v126 = vec![
         18, 185, 1, 26, 182, 1, 34, 173, 1, 10, 14, 115, 51, 58, 47, 47, 109, 121, 95, 98, 117, 99,
         107, 101, 116, 18, 37, 10, 10, 65, 87, 83, 95, 75, 69, 89, 95, 73, 68, 18, 23, 115, 117,
         112, 101, 114, 32, 115, 101, 99, 117, 114, 101, 32, 97, 99, 99, 101, 115, 115, 32, 107,
@@ -44,9 +44,9 @@ fn test_v126_add_glue_as_iceberg_catalog_option() -> anyhow::Result<()> {
         99, 114, 101, 116, 32, 107, 101, 121, 18, 47, 10, 6, 82, 69, 71, 73, 79, 78, 18, 37, 117,
         115, 45, 101, 97, 115, 116, 45, 49, 32, 97, 107, 97, 32, 97, 110, 116, 105, 45, 109, 117,
         108, 116, 105, 45, 97, 118, 97, 105, 108, 97, 98, 105, 108, 105, 116, 121, 26, 14, 108,
-        111, 99, 97, 108, 104, 111, 115, 116, 58, 57, 48, 48, 48, 160, 6, 125, 168, 6, 24, 160, 6,
-        125, 168, 6, 24, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48,
-        48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 125, 168, 6, 24,
+        111, 99, 97, 108, 104, 111, 115, 116, 58, 57, 48, 48, 48, 160, 6, 126, 168, 6, 24, 160, 6,
+        126, 168, 6, 24, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48,
+        48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 126, 168, 6, 24,
     ];
 
     let want = || databend_common_meta_app::schema::CatalogMeta {
@@ -65,14 +65,14 @@ fn test_v126_add_glue_as_iceberg_catalog_option() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), catalog_meta_v125.as_slice(), 125, want())?;
+    common::test_load_old(func_name!(), catalog_meta_v126.as_slice(), 126, want())?;
 
     Ok(())
 }
 
 #[test]
 fn test_v126_iceberg_storage_catalog_option() -> anyhow::Result<()> {
-    let catalog_meta_v125 = vec![
+    let catalog_meta_v126 = vec![
         18, 180, 1, 26, 177, 1, 42, 168, 1, 10, 14, 108, 111, 99, 97, 108, 104, 111, 115, 116, 58,
         57, 48, 48, 48, 18, 9, 109, 121, 45, 98, 117, 99, 107, 101, 116, 26, 37, 10, 10, 65, 87,
         83, 95, 75, 69, 89, 95, 73, 68, 18, 23, 115, 117, 112, 101, 114, 32, 115, 101, 99, 117,
@@ -81,11 +81,10 @@ fn test_v126_iceberg_storage_catalog_option() -> anyhow::Result<()> {
         32, 115, 101, 99, 117, 114, 101, 32, 115, 101, 99, 114, 101, 116, 32, 107, 101, 121, 26,
         47, 10, 6, 82, 69, 71, 73, 79, 78, 18, 37, 117, 115, 45, 101, 97, 115, 116, 45, 49, 32, 97,
         107, 97, 32, 97, 110, 116, 105, 45, 109, 117, 108, 116, 105, 45, 97, 118, 97, 105, 108, 97,
-        98, 105, 108, 105, 116, 121, 160, 6, 125, 168, 6, 24, 160, 6, 125, 168, 6, 24, 162, 1, 23,
+        98, 105, 108, 105, 116, 121, 160, 6, 126, 168, 6, 24, 160, 6, 126, 168, 6, 24, 162, 1, 23,
         50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67,
-        160, 6, 125, 168, 6, 24,
+        160, 6, 126, 168, 6, 24,
     ];
-
     let want = || databend_common_meta_app::schema::CatalogMeta {
         catalog_option: CatalogOption::Iceberg(IcebergCatalogOption::Storage(
             IcebergStorageCatalogOption {
@@ -102,7 +101,7 @@ fn test_v126_iceberg_storage_catalog_option() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), catalog_meta_v125.as_slice(), 125, want())?;
+    common::test_load_old(func_name!(), catalog_meta_v126.as_slice(), 126, want())?;
 
     Ok(())
 }

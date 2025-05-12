@@ -394,7 +394,7 @@ impl<'a> Binder {
             Statement::ShowUsers { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password default.system.users {} ORDER BY name {}",
+                    "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM default.system.users {} ORDER BY name {}",
                     show_limit, limit_str
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowUsers)
@@ -435,7 +435,7 @@ impl<'a> Binder {
             Statement::ShowStages { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, stage_type, number_of_files, creator, created_on, comment default.system.stages {} ORDER BY name {}",
+                    "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM default.system.stages {} ORDER BY name {}",
                     show_limit, limit_str,
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowStages)
@@ -458,7 +458,8 @@ impl<'a> Binder {
             Statement::DescribeStage { stage_name } => {
                 self.bind_rewrite_to_query(
                     bind_context,
-                    format!("SELECT * default.system.stages WHERE name = '{stage_name}'").as_str(),
+                    format!("SELECT * FROM default.system.stages WHERE name = '{stage_name}'")
+                        .as_str(),
                     RewriteKind::DescribeStage,
                 )
                 .await?
