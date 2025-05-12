@@ -6,7 +6,7 @@ spark = (
     .config("spark.sql.catalog.iceberg.type", "rest")
     .config("spark.sql.catalog.iceberg.uri", "http://127.0.0.1:8181")
     .config("spark.sql.catalog.iceberg.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
-    .config("spark.sql.catalog.iceberg.warehouse", "s3://iceberg-test/")
+    .config("spark.sql.catalog.iceberg.warehouse", "s3://iceberg-tpch/")
     .config("spark.sql.catalog.iceberg.s3.access-key-id", "admin")
     .config("spark.sql.catalog.iceberg.s3.secret-access-key", "password")
     .config("spark.sql.catalog.iceberg.s3.path-style-access", "true")

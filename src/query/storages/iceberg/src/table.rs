@@ -419,25 +419,67 @@ impl IcebergTable {
     }
 
     fn convert_orc_schema(schema: &Schema) -> Schema {
-        let fields = schema
-            .fields()
-            .iter()
-            .map(|field| {
-                // orc-rust is not compatible with UTF8 View
-                if let arrow_schema::DataType::Utf8View = field.data_type() {
-                    Arc::new(
-                        arrow_schema::Field::new(
-                            field.name(),
-                            arrow_schema::DataType::Utf8,
-                            field.is_nullable(),
-                        )
-                        .with_metadata(field.metadata().clone()),
-                    )
-                } else {
-                    field.clone()
+        fn visit_field(field: &arrow_schema::FieldRef) -> arrow_schema::FieldRef {
+            Arc::new(
+                arrow_schema::Field::new(
+                    field.name(),
+                    visit_type(field.data_type()),
+                    field.is_nullable(),
+                )
+                .with_metadata(field.metadata().clone()),
+            )
+        }
+
+        // orc-rust is not compatible with UTF8 View
+        fn visit_type(ty: &arrow_schema::DataType) -> arrow_schema::DataType {
+            match ty {
+                arrow_schema::DataType::Utf8View => arrow_schema::DataType::Utf8,
+                arrow_schema::DataType::List(field) => {
+                    arrow_schema::DataType::List(visit_field(field))
                 }
-            })
-            .collect::<Vec<_>>();
+                arrow_schema::DataType::ListView(field) => {
+                    arrow_schema::DataType::ListView(visit_field(field))
+                }
+                arrow_schema::DataType::FixedSizeList(field, len) => {
+                    arrow_schema::DataType::FixedSizeList(visit_field(field), *len)
+                }
+                arrow_schema::DataType::LargeList(field) => {
+                    arrow_schema::DataType::LargeList(visit_field(field))
+                }
+                arrow_schema::DataType::LargeListView(field) => {
+                    arrow_schema::DataType::LargeListView(visit_field(field))
+                }
+                arrow_schema::DataType::Struct(fields) => {
+                    let visited_fields = fields.iter().map(visit_field).collect::<Vec<_>>();
+                    arrow_schema::DataType::Struct(arrow_schema::Fields::from(visited_fields))
+                }
+                arrow_schema::DataType::Union(fields, mode) => {
+                    let (ids, fields): (Vec<_>, Vec<_>) = fields
+                        .iter()
+                        .map(|(i, field)| (i, visit_field(field)))
+                        .unzip();
+                    arrow_schema::DataType::Union(
+                        arrow_schema::UnionFields::new(ids, fields),
+                        *mode,
+                    )
+                }
+                arrow_schema::DataType::Dictionary(key, value) => {
+                    arrow_schema::DataType::Dictionary(
+                        Box::new(visit_type(key)),
+                        Box::new(visit_type(value)),
+                    )
+                }
+                arrow_schema::DataType::Map(field, v) => {
+                    arrow_schema::DataType::Map(visit_field(field), *v)
+                }
+                ty => {
+                    debug_assert!(!ty.is_nested());
+                    ty.clone()
+                }
+            }
+        }
+
+        let fields = schema.fields().iter().map(visit_field).collect::<Vec<_>>();
 
         Schema::new(fields).with_metadata(schema.metadata().clone())
     }

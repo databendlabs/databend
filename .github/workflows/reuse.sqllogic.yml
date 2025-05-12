@@ -176,25 +176,6 @@ jobs:
         with:
           name: test-sqllogic-standalone-iceberg-tpch
 
-  standalone_iceberg_test:
-    runs-on: [ self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}" ]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
-      - uses: ./.github/actions/test_sqllogic_iceberg_test
-        timeout-minutes: 15
-        with:
-          dirs: iceberg
-          handlers: http,hybrid
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-sqllogic-standalone-iceberg-test
-
   cluster:
     runs-on:
       - self-hosted
