@@ -97,8 +97,7 @@ impl DataBlock {
                     })
                     .collect();
 
-                let column =
-                    Column::take_column_indices(&full_columns, ty.clone(), indices, result_size);
+                let column = Column::take_column_indices(&full_columns, indices, result_size);
 
                 BlockEntry::new(ty, Value::Column(column))
             })
@@ -245,7 +244,6 @@ impl DataBlock {
 impl Column {
     pub fn take_column_indices(
         columns: &[Column],
-        datatype: DataType,
         indices: &[BlockRowIndex],
         result_size: usize,
     ) -> Column {
@@ -333,7 +331,6 @@ impl Column {
                 Self::take_block_value_types::<BitmapType>(columns, builder, indices)
             }
             Column::Nullable(_) => {
-                let inner_ty = datatype.as_nullable().unwrap();
                 let inner_columns = columns
                     .iter()
                     .map(|c| match c {
@@ -350,47 +347,23 @@ impl Column {
                     })
                     .collect::<Vec<_>>();
 
-                let inner_column = Self::take_column_indices(
-                    &inner_columns,
-                    *inner_ty.clone(),
-                    indices,
-                    result_size,
-                );
-
-                let inner_bitmap = Self::take_column_indices(
-                    &inner_bitmaps,
-                    DataType::Boolean,
-                    indices,
-                    result_size,
-                );
-
+                let inner_column = Self::take_column_indices(&inner_columns, indices, result_size);
+                let inner_bitmap = Self::take_column_indices(&inner_bitmaps, indices, result_size);
                 NullableColumn::new_column(
                     inner_column,
                     BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
                 )
             }
-            Column::Tuple { .. } => {
-                let inner_ty = datatype.as_tuple().unwrap();
-                let inner_columns = columns
-                    .iter()
-                    .map(|c| match c {
-                        Column::Tuple(fields) => fields.clone(),
-                        _ => unreachable!(),
-                    })
-                    .collect::<Vec<_>>();
-
-                let fields: Vec<Column> = inner_ty
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, ty)| {
-                        let sub_columns = inner_columns
+            Column::Tuple(first) => {
+                let fields = (0..first.len())
+                    .map(|idx| {
+                        let sub_columns = columns
                             .iter()
-                            .map(|c| c[idx].clone())
+                            .map(|c| c.as_tuple().unwrap()[idx].clone())
                             .collect::<Vec<_>>();
-                        Self::take_column_indices(&sub_columns, ty.clone(), indices, result_size)
+                        Self::take_column_indices(&sub_columns, indices, result_size)
                     })
                     .collect();
-
                 Column::Tuple(fields)
             }
             Column::Variant(_) => {
@@ -408,7 +381,7 @@ impl Column {
         }
     }
 
-    pub fn take_downcast_column_vec(columns: &[Column], datatype: DataType) -> ColumnVec {
+    pub fn take_downcast_column_vec(columns: &[Column]) -> ColumnVec {
         match &columns[0] {
             Column::Null { .. } => ColumnVec::Null,
             Column::EmptyArray { .. } => ColumnVec::EmptyArray,
@@ -561,7 +534,6 @@ impl Column {
                 ColumnVec::Bitmap(columns)
             }
             Column::Nullable(_) => {
-                let inner_ty = datatype.as_nullable().unwrap();
                 let inner_columns = columns
                     .iter()
                     .map(|c| match c {
@@ -578,39 +550,20 @@ impl Column {
                     })
                     .collect::<Vec<_>>();
 
-                let inner_column =
-                    Self::take_downcast_column_vec(&inner_columns, *inner_ty.clone());
-
-                let inner_bitmap =
-                    Self::take_downcast_column_vec(&inner_bitmaps, DataType::Boolean);
-
-                ColumnVec::Nullable(Box::new(NullableColumnVec {
-                    column: inner_column,
-                    validity: inner_bitmap,
-                }))
+                let column = Self::take_downcast_column_vec(&inner_columns);
+                let validity = Self::take_downcast_column_vec(&inner_bitmaps);
+                ColumnVec::Nullable(Box::new(NullableColumnVec { column, validity }))
             }
-            Column::Tuple { .. } => {
-                let inner_ty = datatype.as_tuple().unwrap();
-                let inner_columns = columns
-                    .iter()
-                    .map(|c| match c {
-                        Column::Tuple(fields) => fields.clone(),
-                        _ => unreachable!(),
-                    })
-                    .collect::<Vec<_>>();
-
-                let fields: Vec<ColumnVec> = inner_ty
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, ty)| {
-                        let sub_columns = inner_columns
+            Column::Tuple(first) => {
+                let fields: Vec<ColumnVec> = (0..first.len())
+                    .map(|idx| {
+                        let sub_columns = columns
                             .iter()
-                            .map(|c| c[idx].clone())
+                            .map(|c| c.as_tuple().unwrap()[idx].clone())
                             .collect::<Vec<_>>();
-                        Self::take_downcast_column_vec(&sub_columns, ty.clone())
+                        Self::take_downcast_column_vec(&sub_columns)
                     })
                     .collect();
-
                 ColumnVec::Tuple(fields)
             }
             Column::Variant(_) => {
@@ -650,10 +603,9 @@ impl Column {
             ColumnVec::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumnVec::NUM_TYPE(columns) => {
                     let builder = Self::take_block_vec_primitive_types(columns, indices);
-                    <NumberType<NUM_TYPE>>::upcast_column(<NumberType<NUM_TYPE>>::column_from_vec(
-                        builder,
-                        &[],
-                    ))
+                    <NumberType<NUM_TYPE> as ValueType>::upcast_column(
+                        <NumberType<NUM_TYPE> as ArgType>::column_from_vec(builder, &[]),
+                    )
                 }
             }),
             ColumnVec::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
@@ -673,10 +625,9 @@ impl Column {
             }
             ColumnVec::Timestamp(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let ts = <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
-                    builder,
-                    &[],
-                ))
+                let ts = <NumberType<i64> as ValueType>::upcast_column(
+                    <NumberType<i64> as ArgType>::column_from_vec(builder, &[]),
+                )
                 .into_number()
                 .unwrap()
                 .into_int64()
@@ -685,10 +636,9 @@ impl Column {
             }
             ColumnVec::Date(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let d = <NumberType<i32>>::upcast_column(<NumberType<i32>>::column_from_vec(
-                    builder,
-                    &[],
-                ))
+                let d = <NumberType<i32> as ValueType>::upcast_column(
+                    <NumberType<i32> as ArgType>::column_from_vec(builder, &[]),
+                )
                 .into_number()
                 .unwrap()
                 .into_int32()
@@ -697,10 +647,11 @@ impl Column {
             }
             ColumnVec::Interval(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let i =
-                    <IntervalType>::upcast_column(<IntervalType>::column_from_vec(builder, &[]))
-                        .into_interval()
-                        .unwrap();
+                let i = <IntervalType as ValueType>::upcast_column(
+                    <IntervalType>::column_from_vec(builder, &[]),
+                )
+                .into_interval()
+                .unwrap();
                 Column::Interval(i)
             }
             ColumnVec::Array(columns) => {

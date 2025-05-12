@@ -1546,68 +1546,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let create_virtual_column = map_res(
-        rule! {
-            CREATE
-            ~ ( OR ~ ^REPLACE )?
-            ~ VIRTUAL ~ COLUMN
-            ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ ^"(" ~ ^#comma_separated_list1(virtual_column) ~ ^")"
-            ~ FOR ~ #dot_separated_idents_1_to_3
-        },
-        |(
-            _,
-            opt_or_replace,
-            _,
-            _,
-            opt_if_not_exists,
-            _,
-            virtual_columns,
-            _,
-            _,
-            (catalog, database, table),
-        )| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
-                create_option,
-                catalog,
-                database,
-                table,
-                virtual_columns,
-            }))
-        },
-    );
-
-    let alter_virtual_column = map(
-        rule! {
-            ALTER ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(virtual_column) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
-        },
-        |(_, _, _, opt_if_exists, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
-                if_exists: opt_if_exists.is_some(),
-                catalog,
-                database,
-                table,
-                virtual_columns,
-            })
-        },
-    );
-
-    let drop_virtual_column = map(
-        rule! {
-            DROP ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ FOR ~ #dot_separated_idents_1_to_3
-        },
-        |(_, _, _, opt_if_exists, _, (catalog, database, table))| {
-            Statement::DropVirtualColumn(DropVirtualColumnStmt {
-                if_exists: opt_if_exists.is_some(),
-                catalog,
-                database,
-                table,
-            })
-        },
-    );
-
     let refresh_virtual_column = map(
         rule! {
             REFRESH ~ VIRTUAL ~ COLUMN ~ FOR ~ #dot_separated_idents_1_to_3
@@ -2703,11 +2641,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #refresh_inverted_index: "`REFRESH INVERTED INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #create_ngram_index: "`CREATE [OR REPLACE] NGRAM INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             | #drop_ngram_index: "`DROP NGRAM INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
-        ),
-        rule!(
-            #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
-            | #alter_virtual_column: "`ALTER VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
-            | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #sequence
@@ -5254,17 +5187,5 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
             | #comment
         },
         |opts| opts,
-    )(i)
-}
-
-pub fn virtual_column(i: Input) -> IResult<VirtualColumn> {
-    map(
-        rule! {
-            #expr ~ #alias_name?
-        },
-        |(expr, alias)| VirtualColumn {
-            expr: Box::new(expr),
-            alias,
-        },
     )(i)
 }

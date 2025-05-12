@@ -25,12 +25,12 @@ pub fn compress_view(
     col: &BinaryViewColumn,
     validity: Option<Bitmap>,
     buf: &mut Vec<u8>,
-    write_options: WriteOptions,
+    write_options: &WriteOptions,
 ) -> Result<()> {
     // choose compressor
     let col = col.gc_with_dict(validity.clone());
     let view_array: Buffer<i128> = col.views().iter().map(|x| x.as_i128()).collect();
-    compress_integer(&view_array, validity, write_options.clone(), buf)?;
+    compress_integer(&view_array, validity, write_options, buf)?;
     compress_buffers(&col, buf, write_options.default_compression)
 }
 

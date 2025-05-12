@@ -162,7 +162,7 @@ impl ExecutorWorkerContext {
         proc: ProcessorWrapper,
     ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
         let payload = proc.graph.get_node_tracking_payload(proc.processor.id());
-        let _guard = ThreadTracker::tracking(payload.clone());
+        let guard = ThreadTracker::tracking(payload.clone());
 
         let instant = Instant::now();
 
@@ -170,6 +170,11 @@ impl ExecutorWorkerContext {
         let nanos = instant.elapsed().as_nanos();
         assume(nanos < 18446744073709551615_u128);
         Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
+
+        if let Err(out_of_limit) = guard.flush() {
+            return Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)));
+        }
+
         Ok(Some((proc.processor.id(), proc.graph)))
     }
 

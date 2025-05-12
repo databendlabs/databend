@@ -28,7 +28,9 @@ use tonic::Status;
 use watcher::dispatch::Command;
 use watcher::dispatch::DispatcherHandle as GenericDispatcherHandle;
 use watcher::type_config::KVChange;
+use watcher::type_config::KeyOf;
 use watcher::type_config::TypeConfig;
+use watcher::type_config::ValueOf;
 
 use crate::metrics::server_metrics;
 
@@ -42,8 +44,12 @@ impl TypeConfig for WatchTypes {
     type Response = WatchResponse;
     type Error = Status;
 
-    fn new_response(change: KVChange<Self>) -> Self::Response {
-        WatchResponse::new3(change.0, change.1, change.2)
+    fn new_initialize_response(key: KeyOf<Self>, value: ValueOf<Self>) -> Self::Response {
+        WatchResponse::new_initialization_event(key, value)
+    }
+
+    fn new_change_response(change: KVChange<Self>) -> Self::Response {
+        WatchResponse::new_change_event(change.0, change.1, change.2)
     }
 
     fn data_error(error: Error) -> Self::Error {

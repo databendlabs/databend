@@ -80,7 +80,7 @@ impl<T: DoubleType> DoubleCompression<T> for Freq {
         write_options.forbidden_compressions.push(Compression::Freq);
 
         let exceptions = exceptions.into();
-        compress_double(&exceptions, stats.validity.clone(), write_options, output)?;
+        compress_double(&exceptions, stats.validity.clone(), &write_options, output)?;
 
         Ok(output.len() - size)
     }

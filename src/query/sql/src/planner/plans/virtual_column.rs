@@ -12,23 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Write;
+use std::sync::Arc;
 
-use databend_common_column::bitmap::Bitmap;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_storages_common_table_meta::meta::Location;
 
-use super::WriteOptions;
-use crate::compression::boolean::compress_boolean;
-use crate::error::Result;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RefreshVirtualColumnPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub segment_locs: Option<Vec<Location>>,
+}
 
-pub(crate) fn write_bitmap<W: Write>(
-    w: &mut W,
-    column: &Bitmap,
-    validity: Option<Bitmap>,
-    write_options: &WriteOptions,
-    scratch: &mut Vec<u8>,
-) -> Result<()> {
-    scratch.clear();
-    compress_boolean(column, validity, scratch, write_options)?;
-    w.write_all(scratch)?;
-    Ok(())
+impl RefreshVirtualColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }

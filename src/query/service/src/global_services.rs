@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
+use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
 use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
@@ -178,6 +179,9 @@ impl GlobalServices {
         if config.log.persistentlog.on {
             GlobalPersistentLog::init(config).await?;
         }
+
+        GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
+
         Ok(())
     }
 
@@ -195,4 +199,15 @@ impl GlobalServices {
         GlobalInstance::set(Arc::new(WorkloadMgr::create(meta_store, &tenant)?));
         Ok(())
     }
+}
+
+pub fn memory_gc_handle(query_id: &String, _force: bool) -> bool {
+    log::info!("memory_gc_handle {}", query_id);
+    let sessions_manager = SessionManager::instance();
+    // TODO: dealloc jemalloc dirty page?
+    // TODO: page cache?
+    // TODO: databend cache?
+    // TODO: spill query?
+    sessions_manager.kill_by_query_id(query_id);
+    true
 }
