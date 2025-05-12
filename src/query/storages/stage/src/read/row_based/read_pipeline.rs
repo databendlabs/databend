@@ -102,7 +102,7 @@ impl RowBasedReadPipelineBuilder<'_> {
         let format =
             create_row_based_file_format(&self.stage_table_info.stage_info.file_format_params);
 
-        let load_ctx = Arc::new(LoadContext::try_create(
+        let load_ctx = Arc::new(LoadContext::try_create_for_copy(
             ctx.clone(),
             self.stage_table_info,
             pos_projection,

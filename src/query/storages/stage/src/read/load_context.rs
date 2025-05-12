@@ -49,7 +49,7 @@ pub struct LoadContext {
 }
 
 impl LoadContext {
-    pub fn try_create(
+    pub fn try_create_for_copy(
         ctx: Arc<dyn TableContext>,
         stage_table_info: &StageTableInfo,
         pos_projection: Option<Vec<usize>>,
@@ -63,7 +63,7 @@ impl LoadContext {
         file_format_options_ext.disable_variant_check = stage_table_info
             .copy_into_table_options
             .disable_variant_check;
-        Self::try_create_inner(
+        Self::try_create(
             ctx,
             stage_table_info.schema.clone(),
             file_format_options_ext,
@@ -75,7 +75,7 @@ impl LoadContext {
             stage_table_info.copy_into_table_options.on_error.clone(),
         )
     }
-    pub fn try_create_inner(
+    pub fn try_create(
         ctx: Arc<dyn TableContext>,
         schema: TableSchemaRef,
         file_format_options_ext: FileFormatOptionsExt,

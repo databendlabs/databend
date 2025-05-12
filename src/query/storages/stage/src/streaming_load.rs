@@ -61,7 +61,7 @@ pub fn build_streaming_load_pipeline(
 
     let file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings, false)?;
 
-    let load_ctx = Arc::new(LoadContext::try_create_inner(
+    let load_ctx = Arc::new(LoadContext::try_create(
         ctx.clone(),
         schema,
         file_format_options_ext,
