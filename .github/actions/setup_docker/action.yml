@@ -64,7 +64,7 @@ runs:
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
-        username: databendlabs
+        username: ${{ github.actor }}
         password: ${{ github.token }}
 
     - name: Output Registries
@@ -73,4 +73,4 @@ runs:
       run: |
         echo 'dockerhub=datafuselabs/${{ inputs.repo }}' >> $GITHUB_OUTPUT
         echo 'ecr=public.ecr.aws/i7g1w5q7/${{ inputs.repo }}' >> $GITHUB_OUTPUT
-        echo 'ghcr=ghcr.io/databendlabs/${{ inputs.repo }}' >> $GITHUB_OUTPUT
+        echo 'ghcr=ghcr.io/${{ github.repository_owner }}/${{ inputs.repo }}' >> $GITHUB_OUTPUT
