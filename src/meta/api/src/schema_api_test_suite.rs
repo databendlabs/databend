@@ -6952,33 +6952,22 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1_gc_dropped_db_after_undrop";
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-
         let db_name = "db1_gc_dropped_db_after_undrop";
+        let mut util = Util::new(mt, tenant_name, db_name, "", "eng");
+
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
         let db_name_ident = DatabaseNameIdent::new(&tenant, db_name);
 
         // 1. Create database
-        let req = CreateDatabaseReq {
-            create_option: CreateOption::Create,
-            name_ident: db_name_ident.clone(),
-            meta: DatabaseMeta {
-                engine: "does not matter".to_string(),
-                ..Default::default()
-            },
-        };
+        util.create_db().await?;
+        let db_id = util.db_id;
 
-        let res = mt.create_database(req).await?;
-        let db_id = res.db_id;
         info!("Created database with ID: {}", db_id);
 
         // 2. Drop database
-        mt.drop_database(DropDatabaseReq {
-            if_exists: false,
-            name_ident: DatabaseNameIdent::new(&tenant, db_name),
-        })
-        .await?;
+        util.drop_db().await?;
 
-        // 2.1. Check database is dropped
+        // 2.1. Check database is marked as dropped
         let req = ListDroppedTableReq::new(&tenant);
         let resp = mt.get_drop_table_infos(req).await?;
 
@@ -6988,7 +6977,7 @@ impl SchemaApiTestSuite {
             .into_iter()
             .filter(|id| {
                 if let DroppedId::Db { db_id: id, .. } = id {
-                    *id == *db_id
+                    *id == db_id
                 } else {
                     false
                 }
@@ -7022,10 +7011,7 @@ impl SchemaApiTestSuite {
         // 5. Verify the database is still accessible
         let get_req = GetDatabaseReq::new(tenant.clone(), db_name.to_string());
         let db_info = mt.get_database(get_req).await?;
-        assert_eq!(
-            db_info.database_id.db_id, db_id.db_id,
-            "Database ID should match"
-        );
+        assert_eq!(db_info.database_id.db_id, db_id, "Database ID should match");
         assert!(
             db_info.meta.drop_on.is_none(),
             "Database should not be marked as dropped"
