@@ -110,12 +110,11 @@ jobs:
         env:
           REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
-          REPO_GHCR: ${{ steps.login.outputs.ghcr_repo }}
           VERSION: ${{ steps.prepare.outputs.tag }}
         with:
           script: |
-            const { VERSION, REPO_DOCKERHUB, REPO_ECR, REPO_GHCR } = process.env;
-            const repos = [REPO_DOCKERHUB, REPO_ECR, REPO_GHCR];
+            const { VERSION, REPO_DOCKERHUB, REPO_ECR } = process.env;
+            const repos = [REPO_DOCKERHUB, REPO_ECR];
             let tags = [];
             for (const repo of repos) {
               tags.push(`${repo}:${VERSION}`);
