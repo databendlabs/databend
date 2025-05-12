@@ -80,9 +80,10 @@ impl ParquetRSTable {
             .as_ref()
             .and_then(|p| p.top_k(&self.schema()));
 
+        let op = Arc::new(self.operator.clone());
         let mut builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx.clone(),
-            Arc::new(self.operator.clone()),
+            op.clone(),
             table_schema.clone(),
             self.schema_descr.clone(),
             Some(self.arrow_schema.clone()),
@@ -113,6 +114,9 @@ impl ParquetRSTable {
                     full_file_reader.clone(),
                     topk.clone(),
                     internal_columns.clone(),
+                    plan.push_downs.clone(),
+                    table_schema.clone(),
+                    op.clone(),
                 )
             },
             num_threads,

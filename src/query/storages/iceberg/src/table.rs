@@ -325,9 +325,10 @@ impl IcebergTable {
             let read_options = ParquetReadOptions::default()
                 .with_prune_row_groups(true)
                 .with_prune_pages(false);
+            let op = Arc::new(op.clone());
             let mut builder = ParquetRSReaderBuilder::create(
                 ctx.clone(),
-                Arc::new(op.clone()),
+                op.clone(),
                 table_schema.clone(),
                 arrow_schema,
             )?
@@ -351,6 +352,9 @@ impl IcebergTable {
                         None,
                         topk.clone(),
                         internal_columns.clone(),
+                        plan.push_downs.clone(),
+                        table_schema.clone(),
+                        op.clone(),
                     )
                 },
                 max_threads,

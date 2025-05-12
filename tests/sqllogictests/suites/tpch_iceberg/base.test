@@ -19,12 +19,28 @@ statement ok
 use test;
 
 query II rowsort
+select * from t1;
+----
+0 0 a
+1 1 b
+2 2 c
+3 3 d
+
+query II rowsort
 select * from t1_orc;
 ----
 0 0 a
 1 1 b
 2 2 c
 3 3 d
+
+query II rowsort
+select c1, c3 from t1;
+----
+0 a
+1 b
+2 c
+3 d
 
 query II rowsort
 select c1, c3 from t1_orc;

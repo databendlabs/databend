@@ -149,11 +149,12 @@ impl Table for ResultScan {
         _put_cache: bool,
     ) -> Result<()> {
         let read_options = ParquetReadOptions::default();
-        let op = DataOperator::instance().operator();
+        let op = Arc::new(DataOperator::instance().operator());
+        let table_schema = self.table_info.schema();
         let mut builder = ParquetRSReaderBuilder::create(
             ctx.clone(),
-            Arc::new(op),
-            self.table_info.schema(),
+            op.clone(),
+            table_schema.clone(),
             self.schema.clone(),
         )?
         .with_options(read_options);
@@ -168,6 +169,9 @@ impl Table for ResultScan {
                     None,
                     Arc::new(None),
                     vec![],
+                    None,
+                    table_schema.clone(),
+                    op.clone(),
                 )
             },
             1,
