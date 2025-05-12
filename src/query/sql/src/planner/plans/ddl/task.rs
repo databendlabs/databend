@@ -27,6 +27,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 
 pub fn task_schema() -> DataSchemaRef {
@@ -79,7 +80,7 @@ pub fn task_run_schema() -> DataSchemaRef {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateTaskPlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub tenant: Tenant,
     pub task_name: String,
     pub warehouse: Option<String>,

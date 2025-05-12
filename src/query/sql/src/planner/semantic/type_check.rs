@@ -3423,6 +3423,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("connection_id"),
             Ascii::new("timezone"),
             Ascii::new("nullif"),
+            Ascii::new("iff"),
             Ascii::new("ifnull"),
             Ascii::new("nvl"),
             Ascii::new("nvl2"),
@@ -3437,6 +3438,8 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("try_to_variant"),
             Ascii::new("greatest"),
             Ascii::new("least"),
+            Ascii::new("greatest_ignore_nulls"),
+            Ascii::new("least_ignore_nulls"),
             Ascii::new("stream_has_data"),
             Ascii::new("getvariable"),
         ];
@@ -3509,6 +3512,7 @@ impl<'a> TypeChecker<'a> {
                     arg_x,
                 ]))
             }
+            ("iff", args) => Some(self.resolve_function(span, "if", vec![], args)),
             ("ifnull" | "nvl", args) => {
                 if args.len() == 2 {
                     // Rewrite ifnull(x, y) | nvl(x, y) to if(is_null(x), y, x)
@@ -3805,11 +3809,40 @@ impl<'a> TypeChecker<'a> {
                 let box (scalar, data_type) = self.resolve(args[0]).ok()?;
                 self.resolve_cast_to_variant(span, &data_type, &scalar, true)
             }
-            ("greatest", args) => {
+            (name @ ("greatest" | "least"), args) => {
+                let array_func = if name == "greatest" {
+                    "array_max"
+                } else {
+                    "array_min"
+                };
+                let (array, _) = *self.resolve_function(span, "array", vec![], args).ok()?;
+                let null_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Null,
+                });
+
+                let contains_null = self
+                    .resolve_scalar_function_call(span, "array_contains", vec![], vec![
+                        array.clone(),
+                        null_scalar.clone(),
+                    ])
+                    .ok()?;
+
+                let max = self
+                    .resolve_scalar_function_call(span, array_func, vec![], vec![array])
+                    .ok()?;
+
+                Some(self.resolve_scalar_function_call(span, "if", vec![], vec![
+                    contains_null.0.clone(),
+                    null_scalar.clone(),
+                    max.0.clone(),
+                ]))
+            }
+            ("greatest_ignore_nulls", args) => {
                 let (array, _) = *self.resolve_function(span, "array", vec![], args).ok()?;
                 Some(self.resolve_scalar_function_call(span, "array_max", vec![], vec![array]))
             }
-            ("least", args) => {
+            ("least_ignore_nulls", args) => {
                 let (array, _) = *self.resolve_function(span, "array", vec![], args).ok()?;
                 Some(self.resolve_scalar_function_call(span, "array_min", vec![], vec![array]))
             }

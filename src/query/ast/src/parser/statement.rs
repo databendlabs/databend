@@ -122,18 +122,31 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let create_task = map(
+    let create_task = map_res(
         rule! {
-            CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ #create_task_option*
             ~ #set_table_option?
             ~ AS ~ #task_sql_block
         },
-        |(_, _, opt_if_not_exists, task, create_task_opts, session_opts, _, sql)| {
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            task,
+            create_task_opts,
+            session_opts,
+            _,
+            sql,
+        )| {
             let session_opts = session_opts.unwrap_or_default();
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
             let mut stmt = CreateTaskStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: task.to_string(),
                 warehouse: None,
                 schedule_opts: None,
@@ -148,7 +161,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             for opt in create_task_opts {
                 stmt.apply_opt(opt);
             }
-            Statement::CreateTask(stmt)
+            Ok(Statement::CreateTask(stmt))
         },
     );
 
@@ -2771,9 +2784,9 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
         } else {
             insert_source
         };
-        map(
+        map_res(
             rule! {
-                #with? ~ INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                #with? ~ INSERT ~ #hint? ~ OVERWRITE? ~ INTO?  ~ TABLE?
                 ~ #dot_separated_idents_1_to_3
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ #insert_source_parser
@@ -2783,12 +2796,18 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
                 _,
                 opt_hints,
                 overwrite,
+                into,
                 _,
                 (catalog, database, table),
                 opt_columns,
                 source,
             )| {
-                Statement::Insert(InsertStmt {
+                if overwrite.is_none() && into.is_none() {
+                    return Err(nom::Err::Failure(ErrorKind::Other(
+                        "INSERT statement must be followed by 'overwrite' or 'into'",
+                    )));
+                }
+                Ok(Statement::Insert(InsertStmt {
                     hints: opt_hints,
                     with,
                     catalog,
@@ -2798,8 +2817,8 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
                         .map(|(_, columns, _)| columns)
                         .unwrap_or_default(),
                     source,
-                    overwrite: overwrite.kind == OVERWRITE,
-                })
+                    overwrite: overwrite.is_some(),
+                }))
             },
         )(i)
     }
