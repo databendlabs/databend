@@ -65,6 +65,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
+use super::concat_buffer::ConcatBuffer;
 use super::desc::RuntimeFilterDesc;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
@@ -97,11 +98,6 @@ pub struct HashJoinBuildState {
     pub(crate) next_round_counter: AtomicUsize,
     /// The barrier is used to synchronize build side processors.
     pub(crate) barrier: Barrier,
-    // When build side input data is coming, will put it into chunks.
-    // To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
-    // Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
-    // After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
-    pub(crate) chunk_size_limit: usize,
     /// Hash method for hash join keys.
     pub(crate) method: HashMethodKind,
     /// The size of each entry in HashTable.
@@ -115,8 +111,8 @@ pub struct HashJoinBuildState {
     pub(crate) build_hash_table_tasks: RwLock<VecDeque<usize>>,
     pub(crate) mutex: Mutex<()>,
 
-    /// Spill related states.
     pub(crate) memory_settings: MemorySettings,
+    pub(crate) concat_buffer: Mutex<ConcatBuffer>,
 }
 
 impl HashJoinBuildState {
@@ -144,7 +140,7 @@ impl HashJoinBuildState {
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
 
         let settings = ctx.get_settings();
-        let chunk_size_limit = settings.get_max_block_size()? as usize * 16;
+        let concat_threshold = settings.get_max_block_size()? as usize * 16;
         let memory_settings = MemorySettings::from_join_settings(&ctx)?;
 
         Ok(Arc::new(Self {
@@ -155,7 +151,6 @@ impl HashJoinBuildState {
             finalize_counter: AtomicUsize::new(0),
             next_round_counter: AtomicUsize::new(0),
             barrier: Barrier::new(num_threads),
-            chunk_size_limit,
             method,
             entry_size: Default::default(),
             raw_entry_spaces: Default::default(),
@@ -164,40 +159,17 @@ impl HashJoinBuildState {
             build_hash_table_tasks: Default::default(),
             mutex: Default::default(),
             memory_settings,
+            concat_buffer: Mutex::new(ConcatBuffer::new(concat_threshold)),
         }))
     }
 
-    /// Add input `DataBlock` to `hash_join_state.row_space`.
     pub fn build(&self, input: DataBlock) -> Result<()> {
-        let mut buffer = self.hash_join_state.row_space.buffer.write();
-
-        let input_rows = input.num_rows();
-        // We have acquired the lock, so we can use Ordering::Relaxed here.
-        let old_size = self
-            .hash_join_state
-            .row_space
-            .buffer_row_size
-            .fetch_add(input_rows, Ordering::Relaxed);
-        buffer.push(input);
-
-        if old_size + input_rows < self.chunk_size_limit {
-            return Ok(());
+        if let Some(data_block) = self.concat_buffer.lock().add_block(input)? {
+            self.add_build_block(data_block)?;
         }
-
-        let data_block = DataBlock::concat(buffer.as_slice())?;
-        buffer.clear();
-        drop(buffer);
-
-        // We have acquired the lock, so we can use Ordering::Relaxed here.
-        self.hash_join_state
-            .row_space
-            .buffer_row_size
-            .store(0, Ordering::Relaxed);
-
-        self.add_build_block(data_block)
+        Ok(())
     }
 
-    // Add `data_block` for build table to `row_space`
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
         let block_outer_scan_map = if self.hash_join_state.need_outer_scan()
             || matches!(
@@ -252,13 +224,8 @@ impl HashJoinBuildState {
     pub(crate) fn collect_done(&self) -> Result<()> {
         let old_count = self.collect_counter.fetch_sub(1, Ordering::AcqRel);
         if old_count == 1 {
-            {
-                let mut buffer = self.hash_join_state.row_space.buffer.write();
-                if !buffer.is_empty() {
-                    let data_block = DataBlock::concat(&buffer)?;
-                    self.add_build_block(data_block)?;
-                    buffer.clear();
-                }
+            if let Some(data_block) = self.concat_buffer.lock().take_remaining()? {
+                self.add_build_block(data_block)?;
             }
 
             // Get the number of rows of the build side.
