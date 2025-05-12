@@ -2,21 +2,21 @@
 >>>> load csv/it.csv with format (type = CSV), with label L1
 {"id":"csv/it.csv","stats":{"rows":2,"bytes":36}}
 <<<<
->>>> select  * from t1 order by a
+>>>> select * from t1 order by a
 1	b
 2	d
 <<<<
 >>>> load csv/it.csv with format (type = CSV), with label L1
 {"id":"csv/it.csv","stats":{"rows":0,"bytes":0}}
 <<<<
->>>> select  * from t1 order by a
+>>>> select * from t1 order by a
 1	b
 2	d
 <<<<
 >>>> load csv/it.csv with format (type = CSV), with label L2
 {"id":"csv/it.csv","stats":{"rows":2,"bytes":36}}
 <<<<
->>>> select  * from t1 order by a
+>>>> select * from t1 order by a
 1	b
 1	b
 2	d

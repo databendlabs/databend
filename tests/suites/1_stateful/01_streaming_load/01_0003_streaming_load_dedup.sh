@@ -15,15 +15,15 @@ function run() {
   -u root: -XPUT \
   "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"
   echo
-	echo "<<<<"
+  echo "<<<<"
 }
 
 # load csv
 run "type = CSV" "csv/it.csv" "L1"
-query "select  * from t1 order by a"
+query "select * from t1 order by a"
 run "type = CSV" "csv/it.csv" "L1"
-query "select  * from t1 order by a"
+query "select * from t1 order by a"
 run "type = CSV" "csv/it.csv" "L2"
-query "select  * from t1 order by a"
+query "select * from t1 order by a"
 
 stmt "drop table t1;"
