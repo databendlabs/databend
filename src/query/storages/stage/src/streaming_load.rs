@@ -37,6 +37,7 @@ use crate::read::row_based::format::create_row_based_file_format;
 use crate::read::row_based::processors::BlockBuilder;
 use crate::read::row_based::processors::Decompressor;
 use crate::read::row_based::processors::Separator;
+
 pub fn build_streaming_load_pipeline(
     ctx: Arc<dyn TableContext>,
     pipeline: &mut Pipeline,

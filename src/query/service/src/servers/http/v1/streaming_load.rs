@@ -62,16 +62,32 @@ pub struct LoadResponse {
 }
 
 #[allow(clippy::manual_async_fn)]
-fn execute_query(context: Arc<QueryContext>, plan: Plan) -> impl Future<Output = Result<()>> {
-    async move {
-        let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
+fn execute_query(
+    http_query_context: HttpQueryContext,
+    query_context: Arc<QueryContext>,
+    plan: Plan,
+    mem_stat: Arc<MemStat>,
+) -> impl Future<Output = Result<()>> {
+    let id = http_query_context.query_id.clone();
+    let fut = async move {
+        let interpreter = InterpreterFactory::get(query_context.clone(), &plan).await?;
 
-        let mut data_stream = interpreter.execute(context).await?;
+        let mut data_stream = interpreter.execute(query_context).await?;
 
         while let Some(_block) = data_stream.next().await {}
 
         Ok(())
-    }
+    };
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(id.clone());
+    tracking_payload.mem_stat = Some(mem_stat);
+    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+    let root = crate::servers::http::v1::http_query_handlers::get_http_tracing_span(
+        func_path!(),
+        &http_query_context,
+        &id,
+    );
+    ThreadTracker::tracking_future(fut.in_span(root))
 }
 
 #[poem::handler]
@@ -81,40 +97,36 @@ pub async fn streaming_load_handler(
     req: &Request,
     mut multipart: Multipart,
 ) -> PoemResult<Json<LoadResponse>> {
-    let handle = {
-        let root = crate::servers::http::v1::http_query_handlers::get_http_tracing_span(
-            func_path!(),
-            ctx,
-            &ctx.query_id,
-        );
-        let _t = crate::servers::http::v1::http_query_handlers::SlowRequestLogTracker::new(ctx);
-        streaming_load_handler_inner(ctx, req, multipart).in_span(root)
-    };
-    let handle = {
-        let query_mem_stat = MemStat::create(ctx.query_id.clone());
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        tracking_payload.query_id = Some(ctx.query_id.clone());
-        tracking_payload.mem_stat = Some(query_mem_stat.clone());
-        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(handle)
-    };
-
-    handle.await
+    let query_mem_stat = MemStat::create(ctx.query_id.clone());
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(ctx.query_id.clone());
+    tracking_payload.mem_stat = Some(query_mem_stat.clone());
+    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+    let root = crate::servers::http::v1::http_query_handlers::get_http_tracing_span(
+        func_path!(),
+        ctx,
+        &ctx.query_id,
+    );
+    ThreadTracker::tracking_future(
+        streaming_load_handler_inner(ctx, req, multipart, query_mem_stat).in_span(root),
+    )
+    .await
 }
 
 #[async_backtrace::framed]
 pub async fn streaming_load_handler_inner(
-    ctx: &HttpQueryContext,
+    http_context: &HttpQueryContext,
     req: &Request,
     multipart: Multipart,
+    mem_stat: Arc<MemStat>,
 ) -> PoemResult<Json<LoadResponse>> {
     info!(
         "new streaming load request, headers={:?}",
         sanitize_request_headers(req.headers()),
     );
 
-    let session = ctx.upgrade_session(SessionType::HTTPStreamingLoad)?;
-    let context = session
+    let session = http_context.upgrade_session(SessionType::HTTPStreamingLoad)?;
+    let query_context = session
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
@@ -130,16 +142,16 @@ pub async fn streaming_load_handler_inner(
         )
     })?;
 
-    let settings = context.get_settings();
+    let settings = query_context.get_settings();
 
-    let mut planner = Planner::new(context.clone());
+    let mut planner = Planner::new(query_context.clone());
     let (mut plan, extras) = planner
         .plan_sql(sql)
         .await
         .map_err(|err| err.display_with_sql(sql))
         .map_err(BadRequest)?;
 
-    let entry = QueryEntry::create(&context, &plan, &extras).map_err(InternalServerError)?;
+    let entry = QueryEntry::create(&query_context, &plan, &extras).map_err(InternalServerError)?;
     let _guard = QueriesQueueManager::instance()
         .acquire(entry)
         .await
@@ -165,13 +177,13 @@ pub async fn streaming_load_handler_inner(
                     *receiver.lock() = Some(rx);
 
                     let format = format.clone();
-                    let handler = context.spawn(execute_query(context.clone(), plan));
+                    let handler = query_context.spawn(execute_query(http_context.clone(), query_context.clone(), plan, mem_stat));
                     read_multi_part(multipart, &format, tx, input_read_buffer_size).await?;
 
                     match handler.await {
                         Ok(Ok(_)) => Ok(Json(LoadResponse {
-                            id: ctx.query_id.clone(),
-                            stats: context.get_write_progress().get_values(),
+                            id: http_context.query_id.clone(),
+                            stats: query_context.get_write_progress().get_values(),
                         })),
                         Ok(Err(cause)) => Err(poem::Error::from_string(
                             format!(
