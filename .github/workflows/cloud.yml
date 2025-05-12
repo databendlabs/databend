@@ -11,6 +11,7 @@ permissions:
   id-token: write
   pull-requests: write
   contents: read
+  packages: write
 
 env:
   BUILD_PROFILE: release
