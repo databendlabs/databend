@@ -30,7 +30,6 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression = { workspace = true }
-databend-common-meta-embedded = { workspace = true }
 mockall = { workspace = true }
 
 [lints]

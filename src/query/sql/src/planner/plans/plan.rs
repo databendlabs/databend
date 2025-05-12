@@ -42,7 +42,6 @@ use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
-use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::AlterWorkloadGroupPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::AssignWarehouseNodesPlan;
@@ -70,7 +69,6 @@ use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
-use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::CreateWarehousePlan;
 use crate::plans::CreateWorkloadGroupPlan;
 use crate::plans::DescConnectionPlan;
@@ -105,7 +103,6 @@ use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
-use crate::plans::DropVirtualColumnPlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
 use crate::plans::DropWorkloadGroupPlan;
@@ -313,9 +310,6 @@ pub enum Plan {
     RefreshTableIndex(Box<RefreshTableIndexPlan>),
 
     // Virtual Columns
-    CreateVirtualColumn(Box<CreateVirtualColumnPlan>),
-    AlterVirtualColumn(Box<AlterVirtualColumnPlan>),
-    DropVirtualColumn(Box<DropVirtualColumnPlan>),
     RefreshVirtualColumn(Box<RefreshVirtualColumnPlan>),
 
     // Account

@@ -121,9 +121,6 @@ impl Plan {
             Plan::RefreshTableIndex(_) => Ok("RefreshTableIndex".to_string()),
 
             // Virtual Columns
-            Plan::CreateVirtualColumn(_) => Ok("CreateVirtualColumn".to_string()),
-            Plan::AlterVirtualColumn(_) => Ok("AlterVirtualColumn".to_string()),
-            Plan::DropVirtualColumn(_) => Ok("DropVirtualColumn".to_string()),
             Plan::RefreshVirtualColumn(_) => Ok("RefreshVirtualColumn".to_string()),
 
             // Insert

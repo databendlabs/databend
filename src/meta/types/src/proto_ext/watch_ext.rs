@@ -55,15 +55,47 @@ impl WatchRequest {
 }
 
 impl WatchResponse {
-    /// Create a new `WatchResponse` with `key`, `prev` and `current` values.
-    pub fn new3(key: String, prev: Option<SeqV>, current: Option<SeqV>) -> Self {
+    /// Create a new `WatchResponse` that marks the end of initialization phase.
+    ///
+    /// This response is used to signal that the initial-flush phase has completed,
+    /// and the watch stream can now proceed with real-time change notifications.
+    pub fn new_initialization_complete() -> Self {
+        WatchResponse {
+            event: None,
+            is_initialization: false,
+        }
+    }
+
+    /// Create a new `WatchResponse` for an initial key-value pair.
+    /// This represents the initial state of a key, not a change event.
+    ///
+    /// The response will have `is_initialization` set to true to indicate
+    /// this is part of the initial data load rather than a real-time change.
+    pub fn new_initialization_event(key: String, value: SeqV) -> Self {
+        let ev = pb::Event {
+            key,
+            prev: None,
+            current: Some(pb::SeqV::from(value)),
+        };
+
+        WatchResponse {
+            event: Some(ev),
+            is_initialization: true,
+        }
+    }
+
+    /// Create a new `WatchResponse` for a key-value change event.
+    pub fn new_change_event(key: String, prev: Option<SeqV>, current: Option<SeqV>) -> Self {
         let ev = pb::Event {
             key,
             prev: prev.map(pb::SeqV::from),
             current: current.map(pb::SeqV::from),
         };
 
-        WatchResponse { event: Some(ev) }
+        WatchResponse {
+            event: Some(ev),
+            is_initialization: false,
+        }
     }
 
     pub fn new(change: &Change<Vec<u8>, String>) -> Option<Self> {
@@ -73,7 +105,15 @@ impl WatchResponse {
             current: change.result.clone().map(pb::SeqV::from),
         };
 
-        Some(WatchResponse { event: Some(ev) })
+        Some(WatchResponse {
+            event: Some(ev),
+            is_initialization: false,
+        })
+    }
+
+    /// Check if the response is an empty indicator just to indicating initialization completion.
+    pub fn is_initialization_complete_flag(&self) -> bool {
+        !self.is_initialization && self.event.is_none()
     }
 
     pub fn unpack(self) -> Option<(String, Option<SeqV>, Option<SeqV>)> {

@@ -489,7 +489,7 @@ pub(crate) async fn query_handler(
     };
 
     let query_handle = {
-        let query_mem_stat = MemStat::create(format!("Query-{}", ctx.query_id));
+        let query_mem_stat = MemStat::create(ctx.query_id.clone());
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(ctx.query_id.clone());
         tracking_payload.mem_stat = Some(query_mem_stat.clone());

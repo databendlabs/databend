@@ -21,12 +21,15 @@ use super::ColumnOrientedSegment;
 use crate::meta::BlockMeta;
 use crate::meta::ColumnMeta;
 use crate::meta::ColumnMetaV0;
+use crate::meta::VirtualBlockMeta;
+
 pub trait AbstractBlockMeta: Send + Sync + 'static + Sized {
     fn block_size(&self) -> u64;
     fn file_size(&self) -> u64;
     fn row_count(&self) -> u64;
     fn location_path(&self) -> String;
     fn col_metas(&self, col_ids: &HashSet<ColumnId>) -> HashMap<ColumnId, ColumnMeta>;
+    fn virtual_block_meta(&self) -> Option<VirtualBlockMeta>;
 }
 
 impl AbstractBlockMeta for BlockMeta {
@@ -53,6 +56,10 @@ impl AbstractBlockMeta for BlockMeta {
 
     fn location_path(&self) -> String {
         self.location.0.to_string()
+    }
+
+    fn virtual_block_meta(&self) -> Option<VirtualBlockMeta> {
+        self.virtual_block_meta.clone()
     }
 }
 
@@ -97,6 +104,11 @@ impl AbstractBlockMeta for ColumnOrientedBlockMeta {
             .index(self.row_number)
             .unwrap()
             .to_string()
+    }
+
+    fn virtual_block_meta(&self) -> Option<VirtualBlockMeta> {
+        // TODO
+        None
     }
 }
 

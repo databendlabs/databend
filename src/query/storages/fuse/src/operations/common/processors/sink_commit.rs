@@ -59,6 +59,7 @@ use crate::operations::SnapshotGenerator;
 use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
 use crate::FuseTable;
+use crate::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 enum State {
     None,
     FillDefault,
@@ -177,12 +178,29 @@ where F: SnapshotGenerator + Send + Sync + 'static
     ) -> Result<Option<PurgeMode>> {
         let mode = if Self::need_to_purge_all_history(table, snapshot_gen) {
             Some(PurgeMode::PurgeAllHistory)
-        } else if ctx.get_settings().get_enable_auto_vacuum()? {
+        } else if Self::is_auto_vacuum_enabled(ctx, table)? {
             Some(PurgeMode::PurgeAccordingToRetention)
         } else {
             None
         };
         Ok(mode)
+    }
+
+    fn is_auto_vacuum_enabled(ctx: &dyn TableContext, table: &FuseTable) -> Result<bool> {
+        // Priority for auto vacuum:
+        // - If table-level option `FUSE_OPT_KEY_ENABLE_AUTO_VACUUM` is set, it takes precedence
+        // - If table-level option is not set, fall back to the setting
+        match table
+            .table_info
+            .options()
+            .get(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)
+        {
+            Some(v) => {
+                let enabled = v.parse::<u32>()? != 0;
+                Ok(enabled)
+            }
+            None => ctx.get_settings().get_enable_auto_vacuum(),
+        }
     }
 
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {

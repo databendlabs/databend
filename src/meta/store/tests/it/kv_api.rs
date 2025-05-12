@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,30 +13,27 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use databend_common_meta_api::SchemaApiTestSuite;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_raft_store::mem_meta::MemMeta;
-use test_harness::test;
-
-use crate::testing::mem_meta_test_harness;
+use databend_common_meta_store::LocalMetaService;
 
 #[derive(Clone)]
-pub struct MemMetaBuilder {}
+struct MetaNodeUnitTestBuilder {}
 
 #[async_trait]
-impl kvapi::ApiBuilder<MemMeta> for MemMetaBuilder {
-    async fn build(&self) -> MemMeta {
-        MemMeta::default()
+impl kvapi::ApiBuilder<LocalMetaService> for MetaNodeUnitTestBuilder {
+    async fn build(&self) -> LocalMetaService {
+        LocalMetaService::new("UT-Meta").await.unwrap()
     }
 
-    async fn build_cluster(&self) -> Vec<MemMeta> {
-        unimplemented!("embedded meta does not support cluster mode")
+    async fn build_cluster(&self) -> Vec<LocalMetaService> {
+        todo!()
     }
 }
 
-#[test(harness = mem_meta_test_harness)]
-#[fastrace::trace]
-async fn test_mem_meta_schema_api() -> anyhow::Result<()> {
-    SchemaApiTestSuite::test_single_node(MemMetaBuilder {}).await?;
-    Ok(())
+/// It just tests the basic kv api to ensure the internal meta client handle works.
+#[tokio::test]
+async fn test_meta_node_kv_api() -> anyhow::Result<()> {
+    let builder = MetaNodeUnitTestBuilder {};
+
+    kvapi::TestSuite {}.test_single_node(&builder).await
 }

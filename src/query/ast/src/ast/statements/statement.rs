@@ -224,9 +224,6 @@ pub enum Statement {
     DropNgramIndex(DropNgramIndexStmt),
 
     // VirtualColumns
-    CreateVirtualColumn(CreateVirtualColumnStmt),
-    AlterVirtualColumn(AlterVirtualColumnStmt),
-    DropVirtualColumn(DropVirtualColumnStmt),
     RefreshVirtualColumn(RefreshVirtualColumnStmt),
     ShowVirtualColumns(ShowVirtualColumnsStmt),
 
@@ -545,9 +542,6 @@ impl Statement {
             | Statement::DropInvertedIndex(..)
             | Statement::CreateNgramIndex(..)
             | Statement::DropNgramIndex(..)
-            | Statement::CreateVirtualColumn(..)
-            | Statement::AlterVirtualColumn(..)
-            | Statement::DropVirtualColumn(..)
             | Statement::CreateUser(..)
             | Statement::DropUser { .. }
             | Statement::CreateRole { .. }
@@ -831,9 +825,6 @@ impl Display for Statement {
             Statement::CreateNgramIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropNgramIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshInvertedIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateVirtualColumn(stmt) => write!(f, "{stmt}")?,
-            Statement::AlterVirtualColumn(stmt) => write!(f, "{stmt}")?,
-            Statement::DropVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers { show_options } => {

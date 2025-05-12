@@ -234,6 +234,10 @@ impl Settings {
         self.try_get_u64("data_retention_time_in_days")
     }
 
+    pub fn get_data_retention_num_snapshots_to_keep(&self) -> Result<u64> {
+        self.try_get_u64("data_retention_num_snapshots_to_keep")
+    }
+
     pub fn get_max_storage_io_requests(&self) -> Result<u64> {
         self.try_get_u64("max_storage_io_requests")
     }
@@ -893,6 +897,10 @@ impl Settings {
         self.try_set_u64("max_query_memory_usage", max_memory_usage)
     }
 
+    pub fn get_allow_query_exceeded_limit(&self) -> Result<bool> {
+        Ok(self.try_get_u64("allow_query_exceeded_limit")? == 1)
+    }
+
     pub fn get_query_out_of_memory_behavior(&self) -> Result<OutofMemoryBehavior> {
         match self
             .try_get_string("query_out_of_memory_behavior")?
@@ -947,5 +955,13 @@ impl Settings {
 
     pub fn get_trace_sample_rate(&self) -> Result<u64> {
         self.try_get_u64("trace_sample_rate")
+    }
+
+    pub fn set_enable_experimental_virtual_column(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_experimental_virtual_column", val)
+    }
+
+    pub fn get_enable_experimental_virtual_column(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_virtual_column")? == 1)
     }
 }

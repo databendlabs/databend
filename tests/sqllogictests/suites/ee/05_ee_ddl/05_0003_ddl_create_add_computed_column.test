@@ -87,7 +87,7 @@ alter table t2 modify column b drop stored
 statement ok
 create table t3(a string, b string as (concat(a, '-')) stored)
 
-statement error 1117
+statement ok
 alter table t3 modify column a float
 
 statement ok

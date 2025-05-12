@@ -26,6 +26,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
 use databend_common_expression::display::display_tuple_field_name;
+use databend_common_expression::is_stream_column_id;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::TableDataType;
@@ -765,6 +766,19 @@ impl ColumnEntry {
             }
             ColumnEntry::VirtualColumn(VirtualColumn { table_index, .. }) => Some(*table_index),
         }
+    }
+
+    pub fn is_stream_column(&self) -> bool {
+        if let ColumnEntry::BaseTableColumn(BaseTableColumn {
+            column_id: Some(column_id),
+            ..
+        }) = self
+        {
+            if is_stream_column_id(*column_id) {
+                return true;
+            }
+        }
+        false
     }
 }
 
