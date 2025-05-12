@@ -138,6 +138,19 @@ error:
 
 
 ---------- Input ----------
+insert table t select * from t2;
+---------- Output ---------
+error: 
+  --> SQL:1:1
+  |
+1 | insert table t select * from t2;
+  | ^^^^^^
+  | |
+  | INSERT statement must be followed by 'overwrite' or 'into'
+  | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`
+
+
+---------- Input ----------
 truncate a
 ---------- Output ---------
 error: 

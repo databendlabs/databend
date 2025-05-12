@@ -54,6 +54,10 @@ impl CreateOption {
         matches!(self, CreateOption::CreateOrReplace)
     }
 
+    pub fn if_not_exist(&self) -> bool {
+        matches!(self, CreateOption::CreateIfNotExists)
+    }
+
     pub fn if_return_error(&self) -> bool {
         matches!(self, CreateOption::Create)
     }
