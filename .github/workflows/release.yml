@@ -29,6 +29,7 @@ permissions:
   checks: write
   statuses: write
   contents: write
+  packages: write
 
 env:
   BUILD_PROFILE: release
@@ -372,12 +373,13 @@ jobs:
         env:
           REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
+          REPO_GHCR: ${{ steps.login.outputs.ghcr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
           TYPE: ${{ needs.create_release.outputs.type }}
         with:
           script: |
-            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR } = process.env;
-            const repos = [REPO_DOCKERHUB, REPO_ECR];
+            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR, REPO_GHCR } = process.env;
+            const repos = [REPO_DOCKERHUB, REPO_ECR, REPO_GHCR];
             let tags = [];
             for (const repo of repos) {
               tags.push(`${repo}:${VERSION}`);
