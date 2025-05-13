@@ -27,8 +27,10 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 
-use super::WindowPartitionBuffer;
-use super::WindowPartitionMeta;
+use crate::pipelines::processors::transforms::CompactStrategy;
+use crate::pipelines::processors::transforms::DataProcessorStrategy;
+use crate::pipelines::processors::transforms::WindowPartitionBuffer;
+use crate::pipelines::processors::transforms::WindowPartitionMeta;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
@@ -40,7 +42,7 @@ enum State {
     Flush,
     Spill,
     Restore,
-    Concat(Vec<DataBlock>),
+    Compact(Vec<DataBlock>),
 }
 
 pub struct TransformHilbertCollect {
@@ -56,6 +58,7 @@ pub struct TransformHilbertCollect {
     // The buffer is used to control the memory usage of the window operator.
     buffer: WindowPartitionBuffer,
 
+    compact_strategy: CompactStrategy,
     max_block_size: usize,
     // Event variables.
     state: State,
@@ -100,8 +103,6 @@ impl TransformHilbertCollect {
         let spiller = Spiller::create(ctx, operator, spill_config)?;
 
         // Create the window partition buffer.
-        let max_block_rows =
-            max_block_rows.min(settings.get_window_partition_sort_block_size()? as usize);
         let buffer =
             WindowPartitionBuffer::new(spiller, partitions.len(), max_block_rows, memory_settings)?;
 
@@ -113,6 +114,7 @@ impl TransformHilbertCollect {
             immediate_output_blocks: vec![],
             partition_sizes: vec![0; num_partitions],
             max_block_size,
+            compact_strategy: CompactStrategy::new(max_block_rows, max_block_size),
             output_data_blocks: VecDeque::new(),
             state: State::Collect,
         })
@@ -130,7 +132,7 @@ impl Processor for TransformHilbertCollect {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::Concat(_)) {
+        if matches!(self.state, State::Compact(_)) {
             return Ok(Event::Sync);
         }
 
@@ -192,9 +194,9 @@ impl Processor for TransformHilbertCollect {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Collect) {
-            State::Concat(blocks) => {
-                let output = DataBlock::concat(&blocks)?;
-                self.output_data_blocks.push_back(output);
+            State::Compact(blocks) => {
+                let output = self.compact_strategy.process_data_blocks(blocks)?;
+                self.output_data_blocks.extend(output);
             }
             _ => unreachable!(),
         }
@@ -212,12 +214,12 @@ impl Processor for TransformHilbertCollect {
                     let mut restored_data_blocks =
                         self.buffer.restore_by_id(partition_id, true).await?;
                     restored_data_blocks.push(data_block);
-                    self.state = State::Concat(restored_data_blocks);
+                    self.state = State::Compact(restored_data_blocks);
                 }
             }
             State::Restore => {
                 let restored_data_blocks = self.buffer.restore().await?;
-                self.output_data_blocks.extend(restored_data_blocks);
+                self.state = State::Compact(restored_data_blocks);
             }
             _ => unreachable!(),
         }
