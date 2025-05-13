@@ -21,7 +21,6 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::IntervalType;
@@ -689,9 +688,7 @@ fn test_estimated_scalar_repeat_size() {
             233,
             DecimalSize::new_unchecked(46, 6),
         ));
-        let ty = DataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new_unchecked(
-            46, 6,
-        )));
+        let ty = DataType::Decimal(DecimalSize::new_unchecked(46, 6));
         assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 

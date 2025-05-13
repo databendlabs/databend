@@ -31,8 +31,8 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
 
-use super::convert_to_decimal;
 use super::convert_to_decimal_domain;
+use crate::cast::decimal_to_decimal;
 
 #[inline]
 fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u32, u32) {
@@ -56,10 +56,10 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let decimal_a = DecimalDataType::from_size(args_type[0].get_decimal_properties()?).unwrap();
-        let decimal_b = DecimalDataType::from_size(args_type[1].get_decimal_properties()?).unwrap();
-
-        let sig_types = vec![DataType::Decimal(decimal_a), DataType::Decimal(decimal_b)];
+        let sig_types = vec![
+            DataType::Decimal(args_type[0].get_decimal_properties()?),
+            DataType::Decimal(args_type[1].get_decimal_properties()?),
+        ];
 
         // Comparison between different decimal types must be same siganature types
         let function = Function {
@@ -216,57 +216,46 @@ fn op_decimal<Op: CmpOp>(
     args_type: &[DataType],
     ctx: &mut EvalContext,
 ) -> Value<AnyType> {
-    let (dt1, dt2) = (
+    let (size_a, size_b) = (
         args_type[0].as_decimal().unwrap(),
         args_type[1].as_decimal().unwrap(),
     );
+    let (m_a, m_b) = compare_multiplier(size_a.scale(), size_b.scale());
 
-    let (m1, m2) = compare_multiplier(dt1.scale(), dt2.scale());
-
-    match (dt1, dt2) {
-        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(_)) => {
+    match (size_a.is_128(), size_b.is_128()) {
+        (true, true) => {
             let f = |a: i128, b: i128, _: &mut EvalContext| -> bool {
-                Op::is((a * 10_i128.pow(m1)).cmp(&(b * 10_i128.pow(m2))))
+                Op::is((a * 10_i128.pow(m_a)).cmp(&(b * 10_i128.pow(m_b))))
             };
             compare_decimal(a, b, f, ctx)
         }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(_)) => {
+        (false, false) => {
             let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
-                Op::is((a * i256::from(10).pow(m1)).cmp(&(b * i256::from(10).pow(m2))))
+                Op::is((a * i256::from(10).pow(m_a)).cmp(&(b * i256::from(10).pow(m_b))))
             };
             compare_decimal(a, b, f, ctx)
         }
-        (DecimalDataType::Decimal128(s1), DecimalDataType::Decimal256(_)) => {
+        (true, false) => {
             let dest_type = DecimalDataType::Decimal256(DecimalSize::new_unchecked(
                 MAX_DECIMAL256_PRECISION,
-                s1.scale(),
+                size_a.scale(),
             ));
-            let left = convert_to_decimal(
-                a,
-                ctx,
-                &DataType::Decimal(DecimalDataType::Decimal128(*s1)),
-                dest_type,
-            );
 
+            let left = decimal_to_decimal(a, ctx, DecimalDataType::Decimal128(*size_a), dest_type);
             let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
-                Op::is((a * i256::from(10).pow(m1)).cmp(&(b * i256::from(10).pow(m2))))
+                Op::is((a * i256::from(10).pow(m_a)).cmp(&(b * i256::from(10).pow(m_b))))
             };
             compare_decimal(&left, b, f, ctx)
         }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(s2)) => {
+        (false, true) => {
             let dest_type = DecimalDataType::Decimal256(DecimalSize::new_unchecked(
                 MAX_DECIMAL256_PRECISION,
-                s2.scale(),
+                size_b.scale(),
             ));
-            let right = convert_to_decimal(
-                b,
-                ctx,
-                &DataType::Decimal(DecimalDataType::Decimal128(*s2)),
-                dest_type,
-            );
 
+            let right = decimal_to_decimal(b, ctx, DecimalDataType::Decimal128(*size_b), dest_type);
             let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
-                Op::is((a * i256::from(10).pow(m1)).cmp(&(b * i256::from(10).pow(m2))))
+                Op::is((a * i256::from(10).pow(m_a)).cmp(&(b * i256::from(10).pow(m_b))))
             };
             compare_decimal(a, &right, f, ctx)
         }

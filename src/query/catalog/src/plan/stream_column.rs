@@ -199,9 +199,7 @@ impl StreamColumn {
         match &self.column_type {
             StreamColumnType::OriginVersion | StreamColumnType::RowVersion => unreachable!(),
             StreamColumnType::OriginBlockId => BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Decimal(DecimalDataType::Decimal128(
-                    DecimalSize::default_128(),
-                )))),
+                DataType::Nullable(Box::new(DataType::Decimal(DecimalSize::default_128()))),
                 meta.build_origin_block_id(),
             ),
             StreamColumnType::OriginRowNum => build_origin_block_row_num(num_rows),

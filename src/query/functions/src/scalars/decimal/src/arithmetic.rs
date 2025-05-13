@@ -376,7 +376,7 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
             signature: FunctionSignature {
                 name: format!("{:?}", arithmetic_op).to_lowercase(),
                 args_type: args_type.clone(),
-                return_type: DataType::Decimal(return_decimal_type),
+                return_type: DataType::Decimal(return_decimal_type.size()),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |ctx, d| {

@@ -79,10 +79,7 @@ fn test_fixed_width() {
 #[test]
 fn test_decimal128() {
     let converter = RowConverter::new(vec![SortField::new(
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
-            38, 7,
-        )))
-        .wrap_nullable(),
+        DataType::Decimal(DecimalSize::new_unchecked(38, 7)).wrap_nullable(),
     )])
     .unwrap();
 
@@ -111,10 +108,7 @@ fn test_decimal128() {
 #[test]
 fn test_decimal256() {
     let converter = RowConverter::new(vec![SortField::new(
-        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new_unchecked(
-            76, 7,
-        )))
-        .wrap_nullable(),
+        DataType::Decimal(DecimalSize::new_unchecked(76, 7)).wrap_nullable(),
     )])
     .unwrap();
 

@@ -14,7 +14,6 @@
 
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
 use rand::Rng;
 
@@ -57,7 +56,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
         let precision = self.rng.gen_range(1..=76);
         let scale = self.rng.gen_range(0..=precision);
         let size = DecimalSize::new_unchecked(precision, scale);
-        DataType::Decimal(DecimalDataType::from_size(size).unwrap())
+        DataType::Decimal(size)
     }
 
     pub(crate) fn gen_simple_common_data_type(&mut self) -> DataType {

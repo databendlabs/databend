@@ -29,7 +29,6 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int8Type;
 use databend_common_expression::types::NumberDataType;
@@ -326,9 +325,9 @@ where T: Decimal
 
         let data_type = builder.data_type();
         let inner_type = data_type.as_array().unwrap();
-        let decimal_type = inner_type.as_decimal().unwrap();
+        let size = inner_type.as_decimal().unwrap();
 
-        let inner_col = T::upcast_column(sum_values.into(), decimal_type.size());
+        let inner_col = T::upcast_column(sum_values.into(), *size);
         let array_value = ScalarRef::Array(inner_col);
         builder.push(array_value);
 
@@ -375,7 +374,7 @@ where T: Decimal
         let inner_type = data_type.as_array().unwrap();
         let decimal_type = inner_type.as_decimal().unwrap();
 
-        let inner_col = T::upcast_column(avg_values.into(), decimal_type.size());
+        let inner_col = T::upcast_column(avg_values.into(), *decimal_type);
         let array_value = ScalarRef::Array(inner_col);
         builder.push(array_value);
 
@@ -527,29 +526,25 @@ pub fn try_create_aggregate_array_moving_avg_function(
                 0,
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+        DataType::Decimal(s) if s.is_128() => {
             let decimal_size =
                 DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale().max(4));
 
             AggregateArrayMovingAvgFunction::<DecimalArrayMovingSumState<i128>>::try_create(
                 display_name,
                 params,
-                DataType::Array(Box::new(DataType::Decimal(DecimalDataType::from_size(
-                    decimal_size,
-                )?))),
+                DataType::Array(Box::new(DataType::Decimal(decimal_size))),
                 decimal_size.scale() - s.scale(),
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+        DataType::Decimal(s) => {
             let decimal_size =
                 DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale().max(4));
 
             AggregateArrayMovingAvgFunction::<DecimalArrayMovingSumState<i256>>::try_create(
                 display_name,
                 params,
-                DataType::Array(Box::new(DataType::Decimal(DecimalDataType::from_size(
-                    decimal_size,
-                )?))),
+                DataType::Array(Box::new(DataType::Decimal(decimal_size))),
                 decimal_size.scale() - s.scale(),
             )
         }
@@ -704,26 +699,22 @@ pub fn try_create_aggregate_array_moving_sum_function(
                 DataType::Array(Box::new(NumberType::<TSum>::data_type())),
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+        DataType::Decimal(s) if s.is_128() => {
             let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
 
             AggregateArrayMovingSumFunction::<DecimalArrayMovingSumState<i128>>::try_create(
                 display_name,
                 params,
-                DataType::Array(Box::new(DataType::Decimal(DecimalDataType::from_size(
-                    decimal_size,
-                )?))),
+                DataType::Array(Box::new(DataType::Decimal(decimal_size))),
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+        DataType::Decimal(s) => {
             let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale());
 
             AggregateArrayMovingSumFunction::<DecimalArrayMovingSumState<i256>>::try_create(
                 display_name,
                 params,
-                DataType::Array(Box::new(DataType::Decimal(DecimalDataType::from_size(
-                    decimal_size,
-                )?))),
+                DataType::Array(Box::new(DataType::Decimal(decimal_size))),
             )
         }
         _ => Err(ErrorCode::BadDataValueType(format!(

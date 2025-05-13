@@ -585,13 +585,13 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
                 }
             })
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(decimal) if decimal.is_128() => {
             AggregateBitmapIntersectCountFunction::<DecimalType<i128>>::try_create(
                 display_name,
                 extract_params::<DecimalType<i128>>(display_name, filter_column_type, params)?,
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             AggregateBitmapIntersectCountFunction::<DecimalType<i256>>::try_create(
                 display_name,
                 extract_params::<DecimalType<i256>>(display_name, filter_column_type, params)?,

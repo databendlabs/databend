@@ -373,20 +373,17 @@ impl AvroDecoder {
                 let v_precision = v.digits() as i64;
                 let v_leading_digits = v_precision - v.fractional_digit_count();
                 let (big_int, v_scale) = v.into_bigint_and_exponent();
-                if v_leading_digits <= (size.precision() - size.scale()) as i64
-                    && v_scale <= size.scale() as i64
-                {
-                    if let Some(mut d1) = <D>::from_bigint(big_int) {
-                        let scale_diff = (size.scale() as i64) - v_scale;
-                        if scale_diff > 0 {
-                            d1 = d1
-                                .checked_mul(D::e(scale_diff as u32))
-                                .expect("rescale should not overflow");
-                        }
-                        column.push(d1);
-                    } else {
+                if v_leading_digits <= size.leading_digits() as _ && v_scale <= size.scale() as _ {
+                    let Some(mut d1) = <D>::from_bigint(big_int) else {
                         return Err(Error::default());
+                    };
+                    let scale_diff = (size.scale() as i64) - v_scale;
+                    if scale_diff > 0 {
+                        d1 = d1
+                            .checked_mul(D::e(scale_diff as u32))
+                            .expect("rescale should not overflow");
                     }
+                    column.push(d1);
                 } else {
                     return Err(Error::default());
                 }

@@ -20,14 +20,12 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::i256;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FromData;
@@ -69,7 +67,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
             signature: FunctionSignature {
                 name: "to_decimal".to_string(),
                 args_type: vec![from_type.clone()],
-                return_type: DataType::Decimal(decimal_type),
+                return_type: DataType::Decimal(decimal_type.size()),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |ctx, d| {
@@ -267,28 +265,35 @@ pub fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
 pub fn register_decimal_to_string(registry: &mut FunctionRegistry) {
     // decimal to string
     let factory = |_params: &[Scalar], args_type: &[DataType]| {
-        if args_type.len() != 1 {
-            return None;
-        }
-
-        let arg_type = args_type[0].remove_nullable();
-        if !arg_type.is_decimal() {
-            return None;
-        }
+        let (size, nullable) = match args_type {
+            [DataType::Nullable(box DataType::Decimal(size))] => (*size, true),
+            [DataType::Decimal(size)] => (*size, false),
+            _ => return None,
+        };
 
         let function = Function {
             signature: FunctionSignature {
                 name: "to_string".to_string(),
-                args_type: vec![arg_type.clone()],
+                args_type: vec![DataType::Decimal(size)],
                 return_type: StringType::data_type(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, tx| decimal_to_string(args, arg_type.clone(), tx)),
+                eval: Box::new(move |args, ctx| {
+                    if let Some(arg) = args[0].try_downcast::<Decimal128Type>() {
+                        let arg_type = DecimalDataType::Decimal128(size);
+                        return decimal_to_string(arg, arg_type, ctx).upcast();
+                    };
+                    if let Some(arg) = args[0].try_downcast::<Decimal256Type>() {
+                        let arg_type = DecimalDataType::Decimal256(size);
+                        return decimal_to_string(arg, arg_type, ctx).upcast();
+                    };
+                    unreachable!()
+                }),
             },
         };
 
-        if args_type[0].is_nullable() {
+        if nullable {
             Some(Arc::new(function.passthrough_nullable()))
         } else {
             Some(Arc::new(function))
@@ -297,33 +302,13 @@ pub fn register_decimal_to_string(registry: &mut FunctionRegistry) {
     registry.register_function_factory("to_string", factory);
 }
 
-fn decimal_to_string(
-    args: &[Value<AnyType>],
-    from_type: DataType,
-    _ctx: &mut EvalContext,
-) -> Value<AnyType> {
-    let arg = &args[0];
-    let from_type = from_type.as_decimal().unwrap();
-
-    with_decimal_mapped_type!(|DECIMAL_TYPE| match from_type {
-        DecimalDataType::DECIMAL_TYPE(from_size) => {
-            let arg: Value<DecimalType<DECIMAL_TYPE>> = arg.try_downcast().unwrap();
-
-            match arg {
-                Value::Column(col) => {
-                    let mut builder = StringColumnBuilder::with_capacity(col.len());
-                    for x in DecimalType::<DECIMAL_TYPE>::iter_column(&col) {
-                        builder.put_str(&DECIMAL_TYPE::display(x, from_size.scale()));
-                        builder.commit_row();
-                    }
-                    Value::Column(Column::String(builder.build()))
-                }
-                Value::Scalar(x) => Value::Scalar(Scalar::String(
-                    DECIMAL_TYPE::display(x, from_size.scale()).into(),
-                )),
-            }
-        }
-    })
+fn decimal_to_string<T: Decimal>(
+    arg: Value<DecimalType<T>>,
+    from_type: DecimalDataType,
+    ctx: &mut EvalContext,
+) -> Value<StringType> {
+    let scale = from_type.scale();
+    vectorize_1_arg::<DecimalType<T>, StringType>(|v, _| v.display(scale))(arg, ctx)
 }
 
 pub fn convert_to_decimal(
@@ -332,57 +317,75 @@ pub fn convert_to_decimal(
     from_type: &DataType,
     dest_type: DecimalDataType,
 ) -> Value<AnyType> {
-    if let DataType::Decimal(f) = from_type {
-        return decimal_to_decimal(arg, ctx, *f, dest_type);
+    if let DataType::Decimal(size) = from_type {
+        // todo
+        let from_type = if size.is_128() {
+            DecimalDataType::Decimal128(*size)
+        } else {
+            DecimalDataType::Decimal256(*size)
+        };
+        return decimal_to_decimal(arg, ctx, from_type, dest_type);
     }
 
     with_decimal_mapped_type!(|DECIMAL_TYPE| match dest_type {
-        DecimalDataType::DECIMAL_TYPE(size) => {
-            type T = DECIMAL_TYPE;
-            let result = match from_type {
-                DataType::Boolean => {
-                    let arg = arg.try_downcast().unwrap();
-                    vectorize_1_arg::<BooleanType, DecimalType<T>>(|a: bool, _| {
-                        if a {
-                            T::e(size.scale() as u32)
-                        } else {
-                            T::zero()
-                        }
-                    })(arg, ctx)
-                }
-
-                DataType::Number(ty) => {
-                    if ty.is_float() {
-                        match ty {
-                            NumberDataType::Float32 => {
-                                let arg = arg.try_downcast().unwrap();
-                                float_to_decimal::<T, NumberType<F32>>(arg, ctx, size)
-                            }
-                            NumberDataType::Float64 => {
-                                let arg = arg.try_downcast().unwrap();
-                                float_to_decimal::<T, NumberType<F64>>(arg, ctx, size)
-                            }
-                            _ => unreachable!(),
-                        }
-                    } else {
-                        with_integer_mapped_type!(|NUM_TYPE| match ty {
-                            NumberDataType::NUM_TYPE => {
-                                let arg = arg.try_downcast().unwrap();
-                                integer_to_decimal::<T, NumberType<NUM_TYPE>>(arg, ctx, size)
-                            }
-                            _ => unreachable!(),
-                        })
-                    }
-                }
-                DataType::String => {
-                    let arg = arg.try_downcast().unwrap();
-                    string_to_decimal::<T>(arg, ctx, size)
-                }
-                _ => unreachable!("to_decimal not support this DataType"),
-            };
-            result.upcast_decimal(size)
+        DecimalDataType::DECIMAL_TYPE(_) => {
+            other_to_decimal::<DECIMAL_TYPE>(arg, ctx, from_type, dest_type)
         }
     })
+}
+
+pub fn other_to_decimal<T>(
+    arg: &Value<AnyType>,
+    ctx: &mut EvalContext,
+    from_type: &DataType,
+    dest_type: DecimalDataType,
+) -> Value<AnyType>
+where
+    T: Decimal + Mul<Output = T>,
+{
+    let size = dest_type.size();
+    let result = match from_type {
+        DataType::Boolean => {
+            let arg = arg.try_downcast().unwrap();
+            vectorize_1_arg::<BooleanType, DecimalType<T>>(|a: bool, _| {
+                if a {
+                    T::e(size.scale() as u32)
+                } else {
+                    T::zero()
+                }
+            })(arg, ctx)
+        }
+
+        DataType::Number(ty) => {
+            if ty.is_float() {
+                match ty {
+                    NumberDataType::Float32 => {
+                        let arg = arg.try_downcast().unwrap();
+                        float_to_decimal::<T, NumberType<F32>>(arg, ctx, size)
+                    }
+                    NumberDataType::Float64 => {
+                        let arg = arg.try_downcast().unwrap();
+                        float_to_decimal::<T, NumberType<F64>>(arg, ctx, size)
+                    }
+                    _ => unreachable!(),
+                }
+            } else {
+                with_integer_mapped_type!(|NUM_TYPE| match ty {
+                    NumberDataType::NUM_TYPE => {
+                        let arg = arg.try_downcast().unwrap();
+                        integer_to_decimal::<T, NumberType<NUM_TYPE>>(arg, ctx, size)
+                    }
+                    _ => unreachable!(),
+                })
+            }
+        }
+        DataType::String => {
+            let arg = arg.try_downcast().unwrap();
+            string_to_decimal::<T>(arg, ctx, size)
+        }
+        _ => unreachable!("to_decimal not support this DataType"),
+    };
+    result.upcast_decimal(size)
 }
 
 pub fn convert_to_decimal_domain(
@@ -730,7 +733,7 @@ where
     }
 }
 
-fn decimal_to_decimal(
+pub fn decimal_to_decimal(
     arg: &Value<AnyType>,
     ctx: &mut EvalContext,
     from_type: DecimalDataType,
@@ -805,15 +808,19 @@ where
 {
     let from_type = from_type.as_decimal().unwrap();
 
-    let result = with_decimal_mapped_type!(|DECIMAL_TYPE| match from_type {
-        DecimalDataType::DECIMAL_TYPE(from_size) => {
-            let value = arg.try_downcast().unwrap();
-            let scale = from_size.scale() as i32;
-            vectorize_1_arg::<DecimalType<DECIMAL_TYPE>, NumberType<T>>(
-                |x, _ctx: &mut EvalContext| T::convert(x, scale),
-            )(value, ctx)
-        }
-    });
+    let result = if from_type.is_128() {
+        let value = arg.try_downcast().unwrap();
+        let scale = from_type.scale() as i32;
+        vectorize_1_arg::<DecimalType<i128>, NumberType<T>>(|x, _ctx: &mut EvalContext| {
+            T::convert(x, scale)
+        })(value, ctx)
+    } else {
+        let value = arg.try_downcast().unwrap();
+        let scale = from_type.scale() as i32;
+        vectorize_1_arg::<DecimalType<i256>, NumberType<T>>(|x, _ctx: &mut EvalContext| {
+            T::convert(x, scale)
+        })(value, ctx)
+    };
 
     result.upcast()
 }
@@ -825,22 +832,33 @@ fn decimal_to_int<T: Number>(
 ) -> Value<AnyType> {
     let from_type = from_type.as_decimal().unwrap();
 
-    let result = with_decimal_mapped_type!(|DECIMAL_TYPE| match from_type {
-        DecimalDataType::DECIMAL_TYPE(from_size) => {
-            let value = arg.try_downcast().unwrap();
-            vectorize_with_builder_1_arg::<DecimalType<DECIMAL_TYPE>, NumberType<T>>(
-                |x, builder: &mut Vec<T>, ctx: &mut EvalContext| match x
-                    .to_int(from_size.scale(), ctx.func_ctx.rounding_mode)
-                {
-                    Some(x) => builder.push(x),
-                    None => {
-                        ctx.set_error(builder.len(), "decimal cast to int overflow");
-                        builder.push(T::default())
-                    }
-                },
-            )(value, ctx)
-        }
-    });
+    let result = if from_type.is_128() {
+        let value = arg.try_downcast().unwrap();
+        vectorize_with_builder_1_arg::<DecimalType<i128>, NumberType<T>>(
+            |x, builder: &mut Vec<T>, ctx: &mut EvalContext| match x
+                .to_int(from_type.scale(), ctx.func_ctx.rounding_mode)
+            {
+                Some(x) => builder.push(x),
+                None => {
+                    ctx.set_error(builder.len(), "decimal cast to int overflow");
+                    builder.push(T::default())
+                }
+            },
+        )(value, ctx)
+    } else {
+        let value = arg.try_downcast().unwrap();
+        vectorize_with_builder_1_arg::<DecimalType<i256>, NumberType<T>>(
+            |x, builder: &mut Vec<T>, ctx: &mut EvalContext| match x
+                .to_int(from_type.scale(), ctx.func_ctx.rounding_mode)
+            {
+                Some(x) => builder.push(x),
+                None => {
+                    ctx.set_error(builder.len(), "decimal cast to int overflow");
+                    builder.push(T::default())
+                }
+            },
+        )(value, ctx)
+    };
 
     result.upcast()
 }

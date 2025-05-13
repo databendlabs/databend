@@ -16,7 +16,6 @@ use std::ops::*;
 use std::sync::Arc;
 
 use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::with_decimal_mapped_type;
@@ -63,7 +62,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             signature: FunctionSignature {
                 name,
                 args_type: sig_args_type,
-                return_type: DataType::Decimal(dest_decimal_type),
+                return_type: DataType::Decimal(dest_decimal_type.size()),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
@@ -73,7 +72,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
                         ctx,
                         from_type.clone(),
                         dest_decimal_type,
-                        scale,
+                        scale as _,
                         round_mode,
                     )
                 }),
@@ -108,6 +107,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         if !matches!(from_type, DataType::Decimal(_)) {
             return None;
         }
+        let size = *from_type.as_decimal().unwrap();
         let f = Function {
             signature: FunctionSignature {
                 name: "abs".to_string(),
@@ -117,7 +117,9 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
                 eval: Box::new(move |args, ctx| {
-                    decimal_abs(&args[0], ctx, from_type.as_decimal().unwrap())
+                    // todo
+                    let decimal_type = DecimalDataType::from_size(size).unwrap();
+                    decimal_abs(&args[0], ctx, &decimal_type)
                 }),
             },
         };
@@ -296,30 +298,49 @@ fn decimal_rounds(
 
     let zero_or_positive = target_scale >= 0;
 
-    with_decimal_mapped_type!(|DECIMAL_TYPE| match from_decimal_type {
-        DecimalDataType::DECIMAL_TYPE(_) => {
-            let value = arg.try_downcast::<DecimalType<DECIMAL_TYPE>>().unwrap();
+    if from_decimal_type.is_128() {
+        let value = arg.try_downcast::<Decimal128Type>().unwrap();
 
-            let result = match (zero_or_positive, mode) {
-                (true, RoundMode::Round) => {
-                    decimal_round_positive::<_>(value, source_scale, target_scale, ctx)
-                }
-                (true, RoundMode::Truncate) => {
-                    decimal_truncate_positive::<_>(value, source_scale, target_scale, ctx)
-                }
-                (false, RoundMode::Round) => {
-                    decimal_round_negative::<_>(value, source_scale, target_scale, ctx)
-                }
-                (false, RoundMode::Truncate) => {
-                    decimal_truncate_negative::<_>(value, source_scale, target_scale, ctx)
-                }
-                (_, RoundMode::Floor) => decimal_floor::<_>(value, source_scale, ctx),
-                (_, RoundMode::Ceil) => decimal_ceil::<_>(value, source_scale, ctx),
-            };
+        let result = match (zero_or_positive, mode) {
+            (true, RoundMode::Round) => {
+                decimal_round_positive::<_>(value, source_scale, target_scale, ctx)
+            }
+            (true, RoundMode::Truncate) => {
+                decimal_truncate_positive::<_>(value, source_scale, target_scale, ctx)
+            }
+            (false, RoundMode::Round) => {
+                decimal_round_negative::<_>(value, source_scale, target_scale, ctx)
+            }
+            (false, RoundMode::Truncate) => {
+                decimal_truncate_negative::<_>(value, source_scale, target_scale, ctx)
+            }
+            (_, RoundMode::Floor) => decimal_floor::<_>(value, source_scale, ctx),
+            (_, RoundMode::Ceil) => decimal_ceil::<_>(value, source_scale, ctx),
+        };
 
-            result.upcast_decimal(dest_type.size())
-        }
-    })
+        result.upcast_decimal(dest_type.size())
+    } else {
+        let value = arg.try_downcast::<Decimal256Type>().unwrap();
+
+        let result = match (zero_or_positive, mode) {
+            (true, RoundMode::Round) => {
+                decimal_round_positive::<_>(value, source_scale, target_scale, ctx)
+            }
+            (true, RoundMode::Truncate) => {
+                decimal_truncate_positive::<_>(value, source_scale, target_scale, ctx)
+            }
+            (false, RoundMode::Round) => {
+                decimal_round_negative::<_>(value, source_scale, target_scale, ctx)
+            }
+            (false, RoundMode::Truncate) => {
+                decimal_truncate_negative::<_>(value, source_scale, target_scale, ctx)
+            }
+            (_, RoundMode::Floor) => decimal_floor::<_>(value, source_scale, ctx),
+            (_, RoundMode::Ceil) => decimal_ceil::<_>(value, source_scale, ctx),
+        };
+
+        result.upcast_decimal(dest_type.size())
+    }
 }
 
 fn decimal_abs(
@@ -329,11 +350,9 @@ fn decimal_abs(
 ) -> Value<AnyType> {
     with_decimal_mapped_type!(|DECIMAL_TYPE| match data_type {
         DecimalDataType::DECIMAL_TYPE(_) => {
-            let value = arg.try_downcast::<DecimalType<DECIMAL_TYPE>>().unwrap();
-            let result =
-                vectorize_1_arg::<DecimalType<DECIMAL_TYPE>, DecimalType<DECIMAL_TYPE>>(|a, _| {
-                    a.abs()
-                })(value, ctx);
+            type T = DecimalType<DECIMAL_TYPE>;
+            let value = arg.try_downcast::<T>().unwrap();
+            let result = vectorize_1_arg::<T, T>(|a, _| a.abs())(value, ctx);
             result.upcast_decimal(data_type.size())
         }
     })

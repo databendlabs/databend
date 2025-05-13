@@ -33,10 +33,9 @@ use crate::types::number::Number;
 use crate::types::number::NumberColumn;
 use crate::types::AccessType;
 use crate::types::DataType;
-use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
-use crate::with_decimal_mapped_type;
+use crate::with_decimal_type;
 use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
@@ -120,14 +119,15 @@ where T: Clone
                     _ => {}
                 })
             }
-            [(_, DataType::Decimal(decimal))] => {
-                with_decimal_mapped_type!(|DECIMAL_TYPE| match decimal {
-                    DecimalDataType::DECIMAL_TYPE(size) => {
-                        let buffer: Buffer<T> = keys.into();
-                        let col: Buffer<DECIMAL_TYPE> = unsafe { std::mem::transmute(buffer) };
-                        return Ok(vec![DECIMAL_TYPE::upcast_column(col, *size)]);
-                    }
-                })
+            [(_, DataType::Decimal(size))] => {
+                let buffer: Buffer<T> = keys.into();
+                if size.is_128() {
+                    let col: Buffer<i128> = unsafe { std::mem::transmute(buffer) };
+                    return Ok(vec![i128::upcast_column(col, *size)]);
+                } else {
+                    let col: Buffer<i256> = unsafe { std::mem::transmute(buffer) };
+                    return Ok(vec![i256::upcast_column(col, *size)]);
+                }
             }
             _ => (),
         }
@@ -303,18 +303,21 @@ macro_rules! impl_hash_method_fixed_large_keys {
             ) -> Result<KeysState> {
                 // faster path for single fixed decimal keys
                 if group_columns.len() == 1 {
-                    if group_columns[0].data_type().is_decimal() {
-                        with_decimal_mapped_type!(|DECIMAL_TYPE| match &group_columns[0] {
-                            Column::Decimal(DecimalColumn::DECIMAL_TYPE(c, _)) => {
+                    if let Column::Decimal(decimal_column) = &group_columns[0] {
+                        match decimal_column {
+                            DecimalColumn::Decimal128(c, _) => {
                                 let buffer = unsafe {
-                                    std::mem::transmute::<Buffer<DECIMAL_TYPE>, Buffer<$ty>>(
-                                        c.clone(),
-                                    )
+                                    std::mem::transmute::<Buffer<i128>, Buffer<$ty>>(c.clone())
                                 };
                                 return Ok(KeysState::$name(buffer));
                             }
-                            _ => {}
-                        })
+                            DecimalColumn::Decimal256(c, _) => {
+                                let buffer = unsafe {
+                                    std::mem::transmute::<Buffer<i256>, Buffer<$ty>>(c.clone())
+                                };
+                                return Ok(KeysState::$name(buffer));
+                            }
+                        }
                     }
                 }
 
@@ -552,7 +555,7 @@ fn fixed_hash(keys_vec: &mut KeysVec, col_index: usize, column: &Column) -> Resu
             }
         },
         Column::Decimal(c) => {
-            with_decimal_mapped_type!(|DECIMAL_TYPE| match c {
+            with_decimal_type!(|DECIMAL_TYPE| match c {
                 DecimalColumn::DECIMAL_TYPE(c, _) => {
                     match bitmap {
                         Some(bitmap) => {

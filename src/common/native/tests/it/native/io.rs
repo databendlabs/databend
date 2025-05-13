@@ -275,15 +275,9 @@ fn get_all_test_data_types() -> Vec<DataType> {
         DataType::Number(NumberDataType::Int64),
         DataType::Number(NumberDataType::Float32),
         DataType::Number(NumberDataType::Float64),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
-            10, 2,
-        ))),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
-            35, 3,
-        ))),
-        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new_unchecked(
-            55, 3,
-        ))),
+        DataType::Decimal(DecimalSize::new_unchecked(10, 2)),
+        DataType::Decimal(DecimalSize::new_unchecked(35, 3)),
+        DataType::Decimal(DecimalSize::new_unchecked(55, 3)),
         DataType::Nullable(Box::new(DataType::Geography)),
         DataType::Nullable(Box::new(DataType::Geometry)),
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),

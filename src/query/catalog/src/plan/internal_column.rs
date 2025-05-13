@@ -283,9 +283,7 @@ impl InternalColumn {
             InternalColumnType::BaseBlockIds => {
                 assert!(meta.base_block_ids.is_some());
                 BlockEntry::new(
-                    DataType::Array(Box::new(DataType::Decimal(DecimalDataType::Decimal128(
-                        DecimalSize::default_128(),
-                    )))),
+                    DataType::Array(Box::new(DataType::Decimal(DecimalSize::default_128()))),
                     Value::Scalar(meta.base_block_ids.clone().unwrap()),
                 )
             }

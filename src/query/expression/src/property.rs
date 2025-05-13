@@ -32,7 +32,6 @@ use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
-use crate::types::DecimalDataType;
 use crate::types::IntervalType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
@@ -196,14 +195,19 @@ impl Domain {
             DataType::Number(NumberDataType::Float64) => {
                 Domain::Number(NumberDomain::Float64(NumberType::<F64>::full_domain()))
             }
-            DataType::Decimal(x) => match x {
-                DecimalDataType::Decimal128(x) => {
-                    Domain::Decimal(DecimalDomain::Decimal128(Decimal128Type::full_domain(), *x))
+            DataType::Decimal(size) => {
+                if size.is_128() {
+                    Domain::Decimal(DecimalDomain::Decimal128(
+                        Decimal128Type::full_domain(),
+                        *size,
+                    ))
+                } else {
+                    Domain::Decimal(DecimalDomain::Decimal256(
+                        Decimal256Type::full_domain(),
+                        *size,
+                    ))
                 }
-                DecimalDataType::Decimal256(x) => {
-                    Domain::Decimal(DecimalDomain::Decimal256(Decimal256Type::full_domain(), *x))
-                }
-            },
+            }
             DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
             DataType::Date => Domain::Date(DateType::full_domain()),
             DataType::Interval => Domain::Interval(IntervalType::full_domain()),

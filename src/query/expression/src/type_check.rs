@@ -699,9 +699,7 @@ pub fn common_super_type(
                 precision.min(MAX_DECIMAL256_PRECISION)
             };
 
-            Some(DataType::Decimal(
-                DecimalDataType::from_size(DecimalSize::new_unchecked(precision, scale)).ok()?,
-            ))
+            Some(DataType::Decimal(DecimalSize::new(precision, scale).ok()?))
         }
         (DataType::Number(num_ty), DataType::Decimal(a))
         | (DataType::Decimal(a), DataType::Number(num_ty))
@@ -720,9 +718,7 @@ pub fn common_super_type(
                 precision = precision.min(MAX_DECIMAL256_PRECISION);
             }
 
-            Some(DataType::Decimal(
-                DecimalDataType::from_size(DecimalSize::new_unchecked(precision, scale)).ok()?,
-            ))
+            Some(DataType::Decimal(DecimalSize::new(precision, scale).ok()?))
         }
         (DataType::Number(num_ty), DataType::Decimal(_))
         | (DataType::Decimal(_), DataType::Number(num_ty))

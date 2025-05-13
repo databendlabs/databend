@@ -20,7 +20,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal128Type;
 use databend_common_expression::types::Decimal256Type;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
@@ -193,13 +192,13 @@ fn column_update_hll_cardinality(col: &Column, ty: &DataType, hll: &mut ColumnDi
                 hll.add_object(v);
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(decimal) if decimal.is_128() => {
             let col = Decimal128Type::try_downcast_column(col).unwrap();
             for v in col.iter() {
                 hll.add_object(v);
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             let col = Decimal256Type::try_downcast_column(col).unwrap();
             for v in col.iter() {
                 hll.add_object(v);
@@ -233,11 +232,11 @@ fn scalar_update_hll_cardinality(scalar: &ScalarRef, ty: &DataType, hll: &mut Co
             let val = TimestampType::try_downcast_scalar(scalar).unwrap();
             hll.add_object(&val);
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(decimal) if decimal.is_128() => {
             let val = Decimal128Type::try_downcast_scalar(scalar).unwrap();
             hll.add_object(&val);
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             let val = Decimal256Type::try_downcast_scalar(scalar).unwrap();
             hll.add_object(&val);
         }

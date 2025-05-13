@@ -20,7 +20,6 @@ use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
 use num_bigint::BigInt;
 use pretty_assertions::assert_eq;
@@ -139,12 +138,8 @@ fn test_decimal_common_type() {
     ];
 
     for (a, b, c) in cases {
-        let l = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
-            a.0, a.1,
-        )));
-        let expected = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
-            c.0, c.1,
-        )));
+        let l = DataType::Decimal(DecimalSize::new_unchecked(a.0, a.1));
+        let expected = DataType::Decimal(DecimalSize::new_unchecked(c.0, c.1));
         let r = common_super_type(l, b, &[]);
         assert_eq!(r, Some(expected));
     }
