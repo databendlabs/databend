@@ -83,10 +83,14 @@ async fn load_tenant_tables_stats(tenant: &Tenant) -> Result<TenantTablesStatsRe
         };
         for table in tables {
             // local tables are not included in the stats
-            if !matches!(table.distribution_level(), DistributionLevel::Local) {
+            if matches!(table.distribution_level(), DistributionLevel::Local) {
                 continue;
             }
             let engine = table.engine().to_string();
+            // only fuse tables are included in the stats
+            if engine != "FUSE" {
+                continue;
+            }
             let stats = &table.get_table_info().meta.statistics;
             let is_external = table.get_table_info().meta.storage_params.is_some();
             if is_external {
