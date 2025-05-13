@@ -72,14 +72,11 @@ pub struct GlobalPersistentLog {
 impl GlobalPersistentLog {
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         setup_operator().await?;
-
         let meta_client =
             MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf()).map_err(|_e| {
                 ErrorCode::Internal("Create MetaClient failed for GlobalPersistentLog")
             })?;
-
         let stage_name = cfg.log.history.stage_name.clone();
-
         let instance = Arc::new(Self {
             meta_client,
             interval: cfg.log.history.interval as u64,
@@ -123,27 +120,16 @@ impl GlobalPersistentLog {
         }
         self.prepare().await?;
         info!("Persistent log prepared successfully");
-
         spawn(async move {
-            if let Err(e) = GlobalPersistentLog::instance().clean_work().await {
-                error!("Persistent log clean_work exit {}", e);
+            let instance = GlobalPersistentLog::instance();
+            if let Err(e) = instance
+                .transform(instance.tables.tables.get("log_history").unwrap())
+                .await
+            {
+                error!("Persistent log transform exit {}", e);
             }
         });
-
-        loop {
-            // Periodically performs persistent log COPY INTO/ INSERT INTO  every `interval` seconds (around)
-            let may_permit = self.acquire(&meta_key, self.interval).await?;
-            if let Some(guard) = may_permit {
-                if let Err(e) = self.do_copy_into().await {
-                    error!("Persistent log copy into failed: {:?}", e);
-                }
-                self.finish_hook(&meta_key).await?;
-                drop(guard);
-            }
-            // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
-            let sleep_time = self.interval * 500 + random::<u64>() % (self.interval * 1000);
-            tokio::time::sleep(Duration::from_millis(sleep_time)).await;
-        }
+        Ok(())
     }
 
     /// Acquires a permit from a distributed semaphore with timestamp-based rate limiting.
@@ -207,7 +193,7 @@ impl GlobalPersistentLog {
         tracking_payload.query_id = Some(query_id.clone());
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
         // prevent log table from logging its own logs
-        tracking_payload.should_log = false;
+        // tracking_payload.should_log = false;
         let _guard = ThreadTracker::tracking(tracking_payload);
         ThreadTracker::tracking_future(self.do_execute(sql, query_id)).await?;
         Ok(())
@@ -241,68 +227,70 @@ impl GlobalPersistentLog {
         self.execute_sql(&create_stage).await?;
         let create_db = "CREATE DATABASE IF NOT EXISTS system_history";
         self.execute_sql(create_db).await?;
-        let create_seq = "CREATE SEQUENCE IF NOT EXISTS log_history_seq";
-        self.execute_sql(create_seq).await?;
         for (_, table) in self.tables.tables.iter() {
             let create_table = table.create_sql();
             self.execute_sql(&create_table).await?;
         }
-
         Ok(())
     }
 
-    pub async fn do_copy_into(&self) -> Result<()> {
-        let stage_name = self.stage_name.clone();
-        let operator = GlobalLogger::instance().get_operator().await;
-        if let Some(op) = operator {
-            let path = format!("stage/internal/{}/", stage_name);
-        }
-        Ok(())
-    }
-
-    /// Periodically performs persistent log cleaning every `retention_interval` hours (around)
-    async fn clean_work(&self) -> Result<()> {
+    pub async fn transform(&self, table: &HistoryTable) -> Result<()> {
         loop {
-            // will check if it is already `retention_interval` hours every sleep_time
-            let sleep_time = Duration::from_mins(30 + random::<u64>() % 60);
-            let meta_key = format!("{}/persistent_log_clean", self.tenant_id);
-            let may_permit = self.acquire(&meta_key, 60).await?;
+            let meta_key = format!("{}/history_log_work", self.tenant_id);
+            let may_permit = self
+                .acquire(&format!("{}/{}/lock", meta_key, table.name), self.interval)
+                .await?;
             if let Some(guard) = may_permit {
-                if let Err(e) = self.do_clean().await {
-                    error!("persistent log clean failed: {}", e);
+                let batch_number = self
+                    .get_u64_from_meta(&format!("{}/{}/batch_number", meta_key, table.name))
+                    .await?
+                    .unwrap_or(0);
+                let sql: String = if table.name == "log_history" {
+                    let mut sql = table.transform_sql.clone();
+                    sql = sql.replace("{stage_name}", &self.stage_name);
+                    sql = sql.replace("{batch_number}", &(batch_number).to_string());
+                    sql
+                } else {
+                    table.transform_sql.clone()
+                };
+                if let Err(e) = self.execute_sql(&sql).await {
+                    error!("Persistent log copy into failed: {:?}", e);
                 }
                 self.finish_hook(&meta_key).await?;
+                if table.name == "log_history" {
+                    self.set_u64_to_meta(
+                        &format!("{}/{}/batch_number", meta_key, table.name),
+                        batch_number + 1,
+                    )
+                    .await?;
+                }
                 drop(guard);
             }
-            sleep(sleep_time).await;
+            // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
+            let sleep_time = self.interval * 500 + random::<u64>() % (self.interval * 1000);
+            tokio::time::sleep(Duration::from_millis(sleep_time)).await;
         }
     }
 
-    pub async fn do_clean(&self) -> Result<()> {
-        // for table in &self.tables {
-        //     let clean_sql = table.clean_sql(self.retention);
-        //     self.execute_sql(&clean_sql).await?;
-        //     info!(
-        //         "Periodic retention operation on persistent log table '{}' completed successfully.",
-        //         table.table_name()
-        //     );
-        // }
+    pub async fn get_u64_from_meta(&self, meta_key: &str) -> Result<Option<u64>> {
+        match self.meta_client.get_kv(&meta_key).await? {
+            Some(v) => {
+                let num: u64 = serde_json::from_slice(&v.data)?;
+                Ok(Some(num))
+            }
+            None => Ok(None),
+        }
+    }
 
-        // let session = create_session(&self.tenant_id, &self.cluster_id).await?;
-        // let context = session.create_query_context().await?;
-        // if LicenseManagerSwitch::instance()
-        //     .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
-        //     .is_ok()
-        // {
-        //     for table in &self.tables {
-        //         let vacuum = format!("VACUUM TABLE persistent_system.{}", table.table_name());
-        //         self.execute_sql(&vacuum).await?;
-        //         info!(
-        //         "Periodic VACUUM operation on persistent log table '{}' completed successfully.",
-        //         table.table_name()
-        //     );
-        //     }
-        // }
+    pub async fn set_u64_to_meta(&self, meta_key: &str, value: u64) -> Result<()> {
+        self.meta_client
+            .upsert_kv(UpsertKV::new(
+                meta_key,
+                MatchSeq::Any,
+                Operation::Update(serde_json::to_vec(&value)?),
+                None,
+            ))
+            .await?;
         Ok(())
     }
 }
