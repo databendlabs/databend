@@ -38,6 +38,7 @@ use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IcebergGlueCatalogOption;
 use databend_common_meta_app::schema::IcebergHmsCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
+use databend_common_meta_app::schema::IcebergStorageCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
 
 use crate::binder::parse_storage_params_from_uri;
@@ -223,12 +224,16 @@ fn parse_iceberg_rest_catalog(
         .ok_or_else(|| ErrorCode::InvalidArgument("address for iceberg catalog is not specified"))?
         .to_string();
 
-    let warehouse = options
-        .remove("warehouse")
-        .ok_or_else(|| {
-            ErrorCode::InvalidArgument("warehouse for iceberg catalog is not specified")
-        })?
-        .to_string();
+    // only storage catalog don't need warehouse param
+    let mut warehouse = String::new();
+    if typ != "storage" {
+        warehouse = options
+            .remove("warehouse")
+            .ok_or_else(|| {
+                ErrorCode::InvalidArgument("warehouse for iceberg catalog is not specified")
+            })?
+            .to_string();
+    }
 
     let option = match typ.as_str() {
         "rest" => IcebergCatalogOption::Rest(IcebergRestCatalogOption {
@@ -242,9 +247,26 @@ fn parse_iceberg_rest_catalog(
             props: HashMap::from_iter(options),
         }),
         "glue" => IcebergCatalogOption::Glue(IcebergGlueCatalogOption {
+            address,
             warehouse,
             props: HashMap::from_iter(options),
         }),
+        "storage" => {
+            let table_bucket_arn = options
+                .remove("table_bucket_arn")
+                .ok_or_else(|| {
+                    ErrorCode::InvalidArgument(
+                        "table_bucket_arn for iceberg catalog is not specified",
+                    )
+                })?
+                .to_string();
+
+            IcebergCatalogOption::Storage(IcebergStorageCatalogOption {
+                address,
+                table_bucket_arn,
+                props: HashMap::from_iter(options),
+            })
+        }
         v => {
             return Err(ErrorCode::InvalidArgument(format!(
                 "iceberg catalog with type {v} is not supported"

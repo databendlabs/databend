@@ -51,7 +51,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_storages_orc::ORCSource;
 use databend_common_storages_orc::StripeDecoder;
-use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_common_storages_parquet::ParquetReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -346,7 +346,7 @@ impl IcebergTable {
                 .with_prune_row_groups(true)
                 .with_prune_pages(false);
             let op = Arc::new(op.clone());
-            let mut builder = ParquetRSReaderBuilder::create(
+            let mut builder = ParquetReaderBuilder::create(
                 ctx.clone(),
                 op.clone(),
                 table_schema.clone(),

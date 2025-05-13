@@ -35,12 +35,12 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_storage::parquet_rs::infer_schema_with_extension;
+use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_common_storage::read_metadata_async;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;
-use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_common_storages_parquet::ParquetReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
 
@@ -121,7 +121,7 @@ impl Table for ResultScan {
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        let part = ParquetPart::ParquetFile(ParquetFilePart {
+        let part = ParquetPart::File(ParquetFilePart {
             file: self.location.clone(),
             compressed_size: self.file_size,
             estimated_uncompressed_size: self.file_size,
@@ -149,9 +149,9 @@ impl Table for ResultScan {
         _put_cache: bool,
     ) -> Result<()> {
         let read_options = ParquetReadOptions::default();
-        let op = Arc::new(DataOperator::instance().operator());
+        let op = DataOperator::instance().operator();
         let table_schema = self.table_info.schema();
-        let mut builder = ParquetRSReaderBuilder::create(
+        let mut builder = ParquetReaderBuilder::create(
             ctx.clone(),
             op.clone(),
             table_schema.clone(),

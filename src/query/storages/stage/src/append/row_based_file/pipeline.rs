@@ -26,7 +26,7 @@ use opendal::Operator;
 use super::limit_file_size_processor::LimitFileSizeProcessor;
 use super::serialize_processor::SerializeProcessor;
 use super::writer_processor::RowBasedFileWriter;
-use crate::compression::get_compression_alg_copy;
+use crate::compression::get_compression_with_path;
 
 /// SerializeProcessor * N: serialize each data block to many small byte buffers.
 /// LimitFileSizeProcessor * 1:  group small byte buffers to batches (as a block meta) that are large enough as a file.
@@ -91,7 +91,7 @@ pub(crate) fn append_data_to_row_based_files(
         pipeline.try_resize(max_threads)?;
     }
 
-    let compression = get_compression_alg_copy(compression, "")?;
+    let compression = get_compression_with_path(compression, "")?;
 
     pipeline.add_transform(|input, output| {
         let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

@@ -27,11 +27,28 @@
 #![allow(deprecated)]
 
 mod parquet_part;
-mod parquet_rs;
 mod read_settings;
 mod utils;
 
+mod copy_into_table;
+mod parquet_reader;
+mod parquet_table;
+mod partition;
+mod pruning;
+mod source;
+mod statistics;
+
+mod meta;
+mod schema;
+
+pub use copy_into_table::ParquetTableForCopy;
 pub use parquet_part::ParquetFilePart;
 pub use parquet_part::ParquetPart;
-pub use parquet_rs::*;
-pub use read_settings::ReadSettings;
+pub use parquet_reader::ParquetFileReader;
+pub use parquet_reader::ParquetReaderBuilder;
+pub use parquet_reader::ParquetWholeFileReader;
+pub use parquet_table::ParquetTable;
+// for it test
+pub use pruning::ParquetPruner;
+pub use source::ParquetSource;
+pub use source::ParquetSourceType;
