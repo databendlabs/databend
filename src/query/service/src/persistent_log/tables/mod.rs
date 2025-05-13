@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod global_persistent_log;
-mod session;
-mod tables;
+mod history_tables;
+mod log_history;
 
-pub use global_persistent_log::GlobalPersistentLog;
+pub use history_tables::HistoryTable;
+pub use history_tables::HistoryTables;

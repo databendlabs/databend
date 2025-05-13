@@ -387,7 +387,7 @@ pub fn init_logging(
         logger = logger.dispatch(dispatch);
     }
 
-    if cfg.persistentlog.on {
+    if cfg.history.on {
         let (remote_log, flush_guard) =
             RemoteLog::new(&labels, cfg).expect("initialize remote logger");
 
@@ -408,9 +408,7 @@ pub fn init_logging(
             filter_builder = filter_builder.filter(Some("databend::log::query"), LevelFilter::Off);
         }
         let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                filter_builder.parse(&cfg.persistentlog.level),
-            ))
+            .filter(EnvFilter::new(filter_builder.parse(&cfg.history.level)))
             .filter(filter_by_thread_tracker())
             .append(remote_log);
 

@@ -31,10 +31,11 @@ pub use crash_hook::SignalListener;
 
 pub use crate::config::Config;
 pub use crate::config::FileConfig;
+pub use crate::config::HistoryConfig;
+pub use crate::config::HistoryTableConfig;
 pub use crate::config::OTLPConfig;
 pub use crate::config::OTLPEndpointConfig;
 pub use crate::config::OTLPProtocol;
-pub use crate::config::PersistentLogConfig;
 pub use crate::config::ProfileLogConfig;
 pub use crate::config::QueryLogConfig;
 pub use crate::config::StderrConfig;
@@ -54,7 +55,6 @@ pub use crate::remote_log::LogMessage;
 pub use crate::remote_log::RemoteLog;
 pub use crate::remote_log::RemoteLogElement;
 pub use crate::remote_log::RemoteLogGuard;
-pub use crate::remote_log::PERSISTENT_LOG_SCHEMA_VERSION;
 pub use crate::structlog::DummyReporter;
 pub use crate::structlog::StructLogReporter;
 
