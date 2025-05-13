@@ -699,12 +699,21 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let alter_workload_group = map(
+    let set_workload_group_quotas = map(
         rule! {
             ALTER ~ WORKLOAD ~ GROUP ~ #ident ~ SET ~ #workload_quotas
         },
         |(_, _, _, name, _, quotas)| {
-            Statement::AlterWorkloadGroup(AlterWorkloadGroupStmt { name, quotas })
+            Statement::SetWorkloadQuotasGroup(SetWorkloadGroupQuotasStmt { name, quotas })
+        },
+    );
+
+    let unset_workload_group_quotas = map(
+        rule! {
+            ALTER ~ WORKLOAD ~ GROUP ~ #ident ~ UNSET ~ #unset_source
+        },
+        |(_, _, _, name, _, quotas)| {
+            Statement::UnsetWorkloadQuotasGroup(UnsetWorkloadGroupQuotasStmt { name, quotas })
         },
     );
 
@@ -2543,7 +2552,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
             | #drop_workload_group: "`DROP WORKLOAD GROUP [IF EXISTS] <name>`"
             | #rename_workload_group: "`RENAME WORKLOAD GROUP <old_name> TO <new_name>`"
-            | #alter_workload_group: "`ALTER WORKLOAD GROUP <name> set [<workload_group_quotas>]`"
+            | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
+            | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
         ),
         // database
         rule!(

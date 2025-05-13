@@ -1372,7 +1372,8 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateWorkloadGroup(_) => {}
             Plan::DropWorkloadGroup(_) => {}
             Plan::RenameWorkloadGroup(_) => {}
-            Plan::AlterWorkloadGroup(_) => {}
+            Plan::SetWorkloadGroupQuotas(_) => {}
+            Plan::UnsetWorkloadGroupQuotas(_) => {}
         }
 
         Ok(())
