@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_storages_parquet::ParquetFilePart;
-use databend_common_storages_parquet::ParquetPart;
+mod predicate;
+mod read_policy;
+mod reader;
+mod row_group;
+mod topk;
+mod utils;
 
-pub(crate) fn convert_file_scan_task(task: iceberg::scan::FileScanTask) -> ParquetPart {
-    let file = ParquetFilePart {
-        file: task.data_file_path.clone(),
-        compressed_size: task.length,
-        estimated_uncompressed_size: task.length * 5,
-        dedup_key: format!("{}_{}", task.data_file_path, task.length),
-    };
-    ParquetPart::File(file)
-}
+pub use read_policy::*;
+pub use reader::ParquetFileReader;
+pub use reader::ParquetReaderBuilder;
+pub use reader::ParquetWholeFileReader;
+pub use reader::RowGroupReader;
+pub use row_group::cached_range_full_read;
+pub use row_group::InMemoryRowGroup;

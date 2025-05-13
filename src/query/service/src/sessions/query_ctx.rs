@@ -110,7 +110,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
-use databend_common_storages_parquet::ParquetRSTable;
+use databend_common_storages_parquet::ParquetTable;
 use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -603,7 +603,7 @@ impl TableContext for QueryContext {
             DataSourceInfo::StageSource(stage_info) => {
                 self.build_external_by_table_info(stage_info, plan.tbl_args.clone())
             }
-            DataSourceInfo::ParquetSource(table_info) => ParquetRSTable::from_info(table_info),
+            DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
             DataSourceInfo::ORCSource(table_info) => OrcTable::from_info(table_info),
         }
@@ -1643,7 +1643,7 @@ impl TableContext for QueryContext {
                     read_options = read_options.with_do_prewhere(false);
                 }
 
-                ParquetRSTable::create(
+                ParquetTable::create(
                     stage_info.clone(),
                     files_info,
                     read_options,
