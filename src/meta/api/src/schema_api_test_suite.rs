@@ -64,7 +64,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -79,7 +78,6 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
-use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -101,7 +99,6 @@ use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListTableReq;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::RenameDatabaseReq;
@@ -128,11 +125,8 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::schema::VirtualColumnIdent;
-use databend_common_meta_app::schema::VirtualField;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
 use databend_common_meta_app::KeyWithTenant;
@@ -343,9 +337,7 @@ impl SchemaApiTestSuite {
         suite.table_index_create_drop(&b.build().await).await?;
         suite.index_create_list_drop(&b.build().await).await?;
         suite.table_lock_revision(&b.build().await).await?;
-        suite
-            .virtual_column_create_list_drop(&b.build().await)
-            .await?;
+        suite.gc_dropped_db_after_undrop(&b.build().await).await?;
         suite.catalog_create_get_list_drop(&b.build().await).await?;
         suite.table_least_visible_time(&b.build().await).await?;
         suite
@@ -6855,363 +6847,6 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn virtual_column_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
-    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
-        let tenant_name = "tenant1";
-        let tenant = Tenant::new_literal(tenant_name);
-
-        let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
-        let table_id;
-
-        info!("--- prepare db and table");
-        {
-            util.create_db().await?;
-            let (tid, _table_meta) = util.create_table().await?;
-            table_id = tid;
-        }
-
-        let name_ident = VirtualColumnIdent::new(&tenant, table_id);
-
-        {
-            info!("--- list virtual columns with no create before");
-            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
-
-            let res = mt.list_virtual_columns(req).await?;
-            assert!(res.is_empty())
-        }
-
-        {
-            info!("--- create virtual column");
-            let req = CreateVirtualColumnReq {
-                create_option: CreateOption::Create,
-                name_ident: name_ident.clone(),
-                virtual_columns: vec![
-                    VirtualField {
-                        expr: "variant:k1".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant[1]".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k1:k2".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k1:k3".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
-                            NumberDataType::UInt64,
-                        ))),
-                        alias_name: None,
-                    },
-                ],
-                auto_generated: false,
-            };
-
-            mt.create_virtual_column(req.clone()).await?;
-
-            info!("--- create virtual column again");
-            let req = CreateVirtualColumnReq {
-                create_option: CreateOption::Create,
-                name_ident: name_ident.clone(),
-                virtual_columns: vec![
-                    VirtualField {
-                        expr: "variant:k1".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant[1]".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k1:k2".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k1:k3".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
-                            NumberDataType::UInt64,
-                        ))),
-                        alias_name: None,
-                    },
-                ],
-                auto_generated: false,
-            };
-
-            let res = mt.create_virtual_column(req).await;
-            assert!(res.is_err());
-        }
-
-        {
-            info!("--- list virtual columns");
-            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
-
-            let res = mt.list_virtual_columns(req).await?;
-            assert_eq!(1, res.len());
-            assert_eq!(res[0].virtual_columns, vec![
-                VirtualField {
-                    expr: "variant:k1".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    alias_name: None
-                },
-                VirtualField {
-                    expr: "variant[1]".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    alias_name: None
-                },
-                VirtualField {
-                    expr: "variant:k1:k2".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                    alias_name: None
-                },
-                VirtualField {
-                    expr: "variant:k1:k3".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
-                        NumberDataType::UInt64
-                    ))),
-                    alias_name: None
-                },
-            ]);
-
-            let req = ListVirtualColumnsReq::new(&tenant, Some(u64::MAX));
-
-            let res = mt.list_virtual_columns(req).await?;
-            assert!(res.is_empty())
-        }
-
-        {
-            info!("--- update virtual column");
-            let req = UpdateVirtualColumnReq {
-                if_exists: false,
-                name_ident: name_ident.clone(),
-                virtual_columns: vec![
-                    VirtualField {
-                        expr: "variant:k2".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant[2]".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k2:k3".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k2:k4".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
-                            NumberDataType::UInt64,
-                        ))),
-                        alias_name: None,
-                    },
-                ],
-                auto_generated: false,
-            };
-
-            mt.update_virtual_column(req).await?;
-        }
-
-        {
-            info!("--- list virtual columns after update");
-            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
-
-            let res = mt.list_virtual_columns(req).await?;
-            assert_eq!(1, res.len());
-            assert_eq!(res[0].virtual_columns, vec![
-                VirtualField {
-                    expr: "variant:k2".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    alias_name: None
-                },
-                VirtualField {
-                    expr: "variant[2]".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    alias_name: None
-                },
-                VirtualField {
-                    expr: "variant:k2:k3".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                    alias_name: None
-                },
-                VirtualField {
-                    expr: "variant:k2:k4".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
-                        NumberDataType::UInt64
-                    ))),
-                    alias_name: None
-                },
-            ]);
-        }
-
-        {
-            info!("--- drop virtual column");
-            let req = DropVirtualColumnReq {
-                if_exists: false,
-                name_ident: name_ident.clone(),
-            };
-
-            mt.drop_virtual_column(req).await?;
-        }
-
-        {
-            info!("--- list virtual columns after drop");
-            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
-
-            let res = mt.list_virtual_columns(req).await?;
-            assert_eq!(0, res.len());
-        }
-
-        {
-            info!("--- update virtual column after drop");
-            let req = UpdateVirtualColumnReq {
-                if_exists: false,
-                name_ident: name_ident.clone(),
-                virtual_columns: vec![
-                    VirtualField {
-                        expr: "variant:k3".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant[3]".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k3:k4".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k3:k5".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
-                            NumberDataType::UInt64,
-                        ))),
-                        alias_name: None,
-                    },
-                ],
-                auto_generated: false,
-            };
-
-            let res = mt.update_virtual_column(req).await;
-            assert!(res.is_err());
-        }
-
-        {
-            info!("--- create or replace virtual column");
-            let req = CreateVirtualColumnReq {
-                create_option: CreateOption::Create,
-                name_ident: name_ident.clone(),
-                virtual_columns: vec![
-                    VirtualField {
-                        expr: "variant:k1".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant[1]".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k1:k4".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k1:k5".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
-                            NumberDataType::UInt64,
-                        ))),
-                        alias_name: None,
-                    },
-                ],
-                auto_generated: false,
-            };
-
-            mt.create_virtual_column(req.clone()).await?;
-
-            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
-
-            let res = mt.list_virtual_columns(req).await?;
-            assert_eq!(1, res.len());
-            assert_eq!(res[0].virtual_columns, vec![
-                VirtualField {
-                    expr: "variant:k1".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    alias_name: None
-                },
-                VirtualField {
-                    expr: "variant[1]".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    alias_name: None
-                },
-                VirtualField {
-                    expr: "variant:k1:k4".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                    alias_name: None
-                },
-                VirtualField {
-                    expr: "variant:k1:k5".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
-                        NumberDataType::UInt64
-                    ))),
-                    alias_name: None
-                },
-            ]);
-
-            let req = CreateVirtualColumnReq {
-                create_option: CreateOption::CreateOrReplace,
-                name_ident: name_ident.clone(),
-                virtual_columns: vec![
-                    VirtualField {
-                        expr: "variant:k2".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                        alias_name: None,
-                    },
-                    VirtualField {
-                        expr: "variant:k3".to_string(),
-                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                        alias_name: None,
-                    },
-                ],
-                auto_generated: false,
-            };
-
-            mt.create_virtual_column(req.clone()).await?;
-
-            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
-
-            let res = mt.list_virtual_columns(req).await?;
-            assert_eq!(1, res.len());
-            assert_eq!(res[0].virtual_columns, vec![
-                VirtualField {
-                    expr: "variant:k2".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    alias_name: None
-                },
-                VirtualField {
-                    expr: "variant:k3".to_string(),
-                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                    alias_name: None
-                },
-            ]);
-        }
-
-        Ok(())
-    }
-
-    #[fastrace::trace]
     async fn table_lock_revision<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant_name = "tenant1";
@@ -7308,6 +6943,79 @@ impl SchemaApiTestSuite {
             let res7 = mt.list_lock_revisions(req7).await?;
             assert_eq!(res7.len(), 0);
         }
+
+        Ok(())
+    }
+
+    async fn gc_dropped_db_after_undrop<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
+        self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "tenant1_gc_dropped_db_after_undrop";
+        let db_name = "db1_gc_dropped_db_after_undrop";
+        let mut util = Util::new(mt, tenant_name, db_name, "", "eng");
+
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+        let db_name_ident = DatabaseNameIdent::new(&tenant, db_name);
+
+        // 1. Create database
+        util.create_db().await?;
+        let db_id = util.db_id;
+
+        info!("Created database with ID: {}", db_id);
+
+        // 2. Drop database
+        util.drop_db().await?;
+
+        // 2.1. Check database is marked as dropped
+        let req = ListDroppedTableReq::new(&tenant);
+        let resp = mt.get_drop_table_infos(req).await?;
+
+        // Filter for our specific database ID
+        let drop_ids: Vec<DroppedId> = resp
+            .drop_ids
+            .into_iter()
+            .filter(|id| {
+                if let DroppedId::Db { db_id: id, .. } = id {
+                    *id == db_id
+                } else {
+                    false
+                }
+            })
+            .collect();
+
+        assert!(
+            !drop_ids.is_empty(),
+            "Database being tested should be dropped"
+        );
+
+        // 3. Undrop the database
+        //
+        // A more rigorous test would verify the race condition protection, but difficult to implement as an integration test:
+        // Ideally, we would undrop the database precisely after the `gc_drop_tables` process has verified
+        // that the database is marked as dropped, but before committing the kv transaction that removes the database metadata.
+
+        let undrop_req = UndropDatabaseReq {
+            name_ident: db_name_ident.clone(),
+        };
+        mt.undrop_database(undrop_req).await?;
+
+        let req = GcDroppedTableReq {
+            tenant: tenant.clone(),
+            drop_ids,
+        };
+
+        // 4. Check that gc_drop_tables operation has NOT removed database's meta data
+        mt.gc_drop_tables(req.clone()).await?;
+
+        // 5. Verify the database is still accessible
+        let get_req = GetDatabaseReq::new(tenant.clone(), db_name.to_string());
+        let db_info = mt.get_database(get_req).await?;
+        assert_eq!(db_info.database_id.db_id, db_id, "Database ID should match");
+        assert!(
+            db_info.meta.drop_on.is_none(),
+            "Database should not be marked as dropped"
+        );
 
         Ok(())
     }

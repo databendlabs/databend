@@ -80,6 +80,7 @@ async fn apply_snapshot_pruning(
         schema,
         push_down,
         bloom_index_cols,
+        vec![],
         None,
     )?);
 

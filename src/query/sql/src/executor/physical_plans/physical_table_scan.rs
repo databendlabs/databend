@@ -17,6 +17,8 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::parser::token::TokenKind;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
@@ -29,7 +31,6 @@ use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
-use databend_common_expression::type_check::get_simple_cast_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -37,12 +38,14 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use jsonb::keypath::KeyPath;
+use jsonb::keypath::KeyPaths;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::thread_rng;
@@ -124,7 +127,24 @@ impl PhysicalPlanBuilder {
         let scan = if scan.columns.is_empty() {
             scan.clone()
         } else {
-            let columns = scan.columns.clone();
+            let mut columns = scan.columns.clone();
+
+            let required_column_ids: Vec<_> = required.difference(&columns).cloned().collect();
+            if !required_column_ids.is_empty() {
+                // add virtual columns to table scan columns.
+                let read_guard = self.metadata.read();
+                let virtual_column_id_set = read_guard
+                    .virtual_columns_by_table_index(scan.table_index)
+                    .iter()
+                    .map(|column| column.index())
+                    .collect::<HashSet<_>>();
+                for required_column_id in required_column_ids {
+                    if virtual_column_id_set.contains(&required_column_id) {
+                        columns.insert(required_column_id);
+                    }
+                }
+            }
+
             let mut prewhere = scan.prewhere.clone();
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
             if scan.is_lazy_table {
@@ -150,9 +170,9 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         let mut has_inner_column = false;
-        let mut has_virtual_column = false;
         let mut name_mapping = BTreeMap::new();
         let mut project_internal_columns = BTreeMap::new();
+        let mut project_virtual_columns = BTreeMap::new();
         let metadata = self.metadata.read().clone();
 
         for index in scan.columns.iter() {
@@ -171,8 +191,8 @@ impl PhysicalPlanBuilder {
                 }) => {
                     project_internal_columns.insert(*index, internal_column.to_owned());
                 }
-                ColumnEntry::VirtualColumn(_) => {
-                    has_virtual_column = true;
+                ColumnEntry::VirtualColumn(virtual_column) => {
+                    project_virtual_columns.insert(*index, virtual_column.clone());
                 }
                 _ => {}
             }
@@ -225,8 +245,12 @@ impl PhysicalPlanBuilder {
             table_schema = Arc::new(schema);
         }
 
-        let push_downs =
-            self.push_downs(&scan, &table_schema, has_inner_column, has_virtual_column)?;
+        let push_downs = self.push_downs(
+            &scan,
+            &table_schema,
+            project_virtual_columns,
+            has_inner_column,
+        )?;
 
         let mut source = table
             .read_plan(
@@ -338,8 +362,8 @@ impl PhysicalPlanBuilder {
         &self,
         scan: &crate::plans::Scan,
         table_schema: &TableSchema,
+        virtual_columns: BTreeMap<IndexType, VirtualColumn>,
         has_inner_column: bool,
-        has_virtual_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
         let projection = Self::build_projection(
@@ -353,6 +377,7 @@ impl PhysicalPlanBuilder {
             true,
             true,
         );
+        let has_virtual_column = !virtual_columns.is_empty();
 
         let output_columns = if has_virtual_column {
             Some(Self::build_projection(
@@ -524,7 +549,7 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        let virtual_column = self.build_virtual_column(&scan.columns);
+        let virtual_column = self.build_virtual_column(virtual_columns)?;
 
         Ok(PushDownInfo {
             projection: Some(projection),
@@ -558,63 +583,83 @@ impl PhysicalPlanBuilder {
         }
     }
 
-    fn build_virtual_column(&self, indices: &ColumnSet) -> Option<VirtualColumnInfo> {
-        let mut source_column_ids = HashSet::new();
-        let mut column_and_indices = Vec::new();
-        for index in indices.iter() {
-            if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
-            {
-                source_column_ids.insert(virtual_column.source_column_id);
-                let cast_func_name =
-                    if virtual_column.data_type.remove_nullable() != TableDataType::Variant {
-                        let dest_type = DataType::from(&virtual_column.data_type.remove_nullable());
-                        get_simple_cast_function(true, &DataType::Variant, &dest_type)
-                    } else {
-                        None
-                    };
-                let virtual_column_field = VirtualColumnField {
-                    source_column_id: virtual_column.source_column_id,
-                    source_name: virtual_column.source_column_name.clone(),
-                    column_id: virtual_column.column_id,
-                    name: virtual_column.column_name.clone(),
-                    key_paths: virtual_column.key_paths.clone(),
-                    cast_func_name,
-                    data_type: Box::new(virtual_column.data_type.clone()),
-                    is_created: virtual_column.is_created,
+    fn parse_virtual_column_name(name: &str) -> Result<Scalar> {
+        let tokens = tokenize_sql(name)?;
+        let mut i = 0;
+        let mut key_paths = Vec::new();
+        while i < tokens.len() {
+            let token = &tokens[i];
+            if token.kind == TokenKind::LBracket {
+                i += 1;
+                if i >= tokens.len() {
+                    return Err(ErrorCode::Internal(format!(
+                        "Invalid virtual column name {}",
+                        name
+                    )));
+                }
+                let path_token = &tokens[i];
+                let path = path_token.text();
+                let key_path = if path_token.kind == TokenKind::LiteralString {
+                    let s = &path[1..path.len() - 1];
+                    KeyPath::QuotedName(std::borrow::Cow::Borrowed(s))
+                } else if path_token.kind == TokenKind::LiteralInteger {
+                    let idx = path.parse::<i32>().unwrap();
+                    KeyPath::Index(idx)
+                } else {
+                    return Err(ErrorCode::Internal(format!(
+                        "Invalid virtual column name {}",
+                        name
+                    )));
                 };
-                column_and_indices.push((virtual_column_field, *index));
+                key_paths.push(key_path);
+                // skip TokenKind::RBracket
+                i += 1;
             }
+            i += 1;
         }
-        if column_and_indices.is_empty() {
-            return None;
-        }
-        // Make the order of virtual columns the same as their indexes.
-        column_and_indices.sort_by_key(|(_, index)| *index);
+        let keypaths = KeyPaths { paths: key_paths };
 
-        let virtual_column_fields = column_and_indices
-            .into_iter()
-            .map(|(column, _)| column)
-            .collect::<Vec<_>>();
+        Ok(Scalar::String(format!("{}", keypaths)))
+    }
 
-        let mut fields = Vec::with_capacity(virtual_column_fields.len());
-        let next_column_id = virtual_column_fields[0].column_id;
-        for virtual_column_field in &virtual_column_fields {
-            let field = TableField::new_from_column_id(
-                &virtual_column_field.name,
-                *virtual_column_field.data_type.clone(),
-                virtual_column_field.column_id,
-            );
-            fields.push(field);
+    fn build_virtual_column(
+        &self,
+        virtual_columns: BTreeMap<IndexType, VirtualColumn>,
+    ) -> Result<Option<VirtualColumnInfo>> {
+        if virtual_columns.is_empty() {
+            return Ok(None);
         }
-        let metadata = BTreeMap::new();
-        let schema = TableSchema::new_from_column_ids(fields, metadata, next_column_id);
+        let mut source_column_ids = HashSet::new();
+        let mut virtual_column_fields = Vec::with_capacity(virtual_columns.len());
+
+        for (_, virtual_column) in virtual_columns.into_iter() {
+            source_column_ids.insert(virtual_column.source_column_id);
+            let target_type = virtual_column.data_type.remove_nullable();
+
+            let key_paths = Self::parse_virtual_column_name(&virtual_column.column_name)?;
+            let cast_func_name = if target_type != TableDataType::Variant {
+                Some(format!("to_{}", target_type.to_string().to_lowercase()))
+            } else {
+                None
+            };
+
+            let virtual_column_field = VirtualColumnField {
+                source_column_id: virtual_column.source_column_id,
+                source_name: virtual_column.source_column_name.clone(),
+                column_id: virtual_column.column_id,
+                name: virtual_column.column_name.clone(),
+                key_paths,
+                cast_func_name,
+                data_type: Box::new(virtual_column.data_type.clone()),
+            };
+            virtual_column_fields.push(virtual_column_field);
+        }
 
         let virtual_column_info = VirtualColumnInfo {
-            schema: Arc::new(schema),
             source_column_ids,
             virtual_column_fields,
         };
-        Some(virtual_column_info)
+        Ok(Some(virtual_column_info))
     }
 
     pub(crate) fn build_agg_index(

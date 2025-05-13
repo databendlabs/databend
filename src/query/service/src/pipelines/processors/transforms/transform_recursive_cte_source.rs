@@ -351,7 +351,9 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::ChunkFillAndReorder(_)
         | PhysicalPlan::ChunkAppendData(_)
         | PhysicalPlan::ChunkMerge(_)
-        | PhysicalPlan::ChunkCommitInsert(_) => {}
+        | PhysicalPlan::ChunkCommitInsert(_)
+        | PhysicalPlan::BroadcastSource(_)
+        | PhysicalPlan::BroadcastSink(_) => {}
     }
     Ok(())
 }

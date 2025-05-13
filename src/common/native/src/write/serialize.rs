@@ -14,17 +14,23 @@
 
 use std::io::Write;
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::i256;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DecimalColumn;
 use databend_common_expression::types::GeographyColumn;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 
 use super::boolean::write_bitmap;
 use super::WriteOptions;
+use crate::error::Error;
 use crate::error::Result;
 use crate::nested::Nested;
 use crate::util::encode_bool;
@@ -39,48 +45,131 @@ pub fn write<W: Write>(
     write_options: WriteOptions,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    write_nest_info::<W>(w, nested)?;
+    write_nest_info(w, nested)?;
 
-    let (_, validity) = column.validity();
-    let validity = validity.cloned();
+    let mut visitor = WriteVisitor::new(w, write_options, scratch);
+    visitor.visit_column(column.clone())?;
+    Ok(())
+}
 
-    match column.remove_nullable() {
-        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => Ok(()),
-        Column::Number(column) => {
-            with_number_mapped_type!(|NUM_TYPE| match column {
-                NumberColumn::NUM_TYPE(column) => {
-                    write_primitive::<NUM_TYPE, W>(w, &column, validity, write_options, scratch)
-                }
-            })
+struct WriteVisitor<'a, W: Write> {
+    w: &'a mut W,
+    write_options: WriteOptions,
+    scratch: &'a mut Vec<u8>,
+    validity: Option<Bitmap>,
+}
+
+impl<'a, W: Write> WriteVisitor<'a, W> {
+    fn new(w: &'a mut W, write_options: WriteOptions, scratch: &'a mut Vec<u8>) -> Self {
+        Self {
+            w,
+            write_options,
+            scratch,
+            validity: None,
         }
-        Column::Decimal(column) => with_decimal_mapped_type!(|DT| match column {
+    }
+}
+
+impl<'a, W: Write> ValueVisitor for WriteVisitor<'a, W> {
+    type Error = Error;
+    fn visit_scalar(&mut self, _scalar: databend_common_expression::Scalar) -> Result<()> {
+        unreachable!()
+    }
+
+    fn visit_typed_column<T: ValueType>(&mut self, _column: T::Column) -> Result<()> {
+        unreachable!()
+    }
+
+    fn visit_any_number(&mut self, column: NumberColumn) -> Result<()> {
+        with_number_mapped_type!(|NUM_TYPE| match column {
+            NumberColumn::NUM_TYPE(column) => {
+                write_primitive::<NUM_TYPE, W>(
+                    self.w,
+                    &column,
+                    self.validity.clone(),
+                    &self.write_options,
+                    self.scratch,
+                )
+            }
+        })
+    }
+
+    fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
+        with_decimal_mapped_type!(|DT| match column {
             DecimalColumn::DT(column, _) => {
                 let column: Buffer<DT> = unsafe { std::mem::transmute(column) };
-                write_primitive::<DT, W>(w, &column, validity, write_options, scratch)
+                write_primitive::<DT, W>(
+                    self.w,
+                    &column,
+                    self.validity.clone(),
+                    &self.write_options,
+                    self.scratch,
+                )
             }
-        }),
-        Column::Boolean(column) => write_bitmap(w, &column, validity, write_options, scratch),
-        Column::String(column) => {
-            write_view::<W>(w, &column.to_binview(), validity, write_options, scratch)
-        }
-        Column::Timestamp(column) => {
-            write_primitive::<i64, W>(w, &column, validity, write_options, scratch)
-        }
-        Column::Date(column) => {
-            write_primitive::<i32, W>(w, &column, validity, write_options, scratch)
-        }
-        Column::Interval(column) => {
-            let column: Buffer<i128> = unsafe { std::mem::transmute(column) };
-            write_primitive::<i128, W>(w, &column, validity, write_options, scratch)
-        }
-        Column::Binary(b)
-        | Column::Bitmap(b)
-        | Column::Variant(b)
-        | Column::Geography(GeographyColumn(b))
-        | Column::Geometry(b) => write_binary::<W>(w, &b, validity, write_options, scratch),
+        })
+    }
 
-        Column::Tuple(_) | Column::Map(_) | Column::Array(_) | Column::Nullable(_) => {
-            unreachable!()
+    fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
+        let v = self.validity.replace(column.validity);
+        assert!(v.is_none());
+        self.visit_column(column.column)
+    }
+
+    fn visit_column(&mut self, column: Column) -> Result<()> {
+        match column {
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => Ok(()),
+
+            Column::Boolean(column) => write_bitmap(
+                self.w,
+                &column,
+                self.validity.clone(),
+                &self.write_options,
+                self.scratch,
+            ),
+            Column::String(column) => write_view::<W>(
+                self.w,
+                &column.to_binview(),
+                self.validity.clone(),
+                &self.write_options,
+                self.scratch,
+            ),
+            Column::Timestamp(column) => write_primitive::<i64, W>(
+                self.w,
+                &column,
+                self.validity.clone(),
+                &self.write_options,
+                self.scratch,
+            ),
+            Column::Date(column) => write_primitive::<i32, W>(
+                self.w,
+                &column,
+                self.validity.clone(),
+                &self.write_options,
+                self.scratch,
+            ),
+            Column::Interval(column) => {
+                let column: Buffer<i128> = unsafe { std::mem::transmute(column) };
+                write_primitive::<i128, W>(
+                    self.w,
+                    &column,
+                    self.validity.clone(),
+                    &self.write_options,
+                    self.scratch,
+                )
+            }
+
+            Column::Binary(b)
+            | Column::Bitmap(b)
+            | Column::Variant(b)
+            | Column::Geography(GeographyColumn(b))
+            | Column::Geometry(b) => write_binary::<W>(
+                self.w,
+                &b,
+                self.validity.clone(),
+                self.write_options.clone(),
+                self.scratch,
+            ),
+            _ => Self::default_visit_column(column, self),
         }
     }
 }

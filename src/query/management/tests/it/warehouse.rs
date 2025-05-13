@@ -23,8 +23,8 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
 use databend_common_management::*;
-use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_store::LocalMetaService;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
@@ -1561,7 +1561,9 @@ async fn nodes(lift: Duration, size: usize) -> Result<(MetaStore, WarehouseMgr, 
 }
 
 async fn new_cluster_api(lift: Duration) -> Result<(MetaStore, WarehouseMgr)> {
-    let test_api = MetaStore::L(Arc::new(MemMeta::default()));
+    let test_api = MetaStore::L(Arc::new(
+        LocalMetaService::new("management-test").await.unwrap(),
+    ));
     let cluster_manager = WarehouseMgr::create(test_api.clone(), "test-tenant-id", lift)?;
     Ok((test_api, cluster_manager))
 }

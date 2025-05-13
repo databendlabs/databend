@@ -18,6 +18,8 @@ mod physical_aggregate_expand;
 mod physical_aggregate_final;
 mod physical_aggregate_partial;
 mod physical_async_func;
+#[allow(dead_code)]
+mod physical_broadcast;
 mod physical_cache_scan;
 mod physical_column_mutation;
 mod physical_commit_sink;
@@ -65,6 +67,9 @@ pub use physical_aggregate_final::AggregateFinal;
 pub use physical_aggregate_partial::AggregatePartial;
 pub use physical_async_func::AsyncFunction;
 pub use physical_async_func::AsyncFunctionDesc;
+pub use physical_broadcast::BroadcastSink;
+pub use physical_broadcast::BroadcastSource;
+pub use physical_broadcast::*;
 pub use physical_cache_scan::CacheScan;
 pub use physical_column_mutation::ColumnMutation;
 pub use physical_commit_sink::*;

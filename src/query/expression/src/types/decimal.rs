@@ -48,11 +48,12 @@ use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::ArgType;
+use super::DataType;
+use super::GenericMap;
 use super::SimpleDomain;
-use crate::types::ArgType;
-use crate::types::DataType;
-use crate::types::GenericMap;
-use crate::types::ValueType;
+use super::SimpleType;
+use super::SimpleValueType;
 use crate::utils::arrow::buffer_into_mut;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -66,49 +67,34 @@ pub struct DecimalType<T: Decimal>(PhantomData<T>);
 pub type Decimal128Type = DecimalType<i128>;
 pub type Decimal256Type = DecimalType<i256>;
 
-impl<Num: Decimal> ValueType for DecimalType<Num> {
+impl<Num: Decimal> SimpleValueType for DecimalType<Num> {}
+
+impl<Num: Decimal> SimpleType for DecimalType<Num> {
     type Scalar = Num;
-    type ScalarRef<'a> = Num;
-    type Column = Buffer<Num>;
     type Domain = SimpleDomain<Num>;
-    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, Num>>;
-    type ColumnBuilder = Vec<Num>;
 
-    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        scalar
-    }
-
-    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        *scalar
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn downcast_scalar(scalar: &ScalarRef) -> Option<Num> {
         Num::try_downcast_scalar(scalar.as_decimal()?)
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        let down_col = Num::try_downcast_column(col);
-        if let Some(col) = down_col {
-            Some(col.0)
-        } else {
-            None
-        }
+    fn downcast_column(col: &Column) -> Option<Buffer<Self::Scalar>> {
+        Num::try_downcast_column(col).map(|(col, _)| col)
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Num::try_downcast_domain(domain.as_decimal()?)
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Num>> {
         Num::try_downcast_builder(builder)
     }
 
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+    fn downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Num>> {
         Num::try_downcast_owned_builder(builder)
     }
 
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
+    fn upcast_column_builder(
+        builder: Vec<Num>,
         decimal_size: Option<DecimalSize>,
     ) -> Option<ColumnBuilder> {
         Some(ColumnBuilder::Decimal(Num::upcast_builder(
@@ -121,7 +107,7 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::upcast_scalar(scalar, Num::default_decimal_size())
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
+    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
         Num::upcast_column(col, Num::default_decimal_size())
     }
 
@@ -129,98 +115,28 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::upcast_domain(domain, Num::default_decimal_size())
     }
 
-    fn column_len(col: &Self::Column) -> usize {
-        col.len()
-    }
-
-    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.get(index).cloned()
+    #[inline(always)]
+    fn compare(lhs: &Num, rhs: &Num) -> Ordering {
+        lhs.cmp(rhs)
     }
 
     #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        debug_assert!(index < col.len());
-
-        *col.get_unchecked(index)
-    }
-
-    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
-    }
-
-    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter().cloned()
-    }
-
-    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        buffer_into_mut(col)
-    }
-
-    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
-        builder.len()
-    }
-
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        builder.push(item)
-    }
-
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        if n == 1 {
-            builder.push(item)
-        } else {
-            builder.resize(builder.len() + n, item)
-        }
-    }
-
-    fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push(Num::default())
-    }
-
-    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
-        builder.extend_from_slice(other);
-    }
-
-    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        builder.into()
-    }
-
-    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(builder.len(), 1);
-        builder[0]
-    }
-
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(&rhs)
-    }
-
-    #[inline(always)]
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left == right
-    }
-
-    #[inline(always)]
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left != right
-    }
-
-    #[inline(always)]
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than(left: &Num, right: &Num) -> bool {
         left > right
     }
 
     #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn greater_than_equal(left: &Num, right: &Num) -> bool {
         left >= right
     }
 
     #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn less_than(left: &Num, right: &Num) -> bool {
         left < right
     }
 
     #[inline(always)]
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+    fn less_than_equal(left: &Num, right: &Num) -> bool {
         left <= right
     }
 }
@@ -396,7 +312,7 @@ pub trait Decimal:
     fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self>;
 
     // mul two decimals and return a decimal with rounding option
-    fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self>;
+    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self>;
 
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
@@ -505,7 +421,22 @@ impl Decimal for i128 {
         self.checked_rem(rhs)
     }
 
-    fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self> {
+    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self> {
+        if shift_scale == 0 {
+            return Some(self);
+        }
+
+        if !overflow {
+            let div = i128::e(shift_scale);
+            let res = if self.is_negative() == rhs.is_negative() {
+                (self * rhs + div / 2) / div
+            } else {
+                (self * rhs - div / 2) / div
+            };
+
+            return Some(res);
+        }
+
         let div = i256::e(shift_scale);
         let res = if self.is_negative() == rhs.is_negative() {
             (i256::from(self) * i256::from(rhs) + div / i256::from(2)) / div
@@ -753,8 +684,21 @@ impl Decimal for i256 {
         self.0.checked_rem(rhs.0).map(Self)
     }
 
-    fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self> {
+    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self> {
+        if shift_scale == 0 {
+            return Some(self);
+        }
+
         let div = i256::e(shift_scale);
+        if !overflow {
+            let ret = if self.is_negative() == rhs.is_negative() {
+                (self * rhs + div / i256::from(2)) / div
+            } else {
+                (self * rhs - div / i256::from(2)) / div
+            };
+            return Some(ret);
+        }
+
         let ret: Option<i256> = if self.is_negative() == rhs.is_negative() {
             self.checked_mul(rhs)
                 .map(|x| (x + div / i256::from(2)) / div)

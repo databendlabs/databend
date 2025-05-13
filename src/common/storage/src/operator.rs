@@ -116,18 +116,8 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
 /// Please balance the performance and compile time.
 pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
     let ob = Operator::new(builder)?
-        // NOTE
-        //
-        // Magic happens here. We will add a layer upon original
-        // storage operator so that all underlying storage operations
-        // will send to storage runtime.
-        .layer(RuntimeLayer::new(GlobalIORuntime::instance()))
-        .finish();
-
-    // Make sure the http client has been updated.
-    ob.update_http_client(|_| HttpClient::with(StorageHttpClient::default()));
-
-    let mut op = ob
+        // Timeout layer is required to be the first layer so that internal
+        // futures can be cancelled safely when the timeout is reached.
         .layer({
             let retry_timeout = env::var("_DATABEND_INTERNAL_RETRY_TIMEOUT")
                 .ok()
@@ -153,6 +143,18 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
 
             timeout_layer
         })
+        // NOTE
+        //
+        // Magic happens here. We will add a layer upon original
+        // storage operator so that all underlying storage operations
+        // will send to storage runtime.
+        .layer(RuntimeLayer::new(GlobalIORuntime::instance()))
+        .finish();
+
+    // Make sure the http client has been updated.
+    ob.update_http_client(|_| HttpClient::with(StorageHttpClient::default()));
+
+    let mut op = ob
         // Add retry
         .layer(
             RetryLayer::new()
@@ -534,4 +536,31 @@ pub async fn check_operator(
                 params
             ))
         })
+}
+
+pub trait OperatorRegistry: Send + Sync {
+    fn get_operator_path<'a>(&self, _location: &'a str) -> Result<(Operator, &'a str)>;
+}
+
+impl OperatorRegistry for Operator {
+    fn get_operator_path<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
+        Ok((self.clone(), location))
+    }
+}
+
+impl OperatorRegistry for DataOperator {
+    fn get_operator_path<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
+        Ok((self.operator.clone(), location))
+    }
+}
+
+impl OperatorRegistry for iceberg::io::FileIO {
+    fn get_operator_path<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
+        let file_io = self
+            .new_input(location)
+            .map_err(|err| std::io::Error::new(ErrorKind::Unsupported, err.message()))?;
+
+        let pos = file_io.relative_path_pos();
+        Ok((file_io.get_operator().clone(), &location[pos..]))
+    }
 }

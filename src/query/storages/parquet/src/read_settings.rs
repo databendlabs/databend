@@ -21,6 +21,19 @@ use databend_common_exception::Result;
 pub struct ReadSettings {
     pub max_gap_size: u64,
     pub max_range_size: u64,
+    pub parquet_fast_read_bytes: u64,
+    pub enable_cache: bool,
+}
+
+impl Default for ReadSettings {
+    fn default() -> Self {
+        Self {
+            max_gap_size: 48,
+            max_range_size: 512 * 1024,
+            parquet_fast_read_bytes: u64::MAX,
+            enable_cache: false,
+        }
+    }
 }
 
 impl ReadSettings {
@@ -30,6 +43,15 @@ impl ReadSettings {
             max_range_size: ctx
                 .get_settings()
                 .get_storage_io_max_page_bytes_for_read()?,
+            parquet_fast_read_bytes: ctx.get_settings().get_parquet_fast_read_bytes()?,
+            enable_cache: false,
         })
+    }
+
+    pub fn with_enable_cache(self, enable_cache: bool) -> Self {
+        Self {
+            enable_cache,
+            ..self
+        }
     }
 }

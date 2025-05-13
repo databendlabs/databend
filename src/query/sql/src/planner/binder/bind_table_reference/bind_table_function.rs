@@ -152,6 +152,7 @@ impl Binder {
                 false,
                 false,
                 None,
+                false,
             );
 
             let (s_expr, mut bind_context) =
@@ -214,6 +215,7 @@ impl Binder {
                 false,
                 false,
                 None,
+                false,
             );
 
             let (s_expr, mut bind_context) =

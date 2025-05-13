@@ -25,7 +25,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::TableSchemaRef;
 use databend_storages_common_table_meta::table::ChangeType;
 
 use super::AggIndexInfo;
@@ -36,8 +35,6 @@ use crate::plan::Projection;
 /// Generated from the source column by the paths.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct VirtualColumnInfo {
-    /// The schema of virtual columns.
-    pub schema: TableSchemaRef,
     /// The source column ids of virtual columns.
     /// If the virtual columns are not generated,
     /// we can read data from source column to generate them.
@@ -63,9 +60,6 @@ pub struct VirtualColumnField {
     pub cast_func_name: Option<String>,
     /// Virtual column data type.
     pub data_type: Box<TableDataType>,
-    /// Is the virtual column is created,
-    /// if not, reminder user to create it.
-    pub is_created: bool,
 }
 
 /// Information about prewhere optimization.

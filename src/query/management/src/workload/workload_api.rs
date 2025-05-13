@@ -13,14 +13,35 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::time::Duration;
 
 use databend_common_exception::Result;
 
+pub const CPU_QUOTA_KEY: &str = "cpu_quota";
+pub const MEMORY_QUOTA_KEY: &str = "memory_quota";
+pub const QUERY_TIMEOUT_QUOTA_KEY: &str = "query_timeout";
+pub const MAX_CONCURRENCY_QUOTA_KEY: &str = "max_concurrency";
+pub const QUERY_QUEUED_TIMEOUT_QUOTA_KEY: &str = "query_queued_timeout";
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Debug)]
 pub enum QuotaValue {
     Duration(Duration),
-    String(String),
+    Percentage(usize),
+    Bytes(usize),
+    Number(usize),
+}
+
+impl Display for QuotaValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            QuotaValue::Percentage(v) => write!(f, "{}%", v),
+            QuotaValue::Duration(v) => write!(f, "{:?}", v),
+            QuotaValue::Bytes(v) => write!(f, "{}", v),
+            QuotaValue::Number(v) => write!(f, "{}", v),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
@@ -28,6 +49,12 @@ pub struct WorkloadGroup {
     pub id: String,
     pub name: String,
     pub quotas: HashMap<String, QuotaValue>,
+}
+
+impl WorkloadGroup {
+    pub fn get_quota(&self, key: &'static str) -> Option<QuotaValue> {
+        self.quotas.get(key).cloned()
+    }
 }
 
 #[async_trait::async_trait]

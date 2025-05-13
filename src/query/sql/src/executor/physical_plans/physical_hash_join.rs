@@ -27,8 +27,8 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use super::physical_join_filter::PhysicalRuntimeFilters;
 use super::JoinRuntimeFilter;
-use super::PhysicalRuntimeFilters;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;

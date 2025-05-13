@@ -30,7 +30,7 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_settings::Settings;
 use databend_common_storage::init_stage_operator;
 
-use crate::compression::get_compression_alg_copy;
+use crate::compression::get_compression_with_path;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::format::create_row_based_file_format;
 use crate::read::row_based::processors::BlockBuilder;
@@ -102,7 +102,7 @@ impl RowBasedReadPipelineBuilder<'_> {
         let format =
             create_row_based_file_format(&self.stage_table_info.stage_info.file_format_params);
 
-        let load_ctx = Arc::new(LoadContext::try_create(
+        let load_ctx = Arc::new(LoadContext::try_create_for_copy(
             ctx.clone(),
             self.stage_table_info,
             pos_projection,
@@ -118,7 +118,7 @@ impl RowBasedReadPipelineBuilder<'_> {
         {
             StageFileCompression::None => {}
             compression => {
-                let algo = get_compression_alg_copy(compression, "")?;
+                let algo = get_compression_with_path(compression, "")?;
                 pipeline.try_add_accumulating_transformer(|| {
                     Decompressor::try_create(load_ctx.clone(), algo)
                 })?;

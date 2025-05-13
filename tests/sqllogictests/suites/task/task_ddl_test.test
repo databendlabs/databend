@@ -13,6 +13,13 @@ CREATE TASK mytask
   SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
   AS SELECT 1;
 
+statement error 2801
+CREATE TASK task_with_bad_set
+  WAREHOUSE = 'mywh'
+  SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
+  settings_not_found = '123'
+  AS SELECT 1;
+
 query SSSS
 select name, warehouse, schedule, definition from system.tasks where name = 'mytask'
 ----
@@ -100,14 +107,13 @@ SUCCEEDED
 statement ok
 CREATE TASK sessionTask
   WAREHOUSE = 'mywh'
-  SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
-  DATABASE = 'mydb', TIMEZONE = 'America/Los_Angeles'
+  SCHEDULE = USING CRON '0 0 0 1 1 ? 2100' 'America/Los_Angeles'
   AS SELECT 1;
 
 query SSS
 select name, state, session_parameters from system.tasks where name = 'sessionTask'
 ----
-sessionTask Suspended {"database":"mydb","timezone":"America/Los_Angeles"}
+sessionTask Suspended {}
 
 statement ok
 EXECUTE TASK sessionTask
@@ -115,9 +121,9 @@ EXECUTE TASK sessionTask
 query SSSS
 select name, session_parameters from system.task_history where name = 'sessionTask'
 ----
-sessionTask {"database":"mydb","timezone":"America/Los_Angeles"}
+sessionTask {}
 
-statement ok
+statement error 2801
 ALTER TASK sessionTask
   SET
   DATABASE = 'db2', TIMEZONE = 'Pacific/Honolulu'
@@ -125,7 +131,7 @@ ALTER TASK sessionTask
 query SSS
 select name, state, session_parameters from system.tasks where name = 'sessionTask'
 ----
-sessionTask Suspended {"database":"db2","timezone":"Pacific/Honolulu"}
+sessionTask Suspended {}
 
 query I
 select run_id from system.task_history where name = 'MockTask' limit 6;

@@ -92,7 +92,7 @@ where A: SortAlgorithm
         Self { base, step }
     }
 
-    pub fn sort_input_data(
+    pub async fn sort_input_data(
         &mut self,
         input_data: Vec<DataBlock>,
         aborting: &AtomicBool,
@@ -100,7 +100,9 @@ where A: SortAlgorithm
         let Step::Collect(collect) = &mut self.step else {
             unreachable!()
         };
-        collect.sort_input_data(&self.base, input_data, aborting)
+        collect
+            .sort_input_data(&self.base, input_data, aborting)
+            .await
     }
 
     pub async fn subsequent_spill_last(&mut self, target_rows: usize) -> Result<()> {
@@ -158,7 +160,7 @@ where A: SortAlgorithm
 }
 
 impl<A: SortAlgorithm> StepCollect<A> {
-    fn sort_input_data(
+    async fn sort_input_data(
         &mut self,
         base: &Base,
         mut input_data: Vec<DataBlock>,
@@ -191,7 +193,11 @@ impl<A: SortAlgorithm> StepCollect<A> {
                     ));
                 }
 
-                sorted.push_back(base.new_block(data));
+                let mut block = base.new_block(data);
+                if !sorted.is_empty() {
+                    block.spill(&base.spiller).await?;
+                }
+                sorted.push_back(block);
             }
             debug_assert!(merger.is_finished());
             sorted

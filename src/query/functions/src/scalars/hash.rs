@@ -250,13 +250,13 @@ where for<'a> T::ScalarRef<'a>: DFHash {
     );
 }
 
-struct CityHasher64 {
+pub struct CityHasher64 {
     seed: u64,
     value: u64,
 }
 
 impl CityHasher64 {
-    fn with_seed(s: u64) -> Self {
+    pub fn with_seed(s: u64) -> Self {
         Self { seed: s, value: 0 }
     }
 }

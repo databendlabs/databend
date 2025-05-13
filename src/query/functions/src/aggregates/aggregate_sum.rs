@@ -205,7 +205,7 @@ where
         if SHOULD_CHECK_OVERFLOW && (value > T::Scalar::MAX || value < T::Scalar::MIN) {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
-                self.value,
+                value,
                 T::Scalar::MIN,
                 T::Scalar::MAX,
             )));
@@ -295,7 +295,7 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
         validity: Option<&Bitmap>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let col = IntervalType::upcast_column(other);
+        let col = <IntervalType as ValueType>::upcast_column(other);
         let buffer = IntervalType::try_downcast_column(&col).unwrap();
         match validity {
             Some(validity) if validity.null_count() > 0 => {

@@ -2,7 +2,7 @@
 
 ## Release
 
-Databend make new releases via workflow [Release](./workflows/release.yml).
+Databend makes new releases via workflow [Release](./workflows/release.yml).
 
 There are three ways to trigger a new release:
 
@@ -10,7 +10,7 @@ There are three ways to trigger a new release:
 - On Schedule (every day at 00:00 UTC+8)
 - Manually triggered
 
-If new tags pushed, we use this the new tag name as release name. Otherwise, we will generate a new nightly tag.
+If new tags pushed, we use the new tag name as release name. Otherwise, we will generate a new nightly tag.
 
 For example:
 
@@ -23,4 +23,4 @@ For every release, we will:
 - Build binaries and pack them on Linux and MacOS.
 - Upload built packages to GitHub Releases, AWS S3 bucket and Docker Registry.
 
-We are adopting github native release notes generation which controlled by [release.yml](./release.yml).
+We are adopting github native release notes generation which is controlled by [release.yml](./release.yml).

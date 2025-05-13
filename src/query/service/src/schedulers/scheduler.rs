@@ -17,6 +17,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_sql::executor::build_broadcast_plans;
 use databend_common_sql::planner::QueryExecutor;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
@@ -99,11 +100,15 @@ pub async fn build_distributed_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
-    let fragmenter = Fragmenter::try_create(ctx.clone())?;
-
-    let root_fragment = fragmenter.build_fragment(plan)?;
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
-    root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+    for plan in build_broadcast_plans(ctx.as_ref())?
+        .iter()
+        .chain(std::iter::once(plan))
+    {
+        let fragmenter = Fragmenter::try_create(ctx.clone())?;
+        let root_fragment = fragmenter.build_fragment(plan)?;
+        root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+    }
 
     let exchange_manager = ctx.get_exchange_manager();
 

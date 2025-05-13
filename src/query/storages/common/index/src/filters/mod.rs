@@ -14,6 +14,7 @@
 
 //! Probabilistic filters
 
+mod bloom_filter;
 mod filter;
 mod xor8;
 
@@ -21,8 +22,10 @@ pub use filter::Filter;
 pub use filter::FilterBuilder;
 pub use xor8::BlockBloomFilterIndexVersion;
 pub use xor8::BlockFilter;
+pub use xor8::BloomBuilder;
+pub use xor8::BloomFilter;
+pub use xor8::FilterImpl;
+pub use xor8::FilterImplBuilder;
 pub use xor8::V2BloomBlock;
 pub use xor8::Xor8Builder;
-pub use xor8::Xor8BuildingError;
-pub use xor8::Xor8CodecError;
 pub use xor8::Xor8Filter;

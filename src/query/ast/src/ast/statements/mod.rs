@@ -56,6 +56,7 @@ mod user;
 mod view;
 mod virtual_column;
 mod warehouse;
+mod workload;
 
 pub use call::*;
 pub use catalog::*;
@@ -101,3 +102,4 @@ pub use user::*;
 pub use view::*;
 pub use virtual_column::*;
 pub use warehouse::*;
+pub use workload::*;

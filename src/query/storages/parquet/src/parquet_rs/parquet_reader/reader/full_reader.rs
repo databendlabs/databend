@@ -26,10 +26,10 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
+use databend_common_storage::OperatorRegistry;
 use futures::future::BoxFuture;
 use futures::StreamExt;
 use futures::TryFutureExt;
-use opendal::Operator;
 use opendal::Reader;
 use parquet::arrow::arrow_reader::ArrowPredicateFn;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
@@ -52,7 +52,7 @@ use crate::ParquetRSPruner;
 
 /// The reader to read a whole parquet file.
 pub struct ParquetRSFullReader {
-    pub(super) op: Operator,
+    pub(super) op_registry: Arc<dyn OperatorRegistry>,
     pub(super) expect_file_schema: Option<(SchemaDescPtr, String)>,
     pub(super) output_schema: TableSchemaRef,
     pub(super) predicate: Option<Arc<ParquetPredicate>>,
@@ -89,7 +89,8 @@ impl ParquetRSFullReader {
                 .map(|(f, v)| (f.name().to_string(), v.clone()))
                 .collect::<std::collections::HashMap<String, Scalar>>()
         });
-        let reader: Reader = self.op.reader(loc).await?;
+        let (op, path) = self.op_registry.get_operator_path(loc)?;
+        let reader: Reader = op.reader(path).await?;
         let reader = ParquetFileReader::new(reader, size);
         let mut builder = ParquetRecordBatchStreamBuilder::new_with_options(
             reader,
@@ -171,8 +172,7 @@ impl ParquetRSFullReader {
     }
 
     /// Read a [`DataBlock`] from bytes.
-    pub fn read_blocks_from_binary(&self, raw: Vec<u8>, path: &str) -> Result<Vec<DataBlock>> {
-        let bytes = Bytes::from(raw);
+    pub fn read_blocks_from_binary(&self, bytes: Bytes, path: &str) -> Result<Vec<DataBlock>> {
         let mut builder = ParquetRecordBatchReaderBuilder::try_new_with_options(
             bytes,
             ArrowReaderOptions::new(),

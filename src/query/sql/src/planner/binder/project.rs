@@ -46,7 +46,6 @@ use crate::binder::select::SelectList;
 use crate::binder::window::find_replaced_window_function;
 use crate::binder::window::WindowInfo;
 use crate::binder::ExprContext;
-use crate::binder::VirtualColumnContext;
 use crate::binder::Visibility;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
@@ -319,7 +318,7 @@ impl Binder {
         let scalar = match column_binding.virtual_expr {
             Some(virtual_expr) => {
                 let mut input_context = input_context.clone();
-                input_context.virtual_column_context = VirtualColumnContext::default();
+                input_context.allow_virtual_column = false;
                 let mut scalar_binder = ScalarBinder::new(
                     &mut input_context,
                     self.ctx.clone(),

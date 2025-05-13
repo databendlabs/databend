@@ -23,8 +23,6 @@ pub mod config;
 pub mod key_spaces;
 pub mod leveled_store;
 pub(crate) mod marked;
-pub mod mem_meta;
-pub mod mem_state_machine;
 pub mod ondisk;
 pub mod raft_log_v004;
 pub mod sm_v003;

@@ -24,5 +24,7 @@ pub use reader::ParquetFileReader;
 pub use reader::ParquetRSFullReader;
 pub use reader::ParquetRSReaderBuilder;
 pub use reader::ParquetRSRowGroupReader;
+pub use row_group::cached_range_full_read;
+pub use row_group::cached_range_read;
 pub use row_group::InMemoryRowGroup;
 pub use utils::transform_record_batch;

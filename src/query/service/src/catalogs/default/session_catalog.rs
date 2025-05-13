@@ -42,7 +42,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -53,7 +52,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -76,7 +74,6 @@ use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -100,10 +97,8 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
@@ -276,46 +271,6 @@ impl Catalog for SessionCatalog {
             return Ok(vec![]);
         }
         self.inner.list_indexes_by_table_id(req).await
-    }
-
-    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<()> {
-        if is_temp_table_id(req.name_ident.table_id()) {
-            return Err(ErrorCode::StorageUnsupported(format!(
-                "CreateVirtualColumn: table id {} is a temporary table id",
-                req.name_ident.table_id()
-            )));
-        }
-        self.inner.create_virtual_column(req).await
-    }
-
-    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<()> {
-        if is_temp_table_id(req.name_ident.table_id()) {
-            return Err(ErrorCode::StorageUnsupported(format!(
-                "UpdateVirtualColumn: table id {} is a temporary table id",
-                req.name_ident.table_id()
-            )));
-        }
-        self.inner.update_virtual_column(req).await
-    }
-
-    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<()> {
-        if is_temp_table_id(req.name_ident.table_id()) {
-            return Err(ErrorCode::StorageUnsupported(format!(
-                "DropVirtualColumn: table id {} is a temporary table id",
-                req.name_ident.table_id()
-            )));
-        }
-        self.inner.drop_virtual_column(req).await
-    }
-
-    async fn list_virtual_columns(
-        &self,
-        req: ListVirtualColumnsReq,
-    ) -> Result<Vec<VirtualColumnMeta>> {
-        if req.table_id.is_some_and(is_temp_table_id) {
-            return Ok(vec![]);
-        }
-        self.inner.list_virtual_columns(req).await
     }
 
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
