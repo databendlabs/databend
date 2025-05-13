@@ -11842,6 +11842,548 @@ Insert(
 
 
 ---------- Input ----------
+insert overwrite into table t select * from t2;
+---------- Output ---------
+INSERT OVERWRITE t SELECT * FROM t2
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        with: None,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                28..29,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        columns: [],
+        source: Select {
+            query: Query {
+                span: Some(
+                    30..46,
+                ),
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: Some(
+                            30..46,
+                        ),
+                        hints: None,
+                        distinct: false,
+                        top_n: None,
+                        select_list: [
+                            StarColumns {
+                                qualified: [
+                                    Star(
+                                        Some(
+                                            37..38,
+                                        ),
+                                    ),
+                                ],
+                                column_filter: None,
+                            },
+                        ],
+                        from: [
+                            Table {
+                                span: Some(
+                                    44..46,
+                                ),
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        44..46,
+                                    ),
+                                    name: "t2",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                alias: None,
+                                temporal: None,
+                                with_options: None,
+                                pivot: None,
+                                unpivot: None,
+                                sample: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: None,
+                        qualify: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                ignore_result: false,
+            },
+        },
+        overwrite: true,
+    },
+)
+
+
+---------- Input ----------
+insert overwrite table t select * from t2;
+---------- Output ---------
+INSERT OVERWRITE t SELECT * FROM t2
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        with: None,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                23..24,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        columns: [],
+        source: Select {
+            query: Query {
+                span: Some(
+                    25..41,
+                ),
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: Some(
+                            25..41,
+                        ),
+                        hints: None,
+                        distinct: false,
+                        top_n: None,
+                        select_list: [
+                            StarColumns {
+                                qualified: [
+                                    Star(
+                                        Some(
+                                            32..33,
+                                        ),
+                                    ),
+                                ],
+                                column_filter: None,
+                            },
+                        ],
+                        from: [
+                            Table {
+                                span: Some(
+                                    39..41,
+                                ),
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        39..41,
+                                    ),
+                                    name: "t2",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                alias: None,
+                                temporal: None,
+                                with_options: None,
+                                pivot: None,
+                                unpivot: None,
+                                sample: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: None,
+                        qualify: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                ignore_result: false,
+            },
+        },
+        overwrite: true,
+    },
+)
+
+
+---------- Input ----------
+INSERT ALL
+    WHEN c3 = 1 THEN
+      INTO t1
+    WHEN c3 = 3 THEN
+      INTO t2
+SELECT * from s;
+---------- Output ---------
+INSERT ALL WHEN c3 = 1 THEN INTO t1  WHEN c3 = 3 THEN INTO t2  SELECT * FROM s
+---------- AST ------------
+InsertMultiTable(
+    InsertMultiTableStmt {
+        overwrite: false,
+        is_first: false,
+        when_clauses: [
+            WhenClause {
+                condition: BinaryOp {
+                    span: Some(
+                        23..24,
+                    ),
+                    op: Eq,
+                    left: ColumnRef {
+                        span: Some(
+                            20..22,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        20..22,
+                                    ),
+                                    name: "c3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            25..26,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                },
+                into_clauses: [
+                    IntoClause {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                43..45,
+                            ),
+                            name: "t1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        target_columns: [],
+                        source_columns: [],
+                    },
+                ],
+            },
+            WhenClause {
+                condition: BinaryOp {
+                    span: Some(
+                        58..59,
+                    ),
+                    op: Eq,
+                    left: ColumnRef {
+                        span: Some(
+                            55..57,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        55..57,
+                                    ),
+                                    name: "c3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            60..61,
+                        ),
+                        value: UInt64(
+                            3,
+                        ),
+                    },
+                },
+                into_clauses: [
+                    IntoClause {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                78..80,
+                            ),
+                            name: "t2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        target_columns: [],
+                        source_columns: [],
+                    },
+                ],
+            },
+        ],
+        else_clause: None,
+        into_clauses: [],
+        source: Query {
+            span: Some(
+                81..96,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        81..96,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        88..89,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                95..96,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    95..96,
+                                ),
+                                name: "s",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+INSERT overwrite ALL
+    WHEN c3 = 1 THEN
+      INTO t1
+    WHEN c3 = 3 THEN
+      INTO t2
+SELECT * from s;
+---------- Output ---------
+INSERT OVERWRITE ALL WHEN c3 = 1 THEN INTO t1  WHEN c3 = 3 THEN INTO t2  SELECT * FROM s
+---------- AST ------------
+InsertMultiTable(
+    InsertMultiTableStmt {
+        overwrite: true,
+        is_first: false,
+        when_clauses: [
+            WhenClause {
+                condition: BinaryOp {
+                    span: Some(
+                        33..34,
+                    ),
+                    op: Eq,
+                    left: ColumnRef {
+                        span: Some(
+                            30..32,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        30..32,
+                                    ),
+                                    name: "c3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            35..36,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                },
+                into_clauses: [
+                    IntoClause {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                53..55,
+                            ),
+                            name: "t1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        target_columns: [],
+                        source_columns: [],
+                    },
+                ],
+            },
+            WhenClause {
+                condition: BinaryOp {
+                    span: Some(
+                        68..69,
+                    ),
+                    op: Eq,
+                    left: ColumnRef {
+                        span: Some(
+                            65..67,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        65..67,
+                                    ),
+                                    name: "c3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            70..71,
+                        ),
+                        value: UInt64(
+                            3,
+                        ),
+                    },
+                },
+                into_clauses: [
+                    IntoClause {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                88..90,
+                            ),
+                            name: "t2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        target_columns: [],
+                        source_columns: [],
+                    },
+                ],
+            },
+        ],
+        else_clause: None,
+        into_clauses: [],
+        source: Query {
+            span: Some(
+                91..106,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        91..106,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        98..99,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                105..106,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    105..106,
+                                ),
+                                name: "s",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
 select parse_json('{"k1": [0, 1, 2]}').k1[0];
 ---------- Output ---------
 SELECT parse_json('{"k1": [0, 1, 2]}'):k1[0]
@@ -20136,462 +20678,6 @@ DropDatamaskPolicy(
 
 
 ---------- Input ----------
-CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
----------- Output ---------
-CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
----------- AST ------------
-CreateVirtualColumn(
-    CreateVirtualColumnStmt {
-        create_option: Create,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                51..52,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        virtual_columns: [
-            VirtualColumn {
-                expr: MapAccess {
-                    span: Some(
-                        30..36,
-                    ),
-                    expr: MapAccess {
-                        span: Some(
-                            24..30,
-                        ),
-                        expr: ColumnRef {
-                            span: Some(
-                                23..24,
-                            ),
-                            column: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Name(
-                                    Identifier {
-                                        span: Some(
-                                            23..24,
-                                        ),
-                                        name: "a",
-                                        quote: None,
-                                        ident_type: None,
-                                    },
-                                ),
-                            },
-                        },
-                        accessor: Bracket {
-                            key: Literal {
-                                span: Some(
-                                    25..29,
-                                ),
-                                value: String(
-                                    "k1",
-                                ),
-                            },
-                        },
-                    },
-                    accessor: Bracket {
-                        key: Literal {
-                            span: Some(
-                                31..35,
-                            ),
-                            value: String(
-                                "k2",
-                            ),
-                        },
-                    },
-                },
-                alias: None,
-            },
-            VirtualColumn {
-                expr: MapAccess {
-                    span: Some(
-                        42..45,
-                    ),
-                    expr: MapAccess {
-                        span: Some(
-                            39..42,
-                        ),
-                        expr: ColumnRef {
-                            span: Some(
-                                38..39,
-                            ),
-                            column: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Name(
-                                    Identifier {
-                                        span: Some(
-                                            38..39,
-                                        ),
-                                        name: "b",
-                                        quote: None,
-                                        ident_type: None,
-                                    },
-                                ),
-                            },
-                        },
-                        accessor: Bracket {
-                            key: Literal {
-                                span: Some(
-                                    40..41,
-                                ),
-                                value: UInt64(
-                                    0,
-                                ),
-                            },
-                        },
-                    },
-                    accessor: Bracket {
-                        key: Literal {
-                            span: Some(
-                                43..44,
-                            ),
-                            value: UInt64(
-                                1,
-                            ),
-                        },
-                    },
-                },
-                alias: None,
-            },
-        ],
-    },
-)
-
-
----------- Input ----------
-CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2']::string as v1, b[0][1]::int as v2) FOR t
----------- Output ---------
-CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2']::STRING AS v1, b[0][1]::Int32 AS v2) FOR t
----------- AST ------------
-CreateVirtualColumn(
-    CreateVirtualColumnStmt {
-        create_option: CreateOrReplace,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                87..88,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        virtual_columns: [
-            VirtualColumn {
-                expr: Cast {
-                    span: Some(
-                        47..55,
-                    ),
-                    expr: MapAccess {
-                        span: Some(
-                            41..47,
-                        ),
-                        expr: MapAccess {
-                            span: Some(
-                                35..41,
-                            ),
-                            expr: ColumnRef {
-                                span: Some(
-                                    34..35,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                34..35,
-                                            ),
-                                            name: "a",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            accessor: Bracket {
-                                key: Literal {
-                                    span: Some(
-                                        36..40,
-                                    ),
-                                    value: String(
-                                        "k1",
-                                    ),
-                                },
-                            },
-                        },
-                        accessor: Bracket {
-                            key: Literal {
-                                span: Some(
-                                    42..46,
-                                ),
-                                value: String(
-                                    "k2",
-                                ),
-                            },
-                        },
-                    },
-                    target_type: String,
-                    pg_style: true,
-                },
-                alias: Some(
-                    Identifier {
-                        span: Some(
-                            59..61,
-                        ),
-                        name: "v1",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ),
-            },
-            VirtualColumn {
-                expr: Cast {
-                    span: Some(
-                        70..75,
-                    ),
-                    expr: MapAccess {
-                        span: Some(
-                            67..70,
-                        ),
-                        expr: MapAccess {
-                            span: Some(
-                                64..67,
-                            ),
-                            expr: ColumnRef {
-                                span: Some(
-                                    63..64,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                63..64,
-                                            ),
-                                            name: "b",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            accessor: Bracket {
-                                key: Literal {
-                                    span: Some(
-                                        65..66,
-                                    ),
-                                    value: UInt64(
-                                        0,
-                                    ),
-                                },
-                            },
-                        },
-                        accessor: Bracket {
-                            key: Literal {
-                                span: Some(
-                                    68..69,
-                                ),
-                                value: UInt64(
-                                    1,
-                                ),
-                            },
-                        },
-                    },
-                    target_type: Int32,
-                    pg_style: true,
-                },
-                alias: Some(
-                    Identifier {
-                        span: Some(
-                            79..81,
-                        ),
-                        name: "v2",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ),
-            },
-        ],
-    },
-)
-
-
----------- Input ----------
-ALTER VIRTUAL COLUMN (a['k1']['k2'] as v1, b[0][1] as v2) FOR t
----------- Output ---------
-ALTER VIRTUAL COLUMN (a['k1']['k2'] AS v1, b[0][1] AS v2) FOR t
----------- AST ------------
-AlterVirtualColumn(
-    AlterVirtualColumnStmt {
-        if_exists: false,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                62..63,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        virtual_columns: [
-            VirtualColumn {
-                expr: MapAccess {
-                    span: Some(
-                        29..35,
-                    ),
-                    expr: MapAccess {
-                        span: Some(
-                            23..29,
-                        ),
-                        expr: ColumnRef {
-                            span: Some(
-                                22..23,
-                            ),
-                            column: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Name(
-                                    Identifier {
-                                        span: Some(
-                                            22..23,
-                                        ),
-                                        name: "a",
-                                        quote: None,
-                                        ident_type: None,
-                                    },
-                                ),
-                            },
-                        },
-                        accessor: Bracket {
-                            key: Literal {
-                                span: Some(
-                                    24..28,
-                                ),
-                                value: String(
-                                    "k1",
-                                ),
-                            },
-                        },
-                    },
-                    accessor: Bracket {
-                        key: Literal {
-                            span: Some(
-                                30..34,
-                            ),
-                            value: String(
-                                "k2",
-                            ),
-                        },
-                    },
-                },
-                alias: Some(
-                    Identifier {
-                        span: Some(
-                            39..41,
-                        ),
-                        name: "v1",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ),
-            },
-            VirtualColumn {
-                expr: MapAccess {
-                    span: Some(
-                        47..50,
-                    ),
-                    expr: MapAccess {
-                        span: Some(
-                            44..47,
-                        ),
-                        expr: ColumnRef {
-                            span: Some(
-                                43..44,
-                            ),
-                            column: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Name(
-                                    Identifier {
-                                        span: Some(
-                                            43..44,
-                                        ),
-                                        name: "b",
-                                        quote: None,
-                                        ident_type: None,
-                                    },
-                                ),
-                            },
-                        },
-                        accessor: Bracket {
-                            key: Literal {
-                                span: Some(
-                                    45..46,
-                                ),
-                                value: UInt64(
-                                    0,
-                                ),
-                            },
-                        },
-                    },
-                    accessor: Bracket {
-                        key: Literal {
-                            span: Some(
-                                48..49,
-                            ),
-                            value: UInt64(
-                                1,
-                            ),
-                        },
-                    },
-                },
-                alias: Some(
-                    Identifier {
-                        span: Some(
-                            54..56,
-                        ),
-                        name: "v2",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ),
-            },
-        ],
-    },
-)
-
-
----------- Input ----------
-DROP VIRTUAL COLUMN FOR t
----------- Output ---------
-DROP VIRTUAL COLUMN FOR t
----------- AST ------------
-DropVirtualColumn(
-    DropVirtualColumnStmt {
-        if_exists: false,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                24..25,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-    },
-)
-
-
----------- Input ----------
 REFRESH VIRTUAL COLUMN FOR t
 ---------- Output ---------
 REFRESH VIRTUAL COLUMN FOR t
@@ -21653,7 +21739,7 @@ CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 900 SECON
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: Some(
             "MyWarehouse",
@@ -21693,7 +21779,7 @@ CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: Some(
             "MyWarehouse",
@@ -21728,7 +21814,7 @@ CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECO
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: Some(
             "MyWarehouse",
@@ -21763,7 +21849,7 @@ CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECO
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: Some(
             "MyWarehouse",
@@ -21798,7 +21884,7 @@ CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: Some(
@@ -21831,7 +21917,7 @@ CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INT
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: Some(
@@ -21860,7 +21946,7 @@ CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INT
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: Some(
@@ -21889,7 +21975,7 @@ CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECE
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: None,
@@ -21961,7 +22047,7 @@ CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los A
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: None,
@@ -22003,7 +22089,7 @@ END;
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: None,
@@ -22048,7 +22134,7 @@ END;
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "merge_task",
         warehouse: Some(
             "test-parser",
@@ -22091,7 +22177,7 @@ END;
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "merge_task",
         warehouse: Some(
             "test-parser",

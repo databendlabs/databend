@@ -4958,7 +4958,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
@@ -16442,8 +16441,8 @@ dependencies = [
 
 [[package]]
 name = "watcher"
-version = "0.2.0"
-source = "git+https://github.com/databendlabs/watcher?tag=v0.2.0#7bff8b42604a95ddda90fe42f329f1b72a526f06"
+version = "0.4.0"
+source = "git+https://github.com/databendlabs/watcher?tag=v0.4.0#a550d7cb0ac809cf719d55b4c4984aafb78f88e8"
 dependencies = [
  "futures",
  "log",

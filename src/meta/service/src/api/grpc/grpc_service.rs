@@ -74,7 +74,7 @@ use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
 use watcher::key_range::build_key_range;
-use watcher::util::new_watch_sink;
+use watcher::util::new_initialization_sink;
 use watcher::util::try_forward;
 use watcher::watch_stream::WatchStream;
 use watcher::watch_stream::WatchStreamSender;
@@ -459,10 +459,21 @@ impl MetaService for MetaServiceImpl {
             let ctx = "watch-Dispatcher";
 
             if let Some(sender) = sm.event_sender() {
-                let snk = new_watch_sink::<WatchTypes>(tx, ctx);
+                let snk = new_initialization_sink::<WatchTypes>(tx.clone(), ctx);
                 let strm = sm.range_kv(key_range).await?;
 
-                let fu = try_forward(strm, snk, ctx);
+                let fu = async move {
+                    try_forward(strm, snk, ctx).await;
+
+                    // Send an empty message with `is_initialization=false` to indicate
+                    // the end of the initialization flush.
+                    tx.send(Ok(WatchResponse::new_initialization_complete()))
+                        .await
+                        .map_err(|e| {
+                            error!("failed to send flush complete message: {}", e);
+                        })
+                        .ok();
+                };
                 let fu = Box::pin(fu);
 
                 info!(

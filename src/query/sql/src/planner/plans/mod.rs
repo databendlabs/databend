@@ -51,6 +51,7 @@ mod system;
 mod udaf;
 mod udf;
 mod union_all;
+mod virtual_column;
 mod window;
 
 pub use aggregate::*;
@@ -97,4 +98,5 @@ pub use system::*;
 pub use udaf::*;
 pub use udf::*;
 pub use union_all::UnionAll;
+pub use virtual_column::*;
 pub use window::*;

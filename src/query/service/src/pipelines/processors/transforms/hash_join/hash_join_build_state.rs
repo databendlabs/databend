@@ -754,22 +754,22 @@ impl HashJoinBuildState {
                 .collect();
             let columns: Vec<ColumnVec> = (0..num_columns)
                 .map(|index| {
-                    let columns = data_blocks
+                    let full_columns = data_blocks
                         .iter()
-                        .map(|block| (block.get_by_offset(index), block.num_rows()))
-                        .collect_vec();
-                    let full_columns: Vec<Column> = columns
-                        .iter()
-                        .map(|(entry, rows)| match &entry.value {
-                            Value::Scalar(s) => {
-                                let builder =
-                                    ColumnBuilder::repeat(&s.as_ref(), *rows, &entry.data_type);
-                                builder.build()
+                        .map(|block| {
+                            let entry = block.get_by_offset(index);
+                            let rows = block.num_rows();
+                            match &entry.value {
+                                Value::Scalar(s) => {
+                                    let builder =
+                                        ColumnBuilder::repeat(&s.as_ref(), rows, &entry.data_type);
+                                    builder.build()
+                                }
+                                Value::Column(c) => c.clone(),
                             }
-                            Value::Column(c) => c.clone(),
                         })
-                        .collect();
-                    Column::take_downcast_column_vec(&full_columns, columns[0].0.data_type.clone())
+                        .collect::<Vec<_>>();
+                    Column::take_downcast_column_vec(&full_columns)
                 })
                 .collect();
             build_state.generation_state.build_columns_data_type = columns_data_type;

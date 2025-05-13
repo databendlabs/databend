@@ -23,7 +23,6 @@ use crate::principal::ProcedureIdentity;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
-use crate::schema::virtual_column_ident;
 use crate::schema::DictionaryIdentity;
 use crate::schema::SequenceRsc;
 use crate::tenant_key::errors::ExistError;
@@ -1084,12 +1083,6 @@ pub enum AppError {
     UnmatchMaskPolicyReturnType(#[from] UnmatchMaskPolicyReturnType),
 
     #[error(transparent)]
-    VirtualColumnNotFound(#[from] UnknownError<virtual_column_ident::Resource, u64>),
-
-    #[error(transparent)]
-    VirtualColumnAlreadyExists(#[from] ExistError<virtual_column_ident::Resource, u64>),
-
-    #[error(transparent)]
     VirtualColumnIdOutBound(#[from] VirtualColumnIdOutBound),
 
     #[error(transparent)]
@@ -1611,10 +1604,6 @@ impl From<AppError> for ErrorCode {
             AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
             AppError::UnmatchMaskPolicyReturnType(err) => {
                 ErrorCode::UnmatchMaskPolicyReturnType(err.message())
-            }
-            AppError::VirtualColumnNotFound(err) => ErrorCode::VirtualColumnNotFound(err.message()),
-            AppError::VirtualColumnAlreadyExists(err) => {
-                ErrorCode::VirtualColumnAlreadyExists(err.message())
             }
             AppError::MultiStatementTxnCommitFailed(err) => {
                 ErrorCode::UnresolvableConflict(err.message())

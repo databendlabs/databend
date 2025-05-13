@@ -446,15 +446,6 @@ impl InterpreterFactory {
                 RefreshTableIndexInterpreter::try_create(ctx, *index.clone())?,
             )),
             // Virtual columns
-            Plan::CreateVirtualColumn(create_virtual_column) => Ok(Arc::new(
-                CreateVirtualColumnInterpreter::try_create(ctx, *create_virtual_column.clone())?,
-            )),
-            Plan::AlterVirtualColumn(alter_virtual_column) => Ok(Arc::new(
-                AlterVirtualColumnInterpreter::try_create(ctx, *alter_virtual_column.clone())?,
-            )),
-            Plan::DropVirtualColumn(drop_virtual_column) => Ok(Arc::new(
-                DropVirtualColumnInterpreter::try_create(ctx, *drop_virtual_column.clone())?,
-            )),
             Plan::RefreshVirtualColumn(refresh_virtual_column) => Ok(Arc::new(
                 RefreshVirtualColumnInterpreter::try_create(ctx, *refresh_virtual_column.clone())?,
             )),

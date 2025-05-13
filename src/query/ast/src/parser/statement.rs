@@ -122,18 +122,31 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let create_task = map(
+    let create_task = map_res(
         rule! {
-            CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ #create_task_option*
             ~ #set_table_option?
             ~ AS ~ #task_sql_block
         },
-        |(_, _, opt_if_not_exists, task, create_task_opts, session_opts, _, sql)| {
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            task,
+            create_task_opts,
+            session_opts,
+            _,
+            sql,
+        )| {
             let session_opts = session_opts.unwrap_or_default();
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
             let mut stmt = CreateTaskStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: task.to_string(),
                 warehouse: None,
                 schedule_opts: None,
@@ -148,7 +161,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             for opt in create_task_opts {
                 stmt.apply_opt(opt);
             }
-            Statement::CreateTask(stmt)
+            Ok(Statement::CreateTask(stmt))
         },
     );
 
@@ -1546,68 +1559,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let create_virtual_column = map_res(
-        rule! {
-            CREATE
-            ~ ( OR ~ ^REPLACE )?
-            ~ VIRTUAL ~ COLUMN
-            ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ ^"(" ~ ^#comma_separated_list1(virtual_column) ~ ^")"
-            ~ FOR ~ #dot_separated_idents_1_to_3
-        },
-        |(
-            _,
-            opt_or_replace,
-            _,
-            _,
-            opt_if_not_exists,
-            _,
-            virtual_columns,
-            _,
-            _,
-            (catalog, database, table),
-        )| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
-                create_option,
-                catalog,
-                database,
-                table,
-                virtual_columns,
-            }))
-        },
-    );
-
-    let alter_virtual_column = map(
-        rule! {
-            ALTER ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(virtual_column) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
-        },
-        |(_, _, _, opt_if_exists, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
-                if_exists: opt_if_exists.is_some(),
-                catalog,
-                database,
-                table,
-                virtual_columns,
-            })
-        },
-    );
-
-    let drop_virtual_column = map(
-        rule! {
-            DROP ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ FOR ~ #dot_separated_idents_1_to_3
-        },
-        |(_, _, _, opt_if_exists, _, (catalog, database, table))| {
-            Statement::DropVirtualColumn(DropVirtualColumnStmt {
-                if_exists: opt_if_exists.is_some(),
-                catalog,
-                database,
-                table,
-            })
-        },
-    );
-
     let refresh_virtual_column = map(
         rule! {
             REFRESH ~ VIRTUAL ~ COLUMN ~ FOR ~ #dot_separated_idents_1_to_3
@@ -2703,11 +2654,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #refresh_inverted_index: "`REFRESH INVERTED INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #create_ngram_index: "`CREATE [OR REPLACE] NGRAM INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             | #drop_ngram_index: "`DROP NGRAM INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
-        ),
-        rule!(
-            #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
-            | #alter_virtual_column: "`ALTER VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
-            | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #sequence
@@ -2838,9 +2784,9 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
         } else {
             insert_source
         };
-        map(
+        map_res(
             rule! {
-                #with? ~ INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                #with? ~ INSERT ~ #hint? ~ OVERWRITE? ~ INTO?  ~ TABLE?
                 ~ #dot_separated_idents_1_to_3
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ #insert_source_parser
@@ -2850,12 +2796,18 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
                 _,
                 opt_hints,
                 overwrite,
+                into,
                 _,
                 (catalog, database, table),
                 opt_columns,
                 source,
             )| {
-                Statement::Insert(InsertStmt {
+                if overwrite.is_none() && into.is_none() {
+                    return Err(nom::Err::Failure(ErrorKind::Other(
+                        "INSERT statement must be followed by 'overwrite' or 'into'",
+                    )));
+                }
+                Ok(Statement::Insert(InsertStmt {
                     hints: opt_hints,
                     with,
                     catalog,
@@ -2865,8 +2817,8 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
                         .map(|(_, columns, _)| columns)
                         .unwrap_or_default(),
                     source,
-                    overwrite: overwrite.kind == OVERWRITE,
-                })
+                    overwrite: overwrite.is_some(),
+                }))
             },
         )(i)
     }
@@ -5254,17 +5206,5 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
             | #comment
         },
         |opts| opts,
-    )(i)
-}
-
-pub fn virtual_column(i: Input) -> IResult<VirtualColumn> {
-    map(
-        rule! {
-            #expr ~ #alias_name?
-        },
-        |(expr, alias)| VirtualColumn {
-            expr: Box::new(expr),
-            alias,
-        },
     )(i)
 }

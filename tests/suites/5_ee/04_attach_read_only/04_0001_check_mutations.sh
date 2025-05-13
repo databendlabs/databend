@@ -16,18 +16,6 @@ echo "attach table test_attach_only.test_json_read_only 's3://testbucket/admin/d
 echo "create index should fail"
 echo "CREATE INVERTED INDEX IF NOT EXISTS idx1 ON test_attach_only.test_json_read_only(val)" | $BENDSQL_CLIENT_CONNECT
 
-echo "create virtual column should fail"
-echo "CREATE VIRTUAL COLUMN (val['a'], val['b']) FOR test_attach_only.test_json_read_only" | $BENDSQL_CLIENT_CONNECT
-
-echo "alter virtual column should fail"
-echo "ALTER VIRTUAL COLUMN (val['k1']) FOR test_attach_only.test_json_read_only" | $BENDSQL_CLIENT_CONNECT
-
-echo "drop virtual column should fail"
-echo "DROP VIRTUAL COLUMN FOR test_attach_only.test_json_read_only" | $BENDSQL_CLIENT_CONNECT
-
-echo "refresh virtual column should fail"
-echo "REFRESH VIRTUAL COLUMN FOR test_attach_only.test_json_read_only" | $BENDSQL_CLIENT_CONNECT
-
 # vacuum
 echo "vacuum table"
 

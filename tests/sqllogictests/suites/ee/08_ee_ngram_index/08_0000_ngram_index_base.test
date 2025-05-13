@@ -13,16 +13,28 @@
 ## limitations under the License.
 
 statement ok
-drop database if exists test_index
+drop database if exists test_gram_index
 
 statement ok
-create database test_index
+create database test_gram_index
 
 statement ok
-use test_index
+use test_gram_index
 
 statement ok
 CREATE TABLE t1 (id int, content string, NGRAM INDEX idx1 (content) gram_size = 5)
+
+statement ok
+INSERT INTO t1 VALUES
+(1, 'The quick brown fox jumps over the lazy dog'),
+(2, 'A picture is worth a thousand words'),
+(3, 'The early bird catches the worm'),
+(4, 'Actions speak louder than words');
+
+query III
+select row_count, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't1')
+----
+4 1049458 1048617
 
 statement ok
 CREATE TABLE t2 (id int, content string)
@@ -68,4 +80,5 @@ statement ok
 use default
 
 statement ok
-drop database test_index
+drop database test_gram_index
+

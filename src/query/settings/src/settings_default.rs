@@ -185,6 +185,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![String::from("throw"), String::from("spilling")])),
                 }),
+                ("allow_query_exceeded_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Allow queries to overshoot the configured memory limit, deferring error notification until memory contention is encountered.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("data_retention_time_in_days", DefaultSettingValue {
                     // unit of retention_period is day
                     value: UserSettingValue::UInt64(1),
@@ -192,6 +199,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
+                }),
+                ("data_retention_num_snapshots_to_keep", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Specifies how many snapshots to retain during vacuum operations. Overrides 'data_retention_time_in_days'. If set to 0, this setting will be ignored.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=500)),
                 }),
                 ("max_spill_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_spill_io_requests),
@@ -1291,6 +1305,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
+                }),
+                ("enable_experimental_virtual_column", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental virtual column",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
             ]);
 
