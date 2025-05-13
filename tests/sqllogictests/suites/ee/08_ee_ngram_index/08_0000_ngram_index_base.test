@@ -22,7 +22,7 @@ statement ok
 use test_index
 
 statement ok
-CREATE TABLE t1 (id int, content string, NGRAM INDEX idx1 (content) gram_size = 5)
+CREATE TABLE t1 (id int, content string, NGRAM INDEX idx1 (content) gram_size = 5 bloom_size = 1048576)
 
 statement ok
 CREATE TABLE t2 (id int, content string)
@@ -31,22 +31,22 @@ statement error
 CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 0
 
 statement error
-CREATE NGRAM INDEX idx2 ON t2(content) bitmap_size = 0
+CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 0
 
 statement error
-CREATE NGRAM INDEX idx2 ON t2(content) bitmap_size = 511
+CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 511
 
 statement error
-CREATE NGRAM INDEX idx2 ON t2(content) bitmap_size = 10485761
+CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 10485761
 
 statement ok
-CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5
+CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5 bloom_size = 1048576
 
 query T
 select name, type, original, definition from system.indexes;
 ----
-idx1 NGRAM (empty) t1(content)gram_size='5'
-idx2 NGRAM (empty) t2(content)gram_size='5'
+idx1 NGRAM (empty) t1(content)bloom_size='1048576' gram_size='5'
+idx2 NGRAM (empty) t2(content)bloom_size='1048576' gram_size='5'
 
 statement error
 CREATE INVERTED INDEX idx1 ON t1(content)
@@ -57,12 +57,12 @@ DROP NGRAM INDEX idx2 ON t2
 query T
 select name, type, original, definition from system.indexes;
 ----
-idx1 NGRAM (empty) t1(content)gram_size='5'
+idx1 NGRAM (empty) t1(content)bloom_size='1048576' gram_size='5'
 
 query T
 show create table t1;
 ----
-t1 CREATE TABLE t1 (     id INT NULL,     content VARCHAR NULL,     SYNC NGRAM INDEX idx1 (content) gram_size = '5'   ) ENGINE=FUSE
+t1 CREATE TABLE t1 (     id INT NULL,     content VARCHAR NULL,     SYNC NGRAM INDEX idx1 (content) bloom_size = '1048576', gram_size = '5'   ) ENGINE=FUSE
 
 statement ok
 use default
