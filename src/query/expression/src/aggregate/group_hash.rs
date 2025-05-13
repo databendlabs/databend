@@ -202,11 +202,11 @@ impl<const IS_FIRST: bool> HashVisitor<'_, IS_FIRST> {
         for<'a> T::ScalarRef<'a>: AggHash,
     {
         if IS_FIRST {
-            for (x, val) in T::iter_column(&col).zip(self.values.iter_mut()) {
+            for (x, val) in T::iter_column(col).zip(self.values.iter_mut()) {
                 *val = x.agg_hash();
             }
         } else {
-            for (x, val) in T::iter_column(&col).zip(self.values.iter_mut()) {
+            for (x, val) in T::iter_column(col).zip(self.values.iter_mut()) {
                 *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.agg_hash();
             }
         }
@@ -218,11 +218,11 @@ impl<const IS_FIRST: bool> HashVisitor<'_, IS_FIRST> {
         for<'a> T::ScalarRef<'a>: AsRef<[u8]>,
     {
         if IS_FIRST {
-            for (x, val) in T::iter_column(&col).zip(self.values.iter_mut()) {
+            for (x, val) in T::iter_column(col).zip(self.values.iter_mut()) {
                 *val = x.as_ref().agg_hash();
             }
         } else {
-            for (x, val) in T::iter_column(&col).zip(self.values.iter_mut()) {
+            for (x, val) in T::iter_column(col).zip(self.values.iter_mut()) {
                 *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.as_ref().agg_hash();
             }
         }

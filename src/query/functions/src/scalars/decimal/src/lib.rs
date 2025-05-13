@@ -36,5 +36,5 @@ pub use cast::register_decimal_to_float;
 pub use cast::register_decimal_to_int;
 pub use cast::register_decimal_to_string;
 pub use cast::register_to_decimal;
-pub use comparison::register_decimal_compare_op;
+pub use comparison::register_decimal_compare;
 pub use math::register_decimal_math;

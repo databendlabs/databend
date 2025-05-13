@@ -53,7 +53,7 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
-use databend_functions_scalar_decimal::register_decimal_compare_op;
+use databend_functions_scalar_decimal::register_decimal_compare;
 use jsonb::RawJsonb;
 use regex::Regex;
 
@@ -317,7 +317,7 @@ fn register_number_cmp(registry: &mut FunctionRegistry) {
                 register_simple_domain_type_cmp!(registry, NumberType<NUM_TYPE>);
             }
             NumberClass::Decimal128 => {
-                register_decimal_compare_op(registry)
+                register_decimal_compare(registry)
             }
             NumberClass::Decimal256 => {
                 // already registered in Decimal128 branch

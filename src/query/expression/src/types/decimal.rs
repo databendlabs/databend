@@ -315,6 +315,10 @@ impl DecimalSize {
     pub fn scale(&self) -> u8 {
         self.scale
     }
+
+    pub fn leading_digits(&self) -> u8 {
+        self.precision - self.scale
+    }
 }
 
 pub trait Decimal:
@@ -1036,76 +1040,6 @@ impl DecimalDataType {
         })?;
 
         Ok((a_type, b_type))
-    }
-
-    // Returns binded types and result type
-    pub fn binary_result_type(
-        a: &Self,
-        b: &Self,
-        is_multiply: bool,
-        is_divide: bool,
-        is_plus_minus: bool,
-    ) -> Result<(Self, Self, Self)> {
-        let mut scale = a.scale().max(b.scale());
-        let mut precision = a.max_result_precision(b);
-
-        // from snowflake: https://docs.snowflake.com/sql-reference/operators-arithmetic
-        if is_multiply {
-            scale = (a.scale() + b.scale()).min(a.scale().max(b.scale()).max(12));
-            let l = a.leading_digits() + b.leading_digits();
-            precision = l + scale;
-        } else if is_divide {
-            scale = a.scale().max((a.scale() + 6).min(12)); // scale must be >= a.sale()
-            let l = a.leading_digits() + b.scale(); // l must be >= a.leading_digits()
-            precision = l + scale; // so precision must be >= a.precision()
-        } else if is_plus_minus {
-            scale = std::cmp::max(a.scale(), b.scale());
-            // for addition/subtraction, we add 1 to the width to ensure we don't overflow
-            let plus_min_precision = a.leading_digits().max(b.leading_digits()) + scale + 1;
-            precision = precision.min(plus_min_precision);
-        }
-
-        // if the args both are Decimal128, we need to clamp the precision to 38
-        if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
-            precision = precision.min(MAX_DECIMAL128_PRECISION);
-        } else if precision <= MAX_DECIMAL128_PRECISION
-            && Self::belong_diff_precision(a.precision(), b.precision())
-        {
-            // lift up to decimal256
-            precision = MAX_DECIMAL128_PRECISION + 1;
-        }
-        precision = precision.min(MAX_DECIMAL256_PRECISION);
-
-        let result_type = Self::from_size(DecimalSize { precision, scale })?;
-
-        if is_multiply {
-            Ok((
-                Self::from_size(DecimalSize {
-                    precision,
-                    scale: a.scale(),
-                })?,
-                Self::from_size(DecimalSize {
-                    precision,
-                    scale: b.scale(),
-                })?,
-                result_type,
-            ))
-        } else if is_divide {
-            let p = precision.max(a.precision()).max(b.precision());
-            Ok((
-                Self::from_size(DecimalSize {
-                    precision: p,
-                    scale: a.scale(),
-                })?,
-                Self::from_size(DecimalSize {
-                    precision: p,
-                    scale: b.scale(),
-                })?,
-                result_type,
-            ))
-        } else {
-            Ok((result_type, result_type, result_type))
-        }
     }
 }
 
