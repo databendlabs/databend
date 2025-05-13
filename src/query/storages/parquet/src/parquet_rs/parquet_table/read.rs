@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumnType;
+use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -51,6 +52,9 @@ impl ParquetRSTable {
         let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
 
         let table_schema: TableSchemaRef = self.table_info.schema();
+        let projection =
+            PushDownInfo::projection_of_push_downs(&table_schema, plan.push_downs.as_ref());
+        let output_schema = Arc::new(projection.project_schema(&table_schema));
         // If there is a `ParquetFilePart`, we should create pruner for it.
         // Although `ParquetFilePart`s are always staying at the end of `parts` when `do_read_partitions`,
         // but parts are reshuffled when `redistribute_source_fragment`, so let us check all of them.
@@ -116,6 +120,7 @@ impl ParquetRSTable {
                     internal_columns.clone(),
                     plan.push_downs.clone(),
                     table_schema.clone(),
+                    output_schema.clone(),
                     op.clone(),
                 )
             },

@@ -362,6 +362,10 @@ impl IcebergTable {
             let row_group_reader = Arc::new(builder.build_row_group_reader(need_row_number)?);
 
             let topk = Arc::new(topk);
+            let projection =
+                PushDownInfo::projection_of_push_downs(&table_schema, plan.push_downs.as_ref());
+            let output_schema = Arc::new(projection.project_schema(&table_schema));
+
             pipeline.add_source(
                 |output| {
                     ParquetSource::create(
@@ -374,6 +378,7 @@ impl IcebergTable {
                         internal_columns.clone(),
                         plan.push_downs.clone(),
                         table_schema.clone(),
+                        output_schema.clone(),
                         op.clone(),
                     )
                 },

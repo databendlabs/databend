@@ -144,7 +144,7 @@ impl Table for ResultScan {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _plan: &DataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
@@ -158,6 +158,9 @@ impl Table for ResultScan {
             self.schema.clone(),
         )?
         .with_options(read_options);
+        let projection =
+            PushDownInfo::projection_of_push_downs(&table_schema, plan.push_downs.as_ref());
+        let output_schema = Arc::new(projection.project_schema(&table_schema));
         let row_group_reader = Arc::new(builder.build_row_group_reader(false)?);
         pipeline.add_source(
             |output| {
@@ -171,6 +174,7 @@ impl Table for ResultScan {
                     vec![],
                     None,
                     table_schema.clone(),
+                    output_schema.clone(),
                     op.clone(),
                 )
             },

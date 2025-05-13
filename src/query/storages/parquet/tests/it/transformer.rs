@@ -39,10 +39,9 @@ fn build_field_id_to_source_schema_map_works() {
     let result = RecordBatchTransformer::build_field_id_to_arrow_schema_map(&arrow_schema).unwrap();
 
     let expected = HashMap::from_iter([
-        (10, (arrow_schema.fields()[0].clone(), 0)),
-        (11, (arrow_schema.fields()[1].clone(), 1)),
-        (12, (arrow_schema.fields()[2].clone(), 2)),
-        (14, (arrow_schema.fields()[3].clone(), 3)),
+        (11, (arrow_schema.fields()[0].clone(), 0)),
+        (12, (arrow_schema.fields()[1].clone(), 1)),
+        (14, (arrow_schema.fields()[2].clone(), 2)),
     ]);
 
     assert!(result.eq(&expected));
@@ -74,6 +73,32 @@ fn processor_returns_properly_shaped_record_batch_when_schema_migration_required
     let expected = clean_fields_meta(expected_record_batch_migration_required());
 
     assert_eq!(result, expected);
+}
+
+#[test]
+fn processor_returns_properly_shaped_record_batch_when_schema_match_by_name() {
+    let table_schema = Arc::new(table_schema().project(&[1, 2, 4]));
+
+    let mut inst = RecordBatchTransformer::build(table_schema);
+    inst.match_by_field_name(true);
+
+    let result = inst
+        .process_record_batch(expected_record_batch_migration_required())
+        .unwrap();
+
+    let expected = clean_fields_meta(expected_record_batch_migration_required());
+
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn processor_returns_properly_shaped_record_batch_when_schema_no_match_by_name() {
+    let table_schema = Arc::new(table_schema().project(&[3, 4]));
+
+    let mut inst = RecordBatchTransformer::build(table_schema);
+    inst.match_by_field_name(true);
+
+    assert!(inst.process_record_batch(source_record_batch()).is_err())
 }
 
 fn clean_fields_meta(batch: RecordBatch) -> RecordBatch {

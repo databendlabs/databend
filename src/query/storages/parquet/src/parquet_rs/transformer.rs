@@ -60,6 +60,7 @@ enum BatchTransform {
 
 #[derive(Clone)]
 pub struct RecordBatchTransformer {
+    match_by_field_name: bool,
     target_schema: SchemaRef,
     table_field_mapping: BTreeMap<ColumnId, usize>,
 
@@ -76,10 +77,15 @@ impl RecordBatchTransformer {
         }
 
         RecordBatchTransformer {
+            match_by_field_name: false,
             target_schema: Arc::new(target_schema),
             table_field_mapping,
             transforms: None,
         }
+    }
+
+    pub fn match_by_field_name(&mut self, match_by_field_name: bool) {
+        self.match_by_field_name = match_by_field_name;
     }
 
     pub fn process_record_batch(
@@ -106,6 +112,7 @@ impl RecordBatchTransformer {
                     record_batch.schema_ref(),
                     &self.target_schema,
                     &self.table_field_mapping,
+                    self.match_by_field_name,
                 )?);
 
                 self.process_record_batch(record_batch)?
@@ -185,6 +192,7 @@ impl RecordBatchTransformer {
         source: &SchemaRef,
         target: &SchemaRef,
         table_field_mapping: &BTreeMap<ColumnId, usize>,
+        match_by_field_name: bool,
     ) -> databend_common_exception::Result<BatchTransform> {
         match Self::compare_schemas(source, target) {
             SchemaComparison::Equivalent => Ok(BatchTransform::PassThrough),
@@ -196,6 +204,7 @@ impl RecordBatchTransformer {
                     source,
                     target,
                     table_field_mapping,
+                    match_by_field_name,
                 )?,
                 target_schema: target.clone(),
             }),
@@ -206,33 +215,63 @@ impl RecordBatchTransformer {
         source: &SchemaRef,
         target: &SchemaRef,
         table_field_mapping: &BTreeMap<ColumnId, usize>,
+        match_by_field_name: bool,
     ) -> databend_common_exception::Result<Vec<ColumnSource>> {
-        let source_map = Self::build_field_id_to_arrow_schema_map(source)?;
-
         let mut sources = Vec::with_capacity(table_field_mapping.len());
-        for (field_id, target_i) in table_field_mapping.iter() {
-            let target_field = target.field(*target_i);
-            let target_type = target_field.data_type();
 
-            let Some((source_field, source_index)) = source_map.get(field_id) else {
-                return Err(ErrorCode::TableSchemaMismatch(format!("The field with field_id: {field_id} does not exist in the target schema: {:#?}.", target)));
-            };
+        if match_by_field_name {
+            for target_field in target.fields() {
+                let target_type = target_field.data_type();
+                let Some((source_index, source_field)) = source.fields().find(target_field.name())
+                else {
+                    return Err(ErrorCode::TableSchemaMismatch(format!(
+                        "The field with field name: {} does not exist in the source schema: {:#?}.",
+                        target_field.name(),
+                        source
+                    )));
+                };
 
-            sources.push(
-                if source_field
-                    .data_type()
-                    .equals_datatype(target_field.data_type())
-                {
-                    ColumnSource::PassThrough {
-                        source_index: *source_index,
-                    }
-                } else {
-                    ColumnSource::Promote {
-                        target_type: target_type.clone(),
-                        source_index: *source_index,
-                    }
-                },
-            )
+                sources.push(
+                    if source_field
+                        .data_type()
+                        .equals_datatype(target_field.data_type())
+                    {
+                        ColumnSource::PassThrough { source_index }
+                    } else {
+                        ColumnSource::Promote {
+                            target_type: target_type.clone(),
+                            source_index,
+                        }
+                    },
+                )
+            }
+        } else {
+            let source_map = Self::build_field_id_to_arrow_schema_map(source)?;
+
+            for (field_id, target_index) in table_field_mapping.iter() {
+                let target_field = target.field(*target_index);
+                let target_type = target_field.data_type();
+
+                let Some((source_field, source_index)) = source_map.get(field_id) else {
+                    return Err(ErrorCode::TableSchemaMismatch(format!("The field with field_id: {field_id} does not exist in the source schema: {:#?}.", source)));
+                };
+
+                sources.push(
+                    if source_field
+                        .data_type()
+                        .equals_datatype(target_field.data_type())
+                    {
+                        ColumnSource::PassThrough {
+                            source_index: *source_index,
+                        }
+                    } else {
+                        ColumnSource::Promote {
+                            target_type: target_type.clone(),
+                            source_index: *source_index,
+                        }
+                    },
+                )
+            }
         }
         Ok(sources)
     }
