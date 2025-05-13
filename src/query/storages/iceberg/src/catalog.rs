@@ -107,6 +107,8 @@ use iceberg_catalog_hms::HmsCatalogConfig;
 use iceberg_catalog_hms::HmsThriftTransport;
 use iceberg_catalog_rest::RestCatalog;
 use iceberg_catalog_rest::RestCatalogConfig;
+use iceberg_catalog_s3tables::S3TablesCatalog;
+use iceberg_catalog_s3tables::S3TablesCatalogConfig;
 
 use crate::database::IcebergDatabase;
 use crate::IcebergTable;
@@ -194,6 +196,7 @@ impl IcebergCatalog {
             }
             IcebergCatalogOption::Glue(glue) => {
                 let cfg = GlueCatalogConfig::builder()
+                    .uri(glue.address.clone())
                     .warehouse(glue.warehouse.clone())
                     .props(
                         glue.props
@@ -212,6 +215,27 @@ impl IcebergCatalog {
                         ))
                     },
                 )?;
+                Arc::new(ctl)
+            }
+            IcebergCatalogOption::Storage(s) => {
+                let cfg = S3TablesCatalogConfig::builder()
+                    .endpoint_url(s.address.clone())
+                    .table_bucket_arn(s.table_bucket_arn.clone())
+                    .properties(
+                        s.props
+                            .clone()
+                            .into_iter()
+                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
+                            .collect(),
+                    )
+                    .build();
+
+                let ctl = databend_common_base::runtime::block_on(S3TablesCatalog::new(cfg))
+                    .map_err(|err| {
+                        ErrorCode::BadArguments(format!(
+                            "There was an error building the s3 tables catalog: {err:?}"
+                        ))
+                    })?;
                 Arc::new(ctl)
             }
         };
