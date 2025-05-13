@@ -61,7 +61,7 @@ pub(crate) struct SessionExecutor {
     keywords: Arc<Vec<String>>,
 }
 
-static PROMPT_SQL: &str = "select name from system.tables union all select name from system.columns union all select name from system.databases union all select name from system.functions";
+static PROMPT_SQL: &str = "select name from default.system.tables union all select name from default.system.columns union all select name from default.system.databases union all select name from default.system.functions";
 
 impl SessionExecutor {
     pub async fn try_new(is_repl: bool, output_format: &str) -> Result<Self> {

@@ -50,6 +50,7 @@ fn test_v111_add_glue_as_iceberg_catalog_option() -> anyhow::Result<()> {
     let want = || databend_common_meta_app::schema::CatalogMeta {
         catalog_option: CatalogOption::Iceberg(IcebergCatalogOption::Glue(
             IcebergGlueCatalogOption {
+                address: "".to_string(),
                 warehouse: "s3://my_bucket".to_string(),
                 props: hashmap! {
                     s("AWS_KEY_ID") => s("super secure access key"),
