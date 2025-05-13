@@ -41,7 +41,7 @@ use crate::parquet_reader::topk::ParquetTopK;
 use crate::parquet_reader::utils::compute_output_field_paths;
 use crate::parquet_reader::utils::transform_record_batch;
 use crate::parquet_reader::utils::FieldPaths;
-use crate::parquet_rs::transformer::RecordBatchTransformer;
+use crate::transformer::RecordBatchTransformer;
 
 pub struct TopkOnlyPolicyBuilder {
     topk: Arc<ParquetTopK>,

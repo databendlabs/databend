@@ -18,7 +18,7 @@ use databend_common_expression::TopKSorter;
 use parquet::arrow::arrow_reader::RowSelection;
 
 use crate::parquet_reader::row_group::InMemoryRowGroup;
-use crate::parquet_rs::transformer::RecordBatchTransformer;
+use crate::transformer::RecordBatchTransformer;
 
 /// The policy for reading a row group.
 ///

@@ -37,6 +37,7 @@ mod partition;
 mod pruning;
 mod source;
 mod statistics;
+mod transformer;
 
 mod meta;
 mod schema;

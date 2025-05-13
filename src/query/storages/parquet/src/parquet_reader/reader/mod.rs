@@ -15,7 +15,6 @@
 mod builder;
 mod full_reader;
 mod row_group_reader;
-mod transformer;
 
 pub use builder::ParquetReaderBuilder;
 pub use full_reader::ParquetFileReader;

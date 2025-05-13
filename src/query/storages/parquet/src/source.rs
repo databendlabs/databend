@@ -56,10 +56,11 @@ use crate::parquet_reader::policy::ReadPolicyImpl;
 use crate::parquet_reader::ParquetWholeFileReader;
 use crate::parquet_reader::RowGroupReader;
 use crate::partition::ParquetRowGroupPart;
-use crate::parquet_rs::transformer::RecordBatchTransformer;
 use crate::read_settings::ReadSettings;
+use crate::transformer::RecordBatchTransformer;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
+use crate::ParquetReaderBuilder;
 
 enum State {
     Init,
@@ -364,7 +365,7 @@ impl ParquetSource {
             let need_row_number = self
                 .internal_columns
                 .contains(&InternalColumnType::FileRowNumber);
-            let mut builder = ParquetRSReaderBuilder::create(
+            let mut builder = ParquetReaderBuilder::create(
                 self.ctx.clone(),
                 self.op_registry.clone(),
                 self.table_schema.clone(),

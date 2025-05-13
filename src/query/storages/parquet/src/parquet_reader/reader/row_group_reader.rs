@@ -30,9 +30,9 @@ use crate::parquet_reader::policy::PolicyType;
 use crate::parquet_reader::policy::ReadPolicyImpl;
 use crate::parquet_reader::policy::POLICY_PREDICATE_ONLY;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
-use crate::parquet_rs::transformer::RecordBatchTransformer;
 use crate::partition::ParquetRowGroupPart;
 use crate::read_settings::ReadSettings;
+use crate::transformer::RecordBatchTransformer;
 
 /// The reader to read a row group.
 pub struct RowGroupReader {

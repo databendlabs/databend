@@ -31,7 +31,7 @@ use super::policy::ReadPolicyImpl;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_reader::utils::transform_record_batch;
 use crate::parquet_reader::utils::FieldPaths;
-use crate::RecordBatchTransformer;
+use crate::transformer::RecordBatchTransformer;
 
 pub struct NoPretchPolicyBuilder {
     projection: ProjectionMask,
