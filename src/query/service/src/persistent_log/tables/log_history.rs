@@ -68,16 +68,15 @@ pub fn log_history() -> Arc<HistoryTable> {
                 "fields",
                 TableDataType::Nullable(Box::new(TableDataType::Variant)),
             ),
-            TableField::new(
-                "sequence_number",
-                TableDataType::Number(NumberDataType::Int64),
-            ),
+            TableField::new("batch_number", TableDataType::Number(NumberDataType::Int64)),
         ]),
-        cluster_by: vec!["sequence_number".to_string()],
+        cluster_by: vec!["batch_number".to_string()],
         transform_sql: String::from(
-            "COPY INTO persistent_system.log_history (timestamp, path, target, log_level,
-                 cluster_id, node_id, warehouse_id, query_id, message, fields)
-                 FROM @{stage_name} file_format = (TYPE = PARQUET) PURGE = TRUE",
+            "COPY INTO system_history.log_history FROM (
+                    SELECT timestamp, path, target, log_level, cluster_id,
+                    node_id, warehouse_id, query_id, message, fields, {batch_number}
+                    FROM @{stage_name}
+                 ) file_format = (TYPE = PARQUET) PURGE = TRUE",
         ),
     })
 }

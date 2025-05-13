@@ -30,7 +30,6 @@ impl HistoryTables {
     fn get_table(table_name: &str) -> Result<Arc<HistoryTable>> {
         match table_name {
             "log_history" => Ok(log_history()),
-
             _ => Err(ErrorCode::InvalidConfig("Unknown log history table name")),
         }
     }
@@ -58,13 +57,9 @@ pub struct HistoryTable {
 impl HistoryTable {
     pub fn create_sql(&self) -> String {
         let mut fields = vec![];
-        let table_name = &self.name;
         for field in self.schema.fields().iter() {
             let field_name = field.name();
-            let mut field_type = field.data_type().sql_name();
-            if table_name == "log_history" && field_name == "sequence_number" {
-                field_type = format!("{} DEFAULT NEXTVAL(log_history_seq)", field_type);
-            }
+            let field_type = field.data_type().sql_name();
             fields.push(format!("{} {}", field_name, field_type))
         }
         let fields = fields.join(", ");
