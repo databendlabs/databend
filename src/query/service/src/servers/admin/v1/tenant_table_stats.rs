@@ -63,12 +63,17 @@ async fn load_tenant_tables_stats(tenant: &Tenant) -> Result<TenantTablesStatsRe
 
     let databases = catalog.list_databases(tenant).await?;
 
-    let database_count = databases.len() as u64;
+    let mut database_count = 0;
     let mut internal_stats: BTreeMap<String, TenantTableStatsInfo> = BTreeMap::new();
     let mut external_stats: BTreeMap<String, TenantTableStatsInfo> = BTreeMap::new();
     let mut warnings: Vec<String> = vec![];
 
     for database in databases {
+        let db_name = database.name().to_lowercase();
+        if db_name == "information_schema" || db_name == "system" {
+            continue;
+        }
+        database_count += 1;
         let tables = match catalog.list_tables(tenant, database.name()).await {
             Ok(v) => v,
             Err(err) => {
@@ -87,10 +92,6 @@ async fn load_tenant_tables_stats(tenant: &Tenant) -> Result<TenantTablesStatsRe
                 continue;
             }
             let engine = table.engine().to_string();
-            // only fuse tables are included in the stats
-            if engine != "FUSE" {
-                continue;
-            }
             let stats = &table.get_table_info().meta.statistics;
             let is_external = table.get_table_info().meta.storage_params.is_some();
             if is_external {
