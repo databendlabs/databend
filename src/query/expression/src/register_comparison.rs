@@ -52,7 +52,7 @@ impl FunctionRegistry {
     }
 }
 
-pub fn vectorize_cmp_2_arg<I1: ArgType, I2: ArgType>(
+pub fn vectorize_cmp_2_arg<I1: ValueType, I2: ValueType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut EvalContext) -> bool + Copy + Send + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<BooleanType> + Copy + Send + Sync
 where

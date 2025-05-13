@@ -20,6 +20,7 @@ use databend_common_column::types::months_days_micros;
 use databend_common_io::Interval;
 
 use super::number::SimpleDomain;
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -129,7 +130,9 @@ impl ArgType for IntervalType {
             max: months_days_micros::new(12 * 200, 365 * 200, 7200000000000000000),
         }
     }
+}
 
+impl ReturnType for IntervalType {
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 
 use super::AnyType;
 use super::DecimalSize;
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -192,7 +193,9 @@ impl<T: ArgType> ArgType for ArrayType<T> {
     fn full_domain() -> Self::Domain {
         Some(T::full_domain())
     }
+}
 
+impl<T: ArgType> ReturnType for ArrayType<T> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         ArrayColumnBuilder::with_capacity(capacity, 0, generics)
     }

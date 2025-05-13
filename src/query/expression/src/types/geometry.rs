@@ -22,6 +22,7 @@ use geozero::wkt::Ewkt;
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
 use super::binary::BinaryColumnIter;
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -175,7 +176,9 @@ impl ArgType for GeometryType {
     }
 
     fn full_domain() -> Self::Domain {}
+}
 
+impl ReturnType for GeometryType {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         BinaryColumnBuilder::with_capacity(capacity, 0)
     }

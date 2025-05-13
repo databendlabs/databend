@@ -26,6 +26,7 @@ use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
+use crate::types::ReturnType;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -204,7 +205,9 @@ impl ArgType for StringType {
             max: None,
         }
     }
+}
 
+impl ReturnType for StringType {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity)
     }

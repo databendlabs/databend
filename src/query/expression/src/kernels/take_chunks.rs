@@ -603,9 +603,10 @@ impl Column {
             ColumnVec::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumnVec::NUM_TYPE(columns) => {
                     let builder = Self::take_block_vec_primitive_types(columns, indices);
-                    <NumberType<NUM_TYPE> as ValueType>::upcast_column(
-                        <NumberType<NUM_TYPE> as ArgType>::column_from_vec(builder, &[]),
-                    )
+                    NumberType::<NUM_TYPE>::upcast_column(NumberType::<NUM_TYPE>::column_from_vec(
+                        builder,
+                        &[],
+                    ))
                 }
             }),
             ColumnVec::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
@@ -625,9 +626,10 @@ impl Column {
             }
             ColumnVec::Timestamp(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let ts = <NumberType<i64> as ValueType>::upcast_column(
-                    <NumberType<i64> as ArgType>::column_from_vec(builder, &[]),
-                )
+                let ts = NumberType::<i64>::upcast_column(NumberType::<i64>::column_from_vec(
+                    builder,
+                    &[],
+                ))
                 .into_number()
                 .unwrap()
                 .into_int64()
@@ -636,9 +638,10 @@ impl Column {
             }
             ColumnVec::Date(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let d = <NumberType<i32> as ValueType>::upcast_column(
-                    <NumberType<i32> as ArgType>::column_from_vec(builder, &[]),
-                )
+                let d = NumberType::<i32>::upcast_column(NumberType::<i32>::column_from_vec(
+                    builder,
+                    &[],
+                ))
                 .into_number()
                 .unwrap()
                 .into_int32()
@@ -647,11 +650,9 @@ impl Column {
             }
             ColumnVec::Interval(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let i = <IntervalType as ValueType>::upcast_column(
-                    <IntervalType>::column_from_vec(builder, &[]),
-                )
-                .into_interval()
-                .unwrap();
+                let i = IntervalType::upcast_column(IntervalType::column_from_vec(builder, &[]))
+                    .into_interval()
+                    .unwrap();
                 Column::Interval(i)
             }
             ColumnVec::Array(columns) => {

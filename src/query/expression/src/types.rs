@@ -70,7 +70,7 @@ pub use self::nullable::NullableColumn;
 pub use self::nullable::NullableType;
 pub use self::number::*;
 pub use self::number_class::*;
-pub use self::simple_type::*;
+use self::simple_type::*;
 pub use self::string::StringColumn;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
@@ -485,9 +485,12 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     }
 }
 
-pub trait ArgType: ValueType {
+pub trait ArgType: ReturnType {
     fn data_type() -> DataType;
     fn full_domain() -> Self::Domain;
+}
+
+pub trait ReturnType: ValueType {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
     fn column_from_vec(vec: Vec<Self::Scalar>, generics: &GenericMap) -> Self::Column {

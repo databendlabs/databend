@@ -18,6 +18,7 @@ use std::ops::Range;
 
 use super::ArrayType;
 use super::DecimalSize;
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::ArgType;
@@ -186,7 +187,9 @@ impl<K: ArgType, V: ArgType> ArgType for KvPair<K, V> {
     fn full_domain() -> Self::Domain {
         (K::full_domain(), V::full_domain())
     }
+}
 
+impl<K: ArgType, V: ArgType> ReturnType for KvPair<K, V> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         KvColumnBuilder::with_capacity(capacity, generics)
     }
@@ -334,11 +337,11 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     type ColumnBuilder = <MapInternal<K, V> as ValueType>::ColumnBuilder;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        <MapInternal<K, V> as ValueType>::to_owned_scalar(scalar)
+        MapInternal::<K, V>::to_owned_scalar(scalar)
     }
 
     fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        <MapInternal<K, V> as ValueType>::to_scalar_ref(scalar)
+        MapInternal::<K, V>::to_scalar_ref(scalar)
     }
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
@@ -361,18 +364,18 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        <MapInternal<K, V> as ValueType>::try_downcast_builder(builder)
+        MapInternal::<K, V>::try_downcast_builder(builder)
     }
 
     fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        <MapInternal<K, V> as ValueType>::try_downcast_owned_builder(builder)
+        MapInternal::<K, V>::try_downcast_owned_builder(builder)
     }
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
         decimal_size: Option<DecimalSize>,
     ) -> Option<ColumnBuilder> {
-        <MapInternal<K, V> as ValueType>::try_upcast_column_builder(builder, decimal_size)
+        MapInternal::<K, V>::try_upcast_column_builder(builder, decimal_size)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -390,64 +393,64 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     }
 
     fn column_len(col: &Self::Column) -> usize {
-        <MapInternal<K, V> as ValueType>::column_len(col)
+        MapInternal::<K, V>::column_len(col)
     }
 
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        <MapInternal<K, V> as ValueType>::index_column(col, index)
+        MapInternal::<K, V>::index_column(col, index)
     }
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        <MapInternal<K, V> as ValueType>::index_column_unchecked(col, index)
+        MapInternal::<K, V>::index_column_unchecked(col, index)
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        <MapInternal<K, V> as ValueType>::slice_column(col, range)
+        MapInternal::<K, V>::slice_column(col, range)
     }
 
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        <MapInternal<K, V> as ValueType>::iter_column(col)
+        MapInternal::<K, V>::iter_column(col)
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        <MapInternal<K, V> as ValueType>::column_to_builder(col)
+        MapInternal::<K, V>::column_to_builder(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
-        <MapInternal<K, V> as ValueType>::builder_len(builder)
+        MapInternal::<K, V>::builder_len(builder)
     }
 
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        <MapInternal<K, V> as ValueType>::push_item(builder, item)
+        MapInternal::<K, V>::push_item(builder, item)
     }
 
     fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        <MapInternal<K, V> as ValueType>::push_item_repeat(builder, item, n)
+        MapInternal::<K, V>::push_item_repeat(builder, item, n)
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        <MapInternal<K, V> as ValueType>::push_default(builder)
+        MapInternal::<K, V>::push_default(builder)
     }
 
     fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
-        <MapInternal<K, V> as ValueType>::append_column(builder, other)
+        MapInternal::<K, V>::append_column(builder, other)
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        <MapInternal<K, V> as ValueType>::build_column(builder)
+        MapInternal::<K, V>::build_column(builder)
     }
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        <MapInternal<K, V> as ValueType>::build_scalar(builder)
+        MapInternal::<K, V>::build_scalar(builder)
     }
 
     fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        <MapInternal<K, V> as ValueType>::scalar_memory_size(scalar)
+        MapInternal::<K, V>::scalar_memory_size(scalar)
     }
 
     fn column_memory_size(col: &Self::Column) -> usize {
-        <MapInternal<K, V> as ValueType>::column_memory_size(col)
+        MapInternal::<K, V>::column_memory_size(col)
     }
 }
 
@@ -460,8 +463,10 @@ impl<K: ArgType, V: ArgType> ArgType for MapType<K, V> {
     fn full_domain() -> Self::Domain {
         Some((K::full_domain(), V::full_domain()))
     }
+}
 
+impl<K: ArgType, V: ArgType> ReturnType for MapType<K, V> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
-        <MapInternal<K, V> as ArgType>::create_builder(capacity, generics)
+        MapInternal::<K, V>::create_builder(capacity, generics)
     }
 }

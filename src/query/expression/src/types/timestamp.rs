@@ -32,6 +32,7 @@ use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
+use crate::types::ReturnType;
 use crate::types::SimpleType;
 use crate::types::SimpleValueType;
 use crate::utils::date_helper::DateConverter;
@@ -159,7 +160,9 @@ impl ArgType for TimestampType {
             max: TIMESTAMP_MAX,
         }
     }
+}
 
+impl ReturnType for TimestampType {
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

@@ -22,6 +22,7 @@ use databend_common_column::bitmap::MutableBitmap;
 
 use super::AnyType;
 use super::DecimalSize;
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -240,7 +241,9 @@ impl<T: ArgType> ArgType for NullableType<T> {
             value: Some(Box::new(T::full_domain())),
         }
     }
+}
 
+impl<T: ArgType> ReturnType for NullableType<T> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         NullableColumnBuilder::with_capacity(capacity, generics)
     }

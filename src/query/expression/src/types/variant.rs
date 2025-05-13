@@ -38,6 +38,7 @@ use crate::types::DataType;
 use crate::types::DecimalScalar;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
+use crate::types::ReturnType;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -191,7 +192,9 @@ impl ArgType for VariantType {
     }
 
     fn full_domain() -> Self::Domain {}
+}
 
+impl ReturnType for VariantType {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         BinaryColumnBuilder::with_capacity(capacity, 0)
     }

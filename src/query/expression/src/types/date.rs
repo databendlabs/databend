@@ -30,6 +30,7 @@ use super::ArgType;
 use super::DataType;
 use super::DecimalSize;
 use super::GenericMap;
+use super::ReturnType;
 use super::SimpleType;
 use super::SimpleValueType;
 use crate::date_helper::DateConverter;
@@ -135,7 +136,9 @@ impl ArgType for DateType {
             max: DATE_MAX,
         }
     }
+}
 
+impl ReturnType for DateType {
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

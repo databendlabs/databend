@@ -20,6 +20,7 @@ use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
+use crate::types::ReturnType;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -171,7 +172,9 @@ impl ArgType for BinaryType {
     }
 
     fn full_domain() -> Self::Domain {}
+}
 
+impl ReturnType for BinaryType {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         BinaryColumnBuilder::with_capacity(capacity, 0)
     }

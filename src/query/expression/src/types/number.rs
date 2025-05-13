@@ -33,6 +33,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::decimal::DecimalSize;
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -189,7 +190,9 @@ impl<Num: Number> ArgType for NumberType<Num> {
             max: Num::MAX,
         }
     }
+}
 
+impl<Num: Number> ReturnType for NumberType<Num> {
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

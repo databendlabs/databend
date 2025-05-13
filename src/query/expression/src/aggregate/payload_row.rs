@@ -24,7 +24,6 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalType;
 use crate::types::i256;
 use crate::types::AnyType;
-use crate::types::ArgType;
 use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -507,7 +506,7 @@ unsafe fn row_match_string_column(
     *count = match_count;
 }
 
-unsafe fn row_match_column_type<T: ArgType>(
+unsafe fn row_match_column_type<T: ValueType>(
     col: &Column,
     validity: Option<&Bitmap>,
     address: &[*const u8],

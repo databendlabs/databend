@@ -15,6 +15,7 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -160,7 +161,9 @@ impl<const INDEX: usize> ArgType for GenericType<INDEX> {
     fn full_domain() -> Self::Domain {
         unreachable!()
     }
+}
 
+impl<const INDEX: usize> ReturnType for GenericType<INDEX> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         ColumnBuilder::with_capacity(&generics[INDEX], capacity)
     }

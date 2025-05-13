@@ -22,6 +22,7 @@ use string::StringColumnBuilder;
 
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
+use crate::types::simple_type::SimpleType;
 use crate::types::string::StringColumn;
 use crate::types::*;
 use crate::visitor::ValueVisitor;

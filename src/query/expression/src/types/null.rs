@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::ops::Range;
 
 use super::nullable::NullableDomain;
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -182,7 +183,9 @@ impl ArgType for NullType {
     }
 
     fn full_domain() -> Self::Domain {}
+}
 
+impl ReturnType for NullType {
     fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         0
     }

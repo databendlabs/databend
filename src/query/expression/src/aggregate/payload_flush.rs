@@ -35,6 +35,7 @@ use crate::types::DateType;
 use crate::types::DecimalSize;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
+use crate::types::ReturnType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;

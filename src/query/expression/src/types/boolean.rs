@@ -22,6 +22,7 @@ use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
+use crate::types::ReturnType;
 use crate::types::ValueType;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
@@ -206,7 +207,9 @@ impl ArgType for BooleanType {
             has_true: true,
         }
     }
+}
 
+impl ReturnType for BooleanType {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         MutableBitmap::with_capacity(capacity)
     }

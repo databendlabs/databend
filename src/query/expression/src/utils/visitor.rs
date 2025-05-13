@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use decimal::DecimalType;
 use geometry::GeometryType;
 
+use crate::types::simple_type::SimpleType;
 use crate::types::*;
 use crate::*;
 

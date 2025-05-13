@@ -51,6 +51,7 @@ use serde::Serialize;
 use super::ArgType;
 use super::DataType;
 use super::GenericMap;
+use super::ReturnType;
 use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
@@ -152,7 +153,9 @@ impl<Num: Decimal> ArgType for DecimalType<Num> {
             max: Num::MAX,
         }
     }
+}
 
+impl<Num: Decimal> ReturnType for DecimalType<Num> {
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }
