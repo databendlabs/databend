@@ -73,6 +73,9 @@ use crate::servers::http::v1::unix_ts;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::SessionClaim;
+use crate::servers::login_history::LoginEventType;
+use crate::servers::login_history::LoginHandler;
+use crate::servers::login_history::LoginHistory;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -357,9 +360,19 @@ fn make_cookie(name: impl Into<String>, value: impl Into<String>) -> Cookie {
 
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
-    async fn auth(&self, req: &Request, query_id: String) -> Result<HttpQueryContext> {
-        let credential = get_credential(req, self.kind, self.endpoint_kind)?;
+    async fn auth(
+        &self,
+        req: &Request,
+        query_id: String,
+        login_history: &mut LoginHistory,
+    ) -> Result<HttpQueryContext> {
+        let client_host = get_client_ip(req);
+        let node_id = GlobalConfig::instance().query.node_id.clone();
+        login_history.client_ip = client_host.clone().unwrap_or_default();
+        login_history.node_id = node_id.clone();
 
+        let credential = get_credential(req, self.kind, self.endpoint_kind)?;
+        login_history.auth_type = credential.type_name();
         let session_manager = SessionManager::instance();
 
         let mut session = session_manager.create_session(SessionType::Dummy).await?;
@@ -385,6 +398,7 @@ impl<E> HTTPSessionEndpoint<E> {
                 self.endpoint_kind.need_user_info(),
             )
             .await?;
+        login_history.user_name = user_name.clone();
 
         let client_session_id = match (&authed_client_session_id, &cookie_session_id) {
             (Some(id1), Some(id2)) => {
@@ -412,6 +426,8 @@ impl<E> HTTPSessionEndpoint<E> {
                 }
             }
         };
+        login_history.session_id = client_session_id.clone().unwrap_or_default();
+
         if let Some(id) = &client_session_id {
             session.set_client_session_id(id.clone());
             let last_access_time = req
@@ -454,6 +470,7 @@ impl<E> HTTPSessionEndpoint<E> {
             .headers()
             .get(USER_AGENT)
             .map(|id| id.to_str().unwrap().to_string());
+        login_history.user_agent = user_agent.clone().unwrap_or_default();
 
         let expected_node_id = req
             .headers()
@@ -465,9 +482,6 @@ impl<E> HTTPSessionEndpoint<E> {
             .get(TRACE_PARENT)
             .map(|id| id.to_str().unwrap().to_string());
         let opentelemetry_baggage = extract_baggage_from_headers(req.headers());
-        let client_host = get_client_ip(req);
-
-        let node_id = GlobalConfig::instance().query.node_id.clone();
 
         Ok(HttpQueryContext {
             session,
@@ -653,13 +667,22 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             .map(|id| id.to_str().unwrap().to_string())
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
+        let mut login_history = LoginHistory::new();
+        login_history.handler = LoginHandler::HTTP;
+        login_history.connection_uri = uri.to_string();
+
         ThreadTracker::tracking_future(async move {
-            match self.auth(&req, query_id).await {
+            match self.auth(&req, query_id, &mut login_history).await {
                 Ok(ctx) => {
+                    login_history.event_type = LoginEventType::LoginSuccess;
+                    login_history.write_to_log();
                     req.extensions_mut().insert(ctx);
                     self.ep.call(req).await.map(|v| v.into_response())
                 }
                 Err(err) => {
+                    login_history.event_type = LoginEventType::LoginFailed;
+                    login_history.error_message = err.to_string();
+                    login_history.write_to_log();
                     let err = HttpErrorCode::error_code(err);
                     if err.status() == StatusCode::UNAUTHORIZED {
                         warn!(
