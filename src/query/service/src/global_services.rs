@@ -175,7 +175,7 @@ impl GlobalServices {
 
         Self::init_workload_mgr(config).await?;
 
-        if config.log.persistentlog.on {
+        if config.log.history.on {
             GlobalPersistentLog::init(config).await?;
         }
         Ok(())

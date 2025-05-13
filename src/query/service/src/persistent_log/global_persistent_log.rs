@@ -32,6 +32,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_semaphore::acquirer::Permit;
@@ -44,7 +45,6 @@ use databend_common_meta_types::UpsertKV;
 use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::GlobalLogger;
-use databend_common_tracing::PERSISTENT_LOG_SCHEMA_VERSION;
 use futures_util::TryStreamExt;
 use log::error;
 use log::info;
@@ -54,22 +54,19 @@ use uuid::Uuid;
 
 use crate::interpreters::InterpreterFactory;
 use crate::persistent_log::session::create_session;
-use crate::persistent_log::table_schemas::PersistentLogTable;
-use crate::persistent_log::table_schemas::QueryDetailsTable;
-use crate::persistent_log::table_schemas::QueryLogTable;
-use crate::persistent_log::table_schemas::QueryProfileTable;
+use crate::persistent_log::tables::HistoryTable;
+use crate::persistent_log::tables::HistoryTables;
 
 pub struct GlobalPersistentLog {
-    meta_store: MetaStore,
+    meta_client: Arc<ClientHandle>,
     interval: u64,
     tenant_id: String,
     node_id: String,
     cluster_id: String,
     stage_name: String,
     initialized: AtomicBool,
-    tables: Vec<Box<dyn PersistentLogTable>>,
-    retention: usize,
     retention_interval: usize,
+    tables: HistoryTables,
 }
 
 impl GlobalPersistentLog {
@@ -81,50 +78,18 @@ impl GlobalPersistentLog {
                 ErrorCode::Internal("Create MetaClient failed for GlobalPersistentLog")
             })?;
 
-        let mut tables: Vec<Box<dyn PersistentLogTable>> = vec![];
-
-        if cfg.log.query.on {
-            let query_details = QueryDetailsTable::new();
-            info!(
-                "Persistent query details table is enabled, persistent_system.{}",
-                query_details.table_name()
-            );
-            tables.push(Box::new(query_details));
-        }
-
-        if cfg.log.profile.on {
-            let profile = QueryProfileTable::new();
-            info!(
-                "Persistent query profile table is enabled, persistent_system.{}",
-                profile.table_name()
-            );
-            tables.push(Box::new(profile));
-        }
-
-        let query_log = QueryLogTable::new();
-        info!(
-            "Persistent query log table is enabled, persistent_system.{}",
-            query_log.table_name()
-        );
-        tables.push(Box::new(query_log));
-
-        let stage_name = format!(
-            "{}_v{}",
-            cfg.log.persistentlog.stage_name.clone(),
-            PERSISTENT_LOG_SCHEMA_VERSION
-        );
+        let stage_name = cfg.log.history.stage_name.clone();
 
         let instance = Arc::new(Self {
-            meta_store: MetaStore::R(meta_client),
-            interval: cfg.log.persistentlog.interval as u64,
+            meta_client,
+            interval: cfg.log.history.interval as u64,
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
             node_id: cfg.query.node_id.clone(),
             cluster_id: cfg.query.cluster_id.clone(),
             stage_name,
             initialized: AtomicBool::new(false),
-            tables,
-            retention: cfg.log.persistentlog.retention,
-            retention_interval: cfg.log.persistentlog.retention_interval,
+            retention_interval: cfg.log.history.retention_interval,
+            tables: HistoryTables::init(cfg)?,
         });
         GlobalInstance::set(instance);
         GlobalIORuntime::instance().try_spawn(
@@ -136,31 +101,6 @@ impl GlobalPersistentLog {
             Some("persistent-log-worker".to_string()),
         )?;
         Ok(())
-    }
-
-    /// Create a dummy instance of GlobalPersistentLog for testing purposes.
-    pub async fn create_dummy(cfg: &InnerConfig) -> Result<Self> {
-        setup_operator().await?;
-        let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf())
-            .create_meta_store()
-            .await
-            .map_err(|_e| ErrorCode::Internal("create memory meta store failed"))?;
-        Ok(Self {
-            meta_store,
-            interval: cfg.log.persistentlog.interval as u64,
-            tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
-            node_id: cfg.query.node_id.clone(),
-            cluster_id: cfg.query.cluster_id.clone(),
-            stage_name: cfg.log.persistentlog.stage_name.clone(),
-            initialized: AtomicBool::new(false),
-            tables: vec![
-                Box::new(QueryDetailsTable::new()),
-                Box::new(QueryProfileTable::new()),
-                Box::new(QueryLogTable::new()),
-            ],
-            retention: cfg.log.persistentlog.retention,
-            retention_interval: cfg.log.persistentlog.retention_interval,
-        })
     }
 
     pub fn instance() -> Arc<GlobalPersistentLog> {
@@ -181,12 +121,8 @@ impl GlobalPersistentLog {
                 break;
             }
         }
-
-        // No need to wait, we want to do prepare as soon as possible
-        let prepare_guard = self.acquire(&meta_key, self.interval, 0).await?;
         self.prepare().await?;
         info!("Persistent log prepared successfully");
-        drop(prepare_guard);
 
         spawn(async move {
             if let Err(e) = GlobalPersistentLog::instance().clean_work().await {
@@ -196,21 +132,10 @@ impl GlobalPersistentLog {
 
         loop {
             // Periodically performs persistent log COPY INTO/ INSERT INTO  every `interval` seconds (around)
-            let may_permit = self
-                .acquire(&meta_key, self.interval, self.interval)
-                .await?;
+            let may_permit = self.acquire(&meta_key, self.interval).await?;
             if let Some(guard) = may_permit {
                 if let Err(e) = self.do_copy_into().await {
                     error!("Persistent log copy into failed: {:?}", e);
-                    let latest_version = self.get_version_from_meta().await?;
-                    if let Some(version) = latest_version {
-                        if version > PERSISTENT_LOG_SCHEMA_VERSION as u64 {
-                            info!("Persistent log tables enable version suffix");
-                            for table in &self.tables {
-                                table.enable_version_suffix();
-                            }
-                        }
-                    }
                 }
                 self.finish_hook(&meta_key).await?;
                 drop(guard);
@@ -225,25 +150,16 @@ impl GlobalPersistentLog {
     ///
     /// This function attempts to acquire a permit from a distributed semaphore identified by `meta_key`.
     /// It also implements a rate limiting mechanism based on the last execution timestamp.
-    pub async fn acquire(
-        &self,
-        meta_key: &str,
-        lease: u64,
-        interval: u64,
-    ) -> Result<Option<Permit>> {
+    pub async fn acquire(&self, meta_key: &str, interval: u64) -> Result<Option<Permit>> {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.should_log = false;
         let _guard = ThreadTracker::tracking(tracking_payload);
-        let meta_client = match &self.meta_store {
-            MetaStore::R(handle) => handle.clone(),
-            _ => unreachable!("Metastore::L should only used for testing"),
-        };
         let acquired_guard = ThreadTracker::tracking_future(Semaphore::new_acquired(
-            meta_client,
+            self.meta_client.clone(),
             meta_key,
             1,
             self.node_id.clone(),
-            Duration::from_secs(lease),
+            Duration::from_secs(3),
         ))
         .await
         .map_err(|_e| "acquire semaphore failed from GlobalPersistentLog")?;
@@ -251,7 +167,7 @@ impl GlobalPersistentLog {
             return Ok(Some(acquired_guard));
         }
         if match ThreadTracker::tracking_future(
-            self.meta_store
+            self.meta_client
                 .get_kv(&format!("{}/last_timestamp", meta_key)),
         )
         .await?
@@ -272,7 +188,7 @@ impl GlobalPersistentLog {
     }
 
     pub async fn finish_hook(&self, meta_key: &str) -> Result<()> {
-        self.meta_store
+        self.meta_client
             .upsert_kv(UpsertKV::new(
                 format!("{}/last_timestamp", meta_key),
                 MatchSeq::Any,
@@ -323,47 +239,12 @@ impl GlobalPersistentLog {
         let stage_name = self.stage_name.clone();
         let create_stage = format!("CREATE STAGE IF NOT EXISTS {}", stage_name);
         self.execute_sql(&create_stage).await?;
-        let create_db = "CREATE DATABASE IF NOT EXISTS persistent_system";
+        let create_db = "CREATE DATABASE IF NOT EXISTS system_history";
         self.execute_sql(create_db).await?;
-
-        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
-        let context = session.create_query_context().await?;
-        if let Some(version) = self.get_version_from_meta().await? {
-            if version > PERSISTENT_LOG_SCHEMA_VERSION as u64 {
-                // older version node need put the logs into the table has version suffix
-                for table in &self.tables {
-                    table.enable_version_suffix();
-                }
-                return Ok(());
-            }
-            let mut need_rename = false;
-            for table in &self.tables {
-                let old_table = context
-                    .get_table(CATALOG_DEFAULT, "persistent_system", &table.table_name())
-                    .await;
-                if old_table.is_ok() {
-                    let old_schema = old_table?.schema();
-                    if !table.schema_equal(old_schema) {
-                        need_rename = true;
-                    }
-                }
-            }
-            if need_rename {
-                for table in &self.tables {
-                    let old_table_name = format!("`{}_v{}`", table.table_name(), version);
-                    let rename_sql = format!(
-                        "ALTER TABLE IF EXISTS persistent_system.{} RENAME TO {}",
-                        table.table_name(),
-                        old_table_name
-                    );
-                    self.execute_sql(&rename_sql).await?;
-                }
-            }
-        }
-        self.set_version_to_meta(PERSISTENT_LOG_SCHEMA_VERSION)
-            .await?;
-        for table in &self.tables {
-            let create_table = table.create_table_sql();
+        let create_seq = "CREATE SEQUENCE IF NOT EXISTS log_history_seq";
+        self.execute_sql(create_seq).await?;
+        for (_, table) in self.tables.tables.iter() {
+            let create_table = table.create_sql();
             self.execute_sql(&create_table).await?;
         }
 
@@ -375,25 +256,6 @@ impl GlobalPersistentLog {
         let operator = GlobalLogger::instance().get_operator().await;
         if let Some(op) = operator {
             let path = format!("stage/internal/{}/", stage_name);
-            // Why we need to list the files first?
-            // Consider this case:
-            // After executing the two insert statements, a new file is created in the stage.
-            // Copy into enable the `PURGE` option, which will delete all files in the stage.
-            // the new file will be deleted and not inserted into the tables.
-            let files: Vec<String> = op
-                .list(&path)
-                .await?
-                .into_iter()
-                .filter(|f| f.name().ends_with(".parquet"))
-                .map(|f| f.name().to_string())
-                .collect();
-            if files.is_empty() {
-                return Ok(());
-            }
-            for table in &self.tables {
-                self.execute_sql(&table.copy_into_sql(&stage_name, &files))
-                    .await?;
-            }
         }
         Ok(())
     }
@@ -404,13 +266,7 @@ impl GlobalPersistentLog {
             // will check if it is already `retention_interval` hours every sleep_time
             let sleep_time = Duration::from_mins(30 + random::<u64>() % 60);
             let meta_key = format!("{}/persistent_log_clean", self.tenant_id);
-            let may_permit = self
-                .acquire(
-                    &meta_key,
-                    60,
-                    Duration::from_hours(self.retention_interval as u64).as_secs(),
-                )
-                .await?;
+            let may_permit = self.acquire(&meta_key, 60).await?;
             if let Some(guard) = may_permit {
                 if let Err(e) = self.do_clean().await {
                     error!("persistent log clean failed: {}", e);
@@ -423,56 +279,30 @@ impl GlobalPersistentLog {
     }
 
     pub async fn do_clean(&self) -> Result<()> {
-        for table in &self.tables {
-            let clean_sql = table.clean_sql(self.retention);
-            self.execute_sql(&clean_sql).await?;
-            info!(
-                "Periodic retention operation on persistent log table '{}' completed successfully.",
-                table.table_name()
-            );
-        }
+        // for table in &self.tables {
+        //     let clean_sql = table.clean_sql(self.retention);
+        //     self.execute_sql(&clean_sql).await?;
+        //     info!(
+        //         "Periodic retention operation on persistent log table '{}' completed successfully.",
+        //         table.table_name()
+        //     );
+        // }
 
-        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
-        let context = session.create_query_context().await?;
-        if LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
-            .is_ok()
-        {
-            for table in &self.tables {
-                let vacuum = format!("VACUUM TABLE persistent_system.{}", table.table_name());
-                self.execute_sql(&vacuum).await?;
-                info!(
-                "Periodic VACUUM operation on persistent log table '{}' completed successfully.",
-                table.table_name()
-            );
-            }
-        }
-        Ok(())
-    }
-
-    pub async fn get_version_from_meta(&self) -> Result<Option<u64>> {
-        match self
-            .meta_store
-            .get_kv(&format!("{}/persistent_log_work/version", self.tenant_id))
-            .await?
-        {
-            Some(v) => {
-                let version: u64 = serde_json::from_slice(&v.data)?;
-                Ok(Some(version))
-            }
-            None => Ok(None),
-        }
-    }
-
-    pub async fn set_version_to_meta(&self, version: usize) -> Result<()> {
-        self.meta_store
-            .upsert_kv(UpsertKV::new(
-                format!("{}/persistent_log_work/version", self.tenant_id),
-                MatchSeq::Any,
-                Operation::Update(serde_json::to_vec(&version)?),
-                None,
-            ))
-            .await?;
+        // let session = create_session(&self.tenant_id, &self.cluster_id).await?;
+        // let context = session.create_query_context().await?;
+        // if LicenseManagerSwitch::instance()
+        //     .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
+        //     .is_ok()
+        // {
+        //     for table in &self.tables {
+        //         let vacuum = format!("VACUUM TABLE persistent_system.{}", table.table_name());
+        //         self.execute_sql(&vacuum).await?;
+        //         info!(
+        //         "Periodic VACUUM operation on persistent log table '{}' completed successfully.",
+        //         table.table_name()
+        //     );
+        //     }
+        // }
         Ok(())
     }
 }
