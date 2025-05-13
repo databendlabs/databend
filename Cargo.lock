@@ -4455,6 +4455,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "opendal",
+ "parking_lot 0.12.3",
  "parquet",
  "serde",
  "serde_json",

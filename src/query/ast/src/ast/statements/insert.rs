@@ -21,6 +21,7 @@ use derive_visitor::DriveMut;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
+use crate::ast::FileFormatOptions;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -71,9 +72,20 @@ impl Display for InsertStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum InsertSource {
-    Values { rows: Vec<Vec<Expr>> },
-    RawValues { rest_str: String, start: usize },
-    Select { query: Box<Query> },
+    Values {
+        rows: Vec<Vec<Expr>>,
+    },
+    RawValues {
+        rest_str: String,
+        start: usize,
+    },
+    Select {
+        query: Box<Query>,
+    },
+    StreamingLoad {
+        format_options: FileFormatOptions,
+        on_error_mode: Option<String>,
+    },
 }
 
 impl Display for InsertSource {
@@ -93,6 +105,17 @@ impl Display for InsertSource {
             }
             InsertSource::RawValues { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
+            InsertSource::StreamingLoad {
+                format_options,
+                on_error_mode,
+            } => {
+                write!(f, " FILE_FORMAT = ({})", format_options)?;
+                write!(
+                    f,
+                    " ON_ERROR = '{}'",
+                    on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
+                )
+            }
         }
     }
 }

@@ -432,6 +432,9 @@ impl ReplaceInterpreter {
                 }
                 _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
             },
+            InsertInputSource::StreamingLoad { .. } => {
+                unreachable!("replace with streaming not supported yet")
+            }
         }
     }
 
