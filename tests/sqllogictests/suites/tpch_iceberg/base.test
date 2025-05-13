@@ -58,7 +58,7 @@ statement ok
 CREATE OR REPLACE STAGE s3_stage url='s3://warehouse/' connection=(aws_key_id='admin' aws_secret_key='password' endpoint_url = 'http://127.0.0.1:9000');
 
 query II rowsort
-select * from @s3_stage/tpch/t1/data/;
+select * from @s3_stage/test/t1/data/;
 ----
 0 0 a
 1 1 b
@@ -67,7 +67,7 @@ select * from @s3_stage/tpch/t1/data/;
 4 NULL NULL
 
 query II rowsort
-select c1, c3 from @s3_stage/tpch/t1/data/;
+select c1, c3 from @s3_stage/test/t1/data/;
 ----
 0 a
 1 b
@@ -79,7 +79,7 @@ statement ok
 CREATE OR REPLACE STAGE s3_stage url='s3://warehouse/' connection=(aws_key_id='admin' aws_secret_key='password' endpoint_url = 'http://127.0.0.1:9000');
 
 query II rowsort
-select * from @s3_stage/tpch/t1_orc/data/;
+select * from @s3_stage/test/t1_orc/data/;
 ----
 0 0 a
 1 1 b
@@ -88,7 +88,7 @@ select * from @s3_stage/tpch/t1_orc/data/;
 4 NULL NULL
 
 query II rowsort
-select c1, c3 from @s3_stage/tpch/t1_orc/data/;
+select c1, c3 from @s3_stage/test/t1_orc/data/;
 ----
 0 a
 1 b
