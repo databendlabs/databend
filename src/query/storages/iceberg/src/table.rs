@@ -39,7 +39,9 @@ use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
@@ -64,6 +66,7 @@ use crate::statistics::IcebergStatistics;
 
 const ICEBERG_TABLE_FORMAT_OPT: &str = "write.format.default";
 const ICEBERG_TABLE_FORMAT_OPT_ORC: &str = "orc";
+const PARQUET_FIELD_ID_META_KEY: &str = "PARQUET:field_id";
 
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
@@ -120,7 +123,24 @@ impl IcebergTable {
         let arrow_schema = schema_to_arrow_schema(meta.current_schema().as_ref()).map_err(|e| {
             ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
         })?;
-        TableSchema::try_from(&arrow_schema)
+        let mut fields = Vec::with_capacity(arrow_schema.fields().len());
+
+        for arrow_f in arrow_schema.fields().iter() {
+            let field_id: ColumnId = arrow_f
+                .metadata()
+                .get(PARQUET_FIELD_ID_META_KEY)
+                .map(|s| s.parse::<ColumnId>())
+                .transpose()?
+                .unwrap_or(0);
+            let mut field = TableField::try_from(arrow_f.as_ref())?;
+            field.column_id = field_id;
+            fields.push(field);
+        }
+        Ok(TableSchema {
+            fields,
+            metadata: arrow_schema.metadata().clone().into_iter().collect(),
+            next_column_id: 0,
+        })
     }
 
     /// build_engine_options will generate `engine_options` from [`iceberg::table::Table`] so that
@@ -330,7 +350,7 @@ impl IcebergTable {
                 ctx.clone(),
                 op.clone(),
                 table_schema.clone(),
-                arrow_schema,
+                arrow_schema.clone(),
             )?
             .with_options(read_options)
             .with_push_downs(plan.push_downs.as_ref());

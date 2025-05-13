@@ -32,7 +32,7 @@ CREATE TABLE iceberg.test.t1 (
 USING iceberg;
 """)
 
-spark.sql(f"""INSERT INTO iceberg.test.t1 VALUES (0, 0, 'a'), (1, 1, 'b'), (2, 2, 'c'), (3, 3, 'd');""")
+spark.sql(f"""INSERT INTO iceberg.test.t1 VALUES (0, 0, 'a'), (1, 1, 'b'), (2, 2, 'c'), (3, 3, 'd'), (4, null, null);""")
 
 # ORC
 spark.sql(f"""
@@ -47,6 +47,6 @@ TBLPROPERTIES (
 );
 """)
 
-spark.sql(f"""INSERT INTO iceberg.test.t1_orc VALUES (0, 0, 'a'), (1, 1, 'b'), (2, 2, 'c'), (3, 3, 'd');""")
+spark.sql(f"""INSERT INTO iceberg.test.t1_orc VALUES (0, 0, 'a'), (1, 1, 'b'), (2, 2, 'c'), (3, 3, 'd'), (4, null, null);""")
 
 spark.stop()

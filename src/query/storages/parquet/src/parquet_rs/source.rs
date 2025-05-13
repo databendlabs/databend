@@ -55,6 +55,7 @@ use super::parquet_reader::policy::ReadPolicyImpl;
 use super::read_metadata_async_cached;
 use super::ParquetRSFullReader;
 use super::ParquetRSRowGroupPart;
+use crate::parquet_rs::transformer::RecordBatchTransformer;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
 use crate::ParquetRSReaderBuilder;
@@ -106,6 +107,7 @@ pub struct ParquetSource {
     push_downs: Option<PushDownInfo>,
     topk: Arc<Option<TopK>>,
     op_registry: Arc<dyn OperatorRegistry>,
+    transformer: RecordBatchTransformer,
 }
 
 impl ParquetSource {
@@ -129,6 +131,7 @@ impl ParquetSource {
             .as_ref()
             .as_ref()
             .map(|t| TopKSorter::new(t.limit, t.asc));
+        let transformer = RecordBatchTransformer::build(table_schema.clone());
 
         Ok(ProcessorPtr::create(Box::new(Self {
             source_type,
@@ -148,6 +151,7 @@ impl ParquetSource {
             push_downs,
             topk,
             op_registry,
+            transformer,
         })))
     }
 }
@@ -275,6 +279,7 @@ impl Processor for ParquetSource {
                                     &ReadSettings::from_ctx(&self.ctx)?,
                                     part,
                                     &mut self.topk_sorter,
+                                    self.transformer.clone(),
                                 )
                                 .await?
                             {
@@ -345,9 +350,8 @@ impl ParquetSource {
             )?;
         }
         // The schema of the table in iceberg may be inconsistent with the schema in parquet
-        let reader = if matches!(self.source_type, ParquetSourceType::Iceberg)
-            && self.row_group_reader.schema_desc().root_schema()
-                != meta.file_metadata().schema_descr().root_schema()
+        let reader = if self.row_group_reader.schema_desc().root_schema()
+            != meta.file_metadata().schema_descr().root_schema()
         {
             let read_options = ParquetReadOptions::default()
                 .with_prune_row_groups(true)
@@ -397,6 +401,7 @@ impl ParquetSource {
                     &ReadSettings::from_ctx(&self.ctx)?,
                     &part,
                     &mut self.topk_sorter,
+                    self.transformer.clone(),
                 )
                 .await?;
 

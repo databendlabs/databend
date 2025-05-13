@@ -22,6 +22,7 @@ mod statistics;
 
 mod meta;
 mod schema;
+mod transformer;
 
 pub use copy_into_table::ParquetTableForCopy;
 pub use meta::read_metadata_async_cached;
@@ -36,3 +37,4 @@ pub use source::ParquetSource;
 pub use source::ParquetSourceType;
 pub use statistics::collect_row_group_stats;
 pub use statistics::collect_single_row_group_stats;
+pub use transformer::RecordBatchTransformer;

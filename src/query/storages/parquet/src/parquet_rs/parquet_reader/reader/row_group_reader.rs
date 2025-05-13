@@ -30,6 +30,7 @@ use crate::parquet_rs::parquet_reader::policy::PolicyType;
 use crate::parquet_rs::parquet_reader::policy::ReadPolicyImpl;
 use crate::parquet_rs::parquet_reader::policy::POLICY_PREDICATE_ONLY;
 use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
+use crate::parquet_rs::transformer::RecordBatchTransformer;
 use crate::ParquetRSRowGroupPart;
 use crate::ReadSettings;
 
@@ -61,6 +62,7 @@ impl ParquetRSRowGroupReader {
         read_settings: &ReadSettings,
         part: &ParquetRSRowGroupPart,
         topk_sorter: &mut Option<TopKSorter>,
+        transformer: RecordBatchTransformer,
     ) -> Result<Option<ReadPolicyImpl>> {
         if let Some((sorter, min_max)) = topk_sorter.as_ref().zip(part.sort_min_max.as_ref()) {
             if sorter.never_match(min_max) {
@@ -99,7 +101,13 @@ impl ParquetRSRowGroupReader {
 
         let builder = &self.policy_builders[policy as usize];
         builder
-            .build(row_group, selection, topk_sorter, self.batch_size)
+            .build(
+                row_group,
+                selection,
+                topk_sorter,
+                Some(transformer),
+                self.batch_size,
+            )
             .await
     }
 }

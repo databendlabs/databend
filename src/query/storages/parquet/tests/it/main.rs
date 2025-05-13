@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod merge_io;
+mod transformer;
