@@ -694,6 +694,7 @@ impl PrivilegeAccess {
                 self.check(ctx, plan).await?;
             }
             InsertInputSource::Values(_) => {}
+            InsertInputSource::StreamingLoad { .. } => {}
         }
         Ok(())
     }

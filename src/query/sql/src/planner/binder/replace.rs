@@ -18,6 +18,7 @@ use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::binder::Binder;
@@ -137,6 +138,9 @@ impl Binder {
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
                 Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
             }
+            InsertSource::StreamingLoad { .. } => Err(ErrorCode::Unimplemented(
+                "Replace with streaming load not supported yet.",
+            )),
         };
 
         let plan = Replace {
