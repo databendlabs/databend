@@ -30,10 +30,10 @@ use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::statements::warehouse::ShowWarehousesStmt;
-use crate::ast::statements::workload::AlterWorkloadGroupStmt;
 use crate::ast::statements::workload::CreateWorkloadGroupStmt;
 use crate::ast::statements::workload::DropWorkloadGroupStmt;
 use crate::ast::statements::workload::RenameWorkloadGroupStmt;
+use crate::ast::statements::workload::SetWorkloadGroupQuotasStmt;
 use crate::ast::statements::workload::ShowWorkloadGroupsStmt;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
@@ -156,7 +156,8 @@ pub enum Statement {
     CreateWorkloadGroup(CreateWorkloadGroupStmt),
     DropWorkloadGroup(DropWorkloadGroupStmt),
     RenameWorkloadGroup(RenameWorkloadGroupStmt),
-    AlterWorkloadGroup(AlterWorkloadGroupStmt),
+    SetWorkloadQuotasGroup(SetWorkloadGroupQuotasStmt),
+    UnsetWorkloadQuotasGroup(UnsetWorkloadGroupQuotasStmt),
 
     // Databases
     ShowDatabases(ShowDatabasesStmt),
@@ -589,7 +590,8 @@ impl Statement {
             | Statement::CreateWorkloadGroup(..)
             | Statement::DropWorkloadGroup(..)
             | Statement::RenameWorkloadGroup(..)
-            | Statement::AlterWorkloadGroup(..) => false,
+            | Statement::SetWorkloadQuotasGroup(..)
+            | Statement::UnsetWorkloadQuotasGroup(..) => false,
             Statement::StatementWithSettings { stmt, settings: _ } => {
                 stmt.allowed_in_multi_statement()
             }
@@ -1034,7 +1036,8 @@ impl Display for Statement {
             Statement::CreateWorkloadGroup(stmt) => write!(f, "{stmt}")?,
             Statement::DropWorkloadGroup(stmt) => write!(f, "{stmt}")?,
             Statement::RenameWorkloadGroup(stmt) => write!(f, "{stmt}")?,
-            Statement::AlterWorkloadGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::SetWorkloadQuotasGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::UnsetWorkloadQuotasGroup(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

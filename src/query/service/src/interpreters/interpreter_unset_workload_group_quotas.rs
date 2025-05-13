@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
@@ -22,29 +21,28 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::WorkloadApi;
 use databend_common_management::WorkloadMgr;
-use databend_common_sql::plans::AlterWorkloadGroupPlan;
+use databend_common_sql::plans::UnsetWorkloadGroupQuotasPlan;
 
-use crate::interpreters::interpreter_create_workload_group::to_quota_value;
 use crate::interpreters::util::AuditElement;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
-pub struct AlterWorkloadGroupInterpreter {
+pub struct UnsetWorkloadGroupQuotasInterpreter {
     ctx: Arc<QueryContext>,
-    plan: AlterWorkloadGroupPlan,
+    plan: UnsetWorkloadGroupQuotasPlan,
 }
 
-impl AlterWorkloadGroupInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterWorkloadGroupPlan) -> Result<Self> {
-        Ok(AlterWorkloadGroupInterpreter { ctx, plan })
+impl UnsetWorkloadGroupQuotasInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: UnsetWorkloadGroupQuotasPlan) -> Result<Self> {
+        Ok(UnsetWorkloadGroupQuotasInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for AlterWorkloadGroupInterpreter {
+impl Interpreter for UnsetWorkloadGroupQuotasInterpreter {
     fn name(&self) -> &str {
-        "AlterWorkloadGroupInterpreter"
+        "UnsetWorkloadGroupQuotasInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -56,22 +54,16 @@ impl Interpreter for AlterWorkloadGroupInterpreter {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
 
-        let mut workload_quotas = HashMap::with_capacity(self.plan.quotas.len());
-
-        for (key, value) in &self.plan.quotas {
-            workload_quotas.insert(key.clone(), to_quota_value(value));
-        }
-
         let workload_manager = GlobalInstance::get::<Arc<WorkloadMgr>>();
         workload_manager
-            .alter_quotas(self.plan.name.clone(), workload_quotas)
+            .unset_quotas(self.plan.name.clone(), self.plan.quotas.clone())
             .await?;
 
         let user_info = self.ctx.get_current_user()?;
         log::info!(
             target: "databend::log::audit",
             "{}",
-            serde_json::to_string(&AuditElement::create(&user_info, "alter_workload", &self.plan))?
+            serde_json::to_string(&AuditElement::create(&user_info, "unset_workload_quotas", &self.plan))?
         );
         Ok(PipelineBuildResult::create())
     }
