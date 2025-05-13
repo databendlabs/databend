@@ -409,6 +409,7 @@ build_exceptions! {
     AlreadyExistsWorkload(3141),
     UnknownWorkload(3142),
     WorkloadOperateConflict(3143),
+    UnknownWorkloadQuotas(3144),
 }
 
 // Storage errors [3001, 4000].

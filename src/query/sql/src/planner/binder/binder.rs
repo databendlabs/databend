@@ -792,7 +792,8 @@ impl<'a> Binder {
             Statement::CreateWorkloadGroup(v) => self.bind_create_workload_group(v)?,
             Statement::DropWorkloadGroup(v) => self.bind_drop_workload_group(v)?,
             Statement::RenameWorkloadGroup(v) => self.bind_rename_workload_group(v)?,
-            Statement::AlterWorkloadGroup(v) => self.bind_alter_workload_group(v)?,
+            Statement::SetWorkloadQuotasGroup(v) => self.bind_set_workload_group_quotas(v)?,
+            Statement::UnsetWorkloadQuotasGroup(v) => self.bind_unset_workload_group_quotas(v)?,
         };
 
         match &plan {
