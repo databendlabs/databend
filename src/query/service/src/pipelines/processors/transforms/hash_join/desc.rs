@@ -48,8 +48,6 @@ pub struct HashJoinDesc {
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
-    // Under cluster, mark if the join is broadcast join.
-    pub broadcast: bool,
     pub(crate) runtime_filter: RuntimeFiltersDesc,
 }
 
@@ -115,7 +113,6 @@ impl HashJoinDesc {
                 // marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
-            broadcast: join.broadcast,
             single_to_inner: join.single_to_inner.clone(),
             runtime_filter: (&join.runtime_filter).into(),
         })
