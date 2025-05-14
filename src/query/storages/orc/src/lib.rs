@@ -34,4 +34,6 @@ mod table;
 mod utils;
 
 pub use copy_into_table::OrcTableForCopy;
+pub use processors::decoder::StripeDecoder;
+pub use processors::source::ORCSource;
 pub use table::OrcTable;

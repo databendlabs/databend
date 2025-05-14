@@ -53,11 +53,12 @@ message IcebergCatalogOption {
   // We don't need to StorageConfig in iceberg catalog anymore.
   // StorageConfig storage_params = 1;
   reserved 1;
-  
+
   oneof iceberg_catalog_option {
     IcebergRestCatalogOption rest_catalog = 2;
     IcebergHmsCatalogOption hms_catalog = 3;
     IcebergGlueCatalogOption glue_catalog = 4;
+    IcebergStorageCatalogOption storage_catalog = 5;
   }
 }
 
@@ -85,6 +86,16 @@ message IcebergGlueCatalogOption {
 
   string warehouse = 1;
   map<string, string> props = 2;
+  string address = 3;
+}
+
+message IcebergStorageCatalogOption {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string address = 1;
+  string table_bucket_arn = 2;
+  map<string, string> props = 3;
 }
 
 message ShareCatalogOption {

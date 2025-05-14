@@ -87,6 +87,12 @@ new_valid_mem (empty) 4294967296 (empty) (empty) (empty)
 valid_timeout 50% 20% 960s 10 900s
 
 statement ok
+ALTER WORKLOAD GROUP valid_timeout UNSET query_queued_timeout;
+
+statement error 3144
+ALTER WORKLOAD GROUP valid_timeout UNSET query_queued_timeout;
+
+statement ok
 drop workload group valid_timeout;
 
 statement ok
