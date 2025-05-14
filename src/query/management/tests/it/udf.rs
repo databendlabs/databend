@@ -25,8 +25,8 @@ use databend_common_management::*;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 
@@ -234,8 +234,10 @@ fn create_test_udf_script() -> UserDefinedFunction {
     )
 }
 
-async fn new_udf_api() -> Result<(Arc<MemMeta>, UdfMgr)> {
-    let test_api = Arc::new(MemMeta::default());
+async fn new_udf_api() -> Result<(Arc<MetaStore>, UdfMgr)> {
+    let test_api = MetaStore::new_local_testing().await;
+    let test_api = Arc::new(test_api);
+
     let mgr = UdfMgr::create(test_api.clone(), &Tenant::new_literal("admin"));
     Ok((test_api, mgr))
 }

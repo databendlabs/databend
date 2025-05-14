@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_base::base::tokio;
 use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_embedded::MemMeta;
+use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::UpsertKV;
 use mockall::predicate::*;
 
@@ -89,8 +89,10 @@ mod add {
 
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
-) -> databend_common_exception::Result<(Arc<MemMeta>, RoleMgr)> {
-    let test_api = Arc::new(MemMeta::default());
+) -> databend_common_exception::Result<(Arc<MetaStore>, RoleMgr)> {
+    let test_api = MetaStore::new_local_testing().await;
+    let test_api = Arc::new(test_api);
+
     let tenant = Tenant::new_literal("admin");
     let mgr = RoleMgr::create(
         test_api.clone(),

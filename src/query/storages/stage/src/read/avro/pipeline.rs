@@ -76,7 +76,7 @@ impl AvroReadPipelineBuilder<'_> {
 
         let operator = init_stage_operator(&self.stage_table_info.stage_info)?;
 
-        let load_ctx = Arc::new(LoadContext::try_create(
+        let load_ctx = Arc::new(LoadContext::try_create_for_copy(
             ctx.clone(),
             self.stage_table_info,
             pos_projection,

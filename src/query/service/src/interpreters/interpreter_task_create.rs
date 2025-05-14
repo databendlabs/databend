@@ -20,9 +20,12 @@ use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb;
 use databend_common_cloud_control::pb::CreateTaskRequest;
+use databend_common_cloud_control::pb::DropTaskRequest;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_settings::DefaultSettings;
+use databend_common_settings::SettingScope;
 use databend_common_sql::plans::CreateTaskPlan;
 
 use crate::interpreters::common::get_task_client_config;
@@ -64,7 +67,7 @@ impl CreateTaskInterpreter {
             error_integration: plan.error_integration,
             task_sql_type: 0,
             suspend_task_after_num_failures: plan.suspend_task_after_num_failures.map(|x| x as i32),
-            if_not_exist: plan.if_not_exists,
+            if_not_exist: plan.create_option.if_not_exist(),
             after: plan.after,
             when_condition: plan.when_condition,
             session_parameters: plan.session_parameters,
@@ -82,6 +85,14 @@ impl CreateTaskInterpreter {
             }
         }
         req
+    }
+
+    fn validate_session_parameters(&self) -> Result<()> {
+        let session_parameters = self.plan.session_parameters.clone();
+        for (key, _) in session_parameters.iter() {
+            DefaultSettings::check_setting_scope(key, SettingScope::Session)?;
+        }
+        Ok(())
     }
 }
 
@@ -104,11 +115,24 @@ impl Interpreter for CreateTaskInterpreter {
                 "cannot create task without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
         }
+        self.validate_session_parameters()?;
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
         let req = self.build_request();
         let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
-        let req = make_request(req, config);
+        let req = make_request(req, config.clone());
+
+        // cloud don't support create or replace, let's remove the task in previous
+        if self.plan.create_option.is_overriding() {
+            let drop_req = DropTaskRequest {
+                task_name: self.plan.task_name.clone(),
+                tenant_id: self.plan.tenant.tenant_name().to_string(),
+                if_exist: true,
+            };
+            let drop_req = make_request(drop_req, config);
+            task_client.drop_task(drop_req).await?;
+        }
+
         task_client.create_task(req).await?;
         Ok(PipelineBuildResult::create())
     }

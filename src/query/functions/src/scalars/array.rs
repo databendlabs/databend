@@ -876,6 +876,42 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
+
+    registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>,  ArrayType<GenericType<0>> , _, _>(
+        "array_intersection",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>,  ArrayType<GenericType<0>> >(
+            |left, right, output, _| {
+                let mut set: StackHashSet<u128, 16> = StackHashSet::with_capacity(left.len());
+                let builder = &mut  output.builder;
+                for val in left.iter() {
+                    if val == ScalarRef::Null {
+                        continue;
+                    }
+                    let mut hasher = SipHasher24::new();
+                    val.hash(&mut hasher);
+                    let hash128 = hasher.finish128();
+                    let key = hash128.into();
+                    let _ = set.set_insert(key);
+                }
+
+                for val in right.iter() {
+                    if val == ScalarRef::Null {
+                        continue;
+                    }
+                    let mut hasher = SipHasher24::new();
+                    val.hash(&mut hasher);
+                    let hash128 = hasher.finish128();
+                    let key = hash128.into();
+
+                    if set.contains(&key) {
+                        builder.push(val);
+                    }
+                }
+                output.commit_row()
+            },
+        ),
+    );
 }
 
 fn register_array_aggr(registry: &mut FunctionRegistry) {

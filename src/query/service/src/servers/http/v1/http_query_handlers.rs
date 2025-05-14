@@ -78,6 +78,7 @@ use crate::servers::http::v1::query::blocks_serializer::BlocksSerializer;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::refresh_handler;
 use crate::servers::http::v1::roles::list_roles_handler;
+use crate::servers::http::v1::streaming_load_handler;
 use crate::servers::http::v1::upload_to_stage;
 use crate::servers::http::v1::users::create_user_handler;
 use crate::servers::http::v1::users::list_users_handler;
@@ -489,7 +490,7 @@ pub(crate) async fn query_handler(
     };
 
     let query_handle = {
-        let query_mem_stat = MemStat::create(format!("Query-{}", ctx.query_id));
+        let query_mem_stat = MemStat::create(ctx.query_id.clone());
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(ctx.query_id.clone());
         tracking_payload.mem_stat = Some(query_mem_stat.clone());
@@ -703,6 +704,11 @@ pub fn query_route() -> Route {
             get(list_users_handler).post(create_user_handler),
             EndpointKind::Metadata,
         ),
+        (
+            "/streaming_load",
+            put(streaming_load_handler),
+            EndpointKind::StreamingLoad,
+        ),
         ("/roles", get(list_roles_handler), EndpointKind::Metadata),
     ];
 
@@ -742,14 +748,14 @@ fn query_id_to_trace_id(query_id: &str) -> TraceId {
 /// The HTTP query endpoints are expected to be responses within 60 seconds.
 /// If it exceeds far from 60 seconds, there might be something wrong, we should
 /// log it.
-struct SlowRequestLogTracker {
+pub(crate) struct SlowRequestLogTracker {
     started_at: std::time::Instant,
     method: String,
     uri: String,
 }
 
 impl SlowRequestLogTracker {
-    fn new(ctx: &HttpQueryContext) -> Self {
+    pub(crate) fn new(ctx: &HttpQueryContext) -> Self {
         Self {
             started_at: std::time::Instant::now(),
             method: ctx.http_method.clone(),
@@ -776,7 +782,11 @@ impl Drop for SlowRequestLogTracker {
 
 // get_http_tracing_span always return a valid span for tracing
 // it will try to decode w3 traceparent and if empty or failed, it will create a new root span and throw a warning
-fn get_http_tracing_span(name: &'static str, ctx: &HttpQueryContext, query_id: &str) -> Span {
+pub(crate) fn get_http_tracing_span(
+    name: &'static str,
+    ctx: &HttpQueryContext,
+    query_id: &str,
+) -> Span {
     if let Some(parent) = ctx.trace_parent.as_ref() {
         let trace = parent.as_str();
         match SpanContext::decode_w3c_traceparent(trace) {

@@ -377,9 +377,6 @@ impl<'a> Binder {
             }
 
             // Virtual Columns
-            Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
-            Statement::AlterVirtualColumn(stmt) => self.bind_alter_virtual_column(stmt).await?,
-            Statement::DropVirtualColumn(stmt) => self.bind_drop_virtual_column(stmt).await?,
             Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
             Statement::ShowVirtualColumns(stmt) => {
                 self.bind_show_virtual_columns(bind_context, stmt).await?
@@ -394,7 +391,7 @@ impl<'a> Binder {
             Statement::ShowUsers { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM system.users {} ORDER BY name {}",
+                    "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM default.system.users {} ORDER BY name {}",
                     show_limit, limit_str
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowUsers)
@@ -435,7 +432,7 @@ impl<'a> Binder {
             Statement::ShowStages { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM system.stages {} ORDER BY name {}",
+                    "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM default.system.stages {} ORDER BY name {}",
                     show_limit, limit_str,
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowStages)
@@ -458,7 +455,8 @@ impl<'a> Binder {
             Statement::DescribeStage { stage_name } => {
                 self.bind_rewrite_to_query(
                     bind_context,
-                    format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(),
+                    format!("SELECT * FROM default.system.stages WHERE name = '{stage_name}'")
+                        .as_str(),
                     RewriteKind::DescribeStage,
                 )
                 .await?
@@ -795,7 +793,8 @@ impl<'a> Binder {
             Statement::CreateWorkloadGroup(v) => self.bind_create_workload_group(v)?,
             Statement::DropWorkloadGroup(v) => self.bind_drop_workload_group(v)?,
             Statement::RenameWorkloadGroup(v) => self.bind_rename_workload_group(v)?,
-            Statement::AlterWorkloadGroup(v) => self.bind_alter_workload_group(v)?,
+            Statement::SetWorkloadQuotasGroup(v) => self.bind_set_workload_group_quotas(v)?,
+            Statement::UnsetWorkloadQuotasGroup(v) => self.bind_unset_workload_group_quotas(v)?,
         };
 
         match &plan {

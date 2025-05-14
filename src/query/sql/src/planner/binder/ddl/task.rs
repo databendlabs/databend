@@ -111,7 +111,7 @@ impl Binder {
         stmt: &CreateTaskStmt,
     ) -> Result<Plan> {
         let CreateTaskStmt {
-            if_not_exists,
+            create_option,
             name,
             warehouse,
             schedule_opts,
@@ -136,7 +136,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = CreateTaskPlan {
-            if_not_exists: *if_not_exists,
+            create_option: create_option.clone().into(),
             tenant,
             task_name: name.to_string(),
             warehouse: warehouse.clone(),

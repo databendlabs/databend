@@ -14,6 +14,7 @@
 
 use std::path::Path;
 
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::ThreadTracker;
 use log::Record;
 use logforth::append::rolling_file::NonBlockingBuilder;
@@ -23,6 +24,7 @@ use logforth::append::RollingFile;
 use logforth::layout::collect_kvs;
 use logforth::layout::CustomLayout;
 use logforth::layout::KvDisplay;
+use logforth::Append;
 use logforth::Layout;
 use serde_json::Map;
 
@@ -32,7 +34,7 @@ pub(crate) fn new_rolling_file_appender(
     name: impl ToString,
     max_files: usize,
     max_file_size: usize,
-) -> (RollingFile, Box<dyn Send + Sync + 'static>) {
+) -> (RollingFileWarp, Box<dyn Send + Sync + 'static>) {
     let rolling = RollingFileWriter::builder()
         .rotation(Rotation::Hourly)
         .filename_prefix(name.to_string())
@@ -44,7 +46,33 @@ pub(crate) fn new_rolling_file_appender(
         .thread_name("log-file-appender")
         .finish(rolling);
 
-    (RollingFile::new(non_blocking), Box::new(guard))
+    (
+        RollingFileWarp::new(RollingFile::new(non_blocking)),
+        Box::new(guard),
+    )
+}
+
+#[derive(Debug)]
+pub struct RollingFileWarp {
+    inner: RollingFile,
+}
+
+impl RollingFileWarp {
+    pub fn new(inner: RollingFile) -> Self {
+        Self { inner }
+    }
+
+    /// Sets the layout used to format log records as bytes.
+    pub fn with_layout(self, layout: impl Into<Layout>) -> Self {
+        Self::new(self.inner.with_layout(layout))
+    }
+}
+
+impl Append for RollingFileWarp {
+    fn append(&self, record: &Record) -> anyhow::Result<()> {
+        let _guard = LimitMemGuard::enter_unlimited();
+        self.inner.append(record)
+    }
 }
 
 pub fn get_layout(format: &str) -> Layout {

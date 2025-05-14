@@ -49,7 +49,7 @@ pub struct MetaStoreProvider {
     rpc_conf: RpcClientConf,
 }
 
-/// MetaStore is impl with either a local embedded meta store, or a grpc-client of metasrv
+/// MetaStore is impl with either a local meta-service, or a grpc-client of metasrv
 #[derive(Clone)]
 pub enum MetaStore {
     L(Arc<LocalMetaService>),

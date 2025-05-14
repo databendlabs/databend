@@ -42,8 +42,6 @@ use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
-use crate::plans::AlterVirtualColumnPlan;
-use crate::plans::AlterWorkloadGroupPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CallProcedurePlan;
@@ -70,7 +68,6 @@ use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
-use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::CreateWarehousePlan;
 use crate::plans::CreateWorkloadGroupPlan;
 use crate::plans::DescConnectionPlan;
@@ -105,7 +102,6 @@ use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
-use crate::plans::DropVirtualColumnPlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
 use crate::plans::DropWorkloadGroupPlan;
@@ -148,6 +144,7 @@ use crate::plans::SetPlan;
 use crate::plans::SetPriorityPlan;
 use crate::plans::SetRolePlan;
 use crate::plans::SetSecondaryRolesPlan;
+use crate::plans::SetWorkloadGroupQuotasPlan;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
@@ -163,6 +160,7 @@ use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
 use crate::plans::UnsetPlan;
+use crate::plans::UnsetWorkloadGroupQuotasPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::UseWarehousePlan;
@@ -236,7 +234,8 @@ pub enum Plan {
     CreateWorkloadGroup(Box<CreateWorkloadGroupPlan>),
     DropWorkloadGroup(Box<DropWorkloadGroupPlan>),
     RenameWorkloadGroup(Box<RenameWorkloadGroupPlan>),
-    AlterWorkloadGroup(Box<AlterWorkloadGroupPlan>),
+    SetWorkloadGroupQuotas(Box<SetWorkloadGroupQuotasPlan>),
+    UnsetWorkloadGroupQuotas(Box<UnsetWorkloadGroupQuotasPlan>),
 
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
@@ -313,9 +312,6 @@ pub enum Plan {
     RefreshTableIndex(Box<RefreshTableIndexPlan>),
 
     // Virtual Columns
-    CreateVirtualColumn(Box<CreateVirtualColumnPlan>),
-    AlterVirtualColumn(Box<AlterVirtualColumnPlan>),
-    DropVirtualColumn(Box<DropVirtualColumnPlan>),
     RefreshVirtualColumn(Box<RefreshVirtualColumnPlan>),
 
     // Account

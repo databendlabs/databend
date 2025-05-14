@@ -2528,31 +2528,42 @@ impl ColumnBuilder {
     }
 
     pub fn build(self) -> Column {
-        match self {
-            ColumnBuilder::Null { len } => Column::Null { len },
-            ColumnBuilder::EmptyArray { len } => Column::EmptyArray { len },
-            ColumnBuilder::EmptyMap { len } => Column::EmptyMap { len },
-            ColumnBuilder::Number(builder) => Column::Number(builder.build()),
-            ColumnBuilder::Decimal(builder) => Column::Decimal(builder.build()),
-            ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
-            ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
-            ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
-            ColumnBuilder::Tuple(fields) => {
-                assert!(fields.iter().map(|field| field.len()).all_equal());
-                Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
-            }
+        match_template::match_template! {
+            T = [
+                Date => DateType,
+                Timestamp => TimestampType,
+                Interval => IntervalType,
+            ],
+            match self {
+                ColumnBuilder::T(b) => {
+                    Self::type_build::<T>(b)
+                }
+                ColumnBuilder::Null { len } => Column::Null { len },
+                ColumnBuilder::EmptyArray { len } => Column::EmptyArray { len },
+                ColumnBuilder::EmptyMap { len } => Column::EmptyMap { len },
+                ColumnBuilder::Number(builder) => Column::Number(builder.build()),
+                ColumnBuilder::Decimal(builder) => Column::Decimal(builder.build()),
+                ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
+                ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
+                ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
+                ColumnBuilder::Tuple(fields) => {
+                    assert!(fields.iter().map(|field| field.len()).all_equal());
+                    Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
+                }
 
-            ColumnBuilder::Boolean(b) => Column::Boolean(BooleanType::build_column(b)),
-            ColumnBuilder::Binary(b) => Column::Binary(BinaryType::build_column(b)),
-            ColumnBuilder::String(b) => Column::String(StringType::build_column(b)),
-            ColumnBuilder::Timestamp(b) => Column::Timestamp(TimestampType::build_column(b)),
-            ColumnBuilder::Date(b) => Column::Date(DateType::build_column(b)),
-            ColumnBuilder::Interval(b) => Column::Interval(IntervalType::build_column(b)),
-            ColumnBuilder::Bitmap(b) => Column::Bitmap(BitmapType::build_column(b)),
-            ColumnBuilder::Variant(b) => Column::Variant(VariantType::build_column(b)),
-            ColumnBuilder::Geometry(b) => Column::Geometry(GeometryType::build_column(b)),
-            ColumnBuilder::Geography(b) => Column::Geography(GeographyType::build_column(b)),
+                ColumnBuilder::Boolean(b) => Column::Boolean(BooleanType::build_column(b)),
+                ColumnBuilder::Binary(b) => Column::Binary(BinaryType::build_column(b)),
+                ColumnBuilder::String(b) => Column::String(StringType::build_column(b)),
+                ColumnBuilder::Bitmap(b) => Column::Bitmap(BitmapType::build_column(b)),
+                ColumnBuilder::Variant(b) => Column::Variant(VariantType::build_column(b)),
+                ColumnBuilder::Geometry(b) => Column::Geometry(GeometryType::build_column(b)),
+                ColumnBuilder::Geography(b) => Column::Geography(GeographyType::build_column(b)),
+            }
         }
+    }
+
+    fn type_build<T: ValueType>(builder: T::ColumnBuilder) -> Column {
+        T::upcast_column(T::build_column(builder))
     }
 
     pub fn build_scalar(self) -> Scalar {
@@ -2577,7 +2588,7 @@ impl ColumnBuilder {
             ColumnBuilder::Binary(b) => Scalar::Binary(BinaryType::build_scalar(b)),
             ColumnBuilder::String(b) => Scalar::String(StringType::build_scalar(b)),
             ColumnBuilder::Timestamp(b) => Scalar::Timestamp(TimestampType::build_scalar(b)),
-            ColumnBuilder::Date(b) => Scalar::Date(DateType::build_scalar(b)),
+            ColumnBuilder::Date(b) => Scalar::Date(<DateType as ValueType>::build_scalar(b)),
             ColumnBuilder::Interval(b) => Scalar::Interval(IntervalType::build_scalar(b)),
             ColumnBuilder::Bitmap(b) => Scalar::Bitmap(BitmapType::build_scalar(b)),
             ColumnBuilder::Variant(b) => Scalar::Variant(VariantType::build_scalar(b)),

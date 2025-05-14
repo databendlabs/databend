@@ -4,7 +4,6 @@ Databend Meta is a transactional metadata service.
 
 - [`api`](./api/), the user level api interface exposed based on the KVApi implementation.
 - [`app`](./app/), defines meta data types used by meta-client application.
-- [`embedded`](./embedded/), a meta store backed with a local sled::Tree.
 - [`grpc`](client/), the client library based on grpc and is used to communicate with meta service.
 - [`protos`](./protos/) defines the protobuf messages a meta client talks to a meta server.
 - [`proto-conv`](./proto-conv/) defines how to convert metadata types in rust from and to protobuf messages.
@@ -80,26 +79,21 @@ The following is an illustration of the latest query-meta compatibility:
 `[, a.b.c)` denotes the range of versions from previous version(on the left column)(inclusive)
 upto `a.b.c` (exclusive).
 
-TODO: xx is the version in which semaphore is added. update it when merged.
 
-| `Meta\Query`       | 1.1.34) | [, 1.2.287) | [, 1.2.361) | [, xx) | [, +∞)           |
-|:-------------------|:--------|:------------|:------------|:-------|:-----------------|
-| [0.8.30, 0.8.35)   |         | ❌           | ❌           | ❌      | ❌                |
-| [0.8.35, 0.9.23)   |         | ❌           | ❌           | ❌      | ❌                |
-| [0.9.23, 0.9.42)   |         | ❌           | ❌           | ❌      | ❌                |
-| [0.9.42, 1.1.32)   |         | ❌           | ❌           | ❌      | ❌                |
-| [1.1.32, 1.2.63)   |         | ✅           | ❌           | ❌      | ❌                |
-| [1.2.63, 1.2.226)  |         | ✅           | ❌           | ❌      | ❌                |
-| [1.2.226, 1.2.258) |         | ✅           | ✅           | ❌      | ❌                |
-| [1.2.258, 1.2.663) |         | ✅           | ✅           | ✅      | ✅(no semaphore)  |
-| [1.2.663, 1.2.677) |         | ❌           | ✅           | ✅      | ✅(no semaphore)  |
-| [1.2.677, +∞)      |         | ❌           | ✅           | ✅      | ✅                |
+| `Meta\Query`       | 1.2.287) | [, 1.2.361) | [, 1.2.715) | [, 1.2.726)      | [, +∞) |
+|:-------------------|:---------|:------------|:------------|:-----------------|:-------|
+| [1.2.63, 1.2.226)  |          | ❌           | ❌            | ❌                | ❌      |
+| [1.2.226, 1.2.258) |          | ✅           | ❌            | ❌                | ❌      |
+| [1.2.258, 1.2.663) |          | ✅           | ✅            | ✅(no semaphore)  | ❌      |
+| [1.2.663, 1.2.677) |          | ✅           | ✅            | ✅(no semaphore)  | ❌      |
+| [1.2.677, +∞)      |          | ✅           | ✅            | ✅                | ✅      |
 
 History versions that are not included in the above chart:
 
 - Query `[0.7.59, 0.8.80)` is compatible with Meta `[0.8.30, 0.9.23)`.
 - Query `[0.8.80, 0.9.41)` is compatible with Meta `[0.8.35, 0.9.42)`.
 - Query `[0.9.41, 1.1.34)` is compatible with Meta `[0.8.35, 1.2.663)`.
+- Query `[1.1.34, 1.2.287)` is compatible with Meta `[1.1.32, 1.2.63)`.
 
 
 ## Compatibility between databend-meta

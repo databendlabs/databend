@@ -1858,6 +1858,15 @@ evaluation (internal):
 +--------+----------------------------+
 
 
+ast            : concat('5', 3, 4)
+raw expr       : concat('5', 3, 4)
+checked expr   : concat<String, String, String>("5", CAST<UInt8>(3_u8 AS String), CAST<UInt8>(4_u8 AS String))
+optimized expr : "534"
+output type    : String
+output domain  : {"534"..="534"}
+output         : '534'
+
+
 ast            : concat('5', '3', '4')
 raw expr       : concat('5', '3', '4')
 checked expr   : concat<String, String, String>("5", "3", "4")
