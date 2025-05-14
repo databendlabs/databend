@@ -27,7 +27,7 @@ databend-common-users = { workspace = true }
 databend-query = { workspace = true, features = [
     "simd",
     "disable_initial_exec_tls",
-]}
+] }
 pyo3 = { version = "0.24", features = ["extension-module", "abi3", "abi3-py37"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }

@@ -17,37 +17,24 @@ mod display;
 mod executor;
 pub(crate) mod helper;
 
-use std::env;
 use std::io::stdin;
 use std::io::IsTerminal;
-use std::path::Path;
 
 use databend_common_config::Config;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
-use databend_common_meta_app::storage::StorageFsConfig;
-use databend_common_meta_app::storage::StorageParams;
 
 use crate::clusters::ClusterDiscovery;
 use crate::GlobalServices;
 
 pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
-    let temp_dir = tempfile::tempdir()?;
-    let p = env::var("DATABEND_DATA_DIR");
-    let path = match &p {
-        Ok(p) => Path::new(p),
-        Err(_) => temp_dir.path(),
-    };
-
-    env::set_var("DATABEND_META_DIR", path.join("_meta"));
     let mut conf: InnerConfig = Config::load(true).unwrap().try_into().unwrap();
     conf.storage.allow_insecure = true;
-    conf.query.cluster_id = "local_test".to_string();
-    conf.storage.params = StorageParams::Fs(StorageFsConfig {
-        root: path.join("_data").to_str().unwrap().to_owned(),
-    });
+    if conf.query.cluster_id == "" {
+        conf.query.cluster_id = "local_test".to_string();
+    }
 
     GlobalServices::init(&conf, false).await?;
     // init oss license manager

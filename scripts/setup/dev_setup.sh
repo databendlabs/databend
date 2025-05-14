@@ -171,6 +171,8 @@ function install_openssl {
 
 	echo "==> installing openssl libs..."
 
+	PERL_MM_USE_DEFAULT=1 perl -MCPAN -e 'install IPC::Cmd'
+
 	case "$PACKAGE_MANAGER" in
 	apt-get)
 		install_pkg libssl-dev "$PACKAGE_MANAGER"
