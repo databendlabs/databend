@@ -72,6 +72,10 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
     };
 
     for database in databases {
+        let db_name = database.name().to_lowercase();
+        if db_name == "information_schema" || db_name == "system" {
+            continue;
+        }
         let database_info = database.get_db_info();
         let tables = match catalog.list_tables(tenant, database.name()).await {
             Ok(v) => v,
