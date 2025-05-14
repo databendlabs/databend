@@ -107,8 +107,6 @@ runs:
         uname -a
         cat /proc/cpuinfo
         free -h
-        python --version || echo "no python"
-        which python || echo "no python"
 
     # - uses: everpcpc/actions-cache@v1
     #   if: env.RUNNER_PROVIDER == 'aws'
