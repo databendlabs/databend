@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Visibility;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::TableAlias;
 use databend_common_exception::Result;
@@ -20,6 +19,7 @@ use databend_common_exception::Result;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 use crate::BindContext;
+use crate::Visibility;
 
 impl Binder {
     /// Bind a subquery.

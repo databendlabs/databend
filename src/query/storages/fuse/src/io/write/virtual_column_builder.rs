@@ -79,10 +79,10 @@ impl VirtualColumnBuilder {
         if !ctx
             .get_settings()
             .get_enable_experimental_virtual_column()
-            .unwrap_or_default() ||
-            LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
-            .is_err()
+            .unwrap_or_default()
+            || LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
+                .is_err()
         {
             return None;
         }
