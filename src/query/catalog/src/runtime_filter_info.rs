@@ -72,9 +72,9 @@ impl RuntimeFilterInfo {
 }
 
 pub struct RuntimeFilterReady {
-    pub runtime_filter_watcher: Sender<Option<bool>>,
+    pub runtime_filter_watcher: Sender<Option<()>>,
     /// A dummy receiver to make runtime_filter_watcher channel open.
-    pub _runtime_filter_dummy_receiver: Receiver<Option<bool>>,
+    pub _runtime_filter_dummy_receiver: Receiver<Option<()>>,
 }
 
 impl Default for RuntimeFilterReady {

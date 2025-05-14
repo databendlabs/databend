@@ -253,7 +253,7 @@ impl HashJoinBuildState {
                     .build_watcher
                     .send(HashTableType::Empty)
                     .map_err(|_| ErrorCode::TokioError("build_watcher channel is closed"))?;
-                self.set_bloom_filter_ready(false)?;
+                self.set_bloom_filter_ready()?;
                 return Ok(());
             }
 
@@ -272,7 +272,7 @@ impl HashJoinBuildState {
             if self.hash_join_state.spilled_partitions.read().is_empty() {
                 self.add_runtime_filter(&build_chunks, build_num_rows)?;
             } else {
-                self.set_bloom_filter_ready(false)?;
+                self.set_bloom_filter_ready()?;
             }
 
             // Divide the finalize phase into multiple tasks.
@@ -791,19 +791,18 @@ impl HashJoinBuildState {
         }
     }
 
-    pub fn set_bloom_filter_ready(&self, ready: bool) -> Result<()> {
+    pub fn set_bloom_filter_ready(&self) -> Result<()> {
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         for runtime_filter_ready in build_state.runtime_filter_ready.iter() {
             runtime_filter_ready
                 .runtime_filter_watcher
-                .send(Some(ready))
+                .send(Some(()))
                 .map_err(|_| ErrorCode::TokioError("watcher channel is closed"))?;
         }
         Ok(())
     }
 
     fn add_runtime_filter(&self, build_chunks: &[DataBlock], build_num_rows: usize) -> Result<()> {
-        let mut bloom_filter_ready = false;
         for rf in self.runtime_filter_desc() {
             let mut runtime_filter = RuntimeFilterInfo::default();
             if rf.enable_inlist_runtime_filter && build_num_rows < INLIST_RUNTIME_FILTER_THRESHOLD {
@@ -831,11 +830,10 @@ impl HashJoinBuildState {
                 )?;
             }
             if !runtime_filter.is_empty() {
-                bloom_filter_ready |= !runtime_filter.is_blooms_empty();
                 self.ctx.set_runtime_filter((rf.scan_id, runtime_filter));
             }
         }
-        self.set_bloom_filter_ready(bloom_filter_ready)?;
+        self.set_bloom_filter_ready()?;
         Ok(())
     }
 
