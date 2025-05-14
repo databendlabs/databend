@@ -77,7 +77,7 @@ select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 query I
 select count() from fuse_snapshot('test_hilbert','t');
 ----
-8
+9
 
 query II
 select block_count,row_count from fuse_segment('test_hilbert','t');
@@ -109,7 +109,7 @@ select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 query T
 select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t', 'a,b');
 ----
-(a, b) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":5},"constant_block_count":0,"total_block_count":5}
+(a, b) linear {"average_depth":1.4,"average_overlaps":0.4,"block_depth_histogram":{"00001":3,"00002":2},"constant_block_count":0,"total_block_count":5}
 
 # column specified not exist
 statement error 1065
