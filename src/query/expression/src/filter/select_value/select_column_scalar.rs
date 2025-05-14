@@ -18,14 +18,14 @@ use databend_common_exception::Result;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
 use crate::types::string::StringColumn;
-use crate::types::ValueType;
+use crate::types::AccessType;
 use crate::LikePattern;
 
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn select_column_scalar<
-        T: ValueType,
+        T: AccessType,
         C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
         const FALSE: bool,
     >(

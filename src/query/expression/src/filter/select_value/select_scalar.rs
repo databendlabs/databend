@@ -16,14 +16,14 @@ use databend_common_exception::Result;
 
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
-use crate::types::ValueType;
+use crate::types::AccessType;
 use crate::Scalar;
 
 impl Selector<'_> {
     #[allow(clippy::too_many_arguments)]
     // Select indices by comparing two scalars.
     pub(crate) fn select_scalars<
-        T: ValueType,
+        T: AccessType,
         C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
     >(
         &self,

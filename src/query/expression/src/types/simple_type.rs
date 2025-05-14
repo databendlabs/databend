@@ -185,6 +185,7 @@ impl<T: SimpleValueType> AccessType for T {
     }
 }
 
+#[doc(hidden)]
 impl<T: SimpleValueType> ValueType for T {
     type ColumnBuilder = Vec<Self::Scalar>;
 

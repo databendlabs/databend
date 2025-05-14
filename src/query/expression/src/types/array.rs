@@ -39,10 +39,10 @@ use crate::ScalarRef;
 pub struct ArrayType<T>(PhantomData<T>);
 
 impl<T: AccessType> AccessType for ArrayType<T> {
-    type Scalar = <T as AccessType>::Column;
-    type ScalarRef<'a> = <T as AccessType>::Column;
+    type Scalar = T::Column;
+    type ScalarRef<'a> = T::Column;
     type Column = ArrayColumn<T>;
-    type Domain = Option<<T as AccessType>::Domain>;
+    type Domain = Option<T::Domain>;
     type ColumnIterator<'a> = ArrayIterator<'a, T>;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
