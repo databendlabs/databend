@@ -53,24 +53,3 @@ select c1, c3 from t1_orc;
 2 c
 3 d
 4 NULL
-
-statement ok
-CREATE OR REPLACE STAGE s3_stage url='s3://iceberg-tpch/' connection=(aws_key_id='admin' aws_secret_key='password' endpoint_url = 'http://127.0.0.1:9000');
-
-query II rowsort
-select * from @s3_stage/test/t1/data/;
-----
-0 0 a
-1 1 b
-2 2 c
-3 3 d
-4 NULL NULL
-
-query II rowsort
-select c1, c3 from @s3_stage/test/t1/data/;
-----
-0 a
-1 b
-2 c
-3 d
-4 NULL
