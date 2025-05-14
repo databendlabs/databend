@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod history_tables;
-mod log_history;
 
+pub use history_tables::init_tables;
 pub use history_tables::HistoryTable;
-pub use history_tables::HistoryTables;
