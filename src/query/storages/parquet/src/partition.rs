@@ -107,8 +107,6 @@ pub struct ParquetRowGroupPart {
     pub schema_index: usize,
 }
 
-impl Eq for ParquetRowGroupPart {}
-
 impl ParquetRowGroupPart {
     pub fn uncompressed_size(&self) -> u64 {
         self.uncompressed_size

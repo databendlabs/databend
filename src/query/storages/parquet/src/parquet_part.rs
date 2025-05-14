@@ -27,7 +27,7 @@ use databend_common_exception::Result;
 
 use crate::partition::ParquetRowGroupPart;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub enum ParquetPart {
     File(ParquetFilePart),
     SmallFiles(Vec<ParquetFilePart>),

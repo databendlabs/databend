@@ -22,7 +22,7 @@ use databend_common_expression::Scalar;
 use databend_common_storages_parquet::ParquetPart;
 
 /// only support parquet for now: https://github.com/delta-io/delta/issues/87
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct DeltaPartInfo {
     pub data: ParquetPart,
     pub partition_values: Vec<Scalar>,
