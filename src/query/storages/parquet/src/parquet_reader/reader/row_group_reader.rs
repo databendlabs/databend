@@ -32,6 +32,7 @@ use crate::parquet_reader::policy::POLICY_PREDICATE_ONLY;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
 use crate::partition::ParquetRowGroupPart;
 use crate::read_settings::ReadSettings;
+use crate::transformer::RecordBatchTransformer;
 
 /// The reader to read a row group.
 pub struct RowGroupReader {
@@ -61,6 +62,7 @@ impl RowGroupReader {
         read_settings: &ReadSettings,
         part: &ParquetRowGroupPart,
         topk_sorter: &mut Option<TopKSorter>,
+        transformer: RecordBatchTransformer,
     ) -> Result<Option<ReadPolicyImpl>> {
         if let Some((sorter, min_max)) = topk_sorter.as_ref().zip(part.sort_min_max.as_ref()) {
             if sorter.never_match(min_max) {
@@ -99,7 +101,13 @@ impl RowGroupReader {
 
         let builder = &self.policy_builders[policy as usize];
         builder
-            .build(row_group, selection, topk_sorter, self.batch_size)
+            .build(
+                row_group,
+                selection,
+                topk_sorter,
+                Some(transformer),
+                self.batch_size,
+            )
             .await
     }
 }

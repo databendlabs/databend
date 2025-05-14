@@ -18,6 +18,7 @@ use databend_common_expression::TopKSorter;
 use parquet::arrow::arrow_reader::RowSelection;
 
 use crate::parquet_reader::row_group::InMemoryRowGroup;
+use crate::transformer::RecordBatchTransformer;
 
 /// The policy for reading a row group.
 ///
@@ -63,6 +64,7 @@ pub trait ReadPolicyBuilder: Send + Sync {
         _row_group: InMemoryRowGroup<'_>,
         _row_selection: Option<RowSelection>,
         _sorter: &mut Option<TopKSorter>,
+        _transformer: Option<RecordBatchTransformer>,
         _batch_size: usize,
     ) -> Result<Option<ReadPolicyImpl>> {
         unreachable!()

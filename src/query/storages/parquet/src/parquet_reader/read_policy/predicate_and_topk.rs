@@ -42,6 +42,7 @@ use crate::parquet_reader::utils::bitmap_to_boolean_array;
 use crate::parquet_reader::utils::compute_output_field_paths;
 use crate::parquet_reader::utils::transform_record_batch;
 use crate::parquet_reader::utils::FieldPaths;
+use crate::transformer::RecordBatchTransformer;
 
 pub struct PredicateAndTopkPolicyBuilder {
     predicate: Arc<ParquetPredicate>,
@@ -158,6 +159,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
         mut row_group: InMemoryRowGroup<'_>,
         mut selection: Option<RowSelection>,
         sorter: &mut Option<TopKSorter>,
+        transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
     ) -> Result<Option<ReadPolicyImpl>> {
         let mut num_rows = selection
@@ -266,6 +268,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
         Ok(Some(Box::new(PredicateAndTopkPolicy {
             prefetched: prefetched_blocks,
             reader,
+            transformer,
             remain_field_paths: self.remain_field_paths.clone(),
             src_schema: self.src_schema.clone(),
             dst_schema: self.dst_schema.clone(),
@@ -280,6 +283,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
 pub struct PredicateAndTopkPolicy {
     prefetched: VecDeque<DataBlock>,
     reader: ParquetRecordBatchReader,
+    transformer: Option<RecordBatchTransformer>,
 
     /// See the comments of `field_paths` in [`super::NoPrefetchPolicy`].
     remain_field_paths: Arc<Option<FieldPaths>>,
@@ -292,7 +296,10 @@ pub struct PredicateAndTopkPolicy {
 impl ReadPolicy for PredicateAndTopkPolicy {
     fn read_block(&mut self) -> Result<Option<DataBlock>> {
         let batch = self.reader.next().transpose()?;
-        if let Some(batch) = batch {
+        if let Some(mut batch) = batch {
+            if let Some(transformer) = &mut self.transformer {
+                batch = transformer.process_record_batch(batch)?;
+            }
             debug_assert!(!self.prefetched.is_empty());
             let prefetched = self.prefetched.pop_front().unwrap();
             let mut block =

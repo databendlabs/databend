@@ -41,6 +41,7 @@ use crate::parquet_reader::topk::ParquetTopK;
 use crate::parquet_reader::utils::compute_output_field_paths;
 use crate::parquet_reader::utils::transform_record_batch;
 use crate::parquet_reader::utils::FieldPaths;
+use crate::transformer::RecordBatchTransformer;
 
 pub struct TopkOnlyPolicyBuilder {
     topk: Arc<ParquetTopK>,
@@ -133,6 +134,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
         mut row_group: InMemoryRowGroup<'_>,
         mut selection: Option<RowSelection>,
         sorter: &mut Option<TopKSorter>,
+        transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
     ) -> Result<Option<ReadPolicyImpl>> {
         debug_assert!(sorter.is_some());
@@ -194,6 +196,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
         Ok(Some(Box::new(TopkOnlyPolicy {
             prefetched: prefetched_cols,
             reader,
+            transformer,
             remain_field_paths: self.remain_field_paths.clone(),
             remain_schema: self.remain_schema.clone(),
             src_schema: self.src_schema.clone(),
@@ -208,6 +211,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
 pub struct TopkOnlyPolicy {
     prefetched: Option<VecDeque<BlockEntry>>,
     reader: ParquetRecordBatchReader,
+    transformer: Option<RecordBatchTransformer>,
 
     /// See the comments of `field_paths` in [`super::NoPrefetchPolicy`].
     remain_field_paths: Arc<Option<FieldPaths>>,
@@ -222,7 +226,10 @@ pub struct TopkOnlyPolicy {
 impl ReadPolicy for TopkOnlyPolicy {
     fn read_block(&mut self) -> Result<Option<DataBlock>> {
         let batch = self.reader.next().transpose()?;
-        if let Some(batch) = batch {
+        if let Some(mut batch) = batch {
+            if let Some(transformer) = &mut self.transformer {
+                batch = transformer.process_record_batch(batch)?;
+            }
             debug_assert!(
                 self.prefetched.is_none() || !self.prefetched.as_ref().unwrap().is_empty()
             );

@@ -199,8 +199,7 @@ fn get_column_stats(
     upper: &HashMap<i32, Datum>,
     null_counts: &HashMap<i32, u64>,
 ) -> BasicColumnStatistics {
-    // The column id in iceberg is 1-based while the column id in Databend is 0-based.
-    let iceberg_col_id = field.column_id as i32 + 1;
+    let iceberg_col_id = field.column_id as i32;
     BasicColumnStatistics {
         min: lower
             .get(&iceberg_col_id)
