@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Visibility;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::TableAlias;
 use databend_common_exception::Result;
@@ -53,6 +54,12 @@ impl Binder {
                     .change_derived_column_alias(column.index, column.column_name.clone());
             }
         }
+
+        // Set all columns as Visible, because the outer query may use `SELECT *` to get all columns.
+        for column in result_bind_context.columns.iter_mut() {
+            column.visibility = Visibility::Visible;
+        }
+
         Ok((result, result_bind_context))
     }
 }

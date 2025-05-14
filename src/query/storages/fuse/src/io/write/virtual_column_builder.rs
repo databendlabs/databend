@@ -79,16 +79,14 @@ impl VirtualColumnBuilder {
         if !ctx
             .get_settings()
             .get_enable_experimental_virtual_column()
-            .unwrap_or_default()
-        {
-            return None;
-        }
-        if LicenseManagerSwitch::instance()
+            .unwrap_or_default() ||
+            LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
             .is_err()
         {
             return None;
         }
+
         // ignore persistent system tables {
         if let Ok(database_name) = table_info.database_name() {
             if database_name == "persistent_system" {
