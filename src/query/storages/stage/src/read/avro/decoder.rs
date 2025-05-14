@@ -373,7 +373,9 @@ impl AvroDecoder {
                 let v_precision = v.digits() as i64;
                 let v_leading_digits = v_precision - v.fractional_digit_count();
                 let (big_int, v_scale) = v.into_bigint_and_exponent();
-                if v_leading_digits <= size.leading_digits() as _ && v_scale <= size.scale() as _ {
+                if v_leading_digits <= size.leading_digits() as i64
+                    && v_scale <= size.scale() as i64
+                {
                     let Some(mut d1) = <D>::from_bigint(big_int) else {
                         return Err(Error::default());
                     };

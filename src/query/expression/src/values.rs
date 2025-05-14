@@ -374,6 +374,10 @@ impl Value<AnyType> {
             Value::Column(col) => col.domain(),
         }
     }
+
+    pub fn is_scalar_null(&self) -> bool {
+        self.as_scalar().map(|s| s.is_null()).unwrap_or_default()
+    }
 }
 
 impl Scalar {

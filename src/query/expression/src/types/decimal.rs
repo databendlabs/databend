@@ -48,6 +48,7 @@ use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::AnyType;
 use super::ArgType;
 use super::DataType;
 use super::GenericMap;
@@ -56,11 +57,13 @@ use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
 use crate::utils::arrow::buffer_into_mut;
+use crate::with_decimal_type;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
 use crate::Scalar;
 use crate::ScalarRef;
+use crate::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreDecimal<T: Decimal>(PhantomData<T>);
@@ -174,24 +177,6 @@ impl<Num: Decimal> ReturnType for DecimalType<Num> {
     ) -> Self::Column {
         iter.collect()
     }
-}
-
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-    EnumAsInner,
-)]
-pub enum DecimalDataType {
-    Decimal128(DecimalSize),
-    Decimal256(DecimalSize),
 }
 
 #[derive(
@@ -961,6 +946,24 @@ impl Decimal for i256 {
 pub static MAX_DECIMAL128_PRECISION: u8 = 38;
 pub static MAX_DECIMAL256_PRECISION: u8 = 76;
 
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+    EnumAsInner,
+)]
+pub enum DecimalDataType {
+    Decimal128(DecimalSize),
+    Decimal256(DecimalSize),
+}
+
 impl DecimalDataType {
     pub fn from_size(size: DecimalSize) -> Result<DecimalDataType> {
         size.validate()?;
@@ -971,32 +974,51 @@ impl DecimalDataType {
         }
     }
 
+    pub fn from_value(value: &Value<AnyType>) -> Option<(DecimalDataType, bool)> {
+        match value {
+            Value::Scalar(Scalar::Decimal(scalar)) => with_decimal_type!(|T| match scalar {
+                DecimalScalar::T(_, size) => Some((DecimalDataType::T(*size), false)),
+            }),
+            Value::Column(Column::Decimal(column)) => with_decimal_type!(|T| match column {
+                DecimalColumn::T(_, size) => Some((DecimalDataType::T(*size), false)),
+            }),
+            Value::Column(Column::Nullable(box column)) => {
+                with_decimal_type!(|T| match &column.column {
+                    Column::Decimal(DecimalColumn::T(_, size)) =>
+                        Some((DecimalDataType::T(*size), true)),
+                    _ => None,
+                })
+            }
+            _ => None,
+        }
+    }
+
     pub fn default_scalar(&self) -> DecimalScalar {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalDataType::DECIMAL_TYPE(size) => DecimalScalar::DECIMAL_TYPE(0.into(), *size),
         })
     }
 
     pub fn size(&self) -> DecimalSize {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalDataType::DECIMAL_TYPE(size) => *size,
         })
     }
 
     pub fn scale(&self) -> u8 {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalDataType::DECIMAL_TYPE(size) => size.scale(),
         })
     }
 
     pub fn precision(&self) -> u8 {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalDataType::DECIMAL_TYPE(size) => size.precision(),
         })
     }
 
     pub fn leading_digits(&self) -> u8 {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalDataType::DECIMAL_TYPE(size) => size.precision() - size.scale(),
         })
     }
@@ -1071,13 +1093,13 @@ impl DecimalScalar {
 
 impl DecimalColumn {
     pub fn len(&self) -> usize {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, _) => col.len(),
         })
     }
 
     pub fn index(&self, index: usize) -> Option<DecimalScalar> {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, size) =>
                 Some(DecimalScalar::DECIMAL_TYPE(col.get(index).cloned()?, *size)),
         })
@@ -1088,7 +1110,7 @@ impl DecimalColumn {
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> DecimalScalar {
         debug_assert!(index < self.len());
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, size) =>
                 DecimalScalar::DECIMAL_TYPE(*col.get_unchecked(index), *size),
         })
@@ -1102,7 +1124,7 @@ impl DecimalColumn {
             self.len()
         );
 
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, size) => {
                 DecimalColumn::DECIMAL_TYPE(
                     col.clone().sliced(range.start, range.end - range.start),
@@ -1114,7 +1136,7 @@ impl DecimalColumn {
 
     pub fn domain(&self) -> DecimalDomain {
         assert!(self.len() > 0);
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, size) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
                 DecimalDomain::DECIMAL_TYPE(
@@ -1180,34 +1202,34 @@ impl DecimalColumn {
 
 impl DecimalColumnBuilder {
     pub fn from_column(col: DecimalColumn) -> Self {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match col {
+        with_decimal_type!(|DECIMAL_TYPE| match col {
             DecimalColumn::DECIMAL_TYPE(col, size) =>
                 DecimalColumnBuilder::DECIMAL_TYPE(buffer_into_mut(col), size),
         })
     }
 
     pub fn repeat(scalar: DecimalScalar, n: usize) -> DecimalColumnBuilder {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match scalar {
+        with_decimal_type!(|DECIMAL_TYPE| match scalar {
             DecimalScalar::DECIMAL_TYPE(num, size) =>
                 DecimalColumnBuilder::DECIMAL_TYPE(vec![num; n], size),
         })
     }
 
     pub fn repeat_default(ty: &DecimalDataType, n: usize) -> Self {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match ty {
+        with_decimal_type!(|DECIMAL_TYPE| match ty {
             DecimalDataType::DECIMAL_TYPE(size) =>
                 DecimalColumnBuilder::DECIMAL_TYPE(vec![0.into(); n], *size),
         })
     }
 
     pub fn len(&self) -> usize {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumnBuilder::DECIMAL_TYPE(col, _) => col.len(),
         })
     }
 
     pub fn with_capacity(ty: &DecimalDataType, capacity: usize) -> Self {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match ty {
+        with_decimal_type!(|DECIMAL_TYPE| match ty {
             DecimalDataType::DECIMAL_TYPE(size) =>
                 DecimalColumnBuilder::DECIMAL_TYPE(Vec::with_capacity(capacity), *size),
         })
@@ -1218,7 +1240,7 @@ impl DecimalColumnBuilder {
     }
 
     pub fn push_repeat(&mut self, item: DecimalScalar, n: usize) {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, item) {
+        with_decimal_type!(|DECIMAL_TYPE| match (self, item) {
             (
                 DecimalColumnBuilder::DECIMAL_TYPE(builder, builder_size),
                 DecimalScalar::DECIMAL_TYPE(value, value_size),
@@ -1235,13 +1257,13 @@ impl DecimalColumnBuilder {
     }
 
     pub fn push_default(&mut self) {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumnBuilder::DECIMAL_TYPE(builder, _) => builder.push(0.into()),
         })
     }
 
     pub fn append_column(&mut self, other: &DecimalColumn) {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
+        with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
             (
                 DecimalColumnBuilder::DECIMAL_TYPE(builder, builder_size),
                 DecimalColumn::DECIMAL_TYPE(other, other_size),
@@ -1261,7 +1283,7 @@ impl DecimalColumnBuilder {
     }
 
     pub fn build(self) -> DecimalColumn {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumnBuilder::DECIMAL_TYPE(builder, size) =>
                 DecimalColumn::DECIMAL_TYPE(builder.into(), size),
         })
@@ -1270,14 +1292,14 @@ impl DecimalColumnBuilder {
     pub fn build_scalar(self) -> DecimalScalar {
         assert_eq!(self.len(), 1);
 
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumnBuilder::DECIMAL_TYPE(builder, size) =>
                 DecimalScalar::DECIMAL_TYPE(builder[0], size),
         })
     }
 
     pub fn pop(&mut self) -> Option<DecimalScalar> {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumnBuilder::DECIMAL_TYPE(builder, size) => {
                 builder
                     .pop()
@@ -1296,7 +1318,7 @@ impl DecimalColumnBuilder {
 
 impl PartialOrd for DecimalScalar {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
+        with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
             (
                 DecimalScalar::DECIMAL_TYPE(lhs, lhs_size),
                 DecimalScalar::DECIMAL_TYPE(rhs, rhs_size),
@@ -1314,7 +1336,7 @@ impl PartialOrd for DecimalScalar {
 
 impl PartialOrd for DecimalColumn {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
+        with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
             (
                 DecimalColumn::DECIMAL_TYPE(lhs, lhs_size),
                 DecimalColumn::DECIMAL_TYPE(rhs, rhs_size),
