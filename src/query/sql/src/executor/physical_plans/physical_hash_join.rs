@@ -31,7 +31,6 @@ use super::physical_join_filter::PhysicalRuntimeFilters;
 use super::JoinRuntimeFilter;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
-use crate::executor::physical_plans::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
@@ -111,16 +110,6 @@ pub struct HashJoin {
 impl HashJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
-    }
-
-    pub fn is_broadcast(&self) -> bool {
-        matches!(
-            self.build.as_ref(),
-            PhysicalPlan::Exchange(Exchange {
-                kind: FragmentKind::Expansive,
-                ..
-            })
-        )
     }
 }
 
