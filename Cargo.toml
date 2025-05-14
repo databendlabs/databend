@@ -111,7 +111,7 @@ members = [
     "tests/sqllogictests",
     "src/tests/sqlsmith",
     "src/bendsave",
-    # "src/bendpy",
+    "src/bendpy",
 ]
 
 # Workspace dependencies
@@ -308,7 +308,7 @@ enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { version = "1.5.1" }
 faststr = "0.2"
 feature-set = { version = "0.1.1" }
-flatbuffers = "24" # Must use the same version with arrow-ipc
+flatbuffers = "25" # Must use the same version with arrow-ipc
 foreign_vec = "0.1.0"
 form_urlencoded = { version = "1" }
 fs_extra = "1.3.0"
@@ -384,10 +384,10 @@ num-derive = "0.4.2"
 num-traits = "0.2.19"
 num_cpus = "1.13.1"
 object = "0.36.5"
-object_store_opendal = { git = "https://github.com/apache/opendal", rev = "a163e32" }
+object_store_opendal = { version = "0.52.0" }
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
-opendal = { git = "https://github.com/apache/opendal", rev = "a163e32", features = [
+opendal = { version = "0.53.2", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
@@ -633,6 +633,7 @@ overflow-checks = true
 rpath = false
 
 [patch.crates-io]
+arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "92eeb3b" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
