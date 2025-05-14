@@ -28,6 +28,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::physical_join_filter::PhysicalRuntimeFilters;
+use super::FragmentKind;
 use super::JoinRuntimeFilter;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
@@ -105,6 +106,7 @@ pub struct HashJoin {
     pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
 
     pub runtime_filter: PhysicalRuntimeFilters,
+    pub broadcast_id: Option<u32>,
 }
 
 impl HashJoin {
@@ -801,6 +803,15 @@ impl PhysicalPlanBuilder {
         runtime_filter: PhysicalRuntimeFilters,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
+        let broadcast_id = if let PhysicalPlan::Exchange(Exchange {
+            kind: FragmentKind::Normal,
+            ..
+        }) = build_side.as_ref()
+        {
+            Some(self.ctx.get_next_broadcast_id())
+        } else {
+            None
+        };
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: 0,
             projections,
@@ -822,6 +833,7 @@ impl PhysicalPlanBuilder {
             single_to_inner: join.single_to_inner.clone(),
             build_side_cache_info,
             runtime_filter,
+            broadcast_id,
         }))
     }
 
