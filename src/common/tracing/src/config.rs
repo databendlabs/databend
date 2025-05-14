@@ -363,7 +363,10 @@ impl Display for HistoryConfig {
             self.stage_name,
             self.level,
             self.retention_interval,
-            self.tables.iter().map(|f| f.table_name.clone()).join(", ")
+            self.tables
+                .iter()
+                .map(|f| format!("{}({} hours)", f.table_name.clone(), f.retention))
+                .join(", ")
         )
     }
 }
@@ -387,7 +390,7 @@ impl Default for HistoryTableConfig {
     fn default() -> Self {
         Self {
             table_name: "".to_string(),
-            retention: 72,
+            retention: 168,
         }
     }
 }

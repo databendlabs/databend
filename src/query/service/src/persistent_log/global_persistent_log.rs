@@ -23,7 +23,6 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
@@ -37,8 +36,6 @@ use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::Semaphore;
-use databend_common_meta_store::MetaStore;
-use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
@@ -54,8 +51,8 @@ use uuid::Uuid;
 
 use crate::interpreters::InterpreterFactory;
 use crate::persistent_log::session::create_session;
+use crate::persistent_log::tables::init_tables;
 use crate::persistent_log::tables::HistoryTable;
-use crate::persistent_log::tables::HistoryTables;
 
 pub struct GlobalPersistentLog {
     meta_client: Arc<ClientHandle>,
@@ -66,7 +63,7 @@ pub struct GlobalPersistentLog {
     stage_name: String,
     initialized: AtomicBool,
     retention_interval: usize,
-    tables: HistoryTables,
+    tables: Vec<Arc<HistoryTable>>,
 }
 
 impl GlobalPersistentLog {
@@ -86,7 +83,7 @@ impl GlobalPersistentLog {
             stage_name,
             initialized: AtomicBool::new(false),
             retention_interval: cfg.log.history.retention_interval,
-            tables: HistoryTables::init(cfg)?,
+            tables: init_tables(cfg)?,
         });
         GlobalInstance::set(instance);
         GlobalIORuntime::instance().try_spawn(
@@ -109,7 +106,6 @@ impl GlobalPersistentLog {
     }
 
     pub async fn work(&self) -> Result<()> {
-        let meta_key = format!("{}/persistent_log_work", self.tenant_id);
         // Wait all services to be initialized
         loop {
             if !self.initialized.load(Ordering::SeqCst) {
@@ -120,15 +116,61 @@ impl GlobalPersistentLog {
         }
         self.prepare().await?;
         info!("Persistent log prepared successfully");
-        spawn(async move {
-            let instance = GlobalPersistentLog::instance();
-            if let Err(e) = instance
-                .transform(instance.tables.tables.get("log_history").unwrap())
-                .await
-            {
-                error!("Persistent log transform exit {}", e);
-            }
-        });
+        // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
+        let sleep_time =
+            Duration::from_millis(self.interval * 500 + random::<u64>() % (self.interval * 1000));
+        for table in self.tables.iter() {
+            let table_clone = table.clone();
+            let meta_key = format!("{}/history_log_transform", self.tenant_id).clone();
+            let log = GlobalPersistentLog::instance();
+            spawn(async move {
+                loop {
+                    match log.transform(&table_clone, &meta_key).await {
+                        Ok(acquired_lock) => {
+                            if acquired_lock {
+                                let _ = log
+                                    .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
+                                    .await;
+                            }
+                        }
+                        Err(e) => {
+                            let _ = log
+                                .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
+                                .await;
+                            error!("{} log transform exit {}", table_clone.name, e);
+                        }
+                    }
+                    sleep(sleep_time).await;
+                }
+            });
+        }
+        let sleep_time = Duration::from_mins(30 + random::<u64>() % 60);
+        for table in self.tables.iter() {
+            let table_clone = table.clone();
+            let meta_key = format!("{}/history_log_clean", self.tenant_id);
+            let log = GlobalPersistentLog::instance();
+            spawn(async move {
+                loop {
+                    match log.clean(&table_clone, &meta_key).await {
+                        Ok(acquired_lock) => {
+                            if acquired_lock {
+                                let _ = log
+                                    .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
+                                    .await;
+                            }
+                        }
+                        Err(e) => {
+                            let _ = log
+                                .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
+                                .await;
+                            error!("{} log clean exit {}", table_clone.name, e);
+                        }
+                    }
+                    sleep(sleep_time).await;
+                }
+            });
+        }
+
         Ok(())
     }
 
@@ -173,6 +215,7 @@ impl GlobalPersistentLog {
         }
     }
 
+    /// Updating the last execution timestamp in the metadata.
     pub async fn finish_hook(&self, meta_key: &str) -> Result<()> {
         self.meta_client
             .upsert_kv(UpsertKV::new(
@@ -227,49 +270,78 @@ impl GlobalPersistentLog {
         self.execute_sql(&create_stage).await?;
         let create_db = "CREATE DATABASE IF NOT EXISTS system_history";
         self.execute_sql(create_db).await?;
-        for (_, table) in self.tables.tables.iter() {
-            let create_table = table.create_sql();
-            self.execute_sql(&create_table).await?;
+        for table in self.tables.iter() {
+            let create_table = &table.create;
+            self.execute_sql(create_table).await?;
         }
         Ok(())
     }
 
-    pub async fn transform(&self, table: &HistoryTable) -> Result<()> {
-        loop {
-            let meta_key = format!("{}/history_log_work", self.tenant_id);
-            let may_permit = self
-                .acquire(&format!("{}/{}/lock", meta_key, table.name), self.interval)
-                .await?;
-            if let Some(guard) = may_permit {
-                let batch_number = self
-                    .get_u64_from_meta(&format!("{}/{}/batch_number", meta_key, table.name))
+    pub async fn transform(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
+        let may_permit = self
+            .acquire(&format!("{}/{}/lock", meta_key, table.name), self.interval)
+            .await?;
+        if let Some(_guard) = may_permit {
+            let mut batch_number_end = 0;
+            let batch_number_begin = self
+                .get_u64_from_meta(&format!("{}/{}/batch_number", meta_key, table.name))
+                .await?
+                .unwrap_or(0);
+            let sql = if table.name == "log_history" {
+                table.assemble_log_history_transform(&self.stage_name, batch_number_begin)
+            } else {
+                batch_number_end = self
+                    .get_u64_from_meta(&format!("{}/{}/batch_number", meta_key, "log_history"))
                     .await?
                     .unwrap_or(0);
-                let sql: String = if table.name == "log_history" {
-                    let mut sql = table.transform_sql.clone();
-                    sql = sql.replace("{stage_name}", &self.stage_name);
-                    sql = sql.replace("{batch_number}", &(batch_number).to_string());
-                    sql
-                } else {
-                    table.transform_sql.clone()
-                };
-                if let Err(e) = self.execute_sql(&sql).await {
-                    error!("Persistent log copy into failed: {:?}", e);
+                if batch_number_begin >= batch_number_end {
+                    return Ok(true);
                 }
-                self.finish_hook(&meta_key).await?;
-                if table.name == "log_history" {
-                    self.set_u64_to_meta(
-                        &format!("{}/{}/batch_number", meta_key, table.name),
-                        batch_number + 1,
-                    )
-                    .await?;
-                }
-                drop(guard);
+                table.assemble_normal_transform(batch_number_begin, batch_number_end)
+            };
+            dbg!(&sql);
+            self.execute_sql(&sql).await?;
+            if table.name == "log_history" {
+                self.set_u64_to_meta(
+                    &format!("{}/{}/batch_number", meta_key, table.name),
+                    batch_number_begin + 1,
+                )
+                .await?;
+            } else {
+                self.set_u64_to_meta(
+                    &format!("{}/{}/batch_number", meta_key, table.name),
+                    batch_number_end,
+                )
+                .await?;
             }
-            // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
-            let sleep_time = self.interval * 500 + random::<u64>() % (self.interval * 1000);
-            tokio::time::sleep(Duration::from_millis(sleep_time)).await;
+            return Ok(true);
         }
+        Ok(false)
+    }
+
+    pub async fn clean(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
+        let may_permit = self
+            .acquire(
+                &format!("{}/{}/lock", meta_key, table.name),
+                Duration::from_hours(self.retention_interval as u64).as_secs(),
+            )
+            .await?;
+        if let Some(_guard) = may_permit {
+            let sql = &table.delete;
+            self.execute_sql(sql).await?;
+            let session = create_session(&self.tenant_id, &self.cluster_id).await?;
+            let context = session.create_query_context().await?;
+            if LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
+                .is_ok()
+            {
+                let vacuum = format!("VACUUM TABLE persistent_system.{}", table.name);
+                self.execute_sql(&vacuum).await?;
+                info!("Periodic VACUUM operation on persistent log table '{}' completed successfully.",table.name);
+            }
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     pub async fn get_u64_from_meta(&self, meta_key: &str) -> Result<Option<u64>> {
