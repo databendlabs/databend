@@ -68,9 +68,10 @@ async fn load_tenant_tables_stats(tenant: &Tenant) -> Result<TenantTablesStatsRe
     let mut external_stats: BTreeMap<String, TenantTableStatsInfo> = BTreeMap::new();
     let mut warnings: Vec<String> = vec![];
 
+    let system_dbs = ["information_schema", "system"];
     for database in databases {
         let db_name = database.name().to_lowercase();
-        if db_name == "information_schema" || db_name == "system" {
+        if system_dbs.contains(&db_name.as_str()) {
             continue;
         }
         database_count += 1;

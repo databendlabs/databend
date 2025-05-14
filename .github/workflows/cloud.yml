@@ -98,6 +98,8 @@ jobs:
         with:
           repo: databend-query
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Prepare for docker
         id: prepare
         run: |
