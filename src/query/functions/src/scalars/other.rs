@@ -31,6 +31,7 @@ use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::GenericType;

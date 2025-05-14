@@ -15,6 +15,7 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
+use super::AccessType;
 use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
@@ -30,13 +31,12 @@ use crate::ScalarRef;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmptyArrayType;
 
-impl ValueType for EmptyArrayType {
+impl AccessType for EmptyArrayType {
     type Scalar = ();
     type ScalarRef<'a> = ();
     type Column = usize;
     type Domain = ();
     type ColumnIterator<'a> = std::iter::RepeatN<()>;
-    type ColumnBuilder = usize;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
@@ -65,27 +65,6 @@ impl ValueType for EmptyArrayType {
             Domain::Array(None) => Some(()),
             _ => None,
         }
-    }
-
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::EmptyArray { len } => Some(len),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::EmptyArray { len } => Some(len),
-            _ => None,
-        }
-    }
-
-    fn try_upcast_column_builder(
-        len: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::EmptyArray { len })
     }
 
     fn upcast_scalar(_: Self::Scalar) -> Scalar {
@@ -122,38 +101,6 @@ impl ValueType for EmptyArrayType {
 
     fn iter_column(len: &Self::Column) -> Self::ColumnIterator<'_> {
         std::iter::repeat_n((), *len)
-    }
-
-    fn column_to_builder(len: Self::Column) -> Self::ColumnBuilder {
-        len
-    }
-
-    fn builder_len(len: &Self::ColumnBuilder) -> usize {
-        *len
-    }
-
-    fn push_item(len: &mut Self::ColumnBuilder, _: Self::Scalar) {
-        *len += 1
-    }
-
-    fn push_item_repeat(len: &mut Self::ColumnBuilder, _: Self::ScalarRef<'_>, n: usize) {
-        *len += n
-    }
-
-    fn push_default(len: &mut Self::ColumnBuilder) {
-        *len += 1
-    }
-
-    fn append_column(len: &mut Self::ColumnBuilder, other_len: &Self::Column) {
-        *len += other_len
-    }
-
-    fn build_column(len: Self::ColumnBuilder) -> Self::Column {
-        len
-    }
-
-    fn build_scalar(len: Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(len, 1);
     }
 
     fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
@@ -197,6 +144,63 @@ impl ValueType for EmptyArrayType {
     #[inline(always)]
     fn less_than_equal(_left: Self::ScalarRef<'_>, _right: Self::ScalarRef<'_>) -> bool {
         true
+    }
+}
+
+impl ValueType for EmptyArrayType {
+    type ColumnBuilder = usize;
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::EmptyArray { len } => Some(len),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::EmptyArray { len } => Some(len),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(
+        len: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::EmptyArray { len })
+    }
+
+    fn column_to_builder(len: Self::Column) -> Self::ColumnBuilder {
+        len
+    }
+
+    fn builder_len(len: &Self::ColumnBuilder) -> usize {
+        *len
+    }
+
+    fn push_item(len: &mut Self::ColumnBuilder, _: Self::ScalarRef<'_>) {
+        *len += 1
+    }
+
+    fn push_item_repeat(len: &mut Self::ColumnBuilder, _: Self::ScalarRef<'_>, n: usize) {
+        *len += n
+    }
+
+    fn push_default(len: &mut Self::ColumnBuilder) {
+        *len += 1
+    }
+
+    fn append_column(len: &mut Self::ColumnBuilder, other_len: &Self::Column) {
+        *len += other_len
+    }
+
+    fn build_column(len: Self::ColumnBuilder) -> Self::Column {
+        len
+    }
+
+    fn build_scalar(len: Self::ColumnBuilder) -> Self::Scalar {
+        assert_eq!(len, 1);
     }
 }
 

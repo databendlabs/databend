@@ -60,6 +60,7 @@ use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
+use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberClass;

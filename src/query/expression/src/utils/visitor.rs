@@ -49,7 +49,7 @@ pub trait ValueVisitor: Sized {
 
     fn visit_number<T: Number>(
         &mut self,
-        column: <NumberType<T> as ValueType>::Column,
+        column: <NumberType<T> as AccessType>::Column,
     ) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<NumberType<T>>(column)
     }
@@ -132,7 +132,7 @@ pub trait ValueVisitor: Sized {
 
     fn visit_typed_column<T: ValueType>(
         &mut self,
-        column: <T as ValueType>::Column,
+        column: <T as AccessType>::Column,
     ) -> Result<Self::U, Self::Error>;
 
     fn visit_value(&mut self, value: Value<AnyType>) -> Result<Self::U, Self::Error> {

@@ -147,7 +147,7 @@ where I: databend_common_column::types::Index
         Ok(())
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: <T as ValueType>::Column) -> Result<()> {
+    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
         let c = T::upcast_column(column.clone());
         let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
         let mut builder = T::try_downcast_owned_builder(builder).unwrap();

@@ -30,6 +30,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::binary::BinaryColumnIter;
+use super::AccessType;
 use crate::property::Domain;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
@@ -110,13 +111,12 @@ impl GeographyType {
     }
 }
 
-impl ValueType for GeographyType {
+impl AccessType for GeographyType {
     type Scalar = Geography;
     type ScalarRef<'a> = GeographyRef<'a>;
     type Column = GeographyColumn;
     type Domain = ();
     type ColumnIterator<'a> = GeographyIterator<'a>;
-    type ColumnBuilder = BinaryColumnBuilder;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_owned()
@@ -140,27 +140,6 @@ impl ValueType for GeographyType {
         } else {
             None
         }
-    }
-
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Geography(builder) => Some(builder),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Geography(builder) => Some(builder),
-            _ => None,
-        }
-    }
-
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::Geography(builder))
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -196,6 +175,44 @@ impl ValueType for GeographyType {
         col.iter()
     }
 
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
+        scalar.0.len()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
+    }
+}
+
+impl ValueType for GeographyType {
+    type ColumnBuilder = BinaryColumnBuilder;
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Geography(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Geography(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Geography(builder))
+    }
+
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
         BinaryColumnBuilder::from_column(col.0)
     }
@@ -227,19 +244,6 @@ impl ValueType for GeographyType {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         Geography(builder.build_scalar())
-    }
-
-    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        scalar.0.len()
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
-    }
-
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(&rhs)
     }
 }
 

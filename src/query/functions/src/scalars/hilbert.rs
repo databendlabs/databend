@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_expression::hilbert_index;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;

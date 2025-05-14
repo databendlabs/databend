@@ -23,6 +23,7 @@ use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalType;
 use crate::types::i256;
+use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::BinaryType;
 use crate::types::BooleanType;
@@ -33,7 +34,6 @@ use crate::types::NumberType;
 use crate::types::StringColumn;
 use crate::types::StringType;
 use crate::types::TimestampType;
-use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
@@ -506,7 +506,7 @@ unsafe fn row_match_string_column(
     *count = match_count;
 }
 
-unsafe fn row_match_column_type<T: ValueType>(
+unsafe fn row_match_column_type<T: AccessType>(
     col: &Column,
     validity: Option<&Bitmap>,
     address: &[*const u8],
@@ -531,7 +531,7 @@ unsafe fn row_match_column_type<T: ValueType>(
             let is_set = is_all_set || validity.get_bit_unchecked(idx);
             if is_set && is_set2 {
                 let address = address[idx].add(col_offset);
-                let scalar = read::<<T as ValueType>::Scalar>(address as _);
+                let scalar = read::<T::Scalar>(address as _);
                 let value = T::index_column_unchecked(&col, idx);
                 let value = T::to_owned_scalar(value);
 
@@ -553,7 +553,7 @@ unsafe fn row_match_column_type<T: ValueType>(
             let idx = *idx;
             let value = T::index_column_unchecked(&col, idx);
             let address = address[idx].add(col_offset);
-            let scalar = read::<<T as ValueType>::Scalar>(address as _);
+            let scalar = read::<T::Scalar>(address as _);
             let value = T::to_owned_scalar(value);
 
             if scalar.eq(&value) {

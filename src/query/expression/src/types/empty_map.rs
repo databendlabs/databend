@@ -15,6 +15,7 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
+use super::AccessType;
 use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
@@ -30,13 +31,12 @@ use crate::ScalarRef;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmptyMapType;
 
-impl ValueType for EmptyMapType {
+impl AccessType for EmptyMapType {
     type Scalar = ();
     type ScalarRef<'a> = ();
     type Column = usize;
     type Domain = ();
     type ColumnIterator<'a> = std::iter::RepeatN<()>;
-    type ColumnBuilder = usize;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
@@ -65,27 +65,6 @@ impl ValueType for EmptyMapType {
             Domain::Map(None) => Some(()),
             _ => None,
         }
-    }
-
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::EmptyMap { len } => Some(len),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::EmptyMap { len } => Some(len),
-            _ => None,
-        }
-    }
-
-    fn try_upcast_column_builder(
-        len: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::EmptyMap { len })
     }
 
     fn upcast_scalar(_: Self::Scalar) -> Scalar {
@@ -124,6 +103,44 @@ impl ValueType for EmptyMapType {
         std::iter::repeat_n((), *len)
     }
 
+    fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
+        0
+    }
+
+    fn column_memory_size(_: &Self::Column) -> usize {
+        std::mem::size_of::<usize>()
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
+    }
+}
+
+impl ValueType for EmptyMapType {
+    type ColumnBuilder = usize;
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::EmptyMap { len } => Some(len),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::EmptyMap { len } => Some(len),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(
+        len: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::EmptyMap { len })
+    }
+
     fn column_to_builder(len: Self::Column) -> Self::ColumnBuilder {
         len
     }
@@ -132,7 +149,7 @@ impl ValueType for EmptyMapType {
         *len
     }
 
-    fn push_item(len: &mut Self::ColumnBuilder, _: Self::Scalar) {
+    fn push_item(len: &mut Self::ColumnBuilder, _: Self::ScalarRef<'_>) {
         *len += 1
     }
 
@@ -154,19 +171,6 @@ impl ValueType for EmptyMapType {
 
     fn build_scalar(len: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(len, 1);
-    }
-
-    fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
-        0
-    }
-
-    fn column_memory_size(_: &Self::Column) -> usize {
-        std::mem::size_of::<usize>()
-    }
-
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(&rhs)
     }
 }
 

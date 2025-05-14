@@ -29,6 +29,7 @@ use crate::types::i256;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;

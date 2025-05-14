@@ -16,6 +16,7 @@ use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use super::AccessType;
 use super::ArrayType;
 use super::DecimalSize;
 use super::ReturnType;
@@ -32,15 +33,14 @@ use crate::ScalarRef;
 
 // Structurally equals to `Tuple(K, V)`
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KvPair<K: ValueType, V: ValueType>(PhantomData<(K, V)>);
+pub struct KvPair<K, V>(PhantomData<(K, V)>);
 
-impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
+impl<K: AccessType, V: AccessType> AccessType for KvPair<K, V> {
     type Scalar = (K::Scalar, V::Scalar);
     type ScalarRef<'a> = (K::ScalarRef<'a>, V::ScalarRef<'a>);
     type Column = KvColumn<K, V>;
     type Domain = (K::Domain, V::Domain);
     type ColumnIterator<'a> = KvIterator<'a, K, V>;
-    type ColumnBuilder = KvColumnBuilder<K, V>;
 
     fn to_owned_scalar((k, v): Self::ScalarRef<'_>) -> Self::Scalar {
         (K::to_owned_scalar(k), V::to_owned_scalar(v))
@@ -80,29 +80,6 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         }
     }
 
-    fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        None
-    }
-
-    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        let ColumnBuilder::Tuple(mut kv) = builder else {
-            return None;
-        };
-        if kv.len() != 2 {
-            return None;
-        }
-        let values = V::try_downcast_owned_builder(kv.pop()?)?;
-        let keys = K::try_downcast_owned_builder(kv.pop()?)?;
-        Some(KvColumnBuilder { keys, values })
-    }
-
-    fn try_upcast_column_builder(
-        _builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        None
-    }
-
     fn upcast_scalar((k, v): Self::Scalar) -> Scalar {
         Scalar::Tuple(vec![K::upcast_scalar(k), V::upcast_scalar(v)])
     }
@@ -138,6 +115,41 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         col.iter()
     }
 
+    fn scalar_memory_size((k, v): &Self::ScalarRef<'_>) -> usize {
+        K::scalar_memory_size(k) + V::scalar_memory_size(v)
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
+}
+
+impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
+    type ColumnBuilder = KvColumnBuilder<K, V>;
+
+    fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        None
+    }
+
+    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        let ColumnBuilder::Tuple(mut kv) = builder else {
+            return None;
+        };
+        if kv.len() != 2 {
+            return None;
+        }
+        let values = V::try_downcast_owned_builder(kv.pop()?)?;
+        let keys = K::try_downcast_owned_builder(kv.pop()?)?;
+        Some(KvColumnBuilder { keys, values })
+    }
+
+    fn try_upcast_column_builder(
+        _builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        None
+    }
+
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
         KvColumnBuilder::from_column(col)
     }
@@ -169,14 +181,6 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
     }
-
-    fn scalar_memory_size((k, v): &Self::ScalarRef<'_>) -> usize {
-        K::scalar_memory_size(k) + V::scalar_memory_size(v)
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
-    }
 }
 
 impl<K: ArgType, V: ArgType> ArgType for KvPair<K, V> {
@@ -196,12 +200,12 @@ impl<K: ArgType, V: ArgType> ReturnType for KvPair<K, V> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct KvColumn<K: ValueType, V: ValueType> {
+pub struct KvColumn<K: AccessType, V: AccessType> {
     pub keys: K::Column,
     pub values: V::Column,
 }
 
-impl<K: ValueType, V: ValueType> KvColumn<K, V> {
+impl<K: AccessType, V: AccessType> KvColumn<K, V> {
     pub fn len(&self) -> usize {
         K::column_len(&self.keys)
     }
@@ -301,12 +305,12 @@ impl<K: ArgType, V: ArgType> KvColumnBuilder<K, V> {
     }
 }
 
-pub struct KvIterator<'a, K: ValueType, V: ValueType> {
+pub struct KvIterator<'a, K: AccessType, V: AccessType> {
     keys: K::ColumnIterator<'a>,
     values: V::ColumnIterator<'a>,
 }
 
-impl<'a, K: ValueType, V: ValueType> Iterator for KvIterator<'a, K, V> {
+impl<'a, K: AccessType, V: AccessType> Iterator for KvIterator<'a, K, V> {
     type Item = (K::ScalarRef<'a>, V::ScalarRef<'a>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -319,22 +323,21 @@ impl<'a, K: ValueType, V: ValueType> Iterator for KvIterator<'a, K, V> {
     }
 }
 
-unsafe impl<K: ValueType, V: ValueType> TrustedLen for KvIterator<'_, K, V> {}
+unsafe impl<K: AccessType, V: AccessType> TrustedLen for KvIterator<'_, K, V> {}
 
 // Structurally equals to `Array(Tuple(K, V))` but treated distinct from `Array(Tuple(K, V))`
 // in unification.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MapType<K: ValueType, V: ValueType>(PhantomData<(K, V)>);
+pub struct MapType<K, V>(PhantomData<(K, V)>);
 
 pub type MapInternal<K, V> = ArrayType<KvPair<K, V>>;
 
-impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
-    type Scalar = <MapInternal<K, V> as ValueType>::Scalar;
-    type ScalarRef<'a> = <MapInternal<K, V> as ValueType>::ScalarRef<'a>;
-    type Column = <MapInternal<K, V> as ValueType>::Column;
+impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
+    type Scalar = <MapInternal<K, V> as AccessType>::Scalar;
+    type ScalarRef<'a> = <MapInternal<K, V> as AccessType>::ScalarRef<'a>;
+    type Column = <MapInternal<K, V> as AccessType>::Column;
     type Domain = Option<(K::Domain, V::Domain)>;
-    type ColumnIterator<'a> = <MapInternal<K, V> as ValueType>::ColumnIterator<'a>;
-    type ColumnBuilder = <MapInternal<K, V> as ValueType>::ColumnBuilder;
+    type ColumnIterator<'a> = <MapInternal<K, V> as AccessType>::ColumnIterator<'a>;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         MapInternal::<K, V>::to_owned_scalar(scalar)
@@ -363,21 +366,6 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
         }
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        MapInternal::<K, V>::try_downcast_builder(builder)
-    }
-
-    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        MapInternal::<K, V>::try_downcast_owned_builder(builder)
-    }
-
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
-        decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        MapInternal::<K, V>::try_upcast_column_builder(builder, decimal_size)
-    }
-
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Scalar::Map(KvPair::<K, V>::upcast_column(scalar))
     }
@@ -388,7 +376,7 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
         Domain::Map(
-            domain.map(|domain| Box::new(<KvPair<K, V> as ValueType>::upcast_domain(domain))),
+            domain.map(|domain| Box::new(<KvPair<K, V> as AccessType>::upcast_domain(domain))),
         )
     }
 
@@ -411,6 +399,33 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
 
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
         MapInternal::<K, V>::iter_column(col)
+    }
+
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
+        MapInternal::<K, V>::scalar_memory_size(scalar)
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        MapInternal::<K, V>::column_memory_size(col)
+    }
+}
+
+impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
+    type ColumnBuilder = <MapInternal<K, V> as ValueType>::ColumnBuilder;
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        MapInternal::<K, V>::try_downcast_builder(builder)
+    }
+
+    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        MapInternal::<K, V>::try_downcast_owned_builder(builder)
+    }
+
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        MapInternal::<K, V>::try_upcast_column_builder(builder, decimal_size)
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -443,14 +458,6 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         MapInternal::<K, V>::build_scalar(builder)
-    }
-
-    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        MapInternal::<K, V>::scalar_memory_size(scalar)
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        MapInternal::<K, V>::column_memory_size(col)
     }
 }
 

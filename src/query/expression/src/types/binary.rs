@@ -15,6 +15,7 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
+use super::AccessType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -34,13 +35,12 @@ pub type BinaryColumnIter<'a> = databend_common_column::binary::BinaryColumnIter
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryType;
 
-impl ValueType for BinaryType {
+impl AccessType for BinaryType {
     type Scalar = Vec<u8>;
     type ScalarRef<'a> = &'a [u8];
     type Column = BinaryColumn;
     type Domain = ();
     type ColumnIterator<'a> = BinaryColumnIter<'a>;
-    type ColumnBuilder = BinaryColumnBuilder;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_vec()
@@ -64,27 +64,6 @@ impl ValueType for BinaryType {
         } else {
             None
         }
-    }
-
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Binary(builder) => Some(builder),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Binary(builder) => Some(builder),
-            _ => None,
-        }
-    }
-
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::Binary(builder))
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -119,6 +98,44 @@ impl ValueType for BinaryType {
         col.iter()
     }
 
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
+        scalar.len()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.data().len() + col.offsets().len() * 8
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(rhs)
+    }
+}
+
+impl ValueType for BinaryType {
+    type ColumnBuilder = BinaryColumnBuilder;
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Binary(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Binary(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Binary(builder))
+    }
+
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
         BinaryColumnBuilder::from_column(col)
     }
@@ -150,19 +167,6 @@ impl ValueType for BinaryType {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
-    }
-
-    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        scalar.len()
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.data().len() + col.offsets().len() * 8
-    }
-
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(rhs)
     }
 }
 

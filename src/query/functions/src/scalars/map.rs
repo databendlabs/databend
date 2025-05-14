@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_expression::types::map::KvColumn;
 use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;
@@ -31,7 +32,6 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::SimpleDomain;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;

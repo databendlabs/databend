@@ -17,6 +17,7 @@ use std::ops::Range;
 
 use super::ReturnType;
 use crate::property::Domain;
+use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
@@ -31,13 +32,12 @@ use crate::values::ScalarRef;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenericType<const INDEX: usize>;
 
-impl<const INDEX: usize> ValueType for GenericType<INDEX> {
+impl<const INDEX: usize> AccessType for GenericType<INDEX> {
     type Scalar = Scalar;
     type ScalarRef<'a> = ScalarRef<'a>;
     type Column = Column;
     type Domain = Domain;
     type ColumnIterator<'a> = ColumnIterator<'a>;
-    type ColumnBuilder = ColumnBuilder;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_owned()
@@ -57,21 +57,6 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Some(domain.clone())
-    }
-
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        Some(builder)
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        Some(builder)
-    }
-
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        Some(builder)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -107,6 +92,38 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         col.iter()
     }
 
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
+        scalar.memory_size()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
+    }
+}
+
+impl<const INDEX: usize> ValueType for GenericType<INDEX> {
+    type ColumnBuilder = ColumnBuilder;
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        Some(builder)
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        Some(builder)
+    }
+
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(builder)
+    }
+
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
         ColumnBuilder::from_column(col)
     }
@@ -137,19 +154,6 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
-    }
-
-    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        scalar.memory_size()
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
-    }
-
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(&rhs)
     }
 }
 

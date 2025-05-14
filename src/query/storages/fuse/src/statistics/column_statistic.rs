@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
