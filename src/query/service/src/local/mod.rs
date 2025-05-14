@@ -34,7 +34,7 @@ pub async fn query_local(
     output_format: &str,
 ) -> Result<()> {
     conf.storage.allow_insecure = true;
-    if conf.query.cluster_id == "" {
+    if conf.query.cluster_id.is_empty() {
         conf.query.cluster_id = "local_test".to_string();
     }
 

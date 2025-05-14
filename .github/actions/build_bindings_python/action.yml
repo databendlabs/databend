@@ -59,12 +59,19 @@ runs:
         before-script-linux: |
           unset RUSTC_WRAPPER
           ../../scripts/setup/dev_setup.sh -yb
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv venv --python 3.12
+          source .venv/bin/activate
+
 
     - name: Run tests
       working-directory: src/bendpy
       if: endsWith(inputs.target, '-gnu')
       shell: bash
       run: |
-        pip install dist/*.whl
-        pip install pytest pyarrow pandas polars
-        pytest -v tests/*
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        uv venv --python 3.12
+        source .venv/bin/activate
+        uvx  pip install dist/*.whl
+        uvx  pip install pytest pyarrow pandas polars
+        uvx  pytest -v tests/*

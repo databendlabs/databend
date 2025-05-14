@@ -12,20 +12,44 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+import databend
+
+databend.init_service(
+    config="""
+[meta]
+embedded_dir = "./.databend/"
+
+# Storage config.
+[storage]
+# fs | s3 | azblob | obs | oss
+type = "fs"
+allow_insecure = true
+
+[storage.fs]
+data_path = "./.databend/"
+"""
+)
 
 from databend import SessionContext
 import pandas as pd
 import polars
 
+
 class TestBasic:
     ctx = SessionContext()
 
     def test_simple(self):
-        df =  self.ctx.sql("select number % 3 n, sum(number) b from numbers(100) group by n order by n").to_pandas()
-        assert df.values.tolist() == [[0, 1683], [1, 1617], [2, 1650] ]
+        df = self.ctx.sql(
+            "select number % 3 n, sum(number) b from numbers(100) group by n order by n"
+        ).to_pandas()
+        assert df.values.tolist() == [[0, 1683], [1, 1617], [2, 1650]]
 
-        df =  self.ctx.sql("select number % 3 n, sum(number) b from numbers(100) group by n order by n").collect()
-        assert str(df) == """┌─────────────────────┐
+        df = self.ctx.sql(
+            "select number % 3 n, sum(number) b from numbers(100) group by n order by n"
+        ).collect()
+        assert (
+            str(df)
+            == """┌─────────────────────┐
 │   n   │      b      │
 │ UInt8 │ UInt64 NULL │
 ├───────┼─────────────┤
@@ -33,13 +57,22 @@ class TestBasic:
 │     1 │ 1617        │
 │     2 │ 1650        │
 └─────────────────────┘"""
+        )
 
     def test_create_insert_select(self):
         self.ctx.sql("create table aa (a int, b string, c bool, d double)").collect()
-        self.ctx.sql("insert into aa select number, number, true, number from numbers(10)").collect()
-        self.ctx.sql("insert into aa select number, number, true, number from numbers(10)").collect()
-        df = self.ctx.sql("select sum(a) x, max(b) y, max(d) z from aa where c").to_pandas()
-        assert df.values.tolist() == [[90.0, '9', 9.0]]
+        self.ctx.sql(
+            "insert into aa select number, number, true, number from numbers(10)"
+        ).collect()
+        self.ctx.sql(
+            "insert into aa select number, number, true, number from numbers(10)"
+        ).collect()
+        df = self.ctx.sql(
+            "select sum(a) x, max(b) y, max(d) z from aa where c"
+        ).to_pandas()
+        assert df.values.tolist() == [[90.0, "9", 9.0]]
 
-        df = self.ctx.sql("select sum(a) x, max(b) y, max(d) z from aa where c").to_polars()
-        assert df.to_pandas().values.tolist() == [[90.0, '9', 9.0]]
+        df = self.ctx.sql(
+            "select sum(a) x, max(b) y, max(d) z from aa where c"
+        ).to_polars()
+        assert df.to_pandas().values.tolist() == [[90.0, "9", 9.0]]
