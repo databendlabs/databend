@@ -54,7 +54,7 @@ impl RowGroupReaderForCopy {
             InMemoryRowGroup::new(&part.location, op.clone(), &part.meta, None, *read_settings);
         let mut _sorter = None;
         self.row_group_reader_builder
-            .build(row_group, None, &mut _sorter, batch_size)
+            .build(row_group, None, &mut _sorter, None, batch_size)
             .await
     }
 

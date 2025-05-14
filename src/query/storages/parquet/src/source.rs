@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -22,6 +23,8 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::InternalColumnType;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
@@ -34,6 +37,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TopKSorter;
 use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
@@ -42,6 +46,8 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
+use databend_common_storage::OperatorRegistry;
+use parquet::arrow::parquet_to_arrow_schema;
 
 use crate::meta::check_parquet_schema;
 use crate::meta::read_metadata_async_cached;
@@ -51,8 +57,10 @@ use crate::parquet_reader::ParquetWholeFileReader;
 use crate::parquet_reader::RowGroupReader;
 use crate::partition::ParquetRowGroupPart;
 use crate::read_settings::ReadSettings;
+use crate::transformer::RecordBatchTransformer;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
+use crate::ParquetReaderBuilder;
 
 enum State {
     Init,
@@ -94,9 +102,16 @@ pub struct ParquetSource {
     topk_sorter: Option<TopKSorter>,
 
     internal_columns: Vec<InternalColumnType>,
+    table_schema: TableSchemaRef,
+
+    push_downs: Option<PushDownInfo>,
+    topk: Arc<Option<TopK>>,
+    op_registry: Arc<dyn OperatorRegistry>,
+    transformer: RecordBatchTransformer,
 }
 
 impl ParquetSource {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         source_type: ParquetSourceType,
@@ -105,6 +120,10 @@ impl ParquetSource {
         full_reader: Option<Arc<ParquetWholeFileReader>>,
         topk: Arc<Option<TopK>>,
         internal_columns: Vec<InternalColumnType>,
+        push_downs: Option<PushDownInfo>,
+        table_schema: TableSchemaRef,
+        output_schema: TableSchemaRef,
+        op_registry: Arc<dyn OperatorRegistry>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let is_copy = matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
@@ -114,6 +133,7 @@ impl ParquetSource {
             .as_ref()
             .as_ref()
             .map(|t| TopKSorter::new(t.limit, t.asc));
+        let transformer = RecordBatchTransformer::build(output_schema);
 
         Ok(ProcessorPtr::create(Box::new(Self {
             source_type,
@@ -129,6 +149,11 @@ impl ParquetSource {
             copy_status,
             topk_sorter,
             internal_columns,
+            table_schema,
+            push_downs,
+            topk,
+            op_registry,
+            transformer,
         })))
     }
 }
@@ -256,6 +281,7 @@ impl Processor for ParquetSource {
                                     &ReadSettings::from_ctx(&self.ctx)?,
                                     part,
                                     &mut self.topk_sorter,
+                                    self.transformer.clone(),
                                 )
                                 .await?
                             {
@@ -325,6 +351,37 @@ impl ParquetSource {
                 part.file.as_str(),
             )?;
         }
+        self.transformer
+            .match_by_field_name(matches!(self.source_type, ParquetSourceType::StageTable));
+        // The schema of the table in iceberg may be inconsistent with the schema in parquet
+        let reader = if self.row_group_reader.schema_desc().root_schema()
+            != meta.file_metadata().schema_descr().root_schema()
+        {
+            let read_options = ParquetReadOptions::default()
+                .with_prune_row_groups(true)
+                .with_prune_pages(false);
+
+            let arrow_schema = parquet_to_arrow_schema(meta.file_metadata().schema_descr(), None)?;
+            let need_row_number = self
+                .internal_columns
+                .contains(&InternalColumnType::FileRowNumber);
+            let mut builder = ParquetReaderBuilder::create(
+                self.ctx.clone(),
+                self.op_registry.clone(),
+                self.table_schema.clone(),
+                arrow_schema,
+            )?
+            .with_options(read_options)
+            .with_push_downs(self.push_downs.as_ref());
+
+            if !need_row_number {
+                builder = builder.with_topk(self.topk.as_ref().as_ref());
+            }
+
+            Cow::Owned(Arc::new(builder.build_row_group_reader(need_row_number)?))
+        } else {
+            Cow::Borrowed(&self.row_group_reader)
+        };
 
         let mut start_row = 0;
         let mut readers = VecDeque::with_capacity(meta.num_row_groups());
@@ -343,12 +400,12 @@ impl ParquetSource {
             };
             start_row += rg.num_rows() as u64;
 
-            let reader = self
-                .row_group_reader
+            let reader = reader
                 .create_read_policy(
                     &ReadSettings::from_ctx(&self.ctx)?,
                     &part,
                     &mut self.topk_sorter,
+                    self.transformer.clone(),
                 )
                 .await?;
 

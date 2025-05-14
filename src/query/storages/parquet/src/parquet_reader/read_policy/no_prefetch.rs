@@ -31,6 +31,7 @@ use super::policy::ReadPolicyImpl;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_reader::utils::transform_record_batch;
 use crate::parquet_reader::utils::FieldPaths;
+use crate::transformer::RecordBatchTransformer;
 
 pub struct NoPretchPolicyBuilder {
     projection: ProjectionMask,
@@ -46,6 +47,7 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
         mut row_group: InMemoryRowGroup<'_>,
         _row_selection: Option<RowSelection>,
         _sorter: &mut Option<TopKSorter>,
+        transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
     ) -> Result<Option<ReadPolicyImpl>> {
         row_group.fetch(&self.projection, None).await?;
@@ -59,6 +61,7 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
             field_paths: self.field_paths.clone(),
             data_schema: self.data_schema.clone(),
             reader,
+            transformer,
         })))
     }
 }
@@ -100,12 +103,16 @@ pub struct NoPrefetchPolicy {
     data_schema: DataSchema,
 
     reader: ParquetRecordBatchReader,
+    transformer: Option<RecordBatchTransformer>,
 }
 
 impl ReadPolicy for NoPrefetchPolicy {
     fn read_block(&mut self) -> Result<Option<DataBlock>> {
         let batch = self.reader.next().transpose()?;
-        if let Some(batch) = batch {
+        if let Some(mut batch) = batch {
+            if let Some(transformer) = &mut self.transformer {
+                batch = transformer.process_record_batch(batch)?;
+            }
             let block = transform_record_batch(&self.data_schema, &batch, &self.field_paths)?;
             Ok(Some(block))
         } else {
