@@ -176,8 +176,14 @@ impl MetaStoreProvider {
             );
 
             // NOTE: This can only be used for test: data will be removed when program quit.
+            let embedded_dir = self.rpc_conf.embedded_dir.trim();
+            let embedded_dir = if embedded_dir.is_empty() {
+                None
+            } else {
+                Some(embedded_dir.to_string())
+            };
             Ok(MetaStore::L(Arc::new(
-                LocalMetaService::new("MetaStoreProvider-created")
+                LocalMetaService::new_with_fixed_dir(embedded_dir, "MetaStoreProvider-created")
                     .await
                     .unwrap(),
             )))

@@ -439,6 +439,7 @@ impl MetaConfig {
 
     pub fn to_meta_grpc_client_conf(&self) -> RpcClientConf {
         RpcClientConf {
+            embedded_dir: self.embedded_dir.clone(),
             endpoints: self.endpoints.clone(),
             username: self.username.clone(),
             password: self.password.clone(),

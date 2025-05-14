@@ -35,13 +35,13 @@ use crate::GlobalServices;
 
 pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
     let temp_dir = tempfile::tempdir()?;
-    let p = env::var("DATABEND_DATA_PATH");
+    let p = env::var("DATABEND_DATA_DIR");
     let path = match &p {
         Ok(p) => Path::new(p),
         Err(_) => temp_dir.path(),
     };
 
-    env::set_var("META_EMBEDDED_DIR", path.join("_meta"));
+    env::set_var("DATABEND_META_DIR", path.join("_meta"));
     let mut conf: InnerConfig = Config::load(true).unwrap().try_into().unwrap();
     conf.storage.allow_insecure = true;
     conf.query.cluster_id = "local_test".to_string();

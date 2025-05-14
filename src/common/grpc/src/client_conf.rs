@@ -28,6 +28,7 @@ impl RpcClientTlsConfig {
 
 #[derive(Clone, Debug, Default)]
 pub struct RpcClientConf {
+    pub embedded_dir: String,
     pub endpoints: Vec<String>,
     pub username: String,
     pub password: String,

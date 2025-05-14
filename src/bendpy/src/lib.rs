@@ -20,50 +20,68 @@ mod dataframe;
 mod schema;
 mod utils;
 
-use std::env;
+use std::collections::HashMap;
+use std::io::Write;
 use std::path::Path;
+use std::sync::Mutex;
+use std::sync::Once;
 
 use databend_common_config::Config;
 use databend_common_config::InnerConfig;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
-use databend_common_meta_app::storage::StorageFsConfig;
-use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_embedded::MetaEmbedded;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
 use pyo3::prelude::*;
 use utils::RUNTIME;
 
+static INIT: Once = Once::new();
+static INITIALIZED_MUTEX: Mutex<()> = Mutex::new(());
+
 /// A Python module implemented in Rust.
 #[pymodule]
-fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
-    let data_path = env::var("DATABEND_DATA_PATH").unwrap_or(".databend/".to_string());
-    let path = Path::new(&data_path);
-
-    env::set_var("META_EMBEDDED_DIR", path.join("_meta"));
-
-    let mut conf: InnerConfig = Config::load(false).unwrap().try_into().unwrap();
-    conf.storage.allow_insecure = true;
-    conf.storage.params = StorageParams::Fs(StorageFsConfig {
-        root: path.join("_data").to_str().unwrap().to_owned(),
-    });
-
-    RUNTIME.block_on(async {
-        let meta_dir = path.join("_meta");
-        MetaEmbedded::init_global_meta_store(meta_dir.to_string_lossy().to_string())
-            .await
-            .unwrap();
-        GlobalServices::init(&conf).await.unwrap();
-
-        // init oss license manager
-        OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
-        ClusterDiscovery::instance()
-            .register_to_metastore(&conf)
-            .await
-            .unwrap();
-    });
-
+pub fn databend(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(init_service, m)?)?;
     m.add_class::<context::PySessionContext>()?;
+    Ok(())
+}
+
+#[pyfunction]
+fn init_service(_py: Python, config: &str) -> PyResult<()> {
+    let _guard = INITIALIZED_MUTEX.lock().unwrap();
+    if INIT.is_completed() {
+        return Err(pyo3::exceptions::PyRuntimeError::new_err(
+            "Service already initialized",
+        ));
+    }
+
+    // if config is file read it to config_str
+    let conf = if std::fs::exists(Path::new(config)).unwrap() {
+        Config::load_with_config_file(config).unwrap()
+    } else {
+        let temp_dr = tempfile::tempdir().unwrap();
+        let mut file = std::fs::File::create(temp_dr.path().join("config.toml")).unwrap();
+        file.write_all(config.as_bytes()).unwrap();
+        let p = format!("{}", temp_dr.path().join("config.toml").as_path().display());
+        Config::load_with_config_file(&p).unwrap()
+    };
+
+    let mut conf: InnerConfig = conf.try_into().unwrap();
+    conf.query.cluster_id = "bendpy".to_string();
+
+    INIT.call_once(|| {
+        RUNTIME
+            .block_on(async {
+                GlobalServices::init(&conf, false).await?;
+                // init oss license manager
+                OssLicenseManager::init("".to_string()).unwrap();
+                // Cluster register.
+                ClusterDiscovery::instance()
+                    .register_to_metastore(&conf)
+                    .await
+            })
+            .unwrap();
+    });
+
     Ok(())
 }
