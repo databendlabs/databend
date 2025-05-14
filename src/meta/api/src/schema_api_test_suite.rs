@@ -337,6 +337,7 @@ impl SchemaApiTestSuite {
         suite.table_index_create_drop(&b.build().await).await?;
         suite.index_create_list_drop(&b.build().await).await?;
         suite.table_lock_revision(&b.build().await).await?;
+        suite.gc_dropped_db_after_undrop(&b.build().await).await?;
         suite.catalog_create_get_list_drop(&b.build().await).await?;
         suite.table_least_visible_time(&b.build().await).await?;
         suite
@@ -6942,6 +6943,79 @@ impl SchemaApiTestSuite {
             let res7 = mt.list_lock_revisions(req7).await?;
             assert_eq!(res7.len(), 0);
         }
+
+        Ok(())
+    }
+
+    async fn gc_dropped_db_after_undrop<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
+        self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "tenant1_gc_dropped_db_after_undrop";
+        let db_name = "db1_gc_dropped_db_after_undrop";
+        let mut util = Util::new(mt, tenant_name, db_name, "", "eng");
+
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+        let db_name_ident = DatabaseNameIdent::new(&tenant, db_name);
+
+        // 1. Create database
+        util.create_db().await?;
+        let db_id = util.db_id;
+
+        info!("Created database with ID: {}", db_id);
+
+        // 2. Drop database
+        util.drop_db().await?;
+
+        // 2.1. Check database is marked as dropped
+        let req = ListDroppedTableReq::new(&tenant);
+        let resp = mt.get_drop_table_infos(req).await?;
+
+        // Filter for our specific database ID
+        let drop_ids: Vec<DroppedId> = resp
+            .drop_ids
+            .into_iter()
+            .filter(|id| {
+                if let DroppedId::Db { db_id: id, .. } = id {
+                    *id == db_id
+                } else {
+                    false
+                }
+            })
+            .collect();
+
+        assert!(
+            !drop_ids.is_empty(),
+            "Database being tested should be dropped"
+        );
+
+        // 3. Undrop the database
+        //
+        // A more rigorous test would verify the race condition protection, but difficult to implement as an integration test:
+        // Ideally, we would undrop the database precisely after the `gc_drop_tables` process has verified
+        // that the database is marked as dropped, but before committing the kv transaction that removes the database metadata.
+
+        let undrop_req = UndropDatabaseReq {
+            name_ident: db_name_ident.clone(),
+        };
+        mt.undrop_database(undrop_req).await?;
+
+        let req = GcDroppedTableReq {
+            tenant: tenant.clone(),
+            drop_ids,
+        };
+
+        // 4. Check that gc_drop_tables operation has NOT removed database's meta data
+        mt.gc_drop_tables(req.clone()).await?;
+
+        // 5. Verify the database is still accessible
+        let get_req = GetDatabaseReq::new(tenant.clone(), db_name.to_string());
+        let db_info = mt.get_database(get_req).await?;
+        assert_eq!(db_info.database_id.db_id, db_id, "Database ID should match");
+        assert!(
+            db_info.meta.drop_on.is_none(),
+            "Database should not be marked as dropped"
+        );
 
         Ok(())
     }

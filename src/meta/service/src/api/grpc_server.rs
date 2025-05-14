@@ -89,6 +89,7 @@ impl GrpcServer {
 
         let mut builder = if let Some(tls_conf) = tls_conf {
             info!("gRPC TLS enabled");
+            let _ = rustls::crypto::ring::default_provider().install_default();
             builder
                 .tls_config(tls_conf)
                 .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?

@@ -45,7 +45,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_common_storages_parquet::ParquetReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -290,7 +290,7 @@ impl IcebergTable {
             .with_prune_pages(false);
 
         let op = self.table.file_io().clone();
-        let mut builder = ParquetRSReaderBuilder::create(
+        let mut builder = ParquetReaderBuilder::create(
             ctx.clone(),
             Arc::new(op),
             table_schema.clone(),

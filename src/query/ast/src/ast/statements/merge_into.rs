@@ -21,7 +21,6 @@ use derive_visitor::DriveMut;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
-use crate::ast::FileFormatOptions;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -168,12 +167,6 @@ impl Display for MergeIntoStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum MutationSource {
-    StreamingV2 {
-        settings: FileFormatOptions,
-        on_error_mode: Option<String>,
-        start: usize,
-    },
-
     Select {
         query: Box<Query>,
         source_alias: TableAlias,
@@ -190,12 +183,6 @@ pub enum MutationSource {
 impl MutationSource {
     pub fn transform_table_reference(&self) -> TableReference {
         match self {
-            Self::StreamingV2 {
-                settings: _,
-                on_error_mode: _,
-                start: _,
-            } => unimplemented!(),
-
             Self::Select {
                 query,
                 source_alias,
@@ -232,19 +219,6 @@ impl MutationSource {
 impl Display for MutationSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            MutationSource::StreamingV2 {
-                settings,
-                on_error_mode,
-                start: _,
-            } => {
-                write!(f, " FILE_FORMAT = ({})", settings)?;
-                write!(
-                    f,
-                    " ON_ERROR = '{}'",
-                    on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
-                )
-            }
-
             MutationSource::Select {
                 query,
                 source_alias,

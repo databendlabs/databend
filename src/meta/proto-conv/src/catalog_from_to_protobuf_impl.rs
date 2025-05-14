@@ -129,6 +129,9 @@ impl FromToProto for mt::IcebergCatalogOption {
             pb::iceberg_catalog_option::IcebergCatalogOption::GlueCatalog(v) => {
                 mt::IcebergCatalogOption::Glue(mt::IcebergGlueCatalogOption::from_pb(v)?)
             }
+            pb::iceberg_catalog_option::IcebergCatalogOption::StorageCatalog(v) => {
+                mt::IcebergCatalogOption::Storage(mt::IcebergStorageCatalogOption::from_pb(v)?)
+            }
         })
     }
 
@@ -145,6 +148,9 @@ impl FromToProto for mt::IcebergCatalogOption {
                 }
                 mt::IcebergCatalogOption::Glue(v) => {
                     pb::iceberg_catalog_option::IcebergCatalogOption::GlueCatalog(v.to_pb()?)
+                }
+                mt::IcebergCatalogOption::Storage(v) => {
+                    pb::iceberg_catalog_option::IcebergCatalogOption::StorageCatalog(v.to_pb()?)
                 }
             }),
         })
@@ -231,6 +237,7 @@ impl FromToProto for mt::IcebergGlueCatalogOption {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         Ok(Self {
+            address: p.address,
             warehouse: p.warehouse,
             props: p
                 .props
@@ -244,7 +251,43 @@ impl FromToProto for mt::IcebergGlueCatalogOption {
         Ok(pb::IcebergGlueCatalogOption {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
+            address: self.address.clone(),
             warehouse: self.warehouse.clone(),
+            props: self
+                .props
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        })
+    }
+}
+
+impl FromToProto for mt::IcebergStorageCatalogOption {
+    type PB = pb::IcebergStorageCatalogOption;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(Self {
+            address: p.address,
+            table_bucket_arn: p.table_bucket_arn,
+            props: p
+                .props
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::IcebergStorageCatalogOption {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            address: self.address.clone(),
+            table_bucket_arn: self.table_bucket_arn.clone(),
             props: self
                 .props
                 .iter()

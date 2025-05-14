@@ -15,6 +15,7 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
+use databend_common_ast::ast::OnErrorMode;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
@@ -22,6 +23,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_formats::FileFormatOptionsExt;
@@ -47,7 +49,7 @@ pub struct LoadContext {
 }
 
 impl LoadContext {
-    pub fn try_create(
+    pub fn try_create_for_copy(
         ctx: Arc<dyn TableContext>,
         stage_table_info: &StageTableInfo,
         pos_projection: Option<Vec<usize>>,
@@ -61,16 +63,36 @@ impl LoadContext {
         file_format_options_ext.disable_variant_check = stage_table_info
             .copy_into_table_options
             .disable_variant_check;
-        let on_error_mode = stage_table_info.copy_into_table_options.on_error.clone();
-        let fields = stage_table_info
-            .schema
+        Self::try_create(
+            ctx,
+            stage_table_info.schema.clone(),
+            file_format_options_ext,
+            stage_table_info.default_exprs.clone(),
+            pos_projection,
+            block_compact_thresholds,
+            internal_columns,
+            stage_table_info.stage_root.clone(),
+            stage_table_info.copy_into_table_options.on_error.clone(),
+        )
+    }
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        schema: TableSchemaRef,
+        file_format_options_ext: FileFormatOptionsExt,
+        default_exprs: Option<Vec<RemoteDefaultExpr>>,
+        pos_projection: Option<Vec<usize>>,
+        block_compact_thresholds: BlockThresholds,
+        internal_columns: Vec<InternalColumn>,
+        stage_root: String,
+        on_error_mode: OnErrorMode,
+    ) -> Result<Self> {
+        let fields = schema
             .fields()
             .iter()
             .filter(|f| f.computed_expr().is_none())
             .cloned()
             .collect::<Vec<_>>();
         let schema = TableSchemaRefExt::create(fields);
-        let default_exprs = stage_table_info.default_exprs.clone();
         let default_exprs = if let Some(default_exprs) = default_exprs {
             let func_ctx = ctx.get_function_context()?;
             Some(Arc::new(DefaultExprEvaluator::new(
@@ -90,7 +112,7 @@ impl LoadContext {
             default_exprs,
             pos_projection,
             is_copy,
-            stage_root: stage_table_info.stage_root.clone(),
+            stage_root,
             file_format_options_ext,
             error_handler: Arc::new(ErrorHandler {
                 on_error_mode,
