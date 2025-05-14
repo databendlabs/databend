@@ -29,10 +29,10 @@ databend-query = { workspace = true, features = [
     "disable_initial_exec_tls",
 ], default-features = false }
 pyo3 = { version = "0.24", features = ["extension-module", "abi3", "abi3-py37"] }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
 uuid = { workspace = true }
-tempfile = { workspace = true }
 
 [lints]
 workspace = true
