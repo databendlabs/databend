@@ -63,7 +63,7 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
         let max_bytes_per_block = fuse_table.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,
-        ) * 2;
+        );
         let hilbert_min_bytes = std::cmp::max(
             hilbert_clustering_min_bytes,
             max_bytes_per_block * block_per_seg,
