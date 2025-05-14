@@ -20,7 +20,6 @@ pub(crate) mod helper;
 use std::io::stdin;
 use std::io::IsTerminal;
 
-use databend_common_config::Config;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
@@ -29,8 +28,11 @@ use databend_common_license::license_manager::OssLicenseManager;
 use crate::clusters::ClusterDiscovery;
 use crate::GlobalServices;
 
-pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
-    let mut conf: InnerConfig = Config::load(true).unwrap().try_into().unwrap();
+pub async fn query_local(
+    mut conf: InnerConfig,
+    query_sql: &str,
+    output_format: &str,
+) -> Result<()> {
     conf.storage.allow_insecure = true;
     if conf.query.cluster_id == "" {
         conf.query.cluster_id = "local_test".to_string();
