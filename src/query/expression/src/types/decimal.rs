@@ -63,14 +63,14 @@ use crate::Scalar;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecimalType<T: Decimal>(PhantomData<T>);
+pub struct CoreDecimal<T: Decimal>(PhantomData<T>);
 
 pub type Decimal128Type = DecimalType<i128>;
 pub type Decimal256Type = DecimalType<i256>;
 
-impl<Num: Decimal> SimpleValueType for DecimalType<Num> {}
+pub type DecimalType<T> = SimpleValueType<CoreDecimal<T>>;
 
-impl<Num: Decimal> SimpleType for DecimalType<Num> {
+impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     type Scalar = Num;
     type Domain = SimpleDomain<Num>;
 

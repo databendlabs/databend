@@ -65,11 +65,11 @@ pub fn clamp_timestamp(micros: &mut i64) {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TimestampType;
+pub struct CoreTimestamp;
 
-impl SimpleValueType for TimestampType {}
+pub type TimestampType = SimpleValueType<CoreTimestamp>;
 
-impl SimpleType for TimestampType {
+impl SimpleType for CoreTimestamp {
     type Scalar = i64;
     type Domain = SimpleDomain<i64>;
 

@@ -60,11 +60,11 @@ pub fn clamp_date(days: i64) -> i32 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DateType;
+pub struct CoreDate;
 
-impl SimpleValueType for DateType {}
+pub type DateType = SimpleValueType<CoreDate>;
 
-impl SimpleType for DateType {
+impl SimpleType for CoreDate {
     type Scalar = i32;
     type Domain = SimpleDomain<i32>;
 

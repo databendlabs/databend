@@ -34,11 +34,11 @@ use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IntervalType;
+pub struct CoreInterval;
 
-impl SimpleValueType for IntervalType {}
+pub type IntervalType = SimpleValueType<CoreInterval>;
 
-impl SimpleType for IntervalType {
+impl SimpleType for CoreInterval {
     type Scalar = months_days_micros;
     type Domain = SimpleDomain<months_days_micros>;
 

@@ -42,9 +42,7 @@ pub trait ZeroSizeType: Debug + Clone + PartialEq + Sized + 'static {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ZeroSizeValueType<T: ZeroSizeType> {
-    _t: PhantomData<T>,
-}
+pub struct ZeroSizeValueType<T: ZeroSizeType>(PhantomData<T>);
 
 impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
     type Scalar = ();

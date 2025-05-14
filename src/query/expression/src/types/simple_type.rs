@@ -14,6 +14,7 @@
 
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::ops::Range;
 
 use databend_common_column::buffer::Buffer;
@@ -74,11 +75,10 @@ pub trait SimpleType: Debug + Clone + PartialEq + Sized + 'static {
     }
 }
 
-#[doc(hidden)]
-pub trait SimpleValueType: SimpleType {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct SimpleValueType<T: SimpleType>(PhantomData<T>);
 
-#[doc(hidden)]
-impl<T: SimpleValueType> AccessType for T {
+impl<T: SimpleType> AccessType for SimpleValueType<T> {
     type Scalar = T::Scalar;
     type ScalarRef<'a> = T::Scalar;
     type Column = Buffer<T::Scalar>;
@@ -185,8 +185,7 @@ impl<T: SimpleValueType> AccessType for T {
     }
 }
 
-#[doc(hidden)]
-impl<T: SimpleValueType> ValueType for T {
+impl<T: SimpleType> ValueType for SimpleValueType<T> {
     type ColumnBuilder = Vec<Self::Scalar>;
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {
