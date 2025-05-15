@@ -26,6 +26,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
 use fastrace::func_name;
+use serde::Serialize;
 
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::Session;
@@ -34,7 +35,7 @@ pub struct AuthMgr {
     jwt_auth: Option<JwtAuthenticator>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum CredentialType {
     DatabendToken,
     Jwt,
