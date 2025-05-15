@@ -130,6 +130,10 @@ impl CacheAccessor for LruDiskCacheHolder {
         let cache = self.read();
         cache.len()
     }
+
+    fn clear(&self) {
+        // Does nothing for disk cache
+    }
 }
 
 /// The crc32 checksum is stored at the end of `bytes` and encoded as le u32.
