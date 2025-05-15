@@ -15,14 +15,14 @@
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
+use super::SelectionBuffers;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
 use crate::types::AccessType;
 
 impl Selector<'_> {
     // Select indices by comparing two columns.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_columns<
+    pub(super) fn select_columns<
         T: AccessType,
         C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
         const FALSE: bool,
@@ -32,13 +32,17 @@ impl Selector<'_> {
         left: T::Column,
         right: T::Column,
         validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: &mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
     ) -> Result<usize> {
+        let SelectionBuffers {
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        } = buffers;
+
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
 
@@ -158,16 +162,20 @@ impl Selector<'_> {
         Ok(true_count)
     }
 
-    pub(crate) fn select_boolean_column<const FALSE: bool>(
+    pub(super) fn select_boolean_column<const FALSE: bool>(
         &self,
         column: Bitmap,
-        true_selection: &mut [u32],
-        false_selection: &mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
     ) -> usize {
+        let SelectionBuffers {
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        } = buffers;
+
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
         match select_strategy {

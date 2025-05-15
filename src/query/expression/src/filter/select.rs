@@ -15,9 +15,9 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::SelectionBuffers;
 use crate::arrow::and_validities;
 use crate::filter::SelectOp;
-use crate::filter::SelectStrategy;
 use crate::types::i256;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
@@ -43,32 +43,20 @@ use crate::Value;
 impl Selector<'_> {
     // Select indices by comparing two `Value`.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_values(
+    pub(super) fn select_values(
         &self,
         op: &SelectOp,
         mut left: Value<AnyType>,
         mut right: Value<AnyType>,
         left_data_type: DataType,
         right_data_type: DataType,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
+        has_false: bool,
     ) -> Result<usize> {
         // Check if the left or right is `Scalar::Null`.
         if left.is_scalar_null() || right.is_scalar_null() {
-            if false_selection.1 {
-                return Ok(self.select_boolean_scalar_adapt(
-                    false,
-                    true_selection,
-                    false_selection,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    select_strategy,
-                    count,
-                ));
+            if has_false {
+                return Ok(self.select_boolean_scalar_adapt(false, buffers, has_false));
             } else {
                 return Ok(0);
             }
@@ -96,137 +84,56 @@ impl Selector<'_> {
         match left_data_type.remove_nullable() {
             DataType::Number(ty) => {
                 with_number_mapped_type!(|T| match ty {
-                    NumberDataType::T => self.select_type_values_cmp::<NumberType<T>>(
-                        &op,
-                        left,
-                        right,
-                        validity,
-                        true_selection,
-                        false_selection,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
-                    ),
+                    NumberDataType::T => {
+                        self.select_type_values_cmp::<NumberType<T>>(
+                            &op, left, right, validity, buffers, has_false,
+                        )
+                    }
                 })
             }
 
             DataType::Decimal(_) => {
-                let (decimal_type, _) = DecimalDataType::from_value(&left).unwrap();
-                with_decimal_mapped_type!(|T| match decimal_type {
-                    DecimalDataType::T(_) => self.select_type_values_cmp::<DecimalType<T>>(
-                        &op,
-                        left,
-                        right,
-                        validity,
-                        true_selection,
-                        false_selection,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
-                    ),
+                let (left_type, _) = DecimalDataType::from_value(&left).unwrap();
+                let (right_type, _) = DecimalDataType::from_value(&right).unwrap();
+                debug_assert_eq!(left_type.size(), right_type.size());
+
+                with_decimal_mapped_type!(|T| match left_type {
+                    DecimalDataType::T(_) => {
+                        self.select_type_values_cmp::<DecimalType<T>>(
+                            &op, left, right, validity, buffers, has_false,
+                        )
+                    }
                 })
             }
-            DataType::Date => self.select_type_values_cmp::<DateType>(
-                &op,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
+            DataType::Date => self
+                .select_type_values_cmp::<DateType>(&op, left, right, validity, buffers, has_false),
             DataType::Timestamp => self.select_type_values_cmp::<TimestampType>(
-                &op,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                &op, left, right, validity, buffers, has_false,
             ),
             DataType::String => self.select_type_values_cmp::<StringType>(
-                &op,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                &op, left, right, validity, buffers, has_false,
             ),
             DataType::Variant => self.select_type_values_cmp::<VariantType>(
-                &op,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                &op, left, right, validity, buffers, has_false,
             ),
             DataType::Boolean => self.select_type_values_cmp::<BooleanType>(
-                &op,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                &op, left, right, validity, buffers, has_false,
             ),
             DataType::EmptyArray => self.select_type_values_cmp::<EmptyArrayType>(
-                &op,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                &op, left, right, validity, buffers, has_false,
             ),
-            _ => self.select_type_values_cmp::<AnyType>(
-                &op,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
+            _ => self
+                .select_type_values_cmp::<AnyType>(&op, left, right, validity, buffers, has_false),
         }
     }
 
     // Select indices by single `Value`.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_value(
+    pub(super) fn select_value(
         &self,
         value: Value<AnyType>,
         data_type: &DataType,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
+        has_false: bool,
     ) -> Result<usize> {
         debug_assert!(
             matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
@@ -236,58 +143,26 @@ impl Selector<'_> {
             DataType::Boolean => {
                 let value = value.try_downcast::<BooleanType>().unwrap();
                 match value {
-                    Value::Scalar(scalar) => self.select_boolean_scalar_adapt(
-                        scalar,
-                        true_selection,
-                        false_selection,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
-                    ),
-                    Value::Column(column) => self.select_boolean_column_adapt(
-                        column,
-                        true_selection,
-                        false_selection,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
-                    ),
+                    Value::Scalar(scalar) => {
+                        self.select_boolean_scalar_adapt(scalar, buffers, has_false)
+                    }
+                    Value::Column(column) => {
+                        self.select_boolean_column_adapt(column, buffers, has_false)
+                    }
                 }
             }
             DataType::Nullable(box DataType::Boolean) => {
                 let nullable_value = value.try_downcast::<NullableType<BooleanType>>().unwrap();
                 match nullable_value {
-                    Value::Scalar(None) => self.select_boolean_scalar_adapt(
-                        false,
-                        true_selection,
-                        false_selection,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
-                    ),
-                    Value::Scalar(Some(scalar)) => self.select_boolean_scalar_adapt(
-                        scalar,
-                        true_selection,
-                        false_selection,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
-                    ),
+                    Value::Scalar(None) => {
+                        self.select_boolean_scalar_adapt(false, buffers, has_false)
+                    }
+                    Value::Scalar(Some(scalar)) => {
+                        self.select_boolean_scalar_adapt(scalar, buffers, has_false)
+                    }
                     Value::Column(NullableColumn { column, validity }) => {
                         let bitmap = &column & &validity;
-                        self.select_boolean_column_adapt(
-                            bitmap,
-                            true_selection,
-                            false_selection,
-                            mutable_true_idx,
-                            mutable_false_idx,
-                            select_strategy,
-                            count,
-                        )
+                        self.select_boolean_column_adapt(bitmap, buffers, has_false)
                     }
                 }
             }
@@ -301,19 +176,14 @@ impl Selector<'_> {
         Ok(count)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_like(
+    pub(super) fn select_like(
         &self,
         mut column: Column,
         data_type: &DataType,
         like_pattern: &LikePattern,
         not: bool,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
+        has_false: bool,
     ) -> Result<usize> {
         // Remove `NullableColumn` and get the inner column and validity.
         let mut validity = None;
@@ -324,17 +194,6 @@ impl Selector<'_> {
         }
         // It's safe to unwrap because the column's data type is `DataType::String`.
         let column = column.into_string().unwrap();
-        self.select_like_adapt(
-            column,
-            like_pattern,
-            not,
-            validity,
-            true_selection,
-            false_selection,
-            mutable_true_idx,
-            mutable_false_idx,
-            select_strategy,
-            count,
-        )
+        self.select_like_adapt(column, like_pattern, not, validity, buffers, has_false)
     }
 }

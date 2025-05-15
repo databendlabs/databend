@@ -15,6 +15,7 @@
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
+use super::SelectionBuffers;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
 use crate::types::string::StringColumn;
@@ -23,8 +24,7 @@ use crate::LikePattern;
 
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_column_scalar<
+    pub(super) fn select_column_scalar<
         T: AccessType,
         C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
         const FALSE: bool,
@@ -34,13 +34,17 @@ impl<'a> Selector<'a> {
         column: T::Column,
         scalar: T::ScalarRef<'a>,
         validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: &mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
     ) -> Result<usize> {
+        let SelectionBuffers {
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        } = buffers;
+
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
 
@@ -142,19 +146,22 @@ impl<'a> Selector<'a> {
     }
 
     // Select indices by like pattern.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_column_like<const FALSE: bool, const NOT: bool>(
+    pub(super) fn select_column_like<const FALSE: bool, const NOT: bool>(
         &self,
         column: StringColumn,
         like_pattern: &LikePattern,
         validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: &mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
     ) -> Result<usize> {
+        let SelectionBuffers {
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        } = buffers;
+
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
 
