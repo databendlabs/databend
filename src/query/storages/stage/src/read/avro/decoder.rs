@@ -529,7 +529,6 @@ mod test {
     use apache_avro::Decimal;
     use apache_avro::Schema;
     use apache_avro::Writer;
-    use databend_common_expression::types::i256;
     use databend_common_expression::types::DecimalDataType;
     use databend_common_expression::types::DecimalScalar;
     use databend_common_expression::types::DecimalSize;
@@ -658,7 +657,7 @@ mod test {
         let decimal_size = DecimalSize::new_unchecked(7, 4);
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
         let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
+            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
         test_single_field(
             table_field,
             avro_schema.clone(),
@@ -686,11 +685,12 @@ mod test {
             let big_int = BigInt::from_str(s).unwrap();
             Value::BigDecimal(BigDecimal::new(big_int, 2))
         };
-        let value = make_value("12345");
         let decimal_size = DecimalSize::new_unchecked(7, 4);
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
+
+        let value = make_value("12345");
         let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
+            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
         test_single_field(
             table_field.clone(),
             avro_schema.clone(),
