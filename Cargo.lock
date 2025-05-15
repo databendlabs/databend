@@ -3866,6 +3866,7 @@ dependencies = [
  "databend-common-meta-semaphore",
  "databend-common-meta-types",
  "databend-meta",
+ "futures",
  "log",
  "tempfile",
  "tokio",
