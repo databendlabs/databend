@@ -351,8 +351,8 @@ impl CacheManager {
     ///
     /// # Parameters
     /// * `clearance_level` - Determines how aggressively to clear caches:
-    ///   * `CacheClearanceLevel::Basic`: Clears caches that may consume significant memory
-    ///   * `CacheClearanceLevel::Deep`: Clears both basic caches and extra caches to release more memory
+    ///   * `CacheClearanceLevel::Basic`: Clears basic caches that may consume significant memory
+    ///   * `CacheClearanceLevel::Deep`: Performs a more aggressive clearing, including both basic caches and extra caches
     pub fn release_cache_memory(&self, clearance_level: CacheClearanceLevel) {
         /// Clears basic caches that may consume a significant amount of memory
         fn clear_basic_caches(me: &CacheManager) {
@@ -464,8 +464,9 @@ impl CacheManager {
         if let Some(cache) = cache_slot.get() {
             let name = cache.name();
             info!(
-                "reset cache {}: dropping {} bytes, ",
+                "clearing cache {}: dropping {} items, size {}",
                 name,
+                cache.len(),
                 cache.bytes_size()
             );
             cache.clear();
