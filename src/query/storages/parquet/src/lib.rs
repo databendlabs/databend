@@ -23,6 +23,7 @@
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
 #![feature(box_patterns)]
+#![feature(result_flattening)]
 // FIXME: Remove this once the deprecated code is removed
 #![allow(deprecated)]
 
