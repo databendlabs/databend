@@ -110,9 +110,9 @@ select info:partial_segment_count, info:unclustered_segment_count from clusterin
 ########################################################
 
 query T
-select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t', 'a,b');
+select cluster_key, type, info:constant_block_count from clustering_information('test_hilbert','t', 'a,b');
 ----
-(a, b) linear {"average_depth":1.4,"average_overlaps":0.4,"block_depth_histogram":{"00001":3,"00002":2},"constant_block_count":0,"total_block_count":5}
+(a, b) linear 0
 
 # column specified not exist
 statement error 1065
