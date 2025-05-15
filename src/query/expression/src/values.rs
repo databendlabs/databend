@@ -376,7 +376,7 @@ impl Value<AnyType> {
     }
 
     pub fn is_scalar_null(&self) -> bool {
-        self.as_scalar().map(|s| s.is_null()).unwrap_or_default()
+        *self == Value::Scalar(Scalar::Null)
     }
 }
 

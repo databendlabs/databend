@@ -17,32 +17,8 @@ use databend_common_exception::Result;
 use super::SelectionBuffers;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
-use crate::types::AccessType;
-use crate::Scalar;
 
 impl Selector<'_> {
-    // Select indices by comparing two scalars.
-    pub(super) fn select_scalars<
-        T: AccessType,
-        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
-    >(
-        &self,
-        cmp: C,
-        left: Scalar,
-        right: Scalar,
-        buffers: SelectionBuffers,
-        has_false: bool,
-    ) -> Result<usize> {
-        let left = left.as_ref();
-        let left = T::try_downcast_scalar(&left).unwrap();
-        let right = right.as_ref();
-        let right = T::try_downcast_scalar(&right).unwrap();
-        let result = cmp(left, right);
-
-        let count = self.select_boolean_scalar_adapt(result, buffers, has_false);
-        Ok(count)
-    }
-
     pub(super) fn select_boolean_scalar<const FALSE: bool>(
         &self,
         scalar: bool,

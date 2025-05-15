@@ -18,22 +18,23 @@ use databend_common_exception::Result;
 use super::SelectionBuffers;
 use crate::arrow::and_validities;
 use crate::filter::SelectOp;
-use crate::types::i256;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
 use crate::types::AnyType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::Decimal128Type;
+use crate::types::Decimal256Type;
 use crate::types::DecimalDataType;
-use crate::types::DecimalType;
+use crate::types::Decimal128As256Type;
+use crate::types::Decimal256As128Type;
 use crate::types::EmptyArrayType;
 use crate::types::NullableType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::VariantType;
-use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::LikePattern;
@@ -97,13 +98,40 @@ impl Selector<'_> {
                 let (right_type, _) = DecimalDataType::from_value(&right).unwrap();
                 debug_assert_eq!(left_type.size(), right_type.size());
 
-                with_decimal_mapped_type!(|T| match left_type {
-                    DecimalDataType::T(_) => {
-                        self.select_type_values_cmp::<DecimalType<T>>(
+                match (left_type, right_type) {
+                    (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(_)) => {
+                        self.select_type_values_cmp::<Decimal128Type>(
                             &op, left, right, validity, buffers, has_false,
                         )
                     }
-                })
+                    (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(_)) => {
+                        self.select_type_values_cmp::<Decimal256Type>(
+                            &op, left, right, validity, buffers, has_false,
+                        )
+                    }
+                    (DecimalDataType::Decimal128(size), DecimalDataType::Decimal256(_)) => {
+                        if size.is_128() {
+                            self.select_type_values_cmp_lr::<Decimal128Type, Decimal256As128Type>(
+                                &op, left, right, validity, buffers, has_false,
+                            )
+                        } else {
+                            self.select_type_values_cmp_lr::<Decimal128As256Type, Decimal256Type>(
+                                &op, left, right, validity, buffers, has_false,
+                            )
+                        }
+                    }
+                    (DecimalDataType::Decimal256(size), DecimalDataType::Decimal128(_)) => {
+                        if size.is_128() {
+                            self.select_type_values_cmp_lr::<Decimal256As128Type, Decimal128Type>(
+                                &op, left, right, validity, buffers, has_false,
+                            )
+                        } else {
+                            self.select_type_values_cmp_lr::<Decimal256Type, Decimal128As256Type>(
+                                &op, left, right, validity, buffers, has_false,
+                            )
+                        }
+                    }
+                }
             }
             DataType::Date => self
                 .select_type_values_cmp::<DateType>(&op, left, right, validity, buffers, has_false),

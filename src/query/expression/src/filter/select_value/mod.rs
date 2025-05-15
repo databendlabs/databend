@@ -39,16 +39,35 @@ impl Selector<'_> {
         buffers: SelectionBuffers,
         has_false: bool,
     ) -> Result<usize> {
+        self.select_type_values_cmp_lr::<T, T>(op, left, right, validity, buffers, has_false)
+    }
+
+    pub(super) fn select_type_values_cmp_lr<L, R>(
+        &self,
+        op: &SelectOp,
+        left: Value<AnyType>,
+        right: Value<AnyType>,
+        validity: Option<Bitmap>,
+        buffers: SelectionBuffers,
+        has_false: bool,
+    ) -> Result<usize>
+    where
+        L: AccessType,
+        R: for<'a> AccessType<ScalarRef<'a> = L::ScalarRef<'a>>,
+    {
         with_mapped_cmp_method!(|OP| match op {
-            SelectOp::OP =>
-                self.select_type_values::<T, _>(T::OP, left, right, validity, buffers, has_false,),
+            SelectOp::OP => self.select_type_values::<L, R, _>(
+                L::OP,
+                left,
+                right,
+                validity,
+                buffers,
+                has_false,
+            ),
         })
     }
 
-    pub(super) fn select_type_values<
-        T: AccessType,
-        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
-    >(
+    fn select_type_values<L, R, C>(
         &self,
         cmp: C,
         left: Value<AnyType>,
@@ -56,31 +75,61 @@ impl Selector<'_> {
         validity: Option<Bitmap>,
         buffers: SelectionBuffers,
         has_false: bool,
-    ) -> Result<usize> {
+    ) -> Result<usize>
+    where
+        L: AccessType,
+        R: for<'a> AccessType<ScalarRef<'a> = L::ScalarRef<'a>>,
+        C: Fn(L::ScalarRef<'_>, L::ScalarRef<'_>) -> bool,
+    {
         match (left, right) {
             (Value::Scalar(left), Value::Scalar(right)) => {
-                self.select_scalars::<T, C>(cmp, left, right, buffers, has_false)
+                let left = left.as_ref();
+                let left = L::try_downcast_scalar(&left).unwrap();
+                let right = right.as_ref();
+                let right = R::try_downcast_scalar(&right).unwrap();
+
+                let result = cmp(left, right);
+                let count = self.select_boolean_scalar_adapt(result, buffers, has_false);
+                Ok(count)
             }
             (Value::Column(left), Value::Column(right)) => {
-                let left = T::try_downcast_column(&left).unwrap();
-                let right = T::try_downcast_column(&right).unwrap();
+                let left = L::try_downcast_column(&left).unwrap();
+                let right = R::try_downcast_column(&right).unwrap();
 
                 if has_false {
-                    self.select_columns::<T, C, true>(cmp, left, right, validity, buffers)
+                    self.select_columns::<true, L, R, _>(cmp, left, right, validity, buffers)
                 } else {
-                    self.select_columns::<T, C, false>(cmp, left, right, validity, buffers)
+                    self.select_columns::<false, L, R, _>(cmp, left, right, validity, buffers)
                 }
             }
-            (Value::Column(column), Value::Scalar(scalar))
-            | (Value::Scalar(scalar), Value::Column(column)) => {
-                let column = T::try_downcast_column(&column).unwrap();
+            (Value::Column(column), Value::Scalar(scalar)) => {
+                let column = L::try_downcast_column(&column).unwrap();
                 let scalar = scalar.as_ref();
-                let scalar = T::try_downcast_scalar(&scalar).unwrap();
+                let scalar = R::try_downcast_scalar(&scalar).unwrap();
 
                 if has_false {
-                    self.select_column_scalar::<T, C, true>(cmp, column, scalar, validity, buffers)
+                    self.select_column_scalar::<true, L, R, _>(
+                        cmp, column, scalar, validity, buffers,
+                    )
                 } else {
-                    self.select_column_scalar::<T, C, false>(cmp, column, scalar, validity, buffers)
+                    self.select_column_scalar::<false, L, R, _>(
+                        cmp, column, scalar, validity, buffers,
+                    )
+                }
+            }
+            (Value::Scalar(scalar), Value::Column(column)) => {
+                let column = R::try_downcast_column(&column).unwrap();
+                let scalar = scalar.as_ref();
+                let scalar = L::try_downcast_scalar(&scalar).unwrap();
+
+                if has_false {
+                    self.select_column_scalar::<true, R, L, _>(
+                        cmp, column, scalar, validity, buffers,
+                    )
+                } else {
+                    self.select_column_scalar::<false, R, L, _>(
+                        cmp, column, scalar, validity, buffers,
+                    )
                 }
             }
         }

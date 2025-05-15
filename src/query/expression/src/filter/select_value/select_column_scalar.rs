@@ -24,18 +24,19 @@ use crate::LikePattern;
 
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.
-    pub(super) fn select_column_scalar<
-        T: AccessType,
-        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
-        const FALSE: bool,
-    >(
+    pub(super) fn select_column_scalar<const FALSE: bool, L, R, C>(
         &self,
         cmp: C,
-        column: T::Column,
-        scalar: T::ScalarRef<'a>,
+        column: L::Column,
+        scalar: R::ScalarRef<'a>,
         validity: Option<Bitmap>,
         buffers: SelectionBuffers,
-    ) -> Result<usize> {
+    ) -> Result<usize>
+    where
+        L: AccessType,
+        R: AccessType,
+        C: Fn(L::ScalarRef<'_>, R::ScalarRef<'_>) -> bool,
+    {
         let SelectionBuffers {
             true_selection,
             false_selection,
@@ -69,7 +70,7 @@ impl<'a> Selector<'a> {
                             let idx = *true_selection.get_unchecked(i);
                             let ret = validity.get_bit_unchecked(idx as usize)
                                 && cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
+                                    L::index_column_unchecked(&column, idx as usize),
                                     scalar.clone(),
                                 );
                             update_index(ret, idx, true_selection, false_selection);
@@ -79,7 +80,7 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *true_selection.get_unchecked(i);
                             let ret = cmp(
-                                T::index_column_unchecked(&column, idx as usize),
+                                L::index_column_unchecked(&column, idx as usize),
                                 scalar.clone(),
                             );
                             update_index(ret, idx, true_selection, false_selection);
@@ -96,7 +97,7 @@ impl<'a> Selector<'a> {
                             let idx = *false_selection.get_unchecked(i);
                             let ret = validity.get_bit_unchecked(idx as usize)
                                 && cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
+                                    L::index_column_unchecked(&column, idx as usize),
                                     scalar.clone(),
                                 );
                             update_index(ret, idx, true_selection, false_selection);
@@ -106,7 +107,7 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *false_selection.get_unchecked(i);
                             let ret = cmp(
-                                T::index_column_unchecked(&column, idx as usize),
+                                L::index_column_unchecked(&column, idx as usize),
                                 scalar.clone(),
                             );
                             update_index(ret, idx, true_selection, false_selection);
@@ -120,7 +121,7 @@ impl<'a> Selector<'a> {
                         for idx in 0u32..count as u32 {
                             let ret = validity.get_bit_unchecked(idx as usize)
                                 && cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
+                                    L::index_column_unchecked(&column, idx as usize),
                                     scalar.clone(),
                                 );
                             update_index(ret, idx, true_selection, false_selection);
@@ -129,7 +130,7 @@ impl<'a> Selector<'a> {
                     None => {
                         for idx in 0u32..count as u32 {
                             let ret = cmp(
-                                T::index_column_unchecked(&column, idx as usize),
+                                L::index_column_unchecked(&column, idx as usize),
                                 scalar.clone(),
                             );
                             update_index(ret, idx, true_selection, false_selection);

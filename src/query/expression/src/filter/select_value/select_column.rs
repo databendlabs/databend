@@ -22,18 +22,19 @@ use crate::types::AccessType;
 
 impl Selector<'_> {
     // Select indices by comparing two columns.
-    pub(super) fn select_columns<
-        T: AccessType,
-        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
-        const FALSE: bool,
-    >(
+    pub(super) fn select_columns<const FALSE: bool, L, R, C>(
         &self,
         cmp: C,
-        left: T::Column,
-        right: T::Column,
+        left: L::Column,
+        right: R::Column,
         validity: Option<Bitmap>,
         buffers: SelectionBuffers,
-    ) -> Result<usize> {
+    ) -> Result<usize>
+    where
+        L: AccessType,
+        R: AccessType,
+        C: Fn(L::ScalarRef<'_>, R::ScalarRef<'_>) -> bool,
+    {
         let SelectionBuffers {
             true_selection,
             false_selection,
@@ -56,8 +57,8 @@ impl Selector<'_> {
                             let idx = *true_selection.get_unchecked(i);
                             let ret = validity.get_bit_unchecked(idx as usize)
                                 && cmp(
-                                    T::index_column_unchecked(&left, idx as usize),
-                                    T::index_column_unchecked(&right, idx as usize),
+                                    L::index_column_unchecked(&left, idx as usize),
+                                    R::index_column_unchecked(&right, idx as usize),
                                 );
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
@@ -71,8 +72,8 @@ impl Selector<'_> {
                         for i in start..end {
                             let idx = *true_selection.get_unchecked(i);
                             let ret = cmp(
-                                T::index_column_unchecked(&left, idx as usize),
-                                T::index_column_unchecked(&right, idx as usize),
+                                L::index_column_unchecked(&left, idx as usize),
+                                R::index_column_unchecked(&right, idx as usize),
                             );
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
@@ -93,8 +94,8 @@ impl Selector<'_> {
                             let idx = *false_selection.get_unchecked(i);
                             let ret = validity.get_bit_unchecked(idx as usize)
                                 && cmp(
-                                    T::index_column_unchecked(&left, idx as usize),
-                                    T::index_column_unchecked(&right, idx as usize),
+                                    L::index_column_unchecked(&left, idx as usize),
+                                    R::index_column_unchecked(&right, idx as usize),
                                 );
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
@@ -108,8 +109,8 @@ impl Selector<'_> {
                         for i in start..end {
                             let idx = *false_selection.get_unchecked(i);
                             let ret = cmp(
-                                T::index_column_unchecked(&left, idx as usize),
-                                T::index_column_unchecked(&right, idx as usize),
+                                L::index_column_unchecked(&left, idx as usize),
+                                R::index_column_unchecked(&right, idx as usize),
                             );
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
@@ -127,8 +128,8 @@ impl Selector<'_> {
                         for idx in 0u32..count as u32 {
                             let ret = validity.get_bit_unchecked(idx as usize)
                                 && cmp(
-                                    T::index_column_unchecked(&left, idx as usize),
-                                    T::index_column_unchecked(&right, idx as usize),
+                                    L::index_column_unchecked(&left, idx as usize),
+                                    R::index_column_unchecked(&right, idx as usize),
                                 );
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
@@ -141,8 +142,8 @@ impl Selector<'_> {
                     None => {
                         for idx in 0u32..count as u32 {
                             let ret = cmp(
-                                T::index_column_unchecked(&left, idx as usize),
-                                T::index_column_unchecked(&right, idx as usize),
+                                L::index_column_unchecked(&left, idx as usize),
+                                R::index_column_unchecked(&right, idx as usize),
                             );
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
