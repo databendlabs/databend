@@ -576,7 +576,7 @@ dependencies = [
  "genawaiter2",
  "itertools 0.14.0",
  "pyo3",
- "pyo3-build-config 0.24.2",
+ "pyo3-build-config",
  "reqwest",
  "rquickjs",
  "serde_json",
@@ -1359,7 +1359,7 @@ dependencies = [
  "databend-common-users",
  "databend-query",
  "pyo3",
- "pyo3-build-config 0.18.3",
+ "pyo3-build-config",
  "tempfile",
  "tokio",
  "tokio-stream",
@@ -12172,20 +12172,10 @@ dependencies = [
  "memoffset",
  "once_cell",
  "portable-atomic",
- "pyo3-build-config 0.24.2",
+ "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
  "unindent",
-]
-
-[[package]]
-name = "pyo3-build-config"
-version = "0.18.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cb946f5ac61bb61a5014924910d936ebd2b23b705f7a4a3c40b05c720b079a3"
-dependencies = [
- "once_cell",
- "target-lexicon 0.12.16",
 ]
 
 [[package]]
@@ -12206,7 +12196,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78f9cf92ba9c409279bc3305b5409d90db2d2c22392d443a87df3a1adad59e33"
 dependencies = [
  "libc",
- "pyo3-build-config 0.24.2",
+ "pyo3-build-config",
 ]
 
 [[package]]
@@ -12229,7 +12219,7 @@ checksum = "822ece1c7e1012745607d5cf0bcb2874769f0f7cb34c4cde03b9358eb9ef911a"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
- "pyo3-build-config 0.24.2",
+ "pyo3-build-config",
  "quote",
  "syn 2.0.101",
 ]

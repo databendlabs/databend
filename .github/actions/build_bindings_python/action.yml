@@ -69,9 +69,6 @@ runs:
       if: endsWith(inputs.target, '-gnu')
       shell: bash
       run: |
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        uv venv --python 3.12
-        source .venv/bin/activate
-        uvx  pip install dist/*.whl
-        uvx  pip install pytest pyarrow pandas polars
-        uvx  pytest -v tests/*
+        pip install dist/*.whl
+        pip install pytest pyarrow pandas polars
+        pytest -v tests/*
