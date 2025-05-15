@@ -33,8 +33,6 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::parse_exprs;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::operations::UnMatchedExprs;
-
 
 use crate::sessions::QueryContext;
 
@@ -125,36 +123,12 @@ where Self: Transform
     pub fn try_new(
         ctx: Arc<QueryContext>,
         output_schema: DataSchemaRef,
-        unmatched: UnMatchedExprs,
         table: Arc<dyn Table>,
         target_table_schema_with_computed: DataSchemaRef,
+        data_schemas: HashMap<usize, DataSchemaRef>,
+        expression_transforms: Vec<Option<CompoundBlockOperator>>,
+        trigger_non_null_errors: Vec<Option<ErrorCode>>,
     ) -> Result<Self> {
-        let mut expression_transforms = Vec::with_capacity(unmatched.len());
-        let mut data_schemas = HashMap::with_capacity(unmatched.len());
-        let mut trigger_non_null_errors = Vec::with_capacity(unmatched.len());
-        for (idx, item) in unmatched.iter().enumerate() {
-            let input_schema = item.0.clone();
-            data_schemas.insert(idx, input_schema.clone());
-            match build_expression_transform(
-                input_schema,
-                output_schema.clone(),
-                table.clone(),
-                ctx.clone(),
-            ) {
-                Ok(expression_transform) => {
-                    expression_transforms.push(Some(expression_transform));
-                    trigger_non_null_errors.push(None);
-                }
-                Err(err) => {
-                    if err.code() != ErrorCode::BAD_ARGUMENTS {
-                        return Err(err);
-                    }
-
-                    expression_transforms.push(None);
-                    trigger_non_null_errors.push(Some(err));
-                }
-            };
-        }
         // computed_expression_transform will hold entire schema, so this won't get non-null constraint
         let computed_expression_transform = build_expression_transform(
             target_table_schema_with_computed.clone(),

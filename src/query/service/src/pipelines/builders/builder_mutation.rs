@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataSchema;
@@ -34,11 +36,16 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::executor::physical_plans::Mutation;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::UnMatchedExprs;
 use databend_common_storages_fuse::FuseTable;
 
+use crate::pipelines::processors::transforms::build_cast_exprs;
+use crate::pipelines::processors::transforms::build_expression_transform;
+use crate::pipelines::processors::transforms::Branch;
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
+use crate::pipelines::processors::transforms::TransformBranchedAsyncFunction;
 use crate::pipelines::processors::transforms::TransformResortAddOnWithoutSourceSchema;
 use crate::pipelines::PipelineBuilder;
 
@@ -136,6 +143,71 @@ impl PipelineBuilder {
 
         // fill default columns
         let table_default_schema = &table.schema_with_stream().remove_computed_fields();
+        let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
+
+        let mut expression_transforms = Vec::with_capacity(unmatched.len());
+        let mut data_schemas = HashMap::with_capacity(unmatched.len());
+        let mut trigger_non_null_errors = Vec::with_capacity(unmatched.len());
+        let mut branches = HashMap::with_capacity(unmatched.len());
+        for (idx, item) in unmatched.iter().enumerate() {
+            let mut input_schema = item.0.clone();
+            let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
+            if let Some((async_funcs, new_default_schema, new_default_schema_no_cast)) =
+                default_expr_binder
+                    .split_async_default_exprs(input_schema.clone(), default_schema.clone())?
+            {
+                branches.insert(idx, Branch {
+                    async_func_descs: async_funcs,
+                    to_schema: new_default_schema.clone(),
+                    from_schema: new_default_schema_no_cast.clone(),
+                    exprs: build_cast_exprs(
+                        new_default_schema_no_cast.clone(),
+                        new_default_schema.clone(),
+                    )?,
+                });
+                input_schema = new_default_schema;
+            }
+
+            data_schemas.insert(idx, input_schema.clone());
+            match build_expression_transform(
+                input_schema,
+                default_schema.clone(),
+                tbl.clone(),
+                self.ctx.clone(),
+            ) {
+                Ok(expression_transform) => {
+                    expression_transforms.push(Some(expression_transform));
+                    trigger_non_null_errors.push(None);
+                }
+                Err(err) => {
+                    if err.code() != ErrorCode::BAD_ARGUMENTS {
+                        return Err(err);
+                    }
+
+                    expression_transforms.push(None);
+                    trigger_non_null_errors.push(Some(err));
+                }
+            };
+        }
+
+        let branches = Arc::new(branches);
+
+        let mut builder = self
+            .main_pipeline
+            .try_create_async_transform_pipeline_builder_with_len(
+                || {
+                    Ok(TransformBranchedAsyncFunction {
+                        ctx: self.ctx.clone(),
+                        branches: branches.clone(),
+                    })
+                },
+                transform_len,
+            )?;
+        if need_match {
+            builder.add_items_prepend(vec![create_dummy_item()]);
+        }
+        self.main_pipeline.add_pipe(builder.finalize());
+
         let mut builder = self
             .main_pipeline
             .try_create_transform_pipeline_builder_with_len(
@@ -143,9 +215,11 @@ impl PipelineBuilder {
                     TransformResortAddOnWithoutSourceSchema::try_new(
                         self.ctx.clone(),
                         Arc::new(DataSchema::from(table_default_schema)),
-                        unmatched.clone(),
                         tbl.clone(),
                         Arc::new(DataSchema::from(table.schema_with_stream())),
+                        data_schemas.clone(),
+                        expression_transforms.clone(),
+                        trigger_non_null_errors.clone(),
                     )
                 },
                 transform_len,

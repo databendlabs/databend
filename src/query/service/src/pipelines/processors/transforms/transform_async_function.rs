@@ -59,27 +59,7 @@ impl TransformAsyncFunction {
         sequence_name: &String,
         data_type: &DataType,
     ) -> Result<()> {
-        let count = data_block.num_rows() as u64;
-        let value = if count == 0 {
-            UInt64Type::from_data(vec![])
-        } else {
-            let tenant = self.ctx.get_tenant();
-            let catalog = self.ctx.get_default_catalog()?;
-            let req = GetSequenceNextValueReq {
-                ident: SequenceIdent::new(&tenant, sequence_name),
-                count,
-            };
-            let resp = catalog.get_sequence_next_value(req).await?;
-            let range = resp.start..resp.start + count;
-            UInt64Type::from_data(range.collect::<Vec<u64>>())
-        };
-        let entry = BlockEntry {
-            data_type: data_type.clone(),
-            value: Value::Column(value),
-        };
-        data_block.add_column(entry);
-
-        Ok(())
+        transform_sequence(&self.ctx, data_block, sequence_name, data_type).await
     }
 }
 
@@ -113,4 +93,33 @@ impl AsyncTransform for TransformAsyncFunction {
         }
         Ok(data_block)
     }
+}
+
+pub async fn transform_sequence(
+    ctx: &Arc<QueryContext>,
+    data_block: &mut DataBlock,
+    sequence_name: &String,
+    data_type: &DataType,
+) -> Result<()> {
+    let count = data_block.num_rows() as u64;
+    let value = if count == 0 {
+        UInt64Type::from_data(vec![])
+    } else {
+        let tenant = ctx.get_tenant();
+        let catalog = ctx.get_default_catalog()?;
+        let req = GetSequenceNextValueReq {
+            ident: SequenceIdent::new(&tenant, sequence_name),
+            count,
+        };
+        let resp = catalog.get_sequence_next_value(req).await?;
+        let range = resp.start..resp.start + count;
+        UInt64Type::from_data(range.collect::<Vec<u64>>())
+    };
+    let entry = BlockEntry {
+        data_type: data_type.clone(),
+        value: Value::Column(value),
+    };
+    data_block.add_column(entry);
+
+    Ok(())
 }
