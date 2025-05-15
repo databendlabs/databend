@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -393,19 +394,17 @@ pub fn init_logging(
         let mut filter_builder =
             EnvFilterBuilder::new().filter(Some("databend::log::structlog"), LevelFilter::Off);
 
-        if cfg.profile.on {
-            filter_builder =
-                filter_builder.filter(Some("databend::log::profile"), LevelFilter::Trace);
-        } else {
-            filter_builder =
-                filter_builder.filter(Some("databend::log::profile"), LevelFilter::Off);
+        let mut table_to_target = get_table_to_target();
+
+        for table_cfg in cfg.history.tables.iter() {
+            if let Some(target) = table_to_target.remove(&table_cfg.table_name) {
+                filter_builder = filter_builder.filter(Some(&target), LevelFilter::Trace);
+            }
         }
-        if cfg.query.on {
-            filter_builder =
-                filter_builder.filter(Some("databend::log::query"), LevelFilter::Trace);
-        } else {
-            filter_builder = filter_builder.filter(Some("databend::log::query"), LevelFilter::Off);
+        for (_, target) in table_to_target {
+            filter_builder = filter_builder.filter(Some(&target), LevelFilter::Off);
         }
+
         let dispatch = Dispatch::new()
             .filter(EnvFilter::new(filter_builder.parse(&cfg.history.level)))
             .filter(filter_by_thread_tracker())
@@ -422,4 +421,15 @@ pub fn init_logging(
     }
 
     _drop_guards
+}
+
+fn get_table_to_target() -> HashMap<String, String> {
+    [
+        ("profile_history", "databend::log::profile"),
+        ("query_history", "databend::log::query"),
+        ("login_history", "databend::log::login"),
+    ]
+    .iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect()
 }
