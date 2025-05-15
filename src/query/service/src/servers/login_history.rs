@@ -30,6 +30,7 @@ pub enum LoginEventType {
 
 #[derive(Serialize)]
 pub enum LoginHandler {
+    #[allow(clippy::upper_case_acronyms)]
     HTTP,
     MySQL,
 }
