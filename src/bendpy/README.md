@@ -102,7 +102,7 @@ uvx pdoc databend
 **`databend.init_service`  must be called only once**
 
 
--  By default, you can init the service by a local directoy, then data & catalogs will be stored inside the directory.
+-  By default, you can init the service by a local directory, then data & catalogs will be stored inside the directory.
 ```
 import databend
 
