@@ -151,6 +151,7 @@ impl RuleNormalizeAggregateOptimizer {
                                 data_type: work_c.return_type.clone(),
                                 visibility: Visibility::Visible,
                                 column_name: work_c.display_name.clone(),
+                                is_srf: false,
                             },
                         }),
                     })

@@ -512,7 +512,7 @@ impl Binder {
             || stmt.qualify.is_some()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
-            || !bind_context.srf_info.srfs.is_empty()
+            || bind_context.has_srf_recursive()
         {
             return Ok(());
         }
@@ -579,7 +579,6 @@ impl Binder {
         }
 
         let cols = metadata.columns();
-
         let virtual_cols = cols
             .iter()
             .filter(|col| matches!(col, ColumnEntry::VirtualColumn(_)))
