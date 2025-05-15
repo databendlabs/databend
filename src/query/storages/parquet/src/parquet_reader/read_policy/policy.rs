@@ -59,7 +59,7 @@ pub fn default_policy_builders() -> PolicyBuilders {
 
 #[async_trait::async_trait]
 pub trait ReadPolicyBuilder: Send + Sync {
-    async fn build(
+    async fn fetch_and_build(
         &self,
         _row_group: InMemoryRowGroup<'_>,
         _row_selection: Option<RowSelection>,

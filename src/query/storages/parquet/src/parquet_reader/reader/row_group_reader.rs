@@ -203,7 +203,7 @@ impl RowGroupReader {
 
         let builder = &self.policy_builders[policy as usize];
         builder
-            .build(
+            .fetch_and_build(
                 row_group,
                 selections,
                 topk_sorter,
