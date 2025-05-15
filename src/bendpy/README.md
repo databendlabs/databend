@@ -13,7 +13,9 @@ pip install databend
 ### Basic:
 ```python
 import databend
-databend.init_service( config = "config.toml.sample" )
+databend.init_service(local_dir = ".databend")
+# or use config
+# databend.init_service( config = "config.toml.sample" )
 
 from databend import SessionContext
 ctx = SessionContext()

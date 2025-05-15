@@ -44,9 +44,9 @@ pub fn databend(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<context::PySessionContext>()?;
     Ok(())
 }
-
 #[pyfunction]
-fn init_service(_py: Python, config: &str) -> PyResult<()> {
+#[pyo3(signature = (config = "", local_dir = ""))]
+fn init_service(_py: Python, config: &str, local_dir: &str) -> PyResult<()> {
     let _guard = INITIALIZED_MUTEX.lock().unwrap();
     if INIT.is_completed() {
         return Err(pyo3::exceptions::PyRuntimeError::new_err(
@@ -60,6 +60,21 @@ fn init_service(_py: Python, config: &str) -> PyResult<()> {
     } else {
         let temp_dr = tempfile::tempdir().unwrap();
         let mut file = std::fs::File::create(temp_dr.path().join("config.toml")).unwrap();
+
+        let config = if local_dir.is_empty() {
+            format!(
+                r#"[meta]
+embedded_dir = "{local_dir}"
+[storage]
+type = "fs"
+allow_insecure = true
+[storage.fs]
+data_path = "{local_dir}"#
+            )
+        } else {
+            config.to_string()
+        };
+
         file.write_all(config.as_bytes()).unwrap();
         let p = format!("{}", temp_dr.path().join("config.toml").as_path().display());
         Config::load_with_config_file(&p).unwrap()
