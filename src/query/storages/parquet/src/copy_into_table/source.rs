@@ -22,19 +22,16 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use opendal::Operator;
 
+use crate::copy_into_table::projection::CopyProjectionEvaluator;
 use crate::copy_into_table::reader::RowGroupReaderForCopy;
 use crate::parquet_reader::policy::ReadPolicyImpl;
 use crate::read_settings::ReadSettings;
@@ -58,9 +55,7 @@ pub struct ParquetCopySource {
     // Used to read parquet.
     row_group_readers: Arc<HashMap<usize, RowGroupReaderForCopy>>,
     operator: Operator,
-    schema: DataSchemaRef,
-    func_ctx: FunctionContext,
-
+    copy_projection_evaluator: CopyProjectionEvaluator,
     state: State,
     batch_size: usize,
 }
@@ -75,7 +70,8 @@ impl ParquetCopySource {
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let batch_size = ctx.get_settings().get_parquet_max_block_size()? as usize;
-        let func_ctx = ctx.get_function_context()?;
+        let func_ctx = Arc::new(ctx.get_function_context()?);
+        let copy_projection_evaluator = CopyProjectionEvaluator::new(schema, func_ctx);
 
         Ok(ProcessorPtr::create(Box::new(Self {
             output,
@@ -83,23 +79,12 @@ impl ParquetCopySource {
             ctx,
             operator,
             row_group_readers,
-            func_ctx,
             batch_size,
             generated_data: None,
             is_finished: false,
             state: State::Init,
-            schema,
+            copy_projection_evaluator,
         })))
-    }
-    fn project(&self, block: &DataBlock, projection: &[Expr]) -> Result<DataBlock> {
-        let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let mut columns = Vec::with_capacity(projection.len());
-        for (field, expr) in self.schema.fields().iter().zip(projection.iter()) {
-            let value = evaluator.run(expr)?;
-            let column = BlockEntry::new(field.data_type().clone(), value);
-            columns.push(column);
-        }
-        Ok(DataBlock::new(columns, block.num_rows()))
     }
 }
 
@@ -152,7 +137,10 @@ impl Processor for ParquetCopySource {
         match std::mem::replace(&mut self.state, State::Init) {
             State::ReadRowGroup((projection, mut reader)) => {
                 if let Some(block) = reader.as_mut().read_block()? {
-                    self.generated_data = Some(self.project(&block, &projection)?);
+                    self.generated_data = Some(
+                        self.copy_projection_evaluator
+                            .project(&block, &projection)?,
+                    );
                     self.state = State::ReadRowGroup((projection, reader));
                 }
                 // Else: The reader is finished. We should try to build another reader.

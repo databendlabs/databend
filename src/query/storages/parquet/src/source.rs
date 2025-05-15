@@ -78,6 +78,16 @@ pub enum ParquetSourceType {
     Iceberg,
     DeltaLake,
     Hive,
+    StreamingLoad,
+}
+
+impl ParquetSourceType {
+    pub fn need_transformer(&self) -> bool {
+        !matches!(
+            self,
+            ParquetSourceType::StageTable | ParquetSourceType::StreamingLoad
+        )
+    }
 }
 
 pub struct ParquetSource {

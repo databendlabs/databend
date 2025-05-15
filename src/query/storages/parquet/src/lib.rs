@@ -46,6 +46,7 @@ mod schema;
 pub use copy_into_table::ParquetTableForCopy;
 pub use parquet_part::ParquetFilePart;
 pub use parquet_part::ParquetPart;
+pub use parquet_reader::InmMemoryFile;
 pub use parquet_reader::ParquetFileReader;
 pub use parquet_reader::ParquetReaderBuilder;
 pub use parquet_reader::ParquetWholeFileReader;

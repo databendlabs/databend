@@ -20,6 +20,7 @@ mod topk;
 mod utils;
 
 pub use read_policy::*;
+pub use reader::InmMemoryFile;
 pub use reader::ParquetFileReader;
 pub use reader::ParquetReaderBuilder;
 pub use reader::ParquetWholeFileReader;
