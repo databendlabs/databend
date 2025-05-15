@@ -30,6 +30,11 @@ select 1 = '1', 1::Int16 = '1', number from numbers(10) where number = '1'
 1 1 1
 
 query I
+select number from numbers(10) where number = true
+----
+1
+
+query I
 select number from numbers_mt(10) where number between 4 + 0.1  and 8 - 0.1  order by number
 ----
 5
