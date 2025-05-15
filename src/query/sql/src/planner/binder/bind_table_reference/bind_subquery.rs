@@ -15,6 +15,7 @@
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::TableAlias;
 use databend_common_exception::Result;
+use databend_common_expression::is_stream_column;
 
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
@@ -57,6 +58,9 @@ impl Binder {
 
         // Set all columns as Visible, because the outer query may use `SELECT *` to get all columns.
         for column in result_bind_context.columns.iter_mut() {
+            if is_stream_column(&column.column_name) {
+                continue;
+            }
             column.visibility = Visibility::Visible;
         }
 

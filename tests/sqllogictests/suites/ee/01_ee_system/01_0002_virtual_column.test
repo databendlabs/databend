@@ -546,11 +546,11 @@ INSERT (
 3 0
 
 query TTTTT
-SELECT * FROM STUDENT_GRADES;
+SELECT * FROM STUDENT_GRADES ORDER BY school_id;
 ----
+S001 ST001 A Excellent Y
 S002 ST002 B Good Y
 S003 ST003 C Average N
-S001 ST001 A Excellent Y
 
 statement ok
 set enable_experimental_virtual_column = 0;
