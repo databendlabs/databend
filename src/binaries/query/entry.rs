@@ -104,7 +104,7 @@ async fn precheck_services(conf: &InnerConfig) -> Result<(), MainError> {
     if conf.query.max_memory_limit_enabled {
         let size = conf.query.max_server_memory_usage as i64;
         info!("Set memory limit: {}", size);
-        GLOBAL_MEM_STAT.set_limit(size);
+        GLOBAL_MEM_STAT.set_limit(size, false);
     }
 
     #[cfg(not(target_os = "macos"))]

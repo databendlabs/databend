@@ -20,9 +20,12 @@ databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }
+databend-common-pipeline-transforms = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-storages-common-cache = { workspace = true }
+databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 educe = { workspace = true }
 fastrace = { workspace = true }
@@ -31,6 +34,7 @@ iceberg = { workspace = true }
 iceberg-catalog-glue = { workspace = true }
 iceberg-catalog-hms = { workspace = true }
 iceberg-catalog-rest = { workspace = true }
+iceberg-catalog-s3tables = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

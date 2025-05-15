@@ -225,7 +225,7 @@ mod tests {
         let prev = PermitEntry::new("a", 1);
         let current = PermitEntry::new("b", 2);
 
-        let watch_response = WatchResponse::new3(
+        let watch_response = WatchResponse::new_change_event(
             sem_key.format_key(),
             Some(SeqV::new(1, prev.encode_to_vec()?)),
             Some(SeqV::new(2, current.encode_to_vec()?)),

@@ -57,6 +57,11 @@ impl TableMetaFunc for FuseSegment {
                 "bytes_compressed",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
+            TableField::new("index_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "virtual_block_count",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
         ])
     }
 
@@ -75,6 +80,8 @@ impl TableMetaFunc for FuseSegment {
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
         let mut compressed: Vec<u64> = Vec::with_capacity(len);
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
+        let mut index_size: Vec<u64> = Vec::with_capacity(len);
+        let mut virtual_block_count: Vec<Option<u64>> = Vec::with_capacity(len);
         let mut file_location: Vec<String> = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
@@ -95,6 +102,8 @@ impl TableMetaFunc for FuseSegment {
                 row_count.push(segment.summary.row_count);
                 compressed.push(segment.summary.compressed_byte_size);
                 uncompressed.push(segment.summary.uncompressed_byte_size);
+                index_size.push(segment.summary.index_size);
+                virtual_block_count.push(segment.summary.virtual_block_count);
                 file_location.push(segment_locations[idx].0.clone());
 
                 row_num += 1;
@@ -116,6 +125,8 @@ impl TableMetaFunc for FuseSegment {
             UInt64Type::from_data(row_count),
             UInt64Type::from_data(uncompressed),
             UInt64Type::from_data(compressed),
+            UInt64Type::from_data(index_size),
+            UInt64Type::from_opt_data(virtual_block_count),
         ]))
     }
 }

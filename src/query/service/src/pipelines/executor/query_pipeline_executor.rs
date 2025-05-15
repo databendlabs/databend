@@ -18,9 +18,9 @@ use std::time::Instant;
 
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
-use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
@@ -446,24 +446,24 @@ impl QueryPipelineExecutor {
 
 impl Drop for QueryPipelineExecutor {
     fn drop(&mut self) {
-        drop_guard(move || {
-            self.finish::<()>(None);
+        let _guard = LimitMemGuard::enter_unlimited();
 
-            let cause = match self.finished_error.lock().as_ref() {
-                Some(cause) => cause.clone(),
-                None => ErrorCode::Internal("Pipeline illegal state: not successfully shutdown."),
-            };
+        self.finish::<()>(None);
 
-            let mut on_finished_chain = self.on_finished_chain.lock();
+        let cause = match self.finished_error.lock().as_ref() {
+            Some(cause) => cause.clone(),
+            None => ErrorCode::Internal("Pipeline illegal state: not successfully shutdown."),
+        };
 
-            // untracking for on finished
-            let tracking_payload = ThreadTracker::new_tracking_payload();
-            let _guard = ThreadTracker::tracking(tracking_payload);
-            let profiling = self.fetch_plans_profile(true);
-            let info = ExecutionInfo::create(Err(cause), profiling);
-            if let Err(cause) = on_finished_chain.apply(info) {
-                warn!("Pipeline executor shutdown failure, {:?}", cause);
-            }
-        })
+        let mut on_finished_chain = self.on_finished_chain.lock();
+
+        // untracking for on finished
+        let tracking_payload = ThreadTracker::new_tracking_payload();
+        let _guard = ThreadTracker::tracking(tracking_payload);
+        let profiling = self.fetch_plans_profile(true);
+        let info = ExecutionInfo::create(Err(cause), profiling);
+        if let Err(cause) = on_finished_chain.apply(info) {
+            warn!("Pipeline executor shutdown failure, {:?}", cause);
+        }
     }
 }

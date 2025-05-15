@@ -215,7 +215,7 @@ impl HashJoinSpiller {
         } else {
             let mut hashes = self.get_hashes(data_block, join_type)?;
             for hash in hashes.iter_mut() {
-                *hash = Self::get_partition_id(*hash as usize, partition_bits) as u64;
+                *hash = Self::get_partition_id(*hash, partition_bits as u64);
             }
             let partition_blocks = DataBlock::scatter(data_block, &hashes, 1 << partition_bits)?;
             Ok(partition_blocks)
@@ -223,8 +223,8 @@ impl HashJoinSpiller {
     }
 
     #[inline(always)]
-    fn get_partition_id(hash: usize, bits: usize) -> usize {
-        (hash >> (32 - bits)) & ((1 << bits) - 1)
+    fn get_partition_id(hash: u64, bits: u64) -> u64 {
+        (hash >> (64 - bits)) & ((1 << bits) - 1)
     }
 
     // Get all hashes for build input data.

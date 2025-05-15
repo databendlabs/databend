@@ -249,6 +249,7 @@ impl RemoteLog {
 
 impl Append for RemoteLog {
     fn append(&self, record: &Record) -> anyhow::Result<()> {
+        // fsync wal
         let log_element = self.prepare_log_element(record);
         self.buffer
             .log(log_element)

@@ -98,7 +98,9 @@ impl<'a> InferFilterOptimizer<'a> {
                     ) {
                         (true, true) => {
                             if op == ComparisonOp::Equal {
-                                self.add_equal_expr(&func.arguments[0], &func.arguments[1]);
+                                if !self.add_equal_expr(&func.arguments[0], &func.arguments[1]) {
+                                    remaining_predicates.push(predicate);
+                                }
                             } else {
                                 remaining_predicates.push(predicate);
                             }
@@ -178,7 +180,16 @@ impl<'a> InferFilterOptimizer<'a> {
         self.expr_equal_to.push(expr_equal_to);
     }
 
-    pub fn add_equal_expr(&mut self, left: &ScalarExpr, right: &ScalarExpr) {
+    pub fn add_equal_expr(&mut self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
+        let Ok(left_ty) = left.data_type() else {
+            return false;
+        };
+        let Ok(right_ty) = right.data_type() else {
+            return false;
+        };
+        if !Self::check_equal_expr_type(&left_ty, &right_ty) {
+            return false;
+        }
         match self.expr_index.get(left) {
             Some(index) => self.expr_equal_to[*index].push(right.clone()),
             None => self.add_expr(left, vec![], vec![right.clone()]),
@@ -188,6 +199,28 @@ impl<'a> InferFilterOptimizer<'a> {
             Some(index) => self.expr_equal_to[*index].push(left.clone()),
             None => self.add_expr(right, vec![], vec![left.clone()]),
         };
+
+        true
+    }
+
+    // equal expr must have the same type, otherwise the function may fail on execution.
+    fn check_equal_expr_type(left_ty: &DataType, right_ty: &DataType) -> bool {
+        match (left_ty.remove_nullable(), right_ty.remove_nullable()) {
+            (DataType::Number(l), DataType::Number(r)) => {
+                (l.is_integer() && r.is_integer()) || (l.is_float() && r.is_float())
+            }
+            (DataType::Decimal(_), DataType::Decimal(_)) => true,
+            (DataType::Array(box l), DataType::Array(box r)) => Self::check_equal_expr_type(&l, &r),
+            (DataType::Map(box l), DataType::Map(box r)) => Self::check_equal_expr_type(&l, &r),
+            (DataType::Tuple(l_tys), DataType::Tuple(r_tys)) => {
+                l_tys.len() == r_tys.len()
+                    && l_tys
+                        .iter()
+                        .zip(r_tys.iter())
+                        .all(|(l_ty, r_ty)| Self::check_equal_expr_type(l_ty, r_ty))
+            }
+            (_, _) => left_ty.eq(right_ty),
+        }
     }
 
     fn add_expr_predicate(&mut self, expr: &ScalarExpr, new_predicate: Predicate) -> Result<()> {

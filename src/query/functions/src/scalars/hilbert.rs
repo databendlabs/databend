@@ -15,13 +15,14 @@
 use std::sync::Arc;
 
 use databend_common_expression::hilbert_index;
-use databend_common_expression::types::ArgType;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GenericType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::Column;

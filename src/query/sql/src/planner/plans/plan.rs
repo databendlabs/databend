@@ -42,7 +42,6 @@ use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
-use crate::plans::AlterWorkloadGroupPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CallProcedurePlan;
@@ -145,6 +144,7 @@ use crate::plans::SetPlan;
 use crate::plans::SetPriorityPlan;
 use crate::plans::SetRolePlan;
 use crate::plans::SetSecondaryRolesPlan;
+use crate::plans::SetWorkloadGroupQuotasPlan;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
@@ -160,6 +160,7 @@ use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
 use crate::plans::UnsetPlan;
+use crate::plans::UnsetWorkloadGroupQuotasPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::UseWarehousePlan;
@@ -233,7 +234,8 @@ pub enum Plan {
     CreateWorkloadGroup(Box<CreateWorkloadGroupPlan>),
     DropWorkloadGroup(Box<DropWorkloadGroupPlan>),
     RenameWorkloadGroup(Box<RenameWorkloadGroupPlan>),
-    AlterWorkloadGroup(Box<AlterWorkloadGroupPlan>),
+    SetWorkloadGroupQuotas(Box<SetWorkloadGroupQuotasPlan>),
+    UnsetWorkloadGroupQuotas(Box<UnsetWorkloadGroupQuotasPlan>),
 
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),

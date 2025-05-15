@@ -3,7 +3,7 @@ SELECT st_point(60,37);
 ----
 {"type": "Point", "coordinates": [60,37]}
 
-statement error 1801
+statement error 1090
 SELECT st_point(60,100);
 
 query T

@@ -17,7 +17,7 @@ use crate::types::*;
 use crate::values::Value;
 use crate::EvalContext;
 
-pub fn vectorize_1_arg<I1: ArgType, O: ArgType>(
+pub fn vectorize_1_arg<I1: AccessType, O: ReturnType>(
     func: impl Fn(I1::ScalarRef<'_>, &mut EvalContext) -> O::Scalar + Copy + Send + Sync,
 ) -> impl Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, ctx| match arg1 {
@@ -34,7 +34,7 @@ pub fn vectorize_1_arg<I1: ArgType, O: ArgType>(
     }
 }
 
-pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
+pub fn vectorize_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
         + Copy
         + Send
@@ -74,7 +74,7 @@ pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     }
 }
 
-pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
+pub fn vectorize_3_arg<I1: AccessType, I2: AccessType, I3: AccessType, O: ReturnType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, I3::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
         + Copy
         + Send
@@ -102,7 +102,13 @@ pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
     }
 }
 
-pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: ArgType>(
+pub fn vectorize_4_arg<
+    I1: AccessType,
+    I2: AccessType,
+    I3: AccessType,
+    I4: AccessType,
+    O: ReturnType,
+>(
     func: impl Fn(
             I1::ScalarRef<'_>,
             I2::ScalarRef<'_>,
@@ -140,7 +146,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
     }
 }
 
-pub fn vectorize_with_builder_1_arg<I1: ArgType, O: ArgType>(
+pub fn vectorize_with_builder_1_arg<I1: AccessType, O: ReturnType>(
     func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder, &mut EvalContext) + Copy + Send + Sync,
 ) -> impl Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, ctx| {
@@ -162,7 +168,7 @@ pub fn vectorize_with_builder_1_arg<I1: ArgType, O: ArgType>(
     }
 }
 
-pub fn vectorize_with_builder_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
+pub fn vectorize_with_builder_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder, &mut EvalContext)
         + Copy
         + Send
@@ -188,7 +194,12 @@ pub fn vectorize_with_builder_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     }
 }
 
-pub fn vectorize_with_builder_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
+pub fn vectorize_with_builder_3_arg<
+    I1: AccessType,
+    I2: AccessType,
+    I3: AccessType,
+    O: ReturnType,
+>(
     func: impl Fn(
             I1::ScalarRef<'_>,
             I2::ScalarRef<'_>,
@@ -222,11 +233,11 @@ pub fn vectorize_with_builder_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: Ar
 }
 
 pub fn vectorize_with_builder_4_arg<
-    I1: ArgType,
-    I2: ArgType,
-    I3: ArgType,
-    I4: ArgType,
-    O: ArgType,
+    I1: AccessType,
+    I2: AccessType,
+    I3: AccessType,
+    I4: AccessType,
+    O: ReturnType,
 >(
     func: impl Fn(
             I1::ScalarRef<'_>,
@@ -265,7 +276,7 @@ pub fn vectorize_with_builder_4_arg<
     }
 }
 
-pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
+pub fn passthrough_nullable_1_arg<I1: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
 ) -> impl for<'a> Fn(Value<NullableType<I1>>, &mut EvalContext) -> Value<NullableType<O>>
        + Copy
@@ -291,7 +302,7 @@ pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
     }
 }
 
-pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
+pub fn passthrough_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
@@ -323,7 +334,7 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     }
 }
 
-pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
+pub fn passthrough_nullable_3_arg<I1: AccessType, I2: AccessType, I3: ArgType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O>
         + Copy
         + Send
@@ -360,11 +371,11 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
 }
 
 pub fn passthrough_nullable_4_arg<
-    I1: ArgType,
-    I2: ArgType,
-    I3: ArgType,
-    I4: ArgType,
-    O: ArgType,
+    I1: AccessType,
+    I2: AccessType,
+    I3: AccessType,
+    I4: AccessType,
+    O: ReturnType,
 >(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O>
         + Copy
@@ -403,7 +414,7 @@ pub fn passthrough_nullable_4_arg<
     }
 }
 
-pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
+pub fn combine_nullable_1_arg<I1: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync,
 ) -> impl for<'a> Fn(Value<NullableType<I1>>, &mut EvalContext) -> Value<NullableType<O>>
        + Copy
@@ -432,7 +443,7 @@ pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
     }
 }
 
-pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
+pub fn combine_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<NullableType<O>>
         + Copy
         + Send
@@ -469,7 +480,7 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     }
 }
 
-pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
+pub fn combine_nullable_3_arg<I1: AccessType, I2: AccessType, I3: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<NullableType<O>>
         + Copy
         + Send
@@ -508,7 +519,13 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
     }
 }
 
-pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: ArgType>(
+pub fn combine_nullable_4_arg<
+    I1: AccessType,
+    I2: AccessType,
+    I3: AccessType,
+    I4: AccessType,
+    O: ReturnType,
+>(
     func: impl for<'a> Fn(
             Value<I1>,
             Value<I2>,

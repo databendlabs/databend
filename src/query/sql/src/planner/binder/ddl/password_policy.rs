@@ -108,7 +108,7 @@ impl Binder {
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         let query = format!(
-            "SELECT name, comment, options FROM system.password_policies {} order by name {}",
+            "SELECT name, comment, options FROM default.system.password_policies {} order by name {}",
             show_limit, limit_str,
         );
 

@@ -18,6 +18,7 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
@@ -321,10 +322,8 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
         }
     }
 
-    let column_vec = data_types
-        .iter()
-        .enumerate()
-        .map(|(index, data_type)| {
+    let column_vec = (0..data_types.len())
+        .map(|index| {
             let columns = blocks
                 .iter()
                 .map(|block| {
@@ -336,7 +335,7 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
                         .unwrap()
                 })
                 .collect_vec();
-            Column::take_downcast_column_vec(&columns, data_type.clone())
+            Column::take_downcast_column_vec(&columns)
         })
         .collect_vec();
 

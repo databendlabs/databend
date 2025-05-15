@@ -29,6 +29,7 @@ permissions:
   checks: write
   statuses: write
   contents: write
+  packages: write
 
 env:
   BUILD_PROFILE: release

@@ -253,7 +253,8 @@ impl Plan {
             Plan::CreateWorkloadGroup(_) => Ok("CreateWorkloadGroup".to_string()),
             Plan::DropWorkloadGroup(_) => Ok("DropWorkloadGroup".to_string()),
             Plan::RenameWorkloadGroup(_) => Ok("RenameWorkloadGroup".to_string()),
-            Plan::AlterWorkloadGroup(_) => Ok("AlterWorkloadGroup".to_string()),
+            Plan::SetWorkloadGroupQuotas(_) => Ok("SetWorkloadGroupQuotas".to_string()),
+            Plan::UnsetWorkloadGroupQuotas(_) => Ok("UnsetWorkloadGroupQuotas".to_string()),
         }
     }
 }

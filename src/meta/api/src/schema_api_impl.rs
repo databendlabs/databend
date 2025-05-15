@@ -3725,6 +3725,14 @@ async fn gc_dropped_db_by_id(
         return Ok(());
     };
 
+    if seq_db_meta.drop_on.is_none() {
+        // If db is not marked as dropped, just ignore the gc request and return directly.
+        // In subsequent KV transactions, we also verify that db_meta hasn't changed
+        // to ensure we don't reclaim metadata of the given database that might have been
+        // successfully undropped in a parallel operation.
+        return Ok(());
+    }
+
     // TODO: enable this when gc_in_progress is set.
     // if !seq_db_meta.gc_in_progress {
     //     let err = UnknownDatabaseId::new(
@@ -3778,6 +3786,9 @@ async fn gc_dropped_db_by_id(
             .push(txn_put_pb(&db_id_history_ident, &db_id_list)?);
     }
 
+    // Verify db_meta hasn't changed since we started this operation.
+    // This establishes a condition for the transaction that will prevent it from committing
+    // if the database metadata was modified by another concurrent operation (like un-dropping).
     txn.condition.push(txn_cond_eq_seq(&dbid, seq_db_meta.seq));
     txn.if_then.push(txn_op_del(&dbid));
     txn.condition

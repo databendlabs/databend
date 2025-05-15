@@ -11,6 +11,7 @@ permissions:
   id-token: write
   pull-requests: write
   contents: read
+  packages: write
 
 env:
   BUILD_PROFILE: release
@@ -97,17 +98,35 @@ jobs:
         with:
           repo: databend-query
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Prepare for docker
         id: prepare
         run: |
           short_sha=$(echo "${{ needs.info.outputs.sha }}" | cut -c1-7)
           ts=$(date +%s)
           echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}-${ts}" >> $GITHUB_OUTPUT
+      - name: Get Image Tags
+        id: tags
+        uses: actions/github-script@v7
+        env:
+          REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
+          REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
+          VERSION: ${{ steps.prepare.outputs.tag }}
+        with:
+          script: |
+            const { VERSION, REPO_DOCKERHUB, REPO_ECR } = process.env;
+            const repos = [REPO_DOCKERHUB, REPO_ECR];
+            let tags = [];
+            for (const repo of repos) {
+              tags.push(`${repo}:${VERSION}`);
+            }
+            core.setOutput('tags', tags.join(','));
       - name: push service image
         uses: docker/build-push-action@v5
         with:
           push: true
-          tags: ${{ steps.login.outputs.ecr_repo }}:${{ steps.prepare.outputs.tag }}
+          tags: ${{ steps.tags.outputs.tags }}
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/service/query.Dockerfile

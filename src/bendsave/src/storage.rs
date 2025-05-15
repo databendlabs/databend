@@ -130,7 +130,7 @@ pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
 ///
 /// This will load databend meta as a stream of bytes.
 ///
-/// It's internal format looks like
+/// Its internal format looks like
 ///
 /// ```text
 /// {"xx": "yy"}\n

@@ -34,7 +34,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storages_parquet::ParquetFileReader;
-use databend_common_storages_parquet::ParquetRSFullReader;
+use databend_common_storages_parquet::ParquetWholeFileReader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
 
 use crate::HivePartInfo;
@@ -51,7 +51,7 @@ pub struct HiveTableSource {
     ctx: Arc<dyn TableContext>,
 
     // Used to read parquet file.
-    parquet_reader: Arc<ParquetRSFullReader>,
+    parquet_reader: Arc<ParquetWholeFileReader>,
 
     // Used to insert partition_block_entries to data block
     // FieldIndex is the index in the output_schema
@@ -72,7 +72,7 @@ impl HiveTableSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         output_schema: DataSchemaRef,
-        parquet_reader: Arc<ParquetRSFullReader>,
+        parquet_reader: Arc<ParquetWholeFileReader>,
         partition_fields: Vec<TableField>,
     ) -> Result<ProcessorPtr> {
         let output_partition_columns = output_schema

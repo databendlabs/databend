@@ -23,6 +23,7 @@ ctl
 query T
 show databases from ctl;
 ----
+test
 tpch
 
 statement error 1003
@@ -83,6 +84,7 @@ show databases;
 ----
 abc
 ef123
+test
 tpch
 
 statement ok
@@ -92,6 +94,7 @@ query T rowsort
 show databases from ctl;
 ----
 abc
+test
 tpch
 
 statement ok

@@ -67,6 +67,7 @@ impl UDFFlightClient {
         user_agent: &str,
     ) -> Result<Arc<Endpoint>> {
         let tls_config = ClientTlsConfig::new().with_native_roots();
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let endpoint = Endpoint::from_shared(addr.to_string())
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!("Invalid UDF Server address: {err}"))

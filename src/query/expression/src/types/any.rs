@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::ops::Range;
 
 use crate::property::Domain;
+use crate::types::AccessType;
 use crate::types::DecimalSize;
 use crate::types::ValueType;
 use crate::values::Column;
@@ -27,13 +28,12 @@ use crate::ScalarRef;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnyType;
 
-impl ValueType for AnyType {
+impl AccessType for AnyType {
     type Scalar = Scalar;
     type ScalarRef<'a> = ScalarRef<'a>;
     type Column = Column;
     type Domain = Domain;
     type ColumnIterator<'a> = ColumnIterator<'a>;
-    type ColumnBuilder = ColumnBuilder;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_owned()
@@ -53,21 +53,6 @@ impl ValueType for AnyType {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Some(domain.clone())
-    }
-
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        Some(builder)
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        Some(builder)
-    }
-
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        Some(builder)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -103,6 +88,38 @@ impl ValueType for AnyType {
         col.iter()
     }
 
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
+        scalar.memory_size()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
+    }
+}
+
+impl ValueType for AnyType {
+    type ColumnBuilder = ColumnBuilder;
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        Some(builder)
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        Some(builder)
+    }
+
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(builder)
+    }
+
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
         ColumnBuilder::from_column(col)
     }
@@ -133,18 +150,5 @@ impl ValueType for AnyType {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
-    }
-
-    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        scalar.memory_size()
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
-    }
-
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(&rhs)
     }
 }

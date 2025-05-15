@@ -23,7 +23,9 @@ use databend_common_exception::Result;
 
 use super::AnyType;
 use super::DecimalSize;
+use super::ReturnType;
 use crate::property::Domain;
+use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -34,15 +36,14 @@ use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArrayType<T: ValueType>(PhantomData<T>);
+pub struct ArrayType<T>(PhantomData<T>);
 
-impl<T: ValueType> ValueType for ArrayType<T> {
+impl<T: AccessType> AccessType for ArrayType<T> {
     type Scalar = T::Column;
     type ScalarRef<'a> = T::Column;
     type Column = ArrayColumn<T>;
     type Domain = Option<T::Domain>;
     type ColumnIterator<'a> = ArrayIterator<'a, T>;
-    type ColumnBuilder = ArrayColumnBuilder<T>;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
@@ -54,7 +55,7 @@ impl<T: ValueType> ValueType for ArrayType<T> {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Array(array) => T::try_downcast_column(array),
+            ScalarRef::Array(array) => <T as AccessType>::try_downcast_column(array),
             _ => None,
         }
     }
@@ -65,11 +66,58 @@ impl<T: ValueType> ValueType for ArrayType<T> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
-            Domain::Array(Some(domain)) => Some(Some(T::try_downcast_domain(domain)?)),
+            Domain::Array(Some(domain)) => {
+                Some(Some(<T as AccessType>::try_downcast_domain(domain)?))
+            }
             Domain::Array(None) => Some(None),
             _ => None,
         }
     }
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Array(<T as AccessType>::upcast_column(scalar))
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Array(Box::new(col.upcast()))
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Array(domain.map(|domain| Box::new(<T as AccessType>::upcast_domain(domain))))
+    }
+
+    fn column_len(col: &Self::Column) -> usize {
+        col.len()
+    }
+
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
+        col.index(index)
+    }
+
+    #[inline(always)]
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        col.index_unchecked(index)
+    }
+
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
+        col.slice(range)
+    }
+
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
+        col.iter()
+    }
+
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
+        <T as AccessType>::column_memory_size(scalar)
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
+}
+
+impl<T: ValueType> ValueType for ArrayType<T> {
+    type ColumnBuilder = ArrayColumnBuilder<T>;
 
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         None
@@ -110,39 +158,6 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         Some(ColumnBuilder::Array(Box::new(builder.upcast(decimal_size))))
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Array(T::upcast_column(scalar))
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Array(Box::new(col.upcast()))
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Array(domain.map(|domain| Box::new(T::upcast_domain(domain))))
-    }
-
-    fn column_len(col: &Self::Column) -> usize {
-        col.len()
-    }
-
-    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.index(index)
-    }
-
-    #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        col.index_unchecked(index)
-    }
-
-    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.slice(range)
-    }
-
-    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter()
-    }
-
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
         ArrayColumnBuilder::from_column(col)
     }
@@ -174,14 +189,6 @@ impl<T: ValueType> ValueType for ArrayType<T> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
     }
-
-    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        T::column_memory_size(scalar)
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
-    }
 }
 
 impl<T: ArgType> ArgType for ArrayType<T> {
@@ -192,19 +199,21 @@ impl<T: ArgType> ArgType for ArrayType<T> {
     fn full_domain() -> Self::Domain {
         Some(T::full_domain())
     }
+}
 
+impl<T: ArgType> ReturnType for ArrayType<T> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         ArrayColumnBuilder::with_capacity(capacity, 0, generics)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ArrayColumn<T: ValueType> {
+pub struct ArrayColumn<T: AccessType> {
     values: T::Column,
     offsets: Buffer<u64>,
 }
 
-impl<T: ValueType> ArrayColumn<T> {
+impl<T: AccessType> ArrayColumn<T> {
     pub fn new(values: T::Column, offsets: Buffer<u64>) -> ArrayColumn<T> {
         ArrayColumn { values, offsets }
     }
@@ -316,7 +325,7 @@ impl<T: ValueType> ArrayColumn<T> {
 }
 
 impl ArrayColumn<AnyType> {
-    pub fn try_downcast<T: ValueType>(&self) -> Option<ArrayColumn<T>> {
+    pub fn try_downcast<T: AccessType>(&self) -> Option<ArrayColumn<T>> {
         Some(ArrayColumn {
             values: T::try_downcast_column(&self.values)?,
             offsets: self.offsets.clone(),
@@ -324,12 +333,12 @@ impl ArrayColumn<AnyType> {
     }
 }
 
-pub struct ArrayIterator<'a, T: ValueType> {
+pub struct ArrayIterator<'a, T: AccessType> {
     values: &'a T::Column,
     offsets: std::slice::Windows<'a, u64>,
 }
 
-impl<T: ValueType> Iterator for ArrayIterator<'_, T> {
+impl<T: AccessType> Iterator for ArrayIterator<'_, T> {
     type Item = T::Column;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -343,7 +352,7 @@ impl<T: ValueType> Iterator for ArrayIterator<'_, T> {
     }
 }
 
-unsafe impl<T: ValueType> TrustedLen for ArrayIterator<'_, T> {}
+unsafe impl<T: AccessType> TrustedLen for ArrayIterator<'_, T> {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArrayColumnBuilder<T: ValueType> {

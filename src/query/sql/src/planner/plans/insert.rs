@@ -15,18 +15,25 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_ast::ast::OnErrorMode;
+use databend_common_base::base::tokio::sync::mpsc::Receiver;
+use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
+use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::schema::TableInfo;
 use enum_as_inner::EnumAsInner;
+use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -42,6 +49,14 @@ pub enum InsertInputSource {
     Values(InsertValue),
     // From stage
     Stage(Box<Plan>),
+    StreamingLoad {
+        file_format: Box<FileFormatParams>,
+        on_error_mode: OnErrorMode,
+        schema: TableSchemaRef,
+        default_exprs: Option<Vec<RemoteDefaultExpr>>,
+        block_thresholds: BlockThresholds,
+        receiver: Arc<Mutex<Option<Receiver<Result<DataBlock>>>>>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,6 +184,23 @@ pub(crate) fn format_insert_source(
             )
             .format_pretty()?),
         },
+        InsertInputSource::StreamingLoad {
+            file_format: format,
+            on_error_mode,
+            ..
+        } => {
+            let stage_node = vec![
+                FormatTreeNode::new(format!("format: {format}")),
+                FormatTreeNode::new(format!("on_error_mode: {on_error_mode}")),
+            ];
+            children.extend(stage_node);
+
+            Ok(FormatTreeNode::with_children(
+                "InsertPlan (StreamingWithFileFormat):".to_string(),
+                children,
+            )
+            .format_pretty()?)
+        }
         InsertInputSource::Stage(plan) => match *plan.clone() {
             Plan::CopyIntoTable(copy_plan) => {
                 let CopyIntoTablePlan {

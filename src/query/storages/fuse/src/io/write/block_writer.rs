@@ -222,12 +222,14 @@ impl BlockBuilder {
                 .as_ref()
                 .map(|v| v.size)
                 .unwrap_or_default(),
+            ngram_filter_index_size: bloom_index_state
+                .as_ref()
+                .map(|v| v.ngram_size)
+                .unwrap_or_default(),
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,
             create_on: Some(Utc::now()),
-            // TODO(kould): ngram index
-            ngram_filter_index_size: None,
         };
 
         let serialized = BlockSerialization {

@@ -55,9 +55,9 @@ mod column_node;
 pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;
 
-pub mod parquet_rs;
-pub use parquet_rs::read_metadata_async;
-pub use parquet_rs::read_parquet_schema_async_rs;
+pub mod parquet;
+pub use parquet::read_metadata_async;
+pub use parquet::read_parquet_schema_async_rs;
 
 mod stage;
 pub use stage::init_stage_operator;

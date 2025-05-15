@@ -1,0 +1,22 @@
+>>>> create or replace table t1 (a int, b string);
+>>>> load csv/it.csv with format (typ=csv )
+400
+<<<<
+>>>> select * from t1
+<<<<
+>>>> load csv/it.csv with format (format_name='not_exist')
+400
+<<<<
+>>>> select * from t1
+<<<<
+>>>> load parquet/tuple.parquet with format (type=csv)
+400
+<<<<
+>>>> select * from t1
+<<<<
+>>>> load csv/header_only.csv with format (type=csv)
+400
+<<<<
+>>>> select * from t1
+<<<<
+>>>> drop table t1;

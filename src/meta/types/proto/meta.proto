@@ -100,7 +100,24 @@ message Event {
   optional SeqV prev = 3;
 }
 
-message WatchResponse {Event event = 1;}
+// Response in a watch stream from server to the client.
+message WatchResponse {
+  // The event containing key-value change information or a value emitted during initial-flush.
+  // This includes the key, current value (if any), and previous value (if any).
+  Event event = 1;
+
+  // Indicates whether this event is part of the initialization.
+  // 
+  // When true:
+  // - The event represents an existing key-value record at the time the watch was established
+  // - These events are sent when initial_flush=true was specified in WatchRequest
+  // 
+  // When false:
+  // - The event represents a real-time change that occurred after the watch was established
+  // - A special event with no key-value data may be sent to indicate the completion
+  //   of the initial flush phase
+  bool is_initialization = 2;
+}
 
 // messages for txn
 message TxnCondition {

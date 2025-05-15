@@ -25,29 +25,29 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::parquet_rs::ParquetRSRowGroupPart;
+use crate::partition::ParquetRowGroupPart;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum ParquetPart {
-    ParquetFile(ParquetFilePart),
-    ParquetSmallFiles(Vec<ParquetFilePart>),
-    ParquetRSRowGroup(ParquetRSRowGroupPart),
+    File(ParquetFilePart),
+    SmallFiles(Vec<ParquetFilePart>),
+    RowGroup(ParquetRowGroupPart),
 }
 
 impl ParquetPart {
     pub fn uncompressed_size(&self) -> u64 {
         match self {
-            ParquetPart::ParquetFile(p) => p.uncompressed_size(),
-            ParquetPart::ParquetSmallFiles(p) => p.iter().map(|p| p.uncompressed_size()).sum(),
-            ParquetPart::ParquetRSRowGroup(p) => p.uncompressed_size(),
+            ParquetPart::File(p) => p.uncompressed_size(),
+            ParquetPart::SmallFiles(p) => p.iter().map(|p| p.uncompressed_size()).sum(),
+            ParquetPart::RowGroup(p) => p.uncompressed_size(),
         }
     }
 
     pub fn compressed_size(&self) -> u64 {
         match self {
-            ParquetPart::ParquetFile(p) => p.compressed_size(),
-            ParquetPart::ParquetSmallFiles(p) => p.iter().map(|p| p.compressed_size()).sum(),
-            ParquetPart::ParquetRSRowGroup(p) => p.compressed_size(),
+            ParquetPart::File(p) => p.compressed_size(),
+            ParquetPart::SmallFiles(p) => p.iter().map(|p| p.compressed_size()).sum(),
+            ParquetPart::RowGroup(p) => p.compressed_size(),
         }
     }
 }
@@ -83,15 +83,15 @@ impl PartInfo for ParquetPart {
 
     fn hash(&self) -> u64 {
         let path = match self {
-            ParquetPart::ParquetFile(p) => &p.file,
-            ParquetPart::ParquetSmallFiles(p) => {
+            ParquetPart::File(p) => &p.file,
+            ParquetPart::SmallFiles(p) => {
                 let mut s = DefaultHasher::new();
                 for part in p.iter() {
                     part.file.hash(&mut s);
                 }
                 return s.finish();
             }
-            ParquetPart::ParquetRSRowGroup(p) => &p.location,
+            ParquetPart::RowGroup(p) => &p.location,
         };
         let mut s = DefaultHasher::new();
         path.hash(&mut s);
@@ -160,7 +160,7 @@ pub(crate) fn collect_small_file_parts(
                 .collect::<Vec<_>>();
 
             partitions.partitions.push(Arc::new(
-                Box::new(ParquetPart::ParquetSmallFiles(files)) as Box<dyn PartInfo>
+                Box::new(ParquetPart::SmallFiles(files)) as Box<dyn PartInfo>
             ));
             stats.partitions_scanned += 1;
             stats.partitions_total += 1;
@@ -186,14 +186,14 @@ pub(crate) fn collect_file_parts(
 
         let estimated_uncompressed_size = read_bytes * compress_ratio;
 
-        partitions.partitions.push(Arc::new(
-            Box::new(ParquetPart::ParquetFile(ParquetFilePart {
+        partitions
+            .partitions
+            .push(Arc::new(Box::new(ParquetPart::File(ParquetFilePart {
                 file,
                 compressed_size: size,
                 estimated_uncompressed_size: estimated_uncompressed_size as u64,
                 dedup_key,
-            })) as Box<dyn PartInfo>,
-        ));
+            })) as Box<dyn PartInfo>));
 
         stats.read_bytes += read_bytes as usize;
         stats.read_rows += estimated_read_rows as usize;

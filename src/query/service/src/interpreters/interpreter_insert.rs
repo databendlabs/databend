@@ -33,6 +33,7 @@ use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
+use databend_common_storages_stage::build_streaming_load_pipeline;
 use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -246,6 +247,25 @@ impl Interpreter for InsertInterpreter {
                 }
 
                 return Ok(build_res);
+            }
+            InsertInputSource::StreamingLoad {
+                file_format,
+                on_error_mode,
+                schema,
+                default_exprs,
+                block_thresholds,
+                receiver,
+            } => {
+                build_streaming_load_pipeline(
+                    self.ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    file_format,
+                    receiver.clone(),
+                    schema.clone(),
+                    default_exprs.clone(),
+                    *block_thresholds,
+                    on_error_mode.clone(),
+                )?;
             }
         };
 

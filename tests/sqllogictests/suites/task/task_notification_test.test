@@ -57,6 +57,14 @@ create task alert_task
   as
     select 1 as id, 'test' as name;
 
+statement ok
+create or replace task alert_task
+  schedule = using cron '*/5 * * * * * *'
+  error_integration = 'notify'
+  comment = 'test task'
+  as
+    select 1 as id, 'test' as name;
+
 query SS
 select name, error_integration from system.tasks where name = 'alert_task';
 ----

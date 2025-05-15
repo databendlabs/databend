@@ -20,8 +20,10 @@ use std::ops::Range;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 
+use super::AccessType;
 use super::AnyType;
 use super::DecimalSize;
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -35,15 +37,14 @@ use crate::ColumnVec;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NullableType<T: ValueType>(PhantomData<T>);
+pub struct NullableType<T>(PhantomData<T>);
 
-impl<T: ValueType> ValueType for NullableType<T> {
+impl<T: AccessType> AccessType for NullableType<T> {
     type Scalar = Option<T::Scalar>;
     type ScalarRef<'a> = Option<T::ScalarRef<'a>>;
     type Column = NullableColumn<T>;
     type Domain = NullableDomain<T>;
     type ColumnIterator<'a> = NullableIterator<'a, T>;
-    type ColumnBuilder = NullableColumnBuilder<T>;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.map(T::to_owned_scalar)
@@ -84,6 +85,99 @@ impl<T: ValueType> ValueType for NullableType<T> {
         }
     }
 
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        match scalar {
+            Some(scalar) => T::upcast_scalar(scalar),
+            None => Scalar::Null,
+        }
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Nullable(Box::new(col.upcast()))
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Nullable(NullableDomain {
+            has_null: domain.has_null,
+            value: domain.value.map(|value| Box::new(T::upcast_domain(*value))),
+        })
+    }
+
+    fn column_len(col: &Self::Column) -> usize {
+        col.len()
+    }
+
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
+        col.index(index)
+    }
+
+    #[inline(always)]
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        col.index_unchecked(index)
+    }
+
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
+        col.slice(range)
+    }
+
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
+        col.iter()
+    }
+
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
+        match scalar {
+            Some(scalar) => T::scalar_memory_size(scalar),
+            None => 0,
+        }
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
+
+    // Null default lastly
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        match (lhs, rhs) {
+            (Some(lhs), Some(rhs)) => T::compare(lhs, rhs),
+            (Some(_), None) => Ordering::Greater,
+            (None, Some(_)) => Ordering::Less,
+            (None, None) => Ordering::Equal,
+        }
+    }
+
+    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar {
+        Self::to_owned_scalar(Self::index_column_unchecked(col, index))
+    }
+
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        std::matches!(Self::compare(left, right), Ordering::Equal)
+    }
+
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !std::matches!(Self::compare(left, right), Ordering::Equal)
+    }
+
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        std::matches!(Self::compare(left, right), Ordering::Greater)
+    }
+
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        std::matches!(Self::compare(left, right), Ordering::Less)
+    }
+
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !std::matches!(Self::compare(left, right), Ordering::Less)
+    }
+
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        !std::matches!(Self::compare(left, right), Ordering::Greater)
+    }
+}
+
+impl<T: ValueType> ValueType for NullableType<T> {
+    type ColumnBuilder = NullableColumnBuilder<T>;
+
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         None
     }
@@ -123,45 +217,6 @@ impl<T: ValueType> ValueType for NullableType<T> {
         Some(ColumnBuilder::Nullable(Box::new(
             builder.upcast(decimal_size),
         )))
-    }
-
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        match scalar {
-            Some(scalar) => T::upcast_scalar(scalar),
-            None => Scalar::Null,
-        }
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Nullable(Box::new(col.upcast()))
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Nullable(NullableDomain {
-            has_null: domain.has_null,
-            value: domain.value.map(|value| Box::new(T::upcast_domain(*value))),
-        })
-    }
-
-    fn column_len(col: &Self::Column) -> usize {
-        col.len()
-    }
-
-    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.index(index)
-    }
-
-    #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        col.index_unchecked(index)
-    }
-
-    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.slice(range)
-    }
-
-    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter()
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -205,28 +260,6 @@ impl<T: ValueType> ValueType for NullableType<T> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
     }
-
-    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        match scalar {
-            Some(scalar) => T::scalar_memory_size(scalar),
-            None => 0,
-        }
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
-    }
-
-    // Null default lastly
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        match (lhs, rhs) {
-            (Some(lhs), Some(rhs)) => T::compare(lhs, rhs),
-            (Some(_), None) => Ordering::Greater,
-            (None, Some(_)) => Ordering::Less,
-            (None, None) => Ordering::Equal,
-        }
-    }
 }
 
 impl<T: ArgType> ArgType for NullableType<T> {
@@ -240,14 +273,16 @@ impl<T: ArgType> ArgType for NullableType<T> {
             value: Some(Box::new(T::full_domain())),
         }
     }
+}
 
+impl<T: ArgType> ReturnType for NullableType<T> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         NullableColumnBuilder::with_capacity(capacity, generics)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct NullableColumn<T: ValueType> {
+pub struct NullableColumn<T: AccessType> {
     pub column: T::Column,
     pub validity: Bitmap,
 }
@@ -258,7 +293,7 @@ pub struct NullableColumnVec {
     pub validity: ColumnVec,
 }
 
-impl<T: ValueType> NullableColumn<T> {
+impl<T: AccessType> NullableColumn<T> {
     // though column and validity are public
     // we should better use new to create a new instance to ensure the validity and column are consistent
     // todo: make column and validity private
@@ -334,7 +369,7 @@ impl<T: ValueType> NullableColumn<T> {
 }
 
 impl NullableColumn<AnyType> {
-    pub fn try_downcast<T: ValueType>(&self) -> Option<NullableColumn<T>> {
+    pub fn try_downcast<T: AccessType>(&self) -> Option<NullableColumn<T>> {
         Some(NullableColumn::new(
             T::try_downcast_column(&self.column)?,
             self.validity.clone(),
@@ -348,12 +383,12 @@ impl NullableColumn<AnyType> {
     }
 }
 
-pub struct NullableIterator<'a, T: ValueType> {
+pub struct NullableIterator<'a, T: AccessType> {
     iter: T::ColumnIterator<'a>,
     validity: databend_common_column::bitmap::utils::BitmapIter<'a>,
 }
 
-impl<'a, T: ValueType> Iterator for NullableIterator<'a, T> {
+impl<'a, T: AccessType> Iterator for NullableIterator<'a, T> {
     type Item = Option<T::ScalarRef<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -377,7 +412,7 @@ impl<'a, T: ValueType> Iterator for NullableIterator<'a, T> {
     }
 }
 
-unsafe impl<T: ValueType> TrustedLen for NullableIterator<'_, T> {}
+unsafe impl<T: AccessType> TrustedLen for NullableIterator<'_, T> {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NullableColumnBuilder<T: ValueType> {
@@ -468,7 +503,7 @@ impl NullableColumnBuilder<AnyType> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct NullableDomain<T: ValueType> {
+pub struct NullableDomain<T: AccessType> {
     pub has_null: bool,
     // `None` means all rows are `NULL`s.
     //

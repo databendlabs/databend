@@ -52,6 +52,7 @@ rand_distr = { workspace = true }
 recursive = { workspace = true }
 roaring = { workspace = true, features = ["serde"] }
 rust_decimal = { workspace = true }
+rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strength_reduce = { workspace = true }

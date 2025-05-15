@@ -99,7 +99,7 @@ use crate::with_number_mapped_type;
 use crate::with_number_type;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
-pub enum Value<T: ValueType> {
+pub enum Value<T: AccessType> {
     Scalar(T::Scalar),
     Column(T::Column),
 }
@@ -239,7 +239,7 @@ pub enum ColumnBuilder {
     Geography(BinaryColumnBuilder),
 }
 
-impl<T: ValueType> Value<T> {
+impl<T: AccessType> Value<T> {
     pub fn semantically_eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::Scalar(s1), Value::Scalar(s2)) => s1 == s2,
@@ -292,7 +292,7 @@ impl<T: ArgType> Value<T> {
     }
 }
 
-impl<T: ValueType> Value<NullableType<T>> {
+impl<T: AccessType> Value<NullableType<T>> {
     pub fn validity(&self, num_rows: usize) -> Bitmap {
         match self {
             Value::Scalar(None) => Bitmap::new_zeroed(num_rows),
@@ -340,7 +340,7 @@ impl Value<AnyType> {
         }
     }
 
-    pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
+    pub fn try_downcast<T: AccessType>(&self) -> Option<Value<T>> {
         Some(match self {
             Value::Scalar(scalar) => Value::Scalar(T::to_owned_scalar(T::try_downcast_scalar(
                 &scalar.as_ref(),
@@ -1835,19 +1835,19 @@ impl ColumnBuilder {
                 builder.len() * 32
             }
             ColumnBuilder::Boolean(c) => c.as_slice().len(),
-            ColumnBuilder::Binary(col) => col.data.len() + col.offsets.len() * 8,
+            ColumnBuilder::Binary(col) => col.memory_size(),
             ColumnBuilder::String(col) => col.memory_size(),
             ColumnBuilder::Timestamp(col) => col.len() * 8,
             ColumnBuilder::Date(col) => col.len() * 4,
             ColumnBuilder::Interval(col) => col.len() * 16,
-            ColumnBuilder::Array(col) => col.builder.memory_size() + col.offsets.len() * 8,
-            ColumnBuilder::Map(col) => col.builder.memory_size() + col.offsets.len() * 8,
-            ColumnBuilder::Bitmap(col) => col.data.len() + col.offsets.len() * 8,
-            ColumnBuilder::Nullable(c) => c.builder.memory_size() + c.validity.as_slice().len(),
+            ColumnBuilder::Array(b) => b.builder.memory_size() + b.offsets.len() * 8,
+            ColumnBuilder::Map(b) => b.builder.memory_size() + b.offsets.len() * 8,
+            ColumnBuilder::Bitmap(b) => b.memory_size(),
+            ColumnBuilder::Nullable(b) => b.builder.memory_size() + b.validity.as_slice().len(),
             ColumnBuilder::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
-            ColumnBuilder::Variant(col) => col.data.len() + col.offsets.len() * 8,
-            ColumnBuilder::Geometry(col) => col.data.len() + col.offsets.len() * 8,
-            ColumnBuilder::Geography(builder) => builder.memory_size(),
+            ColumnBuilder::Variant(b) => b.memory_size(),
+            ColumnBuilder::Geometry(b) => b.memory_size(),
+            ColumnBuilder::Geography(b) => b.memory_size(),
         }
     }
 
@@ -2528,31 +2528,42 @@ impl ColumnBuilder {
     }
 
     pub fn build(self) -> Column {
-        match self {
-            ColumnBuilder::Null { len } => Column::Null { len },
-            ColumnBuilder::EmptyArray { len } => Column::EmptyArray { len },
-            ColumnBuilder::EmptyMap { len } => Column::EmptyMap { len },
-            ColumnBuilder::Number(builder) => Column::Number(builder.build()),
-            ColumnBuilder::Decimal(builder) => Column::Decimal(builder.build()),
-            ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
-            ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
-            ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
-            ColumnBuilder::Tuple(fields) => {
-                assert!(fields.iter().map(|field| field.len()).all_equal());
-                Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
-            }
+        match_template::match_template! {
+            T = [
+                Date => DateType,
+                Timestamp => TimestampType,
+                Interval => IntervalType,
+            ],
+            match self {
+                ColumnBuilder::T(b) => {
+                    Self::type_build::<T>(b)
+                }
+                ColumnBuilder::Null { len } => Column::Null { len },
+                ColumnBuilder::EmptyArray { len } => Column::EmptyArray { len },
+                ColumnBuilder::EmptyMap { len } => Column::EmptyMap { len },
+                ColumnBuilder::Number(builder) => Column::Number(builder.build()),
+                ColumnBuilder::Decimal(builder) => Column::Decimal(builder.build()),
+                ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
+                ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
+                ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
+                ColumnBuilder::Tuple(fields) => {
+                    assert!(fields.iter().map(|field| field.len()).all_equal());
+                    Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
+                }
 
-            ColumnBuilder::Boolean(b) => Column::Boolean(BooleanType::build_column(b)),
-            ColumnBuilder::Binary(b) => Column::Binary(BinaryType::build_column(b)),
-            ColumnBuilder::String(b) => Column::String(StringType::build_column(b)),
-            ColumnBuilder::Timestamp(b) => Column::Timestamp(TimestampType::build_column(b)),
-            ColumnBuilder::Date(b) => Column::Date(DateType::build_column(b)),
-            ColumnBuilder::Interval(b) => Column::Interval(IntervalType::build_column(b)),
-            ColumnBuilder::Bitmap(b) => Column::Bitmap(BitmapType::build_column(b)),
-            ColumnBuilder::Variant(b) => Column::Variant(VariantType::build_column(b)),
-            ColumnBuilder::Geometry(b) => Column::Geometry(GeometryType::build_column(b)),
-            ColumnBuilder::Geography(b) => Column::Geography(GeographyType::build_column(b)),
+                ColumnBuilder::Boolean(b) => Column::Boolean(BooleanType::build_column(b)),
+                ColumnBuilder::Binary(b) => Column::Binary(BinaryType::build_column(b)),
+                ColumnBuilder::String(b) => Column::String(StringType::build_column(b)),
+                ColumnBuilder::Bitmap(b) => Column::Bitmap(BitmapType::build_column(b)),
+                ColumnBuilder::Variant(b) => Column::Variant(VariantType::build_column(b)),
+                ColumnBuilder::Geometry(b) => Column::Geometry(GeometryType::build_column(b)),
+                ColumnBuilder::Geography(b) => Column::Geography(GeographyType::build_column(b)),
+            }
         }
+    }
+
+    fn type_build<T: ValueType>(builder: T::ColumnBuilder) -> Column {
+        T::upcast_column(T::build_column(builder))
     }
 
     pub fn build_scalar(self) -> Scalar {

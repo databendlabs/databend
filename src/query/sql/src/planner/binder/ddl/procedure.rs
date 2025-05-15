@@ -115,7 +115,7 @@ impl Binder {
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         let query = format!(
-            "SELECT name, procedure_id, arguments, comment, description, created_on FROM system.procedures {} ORDER BY name {}",
+            "SELECT name, procedure_id, arguments, comment, description, created_on FROM default.system.procedures {} ORDER BY name {}",
             show_limit, limit_str,
         );
 

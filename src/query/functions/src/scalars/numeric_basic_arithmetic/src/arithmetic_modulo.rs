@@ -15,7 +15,7 @@
 use std::ops::Rem;
 
 use databend_common_expression::types::number::*;
-use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Value;

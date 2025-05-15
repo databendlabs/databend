@@ -9,10 +9,9 @@ select count_distinct(number) from ( select number % 100 as number from numbers(
 100
 
 query I
-select approx_count_distinct(number), approx_count_distinct(0.2)(number), approx_count_distinct(0.3)(number) from ( select number % 100 as number from numbers(100000))
+select approx_count_distinct(number) between 80 and 113, approx_count_distinct(0.2)(number) between 80 and 113, approx_count_distinct(0.3)(number) between 80 and 113 from ( select number % 100 as number from numbers(100000))
 ----
-100 81 59
-
+1 1 1
 
 query I
 select approx_count_distinct(0.01625)(number) from ( select number % 100 as number from numbers(100000))

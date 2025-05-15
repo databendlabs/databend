@@ -189,8 +189,7 @@ async fn test_alter_quotas() -> Result<()> {
         QuotaValue::Duration(Duration::from_secs(10)),
     );
 
-    mgr.alter_quotas("test_group".to_string(), new_quotas)
-        .await?;
+    mgr.set_quotas("test_group".to_string(), new_quotas).await?;
 
     let updated = mgr.get_by_name("test_group").await?;
     assert_eq!(updated.quotas.len(), 1);
@@ -206,7 +205,7 @@ async fn test_alter_quotas() -> Result<()> {
         QuotaValue::Duration(Duration::from_secs(20)),
     );
 
-    mgr.alter_quotas("test_group".to_string(), update_quotas)
+    mgr.set_quotas("test_group".to_string(), update_quotas)
         .await?;
 
     let updated = mgr.get_by_name("test_group").await?;

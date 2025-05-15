@@ -343,7 +343,7 @@ async fn test_watch() -> anyhow::Result<()> {
 
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
-async fn test_watch_initial_flush() -> anyhow::Result<()> {
+async fn test_watch_initialization_flush() -> anyhow::Result<()> {
     let (tc, _addr) = crate::tests::start_metasrv().await?;
     let updates = vec![
         UpsertKV::update("a", b"a"),
@@ -369,11 +369,25 @@ async fn test_watch_initial_flush() -> anyhow::Result<()> {
     };
 
     let cache = Arc::new(Mutex::new(BTreeMap::new()));
-
     let c = cache.clone();
+
+    let is_initialization_completed = Arc::new(Mutex::new(false));
+    let init_compl = is_initialization_completed.clone();
+
+    let flags = Arc::new(Mutex::new(vec![]));
+    let f = flags.clone();
+
     let cache_updater = async move {
         while let Ok(Some(resp)) = strm.message().await {
-            let event = resp.event.unwrap();
+            f.lock().unwrap().push(resp.is_initialization);
+
+            if resp.is_initialization_complete_flag() {
+                *init_compl.lock().unwrap() = true;
+            }
+
+            let Some(event) = resp.event else {
+                continue;
+            };
 
             let mut cache = c.lock().unwrap();
             if let Some(value) = event.current {
@@ -387,6 +401,14 @@ async fn test_watch_initial_flush() -> anyhow::Result<()> {
     let _h = databend_common_base::runtime::spawn(cache_updater);
 
     tokio::time::sleep(Duration::from_secs(1)).await;
+
+    assert_eq!(flags.lock().unwrap().clone(), vec![
+        true, true, true, true,  // existent key-values
+        false, // initialization complete
+    ]);
+
+    assert!(*is_initialization_completed.lock().unwrap());
+
     let keys = {
         let cache = cache.lock().unwrap();
         cache.keys().cloned().collect::<Vec<_>>()
@@ -398,6 +420,13 @@ async fn test_watch_initial_flush() -> anyhow::Result<()> {
     client.upsert_kv(UpsertKV::delete("c")).await?;
 
     tokio::time::sleep(Duration::from_secs(1)).await;
+
+    assert_eq!(flags.lock().unwrap().clone(), vec![
+        true, true, true, true,  // existent key-values
+        false, // initialization complete
+        false, false, // changes
+    ]);
+
     let values = {
         let cache = cache.lock().unwrap();
         cache

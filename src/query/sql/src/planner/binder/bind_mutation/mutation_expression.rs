@@ -114,9 +114,11 @@ impl MutationExpression {
                     .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
 
                 // Remove stream columns in source context.
-                source_context
-                    .columns
-                    .retain(|v| v.visibility == Visibility::Visible);
+                source_context.columns.retain(|col| {
+                    let read_guard = binder.metadata.read();
+                    let column_entry = read_guard.column(col.index);
+                    !column_entry.is_stream_column()
+                });
 
                 // Add source table columns to required columns.
                 for column_index in source_context.column_set().iter() {
@@ -199,9 +201,12 @@ impl MutationExpression {
                 let from_s_expr = if let Some(from) = from {
                     let (from_s_expr, mut from_context) =
                         binder.bind_table_reference(&mut bind_context, from)?;
-                    from_context
-                        .columns
-                        .retain(|v| v.visibility == Visibility::Visible);
+                    // Remove stream columns in source context.
+                    let read_guard = binder.metadata.read();
+                    from_context.columns.retain(|col| {
+                        let column_entry = read_guard.column(col.index);
+                        !column_entry.is_stream_column()
+                    });
                     for column in from_context.columns.iter() {
                         required_columns.insert(column.index);
                         bind_context.add_column_binding(column.clone());

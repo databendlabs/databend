@@ -13,10 +13,11 @@
 // limitations under the License.
 
 mod batch;
-mod format;
+pub(crate) mod format;
 mod formats;
-mod processors;
+pub(crate) mod processors;
 mod read_pipeline;
 mod utils;
 
+pub use batch::BytesBatch;
 pub use read_pipeline::RowBasedReadPipelineBuilder;

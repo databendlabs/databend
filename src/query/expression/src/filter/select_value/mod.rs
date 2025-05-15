@@ -16,8 +16,8 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
 use crate::types::string::StringColumn;
+use crate::types::AccessType;
 use crate::types::AnyType;
-use crate::types::ValueType;
 use crate::with_mapped_cmp_method;
 use crate::LikePattern;
 use crate::SelectOp;
@@ -31,7 +31,7 @@ mod select_scalar;
 
 impl Selector<'_> {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_type_values_cmp<T: ValueType>(
+    pub(crate) fn select_type_values_cmp<T: AccessType>(
         &self,
         op: &SelectOp,
         left: Value<AnyType>,
@@ -62,7 +62,7 @@ impl Selector<'_> {
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn select_type_values<
-        T: ValueType,
+        T: AccessType,
         C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
     >(
         &self,

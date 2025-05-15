@@ -96,6 +96,7 @@ pub enum EndpointKind {
     SystemInfo,
     Catalog,
     Metadata,
+    StreamingLoad,
 }
 
 impl EndpointKind {
@@ -122,6 +123,7 @@ impl EndpointKind {
             | EndpointKind::Logout
             | EndpointKind::SystemInfo
             | EndpointKind::HeartBeat
+            | EndpointKind::StreamingLoad
             | EndpointKind::UploadToStage
             | EndpointKind::Metadata
             | EndpointKind::Catalog => {

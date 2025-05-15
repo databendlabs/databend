@@ -707,7 +707,7 @@ where F: Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {
     }
 }
 
-pub fn error_to_null<I1: ArgType, O: ArgType>(
+pub fn error_to_null<I1: AccessType, O: ArgType>(
     func: impl Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
 ) -> impl Fn(Value<I1>, &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync {
     debug_assert!(!O::data_type().is_nullable_or_null());

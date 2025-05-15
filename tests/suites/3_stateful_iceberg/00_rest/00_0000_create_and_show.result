@@ -1,6 +1,22 @@
-iceberg_ctl	iceberg	ADDRESS
-http://127.0.0.1:8181
+===== Testing iceberg_rest =====
+iceberg_rest	iceberg	ADDRESS
+http://localhost:8181
 WAREHOUSE
-s3://icebergdata/demo
+s3://warehouse/demo/
 default
-iceberg_ctl
+t
+t
+iceberg_rest
+
+
+===== Testing iceberg_glue =====
+iceberg_glue	iceberg	ADDRESS
+http://localhost:5000
+WAREHOUSE
+s3a://warehouse/glue/
+default
+t
+t
+iceberg_glue
+
+

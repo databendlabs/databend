@@ -15,7 +15,7 @@
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_storage::parquet_rs::read_metadata_sync;
+use databend_common_storage::parquet::read_metadata_sync;
 use databend_common_storage::read_metadata_async;
 use databend_storages_common_io::ReadSettings;
 use log::debug;

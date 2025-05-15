@@ -32,7 +32,7 @@ pub struct MemStatBuffer {
     pub(crate) cur_mem_stat: Option<Arc<MemStat>>,
     pub(crate) memory_usage: i64,
     // Whether to allow unlimited memory. Alloc memory will not panic if it is true.
-    unlimited_flag: bool,
+    pub(crate) unlimited_flag: bool,
     pub(crate) global_mem_stat: &'static MemStat,
     destroyed_thread_local_macro: bool,
 }
@@ -72,17 +72,9 @@ impl MemStatBuffer {
         }
 
         self.cur_mem_stat_id = 0;
-        if let Some(mem_stat) = self.cur_mem_stat.take() {
-            if let Err(cause) = mem_stat.record_memory::<FALLBACK>(memory_usage, alloc) {
-                let memory_usage = match FALLBACK {
-                    true => memory_usage - alloc,
-                    false => memory_usage,
-                };
 
-                self.global_mem_stat
-                    .record_memory::<false>(memory_usage, 0)?;
-                return Err(cause);
-            }
+        if let Some(mem_stat) = self.cur_mem_stat.take() {
+            return mem_stat.record_memory::<FALLBACK>(memory_usage, alloc);
         }
 
         self.global_mem_stat
@@ -93,7 +85,7 @@ impl MemStatBuffer {
         if self.destroyed_thread_local_macro {
             let used = mem_stat.used.fetch_add(usage, Ordering::Relaxed);
             mem_stat
-                .peek_used
+                .peak_used
                 .fetch_max(used + usage, Ordering::Relaxed);
             return Ok(());
         }
@@ -134,7 +126,7 @@ impl MemStatBuffer {
         if self.destroyed_thread_local_macro {
             let used = mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
             mem_stat
-                .peek_used
+                .peak_used
                 .fetch_max(used + memory_usage, Ordering::Relaxed);
             return;
         }
@@ -240,18 +232,24 @@ mod tests {
     use std::alloc::AllocError;
     use std::sync::atomic::Ordering;
 
+    use crate::runtime::memory::mem_stat::ParentMemStat;
     use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
     use crate::runtime::memory::stat_buffer_mem_stat::MemStatBuffer;
     use crate::runtime::GlobalStatBuffer;
     use crate::runtime::MemStat;
+    use crate::runtime::GLOBAL_QUERIES_MANAGER;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_alloc_with_same_allocator() -> Result<(), AllocError> {
-        static TEST_GLOBAL: MemStat = MemStat::global();
+        static TEST_GLOBAL: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
-        let mem_stat = MemStat::create(String::from("test"));
+        let mem_stat = MemStat::create_child(
+            String::from("test"),
+            0,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
         buffer.alloc(&mem_stat, 1)?;
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
         assert_eq!(TEST_GLOBAL.used.load(Ordering::Relaxed), 0);
@@ -272,12 +270,20 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_alloc_with_diff_allocator() -> Result<(), AllocError> {
-        static TEST_GLOBAL: MemStat = MemStat::global();
+        static TEST_GLOBAL: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
-        let mem_stat_1 = MemStat::create(String::from("test"));
-        let mem_stat_2 = MemStat::create(String::from("test"));
+        let mem_stat_1 = MemStat::create_child(
+            String::from("test"),
+            0,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
+        let mem_stat_2 = MemStat::create_child(
+            String::from("test"),
+            0,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
         buffer.alloc(&mem_stat_1, 1)?;
         assert_eq!(mem_stat_1.used.load(Ordering::Relaxed), 0);
         assert_eq!(mem_stat_2.used.load(Ordering::Relaxed), 0);
@@ -297,11 +303,15 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_dealloc_with_same_allocator() -> Result<(), AllocError> {
-        static TEST_GLOBAL: MemStat = MemStat::global();
+        static TEST_GLOBAL: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
-        let mem_stat = MemStat::create(String::from("test"));
+        let mem_stat = MemStat::create_child(
+            String::from("test"),
+            0,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
         let _shared = mem_stat.clone();
 
         buffer.dealloc(&mem_stat, 1);
@@ -324,12 +334,20 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_dealloc_with_diff_allocator() -> Result<(), AllocError> {
-        static TEST_GLOBAL: MemStat = MemStat::global();
+        static TEST_GLOBAL: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
-        let mem_stat_1 = MemStat::create(String::from("test"));
-        let mem_stat_2 = MemStat::create(String::from("test"));
+        let mem_stat_1 = MemStat::create_child(
+            String::from("test"),
+            0,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
+        let mem_stat_2 = MemStat::create_child(
+            String::from("test"),
+            0,
+            ParentMemStat::StaticRef(&TEST_GLOBAL),
+        );
         let _shared = (mem_stat_1.clone(), mem_stat_2.clone());
 
         buffer.dealloc(&mem_stat_1, 1);
@@ -351,7 +369,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_dealloc_with_unique_allocator() -> Result<(), AllocError> {
-        static TEST_GLOBAL: MemStat = MemStat::global();
+        static TEST_GLOBAL: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 

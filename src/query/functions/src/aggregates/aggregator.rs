@@ -76,8 +76,15 @@ impl Aggregators {
         factory.register("arg_min", aggregate_arg_min_function_desc());
         factory.register("arg_max", aggregate_arg_max_function_desc());
 
-        factory.register("covar_samp", aggregate_covariance_sample_desc());
-        factory.register("covar_pop", aggregate_covariance_population_desc());
+        factory.register_multi_names(
+            &["covar_samp", "var_samp", "variance_samp"],
+            aggregate_covariance_sample_desc,
+        );
+        factory.register_multi_names(
+            &["covar_pop", "var_pop", "variance_pop"],
+            aggregate_covariance_population_desc,
+        );
+
         factory.register("stddev_samp", aggregate_stddev_samp_function_desc());
         factory.register("stddev_pop", aggregate_stddev_pop_function_desc());
         factory.register("stddev", aggregate_stddev_samp_function_desc());

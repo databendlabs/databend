@@ -78,6 +78,7 @@ pub enum IcebergCatalogType {
     Rest = 1,
     Hms = 2,
     Glue = 3,
+    Storage = 4,
 }
 
 /// Option for creating a iceberg catalog
@@ -86,6 +87,7 @@ pub enum IcebergCatalogOption {
     Rest(IcebergRestCatalogOption),
     Hms(IcebergHmsCatalogOption),
     Glue(IcebergGlueCatalogOption),
+    Storage(IcebergStorageCatalogOption),
 }
 
 impl IcebergCatalogOption {
@@ -95,6 +97,7 @@ impl IcebergCatalogOption {
             IcebergCatalogOption::Rest(_) => IcebergCatalogType::Rest,
             IcebergCatalogOption::Hms(_) => IcebergCatalogType::Hms,
             IcebergCatalogOption::Glue(_) => IcebergCatalogType::Glue,
+            IcebergCatalogOption::Storage(_) => IcebergCatalogType::Storage,
         }
     }
 }
@@ -122,7 +125,15 @@ pub struct IcebergHmsCatalogOption {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct IcebergGlueCatalogOption {
+    pub address: String,
     pub warehouse: String,
+    pub props: HashMap<String, String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct IcebergStorageCatalogOption {
+    pub table_bucket_arn: String,
+    pub address: String,
     pub props: HashMap<String, String>,
 }
 

@@ -34,11 +34,11 @@ pub fn compress_boolean(
     col: &Bitmap,
     validity: Option<Bitmap>,
     buf: &mut Vec<u8>,
-    write_options: WriteOptions,
+    write_options: &WriteOptions,
 ) -> Result<()> {
     // choose compressor
     let stats = gen_stats(col, validity.clone());
-    let compressor = choose_compressor(col, &stats, &write_options);
+    let compressor = choose_compressor(col, &stats, write_options);
 
     log::debug!(
         "choose boolean compression : {:?}",

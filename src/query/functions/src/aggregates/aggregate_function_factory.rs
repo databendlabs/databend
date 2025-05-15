@@ -182,6 +182,17 @@ impl AggregateFunctionFactory {
         case_insensitive_desc.insert(name.to_lowercase(), desc);
     }
 
+    pub fn register_multi_names(
+        &mut self,
+        names: &[&str],
+        desc_c: impl Fn() -> AggregateFunctionDescription + Clone,
+    ) {
+        let case_insensitive_desc = &mut self.case_insensitive_desc;
+        for name in names {
+            case_insensitive_desc.insert(name.to_lowercase(), desc_c());
+        }
+    }
+
     pub fn register_combinator(&mut self, suffix: &str, desc: CombinatorDescription) {
         for (exists_suffix, _) in &self.case_insensitive_combinator_desc {
             if exists_suffix.eq_ignore_ascii_case(suffix) {

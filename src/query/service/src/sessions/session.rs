@@ -167,12 +167,13 @@ impl Session {
         if let Some(mem_stat) = mem_stat {
             let settings = self.get_settings();
             let query_max_memory_usage = settings.get_max_query_memory_usage()?;
+            let allow_query_exceeded_limit = settings.get_allow_query_exceeded_limit()?;
             let out_of_memory_behavior = settings.get_query_out_of_memory_behavior()?;
 
             if query_max_memory_usage != 0
                 && matches!(out_of_memory_behavior, OutofMemoryBehavior::Throw)
             {
-                mem_stat.set_limit(query_max_memory_usage as i64);
+                mem_stat.set_limit(query_max_memory_usage as i64, allow_query_exceeded_limit);
             }
 
             shared.set_query_memory_tracking(Some(mem_stat));

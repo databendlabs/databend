@@ -65,7 +65,9 @@ pub trait WorkloadApi: Sync + Send {
 
     async fn rename(&self, old_name: String, new_name: String) -> Result<()>;
 
-    async fn alter_quotas(&self, name: String, quotas: HashMap<String, QuotaValue>) -> Result<()>;
+    async fn set_quotas(&self, name: String, quotas: HashMap<String, QuotaValue>) -> Result<()>;
+
+    async fn unset_quotas(&self, name: String, quotas: Vec<String>) -> Result<()>;
 
     async fn get_all(&self) -> Result<Vec<WorkloadGroup>>;
 

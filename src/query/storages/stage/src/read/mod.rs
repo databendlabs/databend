@@ -14,7 +14,7 @@
 
 pub mod avro;
 mod error_handler;
-mod load_context;
+pub(crate) mod load_context;
 pub mod row_based;
 
 pub(crate) mod block_builder_state;

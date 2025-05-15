@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use super::CreateOption;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
@@ -61,7 +62,7 @@ pub enum CreateTaskOption {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTaskStmt {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name: String,
     pub warehouse: Option<String>,
     pub schedule_opts: Option<ScheduleOptions>,
@@ -105,11 +106,14 @@ impl CreateTaskStmt {
 
 impl Display for CreateTaskStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE TASK")?;
-        if self.if_not_exists {
+        write!(f, "CREATE")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " TASK")?;
+        if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
-
         write!(f, " {}", self.name)?;
 
         if let Some(warehouse) = self.warehouse.as_ref() {

@@ -18,7 +18,7 @@ use databend_common_base::base::tokio;
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
-use databend_common_storages_parquet::ParquetRSPruner;
+use databend_common_storages_parquet::ParquetPruner;
 use parquet::arrow::arrow_reader::ArrowReaderMetadata;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::RowSelection;
@@ -50,7 +50,7 @@ async fn test_batch(batches: &[(Scenario, &str, RowSelection)]) {
         let schema = TableSchema::try_from(arrow_schema.as_ref()).unwrap();
         let leaf_fields = Arc::new(schema.leaf_fields());
 
-        let pruner = ParquetRSPruner::try_create(
+        let pruner = ParquetPruner::try_create(
             FunctionContext::default(),
             Arc::new(schema),
             leaf_fields,

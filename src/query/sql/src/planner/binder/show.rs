@@ -32,9 +32,9 @@ impl Binder {
         show_options: &Option<ShowOptions>,
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
-        // rewrite show functions to select * from system.functions ...
+        // rewrite show functions to select * FROM default.system.functions ...
         let query = format!(
-            "SELECT name, is_aggregate, description FROM system.functions {} ORDER BY name {}",
+            "SELECT name, is_aggregate, description FROM default.system.functions {} ORDER BY name {}",
             show_limit, limit_str,
         );
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)
@@ -48,9 +48,9 @@ impl Binder {
         show_options: &Option<ShowOptions>,
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
-        // rewrite show user functions to select * from system.user_functions ...
+        // rewrite show user functions to select * FROM default.system.user_functions ...
         let query = format!(
-            "SELECT name, is_aggregate, description, arguments, language, created_on FROM system.user_functions {} ORDER BY name {}",
+            "SELECT name, is_aggregate, description, arguments, language, created_on FROM default.system.user_functions {} ORDER BY name {}",
             show_limit, limit_str,
         );
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)
@@ -64,9 +64,9 @@ impl Binder {
         show_options: &Option<ShowOptions>,
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
-        // rewrite show functions to select * from system.table_functions ...
+        // rewrite show functions to select * FROM default.system.table_functions ...
         let query = format!(
-            "SELECT name FROM system.table_functions {} ORDER BY name {}",
+            "SELECT name FROM default.system.table_functions {} ORDER BY name {}",
             show_limit, limit_str,
         );
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)
@@ -81,7 +81,7 @@ impl Binder {
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         let query = format!(
-            "SELECT name, value, default, `range`, level, description, type FROM system.settings {} ORDER BY name {}",
+            "SELECT name, value, default, `range`, level, description, type FROM default.system.settings {} ORDER BY name {}",
             show_limit, limit_str,
         );
 
@@ -113,7 +113,7 @@ impl Binder {
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, Some("metric".to_string()));
         let query = format!(
-            "SELECT metric, kind, labels, value FROM system.metrics {} order by metric {}",
+            "SELECT metric, kind, labels, value FROM default.system.metrics {} order by metric {}",
             show_limit, limit_str,
         );
 
@@ -130,7 +130,7 @@ impl Binder {
         let (show_limit, limit_str) =
             get_show_options(show_options, Some("extra_info".to_string()));
         let query = format!(
-            "SELECT * FROM system.processes {} {}",
+            "SELECT * FROM default.system.processes {} {}",
             show_limit, limit_str,
         );
 
@@ -147,7 +147,7 @@ impl Binder {
         let (show_limit, limit_str) =
             get_show_options(show_options, Some("\"Engine\"".to_string()));
         let query = format!(
-            "SELECT \"Engine\", \"Comment\" FROM system.engines {} ORDER BY \"Engine\" ASC {}",
+            "SELECT \"Engine\", \"Comment\" FROM default.system.engines {} ORDER BY \"Engine\" ASC {}",
             show_limit, limit_str,
         );
 
@@ -163,7 +163,7 @@ impl Binder {
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         let query = format!(
-            "SELECT * FROM system.indexes {} order by name {}",
+            "SELECT * FROM default.system.indexes {} order by name {}",
             show_limit, limit_str,
         );
 

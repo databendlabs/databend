@@ -125,7 +125,7 @@ pub struct SqlLogicTestArgs {
     #[arg(
         long = "database",
         default_value = "default",
-        help = "Specify the database to connnect, the default database is 'default'"
+        help = "Specify the database to connect, the default database is 'default'"
     )]
     pub database: String,
 

@@ -71,10 +71,7 @@ impl GlobalStatBuffer {
     }
 
     /// Flush buffered stat to MemStat it belongs to.
-    pub fn flush<const ROLLBACK: bool>(
-        &mut self,
-        alloc: i64,
-    ) -> std::result::Result<(), OutOfLimit> {
+    pub fn flush<const ROLLBACK: bool>(&mut self, alloc: i64) -> Result<(), OutOfLimit> {
         match std::mem::take(&mut self.memory_usage) {
             0 => Ok(()),
             usage => self.global_mem_stat.record_memory::<ROLLBACK>(usage, alloc),
@@ -90,7 +87,7 @@ impl GlobalStatBuffer {
                 .used
                 .fetch_add(memory_usage, Ordering::Relaxed);
             self.global_mem_stat
-                .peek_used
+                .peak_used
                 .fetch_max(used + memory_usage, Ordering::Relaxed);
             return Ok(());
         }
@@ -126,7 +123,7 @@ impl GlobalStatBuffer {
                 .used
                 .fetch_add(memory_usage, Ordering::Relaxed);
             self.global_mem_stat
-                .peek_used
+                .peak_used
                 .fetch_max(used + memory_usage, Ordering::Relaxed);
             return;
         }
@@ -215,10 +212,11 @@ mod tests {
     use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
     use crate::runtime::memory::GlobalStatBuffer;
     use crate::runtime::memory::MemStat;
+    use crate::runtime::GLOBAL_QUERIES_MANAGER;
 
     #[test]
     fn test_alloc() -> Result<()> {
-        static TEST_MEM_STATE: MemStat = MemStat::global();
+        static TEST_MEM_STATE: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
         let mut buffer = GlobalStatBuffer::empty(&TEST_MEM_STATE);
 
         buffer.alloc(1).unwrap();
@@ -243,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_dealloc() -> Result<()> {
-        static TEST_MEM_STATE: MemStat = MemStat::global();
+        static TEST_MEM_STATE: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
         let mut buffer = GlobalStatBuffer::empty(&TEST_MEM_STATE);
 
         buffer.dealloc(1);
@@ -268,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_mark_destroyed() -> Result<()> {
-        static TEST_MEM_STATE: MemStat = MemStat::global();
+        static TEST_MEM_STATE: MemStat = MemStat::global(&GLOBAL_QUERIES_MANAGER);
 
         let mut buffer = GlobalStatBuffer::empty(&TEST_MEM_STATE);
 

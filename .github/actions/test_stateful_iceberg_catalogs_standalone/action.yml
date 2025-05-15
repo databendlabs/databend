@@ -1,0 +1,21 @@
+name: "Test Stateful Standalone Iceberg Rest"
+description: "Running Stateful Iceberg Rest tests in standalone mode"
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_test
+
+    - name: Iceberg Rest Setup for (ubuntu-latest only)
+      shell: bash
+      run: |
+        DOCKER_DEFAULT_PLATFORM=`docker info --format {{.OSType}}/{{.Architecture}}`
+        docker-compose -f "./docker/it-iceberg-catalogs/docker-compose.yaml" up --quiet-pull -d
+        hms_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(docker ps -aq --filter "name=hive-metastore"))
+
+        docker ps -a | grep iceberg
+        echo "HMS in $hms_ip"
+
+    - name: Run Stateful Tests with Standalone mode
+      shell: bash
+      run: |
+        ./scripts/ci/ci-run-stateful-iceberg-catalogs-tests-standalone.sh

@@ -36,7 +36,13 @@ pub struct RenameWorkloadGroupPlan {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct AlterWorkloadGroupPlan {
+pub struct SetWorkloadGroupQuotasPlan {
     pub name: String,
     pub quotas: BTreeMap<String, QuotaValueStmt>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct UnsetWorkloadGroupQuotasPlan {
+    pub name: String,
+    pub quotas: Vec<String>,
 }

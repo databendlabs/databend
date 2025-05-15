@@ -39,7 +39,6 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_add_warehouse_cluster::AddWarehouseClusterInterpreter;
-use crate::interpreters::interpreter_alter_workload_group::AlterWorkloadGroupInterpreter;
 use crate::interpreters::interpreter_assign_warehouse_nodes::AssignWarehouseNodesInterpreter;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
 use crate::interpreters::interpreter_connection_create::CreateConnectionInterpreter;
@@ -72,6 +71,7 @@ use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseCl
 use crate::interpreters::interpreter_rename_workload_group::RenameWorkloadGroupInterpreter;
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
+use crate::interpreters::interpreter_set_workload_group_quotas::SetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_show_online_nodes::ShowOnlineNodesInterpreter;
 use crate::interpreters::interpreter_show_warehouses::ShowWarehousesInterpreter;
 use crate::interpreters::interpreter_show_workload_groups::ShowWorkloadGroupsInterpreter;
@@ -90,6 +90,7 @@ use crate::interpreters::interpreter_txn_abort::AbortInterpreter;
 use crate::interpreters::interpreter_txn_begin::BeginInterpreter;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouseNodesInterpreter;
+use crate::interpreters::interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
 use crate::interpreters::AlterUserInterpreter;
@@ -734,10 +735,12 @@ impl InterpreterFactory {
             Plan::RenameWorkloadGroup(p) => Ok(Arc::new(
                 RenameWorkloadGroupInterpreter::try_create(ctx, *p.clone())?,
             )),
-            Plan::AlterWorkloadGroup(p) => Ok(Arc::new(AlterWorkloadGroupInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
+            Plan::SetWorkloadGroupQuotas(p) => Ok(Arc::new(
+                SetWorkloadGroupQuotasInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::UnsetWorkloadGroupQuotas(p) => Ok(Arc::new(
+                UnsetWorkloadGroupQuotasInterpreter::try_create(ctx, *p.clone())?,
+            )),
             // Plan::ShowCreateProcedure(_) => {}
             //
             // Plan::RenameProcedure(p) => Ok(Arc::new(RenameProcedureInterpreter::try_create(

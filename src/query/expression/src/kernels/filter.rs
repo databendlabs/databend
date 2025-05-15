@@ -203,7 +203,7 @@ impl ValueVisitor for FilterVisitor<'_> {
         Ok(())
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: <T as ValueType>::Column) -> Result<()> {
+    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
         let c = T::upcast_column(column.clone());
         let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
         let mut builder = T::try_downcast_owned_builder(builder).unwrap();
@@ -228,10 +228,7 @@ impl ValueVisitor for FilterVisitor<'_> {
         Ok(())
     }
 
-    fn visit_number<T: Number>(
-        &mut self,
-        buffer: <NumberType<T> as ValueType>::Column,
-    ) -> Result<()> {
+    fn visit_number<T: Number>(&mut self, buffer: Buffer<T>) -> Result<()> {
         self.result = Some(Value::Column(NumberType::<T>::upcast_column(
             self.filter_primitive_types(buffer),
         )));

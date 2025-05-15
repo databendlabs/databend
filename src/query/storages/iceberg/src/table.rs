@@ -17,13 +17,13 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow_schema::Schema;
 use async_trait::async_trait;
 use chrono::Utc;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::ParquetReadOptions;
-use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -39,13 +39,19 @@ use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataSchema;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_storages_orc::ORCSource;
+use databend_common_storages_orc::StripeDecoder;
+use databend_common_storages_parquet::ParquetReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -57,6 +63,10 @@ use crate::partition::convert_file_scan_task;
 use crate::predicate::PredicateBuilder;
 use crate::statistics;
 use crate::statistics::IcebergStatistics;
+
+const ICEBERG_TABLE_FORMAT_OPT: &str = "write.format.default";
+const ICEBERG_TABLE_FORMAT_OPT_ORC: &str = "orc";
+const PARQUET_FIELD_ID_META_KEY: &str = "PARQUET:field_id";
 
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
@@ -113,7 +123,24 @@ impl IcebergTable {
         let arrow_schema = schema_to_arrow_schema(meta.current_schema().as_ref()).map_err(|e| {
             ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
         })?;
-        TableSchema::try_from(&arrow_schema)
+        let mut fields = Vec::with_capacity(arrow_schema.fields().len());
+
+        for arrow_f in arrow_schema.fields().iter() {
+            let field_id: ColumnId = arrow_f
+                .metadata()
+                .get(PARQUET_FIELD_ID_META_KEY)
+                .map(|s| s.parse::<ColumnId>())
+                .transpose()?
+                .unwrap_or(0);
+            let mut field = TableField::try_from(arrow_f.as_ref())?;
+            field.column_id = field_id;
+            fields.push(field);
+        }
+        Ok(TableSchema {
+            fields,
+            metadata: arrow_schema.metadata().clone().into_iter().collect(),
+            next_column_id: 0,
+        })
     }
 
     /// build_engine_options will generate `engine_options` from [`iceberg::table::Table`] so that
@@ -275,51 +302,90 @@ impl IcebergTable {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
         let table_schema = self.info.schema();
-        let arrow_schema = table_schema.as_ref().into();
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let topk = plan
-            .push_downs
-            .as_ref()
-            .and_then(|p| p.top_k(&self.schema()));
+        let op = self.table.file_io();
+        if let Some(true) = self
+            .table
+            .metadata()
+            .properties()
+            .get(ICEBERG_TABLE_FORMAT_OPT)
+            .map(|format| format.as_str() == ICEBERG_TABLE_FORMAT_OPT_ORC)
+        {
+            let projection =
+                PushDownInfo::projection_of_push_downs(&table_schema, plan.push_downs.as_ref());
+            let data_schema: DataSchema = Arc::new(projection.project_schema(&table_schema)).into();
+            let arrow_schema = Arc::new(Self::convert_orc_schema(&Schema::from(&data_schema)));
+            let data_schema = Arc::new(data_schema);
+            pipeline.add_source(
+                |output| {
+                    ORCSource::try_create(
+                        output,
+                        ctx.clone(),
+                        Arc::new(op.clone()),
+                        arrow_schema.clone(),
+                        None,
+                        projection.clone(),
+                    )
+                },
+                max_threads,
+            )?;
+            pipeline.try_resize(max_threads)?;
+            pipeline.add_accumulating_transformer(|| {
+                StripeDecoder::new(ctx.clone(), data_schema.clone(), arrow_schema.clone())
+            });
+        } else {
+            let arrow_schema: Schema = table_schema.as_ref().into();
+            let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
+            let topk = plan
+                .push_downs
+                .as_ref()
+                .and_then(|p| p.top_k(&self.schema()));
+            let read_options = ParquetReadOptions::default()
+                .with_prune_row_groups(true)
+                .with_prune_pages(false);
+            let op = Arc::new(op.clone());
+            let mut builder = ParquetReaderBuilder::create(
+                ctx.clone(),
+                op.clone(),
+                table_schema.clone(),
+                arrow_schema.clone(),
+            )?
+            .with_options(read_options)
+            .with_push_downs(plan.push_downs.as_ref());
 
-        let read_options = ParquetReadOptions::default()
-            .with_prune_row_groups(true)
-            .with_prune_pages(false);
+            if !need_row_number {
+                builder = builder.with_topk(topk.as_ref());
+            }
 
-        let op = self.table.file_io().clone();
-        let mut builder = ParquetRSReaderBuilder::create(
-            ctx.clone(),
-            Arc::new(op),
-            table_schema.clone(),
-            arrow_schema,
-        )?
-        .with_options(read_options)
-        .with_push_downs(plan.push_downs.as_ref());
+            let row_group_reader = Arc::new(builder.build_row_group_reader(need_row_number)?);
 
-        if !need_row_number {
-            builder = builder.with_topk(topk.as_ref());
+            let topk = Arc::new(topk);
+            let projection =
+                PushDownInfo::projection_of_push_downs(&table_schema, plan.push_downs.as_ref());
+            let output_schema = Arc::new(projection.project_schema(&table_schema));
+
+            pipeline.add_source(
+                |output| {
+                    ParquetSource::create(
+                        ctx.clone(),
+                        ParquetSourceType::Iceberg,
+                        output,
+                        row_group_reader.clone(),
+                        None,
+                        topk.clone(),
+                        internal_columns.clone(),
+                        plan.push_downs.clone(),
+                        table_schema.clone(),
+                        output_schema.clone(),
+                        op.clone(),
+                    )
+                },
+                max_threads,
+            )?
         }
-
-        let row_group_reader = Arc::new(builder.build_row_group_reader(need_row_number)?);
-
-        let topk = Arc::new(topk);
-        pipeline.add_source(
-            |output| {
-                ParquetSource::create(
-                    ctx.clone(),
-                    ParquetSourceType::Iceberg,
-                    output,
-                    row_group_reader.clone(),
-                    None,
-                    topk.clone(),
-                    internal_columns.clone(),
-                )
-            },
-            max_threads,
-        )
+        Ok(())
     }
 
     #[fastrace::trace]
@@ -371,8 +437,7 @@ impl IcebergTable {
             .map(|v: iceberg::scan::FileScanTask| {
                 read_rows += v.record_count.unwrap_or_default() as usize;
                 read_bytes += v.length as usize;
-                let part = convert_file_scan_task(v);
-                Arc::new(Box::new(part) as Box<dyn PartInfo>)
+                Arc::new(convert_file_scan_task(v))
             })
             .collect();
 
@@ -380,6 +445,72 @@ impl IcebergTable {
             PartStatistics::new_exact(read_rows, read_bytes, parts.len(), total_files),
             Partitions::create(PartitionsShuffleKind::Mod, parts),
         ))
+    }
+
+    fn convert_orc_schema(schema: &Schema) -> Schema {
+        fn visit_field(field: &arrow_schema::FieldRef) -> arrow_schema::FieldRef {
+            Arc::new(
+                arrow_schema::Field::new(
+                    field.name(),
+                    visit_type(field.data_type()),
+                    field.is_nullable(),
+                )
+                .with_metadata(field.metadata().clone()),
+            )
+        }
+
+        // orc-rust is not compatible with UTF8 View
+        fn visit_type(ty: &arrow_schema::DataType) -> arrow_schema::DataType {
+            match ty {
+                arrow_schema::DataType::Utf8View => arrow_schema::DataType::Utf8,
+                arrow_schema::DataType::List(field) => {
+                    arrow_schema::DataType::List(visit_field(field))
+                }
+                arrow_schema::DataType::ListView(field) => {
+                    arrow_schema::DataType::ListView(visit_field(field))
+                }
+                arrow_schema::DataType::FixedSizeList(field, len) => {
+                    arrow_schema::DataType::FixedSizeList(visit_field(field), *len)
+                }
+                arrow_schema::DataType::LargeList(field) => {
+                    arrow_schema::DataType::LargeList(visit_field(field))
+                }
+                arrow_schema::DataType::LargeListView(field) => {
+                    arrow_schema::DataType::LargeListView(visit_field(field))
+                }
+                arrow_schema::DataType::Struct(fields) => {
+                    let visited_fields = fields.iter().map(visit_field).collect::<Vec<_>>();
+                    arrow_schema::DataType::Struct(arrow_schema::Fields::from(visited_fields))
+                }
+                arrow_schema::DataType::Union(fields, mode) => {
+                    let (ids, fields): (Vec<_>, Vec<_>) = fields
+                        .iter()
+                        .map(|(i, field)| (i, visit_field(field)))
+                        .unzip();
+                    arrow_schema::DataType::Union(
+                        arrow_schema::UnionFields::new(ids, fields),
+                        *mode,
+                    )
+                }
+                arrow_schema::DataType::Dictionary(key, value) => {
+                    arrow_schema::DataType::Dictionary(
+                        Box::new(visit_type(key)),
+                        Box::new(visit_type(value)),
+                    )
+                }
+                arrow_schema::DataType::Map(field, v) => {
+                    arrow_schema::DataType::Map(visit_field(field), *v)
+                }
+                ty => {
+                    debug_assert!(!ty.is_nested());
+                    ty.clone()
+                }
+            }
+        }
+
+        let fields = schema.fields().iter().map(visit_field).collect::<Vec<_>>();
+
+        Schema::new(fields).with_metadata(schema.metadata().clone())
     }
 }
 
