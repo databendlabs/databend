@@ -193,15 +193,20 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         query: &'a str,
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        let query_id = Uuid::new_v4().to_string();
+        let query_id = Uuid::now_v7();
+        // Ensure the query id shares the same representation as trace_id.
+        let query_id_str = query_id.simple().to_string();
+
         let sampled =
             thread_rng().gen_range(0..100) <= self.base.session.get_trace_sample_rate()?;
-        let root = Span::root(func_path!(), SpanContext::random().sampled(sampled))
+        let span_context =
+            SpanContext::new(TraceId(query_id.as_u128()), SpanId::default()).sampled(sampled);
+        let root = Span::root(func_path!(), span_context)
             .with_properties(|| self.base.session.to_fastrace_properties());
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        tracking_payload.query_id = Some(query_id.clone());
-        tracking_payload.mem_stat = Some(MemStat::create(query_id.clone()));
+        tracking_payload.query_id = Some(query_id_str.clone());
+        tracking_payload.mem_stat = Some(MemStat::create(query_id_str.to_string()));
         let _guard = ThreadTracker::tracking(tracking_payload);
 
         ThreadTracker::tracking_future(async {
@@ -226,7 +231,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             let instant = Instant::now();
             let query_result = self
                 .base
-                .do_query(query_id, query)
+                .do_query(query_id_str, query)
                 .await
                 .map_err(|err| err.display_with_sql(query));
 
