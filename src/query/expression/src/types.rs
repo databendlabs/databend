@@ -360,6 +360,7 @@ impl DataType {
     }
 }
 
+/// AccessType defines a series of access methods for a data type
 pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + PartialEq;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
@@ -371,11 +372,12 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_>;
 
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>>;
-    fn try_downcast_column(col: &Column) -> Option<Self::Column>;
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
-
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
+
+    fn try_downcast_column(col: &Column) -> Option<Self::Column>;
     fn upcast_column(col: Self::Column) -> Column;
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
     fn upcast_domain(domain: Self::Domain) -> Domain;
 
     fn column_len(col: &Self::Column) -> usize;
@@ -448,6 +450,7 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     }
 }
 
+/// ValueType includes the builder method of a data type based on AccessType
 pub trait ValueType: AccessType {
     type ColumnBuilder: Debug + Clone;
 
@@ -489,11 +492,7 @@ pub trait ValueType: AccessType {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
 }
 
-pub trait ArgType: ReturnType {
-    fn data_type() -> DataType;
-    fn full_domain() -> Self::Domain;
-}
-
+/// ReturnType and ValueType are very similar, and it should be considered to merge them into ValueType in subsequent refactoring
 pub trait ReturnType: ValueType {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
@@ -522,4 +521,9 @@ pub trait ReturnType: ValueType {
         }
         Self::build_column(col)
     }
+}
+
+pub trait ArgType: ReturnType {
+    fn data_type() -> DataType;
+    fn full_domain() -> Self::Domain;
 }
