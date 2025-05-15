@@ -72,7 +72,6 @@ runs:
       if: endsWith(inputs.target, '-gnu')
       shell: bash
       run: |
-        source .venv/bin/activate
         uv pip install dist/*.whl
         uv pip install pytest pyarrow pandas polars
-        pytest -v tests/*
+        uv run pytest -v tests/*

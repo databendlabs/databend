@@ -95,12 +95,28 @@ uvx pdoc databend
 
 ## Service configuration
 
-Note:
-- **`databend.init_service`  must be initialized before `SessionContext`**
-- **`databend.init_service`  must be called only once**
+> Note:
 
-You can also init by configs str instead of file
+**`databend.init_service`  must be initialized before `SessionContext`**
 
+**`databend.init_service`  must be called only once**
+
+
+-  By default, you can init the service by a local directoy, then data & catalogs will be stored inside the directory.
+```
+import databend
+
+databend.init_service(local_dir = ".databend")
+```
+
+-  You can also init by file
+
+```
+import databend
+databend.init_service( config = "config.toml.sample" )
+```
+
+- And by config str
 ```
 import databend
 
