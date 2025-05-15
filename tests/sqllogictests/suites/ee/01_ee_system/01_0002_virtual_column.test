@@ -427,6 +427,132 @@ select id, data['id'], data['create'], data['text'], data['user']['id'], data['r
 13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
 
 statement ok
+CREATE OR REPLACE TABLE STUDENT_GRADES (
+  SCHOOL_ID VARCHAR,
+  STUDENT_ID VARCHAR,
+  GRADE_CODE VARCHAR,
+  GRADE_DESCRIPTION VARCHAR,
+  HONOR_ROLL VARCHAR(1)
+);
+
+statement ok
+CREATE OR REPLACE TABLE SCHOOL (
+  SCHOOL_ID VARCHAR,
+  SCHOOL_CODE VARCHAR
+);
+
+statement ok
+CREATE OR REPLACE TABLE Student_Current (
+  id VARCHAR,
+  school_code VARCHAR,
+  update_date TIMESTAMP
+);
+
+statement ok
+CREATE OR REPLACE TABLE Academic_Record (
+  student_id VARCHAR,
+  school_code VARCHAR,
+  record_data VARIANT
+);
+
+statement ok
+INSERT INTO SCHOOL VALUES
+  ('S001', 'HIGH_SCHOOL'),
+  ('S002', 'MIDDLE_SCHOOL'),
+  ('S003', 'DISTRICT');
+
+statement ok
+INSERT INTO Student_Current VALUES
+  ('ST001', 'HIGH_SCHOOL', '2023-05-12T10:00:00.000000'),
+  ('ST002', 'MIDDLE_SCHOOL', '2023-05-12T11:00:00.000000'),
+  ('ST003', 'DISTRICT', '2023-05-12T12:00:00.000000');
+
+statement ok
+INSERT INTO Academic_Record VALUES
+  ('ST001', 'HIGH_SCHOOL', '{
+    "academic": {
+      "performance": {
+        "grade_code": "A",
+        "grade_desc": "Excellent",
+        "extra_credits": 2
+      }
+    },
+    "eligible_schools": ["HIGH_SCHOOL", "DISTRICT"]
+  }'),
+  ('ST002', 'MIDDLE_SCHOOL', '{
+    "academic": {
+      "performance": {
+        "grade_code": "B",
+        "grade_desc": "Good",
+        "extra_credits": 1
+      }
+    },
+    "eligible_schools": ["MIDDLE_SCHOOL"]
+  }'),
+  ('ST003', 'DISTRICT', '{
+    "academic": {
+      "performance": {
+        "grade_code": "C",
+        "grade_desc": "Average",
+        "extra_credits": 0
+      }
+    },
+    "eligible_schools": ["HIGH_SCHOOL", "ELEMENTARY"]
+  }');
+
+query T
+MERGE INTO STUDENT_GRADES tgt USING
+(
+  SELECT *
+  FROM
+  (
+    SELECT
+        s.school_id,
+        sc.id AS student_id,
+        ar.record_data:academic.performance.grade_code AS grade_code,
+        ar.record_data:academic.performance.grade_desc AS grade_description,
+        CASE WHEN ar.record_data:academic.performance.extra_credits::INT > 0 THEN 'Y'
+            ELSE 'N' END AS honor_roll,
+        ROW_NUMBER() OVER (PARTITION BY s.school_id, sc.id ORDER BY NULL) row_number
+    FROM Student_Current sc
+    JOIN Academic_Record ar ON sc.id = ar.student_id
+    JOIN SCHOOL s ON s.SCHOOL_CODE = sc.school_code OR
+                    (ar.school_code = 'DISTRICT' AND s.school_code IN (ar.record_data:eligible_schools))
+    WHERE sc.update_date >= '2023-05-01T00:00:00.000000'
+  )
+  WHERE row_number = 1
+) src ON src.school_id = tgt.school_id
+    AND src.student_id = tgt.student_id
+WHEN MATCHED THEN
+UPDATE SET
+  tgt.GRADE_CODE = src.GRADE_CODE,
+  tgt.GRADE_DESCRIPTION = src.GRADE_DESCRIPTION,
+  tgt.HONOR_ROLL = src.HONOR_ROLL
+WHEN NOT MATCHED THEN
+INSERT (
+  SCHOOL_ID,
+  STUDENT_ID,
+  GRADE_CODE,
+  GRADE_DESCRIPTION,
+  HONOR_ROLL
+) VALUES (
+  src.SCHOOL_ID,
+  src.STUDENT_ID,
+  src.GRADE_CODE,
+  src.GRADE_DESCRIPTION,
+  src.HONOR_ROLL
+);
+----
+3 0
+
+query TTTTT
+SELECT * FROM STUDENT_GRADES ORDER BY school_id;
+----
+S001 ST001 A Excellent Y
+S002 ST002 B Good Y
+S003 ST003 C Average N
+
+statement ok
 set enable_experimental_virtual_column = 0;
 
 statement ok
