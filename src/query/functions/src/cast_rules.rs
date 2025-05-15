@@ -72,7 +72,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         // Disable auto cast from strings, e.g., `1 < '1'`.
         registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
         registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
+        registry.register_additional_cast_rules(func_name, CAST_FROM_BOOLEAN_RULES.iter().cloned());
     }
+    registry.register_additional_cast_rules("contains", GENERAL_CAST_RULES.iter().cloned());
+    registry.register_additional_cast_rules("contains", CAST_FROM_VARIANT_RULES());
+
     // for eq function: we allow cast from string to int or float, eg: col_int = '1'
     registry.register_additional_cast_rules("eq", CAST_FROM_STRING_RULES.iter().cloned());
 
@@ -373,6 +377,19 @@ pub const CAST_INT_TO_UINT64: AutoCastRules = &[
         DataType::Number(NumberDataType::Int64),
         DataType::Number(NumberDataType::UInt64),
     ),
+];
+
+pub const CAST_FROM_BOOLEAN_RULES: AutoCastRules = &[
+    (DataType::Boolean, DataType::Number(NumberDataType::UInt8)),
+    (DataType::Boolean, DataType::Number(NumberDataType::UInt16)),
+    (DataType::Boolean, DataType::Number(NumberDataType::UInt32)),
+    (DataType::Boolean, DataType::Number(NumberDataType::UInt64)),
+    (DataType::Boolean, DataType::Number(NumberDataType::Int8)),
+    (DataType::Boolean, DataType::Number(NumberDataType::Int16)),
+    (DataType::Boolean, DataType::Number(NumberDataType::Int32)),
+    (DataType::Boolean, DataType::Number(NumberDataType::Int64)),
+    (DataType::Boolean, DataType::Number(NumberDataType::Float32)),
+    (DataType::Boolean, DataType::Number(NumberDataType::Float64)),
 ];
 
 pub fn get_cast_int_to_string_rules() -> Vec<(DataType, DataType)> {
