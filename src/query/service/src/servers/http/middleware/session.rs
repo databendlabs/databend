@@ -669,7 +669,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 
         let mut login_history = LoginHistory::new();
         login_history.handler = LoginHandler::HTTP;
-        login_history.uri = uri.to_string();
+        login_history.connection_uri = uri.to_string();
 
         ThreadTracker::tracking_future(async move {
             match self.auth(&req, query_id, &mut login_history).await {
