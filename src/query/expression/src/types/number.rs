@@ -33,6 +33,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::decimal::DecimalSize;
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -89,7 +90,7 @@ pub const ALL_NUMERICS_TYPES: &[NumberDataType] = &[
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NumberType<T: Number>(PhantomData<T>);
+pub struct CoreNumber<T: Number>(PhantomData<T>);
 
 pub type Int8Type = NumberType<i8>;
 pub type Int16Type = NumberType<i16>;
@@ -102,9 +103,9 @@ pub type UInt64Type = NumberType<u64>;
 pub type Float32Type = NumberType<F32>;
 pub type Float64Type = NumberType<F64>;
 
-impl<Num: Number> SimpleValueType for NumberType<Num> {}
+pub type NumberType<T> = SimpleValueType<CoreNumber<T>>;
 
-impl<Num: Number> SimpleType for NumberType<Num> {
+impl<Num: Number> SimpleType for CoreNumber<Num> {
     type Scalar = Num;
     type Domain = SimpleDomain<Num>;
 
@@ -189,7 +190,9 @@ impl<Num: Number> ArgType for NumberType<Num> {
             max: Num::MAX,
         }
     }
+}
 
+impl<Num: Number> ReturnType for NumberType<Num> {
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

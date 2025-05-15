@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_expression::types::map::KvPair;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;

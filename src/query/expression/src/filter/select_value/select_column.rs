@@ -17,13 +17,13 @@ use databend_common_exception::Result;
 
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
-use crate::types::ValueType;
+use crate::types::AccessType;
 
 impl Selector<'_> {
     // Select indices by comparing two columns.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn select_columns<
-        T: ValueType,
+        T: AccessType,
         C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
         const FALSE: bool,
     >(

@@ -17,11 +17,13 @@ use std::ops::Range;
 
 pub use databend_common_column::bitmap::*;
 
+use super::AccessType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
+use crate::types::ReturnType;
 use crate::types::ValueType;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
@@ -32,13 +34,12 @@ use crate::ScalarRef;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BooleanType;
 
-impl ValueType for BooleanType {
+impl AccessType for BooleanType {
     type Scalar = bool;
     type ScalarRef<'a> = bool;
     type Column = Bitmap;
     type Domain = BooleanDomain;
     type ColumnIterator<'a> = databend_common_column::bitmap::utils::BitmapIter<'a>;
-    type ColumnBuilder = MutableBitmap;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar
@@ -60,27 +61,6 @@ impl ValueType for BooleanType {
             Column::Boolean(column) => Some(column.clone()),
             _ => None,
         }
-    }
-
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Boolean(builder) => Some(builder),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Boolean(builder) => Some(builder),
-            _ => None,
-        }
-    }
-
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::Boolean(builder))
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
@@ -122,43 +102,6 @@ impl ValueType for BooleanType {
         col.iter()
     }
 
-    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        bitmap_into_mut(col)
-    }
-
-    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
-        builder.len()
-    }
-
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        builder.push(item);
-    }
-
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        if n == 1 {
-            builder.push(item)
-        } else {
-            builder.extend_constant(n, item)
-        }
-    }
-
-    fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push(false);
-    }
-
-    fn append_column(builder: &mut Self::ColumnBuilder, bitmap: &Self::Column) {
-        builder.extend_from_bitmap(bitmap)
-    }
-
-    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        builder.into()
-    }
-
-    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(builder.len(), 1);
-        builder.get(0)
-    }
-
     #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
         lhs.cmp(&rhs)
@@ -195,6 +138,68 @@ impl ValueType for BooleanType {
     }
 }
 
+impl ValueType for BooleanType {
+    type ColumnBuilder = MutableBitmap;
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Boolean(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::Boolean(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Boolean(builder))
+    }
+
+    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
+        bitmap_into_mut(col)
+    }
+
+    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
+        builder.len()
+    }
+
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+        builder.push(item);
+    }
+
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        if n == 1 {
+            builder.push(item)
+        } else {
+            builder.extend_constant(n, item)
+        }
+    }
+
+    fn push_default(builder: &mut Self::ColumnBuilder) {
+        builder.push(false);
+    }
+
+    fn append_column(builder: &mut Self::ColumnBuilder, bitmap: &Self::Column) {
+        builder.extend_from_bitmap(bitmap)
+    }
+
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
+        builder.into()
+    }
+
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
+        assert_eq!(builder.len(), 1);
+        builder.get(0)
+    }
+}
+
 impl ArgType for BooleanType {
     fn data_type() -> DataType {
         DataType::Boolean
@@ -206,7 +211,9 @@ impl ArgType for BooleanType {
             has_true: true,
         }
     }
+}
 
+impl ReturnType for BooleanType {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         MutableBitmap::with_capacity(capacity)
     }

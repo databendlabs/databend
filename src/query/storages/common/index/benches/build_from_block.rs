@@ -24,10 +24,10 @@ mod dummy {
 
     use databend_common_expression::types::number::NumberColumn;
     use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_common_expression::types::AccessType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::UInt64Type;
-    use databend_common_expression::types::ValueType;
     use databend_common_expression::Column;
     use databend_common_expression::FunctionContext;
     use databend_storages_common_index::filters::Filter;

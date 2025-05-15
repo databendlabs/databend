@@ -20,12 +20,14 @@ use databend_common_column::binview::BinaryViewColumnIter;
 use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_exception::Result;
 
+use super::AccessType;
 use crate::property::Domain;
 use crate::types::binary::BinaryColumn;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
+use crate::types::ReturnType;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -35,13 +37,12 @@ use crate::ScalarRef;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringType;
 
-impl ValueType for StringType {
+impl AccessType for StringType {
     type Scalar = String;
     type ScalarRef<'a> = &'a str;
     type Column = StringColumn;
     type Domain = StringDomain;
     type ColumnIterator<'a> = StringIterator<'a>;
-    type ColumnBuilder = StringColumnBuilder;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
         scalar.to_string()
@@ -61,27 +62,6 @@ impl ValueType for StringType {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         domain.as_string().cloned()
-    }
-
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::String(builder) => Some(builder),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::String(builder) => Some(builder),
-            _ => None,
-        }
-    }
-
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::String(builder))
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -115,38 +95,6 @@ impl ValueType for StringType {
 
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
         col.iter()
-    }
-
-    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        StringColumnBuilder::from_column(col)
-    }
-
-    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
-        builder.len()
-    }
-
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        builder.put_and_commit(item);
-    }
-
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        builder.push_repeat(item, n);
-    }
-
-    fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.put_and_commit("");
-    }
-
-    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
-        builder.append_column(other_builder)
-    }
-
-    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        builder.build()
-    }
-
-    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        builder.build_scalar()
     }
 
     fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
@@ -193,6 +141,63 @@ impl ValueType for StringType {
     }
 }
 
+impl ValueType for StringType {
+    type ColumnBuilder = StringColumnBuilder;
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::String(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        match builder {
+            ColumnBuilder::String(builder) => Some(builder),
+            _ => None,
+        }
+    }
+
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::String(builder))
+    }
+
+    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
+        StringColumnBuilder::from_column(col)
+    }
+
+    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
+        builder.len()
+    }
+
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+        builder.put_and_commit(item);
+    }
+
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(item, n);
+    }
+
+    fn push_default(builder: &mut Self::ColumnBuilder) {
+        builder.put_and_commit("");
+    }
+
+    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
+        builder.append_column(other_builder)
+    }
+
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
+        builder.build()
+    }
+
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
+        builder.build_scalar()
+    }
+}
+
 impl ArgType for StringType {
     fn data_type() -> DataType {
         DataType::String
@@ -204,7 +209,9 @@ impl ArgType for StringType {
             max: None,
         }
     }
+}
 
+impl ReturnType for StringType {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity)
     }

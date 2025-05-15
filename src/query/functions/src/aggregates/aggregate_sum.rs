@@ -295,7 +295,7 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
         validity: Option<&Bitmap>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let col = <IntervalType as ValueType>::upcast_column(other);
+        let col = IntervalType::upcast_column(other);
         let buffer = IntervalType::try_downcast_column(&col).unwrap();
         match validity {
             Some(validity) if validity.null_count() > 0 => {
