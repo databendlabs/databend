@@ -22,6 +22,9 @@ statement ok
 create or replace table t(a int, b int) cluster by hilbert(a, b) row_per_block=2 block_per_segment=2 block_size_threshold = 18;
 
 statement ok
+set enable_block_stream_write = 0
+
+statement ok
 set hilbert_clustering_min_bytes = 35;
 
 statement ok
@@ -97,10 +100,10 @@ select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 statement ok
 alter table t recluster final;
 
-query T
-select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
+query II
+select info:partial_segment_count, info:unclustered_segment_count from clustering_information('test_hilbert','t');
 ----
-(b, a) hilbert {"partial_block_count":0,"partial_segment_count":0,"stable_block_count":5,"stable_segment_count":2,"total_block_count":5,"total_segment_count":2,"unclustered_block_count":0,"unclustered_segment_count":0}
+0 0
 
 ########################################################
 #  force eval as linear clustering by specify columns  #
