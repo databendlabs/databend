@@ -345,7 +345,7 @@ impl GlobalPersistentLog {
     }
 
     pub async fn get_u64_from_meta(&self, meta_key: &str) -> Result<Option<u64>> {
-        match self.meta_client.get_kv(&meta_key).await? {
+        match self.meta_client.get_kv(meta_key).await? {
             Some(v) => {
                 let num: u64 = serde_json::from_slice(&v.data)?;
                 Ok(Some(num))
