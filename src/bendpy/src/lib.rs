@@ -38,8 +38,8 @@ static INIT: Once = Once::new();
 static INITIALIZED_MUTEX: Mutex<()> = Mutex::new(());
 
 /// A Python module implemented in Rust.
-#[pymodule]
-pub fn databend(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pymodule(gil_used = false)]
+pub fn _databend(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(init_service, m)?)?;
     m.add_class::<context::PySessionContext>()?;
     Ok(())
