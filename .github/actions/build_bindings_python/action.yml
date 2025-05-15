@@ -45,6 +45,11 @@ runs:
         echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
         echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
 
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
     - name: Build wheels
       uses: PyO3/maturin-action@v1
       with:
@@ -59,16 +64,13 @@ runs:
         before-script-linux: |
           unset RUSTC_WRAPPER
           ../../scripts/setup/dev_setup.sh -yb
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          uv venv --python 3.12
-          source .venv/bin/activate
-
 
     - name: Run tests
       working-directory: src/bendpy
       if: endsWith(inputs.target, '-gnu')
       shell: bash
       run: |
-        pip install dist/*.whl
-        pip install pytest pyarrow pandas polars
+        source .venv/bin/activate
+        uv pip install dist/*.whl
+        uv pip install pytest pyarrow pandas polars
         pytest -v tests/*
