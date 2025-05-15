@@ -44,6 +44,7 @@ use crate::message::GetClusterStatus;
 use crate::message::GetEndpoints;
 use crate::message::MakeEstablishedClient;
 use crate::message::Streamed;
+use crate::InitFlag;
 
 /// Bind a request type to its corresponding response type.
 pub trait RequestFor: Clone + fmt::Debug {
@@ -182,6 +183,10 @@ impl RequestFor for UpsertKV {
 }
 
 impl RequestFor for WatchRequest {
+    type Reply = tonic::codec::Streaming<WatchResponse>;
+}
+
+impl RequestFor for (WatchRequest, InitFlag) {
     type Reply = tonic::codec::Streaming<WatchResponse>;
 }
 

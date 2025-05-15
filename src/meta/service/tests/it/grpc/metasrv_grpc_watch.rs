@@ -365,7 +365,7 @@ async fn test_watch_initialization_flush() -> anyhow::Result<()> {
             filter_type: FilterType::All.into(),
             initial_flush: true,
         };
-        client.request(watch).await?
+        client.watch_with_initialization(watch).await?
     };
 
     let cache = Arc::new(Mutex::new(BTreeMap::new()));
