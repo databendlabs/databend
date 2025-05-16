@@ -62,42 +62,43 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_simple_domain_type_hash::<BooleanType>(registry);
     register_simple_domain_type_hash::<BitmapType>(registry);
 
-    struct Siphash64;
-    impl HashFunction for Siphash64 {
-        type Hasher = DefaultHasher;
-        fn name() -> &'static str {
-            "siphash64"
-        }
-    }
-    register_decimal_hash::<Siphash64>(registry);
-
-    struct XxHash64Func;
-    impl HashFunction for XxHash64Func {
-        type Hasher = XxHash64;
-        fn name() -> &'static str {
-            "xxhash64"
-        }
-    }
-    register_decimal_hash::<XxHash64Func>(registry);
-
-    struct XxHash32Func;
-    impl HashFunction for XxHash32Func {
-        type Hasher = XxHash32;
-        const IS_HASH_32: bool = true;
-        fn name() -> &'static str {
-            "xxhash32"
-        }
-    }
-    register_decimal_hash::<XxHash32Func>(registry);
-
-    register_decimal_hash_with_seed::<CityHasher64>(registry);
-
     for ty in ALL_NUMBER_CLASSES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberClass::NUM_TYPE => {
                 register_simple_domain_type_hash::<NumberType<NUM_TYPE>>(registry);
             }
-            NumberClass::Decimal128 | NumberClass::Decimal256 => {}
+            NumberClass::Decimal128 => {
+                struct Siphash64;
+                impl HashFunction for Siphash64 {
+                    type Hasher = DefaultHasher;
+                    fn name() -> &'static str {
+                        "siphash64"
+                    }
+                }
+                register_decimal_hash::<Siphash64>(registry);
+
+                struct XxHash64Func;
+                impl HashFunction for XxHash64Func {
+                    type Hasher = XxHash64;
+                    fn name() -> &'static str {
+                        "xxhash64"
+                    }
+                }
+                register_decimal_hash::<XxHash64Func>(registry);
+
+                struct XxHash32Func;
+                impl HashFunction for XxHash32Func {
+                    type Hasher = XxHash32;
+                    const IS_HASH_32: bool = true;
+                    fn name() -> &'static str {
+                        "xxhash32"
+                    }
+                }
+
+                register_decimal_hash::<XxHash32Func>(registry);
+                register_decimal_hash_with_seed::<CityHasher64>(registry);
+            }
+            NumberClass::Decimal256 => {}
         });
     }
 

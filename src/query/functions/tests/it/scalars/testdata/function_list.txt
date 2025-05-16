@@ -1175,86 +1175,47 @@ Functions overloads:
 277 city64withseed(Int64 NULL, Float32 NULL) :: UInt64 NULL
 278 city64withseed(Int64, Float64) :: UInt64
 279 city64withseed(Int64 NULL, Float64 NULL) :: UInt64 NULL
-280 city64withseed(Decimal(38, 0), UInt8) :: UInt64
-281 city64withseed(Decimal(38, 0) NULL, UInt8 NULL) :: UInt64 NULL
-282 city64withseed(Decimal(38, 0), UInt16) :: UInt64
-283 city64withseed(Decimal(38, 0) NULL, UInt16 NULL) :: UInt64 NULL
-284 city64withseed(Decimal(38, 0), UInt32) :: UInt64
-285 city64withseed(Decimal(38, 0) NULL, UInt32 NULL) :: UInt64 NULL
-286 city64withseed(Decimal(38, 0), UInt64) :: UInt64
-287 city64withseed(Decimal(38, 0) NULL, UInt64 NULL) :: UInt64 NULL
-288 city64withseed(Decimal(38, 0), Int8) :: UInt64
-289 city64withseed(Decimal(38, 0) NULL, Int8 NULL) :: UInt64 NULL
-290 city64withseed(Decimal(38, 0), Int16) :: UInt64
-291 city64withseed(Decimal(38, 0) NULL, Int16 NULL) :: UInt64 NULL
-292 city64withseed(Decimal(38, 0), Int32) :: UInt64
-293 city64withseed(Decimal(38, 0) NULL, Int32 NULL) :: UInt64 NULL
-294 city64withseed(Decimal(38, 0), Int64) :: UInt64
-295 city64withseed(Decimal(38, 0) NULL, Int64 NULL) :: UInt64 NULL
-296 city64withseed(Decimal(38, 0), Float32) :: UInt64
-297 city64withseed(Decimal(38, 0) NULL, Float32 NULL) :: UInt64 NULL
-298 city64withseed(Decimal(38, 0), Float64) :: UInt64
-299 city64withseed(Decimal(38, 0) NULL, Float64 NULL) :: UInt64 NULL
-300 city64withseed(Decimal(76, 0), UInt8) :: UInt64
-301 city64withseed(Decimal(76, 0) NULL, UInt8 NULL) :: UInt64 NULL
-302 city64withseed(Decimal(76, 0), UInt16) :: UInt64
-303 city64withseed(Decimal(76, 0) NULL, UInt16 NULL) :: UInt64 NULL
-304 city64withseed(Decimal(76, 0), UInt32) :: UInt64
-305 city64withseed(Decimal(76, 0) NULL, UInt32 NULL) :: UInt64 NULL
-306 city64withseed(Decimal(76, 0), UInt64) :: UInt64
-307 city64withseed(Decimal(76, 0) NULL, UInt64 NULL) :: UInt64 NULL
-308 city64withseed(Decimal(76, 0), Int8) :: UInt64
-309 city64withseed(Decimal(76, 0) NULL, Int8 NULL) :: UInt64 NULL
-310 city64withseed(Decimal(76, 0), Int16) :: UInt64
-311 city64withseed(Decimal(76, 0) NULL, Int16 NULL) :: UInt64 NULL
-312 city64withseed(Decimal(76, 0), Int32) :: UInt64
-313 city64withseed(Decimal(76, 0) NULL, Int32 NULL) :: UInt64 NULL
-314 city64withseed(Decimal(76, 0), Int64) :: UInt64
-315 city64withseed(Decimal(76, 0) NULL, Int64 NULL) :: UInt64 NULL
-316 city64withseed(Decimal(76, 0), Float32) :: UInt64
-317 city64withseed(Decimal(76, 0) NULL, Float32 NULL) :: UInt64 NULL
-318 city64withseed(Decimal(76, 0), Float64) :: UInt64
-319 city64withseed(Decimal(76, 0) NULL, Float64 NULL) :: UInt64 NULL
-320 city64withseed(Float32, UInt8) :: UInt64
-321 city64withseed(Float32 NULL, UInt8 NULL) :: UInt64 NULL
-322 city64withseed(Float32, UInt16) :: UInt64
-323 city64withseed(Float32 NULL, UInt16 NULL) :: UInt64 NULL
-324 city64withseed(Float32, UInt32) :: UInt64
-325 city64withseed(Float32 NULL, UInt32 NULL) :: UInt64 NULL
-326 city64withseed(Float32, UInt64) :: UInt64
-327 city64withseed(Float32 NULL, UInt64 NULL) :: UInt64 NULL
-328 city64withseed(Float32, Int8) :: UInt64
-329 city64withseed(Float32 NULL, Int8 NULL) :: UInt64 NULL
-330 city64withseed(Float32, Int16) :: UInt64
-331 city64withseed(Float32 NULL, Int16 NULL) :: UInt64 NULL
-332 city64withseed(Float32, Int32) :: UInt64
-333 city64withseed(Float32 NULL, Int32 NULL) :: UInt64 NULL
-334 city64withseed(Float32, Int64) :: UInt64
-335 city64withseed(Float32 NULL, Int64 NULL) :: UInt64 NULL
-336 city64withseed(Float32, Float32) :: UInt64
-337 city64withseed(Float32 NULL, Float32 NULL) :: UInt64 NULL
-338 city64withseed(Float32, Float64) :: UInt64
-339 city64withseed(Float32 NULL, Float64 NULL) :: UInt64 NULL
-340 city64withseed(Float64, UInt8) :: UInt64
-341 city64withseed(Float64 NULL, UInt8 NULL) :: UInt64 NULL
-342 city64withseed(Float64, UInt16) :: UInt64
-343 city64withseed(Float64 NULL, UInt16 NULL) :: UInt64 NULL
-344 city64withseed(Float64, UInt32) :: UInt64
-345 city64withseed(Float64 NULL, UInt32 NULL) :: UInt64 NULL
-346 city64withseed(Float64, UInt64) :: UInt64
-347 city64withseed(Float64 NULL, UInt64 NULL) :: UInt64 NULL
-348 city64withseed(Float64, Int8) :: UInt64
-349 city64withseed(Float64 NULL, Int8 NULL) :: UInt64 NULL
-350 city64withseed(Float64, Int16) :: UInt64
-351 city64withseed(Float64 NULL, Int16 NULL) :: UInt64 NULL
-352 city64withseed(Float64, Int32) :: UInt64
-353 city64withseed(Float64 NULL, Int32 NULL) :: UInt64 NULL
-354 city64withseed(Float64, Int64) :: UInt64
-355 city64withseed(Float64 NULL, Int64 NULL) :: UInt64 NULL
-356 city64withseed(Float64, Float32) :: UInt64
-357 city64withseed(Float64 NULL, Float32 NULL) :: UInt64 NULL
-358 city64withseed(Float64, Float64) :: UInt64
-359 city64withseed(Float64 NULL, Float64 NULL) :: UInt64 NULL
+280 city64withseed FACTORY
+281 city64withseed(Float32, UInt8) :: UInt64
+282 city64withseed(Float32 NULL, UInt8 NULL) :: UInt64 NULL
+283 city64withseed(Float32, UInt16) :: UInt64
+284 city64withseed(Float32 NULL, UInt16 NULL) :: UInt64 NULL
+285 city64withseed(Float32, UInt32) :: UInt64
+286 city64withseed(Float32 NULL, UInt32 NULL) :: UInt64 NULL
+287 city64withseed(Float32, UInt64) :: UInt64
+288 city64withseed(Float32 NULL, UInt64 NULL) :: UInt64 NULL
+289 city64withseed(Float32, Int8) :: UInt64
+290 city64withseed(Float32 NULL, Int8 NULL) :: UInt64 NULL
+291 city64withseed(Float32, Int16) :: UInt64
+292 city64withseed(Float32 NULL, Int16 NULL) :: UInt64 NULL
+293 city64withseed(Float32, Int32) :: UInt64
+294 city64withseed(Float32 NULL, Int32 NULL) :: UInt64 NULL
+295 city64withseed(Float32, Int64) :: UInt64
+296 city64withseed(Float32 NULL, Int64 NULL) :: UInt64 NULL
+297 city64withseed(Float32, Float32) :: UInt64
+298 city64withseed(Float32 NULL, Float32 NULL) :: UInt64 NULL
+299 city64withseed(Float32, Float64) :: UInt64
+300 city64withseed(Float32 NULL, Float64 NULL) :: UInt64 NULL
+301 city64withseed(Float64, UInt8) :: UInt64
+302 city64withseed(Float64 NULL, UInt8 NULL) :: UInt64 NULL
+303 city64withseed(Float64, UInt16) :: UInt64
+304 city64withseed(Float64 NULL, UInt16 NULL) :: UInt64 NULL
+305 city64withseed(Float64, UInt32) :: UInt64
+306 city64withseed(Float64 NULL, UInt32 NULL) :: UInt64 NULL
+307 city64withseed(Float64, UInt64) :: UInt64
+308 city64withseed(Float64 NULL, UInt64 NULL) :: UInt64 NULL
+309 city64withseed(Float64, Int8) :: UInt64
+310 city64withseed(Float64 NULL, Int8 NULL) :: UInt64 NULL
+311 city64withseed(Float64, Int16) :: UInt64
+312 city64withseed(Float64 NULL, Int16 NULL) :: UInt64 NULL
+313 city64withseed(Float64, Int32) :: UInt64
+314 city64withseed(Float64 NULL, Int32 NULL) :: UInt64 NULL
+315 city64withseed(Float64, Int64) :: UInt64
+316 city64withseed(Float64 NULL, Int64 NULL) :: UInt64 NULL
+317 city64withseed(Float64, Float32) :: UInt64
+318 city64withseed(Float64 NULL, Float32 NULL) :: UInt64 NULL
+319 city64withseed(Float64, Float64) :: UInt64
+320 city64withseed(Float64 NULL, Float64 NULL) :: UInt64 NULL
 0 concat(Variant, Variant) :: Variant
 1 concat(Variant NULL, Variant NULL) :: Variant NULL
 2 concat FACTORY
@@ -3420,16 +3381,13 @@ Functions overloads:
 25 siphash64(UInt64 NULL) :: UInt64 NULL
 26 siphash64(Int64) :: UInt64
 27 siphash64(Int64 NULL) :: UInt64 NULL
-28 siphash64(Decimal(38, 0)) :: UInt64
-29 siphash64(Decimal(38, 0) NULL) :: UInt64 NULL
-30 siphash64(Decimal(76, 0)) :: UInt64
-31 siphash64(Decimal(76, 0) NULL) :: UInt64 NULL
-32 siphash64(Float32) :: UInt64
-33 siphash64(Float32 NULL) :: UInt64 NULL
-34 siphash64(Float64) :: UInt64
-35 siphash64(Float64 NULL) :: UInt64 NULL
-36 siphash64(T0) :: UInt64
-37 siphash64(T0 NULL) :: UInt64 NULL
+28 siphash64 FACTORY
+29 siphash64(Float32) :: UInt64
+30 siphash64(Float32 NULL) :: UInt64 NULL
+31 siphash64(Float64) :: UInt64
+32 siphash64(Float64 NULL) :: UInt64 NULL
+33 siphash64(T0) :: UInt64
+34 siphash64(T0 NULL) :: UInt64 NULL
 0 sleep(Float64) :: UInt8
 0 slice(Array(Nothing), UInt64) :: Array(Nothing)
 1 slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL
@@ -4177,8 +4135,7 @@ Functions overloads:
 25 to_uint8(Boolean NULL) :: UInt8 NULL
 0 to_unix_timestamp(Timestamp) :: Int64
 1 to_unix_timestamp(Timestamp NULL) :: Int64 NULL
-0 to_uuid(Decimal(38, 0)) :: String
-1 to_uuid(Decimal(38, 0) NULL) :: String NULL
+0 to_uuid FACTORY
 0 to_variant FACTORY
 0 to_week_of_year(Date) :: UInt32
 1 to_week_of_year(Date NULL) :: UInt32 NULL
@@ -4678,14 +4635,11 @@ Functions overloads:
 25 xxhash32(UInt64 NULL) :: UInt32 NULL
 26 xxhash32(Int64) :: UInt32
 27 xxhash32(Int64 NULL) :: UInt32 NULL
-28 xxhash32(Decimal(38, 0)) :: UInt32
-29 xxhash32(Decimal(38, 0) NULL) :: UInt32 NULL
-30 xxhash32(Decimal(76, 0)) :: UInt32
-31 xxhash32(Decimal(76, 0) NULL) :: UInt32 NULL
-32 xxhash32(Float32) :: UInt32
-33 xxhash32(Float32 NULL) :: UInt32 NULL
-34 xxhash32(Float64) :: UInt32
-35 xxhash32(Float64 NULL) :: UInt32 NULL
+28 xxhash32 FACTORY
+29 xxhash32(Float32) :: UInt32
+30 xxhash32(Float32 NULL) :: UInt32 NULL
+31 xxhash32(Float64) :: UInt32
+32 xxhash32(Float64 NULL) :: UInt32 NULL
 0 xxhash64(Variant) :: UInt64
 1 xxhash64(Variant NULL) :: UInt64 NULL
 2 xxhash64(String) :: UInt64
@@ -4714,14 +4668,11 @@ Functions overloads:
 25 xxhash64(UInt64 NULL) :: UInt64 NULL
 26 xxhash64(Int64) :: UInt64
 27 xxhash64(Int64 NULL) :: UInt64 NULL
-28 xxhash64(Decimal(38, 0)) :: UInt64
-29 xxhash64(Decimal(38, 0) NULL) :: UInt64 NULL
-30 xxhash64(Decimal(76, 0)) :: UInt64
-31 xxhash64(Decimal(76, 0) NULL) :: UInt64 NULL
-32 xxhash64(Float32) :: UInt64
-33 xxhash64(Float32 NULL) :: UInt64 NULL
-34 xxhash64(Float64) :: UInt64
-35 xxhash64(Float64 NULL) :: UInt64 NULL
+28 xxhash64 FACTORY
+29 xxhash64(Float32) :: UInt64
+30 xxhash64(Float32 NULL) :: UInt64 NULL
+31 xxhash64(Float64) :: UInt64
+32 xxhash64(Float64 NULL) :: UInt64 NULL
 0 yearweek(Date) :: UInt32
 1 yearweek(Date NULL) :: UInt32 NULL
 2 yearweek(Timestamp) :: UInt32
