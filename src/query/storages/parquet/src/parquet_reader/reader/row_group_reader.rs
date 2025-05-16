@@ -80,7 +80,7 @@ impl RowGroupReader {
             op,
             &part.meta,
             page_locations.as_deref(),
-            read_settings.with_enable_cache(true),
+            *read_settings,
         );
         let mut selection = part
             .selectors

@@ -48,5 +48,6 @@ pub use inner::CatalogHiveConfig;
 pub use inner::DiskCacheConfig as DiskCacheInnerConfig;
 pub use inner::DiskCacheKeyReloadPolicy;
 pub use inner::InnerConfig;
+pub use inner::MetaConfig;
 pub use inner::SpillConfig;
 pub use inner::ThriftProtocol;

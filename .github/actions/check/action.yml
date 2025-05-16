@@ -41,7 +41,8 @@ runs:
       run: |
         taplo check
         taplo fmt --check
-
+        python --version || echo "no python"
+        which python || echo "no python"
     # - name: Audit dependencies
     #   shell: bash
     #   if: "!contains(github.event.head_commit.message, 'skip audit')"

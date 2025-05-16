@@ -171,7 +171,7 @@ impl<'a> InMemoryRowGroup<'a> {
                         selection
                             .scan_ranges(&page_locations[idx])
                             .iter()
-                            .map(|r| r.start as u64..r.end as u64),
+                            .map(|r| r.start..r.end),
                     );
                     page_start_offsets
                         .push(ranges.iter().map(|range| range.start as usize).collect());
