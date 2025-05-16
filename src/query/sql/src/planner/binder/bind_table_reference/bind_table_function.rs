@@ -285,6 +285,7 @@ impl Binder {
                         Box::new(data_type),
                         Visibility::Visible,
                     )
+                    .is_srf(true)
                     .build();
                     bind_context.add_column_binding(column_binding);
 

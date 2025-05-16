@@ -274,11 +274,14 @@ impl Processor for ParquetSource {
             State::Init => {
                 if let Some(part) = self.ctx.get_partition() {
                     match ParquetPart::from_part(&part)? {
+                        // From Copy Table from Stage, we don't enable cache
                         ParquetPart::RowGroup(part) => {
                             if let Some(reader) = self
                                 .row_group_reader
                                 .create_read_policy(
-                                    &ReadSettings::from_ctx(&self.ctx)?,
+                                    &ReadSettings::from_ctx(&self.ctx)?.with_enable_cache(
+                                        !matches!(self.source_type, ParquetSourceType::StageTable),
+                                    ),
                                     part,
                                     &mut self.topk_sorter,
                                     self.transformer.clone(),
@@ -343,7 +346,8 @@ impl ParquetSource {
             read_metadata_async_cached(path, &op, Some(part.compressed_size), &part.dedup_key)
                 .await?;
 
-        if matches!(self.source_type, ParquetSourceType::StageTable) {
+        let from_stage_table = matches!(self.source_type, ParquetSourceType::StageTable);
+        if from_stage_table {
             check_parquet_schema(
                 self.row_group_reader.schema_desc(),
                 meta.file_metadata().schema_descr(),
@@ -351,8 +355,7 @@ impl ParquetSource {
                 part.file.as_str(),
             )?;
         }
-        self.transformer
-            .match_by_field_name(matches!(self.source_type, ParquetSourceType::StageTable));
+        self.transformer.match_by_field_name(from_stage_table);
         // The schema of the table in iceberg may be inconsistent with the schema in parquet
         let reader = if self.row_group_reader.schema_desc().root_schema()
             != meta.file_metadata().schema_descr().root_schema()
@@ -402,7 +405,7 @@ impl ParquetSource {
 
             let reader = reader
                 .create_read_policy(
-                    &ReadSettings::from_ctx(&self.ctx)?,
+                    &ReadSettings::from_ctx(&self.ctx)?.with_enable_cache(!from_stage_table),
                     &part,
                     &mut self.topk_sorter,
                     self.transformer.clone(),
