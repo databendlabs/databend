@@ -86,17 +86,20 @@ pub(super) struct AvroDecoder {
     pub error_handler: Arc<ErrorHandler>,
     pub schema: TableSchemaRef,
     pub default_expr_evaluator: Option<Arc<DefaultExprEvaluator>>,
+    is_select: bool,
 }
 
 impl AvroDecoder {
     pub fn new(ctx: Arc<LoadContext>, params: AvroFileFormatParams) -> Self {
         let is_rounding_mode = ctx.file_format_options_ext.is_rounding_mode;
+        let is_select = ctx.file_format_options_ext.is_select;
         Self {
             is_rounding_mode,
             params,
             schema: ctx.schema.clone(),
             error_handler: ctx.error_handler.clone(),
             default_expr_evaluator: ctx.default_exprs.clone(),
+            is_select,
         }
     }
 
@@ -104,8 +107,33 @@ impl AvroDecoder {
         self.read_file(&data.data, state)
     }
 
+    fn read_file_for_select(
+        &self,
+        reader: Reader<&[u8]>,
+        state: &mut BlockBuilderState,
+    ) -> Result<()> {
+        let schema = MatchedSchema::Primary(reader.writer_schema().clone());
+        for (row, value) in reader.enumerate() {
+            let column_builder = if let ColumnBuilder::Variant(b) = &mut state.column_builders[0] {
+                b
+            } else {
+                return Err(ErrorCode::Internal(
+                    "invalid column builder when querying avro",
+                ));
+            };
+            self.read_variant(column_builder, value.unwrap(), &schema)
+                .map_err(|e| {
+                    ErrorCode::BadBytes(format!("fail to read row {row}: {:?}", e.reason))
+                })?;
+            state.add_row(row)
+        }
+        Ok(())
+    }
     fn read_file(&self, file_data: &[u8], state: &mut BlockBuilderState) -> Result<()> {
         let reader = Reader::new(file_data).unwrap();
+        if self.is_select {
+            return self.read_file_for_select(reader, state);
+        }
         let src_schema = reader.writer_schema().clone();
         let src_schema = if let Schema::Record(record) = src_schema {
             record
@@ -248,17 +276,18 @@ impl AvroDecoder {
                     }
                 }
             }),
-            ColumnBuilder::Variant(c) => self.read_variant(c, value),
             ColumnBuilder::Date(c) => self.read_date(c, value),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, value),
             ColumnBuilder::Interval(c) => self.read_interval(c, value),
-            ColumnBuilder::Array(c) => self.read_array(c, value, matched_schema),
-            ColumnBuilder::Map(c) => self.read_map(c, value, matched_schema),
-            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value, matched_schema),
+            ColumnBuilder::Variant(c) => self.read_variant(c, value, matched_schema),
             ColumnBuilder::Decimal(c) => with_decimal_type!(|DECIMAL_TYPE| match c {
                 DecimalColumnBuilder::DECIMAL_TYPE(c, size) =>
                     self.read_decimal(c, *size, value, matched_schema),
             }),
+            ColumnBuilder::Array(c) => self.read_array(c, value, matched_schema),
+            ColumnBuilder::Map(c) => self.read_map(c, value, matched_schema),
+            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value, matched_schema),
+
             // todo: Bitmap, Geometry, Geography
             _ => Err(Error::new_reason(format!(
                 "loading avro to table with column of type {} not supported yet",
@@ -413,11 +442,20 @@ impl AvroDecoder {
         }
     }
 
-    fn read_variant(&self, column: &mut BinaryColumnBuilder, value: Value) -> ReadFieldResult {
-        let v = to_jsonb(&value).map_err(Error::new_reason)?;
-        v.write_to_vec(&mut column.data);
-        column.commit_row();
-        Ok(())
+    fn read_variant(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        value: Value,
+        matched_schema: &MatchedSchema,
+    ) -> ReadFieldResult {
+        if let MatchedSchema::Primary(schema) = matched_schema {
+            let v = to_jsonb(&value, schema).map_err(Error::new_reason)?;
+            v.write_to_vec(&mut column.data);
+            column.commit_row();
+            Ok(())
+        } else {
+            Err(Error::default())
+        }
     }
 
     fn read_nullable(
@@ -592,6 +630,7 @@ mod test {
             }),
             schema: table_schema,
             default_expr_evaluator: None,
+            is_select: false,
         }
     }
 

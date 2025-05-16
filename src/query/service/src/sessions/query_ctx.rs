@@ -1671,7 +1671,7 @@ impl TableContext for QueryContext {
                 };
                 OrcTable::try_create(info).await
             }
-            FileFormatParams::NdJson(..) => {
+            FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
                     "_$1", // TODO: this name should be in visible
                     TableDataType::Variant,
@@ -1731,7 +1731,7 @@ impl TableContext for QueryContext {
             }
             _ => {
                 return Err(ErrorCode::Unimplemented(format!(
-                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, CSV, and TSV. Provided format: '{}'.",
+                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, AVRO, CSV, and TSV. Provided format: '{}'.",
                     stage_info.file_format_params
                 )));
             }
