@@ -81,12 +81,14 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
                 AsyncFunctionArgument::DictGetFunction(_) => unreachable!(),
             }
         }
-        cast_schema(
+        let block = cast_schema(
             block,
             from_schema.clone(),
             to_schema.clone(),
             exprs,
             &self.ctx.get_function_context()?,
-        )
+        )?;
+        let source_schema_idx: SourceSchemaIndex = input_schema_idx;
+        block.add_meta(Some(Box::new(source_schema_idx)))
     }
 }
