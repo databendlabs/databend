@@ -5,7 +5,7 @@ statement ok
 CREATE OR REPLACE TABLE target_table (id int default nextval(test_seq), name varchar(50), value int);
 
 statement ok
-CREATE OR REPLACE TABLE source_table (id INT, name VARCHAR(50), value INT);
+CREATE OR REPLACE TABLE source_table (id INT, name VARCHAR(50), value bigint not null);
 
 statement ok
 INSERT INTO source_table (name, value) VALUES ('Item1', 100),('Item2', 200);
