@@ -7,7 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [build-dependencies]
-pyo3-build-config = "0.18.3"
+pyo3-build-config = "0.24.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -23,16 +23,15 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-license = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-embedded = { workspace = true }
 databend-common-users = { workspace = true }
 databend-query = { workspace = true, features = [
     "simd",
     "disable_initial_exec_tls",
-], default-features = false }
-pyo3 = { version = "0.20", features = ["extension-module", "abi3", "abi3-py37"] }
+] }
+pyo3 = { version = "0.24", features = ["generate-import-lib", "abi3-py312"] }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
-uuid = { workspace = true }
 
 [lints]
 workspace = true

@@ -25,9 +25,9 @@ pub(crate) static RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
     .unwrap();
 
 /// Utility to collect rust futures with GIL released
-pub fn wait_for_future<F: Future>(py: Python, f: F) -> F::Output
+pub fn wait_for_future<F>(py: Python, f: F) -> F::Output
 where
-    F: Send,
+    F: Future + Send,
     F::Output: Send,
 {
     py.allow_threads(|| RUNTIME.block_on(f))

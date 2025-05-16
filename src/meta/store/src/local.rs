@@ -39,7 +39,7 @@ use tokio::time::sleep;
 /// The service will be shutdown if this struct is dropped.
 /// It deref to `ClientHandle` thus it can be used as a client.
 pub struct LocalMetaService {
-    _temp_dir: tempfile::TempDir,
+    _temp_dir: Option<tempfile::TempDir>,
 
     /// For debugging
     name: String,
@@ -72,24 +72,39 @@ impl Deref for LocalMetaService {
 
 impl Drop for LocalMetaService {
     fn drop(&mut self) {
-        Self::rm_raft_dir(
-            &self.config,
-            format_args!("Drop LocalMetaService: {}", self),
-        );
+        if self._temp_dir.is_some() {
+            Self::rm_raft_dir(
+                &self.config,
+                format_args!("Drop LocalMetaService: {}", self),
+            );
+        }
     }
 }
 
 impl LocalMetaService {
+    pub async fn new(name: impl fmt::Display) -> anyhow::Result<LocalMetaService> {
+        Self::new_with_fixed_dir(None, name).await
+    }
+
     /// Create a new Config for test, with unique port assigned
     ///
     /// It brings up a meta-service process with the port number based on the base_port.
     /// If it is None, 19_000 is used.
-    pub async fn new(name: impl fmt::Display) -> anyhow::Result<LocalMetaService> {
+    /// If dir is not empty, we should persistent the dir without cleanup, this could be used in databend-local and bendpy
+    pub async fn new_with_fixed_dir(
+        dir: Option<String>,
+        name: impl fmt::Display,
+    ) -> anyhow::Result<LocalMetaService> {
         let name = name.to_string();
-        let temp_dir = tempfile::tempdir().unwrap();
+        let (temp_dir, dir_path) = if let Some(dir_path) = dir {
+            (None, dir_path)
+        } else {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let dir_path = format!("{}", temp_dir.path().display());
+            (Some(temp_dir), dir_path)
+        };
 
         let raft_port = next_port();
-
         let mut config = configs::Config::default();
 
         // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
@@ -103,12 +118,7 @@ impl LocalMetaService {
         config.raft_config.config_id = raft_port.to_string();
 
         // Use a unique dir for each instance.
-        config.raft_config.raft_dir = format!(
-            "{}/{}-{}/raft_dir",
-            temp_dir.path().display(),
-            name,
-            raft_port
-        );
+        config.raft_config.raft_dir = format!("{}/{}-{}/raft_dir", dir_path, name, raft_port);
 
         // By default, create a meta node instead of open an existent one.
         config.raft_config.single = true;
@@ -133,7 +143,9 @@ impl LocalMetaService {
         info!("new LocalMetaService({}) with config: {:?}", name, config);
 
         // Clean up the raft dir if it exists.
-        Self::rm_raft_dir(&config, "new LocalMetaService");
+        if temp_dir.is_some() {
+            Self::rm_raft_dir(&config, "new LocalMetaService");
+        }
 
         // Bring up the services
         let meta_node = MetaNode::start(&config).await?;

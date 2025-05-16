@@ -107,16 +107,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pyo3-build-config"
-version = "0.18.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cb946f5ac61bb61a5014924910d936ebd2b23b705f7a4a3c40b05c720b079a3"
-dependencies = [
- "once_cell",
- "target-lexicon",
-]
-
-[[package]]
 name = "pyo3-example"
 version = "0.1.0"
 dependencies = [
@@ -125,9 +115,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-ffi"
-version = "0.18.3"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd4d7c5337821916ea2a1d21d1092e8443cf34879e53a0ac653fbb98f44ff65c"
+checksum = "78f9cf92ba9c409279bc3305b5409d90db2d2c22392d443a87df3a1adad59e33"
 dependencies = [
  "libc",
  "pyo3-build-config",

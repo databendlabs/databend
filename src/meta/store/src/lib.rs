@@ -132,9 +132,12 @@ impl MetaStoreProvider {
 
             // NOTE: This can only be used for test: data will be removed when program quit.
             Ok(MetaStore::L(Arc::new(
-                LocalMetaService::new("MetaStoreProvider-created")
-                    .await
-                    .unwrap(),
+                LocalMetaService::new_with_fixed_dir(
+                    self.rpc_conf.embedded_dir.clone(),
+                    "MetaStoreProvider-created",
+                )
+                .await
+                .unwrap(),
             )))
         } else {
             info!(conf :? =(&self.rpc_conf); "use remote meta");

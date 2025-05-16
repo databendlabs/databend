@@ -139,15 +139,15 @@ impl PyDataFrame {
     /// Convert to Arrow Table
     /// Collect the batches and pass to Arrow Table
     pub fn to_arrow_table(&self, py: Python) -> PyResult<PyObject> {
-        let batches = self.to_py_arrow(py)?.to_object(py);
+        let batches = self.to_py_arrow(py)?.into_pyobject(py)?;
         let schema = ArrowSchema::from(self.df.schema().as_ref());
         let schema = PyArrowType(schema);
-        let schema = schema.into_py(py);
+        let schema = schema.into_pyobject(py)?;
 
         Python::with_gil(|py| {
             // Instantiate pyarrow Table object and use its from_batches method
             let table_class = py.import("pyarrow")?.getattr("Table")?;
-            let args = PyTuple::new(py, &[batches, schema]);
+            let args = PyTuple::new(py, &[batches, schema])?;
             let table: PyObject = table_class.call_method1("from_batches", args)?.into();
             Ok(table)
         })
@@ -172,7 +172,7 @@ impl PyDataFrame {
 
         Python::with_gil(|py| {
             let dataframe = py.import("polars")?.getattr("DataFrame")?;
-            let args = PyTuple::new(py, &[table]);
+            let args = PyTuple::new(py, &[table])?;
             let result: PyObject = dataframe.call1(args)?.into();
             Ok(result)
         })

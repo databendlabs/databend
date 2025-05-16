@@ -2,9 +2,11 @@
 requires = ["maturin>1.1.0"]
 build-backend = "maturin"
 
+
 [project]
+version = "0.1.0"
 name = "databend"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 description = "Databend Python Binding"
 classifiers = [
     "Programming Language :: Rust",
@@ -18,10 +20,19 @@ docs = ["pdoc"]
 test = ["pytest", "pandas", "polars"]
 
 [project.urls]
-Documentation = "https://databend.com"
+Documentation = "https://pypi.org/project/databend/"
 Homepage =  "https://databend.com"
-"Home-page" =  "https://databend.com"
 Repository = "https://github.com/datafuselabs/databend"
+
+[dependency-groups]
+dev = ["maturin>=1.8.2"]
+lint = ["ruff>=0.9.10"]
+test = [
+  "pytest>=8.3.5"
+]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+module-name = "databend._databend"
+strip = true
+
