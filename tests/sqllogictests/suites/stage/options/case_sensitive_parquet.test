@@ -93,3 +93,16 @@ query
 select * from t2
 ----
 1 2
+
+statement ok
+create or replace table t3 (name string, age int64, score double);
+
+statement ok
+copy into t3 from @data/parquet/uppercase_fields.parquet file_format = (type = 'PARQUET');
+
+query
+select * from t3
+----
+Alice 25 85.5
+Bob 30 92.3
+Charlie 35 78.9

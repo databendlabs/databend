@@ -84,8 +84,9 @@ impl RecordBatchTransformer {
         }
     }
 
-    pub fn match_by_field_name(&mut self, match_by_field_name: bool) {
+    pub fn match_by_field_name(mut self, match_by_field_name: bool) -> Self {
         self.match_by_field_name = match_by_field_name;
+        self
     }
 
     pub fn process_record_batch(
@@ -105,7 +106,7 @@ impl RecordBatchTransformer {
                 RecordBatch::try_new_with_options(target_schema.clone(), columns, &options)?
             }
             Some(BatchTransform::ModifySchema { target_schema }) => {
-                record_batch.with_schema(target_schema.clone())?
+                RecordBatch::try_new(target_schema.clone(), record_batch.columns().to_vec())?
             }
             None => {
                 self.transforms = Some(Self::generate_batch_transform(
@@ -222,7 +223,10 @@ impl RecordBatchTransformer {
         if match_by_field_name {
             for target_field in target.fields() {
                 let target_type = target_field.data_type();
-                let Some((source_index, source_field)) = source.fields().find(target_field.name())
+                let Some(source_index) = source
+                    .fields()
+                    .iter()
+                    .position(|field| field.name().eq_ignore_ascii_case(target_field.name()))
                 else {
                     return Err(ErrorCode::TableSchemaMismatch(format!(
                         "The field with field name: {} does not exist in the source schema: {:#?}.",
@@ -230,20 +234,16 @@ impl RecordBatchTransformer {
                         source
                     )));
                 };
+                let source_type = source.fields()[source_index].data_type();
 
-                sources.push(
-                    if source_field
-                        .data_type()
-                        .equals_datatype(target_field.data_type())
-                    {
-                        ColumnSource::PassThrough { source_index }
-                    } else {
-                        ColumnSource::Promote {
-                            target_type: target_type.clone(),
-                            source_index,
-                        }
-                    },
-                )
+                sources.push(if source_type.equals_datatype(target_type) {
+                    ColumnSource::PassThrough { source_index }
+                } else {
+                    ColumnSource::Promote {
+                        target_type: target_type.clone(),
+                        source_index,
+                    }
+                })
             }
         } else {
             let source_map = Self::build_field_id_to_arrow_schema_map(source)?;
