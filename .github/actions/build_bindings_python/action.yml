@@ -54,6 +54,8 @@ runs:
       shell: bash
       working-directory: src/bendpy
       run: |
+        unset RUSTC_WRAPPER
+        ../../scripts/setup/dev_setup.sh -yb
         uv venv --python=python3.12
         uv sync --all-groups --all-extras
         uv run  maturin develop
