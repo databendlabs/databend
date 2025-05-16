@@ -20,6 +20,7 @@ use arrow_array::Array;
 use arrow_array::RecordBatch;
 use arrow_array::RecordBatchOptions;
 use arrow_cast::cast;
+use arrow_schema::DataType;
 use arrow_schema::FieldRef;
 use arrow_schema::Schema;
 use arrow_schema::SchemaRef;
@@ -189,12 +190,43 @@ impl RecordBatchTransformer {
         Ok(field_id_to_source_schema)
     }
 
+    fn exist_tuple(ty: &DataType) -> bool {
+        match ty {
+            DataType::Struct(_) => true,
+            DataType::List(field)
+            | DataType::ListView(field)
+            | DataType::FixedSizeList(field, _)
+            | DataType::LargeList(field)
+            | DataType::LargeListView(field) => Self::exist_tuple(field.data_type()),
+            DataType::Union(fields, _) => fields
+                .iter()
+                .any(|(_, field)| Self::exist_tuple(field.data_type())),
+            DataType::Dictionary(key, value) => Self::exist_tuple(key) || Self::exist_tuple(value),
+            DataType::Map(field, _) => Self::exist_tuple(field.data_type()),
+            ty => {
+                debug_assert!(!ty.is_nested());
+                false
+            }
+        }
+    }
+
     fn generate_batch_transform(
         source: &SchemaRef,
         target: &SchemaRef,
         table_field_mapping: &BTreeMap<ColumnId, usize>,
         match_by_field_name: bool,
     ) -> databend_common_exception::Result<BatchTransform> {
+        // When there is a Tuple type, the Field of the Tuple in the target will be rewritten
+        // For example, `select t:a from table` -> field_name: `t:a`.
+        // This is confused for match_by_field_name, so it is skipped in this case
+        if match_by_field_name
+            && source
+                .fields()
+                .iter()
+                .any(|field| Self::exist_tuple(field.data_type()))
+        {
+            return Ok(BatchTransform::PassThrough);
+        }
         match Self::compare_schemas(source, target) {
             SchemaComparison::Equivalent => Ok(BatchTransform::PassThrough),
             SchemaComparison::NameChangesOnly => Ok(BatchTransform::ModifySchema {
