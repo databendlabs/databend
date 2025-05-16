@@ -94,6 +94,7 @@ impl BlockOperator {
 }
 
 /// `CompoundBlockOperator` is a pipeline of `BlockOperator`s
+#[derive(Clone)]
 pub struct CompoundBlockOperator {
     pub operators: Vec<BlockOperator>,
     pub ctx: FunctionContext,

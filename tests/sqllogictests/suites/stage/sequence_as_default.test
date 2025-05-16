@@ -2,7 +2,10 @@ statement ok
 create or replace sequence seq
 
 statement ok
-create or replace table tmp (seq int default nextval(seq), a int);
+create or replace sequence seq1
+
+statement ok
+create or replace table tmp (seq int default nextval(seq), a int, seq1 bigint not null default nextval(seq1));
 
 statement ok
 INSERT INTO tmp(seq, a) values (-1, 11),(-2, 22);
@@ -16,10 +19,10 @@ INSERT INTO tmp(a) select * from numbers(3);
 query
 select * from tmp order by seq;
 ----
--2 22
--1 11
-2 21
-3 22
-4 0
-5 1
-6 2
+-2 22 3
+-1 11 2
+2 21 4
+3 22 5
+4 0 6
+5 1 7
+6 2 8
