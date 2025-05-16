@@ -21,6 +21,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::spawn;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::cluster_info::Cluster;
@@ -42,6 +43,7 @@ use databend_common_meta_types::UpsertKV;
 use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::GlobalLogger;
+use futures_util::future::join_all;
 use futures_util::TryStreamExt;
 use log::error;
 use log::info;
@@ -86,15 +88,18 @@ impl GlobalPersistentLog {
             tables: init_tables(cfg)?,
         });
         GlobalInstance::set(instance);
-        GlobalIORuntime::instance().try_spawn(
-            async move {
-                if let Err(e) = GlobalPersistentLog::instance().work().await {
-                    error!("persistent log exit {}", e);
-                }
-            },
-            Some("persistent-log-worker".to_string()),
-        )?;
-        Ok(())
+        GlobalIORuntime::instance().spawn(async move {
+            let runtime = Runtime::with_worker_threads(2, Some("log-transform-worker".to_owned()))?;
+            runtime
+                .spawn(async move {
+                    if let Err(e) = GlobalPersistentLog::instance().work().await {
+                        error!("persistent log exit {}", e);
+                    }
+                })
+                .await?;
+            Ok::<(), ErrorCode>(())
+        });
+        return Ok(());
     }
 
     pub fn instance() -> Arc<GlobalPersistentLog> {
@@ -119,37 +124,42 @@ impl GlobalPersistentLog {
         // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
         let sleep_time =
             Duration::from_millis(self.interval * 500 + random::<u64>() % (self.interval * 1000));
+        let mut handles = vec![];
         for table in self.tables.iter() {
             let table_clone = table.clone();
             let meta_key = format!("{}/history_log_transform", self.tenant_id).clone();
             let log = GlobalPersistentLog::instance();
-            spawn(async move {
+            let handle = spawn(async move {
                 loop {
                     match log.transform(&table_clone, &meta_key).await {
                         Ok(acquired_lock) => {
                             if acquired_lock {
-                                let _ = log
+                                let res = log
                                     .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                     .await;
+                                dbg!("result with", res);
                             }
                         }
                         Err(e) => {
-                            let _ = log
+                            let res = log
                                 .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                 .await;
+                            dbg!("result with eeee}", res, &e);
                             error!("{} log transform exit {}", table_clone.name, e);
                         }
                     }
                     sleep(sleep_time).await;
                 }
             });
+            handles.push(handle);
         }
+
         let sleep_time = Duration::from_mins(30 + random::<u64>() % 60);
         for table in self.tables.iter() {
             let table_clone = table.clone();
             let meta_key = format!("{}/history_log_clean", self.tenant_id);
             let log = GlobalPersistentLog::instance();
-            spawn(async move {
+            let handle = spawn(async move {
                 loop {
                     match log.clean(&table_clone, &meta_key).await {
                         Ok(acquired_lock) => {
@@ -169,7 +179,9 @@ impl GlobalPersistentLog {
                     sleep(sleep_time).await;
                 }
             });
+            handles.push(handle);
         }
+        join_all(handles).await;
 
         Ok(())
     }
@@ -314,6 +326,7 @@ impl GlobalPersistentLog {
                 )
                 .await?;
             }
+            drop(_guard);
             return Ok(true);
         }
         Ok(false)
@@ -339,6 +352,7 @@ impl GlobalPersistentLog {
                 self.execute_sql(&vacuum).await?;
                 info!("Periodic VACUUM operation on persistent log table '{}' completed successfully.",table.name);
             }
+            drop(_guard);
             return Ok(true);
         }
         Ok(false)
