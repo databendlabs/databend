@@ -171,9 +171,9 @@ function install_openssl {
 
 	echo "==> installing openssl libs..."
 
-	install_pkg perl-core "$PACKAGE_MANAGER"
-	install_pkg perl-CPAN "$PACKAGE_MANAGER"
-	install_pkg perl-devel "$PACKAGE_MANAGER"
+	install_pkg perl-core "$PACKAGE_MANAGER" || echo "perl-core skipped"
+	install_pkg perl-CPAN "$PACKAGE_MANAGER" || echo "perl-CPAN skipped"
+	install_pkg perl-devel "$PACKAGE_MANAGER" || echo "perl-devel skipped"
 
 	PERL_MM_USE_DEFAULT=1 perl -MCPAN -e 'install IPC::Cmd'
 
