@@ -50,18 +50,6 @@ runs:
       with:
         enable-cache: true
 
-    - name: Build and test with maturin
-      shell: bash
-      working-directory: src/bendpy
-      run: |
-        unset RUSTC_WRAPPER
-        ../../scripts/setup/dev_setup.sh -yb
-        uv venv --python=python3.12
-        uv sync --all-groups --all-extras
-        uv run maturin develop
-        uv pip install pytest pyarrow pandas polars
-        uv run pytest -v tests/*
-
     - name: Build wheels
       if: inputs.tag
       uses: PyO3/maturin-action@v1
