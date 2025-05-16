@@ -1151,7 +1151,7 @@ impl DecimalColumn {
         })
     }
 
-    pub fn arrow_buffer(&self) -> arrow_buffer::Buffer {
+    fn arrow_buffer(&self) -> arrow_buffer::Buffer {
         match self {
             DecimalColumn::Decimal128(col, _) => col.clone().into(),
             DecimalColumn::Decimal256(col, _) => {
@@ -1166,6 +1166,18 @@ impl DecimalColumn {
     }
 
     pub fn arrow_data(&self, arrow_type: arrow_schema::DataType) -> ArrayData {
+        #[cfg(debug_assertions)]
+        {
+            match (&arrow_type, self) {
+                (arrow_schema::DataType::Decimal128(p, s), DecimalColumn::Decimal128(_, size))
+                | (arrow_schema::DataType::Decimal256(p, s), DecimalColumn::Decimal256(_, size)) => {
+                    assert_eq!(size.precision, *p);
+                    assert_eq!(size.scale as i16, *s as i16);
+                }
+                _ => unreachable!(),
+            }
+        }
+
         let buffer = self.arrow_buffer();
         let builder = ArrayDataBuilder::new(arrow_type)
             .len(self.len())
