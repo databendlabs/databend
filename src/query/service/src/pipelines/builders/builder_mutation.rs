@@ -192,21 +192,23 @@ impl PipelineBuilder {
 
         let branches = Arc::new(branches);
 
-        let mut builder = self
-            .main_pipeline
-            .try_create_async_transform_pipeline_builder_with_len(
-                || {
-                    Ok(TransformBranchedAsyncFunction {
-                        ctx: self.ctx.clone(),
-                        branches: branches.clone(),
-                    })
-                },
-                transform_len,
-            )?;
-        if need_match {
-            builder.add_items_prepend(vec![create_dummy_item()]);
+        if !branches.is_empty() {
+            let mut builder = self
+                .main_pipeline
+                .try_create_async_transform_pipeline_builder_with_len(
+                    || {
+                        Ok(TransformBranchedAsyncFunction {
+                            ctx: self.ctx.clone(),
+                            branches: branches.clone(),
+                        })
+                    },
+                    transform_len,
+                )?;
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
+            self.main_pipeline.add_pipe(builder.finalize());
         }
-        self.main_pipeline.add_pipe(builder.finalize());
 
         let mut builder = self
             .main_pipeline
