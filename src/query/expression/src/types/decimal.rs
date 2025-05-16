@@ -24,6 +24,7 @@ use std::ops::Mul;
 use std::ops::MulAssign;
 use std::ops::Neg;
 use std::ops::Range;
+use std::ops::Rem;
 use std::ops::Sub;
 use std::ops::SubAssign;
 
@@ -2360,6 +2361,14 @@ impl Div for i256 {
 
     fn div(self, rhs: Self) -> Self::Output {
         Self(self.0 / rhs.0)
+    }
+}
+
+impl Rem for i256 {
+    type Output = Self;
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        Self(self.0 % rhs.0)
     }
 }
 
