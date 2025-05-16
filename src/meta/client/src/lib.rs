@@ -39,6 +39,7 @@ pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::MetaGrpcClient;
 pub use message::ClientWorkerRequest;
+pub use message::InitFlag;
 pub use message::Streamed;
 pub use required::FeatureSpec;
 pub use required::VersionTuple;

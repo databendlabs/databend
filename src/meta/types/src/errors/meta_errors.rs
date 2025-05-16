@@ -23,6 +23,7 @@ use crate::InvalidArgument;
 use crate::InvalidReply;
 use crate::MetaAPIError;
 use crate::MetaClientError;
+use crate::MetaHandshakeError;
 use crate::MetaNetworkError;
 
 /// Top level error MetaNode would return.
@@ -84,6 +85,13 @@ impl From<errors::IncompleteStream> for MetaError {
     fn from(e: errors::IncompleteStream) -> Self {
         let net_err = MetaNetworkError::from(e);
         let client_err = MetaClientError::from(net_err);
+        Self::ClientError(client_err)
+    }
+}
+
+impl From<MetaHandshakeError> for MetaError {
+    fn from(e: MetaHandshakeError) -> Self {
+        let client_err = MetaClientError::from(e);
         Self::ClientError(client_err)
     }
 }
