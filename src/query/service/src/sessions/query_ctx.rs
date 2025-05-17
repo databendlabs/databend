@@ -54,8 +54,8 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterShard;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
@@ -1407,23 +1407,17 @@ impl TableContext for QueryContext {
         runtime_filters.clear();
     }
 
-    fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
+    fn set_runtime_filter(&self, filter: RuntimeFilterShard) {
         let mut runtime_filters = self.shared.runtime_filters.write();
-        match runtime_filters.entry(filters.0) {
-            Entry::Vacant(v) => {
-                v.insert(filters.1);
-            }
-            Entry::Occupied(mut v) => {
-                for filter in filters.1.get_inlist() {
-                    v.get_mut().add_inlist(filter.clone());
-                }
-                for filter in filters.1.get_min_max() {
-                    v.get_mut().add_min_max(filter.clone());
-                }
-                for filter in filters.1.blooms() {
-                    v.get_mut().add_bloom(filter);
-                }
-            }
+        let entry = runtime_filters.entry(filter.scan_id).or_default();
+        if let Some(inlist) = filter.inlist {
+            entry.add_inlist(inlist);
+        }
+        if let Some(min_max) = filter.min_max {
+            entry.add_min_max(min_max);
+        }
+        if let Some(bloom) = filter.bloom {
+            entry.add_bloom(bloom);
         }
     }
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
@@ -21,8 +22,9 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Barrier;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::runtime_filter_info::RemoteRuntimeFilterShards;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterShard;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
@@ -31,6 +33,7 @@ use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDomain;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnRef;
@@ -113,6 +116,7 @@ pub struct HashJoinBuildState {
 
     pub(crate) memory_settings: MemorySettings,
     pub(crate) concat_buffer: Mutex<ConcatBuffer>,
+    pub(crate) broadcast_id: Option<u32>,
 }
 
 impl HashJoinBuildState {
@@ -124,6 +128,7 @@ impl HashJoinBuildState {
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
         num_threads: usize,
+        broadcast_id: Option<u32>,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -160,6 +165,7 @@ impl HashJoinBuildState {
             mutex: Default::default(),
             memory_settings,
             concat_buffer: Mutex::new(ConcatBuffer::new(concat_threshold)),
+            broadcast_id,
         }))
     }
 
@@ -253,7 +259,7 @@ impl HashJoinBuildState {
                     .build_watcher
                     .send(HashTableType::Empty)
                     .map_err(|_| ErrorCode::TokioError("build_watcher channel is closed"))?;
-                self.set_bloom_filter_ready()?;
+                self.add_runtime_filter(&[], build_num_rows)?;
                 return Ok(());
             }
 
@@ -803,44 +809,103 @@ impl HashJoinBuildState {
     }
 
     fn add_runtime_filter(&self, build_chunks: &[DataBlock], build_num_rows: usize) -> Result<()> {
+        let mut runtime_filters = self.build_runtime_filter(build_chunks, build_num_rows)?;
+        if let Some(broadcast_id) = self.broadcast_id {
+            let sender = self.ctx.broadcast_source_sender(broadcast_id);
+            let receiver = self.ctx.broadcast_sink_receiver(broadcast_id);
+            let remote_runtime_filter_shards =
+                RemoteRuntimeFilterShards::from(runtime_filters.clone());
+            let mut received = vec![];
+            // TODO: use async send and recv
+            sender
+                .send_blocking(Box::new(remote_runtime_filter_shards))
+                .unwrap();
+            sender.close();
+            while let Ok(remote_runtime_filter_shards) = receiver.recv_blocking() {
+                let remote_runtime_filter_shards =
+                    RemoteRuntimeFilterShards::downcast_from(remote_runtime_filter_shards).unwrap();
+                if let Some(shards) = remote_runtime_filter_shards.shards {
+                    received.push(shards);
+                }
+            }
+            let remote_runtime_filters = RemoteRuntimeFilterShards::merge(received);
+            runtime_filters = Some(
+                remote_runtime_filters
+                    .into_iter()
+                    .map(|(id, r)| {
+                        (id, RuntimeFilterShard {
+                            id: r.id,
+                            scan_id: r.scan_id,
+                            inlist: r.inlist.map(|x| x.as_expr(&BUILTIN_FUNCTIONS)),
+                            min_max: r.min_max.map(|x| x.as_expr(&BUILTIN_FUNCTIONS)),
+                            bloom: None,
+                        })
+                    })
+                    .collect(),
+            );
+        }
+        if let Some(runtime_filters) = runtime_filters {
+            for (_, runtime_filter) in runtime_filters {
+                self.ctx.set_runtime_filter(runtime_filter);
+            }
+        }
+        Ok(())
+    }
+
+    fn build_runtime_filter(
+        &self,
+        build_chunks: &[DataBlock],
+        build_num_rows: usize,
+    ) -> Result<Option<HashMap<usize, RuntimeFilterShard>>> {
+        if build_num_rows == 0 {
+            return Ok(None);
+        }
+        let mut runtime_filters = HashMap::new();
         for rf in self.runtime_filter_desc() {
-            let mut runtime_filter = RuntimeFilterInfo::default();
-            if rf.enable_inlist_runtime_filter && build_num_rows < INLIST_RUNTIME_FILTER_THRESHOLD {
+            let RuntimeFilterDesc {
+                id,
+                build_key,
+                probe_key,
+                scan_id,
+                enable_bloom_runtime_filter,
+                enable_inlist_runtime_filter,
+                enable_min_max_runtime_filter,
+            } = rf;
+            let mut runtime_filter = RuntimeFilterShard {
+                id: *id,
+                scan_id: *scan_id,
+                inlist: None,
+                min_max: None,
+                bloom: None,
+            };
+            if *enable_inlist_runtime_filter && build_num_rows < INLIST_RUNTIME_FILTER_THRESHOLD {
                 self.inlist_runtime_filter(
                     &mut runtime_filter,
                     build_chunks,
-                    &rf.build_key,
-                    &rf.probe_key,
+                    build_key,
+                    probe_key,
                 )?;
             }
-            if rf.enable_bloom_runtime_filter {
-                self.bloom_runtime_filter(
-                    build_chunks,
-                    &mut runtime_filter,
-                    &rf.build_key,
-                    &rf.probe_key,
-                )?;
+            if *enable_bloom_runtime_filter {
+                self.bloom_runtime_filter(build_chunks, &mut runtime_filter, build_key, probe_key)?;
             }
-            if rf.enable_min_max_runtime_filter {
+            if *enable_min_max_runtime_filter {
                 self.min_max_runtime_filter(
                     build_chunks,
                     &mut runtime_filter,
-                    &rf.build_key,
-                    &rf.probe_key,
+                    build_key,
+                    probe_key,
                 )?;
             }
-            if !runtime_filter.is_empty() {
-                self.ctx.set_runtime_filter((rf.scan_id, runtime_filter));
-            }
+            runtime_filters.insert(*id, runtime_filter);
         }
-        self.set_bloom_filter_ready()?;
-        Ok(())
+        Ok(Some(runtime_filters))
     }
 
     fn bloom_runtime_filter(
         &self,
         data_blocks: &[DataBlock],
-        runtime_filter: &mut RuntimeFilterInfo,
+        runtime_filter: &mut RuntimeFilterShard,
         build_key: &Expr,
         probe_key: &Expr<String>,
     ) -> Result<()> {
@@ -880,13 +945,13 @@ impl HashJoinBuildState {
             hashes_vec.push(hash);
         });
         let filter = BinaryFuse16::try_from(&hashes_vec)?;
-        runtime_filter.add_bloom((id.to_string(), filter));
+        runtime_filter.bloom = Some((id.to_string(), filter));
         Ok(())
     }
 
     fn inlist_runtime_filter(
         &self,
-        runtime_filter: &mut RuntimeFilterInfo,
+        runtime_filter: &mut RuntimeFilterShard,
         data_blocks: &[DataBlock],
         build_key: &Expr,
         probe_key: &Expr<String>,
@@ -896,7 +961,7 @@ impl HashJoinBuildState {
         {
             if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
                 info!("inlist_filter: {:?}", filter.sql_display());
-                runtime_filter.add_inlist(filter);
+                runtime_filter.inlist = Some(filter);
             }
         }
         Ok(())
@@ -905,7 +970,7 @@ impl HashJoinBuildState {
     fn min_max_runtime_filter(
         &self,
         data_blocks: &[DataBlock],
-        runtime_filter: &mut RuntimeFilterInfo,
+        runtime_filter: &mut RuntimeFilterShard,
         build_key: &Expr,
         probe_key: &Expr<String>,
     ) -> Result<()> {
@@ -1000,7 +1065,7 @@ impl HashJoinBuildState {
             };
             if let Some(min_max_filter) = min_max_filter {
                 info!("min_max_filter: {:?}", min_max_filter.sql_display());
-                runtime_filter.add_min_max(min_max_filter);
+                runtime_filter.min_max = Some(min_max_filter);
             }
         }
         Ok(())
