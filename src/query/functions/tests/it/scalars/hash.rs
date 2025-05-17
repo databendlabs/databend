@@ -82,6 +82,9 @@ fn test_city64withseed(file: &mut impl Write) {
     run_ast(file, "city64withseed(to_datetime(100000), 1234)", &[]);
     run_ast(file, "city64withseed(1234567890, 12)", &[]);
     run_ast(file, "city64withseed(1.1, 12)", &[]);
+    run_ast(file, "city64withseed(1.1::decimal(10,1),12)", &[]);
+    run_ast(file, "city64withseed(1.1::decimal(40,1),12)", &[]);
+    run_ast(file, "city64withseed(1.1::decimal(41,1),12)", &[]);
     run_ast(file, "city64withseed('1234567890', 12.12)", &[]);
     run_ast(file, "city64withseed(1234567890, 12.12)", &[]);
     run_ast(file, "city64withseed(to_date(100000), 1234)", &[]);
@@ -93,6 +96,23 @@ fn test_city64withseed(file: &mut impl Write) {
         ),
         ("b", UInt16Type::from_data(vec![10u16, 11, 12])),
     ]);
+
+    let size = DecimalSize::new(10, 0).unwrap();
+    run_ast(file, "city64withseed(a,5)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], size),
+    )]);
+    run_ast(file, "city64withseed(a,5)", &[(
+        "a",
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], size),
+    )]);
+    run_ast(file, "city64withseed(a,5)", &[(
+        "a",
+        Decimal256Type::from_data_with_size(
+            [i256::from(0), i256::from(20)],
+            DecimalSize::new(40, 0).unwrap(),
+        ),
+    )]);
 }
 
 fn test_siphash64(file: &mut impl Write) {
@@ -117,6 +137,9 @@ fn test_xxhash64(file: &mut impl Write) {
     run_ast(file, "xxhash64(to_datetime(100000))", &[]);
     run_ast(file, "xxhash64(1234567890)", &[]);
     run_ast(file, "xxhash64(1.1)", &[]);
+    run_ast(file, "xxhash64(1.1::decimal(10,1))", &[]);
+    run_ast(file, "xxhash64(1.1::decimal(40,1))", &[]);
+    run_ast(file, "xxhash64(1.1::decimal(41,1))", &[]);
     run_ast(file, "xxhash64(to_date(100000))", &[]);
     run_ast(file, "xxhash64(NULL)", &[]);
     run_ast(file, "xxhash64(parse_json('{\"a\":1}'))", &[]);
@@ -125,6 +148,23 @@ fn test_xxhash64(file: &mut impl Write) {
         "a",
         StringType::from_data(vec!["Dobrý den", "ß😀山"]),
     )]);
+
+    let size = DecimalSize::new(10, 0).unwrap();
+    run_ast(file, "xxhash64(a)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], size),
+    )]);
+    run_ast(file, "xxhash64(a)", &[(
+        "a",
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], size),
+    )]);
+    run_ast(file, "xxhash64(a)", &[(
+        "a",
+        Decimal256Type::from_data_with_size(
+            [i256::from(0), i256::from(20)],
+            DecimalSize::new(40, 0).unwrap(),
+        ),
+    )]);
 }
 
 fn test_xxhash32(file: &mut impl Write) {
@@ -132,6 +172,9 @@ fn test_xxhash32(file: &mut impl Write) {
     run_ast(file, "xxhash32(to_datetime(100000))", &[]);
     run_ast(file, "xxhash32(1234567890)", &[]);
     run_ast(file, "xxhash32(1.1)", &[]);
+    run_ast(file, "xxhash32(1.1::decimal(10,1))", &[]);
+    run_ast(file, "xxhash32(1.1::decimal(40,1))", &[]);
+    run_ast(file, "xxhash32(1.1::decimal(41,1))", &[]);
     run_ast(file, "xxhash32(to_date(100000))", &[]);
     run_ast(file, "xxhash32(NULL)", &[]);
     run_ast(file, "xxhash32(parse_json('{\"a\":1}'))", &[]);
@@ -139,5 +182,22 @@ fn test_xxhash32(file: &mut impl Write) {
     run_ast(file, "xxhash32(a)", &[(
         "a",
         StringType::from_data(vec!["Dobrý den", "ß😀山"]),
+    )]);
+
+    let size = DecimalSize::new(10, 0).unwrap();
+    run_ast(file, "xxhash32(a)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], size),
+    )]);
+    run_ast(file, "xxhash32(a)", &[(
+        "a",
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], size),
+    )]);
+    run_ast(file, "xxhash32(a)", &[(
+        "a",
+        Decimal256Type::from_data_with_size(
+            [i256::from(0), i256::from(20)],
+            DecimalSize::new(40, 0).unwrap(),
+        ),
     )]);
 }

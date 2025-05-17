@@ -105,7 +105,7 @@ pub enum DataType {
     Binary,
     String,
     Number(NumberDataType),
-    Decimal(DecimalDataType),
+    Decimal(DecimalSize),
     Timestamp,
     Date,
     Nullable(Box<DataType>),
@@ -291,8 +291,13 @@ impl DataType {
             | DataType::Number(NumberDataType::Float64)
             | DataType::Number(NumberDataType::Int64) => Ok(8),
 
-            DataType::Decimal(DecimalDataType::Decimal128(_)) => Ok(16),
-            DataType::Decimal(DecimalDataType::Decimal256(_)) => Ok(32),
+            DataType::Decimal(decimal) => {
+                if decimal.is_128() {
+                    Ok(16)
+                } else {
+                    Ok(32)
+                }
+            }
             _ => Result::Err(format!(
                 "Function number_byte_size argument must be numeric types, but got {:?}",
                 self
@@ -344,7 +349,7 @@ impl DataType {
 
     pub fn get_decimal_properties(&self) -> Option<DecimalSize> {
         match self {
-            DataType::Decimal(decimal_type) => Some(decimal_type.size()),
+            DataType::Decimal(size) => Some(*size),
             DataType::Number(num_ty) => num_ty.get_decimal_properties(),
             _ => None,
         }

@@ -15,6 +15,7 @@
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
+use super::SelectionBuffers;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
 use crate::types::string::StringColumn;
@@ -23,24 +24,28 @@ use crate::LikePattern;
 
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_column_scalar<
-        T: AccessType,
-        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
-        const FALSE: bool,
-    >(
+    pub(super) fn select_column_scalar<const FALSE: bool, L, R, C>(
         &self,
         cmp: C,
-        column: T::Column,
-        scalar: T::ScalarRef<'a>,
+        column: L::Column,
+        scalar: R::ScalarRef<'a>,
         validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: &mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
+        buffers: SelectionBuffers,
+    ) -> Result<usize>
+    where
+        L: AccessType,
+        R: AccessType,
+        C: Fn(L::ScalarRef<'_>, R::ScalarRef<'_>) -> bool,
+    {
+        let SelectionBuffers {
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        } = buffers;
+
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
 
@@ -65,7 +70,7 @@ impl<'a> Selector<'a> {
                             let idx = *true_selection.get_unchecked(i);
                             let ret = validity.get_bit_unchecked(idx as usize)
                                 && cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
+                                    L::index_column_unchecked(&column, idx as usize),
                                     scalar.clone(),
                                 );
                             update_index(ret, idx, true_selection, false_selection);
@@ -75,7 +80,7 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *true_selection.get_unchecked(i);
                             let ret = cmp(
-                                T::index_column_unchecked(&column, idx as usize),
+                                L::index_column_unchecked(&column, idx as usize),
                                 scalar.clone(),
                             );
                             update_index(ret, idx, true_selection, false_selection);
@@ -92,7 +97,7 @@ impl<'a> Selector<'a> {
                             let idx = *false_selection.get_unchecked(i);
                             let ret = validity.get_bit_unchecked(idx as usize)
                                 && cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
+                                    L::index_column_unchecked(&column, idx as usize),
                                     scalar.clone(),
                                 );
                             update_index(ret, idx, true_selection, false_selection);
@@ -102,7 +107,7 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *false_selection.get_unchecked(i);
                             let ret = cmp(
-                                T::index_column_unchecked(&column, idx as usize),
+                                L::index_column_unchecked(&column, idx as usize),
                                 scalar.clone(),
                             );
                             update_index(ret, idx, true_selection, false_selection);
@@ -116,7 +121,7 @@ impl<'a> Selector<'a> {
                         for idx in 0u32..count as u32 {
                             let ret = validity.get_bit_unchecked(idx as usize)
                                 && cmp(
-                                    T::index_column_unchecked(&column, idx as usize),
+                                    L::index_column_unchecked(&column, idx as usize),
                                     scalar.clone(),
                                 );
                             update_index(ret, idx, true_selection, false_selection);
@@ -125,7 +130,7 @@ impl<'a> Selector<'a> {
                     None => {
                         for idx in 0u32..count as u32 {
                             let ret = cmp(
-                                T::index_column_unchecked(&column, idx as usize),
+                                L::index_column_unchecked(&column, idx as usize),
                                 scalar.clone(),
                             );
                             update_index(ret, idx, true_selection, false_selection);
@@ -142,19 +147,22 @@ impl<'a> Selector<'a> {
     }
 
     // Select indices by like pattern.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_column_like<const FALSE: bool, const NOT: bool>(
+    pub(super) fn select_column_like<const FALSE: bool, const NOT: bool>(
         &self,
         column: StringColumn,
         like_pattern: &LikePattern,
         validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: &mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
     ) -> Result<usize> {
+        let SelectionBuffers {
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        } = buffers;
+
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
 

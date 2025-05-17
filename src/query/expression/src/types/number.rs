@@ -429,7 +429,7 @@ impl NumberDataType {
             NumberDataType::UInt64 => (20, 0),
             _ => return None,
         };
-        Some(DecimalSize { precision, scale })
+        Some(DecimalSize::new_unchecked(precision, scale))
     }
 }
 

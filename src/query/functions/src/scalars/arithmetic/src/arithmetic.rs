@@ -34,7 +34,6 @@ use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberDataType;
@@ -49,7 +48,6 @@ use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::values::Value;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
-use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_number_mapped_type_without_64;
@@ -362,14 +360,16 @@ fn unary_minus_decimal(
     ctx: &mut EvalContext,
 ) -> Value<AnyType> {
     let arg = &args[0];
-    let arg_type = arg_type.as_decimal().unwrap();
-    with_decimal_mapped_type!(|DECIMAL_TYPE| match arg_type {
-        DecimalDataType::DECIMAL_TYPE(size) => {
-            type Type = DecimalType<DECIMAL_TYPE>;
-            let arg = arg.try_downcast().unwrap();
-            vectorize_1_arg::<Type, Type>(|t, _| -t)(arg, ctx).upcast_decimal(*size)
-        }
-    })
+    let size = arg_type.as_decimal().unwrap();
+    if size.is_128() {
+        type T = DecimalType<i128>;
+        let arg = arg.try_downcast().unwrap();
+        vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(*size)
+    } else {
+        type Type = DecimalType<i256>;
+        let arg = arg.try_downcast().unwrap();
+        vectorize_1_arg::<Type, Type>(|t, _| -t)(arg, ctx).upcast_decimal(*size)
+    }
 }
 
 #[inline]

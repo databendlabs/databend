@@ -12,58 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
-
+use super::SelectionBuffers;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
-use crate::types::AccessType;
-use crate::Scalar;
 
 impl Selector<'_> {
-    #[allow(clippy::too_many_arguments)]
-    // Select indices by comparing two scalars.
-    pub(crate) fn select_scalars<
-        T: AccessType,
-        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
-    >(
+    pub(super) fn select_boolean_scalar<const FALSE: bool>(
         &self,
-        cmp: C,
-        left: Scalar,
-        right: Scalar,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
-        let left = left.as_ref();
-        let left = T::try_downcast_scalar(&left).unwrap();
-        let right = right.as_ref();
-        let right = T::try_downcast_scalar(&right).unwrap();
-        let result = cmp(left, right);
-        let count = self.select_boolean_scalar_adapt(
-            result,
+        scalar: bool,
+        buffers: SelectionBuffers,
+    ) -> usize {
+        let SelectionBuffers {
             true_selection,
             false_selection,
             mutable_true_idx,
             mutable_false_idx,
             select_strategy,
             count,
-        );
-        Ok(count)
-    }
+        } = buffers;
 
-    pub(crate) fn select_boolean_scalar<const FALSE: bool>(
-        &self,
-        scalar: bool,
-        true_selection: &mut [u32],
-        false_selection: &mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> usize {
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
         match select_strategy {

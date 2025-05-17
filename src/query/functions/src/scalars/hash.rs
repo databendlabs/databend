@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::unnecessary_cast)]
-
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use databend_common_expression::types::decimal::DecimalType;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::number::F32;
@@ -43,6 +40,10 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
+use databend_functions_scalar_decimal::register_decimal_hash;
+use databend_functions_scalar_decimal::register_decimal_hash_with_seed;
+use databend_functions_scalar_decimal::HashFunction;
+use databend_functions_scalar_decimal::HashFunctionWithSeed;
 use md5::Digest;
 use md5::Md5 as Md5Hasher;
 use naive_cityhash::cityhash64_with_seed;
@@ -67,11 +68,37 @@ pub fn register(registry: &mut FunctionRegistry) {
                 register_simple_domain_type_hash::<NumberType<NUM_TYPE>>(registry);
             }
             NumberClass::Decimal128 => {
-                register_simple_domain_type_hash::<DecimalType<i128>>(registry);
+                struct Siphash64;
+                impl HashFunction for Siphash64 {
+                    type Hasher = DefaultHasher;
+                    fn name() -> &'static str {
+                        "siphash64"
+                    }
+                }
+                register_decimal_hash::<Siphash64>(registry);
+
+                struct XxHash64Func;
+                impl HashFunction for XxHash64Func {
+                    type Hasher = XxHash64;
+                    fn name() -> &'static str {
+                        "xxhash64"
+                    }
+                }
+                register_decimal_hash::<XxHash64Func>(registry);
+
+                struct XxHash32Func;
+                impl HashFunction for XxHash32Func {
+                    type Hasher = XxHash32;
+                    const IS_HASH_32: bool = true;
+                    fn name() -> &'static str {
+                        "xxhash32"
+                    }
+                }
+
+                register_decimal_hash::<XxHash32Func>(registry);
+                register_decimal_hash_with_seed::<CityHasher64>(registry);
             }
-            NumberClass::Decimal256 => {
-                register_simple_domain_type_hash::<DecimalType<i256>>(registry);
-            }
+            NumberClass::Decimal256 => {}
         });
     }
 
@@ -209,6 +236,7 @@ where for<'a> T::ScalarRef<'a>: DFHash {
         }),
     );
 
+    #[allow(clippy::unnecessary_cast)]
     for num_type in ALL_INTEGER_TYPES {
         with_integer_mapped_type!(|NUM_TYPE| match num_type {
             NumberDataType::NUM_TYPE => {
@@ -253,6 +281,16 @@ where for<'a> T::ScalarRef<'a>: DFHash {
 pub struct CityHasher64 {
     seed: u64,
     value: u64,
+}
+
+impl HashFunctionWithSeed for CityHasher64 {
+    fn name() -> &'static str {
+        "city64withseed"
+    }
+
+    fn with_seed(seed: u64) -> Self {
+        CityHasher64::with_seed(seed)
+    }
 }
 
 impl CityHasher64 {

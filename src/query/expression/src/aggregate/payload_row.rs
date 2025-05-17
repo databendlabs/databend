@@ -34,7 +34,7 @@ use crate::types::NumberType;
 use crate::types::StringColumn;
 use crate::types::StringType;
 use crate::types::TimestampType;
-use crate::with_decimal_mapped_type;
+use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::InputColumns;
@@ -46,10 +46,13 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         DataType::Null | DataType::EmptyArray | DataType::EmptyMap => 0,
         DataType::Boolean => 1,
         DataType::Number(n) => n.bit_width() as usize / 8,
-        DataType::Decimal(n) => match n {
-            crate::types::DecimalDataType::Decimal128(_) => 16,
-            crate::types::DecimalDataType::Decimal256(_) => 32,
-        },
+        DataType::Decimal(n) => {
+            if n.is_128() {
+                16
+            } else {
+                32
+            }
+        }
         DataType::Timestamp => 8,
         DataType::Date => 4,
         DataType::Interval => 16,
@@ -86,7 +89,7 @@ pub unsafe fn serialize_column_to_rowformat(
             }
         }),
         Column::Decimal(v) => {
-            with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
+            with_decimal_type!(|DECIMAL_TYPE| match v {
                 DecimalColumn::DECIMAL_TYPE(buffer, _) => {
                     for index in select_vector.iter().take(rows).copied() {
                         store(&buffer[index], address[index].add(offset) as *mut u8);

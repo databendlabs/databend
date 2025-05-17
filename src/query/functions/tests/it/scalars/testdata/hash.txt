@@ -215,11 +215,38 @@ output         : 2939704650099116301
 
 ast            : city64withseed(1.1, 12)
 raw expr       : city64withseed(1.1, 12)
-checked expr   : city64withseed<Float64, UInt8>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Float64), 12_u8)
-optimized expr : 10046394896202388363_u64
+checked expr   : city64withseed<Decimal(2, 1), UInt8>(1.1_d128(2,1), 12_u8)
+optimized expr : 9036782473571630478_u64
 output type    : UInt64
-output domain  : {10046394896202388363..=10046394896202388363}
-output         : 10046394896202388363
+output domain  : {9036782473571630478..=9036782473571630478}
+output         : 9036782473571630478
+
+
+ast            : city64withseed(1.1::decimal(10,1),12)
+raw expr       : city64withseed(CAST(1.1 AS Decimal(10, 1)), 12)
+checked expr   : city64withseed<Decimal(10, 1), UInt8>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(10, 1)), 12_u8)
+optimized expr : 9036782473571630478_u64
+output type    : UInt64
+output domain  : {9036782473571630478..=9036782473571630478}
+output         : 9036782473571630478
+
+
+ast            : city64withseed(1.1::decimal(40,1),12)
+raw expr       : city64withseed(CAST(1.1 AS Decimal(40, 1)), 12)
+checked expr   : city64withseed<Decimal(40, 1), UInt8>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(40, 1)), 12_u8)
+optimized expr : 8239090264861021549_u64
+output type    : UInt64
+output domain  : {8239090264861021549..=8239090264861021549}
+output         : 8239090264861021549
+
+
+ast            : city64withseed(1.1::decimal(41,1),12)
+raw expr       : city64withseed(CAST(1.1 AS Decimal(41, 1)), 12)
+checked expr   : city64withseed<Decimal(41, 1), UInt8>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(41, 1)), 12_u8)
+optimized expr : 8239090264861021549_u64
+output type    : UInt64
+output domain  : {8239090264861021549..=8239090264861021549}
+output         : 8239090264861021549
 
 
 ast            : city64withseed('1234567890', 12.12)
@@ -281,6 +308,70 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------+
 
 
+ast            : city64withseed(a,5)
+raw expr       : city64withseed(a::Decimal(10, 0), 5)
+checked expr   : city64withseed<Decimal(10, 0), UInt8>(a, 5_u8)
+evaluation:
++--------+----------------+----------------------------+
+|        | a              | Output                     |
++--------+----------------+----------------------------+
+| Type   | Decimal(10, 0) | UInt64                     |
+| Domain | {0..=2}        | {0..=18446744073709551615} |
+| Row 0  | 0              | 8661487920261351384        |
+| Row 1  | 1              | 147443385526494728         |
+| Row 2  | 2              | 16351052741262685890       |
++--------+----------------+----------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| a      | Decimal128([0, 1, 2])                                                   |
+| Output | UInt64([8661487920261351384, 147443385526494728, 16351052741262685890]) |
++--------+-------------------------------------------------------------------------+
+
+
+ast            : city64withseed(a,5)
+raw expr       : city64withseed(a::Decimal(10, 0), 5)
+checked expr   : city64withseed<Decimal(10, 0), UInt8>(a, 5_u8)
+evaluation:
++--------+----------------+----------------------------+
+|        | a              | Output                     |
++--------+----------------+----------------------------+
+| Type   | Decimal(10, 0) | UInt64                     |
+| Domain | {0..=20}       | {0..=18446744073709551615} |
+| Row 0  | 0              | 8661487920261351384        |
+| Row 1  | 20             | 6612524184561993910        |
++--------+----------------+----------------------------+
+evaluation (internal):
++--------+----------------------------------------------------+
+| Column | Data                                               |
++--------+----------------------------------------------------+
+| a      | Decimal256([0, 20])                                |
+| Output | UInt64([8661487920261351384, 6612524184561993910]) |
++--------+----------------------------------------------------+
+
+
+ast            : city64withseed(a,5)
+raw expr       : city64withseed(a::Decimal(40, 0), 5)
+checked expr   : city64withseed<Decimal(40, 0), UInt8>(a, 5_u8)
+evaluation:
++--------+----------------+----------------------------+
+|        | a              | Output                     |
++--------+----------------+----------------------------+
+| Type   | Decimal(40, 0) | UInt64                     |
+| Domain | {0..=20}       | {0..=18446744073709551615} |
+| Row 0  | 0              | 5222897140551291012        |
+| Row 1  | 20             | 14808523730046104016       |
++--------+----------------+----------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------+
+| Column | Data                                                |
++--------+-----------------------------------------------------+
+| a      | Decimal256([0, 20])                                 |
+| Output | UInt64([5222897140551291012, 14808523730046104016]) |
++--------+-----------------------------------------------------+
+
+
 ast            : siphash64('Abc')
 raw expr       : siphash64('Abc')
 checked expr   : siphash64<String>("Abc")
@@ -328,11 +419,11 @@ output         : 15130871412783076140
 
 ast            : siphash64(1.1)
 raw expr       : siphash64(1.1)
-checked expr   : siphash64<Float64>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Float64))
-optimized expr : 14856193058643670405_u64
+checked expr   : siphash64<Decimal(2, 1)>(1.1_d128(2,1))
+optimized expr : 10271360460354063574_u64
 output type    : UInt64
-output domain  : {14856193058643670405..=14856193058643670405}
-output         : 14856193058643670405
+output domain  : {10271360460354063574..=10271360460354063574}
+output         : 10271360460354063574
 
 
 ast            : siphash64(to_date(100000))
@@ -421,11 +512,38 @@ output         : 14922725725041217620
 
 ast            : xxhash64(1.1)
 raw expr       : xxhash64(1.1)
-checked expr   : xxhash64<Float64>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Float64))
-optimized expr : 18307966283998289030_u64
+checked expr   : xxhash64<Decimal(2, 1)>(1.1_d128(2,1))
+optimized expr : 16412388371308701297_u64
 output type    : UInt64
-output domain  : {18307966283998289030..=18307966283998289030}
-output         : 18307966283998289030
+output domain  : {16412388371308701297..=16412388371308701297}
+output         : 16412388371308701297
+
+
+ast            : xxhash64(1.1::decimal(10,1))
+raw expr       : xxhash64(CAST(1.1 AS Decimal(10, 1)))
+checked expr   : xxhash64<Decimal(10, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(10, 1)))
+optimized expr : 16412388371308701297_u64
+output type    : UInt64
+output domain  : {16412388371308701297..=16412388371308701297}
+output         : 16412388371308701297
+
+
+ast            : xxhash64(1.1::decimal(40,1))
+raw expr       : xxhash64(CAST(1.1 AS Decimal(40, 1)))
+checked expr   : xxhash64<Decimal(40, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(40, 1)))
+optimized expr : 1889002562955497527_u64
+output type    : UInt64
+output domain  : {1889002562955497527..=1889002562955497527}
+output         : 1889002562955497527
+
+
+ast            : xxhash64(1.1::decimal(41,1))
+raw expr       : xxhash64(CAST(1.1 AS Decimal(41, 1)))
+checked expr   : xxhash64<Decimal(41, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(41, 1)))
+optimized expr : 1889002562955497527_u64
+output type    : UInt64
+output domain  : {1889002562955497527..=1889002562955497527}
+output         : 1889002562955497527
 
 
 ast            : xxhash64(to_date(100000))
@@ -485,6 +603,70 @@ evaluation (internal):
 +--------+--------------------------------------------------+
 
 
+ast            : xxhash64(a)
+raw expr       : xxhash64(a::Decimal(10, 0))
+checked expr   : xxhash64<Decimal(10, 0)>(a)
+evaluation:
++--------+----------------+----------------------------+
+|        | a              | Output                     |
++--------+----------------+----------------------------+
+| Type   | Decimal(10, 0) | UInt64                     |
+| Domain | {0..=2}        | {0..=18446744073709551615} |
+| Row 0  | 0              | 10680828680203489530       |
+| Row 1  | 1              | 10202851891468785390       |
+| Row 2  | 2              | 17456451868801084711       |
++--------+----------------+----------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | Decimal128([0, 1, 2])                                                      |
+| Output | UInt64([10680828680203489530, 10202851891468785390, 17456451868801084711]) |
++--------+----------------------------------------------------------------------------+
+
+
+ast            : xxhash64(a)
+raw expr       : xxhash64(a::Decimal(10, 0))
+checked expr   : xxhash64<Decimal(10, 0)>(a)
+evaluation:
++--------+----------------+----------------------------+
+|        | a              | Output                     |
++--------+----------------+----------------------------+
+| Type   | Decimal(10, 0) | UInt64                     |
+| Domain | {0..=20}       | {0..=18446744073709551615} |
+| Row 0  | 0              | 10680828680203489530       |
+| Row 1  | 20             | 9575395909381350477        |
++--------+----------------+----------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------+
+| Column | Data                                                |
++--------+-----------------------------------------------------+
+| a      | Decimal256([0, 20])                                 |
+| Output | UInt64([10680828680203489530, 9575395909381350477]) |
++--------+-----------------------------------------------------+
+
+
+ast            : xxhash64(a)
+raw expr       : xxhash64(a::Decimal(40, 0))
+checked expr   : xxhash64<Decimal(40, 0)>(a)
+evaluation:
++--------+----------------+----------------------------+
+|        | a              | Output                     |
++--------+----------------+----------------------------+
+| Type   | Decimal(40, 0) | UInt64                     |
+| Domain | {0..=20}       | {0..=18446744073709551615} |
+| Row 0  | 0              | 10358896297039543777       |
+| Row 1  | 20             | 2854678931765021440        |
++--------+----------------+----------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------+
+| Column | Data                                                |
++--------+-----------------------------------------------------+
+| a      | Decimal256([0, 20])                                 |
+| Output | UInt64([10358896297039543777, 2854678931765021440]) |
++--------+-----------------------------------------------------+
+
+
 ast            : xxhash32('Abc')
 raw expr       : xxhash32('Abc')
 checked expr   : xxhash32<String>("Abc")
@@ -514,11 +696,38 @@ output         : 2833116583
 
 ast            : xxhash32(1.1)
 raw expr       : xxhash32(1.1)
-checked expr   : xxhash32<Float64>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Float64))
-optimized expr : 3252916525_u32
+checked expr   : xxhash32<Decimal(2, 1)>(1.1_d128(2,1))
+optimized expr : 2039219311_u32
 output type    : UInt32
-output domain  : {3252916525..=3252916525}
-output         : 3252916525
+output domain  : {2039219311..=2039219311}
+output         : 2039219311
+
+
+ast            : xxhash32(1.1::decimal(10,1))
+raw expr       : xxhash32(CAST(1.1 AS Decimal(10, 1)))
+checked expr   : xxhash32<Decimal(10, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(10, 1)))
+optimized expr : 2039219311_u32
+output type    : UInt32
+output domain  : {2039219311..=2039219311}
+output         : 2039219311
+
+
+ast            : xxhash32(1.1::decimal(40,1))
+raw expr       : xxhash32(CAST(1.1 AS Decimal(40, 1)))
+checked expr   : xxhash32<Decimal(40, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(40, 1)))
+optimized expr : 547584765_u32
+output type    : UInt32
+output domain  : {547584765..=547584765}
+output         : 547584765
+
+
+ast            : xxhash32(1.1::decimal(41,1))
+raw expr       : xxhash32(CAST(1.1 AS Decimal(41, 1)))
+checked expr   : xxhash32<Decimal(41, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(41, 1)))
+optimized expr : 547584765_u32
+output type    : UInt32
+output domain  : {547584765..=547584765}
+output         : 547584765
 
 
 ast            : xxhash32(to_date(100000))
@@ -576,5 +785,69 @@ evaluation (internal):
 | a      | StringColumn[Dobrý den, ß😀山] |
 | Output | UInt32([19285785, 1401072642]) |
 +--------+--------------------------------+
+
+
+ast            : xxhash32(a)
+raw expr       : xxhash32(a::Decimal(10, 0))
+checked expr   : xxhash32<Decimal(10, 0)>(a)
+evaluation:
++--------+----------------+------------------+
+|        | a              | Output           |
++--------+----------------+------------------+
+| Type   | Decimal(10, 0) | UInt32           |
+| Domain | {0..=2}        | {0..=4294967295} |
+| Row 0  | 0              | 3043956479       |
+| Row 1  | 1              | 3899788538       |
+| Row 2  | 2              | 4102789362       |
++--------+----------------+------------------+
+evaluation (internal):
++--------+----------------------------------------------+
+| Column | Data                                         |
++--------+----------------------------------------------+
+| a      | Decimal128([0, 1, 2])                        |
+| Output | UInt32([3043956479, 3899788538, 4102789362]) |
++--------+----------------------------------------------+
+
+
+ast            : xxhash32(a)
+raw expr       : xxhash32(a::Decimal(10, 0))
+checked expr   : xxhash32<Decimal(10, 0)>(a)
+evaluation:
++--------+----------------+------------------+
+|        | a              | Output           |
++--------+----------------+------------------+
+| Type   | Decimal(10, 0) | UInt32           |
+| Domain | {0..=20}       | {0..=4294967295} |
+| Row 0  | 0              | 3043956479       |
+| Row 1  | 20             | 2563915310       |
++--------+----------------+------------------+
+evaluation (internal):
++--------+----------------------------------+
+| Column | Data                             |
++--------+----------------------------------+
+| a      | Decimal256([0, 20])              |
+| Output | UInt32([3043956479, 2563915310]) |
++--------+----------------------------------+
+
+
+ast            : xxhash32(a)
+raw expr       : xxhash32(a::Decimal(40, 0))
+checked expr   : xxhash32<Decimal(40, 0)>(a)
+evaluation:
++--------+----------------+------------------+
+|        | a              | Output           |
++--------+----------------+------------------+
+| Type   | Decimal(40, 0) | UInt32           |
+| Domain | {0..=20}       | {0..=4294967295} |
+| Row 0  | 0              | 2993075492       |
+| Row 1  | 20             | 3044379148       |
++--------+----------------+------------------+
+evaluation (internal):
++--------+----------------------------------+
+| Column | Data                             |
++--------+----------------------------------+
+| a      | Decimal256([0, 20])              |
+| Output | UInt32([2993075492, 3044379148]) |
++--------+----------------------------------+
 
 

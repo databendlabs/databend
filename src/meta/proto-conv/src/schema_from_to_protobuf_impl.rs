@@ -439,18 +439,18 @@ impl FromToProto for ex::types::decimal::DecimalSize {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(ex::types::decimal::DecimalSize {
-            precision: p.precision as u8,
-            scale: p.scale as u8,
-        })
+        Ok(ex::types::decimal::DecimalSize::new_unchecked(
+            p.precision as _,
+            p.scale as _,
+        ))
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         Ok(pb::DecimalSize {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            precision: self.precision as i32,
-            scale: self.scale as i32,
+            precision: self.precision() as i32,
+            scale: self.scale() as i32,
         })
     }
 }

@@ -234,10 +234,10 @@ pub fn parse_datum(data: &Datum) -> Option<Scalar> {
         // Iceberg use i128 to represent decimal
         PrimitiveLiteral::Int128(v) => {
             if let PrimitiveType::Decimal { precision, scale } = data.data_type() {
-                Some(Scalar::Decimal(v.to_scalar(DecimalSize {
-                    precision: *precision as u8,
-                    scale: *scale as u8,
-                })))
+                Some(Scalar::Decimal(v.to_scalar(DecimalSize::new_unchecked(
+                    *precision as u8,
+                    *scale as u8,
+                ))))
             } else {
                 None
             }

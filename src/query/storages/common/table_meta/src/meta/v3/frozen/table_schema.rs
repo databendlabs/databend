@@ -186,10 +186,7 @@ mod converters {
 
     impl From<DecimalSize> for databend_common_expression::types::DecimalSize {
         fn from(value: DecimalSize) -> Self {
-            Self {
-                precision: value.precision,
-                scale: value.scale,
-            }
+            Self::new_unchecked(value.precision, value.scale)
         }
     }
 

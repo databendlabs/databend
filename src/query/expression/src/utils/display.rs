@@ -63,6 +63,7 @@ use crate::types::timestamp::timestamp_to_string;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::DataType;
+use crate::types::DecimalSize;
 use crate::types::NumberClass;
 use crate::types::ValueType;
 use crate::values::Scalar;
@@ -349,18 +350,18 @@ impl Debug for DecimalScalar {
                 write!(
                     f,
                     "{}_d128({},{})",
-                    display_decimal_128(*val, size.scale),
-                    size.precision,
-                    size.scale
+                    display_decimal_128(*val, size.scale()),
+                    size.precision(),
+                    size.scale()
                 )
             }
             DecimalScalar::Decimal256(val, size) => {
                 write!(
                     f,
                     "{}_d256({},{})",
-                    display_decimal_256(val.0, size.scale),
-                    size.precision,
-                    size.scale
+                    display_decimal_256(val.0, size.scale()),
+                    size.precision(),
+                    size.scale()
                 )
             }
         }
@@ -371,10 +372,10 @@ impl Display for DecimalScalar {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             DecimalScalar::Decimal128(val, size) => {
-                write!(f, "{}", display_decimal_128(*val, size.scale))
+                write!(f, "{}", display_decimal_128(*val, size.scale()))
             }
             DecimalScalar::Decimal256(val, size) => {
-                write!(f, "{}", display_decimal_256(val.0, size.scale))
+                write!(f, "{}", display_decimal_256(val.0, size.scale()))
             }
         }
     }
@@ -417,7 +418,7 @@ impl Debug for DecimalColumn {
                 .field(&format_args!(
                     "[{}]",
                     &val.iter()
-                        .map(|x| display_decimal_128(*x, size.scale))
+                        .map(|x| display_decimal_128(*x, size.scale()))
                         .join(", ")
                 ))
                 .finish(),
@@ -426,7 +427,7 @@ impl Debug for DecimalColumn {
                 .field(&format_args!(
                     "[{}]",
                     &val.iter()
-                        .map(|x| display_decimal_256(x.0, size.scale))
+                        .map(|x| display_decimal_256(x.0, size.scale()))
                         .join(", ")
                 ))
                 .finish(),
@@ -614,14 +615,13 @@ impl Display for NumberDataType {
 
 impl Display for DecimalDataType {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match &self {
-            DecimalDataType::Decimal128(size) => {
-                write!(f, "Decimal({}, {})", size.precision, size.scale)
-            }
-            DecimalDataType::Decimal256(size) => {
-                write!(f, "Decimal({}, {})", size.precision, size.scale)
-            }
-        }
+        write!(f, "Decimal({}, {})", self.precision(), self.scale())
+    }
+}
+
+impl Display for DecimalSize {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "Decimal({}, {})", self.precision(), self.scale())
     }
 }
 
@@ -1112,14 +1112,14 @@ impl Display for DecimalDomain {
         match self {
             DecimalDomain::Decimal128(SimpleDomain { min, max }, size) => {
                 write!(f, "{}", SimpleDomain {
-                    min: display_decimal_128(*min, size.scale),
-                    max: display_decimal_128(*max, size.scale),
+                    min: display_decimal_128(*min, size.scale()),
+                    max: display_decimal_128(*max, size.scale()),
                 })
             }
             DecimalDomain::Decimal256(SimpleDomain { min, max }, size) => {
                 write!(f, "{}", SimpleDomain {
-                    min: display_decimal_256(min.0, size.scale),
-                    max: display_decimal_256(max.0, size.scale),
+                    min: display_decimal_256(min.0, size.scale()),
+                    max: display_decimal_256(max.0, size.scale()),
                 })
             }
         }

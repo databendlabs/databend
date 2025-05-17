@@ -99,17 +99,17 @@ impl TryFrom<&Field> for TableField {
                 ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 | ArrowDataType::Utf8View => {
                     TableDataType::String
                 }
-                ArrowDataType::Decimal128(precision, scale) => {
-                    TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                        precision: *precision,
-                        scale: *scale as u8,
-                    }))
+                ArrowDataType::Decimal128(precision, scale) if *scale >= 0 => {
+                    TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new(
+                        *precision,
+                        *scale as _,
+                    )?))
                 }
-                ArrowDataType::Decimal256(precision, scale) => {
-                    TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-                        precision: *precision,
-                        scale: *scale as u8,
-                    }))
+                ArrowDataType::Decimal256(precision, scale) if *scale >= 0 => {
+                    TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new(
+                        *precision,
+                        *scale as _,
+                    )?))
                 }
                 ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
                 ArrowDataType::Date32 => TableDataType::Date,
