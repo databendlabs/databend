@@ -606,7 +606,7 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
     })
 }
 
-fn extract_params<T: ValueType>(
+fn extract_params<T: AccessType>(
     display_name: &str,
     val_type: DataType,
     params: Vec<Scalar>,

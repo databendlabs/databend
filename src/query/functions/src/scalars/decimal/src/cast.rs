@@ -26,6 +26,7 @@ use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FromData;
@@ -861,4 +862,69 @@ fn decimal_to_int<T: Number>(
     };
 
     result.upcast()
+}
+
+pub fn strict_decimal_data_type(mut data: DataBlock) -> Result<DataBlock, String> {
+    use DecimalDataType::Decimal128;
+    use DecimalDataType::Decimal256;
+    let mut ctx = EvalContext {
+        generics: &[],
+        num_rows: data.num_rows(),
+        func_ctx: &FunctionContext::default(),
+        validity: None,
+        errors: None,
+        suppress_error: false,
+    };
+    for entry in data.columns_mut() {
+        if entry.value.is_scalar_null() {
+            continue;
+        }
+        let Some((from_type, nullable)) = DecimalDataType::from_value(&entry.value) else {
+            continue;
+        };
+
+        match from_type {
+            Decimal128(size) => {
+                if size.is_128() {
+                    continue;
+                }
+                if nullable {
+                    let nullable_value =
+                        entry.value.try_downcast::<NullableType<AnyType>>().unwrap();
+                    let value = nullable_value.value().unwrap();
+                    let new_value =
+                        decimal_to_decimal(&value, &mut ctx, from_type, Decimal256(size));
+
+                    entry.value =
+                        new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
+                } else {
+                    entry.value =
+                        decimal_to_decimal(&entry.value, &mut ctx, from_type, Decimal256(size))
+                }
+            }
+            Decimal256(size) => {
+                if !size.is_128() {
+                    continue;
+                }
+                if nullable {
+                    let nullable_value =
+                        entry.value.try_downcast::<NullableType<AnyType>>().unwrap();
+                    let value = nullable_value.value().unwrap();
+                    let new_value =
+                        decimal_to_decimal(&value, &mut ctx, from_type, Decimal128(size));
+
+                    entry.value =
+                        new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
+                } else {
+                    entry.value =
+                        decimal_to_decimal(&entry.value, &mut ctx, from_type, Decimal128(size))
+                }
+            }
+        }
+
+        if let Some((_, msg)) = ctx.errors.take() {
+            return Err(msg);
+        }
+    }
+    Ok(data)
 }

@@ -47,6 +47,7 @@ mod vector;
 
 pub use comparison::ALL_COMP_FUNC_NAMES;
 use databend_functions_scalar_arithmetic::arithmetic;
+pub use databend_functions_scalar_decimal::strict_decimal_data_type;
 use databend_functions_scalar_numeric_basic_arithmetic::register_numeric_basic_arithmetic;
 pub use hash::CityHasher64;
 pub use hash::DFHash;

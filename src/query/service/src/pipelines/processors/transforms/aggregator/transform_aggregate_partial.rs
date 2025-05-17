@@ -128,7 +128,9 @@ impl TransformPartialAggregate {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = block.consume_convert_to_full();
+        let block = strict_decimal_data_type(block)
+            .map_err(ErrorCode::Internal)?
+            .consume_convert_to_full();
         let group_columns = InputColumns::new_block_proxy(&self.params.group_columns, &block);
         let rows_num = block.num_rows();
 

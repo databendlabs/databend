@@ -29,12 +29,13 @@ use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::Decimal128As256Type;
+use crate::types::Decimal256As128Type;
 use crate::types::NumberColumn;
 use crate::types::NumberType;
 use crate::types::StringColumn;
 use crate::types::StringType;
 use crate::types::TimestampType;
-use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::InputColumns;
@@ -88,15 +89,32 @@ pub unsafe fn serialize_column_to_rowformat(
                 }
             }
         }),
-        Column::Decimal(v) => {
-            with_decimal_type!(|DECIMAL_TYPE| match v {
-                DecimalColumn::DECIMAL_TYPE(buffer, _) => {
+        Column::Decimal(v) => match v {
+            DecimalColumn::Decimal128(buffer, size) => {
+                if size.is_128() {
+                    for index in select_vector.iter().take(rows).copied() {
+                        store(&buffer[index], address[index].add(offset) as *mut u8);
+                    }
+                } else {
+                    for index in select_vector.iter().take(rows).copied() {
+                        let val = Decimal128As256Type::index_column_unchecked(buffer, index);
+                        store(&val, address[index].add(offset) as *mut u8);
+                    }
+                }
+            }
+            DecimalColumn::Decimal256(buffer, size) => {
+                if size.is_128() {
+                    for index in select_vector.iter().take(rows).copied() {
+                        let val = Decimal256As128Type::index_column_unchecked(buffer, index);
+                        store(&val, address[index].add(offset) as *mut u8);
+                    }
+                } else {
                     for index in select_vector.iter().take(rows).copied() {
                         store(&buffer[index], address[index].add(offset) as *mut u8);
                     }
                 }
-            })
-        }
+            }
+        },
         Column::Boolean(v) => {
             if v.null_count() == 0 || v.null_count() == v.len() {
                 let val: u8 = if v.null_count() == 0 { 1 } else { 0 };

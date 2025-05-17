@@ -216,26 +216,31 @@ fn op_decimal<Op: CmpOp>(
     args_type: &[DataType],
     ctx: &mut EvalContext,
 ) -> Value<AnyType> {
+    use DecimalDataType::Decimal128;
+    use DecimalDataType::Decimal256;
+
     let (size_a, size_b) = (
         args_type[0].as_decimal().unwrap(),
         args_type[1].as_decimal().unwrap(),
     );
     let (m_a, m_b) = compare_multiplier(size_a.scale(), size_b.scale());
 
-    match (size_a.is_128(), size_b.is_128()) {
-        (true, true) => {
+    let (a_type, _) = DecimalDataType::from_value(a).unwrap();
+    let (b_type, _) = DecimalDataType::from_value(b).unwrap();
+    match (a_type, b_type) {
+        (Decimal128(_), Decimal128(_)) => {
             let f = |a: i128, b: i128, _: &mut EvalContext| -> bool {
                 Op::is((a * 10_i128.pow(m_a)).cmp(&(b * 10_i128.pow(m_b))))
             };
             compare_decimal(a, b, f, ctx)
         }
-        (false, false) => {
+        (Decimal256(_), Decimal256(_)) => {
             let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
                 Op::is((a * i256::from(10).pow(m_a)).cmp(&(b * i256::from(10).pow(m_b))))
             };
             compare_decimal(a, b, f, ctx)
         }
-        (true, false) => {
+        (Decimal128(_), Decimal256(_)) => {
             let dest_type = DecimalDataType::Decimal256(DecimalSize::new_unchecked(
                 MAX_DECIMAL256_PRECISION,
                 size_a.scale(),
@@ -247,7 +252,7 @@ fn op_decimal<Op: CmpOp>(
             };
             compare_decimal(&left, b, f, ctx)
         }
-        (false, true) => {
+        (Decimal256(_), Decimal128(_)) => {
             let dest_type = DecimalDataType::Decimal256(DecimalSize::new_unchecked(
                 MAX_DECIMAL256_PRECISION,
                 size_b.scale(),
