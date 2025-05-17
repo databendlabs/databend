@@ -44,7 +44,9 @@ use crate::parquet_reader::NoPretchPolicyBuilder;
 use crate::parquet_reader::ParquetWholeFileReader;
 use crate::parquet_reader::PredicateAndTopkPolicyBuilder;
 use crate::parquet_reader::TopkOnlyPolicyBuilder;
+use crate::transformer::RecordBatchTransformer;
 use crate::ParquetPruner;
+use crate::ParquetSourceType;
 
 pub struct ParquetReaderBuilder<'a> {
     ctx: Arc<dyn TableContext>,
@@ -214,6 +216,7 @@ impl<'a> ParquetReaderBuilder<'a> {
 
     pub fn build_full_reader(
         &mut self,
+        source_type: ParquetSourceType,
         need_file_row_number: bool,
     ) -> Result<ParquetWholeFileReader> {
         let batch_size = self.ctx.get_settings().get_parquet_max_block_size()? as usize;
@@ -231,6 +234,8 @@ impl<'a> ParquetReaderBuilder<'a> {
             .unwrap();
 
         let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
+        let transformer = (!matches!(source_type, ParquetSourceType::StageTable))
+            .then(|| RecordBatchTransformer::build(output_schema.clone()));
         Ok(ParquetWholeFileReader {
             op_registry: self.op_registry.clone(),
             expect_file_schema: self
@@ -242,12 +247,17 @@ impl<'a> ParquetReaderBuilder<'a> {
             projection,
             field_paths,
             pruner: self.pruner.clone(),
+            transformer,
             need_page_index: self.options.prune_pages(),
             batch_size,
         })
     }
 
-    pub fn build_row_group_reader(&mut self, need_file_row_number: bool) -> Result<RowGroupReader> {
+    pub fn build_row_group_reader(
+        &mut self,
+        source_type: ParquetSourceType,
+        need_file_row_number: bool,
+    ) -> Result<RowGroupReader> {
         let batch_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
         if !need_file_row_number {
@@ -255,6 +265,14 @@ impl<'a> ParquetReaderBuilder<'a> {
             self.build_topk()?;
         }
         self.build_output()?;
+
+        let transformer = (!matches!(source_type, ParquetSourceType::StageTable))
+            .then(|| {
+                self.built_output.as_ref().map(|(_, _, output_schema, _)| {
+                    RecordBatchTransformer::build(output_schema.clone())
+                })
+            })
+            .flatten();
 
         let mut policy_builders = default_policy_builders();
         let default_policy = match (self.built_predicate.as_ref(), self.built_topk.as_ref()) {
@@ -292,6 +310,7 @@ impl<'a> ParquetReaderBuilder<'a> {
             schema_desc: self.schema_desc.clone(),
             policy_builders,
             default_policy,
+            transformer,
         })
     }
 

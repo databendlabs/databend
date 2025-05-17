@@ -53,6 +53,7 @@ use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ParquetPruner;
 use databend_common_storages_parquet::ParquetReaderBuilder;
+use databend_common_storages_parquet::ParquetSourceType;
 use databend_storages_common_pruner::partition_prunner::PartitionPruner;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -196,7 +197,7 @@ impl HiveTable {
                 .with_pruner(Some(pruner))
                 .with_partition_columns(partition_keys);
 
-        let parquet_reader = Arc::new(builder.build_full_reader(false)?);
+        let parquet_reader = Arc::new(builder.build_full_reader(ParquetSourceType::Hive, false)?);
 
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
         pipeline.add_source(

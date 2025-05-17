@@ -57,7 +57,6 @@ use crate::parquet_reader::ParquetWholeFileReader;
 use crate::parquet_reader::RowGroupReader;
 use crate::partition::ParquetRowGroupPart;
 use crate::read_settings::ReadSettings;
-use crate::transformer::RecordBatchTransformer;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
 use crate::ParquetReaderBuilder;
@@ -74,7 +73,8 @@ pub enum ParquetSourceType {
     StageTable,
     ResultCache,
     Iceberg,
-    // DeltaLake,
+    DeltaLake,
+    Hive,
 }
 
 pub struct ParquetSource {
@@ -107,7 +107,6 @@ pub struct ParquetSource {
     push_downs: Option<PushDownInfo>,
     topk: Arc<Option<TopK>>,
     op_registry: Arc<dyn OperatorRegistry>,
-    transformer: RecordBatchTransformer,
 }
 
 impl ParquetSource {
@@ -122,7 +121,6 @@ impl ParquetSource {
         internal_columns: Vec<InternalColumnType>,
         push_downs: Option<PushDownInfo>,
         table_schema: TableSchemaRef,
-        output_schema: TableSchemaRef,
         op_registry: Arc<dyn OperatorRegistry>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -133,7 +131,6 @@ impl ParquetSource {
             .as_ref()
             .as_ref()
             .map(|t| TopKSorter::new(t.limit, t.asc));
-        let transformer = RecordBatchTransformer::build(output_schema);
 
         Ok(ProcessorPtr::create(Box::new(Self {
             source_type,
@@ -153,7 +150,6 @@ impl ParquetSource {
             push_downs,
             topk,
             op_registry,
-            transformer,
         })))
     }
 }
@@ -284,7 +280,6 @@ impl Processor for ParquetSource {
                                     ),
                                     part,
                                     &mut self.topk_sorter,
-                                    self.transformer.clone(),
                                 )
                                 .await?
                             {
@@ -355,7 +350,6 @@ impl ParquetSource {
                 part.file.as_str(),
             )?;
         }
-        self.transformer.match_by_field_name(from_stage_table);
         // The schema of the table in iceberg may be inconsistent with the schema in parquet
         let reader = if self.row_group_reader.schema_desc().root_schema()
             != meta.file_metadata().schema_descr().root_schema()
@@ -381,7 +375,9 @@ impl ParquetSource {
                 builder = builder.with_topk(self.topk.as_ref().as_ref());
             }
 
-            Cow::Owned(Arc::new(builder.build_row_group_reader(need_row_number)?))
+            Cow::Owned(Arc::new(
+                builder.build_row_group_reader(self.source_type, need_row_number)?,
+            ))
         } else {
             Cow::Borrowed(&self.row_group_reader)
         };
@@ -408,7 +404,6 @@ impl ParquetSource {
                     &ReadSettings::from_ctx(&self.ctx)?.with_enable_cache(!from_stage_table),
                     &part,
                     &mut self.topk_sorter,
-                    self.transformer.clone(),
                 )
                 .await?;
 

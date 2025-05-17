@@ -46,6 +46,7 @@ use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetPruner;
 use databend_common_storages_parquet::ParquetReaderBuilder;
+use databend_common_storages_parquet::ParquetSourceType;
 use databend_storages_common_pruner::partition_prunner::FetchPartitionScalars;
 use databend_storages_common_pruner::partition_prunner::PartitionPruner;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -254,7 +255,8 @@ impl DeltaTable {
                 .with_pruner(Some(pruner))
                 .with_partition_columns(self.meta.partition_columns.clone());
 
-        let parquet_reader = Arc::new(builder.build_full_reader(false)?);
+        let parquet_reader =
+            Arc::new(builder.build_full_reader(ParquetSourceType::DeltaLake, false)?);
 
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
         pipeline.add_source(
