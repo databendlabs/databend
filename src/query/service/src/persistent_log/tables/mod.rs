@@ -12,4 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod global_persistent_log;
+mod history_tables;
+
+pub use history_tables::init_tables;
+pub use history_tables::HistoryTable;

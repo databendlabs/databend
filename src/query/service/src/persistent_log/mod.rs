@@ -14,10 +14,6 @@
 
 mod global_persistent_log;
 mod session;
-mod table_schemas;
+mod tables;
 
 pub use global_persistent_log::GlobalPersistentLog;
-pub use table_schemas::PersistentLogTable;
-pub use table_schemas::QueryDetailsTable;
-pub use table_schemas::QueryLogTable;
-pub use table_schemas::QueryProfileTable;
