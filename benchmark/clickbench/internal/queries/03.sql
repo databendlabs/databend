@@ -1,1 +1,1 @@
-select name from system.tables_with_history where name in ('t_1', 't_2');
+select (number::string)::Int from numbers(100000000) ignore_result;
