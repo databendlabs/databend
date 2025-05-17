@@ -19,7 +19,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
-use databend_storages_common_table_meta::meta::Location;
 
 #[async_trait::async_trait]
 pub trait VirtualColumnHandler: Sync + Send {
@@ -27,7 +26,6 @@ pub trait VirtualColumnHandler: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         fuse_table: &FuseTable,
-        segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()>;
 }
@@ -46,11 +44,10 @@ impl VirtualColumnHandlerWrapper {
         &self,
         ctx: Arc<dyn TableContext>,
         fuse_table: &FuseTable,
-        segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.handler
-            .do_refresh_virtual_column(ctx, fuse_table, segment_locs, pipeline)
+            .do_refresh_virtual_column(ctx, fuse_table, pipeline)
             .await
     }
 }

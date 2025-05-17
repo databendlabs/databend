@@ -45,7 +45,7 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        false
     }
 
     #[async_backtrace::framed]
@@ -61,17 +61,11 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
         table.check_mutable()?;
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let segment_locs = self.plan.segment_locs.clone();
 
         let mut build_res = PipelineBuildResult::create();
         let handler = get_virtual_column_handler();
         let _ = handler
-            .do_refresh_virtual_column(
-                self.ctx.clone(),
-                fuse_table,
-                segment_locs,
-                &mut build_res.main_pipeline,
-            )
+            .do_refresh_virtual_column(self.ctx.clone(), fuse_table, &mut build_res.main_pipeline)
             .await?;
 
         Ok(build_res)

@@ -271,8 +271,8 @@ build_exceptions! {
     LicenceDenied(1112),
     /// Unknown datamask
     UnknownDatamask(1113),
-    /// Virtual column not found
-    VirtualColumnNotFound(1115),
+    /// Virtual column error
+    VirtualColumnError(1115),
     /// Virtual column already exists
     VirtualColumnAlreadyExists(1116),
     /// Column referenced by computed column

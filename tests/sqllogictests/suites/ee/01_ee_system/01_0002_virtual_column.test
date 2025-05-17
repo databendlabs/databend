@@ -121,6 +121,9 @@ SELECT r.id, r.val['a'], r.val['b'], r.nval:a, r.nval:b FROM ( SELECT r.id, r.va
 5 55 5 55 5
 6 NULL NULL NULL NULL
 
+statement error 1115
+REFRESH VIRTUAL COLUMN FOR t1;
+
 statement ok
 drop table if exists t2
 
@@ -237,6 +240,9 @@ SELECT r.id, r.val['a'], r.val['b'], r.nval:a, r.nval:b FROM ( SELECT r.id, r.va
 4 44 4 44 4
 5 55 5 55 5
 6 NULL NULL NULL NULL
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t2;
 
 statement ok
 create or replace table tweets (id int, data json);
@@ -425,6 +431,61 @@ select id, data['id'], data['create'], data['text'], data['user']['id'], data['r
 11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
 12 12 "3/19" "vv" 16 10 {"lat":4.0} 4.0 NULL NULL
 13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
+
+query I
+SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
+----
+6
+
+statement ok
+set enable_refresh_virtual_column_after_write = 0;
+
+statement ok
+INSERT INTO tweets FROM (SELECT * FROM tweets);
+
+query I
+SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
+----
+6
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR tweets;
+
+query I
+SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
+----
+12
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/19" "vv" 16 10 {"lat":4.0} 4.0 NULL NULL
+12 12 "3/19" "vv" 16 10 {"lat":4.0} 4.0 NULL NULL
+13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
+13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
+
+statement ok
+set enable_refresh_virtual_column_after_write = 1;
 
 statement ok
 CREATE OR REPLACE TABLE STUDENT_GRADES (
