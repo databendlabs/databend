@@ -214,7 +214,7 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                 NullableType<Float64Type>,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
-        DataType::Decimal(s) if s.is_128() => {
+        DataType::Decimal(s) if s.can_carried_by_128() => {
             let func = AggregateUnaryFunction::<
                 DecimalNumberAggregateStddevState<TYPE>,
                 Decimal128Type,

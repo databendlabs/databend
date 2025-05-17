@@ -298,7 +298,7 @@ fn decimal_rounds(
 
     let zero_or_positive = target_scale >= 0;
 
-    if from_decimal_type.is_128() {
+    if from_decimal_type.can_carried_by_128() {
         let value = arg.try_downcast::<Decimal128Type>().unwrap();
 
         let result = match (zero_or_positive, mode) {

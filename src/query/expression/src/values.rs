@@ -425,7 +425,7 @@ impl Scalar {
                 NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0.0)),
             }),
             DataType::Decimal(size) => {
-                let scalar = if size.is_128() {
+                let scalar = if size.can_carried_by_128() {
                     DecimalDataType::Decimal128(*size).default_scalar()
                 } else {
                     DecimalDataType::Decimal256(*size).default_scalar()
@@ -1407,7 +1407,7 @@ impl Column {
                 })
             }
             DataType::Decimal(size) => {
-                if size.is_128() {
+                if size.can_carried_by_128() {
                     let values = (0..len)
                         .map(|_| i128::from(rng.gen::<i16>()))
                         .collect::<Vec<i128>>();
@@ -1914,7 +1914,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Number(NumberColumnBuilder::with_capacity(num_ty, capacity))
             }
             DataType::Decimal(size) => {
-                let decimal_type = if size.is_128() {
+                let decimal_type = if size.can_carried_by_128() {
                     DecimalDataType::Decimal128(*size)
                 } else {
                     DecimalDataType::Decimal256(*size)
@@ -2004,7 +2004,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Number(NumberColumnBuilder::repeat_default(num_ty, len))
             }
             DataType::Decimal(size) => {
-                let decimal_type = if size.is_128() {
+                let decimal_type = if size.can_carried_by_128() {
                     DecimalDataType::Decimal128(*size)
                 } else {
                     DecimalDataType::Decimal256(*size)

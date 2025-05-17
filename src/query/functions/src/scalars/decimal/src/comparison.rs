@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ord;
 use std::cmp::Ordering;
 use std::ops::*;
 use std::sync::Arc;
@@ -32,7 +31,6 @@ use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
 
 use super::convert_to_decimal_domain;
-use crate::cast::decimal_to_decimal;
 
 #[inline]
 fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u32, u32) {
@@ -216,8 +214,7 @@ fn op_decimal<Op: CmpOp>(
     args_type: &[DataType],
     ctx: &mut EvalContext,
 ) -> Value<AnyType> {
-    use DecimalDataType::Decimal128;
-    use DecimalDataType::Decimal256;
+    use DecimalDataType::*;
 
     let (size_a, size_b) = (
         args_type[0].as_decimal().unwrap(),
@@ -227,59 +224,48 @@ fn op_decimal<Op: CmpOp>(
 
     let (a_type, _) = DecimalDataType::from_value(a).unwrap();
     let (b_type, _) = DecimalDataType::from_value(b).unwrap();
+
     match (a_type, b_type) {
         (Decimal128(_), Decimal128(_)) => {
-            let f = |a: i128, b: i128, _: &mut EvalContext| -> bool {
-                Op::is((a * 10_i128.pow(m_a)).cmp(&(b * 10_i128.pow(m_b))))
-            };
-            compare_decimal(a, b, f, ctx)
+            let a = a.try_downcast::<Decimal128Type>().unwrap();
+            let b = b.try_downcast::<Decimal128Type>().unwrap();
+            let (f_a, f_b) = (10_i128.pow(m_a), 10_i128.pow(m_b));
+            compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
         }
         (Decimal256(_), Decimal256(_)) => {
-            let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
-                Op::is((a * i256::from(10).pow(m_a)).cmp(&(b * i256::from(10).pow(m_b))))
-            };
-            compare_decimal(a, b, f, ctx)
+            let a = a.try_downcast::<Decimal256Type>().unwrap();
+            let b = b.try_downcast::<Decimal256Type>().unwrap();
+            let (f_a, f_b) = (i256::from(10).pow(m_a), i256::from(10).pow(m_b));
+            compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
         }
         (Decimal128(_), Decimal256(_)) => {
-            let dest_type = DecimalDataType::Decimal256(DecimalSize::new_unchecked(
-                MAX_DECIMAL256_PRECISION,
-                size_a.scale(),
-            ));
-
-            let left = decimal_to_decimal(a, ctx, DecimalDataType::Decimal128(*size_a), dest_type);
-            let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
-                Op::is((a * i256::from(10).pow(m_a)).cmp(&(b * i256::from(10).pow(m_b))))
-            };
-            compare_decimal(&left, b, f, ctx)
+            let a = a.try_downcast::<Decimal128As256Type>().unwrap();
+            let b = b.try_downcast::<Decimal256Type>().unwrap();
+            let (f_a, f_b) = (i256::from(10).pow(m_a), i256::from(10).pow(m_b));
+            compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
         }
         (Decimal256(_), Decimal128(_)) => {
-            let dest_type = DecimalDataType::Decimal256(DecimalSize::new_unchecked(
-                MAX_DECIMAL256_PRECISION,
-                size_b.scale(),
-            ));
-
-            let right = decimal_to_decimal(b, ctx, DecimalDataType::Decimal128(*size_b), dest_type);
-            let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
-                Op::is((a * i256::from(10).pow(m_a)).cmp(&(b * i256::from(10).pow(m_b))))
-            };
-            compare_decimal(a, &right, f, ctx)
+            let a = a.try_downcast::<Decimal256Type>().unwrap();
+            let b = b.try_downcast::<Decimal128As256Type>().unwrap();
+            let (f_a, f_b) = (i256::from(10).pow(m_a), i256::from(10).pow(m_b));
+            compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
         }
     }
 }
 
-fn compare_decimal<T, F>(
-    a: &Value<AnyType>,
-    b: &Value<AnyType>,
+fn compare_decimal<A, B, F, T>(
+    a: Value<A>,
+    b: Value<B>,
     f: F,
     ctx: &mut EvalContext,
 ) -> Value<AnyType>
 where
     T: Decimal,
+    A: for<'a> AccessType<ScalarRef<'a> = T>,
+    B: for<'a> AccessType<ScalarRef<'a> = T>,
     F: Fn(T, T, &mut EvalContext) -> bool + Copy + Send + Sync,
 {
-    let a = a.try_downcast().unwrap();
-    let b = b.try_downcast().unwrap();
-    let value = vectorize_cmp_2_arg::<DecimalType<T>, DecimalType<T>>(f)(a, b, ctx);
+    let value = vectorize_cmp_2_arg::<A, B>(f)(a, b, ctx);
     value.upcast()
 }
 
@@ -287,6 +273,40 @@ trait CmpOp {
     const NAME: &str;
     fn is(o: Ordering) -> bool;
     fn domain_op<T: SimpleDomainCmp>(a: &T, b: &T) -> FunctionDomain<BooleanType>;
+    fn compare<D>(a: D, b: D, f_a: D, f_b: D) -> bool
+    where D: Decimal + std::ops::Mul<Output = D> {
+        if a.signum() != b.signum() {
+            return Self::is(a.cmp(&b));
+        }
+
+        let a = if f_a == D::one() {
+            a
+        } else {
+            if let Some(a) = a.checked_mul(f_a) {
+                a
+            } else {
+                return if a.signum() > D::zero() {
+                    Self::is(Ordering::Greater)
+                } else {
+                    Self::is(Ordering::Less)
+                };
+            }
+        };
+        let b = if f_b == D::one() {
+            b
+        } else {
+            if let Some(b) = b.checked_mul(f_b) {
+                b
+            } else {
+                return if b.signum() > D::zero() {
+                    Self::is(Ordering::Less)
+                } else {
+                    Self::is(Ordering::Greater)
+                };
+            }
+        };
+        Self::is(a.cmp(&b))
+    }
 }
 
 macro_rules! define_cmp_op {

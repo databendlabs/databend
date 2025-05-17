@@ -320,7 +320,7 @@ pub fn convert_to_decimal(
 ) -> Value<AnyType> {
     if let DataType::Decimal(size) = from_type {
         // todo
-        let from_type = if size.is_128() {
+        let from_type = if size.can_carried_by_128() {
             DecimalDataType::Decimal128(*size)
         } else {
             DecimalDataType::Decimal256(*size)
@@ -809,7 +809,7 @@ where
 {
     let from_type = from_type.as_decimal().unwrap();
 
-    let result = if from_type.is_128() {
+    let result = if from_type.can_carried_by_128() {
         let value = arg.try_downcast().unwrap();
         let scale = from_type.scale() as i32;
         vectorize_1_arg::<DecimalType<i128>, NumberType<T>>(|x, _ctx: &mut EvalContext| {
@@ -833,7 +833,7 @@ fn decimal_to_int<T: Number>(
 ) -> Value<AnyType> {
     let from_type = from_type.as_decimal().unwrap();
 
-    let result = if from_type.is_128() {
+    let result = if from_type.can_carried_by_128() {
         let value = arg.try_downcast().unwrap();
         vectorize_with_builder_1_arg::<DecimalType<i128>, NumberType<T>>(
             |x, builder: &mut Vec<T>, ctx: &mut EvalContext| match x
@@ -865,8 +865,7 @@ fn decimal_to_int<T: Number>(
 }
 
 pub fn strict_decimal_data_type(mut data: DataBlock) -> Result<DataBlock, String> {
-    use DecimalDataType::Decimal128;
-    use DecimalDataType::Decimal256;
+    use DecimalDataType::*;
     let mut ctx = EvalContext {
         generics: &[],
         num_rows: data.num_rows(),
@@ -885,7 +884,7 @@ pub fn strict_decimal_data_type(mut data: DataBlock) -> Result<DataBlock, String
 
         match from_type {
             Decimal128(size) => {
-                if size.is_128() {
+                if size.can_carried_by_128() {
                     continue;
                 }
                 if nullable {
@@ -903,7 +902,7 @@ pub fn strict_decimal_data_type(mut data: DataBlock) -> Result<DataBlock, String
                 }
             }
             Decimal256(size) => {
-                if !size.is_128() {
+                if !size.can_carried_by_128() {
                     continue;
                 }
                 if nullable {

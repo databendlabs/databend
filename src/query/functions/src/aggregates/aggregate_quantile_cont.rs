@@ -346,8 +346,8 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
             }
         }
 
-        DataType::Decimal(decimal) if decimal.is_128() => {
-            let data_type = DataType::Decimal(*decimal);
+        DataType::Decimal(size) if size.can_carried_by_128() => {
+            let data_type = DataType::Decimal(*size);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<
                     DecimalQuantileContState<DecimalType<i128>>,

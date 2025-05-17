@@ -240,7 +240,7 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                     min: DateType::try_downcast_scalar(&min.as_ref()).unwrap(),
                     max: DateType::try_downcast_scalar(&max.as_ref()).unwrap(),
                 }),
-                DataType::Decimal(dec) => match dec.is_128() {
+                DataType::Decimal(dec) => match dec.can_carried_by_128() {
                     true => Domain::Decimal(DecimalDomain::Decimal128(
                         SimpleDomain {
                             min: Decimal128Type::try_downcast_scalar(&min.as_ref()).unwrap(),

@@ -37,7 +37,7 @@ pub fn register_decimal_to_uuid(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        if !size.is_128() {
+        if !size.can_carried_by_128() {
             return None;
         }
 

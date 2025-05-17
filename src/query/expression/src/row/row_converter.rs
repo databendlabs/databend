@@ -106,8 +106,8 @@ impl RowConverter {
                         lengths.iter_mut().for_each(|x| *x += NUM_TYPE::ENCODED_LEN)
                     }
                 }),
-                DataType::Decimal(t) => {
-                    if t.is_128() {
+                DataType::Decimal(size) => {
+                    if size.can_carried_by_128() {
                         lengths.iter_mut().for_each(|x| *x += i128::ENCODED_LEN)
                     } else {
                         lengths.iter_mut().for_each(|x| *x += i256::ENCODED_LEN)
@@ -246,7 +246,7 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
         }
         Column::Decimal(col) => match col {
             DecimalColumn::Decimal128(buffer, size) => {
-                if size.is_128() {
+                if size.can_carried_by_128() {
                     fixed::encode(out, buffer, validity, asc, nulls_first)
                 } else {
                     let iter = Decimal128As256Type::iter_column(&buffer);
@@ -254,7 +254,7 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
                 }
             }
             DecimalColumn::Decimal256(buffer, size) => {
-                if size.is_128() {
+                if size.can_carried_by_128() {
                     let iter = Decimal256As128Type::iter_column(&buffer);
                     fixed::encode(out, iter, validity, asc, nulls_first)
                 } else {

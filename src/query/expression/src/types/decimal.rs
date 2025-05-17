@@ -307,7 +307,7 @@ impl DecimalSize {
         self.precision - self.scale
     }
 
-    pub fn is_128(&self) -> bool {
+    pub fn can_carried_by_128(&self) -> bool {
         self.precision <= MAX_DECIMAL128_PRECISION
     }
 }
@@ -342,6 +342,8 @@ pub trait Decimal:
 
     fn to_u64_array(self) -> Self::U64Array;
     fn from_u64_array(v: Self::U64Array) -> Self;
+
+    fn signum(self) -> Self;
 
     fn checked_add(self, rhs: Self) -> Option<Self>;
     fn checked_sub(self, rhs: Self) -> Option<Self>;
@@ -439,6 +441,10 @@ impl Decimal for i128 {
 
     fn mem_size() -> usize {
         16
+    }
+
+    fn signum(self) -> Self {
+        self.signum()
     }
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
@@ -702,6 +708,10 @@ impl Decimal for i256 {
 
     fn mem_size() -> usize {
         32
+    }
+
+    fn signum(self) -> Self {
+        Self(self.0.signum())
     }
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
@@ -969,7 +979,7 @@ pub enum DecimalDataType {
 impl DecimalDataType {
     pub fn from_size(size: DecimalSize) -> Result<DecimalDataType> {
         size.validate()?;
-        if size.is_128() {
+        if size.can_carried_by_128() {
             Ok(DecimalDataType::Decimal128(size))
         } else {
             Ok(DecimalDataType::Decimal256(size))

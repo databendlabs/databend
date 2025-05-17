@@ -270,7 +270,7 @@ pub fn try_create_aggregate_range_bound_function(
                 }
             })
         }
-        DataType::Decimal(s) if s.is_128() => {
+        DataType::Decimal(s) if s.can_carried_by_128() => {
             let func = AggregateUnaryFunction::<
                 RangeBoundState<DecimalType<i128>>,
                 DecimalType<i128>,

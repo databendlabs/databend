@@ -239,7 +239,7 @@ impl Payload {
                     self.flush_type_column::<NumberType<NUM_TYPE>>(col_offset, state),
             }),
             DataType::Decimal(size) => {
-                if size.is_128() {
+                if size.can_carried_by_128() {
                     self.flush_decimal_column::<i128>(col_offset, state, size)
                 } else {
                     self.flush_decimal_column::<i256>(col_offset, state, size)

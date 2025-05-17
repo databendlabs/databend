@@ -190,7 +190,7 @@ where
 {
     let (decimal_type, _) = DecimalDataType::from_value(&arg).unwrap();
     let size = decimal_type.size();
-    if size.is_128() {
+    if size.can_carried_by_128() {
         match decimal_type {
             DecimalDataType::Decimal128(_) => {
                 let arg: Value<Decimal128Type> = arg.try_downcast().unwrap();
@@ -250,7 +250,7 @@ where
     let (decimal_type, _) = DecimalDataType::from_value(&arg).unwrap();
     let size = decimal_type.size();
     let scale = size.scale();
-    if size.is_128() {
+    if size.can_carried_by_128() {
         match decimal_type {
             DecimalDataType::Decimal128(_) => {
                 let arg: Value<Decimal128Type> = arg.try_downcast().unwrap();

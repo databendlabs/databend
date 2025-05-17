@@ -32,8 +32,8 @@ use databend_common_expression::types::number::F64;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal;
+use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberDataType;
@@ -342,7 +342,7 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
                     }
                     _ => unreachable!(),
                 }),
-                eval: Box::new(move |args, ctx| unary_minus_decimal(args, arg_type.clone(), ctx)),
+                eval: Box::new(unary_minus_decimal),
             },
         };
 
@@ -354,21 +354,20 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
     });
 }
 
-fn unary_minus_decimal(
-    args: &[Value<AnyType>],
-    arg_type: DataType,
-    ctx: &mut EvalContext,
-) -> Value<AnyType> {
+fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let arg = &args[0];
-    let size = arg_type.as_decimal().unwrap();
-    if size.is_128() {
-        type T = DecimalType<i128>;
-        let arg = arg.try_downcast().unwrap();
-        vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(*size)
-    } else {
-        type Type = DecimalType<i256>;
-        let arg = arg.try_downcast().unwrap();
-        vectorize_1_arg::<Type, Type>(|t, _| -t)(arg, ctx).upcast_decimal(*size)
+    let (decimal, _) = DecimalDataType::from_value(arg).unwrap();
+    match decimal {
+        DecimalDataType::Decimal128(size) => {
+            let arg = arg.try_downcast().unwrap();
+            type T = DecimalType<i128>;
+            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
+        }
+        DecimalDataType::Decimal256(size) => {
+            let arg = arg.try_downcast().unwrap();
+            type T = DecimalType<i256>;
+            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
+        }
     }
 }
 

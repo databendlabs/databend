@@ -355,7 +355,7 @@ pub fn try_create_aggregate_sum_function(
                 NumberType<TSum>,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
-        DataType::Decimal(s) if s.is_128() => {
+        DataType::Decimal(s) if s.can_carried_by_128() => {
             let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
 
             // DecimalWidth<int64_t> = 18

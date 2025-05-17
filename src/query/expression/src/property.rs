@@ -196,7 +196,7 @@ impl Domain {
                 Domain::Number(NumberDomain::Float64(NumberType::<F64>::full_domain()))
             }
             DataType::Decimal(size) => {
-                if size.is_128() {
+                if size.can_carried_by_128() {
                     Domain::Decimal(DecimalDomain::Decimal128(
                         Decimal128Type::full_domain(),
                         *size,

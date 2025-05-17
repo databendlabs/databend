@@ -121,7 +121,7 @@ where T: Clone
             }
             [(_, DataType::Decimal(size))] => {
                 let buffer: Buffer<T> = keys.into();
-                if size.is_128() {
+                if size.can_carried_by_128() {
                     let col: Buffer<i128> = unsafe { std::mem::transmute(buffer) };
                     return Ok(vec![i128::upcast_column(col, *size)]);
                 } else {

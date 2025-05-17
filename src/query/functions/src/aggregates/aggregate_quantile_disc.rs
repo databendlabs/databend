@@ -200,8 +200,8 @@ pub fn try_create_aggregate_quantile_disc_function(
                 }
             })
         }
-        DataType::Decimal(decimal) if decimal.is_128() => {
-            let data_type = DataType::Decimal(decimal);
+        DataType::Decimal(size) if size.can_carried_by_128() => {
+            let data_type = DataType::Decimal(size);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<
                     QuantileState<DecimalType<i128>>,
@@ -229,8 +229,8 @@ pub fn try_create_aggregate_quantile_disc_function(
                 Ok(Arc::new(func))
             }
         }
-        DataType::Decimal(decimal) => {
-            let data_type = DataType::Decimal(decimal);
+        DataType::Decimal(size) => {
+            let data_type = DataType::Decimal(size);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<
                     QuantileState<DecimalType<i256>>,

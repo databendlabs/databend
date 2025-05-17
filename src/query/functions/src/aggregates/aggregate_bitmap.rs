@@ -585,7 +585,7 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
                 }
             })
         }
-        DataType::Decimal(decimal) if decimal.is_128() => {
+        DataType::Decimal(decimal) if decimal.can_carried_by_128() => {
             AggregateBitmapIntersectCountFunction::<DecimalType<i128>>::try_create(
                 display_name,
                 extract_params::<DecimalType<i128>>(display_name, filter_column_type, params)?,

@@ -110,7 +110,7 @@ impl Selector<'_> {
                         )
                     }
                     (DecimalDataType::Decimal128(size), DecimalDataType::Decimal256(_)) => {
-                        if size.is_128() {
+                        if size.can_carried_by_128() {
                             self.select_type_values_cmp_lr::<Decimal128Type, Decimal256As128Type>(
                                 &op, left, right, validity, buffers, has_false,
                             )
@@ -121,7 +121,7 @@ impl Selector<'_> {
                         }
                     }
                     (DecimalDataType::Decimal256(size), DecimalDataType::Decimal128(_)) => {
-                        if size.is_128() {
+                        if size.can_carried_by_128() {
                             self.select_type_values_cmp_lr::<Decimal256As128Type, Decimal128Type>(
                                 &op, left, right, validity, buffers, has_false,
                             )

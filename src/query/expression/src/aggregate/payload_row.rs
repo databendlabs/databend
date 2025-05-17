@@ -48,7 +48,7 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         DataType::Boolean => 1,
         DataType::Number(n) => n.bit_width() as usize / 8,
         DataType::Decimal(n) => {
-            if n.is_128() {
+            if n.can_carried_by_128() {
                 16
             } else {
                 32
@@ -91,7 +91,7 @@ pub unsafe fn serialize_column_to_rowformat(
         }),
         Column::Decimal(v) => match v {
             DecimalColumn::Decimal128(buffer, size) => {
-                if size.is_128() {
+                if size.can_carried_by_128() {
                     for index in select_vector.iter().take(rows).copied() {
                         store(&buffer[index], address[index].add(offset) as *mut u8);
                     }
@@ -103,7 +103,7 @@ pub unsafe fn serialize_column_to_rowformat(
                 }
             }
             DecimalColumn::Decimal256(buffer, size) => {
-                if size.is_128() {
+                if size.can_carried_by_128() {
                     for index in select_vector.iter().take(rows).copied() {
                         let val = Decimal256As128Type::index_column_unchecked(buffer, index);
                         store(&val, address[index].add(offset) as *mut u8);
