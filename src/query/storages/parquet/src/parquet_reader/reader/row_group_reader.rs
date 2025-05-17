@@ -42,6 +42,7 @@ pub struct RowGroupReader {
     pub(super) policy_builders: PolicyBuilders,
 
     pub(super) schema_desc: SchemaDescPtr,
+    pub(super) transformer: Option<RecordBatchTransformer>,
     // Options
     pub(super) batch_size: usize,
 }
@@ -62,7 +63,6 @@ impl RowGroupReader {
         read_settings: &ReadSettings,
         part: &ParquetRowGroupPart,
         topk_sorter: &mut Option<TopKSorter>,
-        transformer: RecordBatchTransformer,
     ) -> Result<Option<ReadPolicyImpl>> {
         if let Some((sorter, min_max)) = topk_sorter.as_ref().zip(part.sort_min_max.as_ref()) {
             if sorter.never_match(min_max) {
@@ -105,7 +105,7 @@ impl RowGroupReader {
                 row_group,
                 selection,
                 topk_sorter,
-                Some(transformer),
+                self.transformer.clone(),
                 self.batch_size,
             )
             .await

@@ -48,6 +48,7 @@ use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::utils::transform_record_batch;
 use crate::parquet_reader::utils::transform_record_batch_by_field_paths;
 use crate::parquet_reader::utils::FieldPaths;
+use crate::transformer::RecordBatchTransformer;
 use crate::ParquetPruner;
 
 /// The reader to read a whole parquet file.
@@ -70,6 +71,8 @@ pub struct ParquetWholeFileReader {
     pub(super) field_paths: Arc<Option<FieldPaths>>,
 
     pub(super) pruner: Option<ParquetPruner>,
+
+    pub(super) transformer: Option<RecordBatchTransformer>,
 
     // Options
     pub(super) need_page_index: bool,
@@ -226,12 +229,16 @@ impl ParquetWholeFileReader {
             }
         }
         let reader = builder.build()?;
+        let mut transformer = self.transformer.clone();
         // Write `if` outside iteration to reduce branches.
         if let Some(field_paths) = self.field_paths.as_ref() {
             reader
                 .into_iter()
                 .map(|batch| {
-                    let batch = batch?;
+                    let mut batch = batch?;
+                    if let Some(transformer) = &mut transformer {
+                        batch = transformer.process_record_batch(batch)?
+                    }
                     transform_record_batch_by_field_paths(&batch, field_paths)
                 })
                 .collect()
@@ -239,7 +246,10 @@ impl ParquetWholeFileReader {
             reader
                 .into_iter()
                 .map(|batch| {
-                    let batch = batch?;
+                    let mut batch = batch?;
+                    if let Some(transformer) = &mut transformer {
+                        batch = transformer.process_record_batch(batch)?
+                    }
                     Ok(
                         DataBlock::from_record_batch(&self.output_schema.as_ref().into(), &batch)?
                             .0,
