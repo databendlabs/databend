@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
-use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal;
 use databend_common_expression::types::Decimal128As256Type;
@@ -27,6 +26,7 @@ use databend_common_expression::types::Decimal256As128Type;
 use databend_common_expression::types::Decimal256Type;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ReturnType;
@@ -82,9 +82,9 @@ fn decimal_hash_factory_1_arg<H: HashFunction>(args_type: &[DataType]) -> Option
             name: H::name().to_string(),
             args_type: [DataType::Decimal(size)].into(),
             return_type: if H::IS_HASH_32 {
-                UInt32Type::data_type()
+                DataType::Number(u32::data_type())
             } else {
-                UInt64Type::data_type()
+                DataType::Number(u64::data_type())
             },
         },
         eval: FunctionEval::Scalar {
@@ -132,7 +132,7 @@ fn decimal_hash_factory_2_arg<H: HashFunctionWithSeed>(
         signature: FunctionSignature {
             name: H::name().to_string(),
             args_type: [DataType::Decimal(size), DataType::Number(seed_type)].into(),
-            return_type: UInt64Type::data_type(),
+            return_type: DataType::Number(u64::data_type()),
         },
         eval: FunctionEval::Scalar {
             calc_domain: Box::new(|_, _| FunctionDomain::Full),

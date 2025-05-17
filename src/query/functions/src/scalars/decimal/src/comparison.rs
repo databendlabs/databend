@@ -281,29 +281,25 @@ trait CmpOp {
 
         let a = if f_a == D::one() {
             a
+        } else if let Some(a) = a.checked_mul(f_a) {
+            a
         } else {
-            if let Some(a) = a.checked_mul(f_a) {
-                a
+            return if a.signum() > D::zero() {
+                Self::is(Ordering::Greater)
             } else {
-                return if a.signum() > D::zero() {
-                    Self::is(Ordering::Greater)
-                } else {
-                    Self::is(Ordering::Less)
-                };
-            }
+                Self::is(Ordering::Less)
+            };
         };
         let b = if f_b == D::one() {
             b
+        } else if let Some(b) = b.checked_mul(f_b) {
+            b
         } else {
-            if let Some(b) = b.checked_mul(f_b) {
-                b
+            return if b.signum() > D::zero() {
+                Self::is(Ordering::Less)
             } else {
-                return if b.signum() > D::zero() {
-                    Self::is(Ordering::Less)
-                } else {
-                    Self::is(Ordering::Greater)
-                };
-            }
+                Self::is(Ordering::Greater)
+            };
         };
         Self::is(a.cmp(&b))
     }

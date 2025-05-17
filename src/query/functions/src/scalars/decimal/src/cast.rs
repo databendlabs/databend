@@ -318,13 +318,8 @@ pub fn convert_to_decimal(
     from_type: &DataType,
     dest_type: DecimalDataType,
 ) -> Value<AnyType> {
-    if let DataType::Decimal(size) = from_type {
-        // todo
-        let from_type = if size.can_carried_by_128() {
-            DecimalDataType::Decimal128(*size)
-        } else {
-            DecimalDataType::Decimal256(*size)
-        };
+    if from_type.is_decimal() {
+        let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
         return decimal_to_decimal(arg, ctx, from_type, dest_type);
     }
 
@@ -495,7 +490,7 @@ fn integer_to_decimal<T, S>(
 ) -> Value<DecimalType<T>>
 where
     T: Decimal + Mul<Output = T>,
-    S: ArgType,
+    S: AccessType,
     for<'a> S::ScalarRef<'a>: Number + AsPrimitive<i128>,
 {
     let multiplier = T::e(size.scale() as u32);
@@ -546,7 +541,7 @@ where
     }
 }
 
-fn float_to_decimal<T: Decimal, S: ArgType>(
+fn float_to_decimal<T: Decimal, S: AccessType>(
     from: Value<S>,
     ctx: &mut EvalContext,
     size: DecimalSize,
