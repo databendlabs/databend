@@ -41,6 +41,7 @@ use log::debug;
 use log::info;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
+use raft_log::DumpApi;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
@@ -63,6 +64,80 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
 async fn test_impl_raft_storage() -> anyhow::Result<()> {
     databend_common_meta_sled_store::openraft::testing::log::Suite::test_all(MetaStoreBuilder {})
         .await?;
+
+    Ok(())
+}
+
+/// Ensure purged logs to be removed from the cache
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
+async fn test_meta_store_purge_cache() -> anyhow::Result<()> {
+    // - Create a meta store
+    // - Update meta store
+    // - Close and reopen it
+    // - Test state is restored: hard state, log, state machine
+
+    let id = 3;
+    let mut tc = MetaSrvTestContext::new(id);
+    tc.config.raft_config.log_cache_max_items = 100;
+    // Build with small chunk, because all entries in the last open chunk will be cached.
+    tc.config.raft_config.log_wal_chunk_max_records = 5;
+
+    {
+        let mut sto = RaftStore::open(&tc.config.raft_config).await?;
+        assert_eq!(id, sto.id);
+        assert!(!sto.is_opened);
+        assert_eq!(None, sto.read_vote().await?);
+
+        info!("--- update metasrv");
+
+        sto.save_vote(&Vote::new(10, 5)).await?;
+
+        sto.blocking_append([
+            Entry::new_blank(log_id(1, 2, 1)),
+            Entry::new_blank(log_id(1, 2, 2)),
+            Entry::new_blank(log_id(1, 2, 3)),
+            Entry::new_blank(log_id(1, 2, 4)),
+            Entry::new_blank(log_id(1, 2, 5)),
+        ])
+        .await?;
+
+        let stat = sto.log.read().await.stat();
+        assert_eq!(stat.payload_cache_item_count, 5);
+
+        {
+            let r = sto.log.read().await;
+            let got = r.dump().write_to_string()?;
+            println!("dump: {}", got);
+            let want_dumped = r#"RaftLog:
+ChunkId(00_000_000_000_000_000_000)
+  R-00000: [000_000_000, 000_000_018) Size(18): State(RaftLogState { vote: None, last: None, committed: None, purged: None, user_data: None })
+  R-00001: [000_000_018, 000_000_046) Size(28): State(RaftLogState { vote: None, last: None, committed: None, purged: None, user_data: Some(LogStoreMeta { node_id: Some(3) }) })
+  R-00002: [000_000_046, 000_000_096) Size(50): SaveVote(Cw(Vote { leader_id: LeaderId { term: 10, node_id: 5 }, committed: false }))
+  R-00003: [000_000_096, 000_000_148) Size(52): Append(Cw(LogId { leader_id: LeaderId { term: 1, node_id: 2 }, index: 1 }), Cw(blank))
+  R-00004: [000_000_148, 000_000_200) Size(52): Append(Cw(LogId { leader_id: LeaderId { term: 1, node_id: 2 }, index: 2 }), Cw(blank))
+ChunkId(00_000_000_000_000_000_200)
+  R-00000: [000_000_000, 000_000_100) Size(100): State(RaftLogState { vote: Some(Cw(Vote { leader_id: LeaderId { term: 10, node_id: 5 }, committed: false })), last: Some(Cw(LogId { leader_id: LeaderId { term: 1, node_id: 2 }, index: 2 })), committed: None, purged: None, user_data: Some(LogStoreMeta { node_id: Some(3) }) })
+  R-00001: [000_000_100, 000_000_152) Size(52): Append(Cw(LogId { leader_id: LeaderId { term: 1, node_id: 2 }, index: 3 }), Cw(blank))
+  R-00002: [000_000_152, 000_000_204) Size(52): Append(Cw(LogId { leader_id: LeaderId { term: 1, node_id: 2 }, index: 4 }), Cw(blank))
+  R-00003: [000_000_204, 000_000_256) Size(52): Append(Cw(LogId { leader_id: LeaderId { term: 1, node_id: 2 }, index: 5 }), Cw(blank))
+"#;
+            assert_eq!(want_dumped, got);
+        }
+
+        // When purging up to index=4, all entries in the last open chunk will still be cached.
+        // All previous entries are purge, although the cache is not full.
+
+        sto.purge(log_id(1, 2, 4)).await?;
+
+        let r = sto.log.read().await;
+        let got = r.dump().write_to_string()?;
+        println!("dump: {}", got);
+
+        let stat = sto.log.read().await.stat();
+        println!("stat: {:#}", stat);
+        assert_eq!(stat.payload_cache_item_count, 3);
+    }
 
     Ok(())
 }
