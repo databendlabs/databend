@@ -50,4 +50,6 @@ pub trait CacheAccessor {
     }
 
     fn name(&self) -> &str;
+
+    fn clear(&self);
 }

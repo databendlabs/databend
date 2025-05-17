@@ -183,6 +183,10 @@ impl CacheAccessor for DiskCacheAccessor {
     fn len(&self) -> usize {
         self.lru_disk_cache.len()
     }
+
+    fn clear(&self) {
+        // For disk cache, clear nothing
+    }
 }
 
 struct CachePopulationWorker<T> {
