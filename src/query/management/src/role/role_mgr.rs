@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
 use databend_common_meta_api::txn_backoff::txn_backoff;
@@ -31,6 +32,8 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
+use databend_common_meta_cache::Cache;
+use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
@@ -47,6 +50,8 @@ use enumflags2::make_bitflags;
 use fastrace::func_name;
 use log::debug;
 use log::error;
+use log::info;
+use log::warn;
 
 use crate::role::role_api::RoleApi;
 use crate::serde::check_and_upgrade_to_pb;
@@ -61,6 +66,7 @@ static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     tenant: Tenant,
+    ownership_cache: Arc<Mutex<Cache>>,
     upgrade_to_pb: bool,
 }
 
@@ -69,12 +75,37 @@ impl RoleMgr {
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: &Tenant,
         upgrade_to_pb: bool,
+        ownership_cache: Arc<Mutex<Cache>>,
     ) -> Self {
         RoleMgr {
             kv_api,
             tenant: tenant.clone(),
+            ownership_cache,
             upgrade_to_pb,
         }
+    }
+
+    /// Create a [`Cache`] for the data [`RoleMgr`] manages.
+    pub async fn new_cache(client: Arc<ClientHandle>) -> Cache {
+        let prefix = TenantOwnershipObjectIdent::key_space_prefix();
+        let name = TenantOwnershipObjectIdent::type_name();
+
+        let mut cache = Cache::new(client, prefix, name).await;
+
+        // The meta-service may not support `WatchRequest::initial_flush` parameter,
+        // Peek the cache state to check if the cache is supported.
+        let peek_res = cache.try_get("dummy").await;
+
+        match peek_res {
+            Ok(_) => {
+                info!("Successfully created cache for ({})", prefix);
+            }
+            Err(err) => {
+                warn!("Failed to create cache for ({}) {:?}", prefix, err);
+            }
+        }
+
+        cache
     }
 
     #[async_backtrace::framed]
@@ -213,10 +244,23 @@ impl RoleApi for RoleMgr {
     #[fastrace::trace]
     async fn list_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
         let object_owner_prefix = self.ownership_object_prefix();
-        let values = self
-            .kv_api
-            .prefix_list_kv(object_owner_prefix.as_str())
-            .await?;
+
+        let cached = {
+            let mut cache = self.ownership_cache.lock().await;
+            let kvs = cache.try_list_dir(object_owner_prefix.as_str()).await;
+            if let Some(err) = kvs.as_ref().err() {
+                warn!("list ownerships from cache failed, err: {}", err);
+            }
+            kvs.ok()
+        };
+
+        let values = if let Some(kvs) = cached {
+            kvs
+        } else {
+            self.kv_api
+                .prefix_list_kv(object_owner_prefix.as_str())
+                .await?
+        };
 
         let mut r = vec![];
 
