@@ -279,6 +279,18 @@ statement error
 select * from (select number from numbers(5)) t2 full outer join (select a, 'A' as name from t) t1 on t1.a = t2.number and 11981933213501947393::DATE;
 
 statement ok
+create or replace table t1(a bool);
+
+statement ok
+insert into t1 values(true),(false),(true);
+
+query IB
+select * from t join t1 on t.a = t1.a
+----
+1 1
+1 1
+
+statement ok
 drop table if exists t;
 
 statement ok

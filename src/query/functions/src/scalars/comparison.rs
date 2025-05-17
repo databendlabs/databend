@@ -64,15 +64,15 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_string_cmp(registry);
     register_date_cmp(registry);
     register_timestamp_cmp(registry);
-    register_number_cmp(registry);
     register_boolean_cmp(registry);
+    register_number_cmp(registry);
     register_array_cmp(registry);
     register_tuple_cmp(registry);
     register_like(registry);
     register_interval_cmp(registry);
 }
 
-pub const ALL_COMP_FUNC_NAMES: &[&str] = &["eq", "noteq", "lt", "lte", "gt", "gte", "contains"];
+pub const ALL_COMP_FUNC_NAMES: &[&str] = &["eq", "noteq", "lt", "lte", "gt", "gte"];
 
 const ALL_TRUE_DOMAIN: BooleanDomain = BooleanDomain {
     has_true: true,
