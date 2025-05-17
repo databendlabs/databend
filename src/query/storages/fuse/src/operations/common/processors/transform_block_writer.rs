@@ -24,11 +24,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
+use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
@@ -37,6 +39,8 @@ use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::StreamBlockBuilder;
 use crate::io::StreamBlockProperties;
+use crate::operations::MutationLogEntry;
+use crate::operations::MutationLogs;
 use crate::FuseTable;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
@@ -54,6 +58,7 @@ pub struct TransformBlockWriter {
     state: State,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
+    kind: MutationKind,
 
     properties: Arc<StreamBlockProperties>,
 
@@ -66,7 +71,7 @@ pub struct TransformBlockWriter {
     // Only used in multi table insert
     table_id: Option<u64>,
 
-    max_block_size: usize,
+    max_block_rows: usize,
     input_data: VecDeque<DataBlock>,
     output_data: Option<DataBlock>,
 }
@@ -76,19 +81,23 @@ impl TransformBlockWriter {
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        kind: MutationKind,
         table: &FuseTable,
         table_meta_timestamps: TableMetaTimestamps,
         with_tid: bool,
+        max_block_bytes: Option<usize>,
     ) -> Result<ProcessorPtr> {
-        let max_block_size = std::cmp::min(
+        let max_block_rows = std::cmp::min(
             ctx.get_settings().get_max_block_size()? as usize,
             table.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT),
         );
-        let properties = StreamBlockProperties::try_create(ctx, table, table_meta_timestamps)?;
+        let properties =
+            StreamBlockProperties::try_create(ctx, table, table_meta_timestamps, max_block_bytes)?;
         Ok(ProcessorPtr::create(Box::new(TransformBlockWriter {
             state: State::Consume,
             input,
             output,
+            kind,
             properties,
             builder: None,
             dal: table.get_operator(),
@@ -98,7 +107,7 @@ impl TransformBlockWriter {
             input_data_size: 0,
             input_num_rows: 0,
             output_data: None,
-            max_block_size,
+            max_block_rows,
         })))
     }
 
@@ -111,16 +120,16 @@ impl TransformBlockWriter {
         Ok(self.builder.as_mut().unwrap())
     }
 
-    fn calc_max_block_size(&self, block: &DataBlock) -> usize {
+    fn calc_max_block_rows(&self, block: &DataBlock) -> usize {
         let min_bytes_per_block = self.properties.block_thresholds.min_bytes_per_block;
         let block_size = block.estimate_block_size();
         if block_size < min_bytes_per_block {
-            return self.max_block_size;
+            return self.max_block_rows;
         }
         let num_rows = block.num_rows();
         let average_row_size = block_size.div_ceil(num_rows);
         let max_rows = min_bytes_per_block.div_ceil(average_row_size);
-        self.max_block_size.min(max_rows)
+        self.max_block_rows.min(max_rows)
     }
 }
 
@@ -198,9 +207,13 @@ impl Processor for TransformBlockWriter {
                 block.check_valid()?;
                 self.input_data_size += block.estimate_block_size();
                 self.input_num_rows += block.num_rows();
-                let max_rows_per_block = self.calc_max_block_size(&block);
-                let blocks = block.split_by_rows_no_tail(max_rows_per_block);
-                self.input_data.extend(blocks);
+                if self.properties.max_block_bytes.is_some() {
+                    self.input_data.push_back(block);
+                } else {
+                    let max_rows_per_block = self.calc_max_block_rows(&block);
+                    let blocks = block.split_by_rows_no_tail(max_rows_per_block);
+                    self.input_data.extend(blocks);
+                }
             }
             State::Serialize => {
                 while let Some(b) = self.input_data.pop_front() {
@@ -273,7 +286,20 @@ impl Processor for TransformBlockWriter {
                     });
                 }
 
-                self.output_data = Some(DataBlock::empty_with_meta(Box::new(extended_block_meta)));
+                let output = if matches!(self.kind, MutationKind::Insert) {
+                    DataBlock::empty_with_meta(Box::new(extended_block_meta))
+                } else {
+                    if matches!(self.kind, MutationKind::Recluster) {
+                        metrics_inc_recluster_write_block_nums();
+                    }
+
+                    DataBlock::empty_with_meta(Box::new(MutationLogs {
+                        entries: vec![MutationLogEntry::AppendBlock {
+                            block_meta: Arc::new(extended_block_meta),
+                        }],
+                    }))
+                };
+                self.output_data = Some(output);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

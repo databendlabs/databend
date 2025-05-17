@@ -40,7 +40,6 @@ use databend_storages_common_table_meta::table::ClusterType;
 use crate::operations::TransformBlockWriter;
 use crate::operations::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
-use crate::FuseStorageFormat;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -50,17 +49,19 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        let enable_stream_block_write = ctx.get_settings().get_enable_block_stream_write()?
-            && matches!(self.storage_format, FuseStorageFormat::Parquet);
+        let enable_stream_block_write =
+            ctx.get_settings().get_enable_block_stream_write()? && self.storage_format_as_parquet();
         if enable_stream_block_write {
             pipeline.add_transform(|input, output| {
                 TransformBlockWriter::try_create(
                     ctx.clone(),
                     input,
                     output,
+                    MutationKind::Insert,
                     self,
                     table_meta_timestamps,
                     false,
+                    None,
                 )
             })?;
         } else {

@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod flight_scatter;
-mod flight_scatter_broadcast;
-mod flight_scatter_hash;
-mod flight_scatter_mod;
+mod compact_strategy;
+mod hilbert_partition_exchange;
+mod transform_hilbert_collect;
 
-pub use flight_scatter::FlightScatter;
-pub use flight_scatter_broadcast::BroadcastFlightScatter;
-pub use flight_scatter_hash::HashFlightScatter;
-pub use flight_scatter_mod::ModFlightScatter;
+pub use compact_strategy::CompactStrategy;
+pub use hilbert_partition_exchange::HilbertPartitionExchange;
+pub use transform_hilbert_collect::TransformHilbertCollect;
