@@ -74,7 +74,6 @@ pub enum AsyncStep {
 pub struct TransformHashJoinBuild {
     input_port: Arc<InputPort>,
     data_blocks: Vec<DataBlock>,
-    data_blocks_memory_size: usize,
 
     build_state: Arc<HashJoinBuildState>,
     hash_table_type: HashTableType,
@@ -127,7 +126,6 @@ impl TransformHashJoinBuild {
         Ok(Box::new(TransformHashJoinBuild {
             input_port,
             data_blocks: vec![],
-            data_blocks_memory_size: 0,
             build_state,
             hash_table_type: HashTableType::FirstRound,
             is_spill_happen_checked: false,
@@ -297,7 +295,6 @@ impl Processor for TransformHashJoinBuild {
                     .is_spill_happened
                     .store(true, Ordering::Release);
                 self.data_blocks.clear();
-                self.data_blocks_memory_size = 0;
             }
             Step::Async(AsyncStep::WaitProbe) => {
                 self.build_state.hash_join_state.wait_probe_notify().await?;
@@ -319,7 +316,6 @@ impl Processor for TransformHashJoinBuild {
 
 impl TransformHashJoinBuild {
     fn add_data_block(&mut self, data_block: DataBlock) {
-        self.data_blocks_memory_size += data_block.memory_size();
         self.data_blocks.push(data_block);
     }
 

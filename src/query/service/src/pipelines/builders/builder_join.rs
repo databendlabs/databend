@@ -107,6 +107,7 @@ impl PipelineBuilder {
             &hash_join_plan.build_projections,
             join_state.clone(),
             output_len,
+            hash_join_plan.broadcast_id,
         )?;
         build_state.add_runtime_filter_ready();
 
