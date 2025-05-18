@@ -50,8 +50,20 @@ pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 /// A function to build function depending on the const parameters and the type of arguments (before coercion).
 ///
 /// The first argument is the const parameters and the second argument is the types of arguments.
-pub trait FunctionFactory =
+pub trait FunctionFactoryClosure =
     Fn(&[Scalar], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
+
+pub enum FunctionFactory {
+    Closure(Box<dyn FunctionFactoryClosure>),
+}
+
+impl FunctionFactory {
+    fn create(&self, params: &[Scalar], args: &[DataType]) -> Option<Arc<Function>> {
+        match self {
+            FunctionFactory::Closure(closure) => closure(params, args),
+        }
+    }
+}
 
 pub struct Function {
     pub signature: FunctionSignature,
@@ -169,7 +181,7 @@ pub enum FunctionID {
 pub struct FunctionRegistry {
     pub funcs: HashMap<String, Vec<(Arc<Function>, usize)>>,
     #[allow(clippy::type_complexity)]
-    pub factories: HashMap<String, Vec<(Box<dyn FunctionFactory>, usize)>>,
+    pub factories: HashMap<String, Vec<(FunctionFactory, usize)>>,
 
     /// Aliases map from alias function name to original function name.
     pub aliases: HashMap<String, String>,
@@ -341,7 +353,7 @@ impl FunctionRegistry {
                     .iter()
                     .find(|(_, func_id)| func_id == id)
                     .map(|(func, _)| func)?;
-                factory(params, args_type)
+                factory.create(params, args_type)
             }
         }
     }
@@ -379,7 +391,7 @@ impl FunctionRegistry {
                 .cloned()
                 .collect::<Vec<_>>();
             candidates.extend(factories.iter().filter_map(|(factory, id)| {
-                factory(params, &args_type).map(|func| {
+                factory.create(params, &args_type).map(|func| {
                     (
                         FunctionID::Factory {
                             name: name.to_string(),
@@ -429,12 +441,12 @@ impl FunctionRegistry {
             .push((Arc::new(func), id));
     }
 
-    pub fn register_function_factory(&mut self, name: &str, factory: impl FunctionFactory) {
+    pub fn register_function_factory(&mut self, name: &str, factory: FunctionFactory) {
         let id = self.next_function_id(name);
         self.factories
             .entry(name.to_string())
             .or_default()
-            .push((Box::new(factory), id));
+            .push((factory, id));
     }
 
     pub fn register_aliases(&mut self, fn_name: &str, aliases: &[&str]) {
@@ -500,7 +512,9 @@ impl FunctionRegistry {
                             .unwrap_or(&[])
                             .iter()
                             .filter(|(_, id)| id > former_id)
-                            .filter_map(|(factory, _)| factory(&[], &former.signature.args_type)),
+                            .filter_map(|(factory, _)| {
+                                factory.create(&[], &former.signature.args_type)
+                            }),
                     )
                 {
                     if former.signature.args_type.len() == latter.signature.args_type.len() {

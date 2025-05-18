@@ -57,6 +57,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_functions_scalar_decimal::register_decimal_to_float;
@@ -303,7 +304,7 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
 }
 
 pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("minus", |_params, args_type| {
+    registry.register_function_factory("minus", FunctionFactory::Closure(Box::new(|_params, args_type| {
         if args_type.len() != 1 {
             return None;
         }
@@ -351,7 +352,7 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
         } else {
             Some(Arc::new(function))
         }
-    });
+    })));
 }
 
 fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {

@@ -23,6 +23,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
@@ -93,9 +94,12 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         RoundMode::Floor,
     ] {
         let name = format!("{:?}", m).to_lowercase();
-        registry.register_function_factory(&name, move |params, args_type| {
-            Some(Arc::new(factory_rounds(params, args_type, m)?))
-        });
+        registry.register_function_factory(
+            &name,
+            FunctionFactory::Closure(Box::new(move |params, args_type| {
+                Some(Arc::new(factory_rounds(params, args_type, m)?))
+            })),
+        );
     }
 
     let factory_abs = |_params: &[Scalar], args_type: &[DataType]| {
@@ -126,9 +130,12 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         }
     };
 
-    registry.register_function_factory("abs", move |params, args_type| {
-        Some(Arc::new(factory_abs(params, args_type)?))
-    });
+    registry.register_function_factory(
+        "abs",
+        FunctionFactory::Closure(Box::new(move |params, args_type| {
+            Some(Arc::new(factory_abs(params, args_type)?))
+        })),
+    );
 }
 
 #[derive(Copy, Clone, Debug)]

@@ -25,6 +25,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
@@ -345,7 +346,7 @@ fn domain_mul<T: Decimal>(
 fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: ArithmeticOp) {
     let name = format!("{:?}", arithmetic_op).to_lowercase();
 
-    registry.register_function_factory(&name, move |_, args_type| {
+    let factory = FunctionFactory::Closure(Box::new(move |_, args_type| {
         if args_type.len() != 2 {
             return None;
         }
@@ -430,7 +431,9 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
         } else {
             Some(Arc::new(function))
         }
-    });
+    }));
+
+    registry.register_function_factory(&name, factory);
 }
 
 pub fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {

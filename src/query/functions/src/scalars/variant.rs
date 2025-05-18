@@ -59,6 +59,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
@@ -240,7 +241,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_function_factory("get_by_keypath", |_, args_type| {
+    let get_by_keypath = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 2 {
             return None;
         }
@@ -261,9 +262,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, false)),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("get_by_keypath", get_by_keypath);
 
-    registry.register_function_factory("get_by_keypath_string", |_, args_type| {
+    let get_by_keypath_string = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 2 {
             return None;
         }
@@ -284,7 +286,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, true)),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("get_by_keypath_string", get_by_keypath_string);
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "get",
@@ -501,7 +504,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_function_factory("json_path_match", |_, args_type| {
+    let json_path_match = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 2 {
             return None;
         }
@@ -522,9 +525,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(|args, ctx| path_predicate_fn(args, ctx, true)),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_path_match", json_path_match);
 
-    registry.register_function_factory("json_path_exists", |_, args_type| {
+    let json_path_exists = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 2 {
             return None;
         }
@@ -545,7 +549,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(|args, ctx| path_predicate_fn(args, ctx, false)),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_path_exists", json_path_exists);
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "get_path",
@@ -1070,7 +1075,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_function_factory("to_variant", |_, args_type| {
+    let to_variant = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 1 {
             return None;
         }
@@ -1126,7 +1131,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("to_variant", to_variant);
 
     registry.register_combine_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
         "try_to_variant",
@@ -1733,7 +1739,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_function_factory("delete_by_keypath", |_, args_type| {
+    let delete_by_keypath = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 2 {
             return None;
         }
@@ -1754,7 +1760,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(delete_by_keypath_fn),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("delete_by_keypath", delete_by_keypath);
 
     registry.register_passthrough_nullable_1_arg(
         "json_typeof",
@@ -1776,7 +1783,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_function_factory("json_object", |_, args_type| {
+    let json_object = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "json_object".to_string(),
@@ -1788,9 +1795,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(json_object_fn),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_object", json_object);
 
-    registry.register_function_factory("try_json_object", |_, args_type| {
+    let try_json_object = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let f = Function {
             signature: FunctionSignature {
                 name: "try_json_object".to_string(),
@@ -1803,9 +1811,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         };
         Some(Arc::new(f.error_to_null()))
-    });
+    }));
+    registry.register_function_factory("try_json_object", try_json_object);
 
-    registry.register_function_factory("json_object_keep_null", |_, args_type| {
+    let json_object_keep_null = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "json_object_keep_null".to_string(),
@@ -1817,9 +1826,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(json_object_keep_null_fn),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_object_keep_null", json_object_keep_null);
 
-    registry.register_function_factory("try_json_object_keep_null", |_, args_type| {
+    let try_json_object_keep_null = FunctionFactory::Closure(Box::new(|_, args_type| {
         let f = Function {
             signature: FunctionSignature {
                 name: "try_json_object_keep_null".to_string(),
@@ -1832,9 +1842,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         };
         Some(Arc::new(f.error_to_null()))
-    });
+    }));
+    registry.register_function_factory("try_json_object_keep_null", try_json_object_keep_null);
 
-    registry.register_function_factory("json_array", |_, args_type| {
+    let json_array = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "json_array".to_string(),
@@ -1846,7 +1857,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(json_array_fn),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_array", json_array);
 
     registry.register_passthrough_nullable_2_arg(
         "json_contains_in_left",
@@ -1962,7 +1974,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_function_factory("json_object_insert", |_, args_type| {
+    let json_object_insert = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 3 && args_type.len() != 4 {
             return None;
         }
@@ -1995,9 +2007,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(move |args, ctx| json_object_insert_fn(args, ctx, is_nullable)),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_object_insert", json_object_insert);
 
-    registry.register_function_factory("json_object_pick", |_, args_type| {
+    let json_object_pick = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() < 2 {
             return None;
         }
@@ -2028,9 +2041,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_object_pick", json_object_pick);
 
-    registry.register_function_factory("json_object_delete", |_, args_type| {
+    let json_object_delete = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() < 2 {
             return None;
         }
@@ -2061,7 +2075,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_object_delete", json_object_delete);
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
         "strip_null_value",

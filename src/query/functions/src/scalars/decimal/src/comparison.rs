@@ -25,6 +25,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::SimpleDomainCmp;
@@ -41,7 +42,7 @@ fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u32, u32) {
 }
 
 fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
-    registry.register_function_factory(Op::NAME, |_, args_type| {
+    let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 2 {
             return None;
         }
@@ -205,7 +206,8 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
         } else {
             Some(Arc::new(function))
         }
-    });
+    }));
+    registry.register_function_factory(Op::NAME, factory);
 }
 
 fn op_decimal<Op: CmpOp>(

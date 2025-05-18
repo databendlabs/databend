@@ -41,20 +41,27 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
 
 pub fn register_decimal_hash<H: HashFunction>(registry: &mut FunctionRegistry) {
-    registry.register_function_factory(H::name(), |_, args_type| {
-        decimal_hash_factory_1_arg::<H>(args_type)
-    });
+    registry.register_function_factory(
+        H::name(),
+        FunctionFactory::Closure(Box::new(|_, args_type| {
+            decimal_hash_factory_1_arg::<H>(args_type)
+        })),
+    );
 }
 
 pub fn register_decimal_hash_with_seed<H: HashFunctionWithSeed>(registry: &mut FunctionRegistry) {
-    registry.register_function_factory(H::name(), |_, args_type| {
-        decimal_hash_factory_2_arg::<H>(args_type)
-    });
+    registry.register_function_factory(
+        H::name(),
+        FunctionFactory::Closure(Box::new(|_, args_type| {
+            decimal_hash_factory_2_arg::<H>(args_type)
+        })),
+    );
 }
 
 pub trait HashFunction {

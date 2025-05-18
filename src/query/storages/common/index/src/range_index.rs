@@ -240,22 +240,26 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                     min: DateType::try_downcast_scalar(&min.as_ref()).unwrap(),
                     max: DateType::try_downcast_scalar(&max.as_ref()).unwrap(),
                 }),
-                DataType::Decimal(dec) => match dec.can_carried_by_128() {
-                    true => Domain::Decimal(DecimalDomain::Decimal128(
-                        SimpleDomain {
-                            min: Decimal128Type::try_downcast_scalar(&min.as_ref()).unwrap(),
-                            max: Decimal128Type::try_downcast_scalar(&max.as_ref()).unwrap(),
-                        },
-                        *dec,
-                    )),
-                    false => Domain::Decimal(DecimalDomain::Decimal256(
-                        SimpleDomain {
-                            min: Decimal256Type::try_downcast_scalar(&min.as_ref()).unwrap(),
-                            max: Decimal256Type::try_downcast_scalar(&max.as_ref()).unwrap(),
-                        },
-                        *dec,
-                    )),
-                },
+                DataType::Decimal(size) => {
+                    if min.as_decimal().unwrap().is_decimal128() {
+                        Domain::Decimal(DecimalDomain::Decimal128(
+                            SimpleDomain {
+                                min: Decimal128Type::try_downcast_scalar(&min.as_ref()).unwrap(),
+                                max: Decimal128Type::try_downcast_scalar(&max.as_ref()).unwrap(),
+                            },
+                            *size,
+                        ))
+                    } else {
+                        Domain::Decimal(DecimalDomain::Decimal256(
+                            SimpleDomain {
+                                min: Decimal256Type::try_downcast_scalar(&min.as_ref()).unwrap(),
+                                max: Decimal256Type::try_downcast_scalar(&max.as_ref()).unwrap(),
+                            },
+                            *size,
+                        ))
+                    }
+                }
+
                 // Unsupported data type
                 _ => Domain::full(data_type),
             })

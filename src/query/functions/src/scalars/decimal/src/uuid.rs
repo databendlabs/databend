@@ -25,11 +25,12 @@ use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 
 pub fn register_decimal_to_uuid(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("to_uuid", |_, args_type| {
+    let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let (size, has_nullable) = match args_type {
             [DataType::Decimal(size)] => (*size, false),
             [DataType::Nullable(box DataType::Decimal(size))] => (*size, true),
@@ -86,5 +87,6 @@ pub fn register_decimal_to_uuid(registry: &mut FunctionRegistry) {
         } else {
             Some(Arc::new(function))
         }
-    });
+    }));
+    registry.register_function_factory("to_uuid", factory);
 }
