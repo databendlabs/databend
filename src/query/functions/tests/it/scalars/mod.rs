@@ -24,6 +24,7 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
@@ -259,9 +260,15 @@ fn list_all_builtin_functions() {
         .factories
         .iter()
         .flat_map(|(name, funcs)| {
-            funcs
-                .iter()
-                .map(|(_, id)| ((name.clone(), *id), format!("{} FACTORY", name.clone())))
+            funcs.iter().map(move |(factor, id)| {
+                let display = match factor {
+                    FunctionFactory::Closure(_) => format!("{name} FACTORY"),
+                    FunctionFactory::Helper(helper) => {
+                        format!("{name} {helper:?}")
+                    }
+                };
+                ((name.clone(), *id), display)
+            })
         })
         .collect_into(&mut funcs);
     funcs.sort_by_key(|(key, _)| key.clone());

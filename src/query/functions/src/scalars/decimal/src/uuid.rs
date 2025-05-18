@@ -12,81 +12,68 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_base::base::uuid::Uuid;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal128Type;
 use databend_common_expression::types::Decimal256As128Type;
 use databend_common_expression::types::DecimalDataType;
-use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::StringType;
 use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
-use databend_common_expression::FunctionFactory;
+use databend_common_expression::FunctionFactoryHelper;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 
 pub fn register_decimal_to_uuid(registry: &mut FunctionRegistry) {
-    let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
-        let (size, has_nullable) = match args_type {
-            [DataType::Decimal(size)] => (*size, false),
-            [DataType::Nullable(box DataType::Decimal(size))] => (*size, true),
-            [DataType::Null] => (DecimalSize::default_128(), true),
-            _ => return None,
-        };
+    let factory = FunctionFactoryHelper::create_1_arg_passthrough_nullable(|_, arg| {
+        let size = arg.as_decimal()?;
 
         if !size.can_carried_by_128() {
             return None;
         }
 
-        let function = Function {
+        fn to_uuid(arg: i128, output: &mut StringColumnBuilder, _: &mut EvalContext<'_>) {
+            let uuid = Uuid::from_u128(arg as u128);
+            let str = uuid.as_simple().to_string();
+            output.put_str(str.as_str());
+            output.commit_row();
+        }
+
+        Some(Function {
             signature: FunctionSignature {
                 name: "to_uuid".to_string(),
-                args_type: [DataType::Decimal(size)].into(),
+                args_type: [DataType::Decimal(*size)].into(),
                 return_type: DataType::String,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, ctx| {
+                eval: Box::new(|args, ctx| {
                     let arg = args[0].clone();
                     let (decimal_type, _) = DecimalDataType::from_value(&arg).unwrap();
                     match decimal_type {
                         DecimalDataType::Decimal128(_) => {
                             let arg = arg.try_downcast::<Decimal128Type>().unwrap();
-                            vectorize_with_builder_1_arg::<Decimal128Type, StringType>(
-                                |arg, output, _| {
-                                    let uuid = Uuid::from_u128(arg as u128);
-                                    let str = uuid.as_simple().to_string();
-                                    output.put_str(str.as_str());
-                                    output.commit_row();
-                                },
-                            )(arg, ctx)
+                            vectorize_with_builder_1_arg::<Decimal128Type, StringType>(to_uuid)(
+                                arg, ctx,
+                            )
                             .upcast()
                         }
                         DecimalDataType::Decimal256(_) => {
                             let arg = arg.try_downcast::<Decimal256As128Type>().unwrap();
                             vectorize_with_builder_1_arg::<Decimal256As128Type, StringType>(
-                                |arg, output, _| {
-                                    let uuid = Uuid::from_u128(arg as u128);
-                                    let str = uuid.as_simple().to_string();
-                                    output.put_str(str.as_str());
-                                    output.commit_row();
-                                },
+                                to_uuid,
                             )(arg, ctx)
                             .upcast()
                         }
                     }
                 }),
             },
-        };
-        if has_nullable {
-            Some(Arc::new(function.passthrough_nullable()))
-        } else {
-            Some(Arc::new(function))
-        }
-    }));
+        })
+    });
+
     registry.register_function_factory("to_uuid", factory);
 }

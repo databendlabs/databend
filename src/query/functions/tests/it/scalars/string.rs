@@ -770,7 +770,6 @@ fn test_split(file: &mut impl Write) {
 
 fn test_to_uuid(file: &mut impl Write) {
     run_ast(file, "to_uuid(5::decimal(1,0))", &[]);
-    run_ast(file, "to_uuid(null)", &[]);
 
     let size = DecimalSize::new(10, 0).unwrap();
     run_ast(file, "to_uuid(a)", &[(
@@ -784,6 +783,11 @@ fn test_to_uuid(file: &mut impl Write) {
     run_ast(file, "to_uuid(a)", &[(
         "a",
         Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], size),
+    )]);
+    run_ast(file, "to_uuid(a)", &[(
+        "a",
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], size)
+            .wrap_nullable(None),
     )]);
     run_ast(file, "to_uuid(a)", &[(
         "a",

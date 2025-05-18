@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::ops::BitAnd;
 use std::ops::BitOr;
 use std::ops::Not;
@@ -53,14 +54,62 @@ pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 pub trait FunctionFactoryClosure =
     Fn(&[Scalar], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
 
+pub struct FunctionFactoryHelper {
+    fixed_arg_count: Option<usize>,
+    passthrough_nullable: bool,
+    create: Box<dyn FunctionFactoryClosure>,
+}
+
+impl Debug for FunctionFactoryHelper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FunctionFactoryHelper")
+            .field("fixed_arg_count", &self.fixed_arg_count)
+            .field("passthrough_nullable", &self.passthrough_nullable)
+            .finish()
+    }
+}
+
+impl FunctionFactoryHelper {
+    pub fn create_1_arg_core(
+        create: fn(&[Scalar], &DataType) -> Option<Function>,
+    ) -> FunctionFactory {
+        FunctionFactory::Helper(Self {
+            fixed_arg_count: Some(1),
+            passthrough_nullable: false,
+            create: Box::new(move |params, args: &[DataType]| match args {
+                [arg0] => create(params, arg0).map(Arc::new),
+                _ => None,
+            }),
+        })
+    }
+
+    pub fn create_1_arg_passthrough_nullable(
+        create: fn(&[Scalar], &DataType) -> Option<Function>,
+    ) -> FunctionFactory {
+        FunctionFactory::Helper(Self {
+            fixed_arg_count: Some(1),
+            passthrough_nullable: true,
+            create: Box::new(move |params, args: &[DataType]| match args {
+                [DataType::Nullable(box arg0)] => {
+                    create(params, arg0).map(|func| Arc::new(func.passthrough_nullable()))
+                }
+                [arg0] => create(params, arg0).map(Arc::new),
+                _ => None,
+            }),
+        })
+    }
+}
+
 pub enum FunctionFactory {
     Closure(Box<dyn FunctionFactoryClosure>),
+    Helper(FunctionFactoryHelper),
 }
 
 impl FunctionFactory {
     fn create(&self, params: &[Scalar], args: &[DataType]) -> Option<Arc<Function>> {
         match self {
             FunctionFactory::Closure(closure) => closure(params, args),
+            FunctionFactory::Helper(factory) => (factory.create)(params, args),
         }
     }
 }
