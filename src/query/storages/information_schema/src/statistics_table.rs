@@ -16,16 +16,20 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_storages_system::generate_catalog_meta;
 use databend_common_storages_view::view_table::ViewTable;
 use databend_common_storages_view::view_table::QUERY;
 
 pub struct StatisticsTable {}
 
 impl StatisticsTable {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
         let query = "SELECT \
         NULL as table_catalog, \
         NULL as table_schema, \
@@ -48,7 +52,7 @@ impl StatisticsTable {
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query);
         let table_info = TableInfo {
-            desc: "'default'.'information_schema'.'statistics'".to_string(),
+            desc: "'information_schema'.'statistics'".to_string(),
             name: "statistics".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
@@ -56,6 +60,11 @@ impl StatisticsTable {
                 engine: "VIEW".to_string(),
                 ..Default::default()
             },
+            catalog_info: Arc::new(CatalogInfo {
+                name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
+                meta: generate_catalog_meta(ctl_name),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 

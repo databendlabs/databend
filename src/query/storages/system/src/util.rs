@@ -12,9 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_exception::Result;
 use databend_common_expression::expr::*;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::schema::CatalogMeta;
+use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::schema::IcebergRestCatalogOption;
+
+pub fn generate_catalog_meta(ctl_name: &str) -> CatalogMeta {
+    if ctl_name.to_lowercase() == CATALOG_DEFAULT {
+        CatalogMeta {
+            catalog_option: CatalogOption::Default,
+            created_on: Default::default(),
+        }
+    } else {
+        CatalogMeta {
+            catalog_option: CatalogOption::Iceberg(IcebergCatalogOption::Rest(
+                IcebergRestCatalogOption {
+                    uri: "".to_string(),
+                    warehouse: "".to_string(),
+                    props: Default::default(),
+                },
+            )),
+            created_on: Default::default(),
+        }
+    }
+}
 
 pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar) -> Result<()>) {
     match expr {

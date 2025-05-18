@@ -38,15 +38,15 @@ pub struct InformationSchemaDatabase {
 }
 
 impl InformationSchemaDatabase {
-    pub fn create(sys_db_meta: &mut InMemoryMetas) -> Self {
+    pub fn create(sys_db_meta: &mut InMemoryMetas, ctl_name: &str) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
-            ColumnsTable::create(sys_db_meta.next_table_id()),
-            TablesTable::create(sys_db_meta.next_table_id()),
-            KeywordsTable::create(sys_db_meta.next_table_id()),
-            ViewsTable::create(sys_db_meta.next_table_id()),
-            SchemataTable::create(sys_db_meta.next_table_id()),
-            StatisticsTable::create(sys_db_meta.next_table_id()),
-            KeyColumnUsageTable::create(sys_db_meta.next_table_id()),
+            ColumnsTable::create(sys_db_meta.next_table_id(), ctl_name),
+            TablesTable::create(sys_db_meta.next_table_id(), ctl_name),
+            KeywordsTable::create(sys_db_meta.next_table_id(), ctl_name),
+            ViewsTable::create(sys_db_meta.next_table_id(), ctl_name),
+            SchemataTable::create(sys_db_meta.next_table_id(), ctl_name),
+            StatisticsTable::create(sys_db_meta.next_table_id(), ctl_name),
+            KeyColumnUsageTable::create(sys_db_meta.next_table_id(), ctl_name),
         ];
 
         let db = "information_schema";

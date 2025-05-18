@@ -27,8 +27,9 @@ mod partition;
 mod predicate;
 mod statistics;
 pub mod table;
-pub use catalog::IcebergCatalog;
-pub use catalog::IcebergCreator;
+
+pub use catalog::IcebergMutableCatalog;
+pub use catalog::IcebergMutableCreator;
 pub use catalog::ICEBERG_CATALOG;
 pub use iceberg_inspect::IcebergInspectTable;
 pub use table::IcebergTable;

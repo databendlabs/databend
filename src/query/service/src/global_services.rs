@@ -33,7 +33,6 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
-use databend_common_storages_iceberg::IcebergCreator;
 use databend_common_storages_system::ProfilesLogQueue;
 use databend_common_tracing::GlobalLogger;
 use databend_common_users::builtin::BuiltIn;
@@ -47,6 +46,7 @@ use crate::auth::AuthMgr;
 use crate::builtin::BuiltinUDFs;
 use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::IcebergCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
 use crate::persistent_log::GlobalPersistentLog;
@@ -104,7 +104,6 @@ impl GlobalServices {
         // Maybe we can do some refactor to simplify the logic here.
         {
             // Init default catalog.
-
             let default_catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
 
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![

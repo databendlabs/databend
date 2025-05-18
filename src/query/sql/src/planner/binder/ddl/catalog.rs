@@ -60,7 +60,7 @@ impl Binder {
     ) -> Result<Plan> {
         let ShowCatalogsStmt { limit } = stmt;
         let mut query = String::new();
-        let default_catalog = self.ctx.get_default_catalog()?.name();
+        let default_catalog = self.ctx.get_current_catalog();
         write!(
             query,
             "SELECT name AS Catalogs FROM {}.system.catalogs",
