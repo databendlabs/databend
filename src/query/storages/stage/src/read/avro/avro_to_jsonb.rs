@@ -138,3 +138,110 @@ fn convert_decimal(
         return Err(format!("Decimal precision too large: {}", precision));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::ops::Mul;
+    use std::str::FromStr;
+
+    use apache_avro::schema::DecimalSchema;
+    use apache_avro::Schema;
+    use databend_common_expression::types::i256;
+    use databend_common_expression::types::Decimal;
+    use num_bigint::BigInt;
+
+    use crate::read::avro::avro_to_jsonb::to_jsonb;
+
+    fn create_avro_decimal(
+        bigint: &str,
+        precision: usize,
+        scale: usize,
+    ) -> (apache_avro::types::Value, Schema) {
+        let avro_schema = Schema::Decimal(DecimalSchema {
+            precision,
+            scale,
+            inner: Box::new(Schema::Null),
+        });
+        let big_int = BigInt::from_str(bigint).unwrap();
+        let value = apache_avro::types::Value::Decimal(apache_avro::Decimal::from(
+            big_int.to_signed_bytes_be(),
+        ));
+        (value, avro_schema)
+    }
+
+    fn create_avro_big_decimal(bigint: &str, scale: usize) -> (apache_avro::types::Value, Schema) {
+        let avro_schema = Schema::BigDecimal;
+        let big_int = BigInt::from_str(bigint).unwrap();
+        let value = apache_avro::types::Value::BigDecimal(apache_avro::BigDecimal::new(
+            big_int,
+            scale as i64,
+        ));
+        (value, avro_schema)
+    }
+
+    #[test]
+    fn test_decimal_128_ok() {
+        let cases = vec![
+            (7, 4, 1234567i128, 7),
+            (7, 4, 123456i128, 6),
+            (38, 10, i128::MAX, 38),
+        ];
+        for (p, s, v, digits) in cases {
+            let (value, schema) = create_avro_decimal(&v.to_string(), p, s);
+            let jsonb_value = to_jsonb(&value, &schema).unwrap();
+            let expected = jsonb::Value::Number(jsonb::Number::Decimal128(jsonb::Decimal128 {
+                precision: p as u8,
+                scale: s as u8,
+                value: v,
+            }));
+            assert_eq!(jsonb_value, expected);
+
+            let (value, schema) = create_avro_big_decimal(&v.to_string(), s);
+            let jsonb_value = to_jsonb(&value, &schema).unwrap();
+            let expected = jsonb::Value::Number(jsonb::Number::Decimal128(jsonb::Decimal128 {
+                precision: digits as u8,
+                scale: s as u8,
+                value: v,
+            }));
+            assert_eq!(jsonb_value, expected);
+        }
+    }
+
+    #[test]
+    fn test_decimal_256_ok() {
+        let cases = vec![
+            (
+                39,
+                10,
+                i256::from_i128(i128::MAX).mul(i256::from_i128(10)),
+                39,
+            ),
+            (
+                72,
+                10,
+                i256::from_i128(i128::MAX).mul(i256::from_i128(10)),
+                39,
+            ),
+            (72, 10, i256::MAX, 72),
+        ];
+        for (p, s, v, digits) in cases {
+            let (value, schema) = create_avro_decimal(&v.to_string(), p, s);
+            let jsonb_value = to_jsonb(&value, &schema).unwrap();
+            let expected = jsonb::Value::Number(jsonb::Number::Decimal256(jsonb::Decimal256 {
+                precision: p as u8,
+                scale: s as u8,
+                value: v.0,
+            }));
+            assert_eq!(jsonb_value, expected);
+
+            let (value, schema) = create_avro_big_decimal(&v.to_string(), s);
+            let jsonb_value = to_jsonb(&value, &schema).unwrap();
+            let expected = jsonb::Value::Number(jsonb::Number::Decimal256(jsonb::Decimal256 {
+                precision: digits as u8,
+                scale: s as u8,
+                value: v.0,
+            }));
+            assert_eq!(jsonb_value, expected);
+        }
+    }
+}
