@@ -266,6 +266,8 @@ pub enum UserOptionItem {
     SetPasswordPolicy(String),
     UnsetPasswordPolicy,
     MustChangePassword(bool),
+    SetWorkloadGroup(String),
+    UnsetWorkloadGroup,
 }
 
 impl Display for UserOptionItem {
@@ -277,6 +279,8 @@ impl Display for UserOptionItem {
             UserOptionItem::SetNetworkPolicy(v) => write!(f, "SET NETWORK POLICY = '{}'", v),
             UserOptionItem::UnsetNetworkPolicy => write!(f, "UNSET NETWORK POLICY"),
             UserOptionItem::SetPasswordPolicy(v) => write!(f, "SET PASSWORD POLICY = '{}'", v),
+            UserOptionItem::SetWorkloadGroup(v) => write!(f, "SET WORKLOAD GROUP = '{}'", v),
+            UserOptionItem::UnsetWorkloadGroup => write!(f, "UNSET WORKLOAD GROUP"),
             UserOptionItem::UnsetPasswordPolicy => write!(f, "UNSET PASSWORD POLICY"),
             UserOptionItem::Disabled(v) => write!(f, "DISABLED = {}", v),
             UserOptionItem::MustChangePassword(v) => write!(f, "MUST_CHANGE_PASSWORD = {}", v),

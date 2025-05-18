@@ -4630,6 +4630,18 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, val)| UserOptionItem::MustChangePassword(val),
     );
+    let set_workload_group = map(
+        rule! {
+            SET ~ WORKLOAD ~ ^GROUP ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, wg)| UserOptionItem::SetWorkloadGroup(wg),
+    );
+    let unset_workload_group = map(
+        rule! {
+            UNSET ~ WORKLOAD ~ ^GROUP
+        },
+        |(_, _, _)| UserOptionItem::UnsetWorkloadGroup,
+    );
 
     rule!(
         #tenant_setting
@@ -4641,6 +4653,8 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #unset_password_policy
         | #set_disabled_option
         | #must_change_password
+        | #set_workload_group
+        | #unset_workload_group
     )(i)
 }
 

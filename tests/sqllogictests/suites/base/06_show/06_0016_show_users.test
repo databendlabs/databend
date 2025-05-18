@@ -41,7 +41,7 @@ default % no_password YES account_admin account_admin 0 NULL NULL NULL
 query TTTTTBTTT
 DESC USER 'showuser2'
 ----
-showuser2 % double_sha1_password (empty) (empty) 1 NULL NULL NULL
+showuser2 % double_sha1_password (empty) (empty) 1 NULL NULL NULL NULL
 
 statement ok
 DROP USER IF EXISTS 'showuser1'

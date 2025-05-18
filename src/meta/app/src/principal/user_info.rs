@@ -191,6 +191,7 @@ pub struct UserOption {
     default_role: Option<String>,
     network_policy: Option<String>,
     password_policy: Option<String>,
+    workload_group: Option<String>,
     disabled: Option<bool>,
     must_change_password: Option<bool>,
 }
@@ -202,6 +203,7 @@ impl UserOption {
             default_role: None,
             network_policy: None,
             password_policy: None,
+            workload_group: None,
             disabled: None,
             must_change_password: None,
         }
@@ -228,6 +230,11 @@ impl UserOption {
 
     pub fn with_password_policy(mut self, password_policy: Option<String>) -> Self {
         self.password_policy = password_policy;
+        self
+    }
+
+    pub fn with_workload_group(mut self, workload_group: Option<String>) -> Self {
+        self.workload_group = workload_group;
         self
     }
 
@@ -260,6 +267,11 @@ impl UserOption {
 
     pub fn password_policy(&self) -> Option<&String> {
         self.password_policy.as_ref()
+    }
+
+    // This is workload_group id
+    pub fn workload_group(&self) -> Option<&String> {
+        self.workload_group.as_ref()
     }
 
     pub fn disabled(&self) -> Option<&bool> {
@@ -330,6 +342,8 @@ impl UserOption {
             UserOptionItem::UnsetPasswordPolicy => self.password_policy = None,
             UserOptionItem::Disabled(v) => self.disabled = Some(*v),
             UserOptionItem::MustChangePassword(v) => self.must_change_password = Some(*v),
+            UserOptionItem::SetWorkloadGroup(v) => self.workload_group = Some(v.clone()),
+            UserOptionItem::UnsetWorkloadGroup => self.workload_group = None,
         }
     }
 }

@@ -103,6 +103,7 @@ impl FromToProto for mt::principal::UserOption {
             .with_default_role(p.default_role)
             .with_network_policy(p.network_policy)
             .with_password_policy(p.password_policy)
+            .with_workload_group(p.workload_group)
             .with_disabled(p.disabled)
             .with_must_change_password(p.must_change_password))
     }
@@ -115,6 +116,7 @@ impl FromToProto for mt::principal::UserOption {
             default_role: self.default_role().cloned(),
             network_policy: self.network_policy().cloned(),
             password_policy: self.password_policy().cloned(),
+            workload_group: self.workload_group().cloned(),
             disabled: self.disabled().cloned(),
             must_change_password: self.must_change_password().cloned(),
         })
