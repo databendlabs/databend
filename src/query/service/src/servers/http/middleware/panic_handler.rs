@@ -31,6 +31,9 @@ impl poem::middleware::PanicHandler for PanicHandler {
 
     fn get_response(&self, _err: Box<dyn Any + Send + 'static>) -> Self::Response {
         metrics_incr_http_response_panics_count();
-        (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "[HTTP-PANIC] Internal server error: request handler panicked",
+        )
     }
 }

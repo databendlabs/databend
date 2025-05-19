@@ -57,7 +57,7 @@ async fn handle(
         db.get_db_info().database_id.db_id,
     ) {
         return Err(ErrorCode::UnknownDatabase(format!(
-            "Unknown database '{}'",
+            "[HTTP-CATALOG] Unknown database: '{}'",
             database
         )));
     }
@@ -71,7 +71,7 @@ async fn handle(
         tbl.get_table_info().ident.table_id,
     ) {
         return Err(ErrorCode::UnknownTable(format!(
-            "Unknown table '{}'",
+            "[HTTP-CATALOG] Unknown table: '{}'",
             table
         )));
     }
