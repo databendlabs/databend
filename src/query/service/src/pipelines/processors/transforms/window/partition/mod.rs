@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_processor_strategy;
+mod partition_process_strategy;
 mod transform_window_partition_collect;
 mod window_partition_buffer;
 mod window_partition_exchange;
 mod window_partition_meta;
 mod window_partition_partial_top_n_exchange;
 
-pub use data_processor_strategy::*;
+pub use partition_process_strategy::*;
 pub use transform_window_partition_collect::*;
 pub use window_partition_buffer::*;
 pub use window_partition_exchange::*;

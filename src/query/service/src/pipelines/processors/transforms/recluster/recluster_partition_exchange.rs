@@ -20,19 +20,19 @@ use databend_common_pipeline_core::processors::Exchange;
 
 use crate::pipelines::processors::transforms::WindowPartitionMeta;
 
-pub struct HilbertPartitionExchange {
+pub struct ReclusterPartitionExchange {
     start: u64,
     width: usize,
 }
 
-impl HilbertPartitionExchange {
-    pub fn create(start: u64, width: usize) -> Arc<HilbertPartitionExchange> {
-        Arc::new(HilbertPartitionExchange { start, width })
+impl ReclusterPartitionExchange {
+    pub fn create(start: u64, width: usize) -> Arc<ReclusterPartitionExchange> {
+        Arc::new(ReclusterPartitionExchange { start, width })
     }
 }
 
-impl Exchange for HilbertPartitionExchange {
-    const NAME: &'static str = "Hilbert";
+impl Exchange for ReclusterPartitionExchange {
+    const NAME: &'static str = "Recluster";
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let mut data_block = data_block;
         let range_ids = data_block
@@ -51,16 +51,10 @@ impl Exchange for HilbertPartitionExchange {
 
         let scatter_indices = DataBlock::divide_indices_by_scatter_size(&indices, self.width);
         // Partition the data blocks to different processors.
-        let base = self.width / n;
-        let remainder = self.width % n;
         let mut output_data_blocks = vec![vec![]; n];
         for (partition_id, indices) in scatter_indices.into_iter().take(self.width).enumerate() {
             if !indices.is_empty() {
-                let target = if partition_id < remainder * (base + 1) {
-                    partition_id / (base + 1)
-                } else {
-                    (partition_id - remainder) / base
-                };
+                let target = (partition_id * n) / self.width;
                 let block = data_block.take_with_optimize_size(&indices)?;
                 output_data_blocks[target].push((partition_id, block));
             }

@@ -37,6 +37,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::operations::TransformBlockBuilder;
 use crate::operations::TransformBlockWriter;
 use crate::operations::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
@@ -53,17 +54,18 @@ impl FuseTable {
             ctx.get_settings().get_enable_block_stream_write()? && self.storage_format_as_parquet();
         if enable_stream_block_write {
             pipeline.add_transform(|input, output| {
-                TransformBlockWriter::try_create(
+                TransformBlockBuilder::try_create(
                     ctx.clone(),
                     input,
                     output,
-                    MutationKind::Insert,
                     self,
                     table_meta_timestamps,
-                    false,
-                    None,
                 )
             })?;
+
+            pipeline.add_async_accumulating_transformer(|| {
+                TransformBlockWriter::create(ctx.clone(), MutationKind::Insert, self, false)
+            });
         } else {
             let block_thresholds = self.get_block_thresholds();
             build_compact_block_pipeline(pipeline, block_thresholds)?;

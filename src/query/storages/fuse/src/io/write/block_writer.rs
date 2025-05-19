@@ -20,6 +20,8 @@ use std::time::Instant;
 use chrono::Utc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
+use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -124,6 +126,7 @@ pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str)
     Ok(())
 }
 
+#[derive(Debug)]
 pub struct BlockSerialization {
     pub block_raw_data: Vec<u8>,
     pub block_meta: BlockMeta,
@@ -131,6 +134,11 @@ pub struct BlockSerialization {
     pub inverted_index_states: Vec<InvertedIndexState>,
     pub virtual_column_state: Option<VirtualColumnState>,
 }
+
+local_block_meta_serde!(BlockSerialization);
+
+#[typetag::serde(name = "block_serialization_meta")]
+impl BlockMetaInfo for BlockSerialization {}
 
 #[derive(Clone)]
 pub struct BlockBuilder {

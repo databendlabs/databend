@@ -22,6 +22,7 @@ mod transform_serialize_segment;
 
 pub use multi_table_insert_commit::CommitMultiTableInsert;
 pub use sink_commit::CommitSink;
+pub use transform_block_writer::TransformBlockBuilder;
 pub use transform_block_writer::TransformBlockWriter;
 pub use transform_merge_commit_meta::TransformMergeCommitMeta;
 pub use transform_mutation_aggregator::TableMutationAggregator;
