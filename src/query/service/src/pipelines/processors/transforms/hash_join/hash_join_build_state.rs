@@ -841,6 +841,7 @@ impl HashJoinBuildState {
                 self.ctx.set_runtime_filter(runtime_filter);
             }
         }
+        self.set_bloom_filter_ready()?;
         Ok(())
     }
 
