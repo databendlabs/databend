@@ -264,8 +264,12 @@ impl ClientSessionManager {
         let (claim, token_type) = SessionClaim::decode(token)?;
         if SystemTime::now() > claim.expire_at() + TTL_GRACE_PERIOD_QUERY {
             return match token_type {
-                TokenType::Refresh => Err(ErrorCode::RefreshTokenExpired("[HTTP-SESSION] Authentication failed: refresh token has expired")),
-                TokenType::Session => Err(ErrorCode::SessionTokenExpired("[HTTP-SESSION] Authentication failed: session token has expired")),
+                TokenType::Refresh => Err(ErrorCode::RefreshTokenExpired(
+                    "[HTTP-SESSION] Authentication failed: refresh token has expired",
+                )),
+                TokenType::Session => Err(ErrorCode::SessionTokenExpired(
+                    "[HTTP-SESSION] Authentication failed: session token has expired",
+                )),
             };
         }
 

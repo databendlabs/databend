@@ -366,7 +366,7 @@ async fn test_simple_sql() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":404,"message":"wrong page number 2"}}"#
+        r#"{"error":{"code":404,"message":"[HTTP-QUERY] [HTTP-QUERY] Invalid page number: requested 2, current page is 1"}}"#
     );
 
     // final
@@ -1759,7 +1759,7 @@ async fn test_txn_error() -> Result<()> {
         assert_eq!(reply.last().1.error.unwrap().code, 4004u16);
         assert_eq!(
             &reply.last().1.error.unwrap().message,
-            "transaction is active but missing server_info"
+            "[HTTP-QUERY] Transaction is active but missing server_info"
         );
     }
 
@@ -1819,7 +1819,7 @@ async fn test_txn_timeout() -> Result<()> {
     assert_eq!(
         reply.last().1.error.unwrap().message,
         format!(
-            "transaction timeout: last_query_id {} not found",
+            "[HTTP-QUERY] Transaction timeout: last_query_id {} not found on this server",
             last_query_id
         )
     );
