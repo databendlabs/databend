@@ -135,6 +135,12 @@ show tables from abc;
 t
 t1
 
+query T
+show columns from abc.t1;
+----
+c1 DATE YES (empty) NULL NULL
+c2 VARCHAR YES (empty) NULL NULL
+
 statement error 1302
 CREATE TABLE IF NOT EXISTS abc.t2(c1 int) ENGINE = fuse
 

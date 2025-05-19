@@ -175,7 +175,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         if let Some((catalog_name, db_name)) =
             self.is_external_show_tables_query(&push_downs, &catalog)
         {
-            println!("call show_tables_from_external_catalog");
             self.show_tables_from_external_catalog(ctx, catalog_name, db_name)
                 .await
         } else {
