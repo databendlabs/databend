@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -117,6 +118,7 @@ pub struct HashJoinBuildState {
     pub(crate) memory_settings: MemorySettings,
     pub(crate) concat_buffer: Mutex<ConcatBuffer>,
     pub(crate) broadcast_id: Option<u32>,
+    pub(crate) is_runtime_filter_added: AtomicBool,
 }
 
 impl HashJoinBuildState {
@@ -166,6 +168,7 @@ impl HashJoinBuildState {
             memory_settings,
             concat_buffer: Mutex::new(ConcatBuffer::new(concat_threshold)),
             broadcast_id,
+            is_runtime_filter_added: AtomicBool::new(false),
         }))
     }
 
@@ -259,26 +262,11 @@ impl HashJoinBuildState {
                     .build_watcher
                     .send(HashTableType::Empty)
                     .map_err(|_| ErrorCode::TokioError("build_watcher channel is closed"))?;
-                self.add_runtime_filter(&[], build_num_rows)?;
                 return Ok(());
             }
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
-            }
-
-            let build_chunks = unsafe {
-                (*self.hash_join_state.build_state.get())
-                    .generation_state
-                    .chunks
-                    .clone()
-            };
-
-            // If spilling happened, skip adding runtime filter, because probe data is ready and spilled.
-            if self.hash_join_state.spilled_partitions.read().is_empty() {
-                self.add_runtime_filter(&build_chunks, build_num_rows)?;
-            } else {
-                self.set_bloom_filter_ready()?;
             }
 
             // Divide the finalize phase into multiple tasks.
@@ -808,7 +796,11 @@ impl HashJoinBuildState {
         Ok(())
     }
 
-    fn add_runtime_filter(&self, build_chunks: &[DataBlock], build_num_rows: usize) -> Result<()> {
+    pub async fn add_runtime_filter(
+        &self,
+        build_chunks: &[DataBlock],
+        build_num_rows: usize,
+    ) -> Result<()> {
         let mut runtime_filters = self.build_runtime_filter(build_chunks, build_num_rows)?;
         if let Some(broadcast_id) = self.broadcast_id {
             let sender = self.ctx.broadcast_source_sender(broadcast_id);
@@ -816,12 +808,12 @@ impl HashJoinBuildState {
             let remote_runtime_filter_shards =
                 RemoteRuntimeFilterShards::from(runtime_filters.clone());
             let mut received = vec![];
-            // TODO: use async send and recv
             sender
-                .send_blocking(Box::new(remote_runtime_filter_shards))
-                .unwrap();
+                .send(Box::new(remote_runtime_filter_shards))
+                .await
+                .map_err(|_| ErrorCode::TokioError("send runtime filter shards failed"))?;
             sender.close();
-            while let Ok(remote_runtime_filter_shards) = receiver.recv_blocking() {
+            while let Ok(remote_runtime_filter_shards) = receiver.recv().await {
                 let remote_runtime_filter_shards =
                     RemoteRuntimeFilterShards::downcast_from(remote_runtime_filter_shards).unwrap();
                 if let Some(shards) = remote_runtime_filter_shards.shards {

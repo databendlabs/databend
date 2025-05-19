@@ -276,6 +276,26 @@ impl Processor for TransformHashJoinBuild {
                     .load(Ordering::Acquire);
             }
             Step::Async(AsyncStep::WaitCollect) => {
+                if !self
+                    .build_state
+                    .is_runtime_filter_added
+                    .swap(true, Ordering::AcqRel)
+                {
+                    let build_chunks = unsafe {
+                        (*self.build_state.hash_join_state.build_state.get())
+                            .generation_state
+                            .chunks
+                            .clone()
+                    };
+                    let build_num_rows = unsafe {
+                        (*self.build_state.hash_join_state.build_state.get())
+                            .generation_state
+                            .build_num_rows
+                    };
+                    self.build_state
+                        .add_runtime_filter(&build_chunks, build_num_rows)
+                        .await?;
+                }
                 if !self.is_spilled_partitions_added {
                     let spilled_partitions = self.spiller.spilled_partitions();
                     self.build_state
