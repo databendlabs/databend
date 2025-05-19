@@ -55,21 +55,21 @@ use iceberg::TableCreation;
 use iceberg::TableIdent;
 
 use crate::cache;
-use crate::IcebergCatalog;
+use crate::IcebergMutableCatalog;
 
 const PARQUET_FIELD_ID_META_KEY: &str = "PARQUET:field_id";
 
 #[derive(Clone, Educe)]
 #[educe(Debug)]
 pub struct IcebergDatabase {
-    ctl: IcebergCatalog,
+    ctl: IcebergMutableCatalog,
 
     info: DatabaseInfo,
     ident: iceberg::NamespaceIdent,
 }
 
 impl IcebergDatabase {
-    pub fn create(ctl: IcebergCatalog, name: &str) -> Self {
+    pub fn create(ctl: IcebergMutableCatalog, name: &str) -> Self {
         let ident = iceberg::NamespaceIdent::new(name.to_string());
         let info = DatabaseInfo {
             database_id: DatabaseId::new(0),

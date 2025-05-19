@@ -274,7 +274,7 @@ async fn test_databases_table() -> Result<()> {
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    let table = DatabasesTableWithoutHistory::create(1);
+    let table = DatabasesTableWithoutHistory::create(1, "default");
 
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("databases_table.txt").unwrap();
@@ -290,7 +290,7 @@ async fn test_databases_history_table() -> Result<()> {
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    let table = DatabasesTableWithHistory::create(1);
+    let table = DatabasesTableWithHistory::create(1, "default");
 
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint
@@ -447,7 +447,7 @@ async fn test_users_table() -> Result<()> {
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 12);
+    assert_eq!(block.num_columns(), 13);
     assert!(block.num_rows() >= 2);
 
     let output = box_render(

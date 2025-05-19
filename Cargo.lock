@@ -4124,6 +4124,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-license",
+ "databend-common-management",
  "databend-common-meta-app",
  "databend-common-meta-types",
  "databend-common-metrics",
@@ -4401,6 +4402,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-catalog",
  "databend-common-meta-app",
+ "databend-common-storages-system",
  "databend-common-storages-view",
 ]
 
