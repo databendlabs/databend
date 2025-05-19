@@ -93,13 +93,13 @@ impl GlobalPersistentLog {
             runtime
                 .spawn(async move {
                     if let Err(e) = GlobalPersistentLog::instance().work().await {
-                        error!("persistent log exit {}", e);
+                        error!("System history exit with {}", e);
                     }
                 })
                 .await?;
             Ok::<(), ErrorCode>(())
         });
-        return Ok(());
+        Ok(())
     }
 
     pub fn instance() -> Arc<GlobalPersistentLog> {
@@ -120,7 +120,7 @@ impl GlobalPersistentLog {
             }
         }
         self.prepare().await?;
-        info!("Persistent log prepared successfully");
+        info!("System history prepared successfully");
         // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
         let sleep_time =
             Duration::from_millis(self.interval * 500 + random::<u64>() % (self.interval * 1000));
@@ -134,18 +134,19 @@ impl GlobalPersistentLog {
                     match log.transform(&table_clone, &meta_key).await {
                         Ok(acquired_lock) => {
                             if acquired_lock {
-                                let res = log
+                                let _ = log
                                     .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                     .await;
-                                dbg!("result with", res);
                             }
                         }
                         Err(e) => {
-                            let res = log
+                            let _ = log
                                 .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                 .await;
-                            dbg!("result with eeee}", res, &e);
-                            error!("{} log transform exit {}", table_clone.name, e);
+                            error!(
+                                "system history {} log transform exit {}",
+                                table_clone.name, e
+                            );
                         }
                     }
                     sleep(sleep_time).await;
@@ -248,7 +249,7 @@ impl GlobalPersistentLog {
         tracking_payload.query_id = Some(query_id.clone());
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
         // prevent log table from logging its own logs
-        // tracking_payload.should_log = false;
+        tracking_payload.should_log = false;
         let _guard = ThreadTracker::tracking(tracking_payload);
         ThreadTracker::tracking_future(self.do_execute(sql, query_id)).await?;
         Ok(())
@@ -311,7 +312,7 @@ impl GlobalPersistentLog {
                 }
                 table.assemble_normal_transform(batch_number_begin, batch_number_end)
             };
-            dbg!(&sql);
+            dbg!(chrono::Local::now(), &table.name);
             self.execute_sql(&sql).await?;
             if table.name == "log_history" {
                 self.set_u64_to_meta(
