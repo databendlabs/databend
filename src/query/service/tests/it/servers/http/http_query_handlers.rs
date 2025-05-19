@@ -526,7 +526,7 @@ async fn test_active_sessions() -> Result<()> {
         .map(|(_status, resp)| (resp.error.map(|e| e.message).unwrap_or_default()))
         .collect::<Vec<_>>();
     results.sort();
-    let msg = "Current active sessions (2) has exceeded the max_active_sessions limit (2)";
+    let msg = "[HTTP-QUERY] Failed to upgrade session: Current active sessions (2) has exceeded the max_active_sessions limit (2)";
     let expect = vec!["", "", msg];
     assert_eq!(results, expect);
     Ok(())
@@ -630,7 +630,7 @@ async fn test_pagination() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":404,"message":"wrong page number 6"}}"#
+        r#"{"error":{"code":404,"message":"[HTTP-QUERY] [HTTP-QUERY] Invalid page number: requested 6, current page is 1"}}"#
     );
 
     let mut next_uri = result.next_uri.clone().unwrap();
