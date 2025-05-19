@@ -125,7 +125,7 @@ impl SystemDatabase {
             MallocStatsTable::create(sys_db_meta.next_table_id()),
             #[cfg(feature = "jemalloc")]
             MallocStatsTotalsTable::create(sys_db_meta.next_table_id()),
-            ColumnsTable::create(sys_db_meta.next_table_id()),
+            ColumnsTable::create(sys_db_meta.next_table_id(), ctl_name),
             UsersTable::create(sys_db_meta.next_table_id()),
             EnginesTable::create(sys_db_meta.next_table_id()),
             RolesTable::create(sys_db_meta.next_table_id()),

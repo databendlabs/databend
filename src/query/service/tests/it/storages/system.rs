@@ -130,7 +130,7 @@ async fn test_columns_table() -> Result<()> {
 
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("columns_table.txt").unwrap();
-    let table = ColumnsTable::create(1);
+    let table = ColumnsTable::create(1, "default");
     run_table_tests(file, ctx, table).await?;
 
     Ok(())
