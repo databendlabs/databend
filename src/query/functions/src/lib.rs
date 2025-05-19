@@ -49,7 +49,11 @@ pub fn is_builtin_function(name: &str) -> bool {
 // which may be modified by user at any time. Those functions are not not suitable for caching.
 pub fn is_cacheable_function(name: &str) -> bool {
     let name = Ascii::new(name);
-    BUILTIN_FUNCTIONS.contains(name.into_inner())
+    (BUILTIN_FUNCTIONS.contains(name.into_inner())
+        && !BUILTIN_FUNCTIONS
+            .get_property(name.as_str())
+            .unwrap()
+            .non_deterministic)
         || AggregateFunctionFactory::instance().contains(name.into_inner())
         || GENERAL_WINDOW_FUNCTIONS.contains(&name)
         || GENERAL_LAMBDA_FUNCTIONS.contains(&name)
