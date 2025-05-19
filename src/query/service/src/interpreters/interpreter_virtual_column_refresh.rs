@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::VirtualColumn;
@@ -62,7 +63,19 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &self.plan.catalog,
+                &self.plan.database,
+                &self.plan.table,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
+
         let mut build_res = PipelineBuildResult::create();
+        build_res.main_pipeline.add_lock_guard(lock_guard);
         let handler = get_virtual_column_handler();
         let _ = handler
             .do_refresh_virtual_column(self.ctx.clone(), fuse_table, &mut build_res.main_pipeline)
