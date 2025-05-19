@@ -14,7 +14,6 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,6 +32,7 @@ use opentelemetry_otlp::WithExportConfig;
 
 use crate::config::OTLPProtocol;
 use crate::filter::filter_by_thread_tracker;
+use crate::history_tables::table_to_target;
 use crate::loggers::get_layout;
 use crate::loggers::new_rolling_file_appender;
 use crate::remote_log::RemoteLog;
@@ -387,7 +387,6 @@ pub fn init_logging(
             .append(structlog_log_file);
         logger = logger.dispatch(dispatch);
     }
-
     if cfg.history.on {
         let (remote_log, flush_guard) =
             RemoteLog::new(&labels, cfg).expect("initialize remote logger");
@@ -395,7 +394,7 @@ pub fn init_logging(
         let mut filter_builder =
             EnvFilterBuilder::new().filter(Some("databend::log::structlog"), LevelFilter::Off);
 
-        let mut table_to_target = get_table_to_target();
+        let mut table_to_target = table_to_target();
 
         for table_cfg in cfg.history.tables.iter() {
             if let Some(target) = table_to_target.remove(&table_cfg.table_name) {
@@ -422,15 +421,4 @@ pub fn init_logging(
     }
 
     _drop_guards
-}
-
-fn get_table_to_target() -> HashMap<String, String> {
-    [
-        ("profile_history", "databend::log::profile"),
-        ("query_history", "databend::log::query"),
-        ("login_history", "databend::log::login"),
-    ]
-    .iter()
-    .map(|(k, v)| (k.to_string(), v.to_string()))
-    .collect()
 }

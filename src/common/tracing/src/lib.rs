@@ -26,6 +26,8 @@ mod panic_hook;
 mod remote_log;
 mod structlog;
 
+mod history_tables;
+
 pub use crash_hook::pipe_file;
 pub use crash_hook::SignalListener;
 
@@ -43,6 +45,8 @@ pub use crate::config::StructLogConfig;
 pub use crate::config::TracingConfig;
 pub use crate::config::CONFIG_DEFAULT_LOG_LEVEL;
 pub use crate::crash_hook::set_crash_hook;
+pub use crate::history_tables::init_history_tables;
+pub use crate::history_tables::HistoryTable;
 pub use crate::init::init_logging;
 pub use crate::init::inject_span_to_tonic_request;
 pub use crate::init::start_trace_for_remote_request;
@@ -57,7 +61,6 @@ pub use crate::remote_log::RemoteLogElement;
 pub use crate::remote_log::RemoteLogGuard;
 pub use crate::structlog::DummyReporter;
 pub use crate::structlog::StructLogReporter;
-
 pub fn closure_name<F: std::any::Any>() -> &'static str {
     let func_path = std::any::type_name::<F>();
     func_path

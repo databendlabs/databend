@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+
+use crate::HistoryConfig;
 
 const TABLES_TOML: &str = include_str!("./history_tables.toml");
 
@@ -64,12 +66,13 @@ pub struct PredefinedTables {
 #[derive(serde::Deserialize, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PredefinedTable {
     pub name: String,
+    pub target: String,
     pub create: String,
     pub transform: String,
     pub delete: String,
 }
 
-pub fn init_tables(cfg: &InnerConfig) -> Result<Vec<Arc<HistoryTable>>> {
+pub fn init_history_tables(cfg: &HistoryConfig) -> Result<Vec<Arc<HistoryTable>>> {
     let predefined_tables: PredefinedTables =
         toml::from_str(TABLES_TOML).expect("Failed to parse toml");
 
@@ -80,12 +83,12 @@ pub fn init_tables(cfg: &InnerConfig) -> Result<Vec<Arc<HistoryTable>>> {
             .map(|table| (table.name.clone(), table)),
     );
 
-    let mut history_tables = Vec::with_capacity(cfg.log.history.tables.len());
+    let mut history_tables = Vec::with_capacity(cfg.tables.len());
     history_tables.push(Arc::new(HistoryTable::create(
         predefined_map.remove("log_history").unwrap(),
         24 * 7,
     )));
-    for enable_table in cfg.log.history.tables.iter() {
+    for enable_table in cfg.tables.iter() {
         if let Some(predefined_table) = predefined_map.remove(&enable_table.table_name) {
             let retention = enable_table.retention;
             history_tables.push(Arc::new(HistoryTable::create(
@@ -100,4 +103,16 @@ pub fn init_tables(cfg: &InnerConfig) -> Result<Vec<Arc<HistoryTable>>> {
         }
     }
     Ok(history_tables)
+}
+
+pub fn table_to_target() -> HashMap<String, String> {
+    let predefined_tables: PredefinedTables =
+        toml::from_str(TABLES_TOML).expect("Failed to parse toml");
+    let mut table_to_target = HashMap::new();
+    for table in predefined_tables.tables {
+        if table.name != "log_history" {
+            table_to_target.insert(table.name, table.target);
+        }
+    }
+    table_to_target
 }
