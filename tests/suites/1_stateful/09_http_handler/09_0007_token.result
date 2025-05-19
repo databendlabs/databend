@@ -28,7 +28,7 @@ False
 401
 {'code': 5100,
  'message': '[HTTP-SESSION] Failed to decode token: base64 decode error: '
-             'Invalid padding, token: bend-v1-s-xxx'}
+            'Invalid padding, token: bend-v1-s-xxx'}
 ---- do_query('select 4',)
 401
 {'code': 5101,
