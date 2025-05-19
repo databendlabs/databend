@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::unimplemented;
 
 use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;

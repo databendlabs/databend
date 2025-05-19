@@ -103,7 +103,7 @@ impl ProcedureMgr {
         Ok(dropped)
     }
 
-    //#[fastrace::trace]
+    #[fastrace::trace]
     pub async fn get_procedure(
         &self,
         req: &GetProcedureReq,
@@ -121,6 +121,7 @@ impl ProcedureMgr {
             procedure_meta: seq_meta.data,
         }))
     }
+
     #[fastrace::trace]
     pub async fn list_procedures(
         &self,

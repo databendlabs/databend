@@ -16,17 +16,22 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_storages_system::generate_catalog_meta;
 use databend_common_storages_view::view_table::ViewTable;
 use databend_common_storages_view::view_table::QUERY;
 
 pub struct SchemataTable {}
 
 impl SchemataTable {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let query = "SELECT
+    pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
+        let query = format!(
+            "SELECT
             name AS catalog_name,
             name AS schema_name,
             'default' AS schema_owner,
@@ -35,12 +40,14 @@ impl SchemataTable {
             NULL AS default_character_set_name,
             NULL AS default_collation_name,
             NULL AS sql_path
-        FROM default.system.databases;";
+        FROM {}.system.databases;",
+            ctl_name
+        );
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'default'.'information_schema'.'schemata'".to_string(),
+            desc: "'information_schema'.'schemata'".to_string(),
             name: "schemata".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
@@ -48,6 +55,11 @@ impl SchemataTable {
                 engine: "VIEW".to_string(),
                 ..Default::default()
             },
+            catalog_info: Arc::new(CatalogInfo {
+                name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
+                meta: generate_catalog_meta(ctl_name),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 
