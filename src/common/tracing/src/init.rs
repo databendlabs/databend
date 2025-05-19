@@ -32,9 +32,9 @@ use opentelemetry_otlp::WithExportConfig;
 
 use crate::config::OTLPProtocol;
 use crate::filter::filter_by_thread_tracker;
-use crate::history_tables::table_to_target;
 use crate::loggers::get_layout;
 use crate::loggers::new_rolling_file_appender;
+use crate::predefined_tables::table_to_target;
 use crate::remote_log::RemoteLog;
 use crate::structlog::StructLogReporter;
 use crate::Config;
