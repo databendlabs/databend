@@ -19,12 +19,21 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::sort_merge;
 use databend_common_settings::Settings;
 
-pub trait DataProcessorStrategy: Send + Sync + 'static {
+pub trait PartitionProcessStrategy: Send + Sync + 'static {
     const NAME: &'static str;
+
+    /// Partition assignment: map partition index to processor via proportional mapping.
+    fn calc_partitions(
+        &self,
+        processor_id: usize,
+        num_processors: usize,
+        num_partitions: usize,
+    ) -> Vec<usize>;
+
     fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>>;
 }
 
-pub struct SortStrategy {
+pub struct WindowPartitionStrategy {
     sort_desc: Vec<SortColumnDescription>,
     schema: DataSchemaRef,
     max_block_size: usize,
@@ -33,7 +42,7 @@ pub struct SortStrategy {
     have_order_col: bool,
 }
 
-impl SortStrategy {
+impl WindowPartitionStrategy {
     pub fn try_create(
         settings: &Settings,
         sort_desc: Vec<SortColumnDescription>,
@@ -54,8 +63,19 @@ impl SortStrategy {
     }
 }
 
-impl DataProcessorStrategy for SortStrategy {
-    const NAME: &'static str = "Sort";
+impl PartitionProcessStrategy for WindowPartitionStrategy {
+    const NAME: &'static str = "Window";
+
+    fn calc_partitions(
+        &self,
+        processor_id: usize,
+        num_processors: usize,
+        num_partitions: usize,
+    ) -> Vec<usize> {
+        (0..num_partitions)
+            .filter(|&partition| partition % num_processors == processor_id)
+            .collect()
+    }
 
     fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         let data_blocks = data_blocks

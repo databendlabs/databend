@@ -20,8 +20,10 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::HilbertPartition;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::io::StreamBlockProperties;
 use databend_common_storages_fuse::operations::TransformBlockWriter;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
@@ -29,10 +31,10 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::CompactStrategy;
-use crate::pipelines::processors::transforms::HilbertPartitionExchange;
-use crate::pipelines::processors::transforms::TransformHilbertCollect;
-use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
+use crate::pipelines::processors::transforms::CompactPartitionStrategy;
+use crate::pipelines::processors::transforms::ReclusterPartitionExchange;
+use crate::pipelines::processors::transforms::ReclusterPartitionStrategy;
+use crate::pipelines::processors::transforms::TransformPartitionCollect;
 use crate::pipelines::PipelineBuilder;
 use crate::spillers::SpillerDiskConfig;
 
@@ -49,7 +51,7 @@ impl PipelineBuilder {
 
         self.main_pipeline.exchange(
             num_processors,
-            HilbertPartitionExchange::create(partition.range_start, partition.range_width),
+            ReclusterPartitionExchange::create(partition.range_start, partition.range_width),
         );
 
         let settings = self.ctx.get_settings();
@@ -66,9 +68,15 @@ impl PipelineBuilder {
         let processor_id = AtomicUsize::new(0);
 
         if enable_stream_writer {
+            let properties = StreamBlockProperties::try_create(
+                self.ctx.clone(),
+                table,
+                partition.table_meta_timestamps,
+            )?;
+
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(Box::new(
-                    TransformHilbertCollect::new(
+                    TransformPartitionCollect::new(
                         self.ctx.clone(),
                         input,
                         output,
@@ -78,28 +86,24 @@ impl PipelineBuilder {
                         partition.range_width,
                         window_spill_settings.clone(),
                         disk_spill.clone(),
-                        partition.rows_per_block,
-                        partition.bytes_per_block,
+                        ReclusterPartitionStrategy::new(properties.clone()),
                     )?,
                 )))
             })?;
 
-            self.main_pipeline.add_transform(|input, output| {
-                TransformBlockWriter::try_create(
+            self.main_pipeline.add_async_accumulating_transformer(|| {
+                TransformBlockWriter::create(
                     self.ctx.clone(),
-                    input,
-                    output,
                     MutationKind::Recluster,
                     table,
-                    partition.table_meta_timestamps,
                     false,
-                    Some(partition.bytes_per_block),
                 )
-            })
+            });
+            Ok(())
         } else {
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(Box::new(
-                    TransformWindowPartitionCollect::new(
+                    TransformPartitionCollect::new(
                         self.ctx.clone(),
                         input,
                         output,
@@ -109,24 +113,26 @@ impl PipelineBuilder {
                         partition.range_width,
                         window_spill_settings.clone(),
                         disk_spill.clone(),
-                        CompactStrategy::new(partition.rows_per_block, partition.bytes_per_block),
+                        CompactPartitionStrategy::new(
+                            partition.rows_per_block,
+                            partition.bytes_per_block,
+                        ),
                     )?,
                 )))
             })?;
 
-            self.main_pipeline
-                .add_transform(|transform_input_port, transform_output_port| {
-                    let proc = TransformSerializeBlock::try_create(
-                        self.ctx.clone(),
-                        transform_input_port,
-                        transform_output_port,
-                        table,
-                        ClusterStatsGenerator::default(),
-                        MutationKind::Recluster,
-                        partition.table_meta_timestamps,
-                    )?;
-                    proc.into_processor()
-                })
+            self.main_pipeline.add_transform(|input, output| {
+                let proc = TransformSerializeBlock::try_create(
+                    self.ctx.clone(),
+                    input,
+                    output,
+                    table,
+                    ClusterStatsGenerator::default(),
+                    MutationKind::Recluster,
+                    partition.table_meta_timestamps,
+                )?;
+                proc.into_processor()
+            })
         }
     }
 }
