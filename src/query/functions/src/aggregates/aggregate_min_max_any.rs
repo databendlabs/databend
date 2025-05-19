@@ -71,11 +71,7 @@ where C: ChangeIf<StringType> + Default
 impl<C> UnaryState<StringType, StringType> for MinMaxStringState<C>
 where C: ChangeIf<StringType> + Default
 {
-    fn add(
-        &mut self,
-        other: <StringType as ValueType>::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: &str, _function_data: Option<&dyn FunctionData>) -> Result<()> {
         match &self.value {
             Some(v) => {
                 if C::change_if(&StringType::to_scalar_ref(v), &other) {

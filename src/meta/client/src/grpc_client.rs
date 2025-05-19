@@ -88,6 +88,7 @@ use crate::grpc_action::RequestFor;
 use crate::grpc_metrics;
 use crate::message;
 use crate::message::Response;
+use crate::required::features;
 use crate::required::std;
 use crate::required::supported_features;
 use crate::required::Features;
@@ -364,6 +365,10 @@ impl MetaGrpcClient {
             message::Request::Watch(r) => {
                 let resp = self.watch(r).await;
                 Response::Watch(resp)
+            }
+            message::Request::WatchWithInitialization((r, _)) => {
+                let resp = self.watch_with_initialization(r).await;
+                Response::WatchWithInitialization(resp)
             }
             message::Request::Export(r) => {
                 let resp = self.export(r).await;
@@ -722,6 +727,27 @@ impl MetaGrpcClient {
         if watch_request.initial_flush {
             client.ensure_feature("watch/initial_flush")?;
         }
+        let res = client.watch(watch_request).await?;
+        Ok(res.into_inner())
+    }
+
+    /// Create a watching stream that receives KV change events.
+    ///
+    /// This method is similar to `watch`, but it also sends all existing key-values with `is_initialization=true`
+    /// before starting the watch stream.
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub(crate) async fn watch_with_initialization(
+        &self,
+        watch_request: WatchRequest,
+    ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaClientError> {
+        debug!("{}: handle watch request: {:?}", self, watch_request);
+
+        let mut client = self.get_established_client().await?;
+        client.ensure_feature_spec(&features::WATCH)?;
+        client.ensure_feature_spec(&features::WATCH_INITIAL_FLUSH)?;
+        client.ensure_feature_spec(&features::WATCH_INIT_FLAG)?;
+
         let res = client.watch(watch_request).await?;
         Ok(res.into_inner())
     }

@@ -34,6 +34,7 @@ pub mod simple_type;
 pub mod string;
 pub mod timestamp;
 pub mod variant;
+pub mod zero_size_type;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::iter::TrustedLen;
@@ -70,11 +71,12 @@ pub use self::nullable::NullableColumn;
 pub use self::nullable::NullableType;
 pub use self::number::*;
 pub use self::number_class::*;
-pub use self::simple_type::*;
+use self::simple_type::*;
 pub use self::string::StringColumn;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
+use self::zero_size_type::*;
 use crate::property::Domain;
 use crate::values::Column;
 pub use crate::values::Scalar;
@@ -360,13 +362,12 @@ impl DataType {
     }
 }
 
-pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
+pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + PartialEq;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
     type Column: Debug + Clone + PartialEq + Send;
     type Domain: Debug + Clone + PartialEq;
     type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
-    type ColumnBuilder: Debug + Clone;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar;
     fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_>;
@@ -374,33 +375,6 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>>;
     fn try_downcast_column(col: &Column) -> Option<Self::Column>;
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
-
-    /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.
-    ///
-    /// Not every builder can be downcasted successfully.
-    /// For example: `ArrayType<T: ValueType>`, `NullableType<T: ValueType>`, and `KvPair<K: ValueType, V: ValueType>`
-    /// cannot be downcasted and this method will return `None`.
-    ///
-    /// So when using this method, we cannot unwrap the returned value directly.
-    /// We should:
-    ///
-    /// ```ignore
-    /// // builder: ColumnBuilder
-    /// // T: ValueType
-    /// if let Some(inner) = T::try_downcast_builder(&mut builder) {
-    ///     inner.push(...);
-    /// } else {
-    ///     builder.push(...);
-    /// }
-    /// ```
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder>;
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
-
-    fn try_upcast_column_builder(
-        builder: Self::ColumnBuilder,
-        decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder>;
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
@@ -423,15 +397,6 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_>;
-    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
-
-    fn builder_len(builder: &Self::ColumnBuilder) -> usize;
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize);
-    fn push_default(builder: &mut Self::ColumnBuilder);
-    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column);
-    fn build_column(builder: Self::ColumnBuilder) -> Self::Column;
-    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
 
     fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
         std::mem::size_of::<Self::Scalar>()
@@ -485,9 +450,53 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     }
 }
 
-pub trait ArgType: ValueType {
+pub trait ValueType: AccessType {
+    type ColumnBuilder: Debug + Clone;
+
+    /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.
+    ///
+    /// Not every builder can be downcasted successfully.
+    /// For example: `ArrayType<T: ValueType>`, `NullableType<T: ValueType>`, and `KvPair<K: ValueType, V: ValueType>`
+    /// cannot be downcasted and this method will return `None`.
+    ///
+    /// So when using this method, we cannot unwrap the returned value directly.
+    /// We should:
+    ///
+    /// ```ignore
+    /// // builder: ColumnBuilder
+    /// // T: ValueType
+    /// if let Some(inner) = T::try_downcast_builder(&mut builder) {
+    ///     inner.push(...);
+    /// } else {
+    ///     builder.push(...);
+    /// }
+    /// ```
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder>;
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
+
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder>;
+
+    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
+
+    fn builder_len(builder: &Self::ColumnBuilder) -> usize;
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize);
+    fn push_default(builder: &mut Self::ColumnBuilder);
+    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column);
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column;
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
+}
+
+pub trait ArgType: ReturnType {
     fn data_type() -> DataType;
     fn full_domain() -> Self::Domain;
+}
+
+pub trait ReturnType: ValueType {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
     fn column_from_vec(vec: Vec<Self::Scalar>, generics: &GenericMap) -> Self::Column {

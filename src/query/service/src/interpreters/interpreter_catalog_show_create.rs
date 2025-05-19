@@ -79,7 +79,13 @@ impl Interpreter for ShowCreateCatalogInterpreter {
                     format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
                 }
                 IcebergCatalogOption::Glue(cfg) => {
-                    format!("WAREHOUSE\n{}", cfg.warehouse)
+                    format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
+                }
+                IcebergCatalogOption::Storage(cfg) => {
+                    format!(
+                        "ADDRESS\n{}\nTABLE_BUCKET_ARN\n{}",
+                        cfg.address, cfg.table_bucket_arn
+                    )
                 }
             }),
         };

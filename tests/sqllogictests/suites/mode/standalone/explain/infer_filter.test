@@ -8,13 +8,19 @@ statement ok
 drop table if exists t3;
 
 statement ok
+drop table if exists t4;
+
+statement ok
 create table t1(a int not null, b int not null);
 
 statement ok
 create table t2(a int not null, b int not null);
 
 statement ok
-create table t3(a int not null, b int not null);
+create table t3(a int not null, b int null);
+
+statement ok
+create table t4(a int not null, b variant null);
 
 # a = 1
 query T
@@ -753,8 +759,65 @@ HashJoin
     ├── apply join filters: [#1]
     └── estimated rows: 0.00
 
+query T
+explain select * from t4 where a = b and strip_null_value(b) is not null;
+----
+Filter
+├── output columns: [t4.a (#0), t4.b (#1)]
+├── filters: [is_true(CAST(t4.a (#0) AS Int32 NULL) = TRY_CAST(t4.b (#1) AS Int32 NULL)), is_not_null(strip_null_value(t4.b (#1)))]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t4
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [and_filters(CAST(t4.a (#0) AS Int32 NULL) = TRY_CAST(t4.b (#1) AS Int32 NULL), is_not_null(strip_null_value(t4.b (#1))))], limit: NONE]
+    └── estimated rows: 0.00
+
+query T
+explain select * from t3 join t4 on t3.b = t4.b where strip_null_value(t4.b) is not null;
+----
+HashJoin
+├── output columns: [t3.a (#0), t3.b (#1), t4.a (#2), t4.b (#3)]
+├── join type: INNER
+├── build keys: [CAST(t4.b (#3) AS Int32 NULL)]
+├── probe keys: [t3.b (#1)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:CAST(t4.b (#3) AS Int32 NULL), probe key:t3.b (#1), filter type:bloom,inlist,min_max
+├── estimated rows: 0.00
+├── Filter(Build)
+│   ├── output columns: [t4.a (#2), t4.b (#3)]
+│   ├── filters: [is_not_null(strip_null_value(t4.b (#3)))]
+│   ├── estimated rows: 0.00
+│   └── TableScan
+│       ├── table: default.default.t4
+│       ├── output columns: [a (#2), b (#3)]
+│       ├── read rows: 0
+│       ├── read size: 0
+│       ├── partitions total: 0
+│       ├── partitions scanned: 0
+│       ├── push downs: [filters: [is_not_null(strip_null_value(t4.b (#3)))], limit: NONE]
+│       └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.t3
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 0.00
+
 statement ok
 drop table if exists t3;
+
+statement ok
+drop table if exists t4;
 
 # merge predicates with different data types.
 statement ok
@@ -815,3 +878,4 @@ drop table if exists t1;
 
 statement ok
 drop table if exists t2;
+

@@ -20,6 +20,9 @@ outputs:
   ecr_repo:
     description: "AWS public ECR Repository"
     value: ${{ steps.registry.outputs.ecr }}
+  ghcr_repo:
+    description: "GitHub Container Registry Repository"
+    value: ${{ steps.registry.outputs.ghcr }}
 
 runs:
   using: "composite"
@@ -57,9 +60,17 @@ runs:
         username: ${{ inputs.dockerhub_user }}
         password: ${{ inputs.dockerhub_token }}
 
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+
     - name: Output Registries
       shell: bash
       id: registry
       run: |
         echo 'dockerhub=datafuselabs/${{ inputs.repo }}' >> $GITHUB_OUTPUT
         echo 'ecr=public.ecr.aws/i7g1w5q7/${{ inputs.repo }}' >> $GITHUB_OUTPUT
+        echo 'ghcr=ghcr.io/${{ github.repository_owner }}/${{ inputs.repo }}' >> $GITHUB_OUTPUT

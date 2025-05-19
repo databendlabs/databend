@@ -122,18 +122,31 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let create_task = map(
+    let create_task = map_res(
         rule! {
-            CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ #create_task_option*
             ~ #set_table_option?
             ~ AS ~ #task_sql_block
         },
-        |(_, _, opt_if_not_exists, task, create_task_opts, session_opts, _, sql)| {
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            task,
+            create_task_opts,
+            session_opts,
+            _,
+            sql,
+        )| {
             let session_opts = session_opts.unwrap_or_default();
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
             let mut stmt = CreateTaskStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: task.to_string(),
                 warehouse: None,
                 schedule_opts: None,
@@ -148,7 +161,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             for opt in create_task_opts {
                 stmt.apply_opt(opt);
             }
-            Statement::CreateTask(stmt)
+            Ok(Statement::CreateTask(stmt))
         },
     );
 
@@ -699,12 +712,21 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let alter_workload_group = map(
+    let set_workload_group_quotas = map(
         rule! {
             ALTER ~ WORKLOAD ~ GROUP ~ #ident ~ SET ~ #workload_quotas
         },
         |(_, _, _, name, _, quotas)| {
-            Statement::AlterWorkloadGroup(AlterWorkloadGroupStmt { name, quotas })
+            Statement::SetWorkloadQuotasGroup(SetWorkloadGroupQuotasStmt { name, quotas })
+        },
+    );
+
+    let unset_workload_group_quotas = map(
+        rule! {
+            ALTER ~ WORKLOAD ~ GROUP ~ #ident ~ UNSET ~ #unset_source
+        },
+        |(_, _, _, name, _, quotas)| {
+            Statement::UnsetWorkloadQuotasGroup(UnsetWorkloadGroupQuotasStmt { name, quotas })
         },
     );
 
@@ -2543,7 +2565,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
             | #drop_workload_group: "`DROP WORKLOAD GROUP [IF EXISTS] <name>`"
             | #rename_workload_group: "`RENAME WORKLOAD GROUP <old_name> TO <new_name>`"
-            | #alter_workload_group: "`ALTER WORKLOAD GROUP <name> set [<workload_group_quotas>]`"
+            | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
+            | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
         ),
         // database
         rule!(
@@ -2771,9 +2794,9 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
         } else {
             insert_source
         };
-        map(
+        map_res(
             rule! {
-                #with? ~ INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                #with? ~ INSERT ~ #hint? ~ OVERWRITE? ~ INTO?  ~ TABLE?
                 ~ #dot_separated_idents_1_to_3
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ #insert_source_parser
@@ -2783,12 +2806,18 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
                 _,
                 opt_hints,
                 overwrite,
+                into,
                 _,
                 (catalog, database, table),
                 opt_columns,
                 source,
             )| {
-                Statement::Insert(InsertStmt {
+                if overwrite.is_none() && into.is_none() {
+                    return Err(nom::Err::Failure(ErrorKind::Other(
+                        "INSERT statement must be followed by 'overwrite' or 'into'",
+                    )));
+                }
+                Ok(Statement::Insert(InsertStmt {
                     hints: opt_hints,
                     with,
                     catalog,
@@ -2798,8 +2827,8 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
                         .map(|(_, columns, _)| columns)
                         .unwrap_or_default(),
                     source,
-                    overwrite: overwrite.kind == OVERWRITE,
-                })
+                    overwrite: overwrite.is_some(),
+                }))
             },
         )(i)
     }
@@ -2969,6 +2998,15 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 //
 // This is a hack to parse large insert statements.
 pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
+    let streaming = map(
+        rule! {
+           #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)?
+        },
+        |(options, on_error_opt)| InsertSource::StreamingLoad {
+            format_options: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
+        },
+    );
     let values = map(
         rule! {
             VALUES ~ #rest_str
@@ -2987,21 +3025,11 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     rule!(
         #values
         | #query
+        | #streaming
     )(i)
 }
 
 pub fn mutation_source(i: Input) -> IResult<MutationSource> {
-    let streaming_v2 = map(
-        rule! {
-           #file_format_clause  ~ (ON_ERROR ~ ^"=" ~ ^#ident)? ~  #rest_str
-        },
-        |(options, on_error_opt, (_, start))| MutationSource::StreamingV2 {
-            settings: options,
-            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
-            start,
-        },
-    );
-
     let query = map(rule! {#query ~ #table_alias}, |(query, source_alias)| {
         MutationSource::Select {
             query: Box::new(query),
@@ -3021,8 +3049,7 @@ pub fn mutation_source(i: Input) -> IResult<MutationSource> {
     );
 
     rule!(
-          #streaming_v2
-        | #query
+        #query
         | #source_table
     )(i)
 }
@@ -4603,6 +4630,18 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, val)| UserOptionItem::MustChangePassword(val),
     );
+    let set_workload_group = map(
+        rule! {
+            SET ~ WORKLOAD ~ ^GROUP ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, wg)| UserOptionItem::SetWorkloadGroup(wg),
+    );
+    let unset_workload_group = map(
+        rule! {
+            UNSET ~ WORKLOAD ~ ^GROUP
+        },
+        |(_, _, _)| UserOptionItem::UnsetWorkloadGroup,
+    );
 
     rule!(
         #tenant_setting
@@ -4614,6 +4653,8 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #unset_password_policy
         | #set_disabled_option
         | #must_change_password
+        | #set_workload_group
+        | #unset_workload_group
     )(i)
 }
 

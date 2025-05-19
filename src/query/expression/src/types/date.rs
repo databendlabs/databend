@@ -30,6 +30,7 @@ use super::ArgType;
 use super::DataType;
 use super::DecimalSize;
 use super::GenericMap;
+use super::ReturnType;
 use super::SimpleType;
 use super::SimpleValueType;
 use crate::date_helper::DateConverter;
@@ -59,11 +60,11 @@ pub fn clamp_date(days: i64) -> i32 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DateType;
+pub struct CoreDate;
 
-impl SimpleValueType for DateType {}
+pub type DateType = SimpleValueType<CoreDate>;
 
-impl SimpleType for DateType {
+impl SimpleType for CoreDate {
     type Scalar = i32;
     type Domain = SimpleDomain<i32>;
 
@@ -135,7 +136,9 @@ impl ArgType for DateType {
             max: DATE_MAX,
         }
     }
+}
 
+impl ReturnType for DateType {
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

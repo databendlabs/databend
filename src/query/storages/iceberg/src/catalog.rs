@@ -107,6 +107,8 @@ use iceberg_catalog_hms::HmsCatalogConfig;
 use iceberg_catalog_hms::HmsThriftTransport;
 use iceberg_catalog_rest::RestCatalog;
 use iceberg_catalog_rest::RestCatalogConfig;
+use iceberg_catalog_s3tables::S3TablesCatalog;
+use iceberg_catalog_s3tables::S3TablesCatalogConfig;
 
 use crate::database::IcebergDatabase;
 use crate::IcebergTable;
@@ -114,11 +116,11 @@ use crate::IcebergTable;
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
 #[derive(Debug)]
-pub struct IcebergCreator;
+pub struct IcebergMutableCreator;
 
-impl CatalogCreator for IcebergCreator {
+impl CatalogCreator for IcebergMutableCreator {
     fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
-        let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(info)?);
+        let catalog: Arc<dyn Catalog> = Arc::new(IcebergMutableCatalog::try_create(info)?);
         Ok(catalog)
     }
 }
@@ -131,7 +133,7 @@ impl CatalogCreator for IcebergCreator {
 /// - Table metadata are saved in external Iceberg storage
 #[derive(Clone, Educe)]
 #[educe(Debug)]
-pub struct IcebergCatalog {
+pub struct IcebergMutableCatalog {
     /// info of this iceberg table.
     info: Arc<CatalogInfo>,
 
@@ -139,7 +141,7 @@ pub struct IcebergCatalog {
     ctl: Arc<dyn iceberg::Catalog>,
 }
 
-impl IcebergCatalog {
+impl IcebergMutableCatalog {
     /// create a new iceberg catalog from the endpoint_address
     #[fastrace::trace]
     pub fn try_create(info: Arc<CatalogInfo>) -> Result<Self> {
@@ -194,6 +196,7 @@ impl IcebergCatalog {
             }
             IcebergCatalogOption::Glue(glue) => {
                 let cfg = GlueCatalogConfig::builder()
+                    .uri(glue.address.clone())
                     .warehouse(glue.warehouse.clone())
                     .props(
                         glue.props
@@ -214,6 +217,27 @@ impl IcebergCatalog {
                 )?;
                 Arc::new(ctl)
             }
+            IcebergCatalogOption::Storage(s) => {
+                let cfg = S3TablesCatalogConfig::builder()
+                    .endpoint_url(s.address.clone())
+                    .table_bucket_arn(s.table_bucket_arn.clone())
+                    .properties(
+                        s.props
+                            .clone()
+                            .into_iter()
+                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
+                            .collect(),
+                    )
+                    .build();
+
+                let ctl = databend_common_base::runtime::block_on(S3TablesCatalog::new(cfg))
+                    .map_err(|err| {
+                        ErrorCode::BadArguments(format!(
+                            "There was an error building the s3 tables catalog: {err:?}"
+                        ))
+                    })?;
+                Arc::new(ctl)
+            }
         };
 
         Ok(Self { info, ctl })
@@ -226,7 +250,7 @@ impl IcebergCatalog {
 }
 
 #[async_trait]
-impl Catalog for IcebergCatalog {
+impl Catalog for IcebergMutableCatalog {
     fn name(&self) -> String {
         self.info.name_ident.catalog_name.clone()
     }
@@ -384,7 +408,7 @@ impl Catalog for IcebergCatalog {
         _get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
-            "Cannot get tables name by ids in HIVE catalog",
+            "Cannot get tables name by ids in ICEBERG catalog",
         ))
     }
 

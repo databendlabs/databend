@@ -28,6 +28,7 @@ use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::MetaHandshakeError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use log::error;
@@ -44,6 +45,7 @@ use crate::endpoints::Endpoints;
 use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
 use crate::required::Features;
+use crate::FeatureSpec;
 
 /// Update the client state according to the result of an RPC.
 trait HandleRPCResult<T> {
@@ -148,11 +150,15 @@ impl EstablishedClient {
         self.features.contains_key(feature)
     }
 
-    pub fn ensure_feature(&self, feature: &str) -> Result<(), Status> {
+    pub fn ensure_feature_spec(&self, spec: &FeatureSpec) -> Result<(), MetaHandshakeError> {
+        self.ensure_feature(spec.0)
+    }
+
+    pub fn ensure_feature(&self, feature: &str) -> Result<(), MetaHandshakeError> {
         if self.has_feature(feature) {
             Ok(())
         } else {
-            Err(Status::failed_precondition(format!(
+            Err(MetaHandshakeError::new(format!(
                 "Feature {} is not supported by the server; server:{{version: {}, features: {:?}}}",
                 feature, self.server_protocol_version, self.features
             )))

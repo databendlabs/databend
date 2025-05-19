@@ -5793,6 +5793,77 @@ AlterUser(
 
 
 ---------- Input ----------
+CREATE USER u1 IDENTIFIED BY '123456' WITH SET WORKLOAD GROUP='W1'
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET WORKLOAD GROUP = 'W1'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        create_option: Create,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123456",
+            ),
+        },
+        user_options: [
+            SetWorkloadGroup(
+                "W1",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH SET WORKLOAD GROUP = 'W1';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH SET WORKLOAD GROUP = 'W1'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            SetWorkloadGroup(
+                "W1",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH UNSET WORKLOAD GROUP;
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH UNSET WORKLOAD GROUP
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            UnsetWorkloadGroup,
+        ],
+    },
+)
+
+
+---------- Input ----------
 CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
 ---------- Output ---------
 CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123', TENANTSETTING
@@ -11837,6 +11908,548 @@ Insert(
             },
         },
         overwrite: false,
+    },
+)
+
+
+---------- Input ----------
+insert overwrite into table t select * from t2;
+---------- Output ---------
+INSERT OVERWRITE t SELECT * FROM t2
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        with: None,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                28..29,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        columns: [],
+        source: Select {
+            query: Query {
+                span: Some(
+                    30..46,
+                ),
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: Some(
+                            30..46,
+                        ),
+                        hints: None,
+                        distinct: false,
+                        top_n: None,
+                        select_list: [
+                            StarColumns {
+                                qualified: [
+                                    Star(
+                                        Some(
+                                            37..38,
+                                        ),
+                                    ),
+                                ],
+                                column_filter: None,
+                            },
+                        ],
+                        from: [
+                            Table {
+                                span: Some(
+                                    44..46,
+                                ),
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        44..46,
+                                    ),
+                                    name: "t2",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                alias: None,
+                                temporal: None,
+                                with_options: None,
+                                pivot: None,
+                                unpivot: None,
+                                sample: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: None,
+                        qualify: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                ignore_result: false,
+            },
+        },
+        overwrite: true,
+    },
+)
+
+
+---------- Input ----------
+insert overwrite table t select * from t2;
+---------- Output ---------
+INSERT OVERWRITE t SELECT * FROM t2
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        with: None,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                23..24,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        columns: [],
+        source: Select {
+            query: Query {
+                span: Some(
+                    25..41,
+                ),
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: Some(
+                            25..41,
+                        ),
+                        hints: None,
+                        distinct: false,
+                        top_n: None,
+                        select_list: [
+                            StarColumns {
+                                qualified: [
+                                    Star(
+                                        Some(
+                                            32..33,
+                                        ),
+                                    ),
+                                ],
+                                column_filter: None,
+                            },
+                        ],
+                        from: [
+                            Table {
+                                span: Some(
+                                    39..41,
+                                ),
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        39..41,
+                                    ),
+                                    name: "t2",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                alias: None,
+                                temporal: None,
+                                with_options: None,
+                                pivot: None,
+                                unpivot: None,
+                                sample: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: None,
+                        qualify: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                ignore_result: false,
+            },
+        },
+        overwrite: true,
+    },
+)
+
+
+---------- Input ----------
+INSERT ALL
+    WHEN c3 = 1 THEN
+      INTO t1
+    WHEN c3 = 3 THEN
+      INTO t2
+SELECT * from s;
+---------- Output ---------
+INSERT ALL WHEN c3 = 1 THEN INTO t1  WHEN c3 = 3 THEN INTO t2  SELECT * FROM s
+---------- AST ------------
+InsertMultiTable(
+    InsertMultiTableStmt {
+        overwrite: false,
+        is_first: false,
+        when_clauses: [
+            WhenClause {
+                condition: BinaryOp {
+                    span: Some(
+                        23..24,
+                    ),
+                    op: Eq,
+                    left: ColumnRef {
+                        span: Some(
+                            20..22,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        20..22,
+                                    ),
+                                    name: "c3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            25..26,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                },
+                into_clauses: [
+                    IntoClause {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                43..45,
+                            ),
+                            name: "t1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        target_columns: [],
+                        source_columns: [],
+                    },
+                ],
+            },
+            WhenClause {
+                condition: BinaryOp {
+                    span: Some(
+                        58..59,
+                    ),
+                    op: Eq,
+                    left: ColumnRef {
+                        span: Some(
+                            55..57,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        55..57,
+                                    ),
+                                    name: "c3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            60..61,
+                        ),
+                        value: UInt64(
+                            3,
+                        ),
+                    },
+                },
+                into_clauses: [
+                    IntoClause {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                78..80,
+                            ),
+                            name: "t2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        target_columns: [],
+                        source_columns: [],
+                    },
+                ],
+            },
+        ],
+        else_clause: None,
+        into_clauses: [],
+        source: Query {
+            span: Some(
+                81..96,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        81..96,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        88..89,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                95..96,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    95..96,
+                                ),
+                                name: "s",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+INSERT overwrite ALL
+    WHEN c3 = 1 THEN
+      INTO t1
+    WHEN c3 = 3 THEN
+      INTO t2
+SELECT * from s;
+---------- Output ---------
+INSERT OVERWRITE ALL WHEN c3 = 1 THEN INTO t1  WHEN c3 = 3 THEN INTO t2  SELECT * FROM s
+---------- AST ------------
+InsertMultiTable(
+    InsertMultiTableStmt {
+        overwrite: true,
+        is_first: false,
+        when_clauses: [
+            WhenClause {
+                condition: BinaryOp {
+                    span: Some(
+                        33..34,
+                    ),
+                    op: Eq,
+                    left: ColumnRef {
+                        span: Some(
+                            30..32,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        30..32,
+                                    ),
+                                    name: "c3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            35..36,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                },
+                into_clauses: [
+                    IntoClause {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                53..55,
+                            ),
+                            name: "t1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        target_columns: [],
+                        source_columns: [],
+                    },
+                ],
+            },
+            WhenClause {
+                condition: BinaryOp {
+                    span: Some(
+                        68..69,
+                    ),
+                    op: Eq,
+                    left: ColumnRef {
+                        span: Some(
+                            65..67,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        65..67,
+                                    ),
+                                    name: "c3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            70..71,
+                        ),
+                        value: UInt64(
+                            3,
+                        ),
+                    },
+                },
+                into_clauses: [
+                    IntoClause {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                88..90,
+                            ),
+                            name: "t2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        target_columns: [],
+                        source_columns: [],
+                    },
+                ],
+            },
+        ],
+        else_clause: None,
+        into_clauses: [],
+        source: Query {
+            span: Some(
+                91..106,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        91..106,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        98..99,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                105..106,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    105..106,
+                                ),
+                                name: "s",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
     },
 )
 
@@ -21197,7 +21810,7 @@ CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 900 SECON
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: Some(
             "MyWarehouse",
@@ -21237,7 +21850,7 @@ CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: Some(
             "MyWarehouse",
@@ -21272,7 +21885,7 @@ CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECO
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: Some(
             "MyWarehouse",
@@ -21307,7 +21920,7 @@ CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECO
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: Some(
             "MyWarehouse",
@@ -21342,7 +21955,7 @@ CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: Some(
@@ -21375,7 +21988,7 @@ CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INT
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: Some(
@@ -21404,7 +22017,7 @@ CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INT
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: Some(
@@ -21433,7 +22046,7 @@ CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECE
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: None,
@@ -21505,7 +22118,7 @@ CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los A
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: None,
@@ -21547,7 +22160,7 @@ END;
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "MyTask1",
         warehouse: None,
         schedule_opts: None,
@@ -21592,7 +22205,7 @@ END;
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "merge_task",
         warehouse: Some(
             "test-parser",
@@ -21635,7 +22248,7 @@ END;
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists,
         name: "merge_task",
         warehouse: Some(
             "test-parser",

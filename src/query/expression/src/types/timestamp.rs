@@ -32,6 +32,7 @@ use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::GenericMap;
+use crate::types::ReturnType;
 use crate::types::SimpleType;
 use crate::types::SimpleValueType;
 use crate::utils::date_helper::DateConverter;
@@ -64,11 +65,11 @@ pub fn clamp_timestamp(micros: &mut i64) {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TimestampType;
+pub struct CoreTimestamp;
 
-impl SimpleValueType for TimestampType {}
+pub type TimestampType = SimpleValueType<CoreTimestamp>;
 
-impl SimpleType for TimestampType {
+impl SimpleType for CoreTimestamp {
     type Scalar = i64;
     type Domain = SimpleDomain<i64>;
 
@@ -159,7 +160,9 @@ impl ArgType for TimestampType {
             max: TIMESTAMP_MAX,
         }
     }
+}
 
+impl ReturnType for TimestampType {
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

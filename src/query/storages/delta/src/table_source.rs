@@ -35,7 +35,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storages_parquet::ParquetFileReader;
 use databend_common_storages_parquet::ParquetPart;
-use databend_common_storages_parquet::ParquetRSFullReader;
+use databend_common_storages_parquet::ParquetWholeFileReader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
 
 use crate::partition::DeltaPartInfo;
@@ -52,7 +52,7 @@ pub struct DeltaTableSource {
     ctx: Arc<dyn TableContext>,
 
     // Used to read parquet file.
-    parquet_reader: Arc<ParquetRSFullReader>,
+    parquet_reader: Arc<ParquetWholeFileReader>,
 
     // Used to insert partition_block_entries to data block
     // FieldIndex is the index in the output_schema
@@ -73,7 +73,7 @@ impl DeltaTableSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         output_schema: DataSchemaRef,
-        parquet_reader: Arc<ParquetRSFullReader>,
+        parquet_reader: Arc<ParquetWholeFileReader>,
         partition_fields: Vec<TableField>,
     ) -> Result<ProcessorPtr> {
         let output_partition_columns = output_schema
@@ -172,7 +172,7 @@ impl Processor for DeltaTableSource {
         } else if let Some(part) = self.ctx.get_partition() {
             let part = DeltaPartInfo::from_part(&part)?;
             match &part.data {
-                ParquetPart::ParquetFile(f) => {
+                ParquetPart::File(f) => {
                     let partition_fields = self
                         .partition_fields
                         .iter()

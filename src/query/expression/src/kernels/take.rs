@@ -21,8 +21,11 @@ use databend_common_exception::Result;
 use string::StringColumnBuilder;
 
 use crate::types::binary::BinaryColumn;
+use crate::types::date::CoreDate;
 use crate::types::nullable::NullableColumn;
+use crate::types::simple_type::SimpleType;
 use crate::types::string::StringColumn;
+use crate::types::timestamp::CoreTimestamp;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
 use crate::with_number_mapped_type;
@@ -119,11 +122,11 @@ where I: databend_common_column::types::Index
 
     fn visit_column(&mut self, column: Column) -> Result<()> {
         match column {
-            Column::Date(buffer) => self.visit_simple_type::<DateType>(buffer),
-            Column::Timestamp(buffer) => self.visit_simple_type::<TimestampType>(buffer),
+            Column::Date(buffer) => self.visit_simple_type::<CoreDate>(buffer),
+            Column::Timestamp(buffer) => self.visit_simple_type::<CoreTimestamp>(buffer),
             Column::Number(number) => {
                 with_number_mapped_type!(|NUM_TYPE| match number {
-                    NumberColumn::NUM_TYPE(b) => self.visit_simple_type::<NumberType<NUM_TYPE>>(b),
+                    NumberColumn::NUM_TYPE(b) => self.visit_simple_type::<CoreNumber<NUM_TYPE>>(b),
                 })
             }
             _ => Self::default_visit_column(column, self),
@@ -146,7 +149,7 @@ where I: databend_common_column::types::Index
         Ok(())
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: <T as ValueType>::Column) -> Result<()> {
+    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
         let c = T::upcast_column(column.clone());
         let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
         let mut builder = T::try_downcast_owned_builder(builder).unwrap();

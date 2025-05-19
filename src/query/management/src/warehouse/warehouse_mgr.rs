@@ -2121,7 +2121,7 @@ impl WarehouseApi for WarehouseMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_local_addr(&self) -> Result<Option<String>> {
+    async fn get_local_addr(&self) -> Result<String> {
         Ok(self.metastore.get_local_addr().await?)
     }
 

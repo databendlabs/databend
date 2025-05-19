@@ -16,9 +16,9 @@ use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NullableType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::KeyAccessor;

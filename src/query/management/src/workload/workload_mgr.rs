@@ -201,7 +201,7 @@ impl WorkloadApi for WorkloadMgr {
         }
     }
 
-    async fn alter_quotas(&self, name: String, quotas: HashMap<String, QuotaValue>) -> Result<()> {
+    async fn set_quotas(&self, name: String, quotas: HashMap<String, QuotaValue>) -> Result<()> {
         for _index in 0..5 {
             let workload = self.get_seq_by_name(&name).await?;
             let seq = workload.seq;
@@ -209,6 +209,40 @@ impl WorkloadApi for WorkloadMgr {
 
             for (key, value) in &quotas {
                 workload.quotas.insert(key.clone(), value.clone());
+            }
+
+            let workload_key = format!("{}/{}", self.workload_key_prefix, workload.id);
+            let mut alter_workload = TxnRequest::default();
+            alter_workload
+                .condition
+                .push(TxnCondition::eq_seq(workload_key.clone(), seq));
+            alter_workload
+                .if_then
+                .push(TxnOp::put(workload_key, serde_json::to_vec(&workload)?));
+
+            if self.metastore.transaction(alter_workload).await?.success {
+                return Ok(());
+            }
+        }
+
+        Err(ErrorCode::WorkloadOperateConflict(
+            "Workload operate conflict(tried 5 times).",
+        ))
+    }
+
+    async fn unset_quotas(&self, name: String, quotas: Vec<String>) -> Result<()> {
+        for _index in 0..5 {
+            let workload = self.get_seq_by_name(&name).await?;
+            let seq = workload.seq;
+            let mut workload = workload.into_value().unwrap();
+
+            for quota_name in &quotas {
+                if workload.quotas.remove(quota_name).is_none() {
+                    return Err(ErrorCode::UnknownWorkloadQuotas(format!(
+                        "Unknown workload group quota name {} in {}",
+                        quota_name, name
+                    )));
+                }
             }
 
             let workload_key = format!("{}/{}", self.workload_key_prefix, workload.id);

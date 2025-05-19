@@ -61,9 +61,18 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool, MainError> {
         Some(Commands::Local {
             query,
             output_format,
-        }) => local::query_local(query, output_format)
-            .await
-            .with_context(make_error)?,
+            config,
+        }) => {
+            let mut conf = conf.clone();
+            if !config.is_empty() {
+                let c =
+                    databend_common_config::Config::load_with_config_file(config.as_str()).unwrap();
+                conf = c.try_into().unwrap();
+            }
+            local::query_local(conf, query, output_format)
+                .await
+                .with_context(make_error)?
+        }
     }
 
     Ok(true)

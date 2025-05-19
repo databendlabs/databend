@@ -515,6 +515,16 @@ impl BindContext {
             .collect()
     }
 
+    pub fn has_srf_recursive(&self) -> bool {
+        self.columns.iter().any(|x| x.is_srf)
+            || !self.srf_info.srfs.is_empty()
+            || self
+                .parent
+                .as_ref()
+                .map(|p| p.has_srf_recursive())
+                .unwrap_or(false)
+    }
+
     /// Return data scheme.
     pub fn output_schema(&self) -> DataSchemaRef {
         let fields = self

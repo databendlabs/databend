@@ -29,6 +29,8 @@ use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
@@ -45,6 +47,7 @@ use crate::grpc_metrics;
 use crate::message;
 use crate::message::Response;
 use crate::ClientWorkerRequest;
+use crate::InitFlag;
 use crate::RequestFor;
 use crate::Streamed;
 
@@ -102,6 +105,22 @@ impl ClientHandle {
             .await?;
 
         Ok(strm)
+    }
+
+    /// Watch without requiring the initialization support
+    pub async fn watch(
+        &self,
+        watch: WatchRequest,
+    ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaClientError> {
+        self.request(watch).await
+    }
+
+    /// Watch with requiring the initialization support
+    pub async fn watch_with_initialization(
+        &self,
+        watch: WatchRequest,
+    ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaClientError> {
+        self.request((watch, InitFlag)).await
     }
 
     /// Send a request to the internal worker task, which will be running in another runtime.

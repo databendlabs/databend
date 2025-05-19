@@ -218,18 +218,18 @@ impl Display for RenameWorkloadGroupStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct AlterWorkloadGroupStmt {
+pub struct SetWorkloadGroupQuotasStmt {
     pub name: Identifier,
     #[drive(skip)]
     pub quotas: BTreeMap<String, QuotaValueStmt>,
 }
 
-impl Display for AlterWorkloadGroupStmt {
+impl Display for SetWorkloadGroupQuotasStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ALTER WORKLOAD GROUP {}", self.name)?;
 
         if !self.quotas.is_empty() {
-            write!(f, " SET ")?;
+            write!(f, " SET")?;
 
             for (idx, (key, value)) in self.quotas.iter().enumerate() {
                 if idx != 0 {
@@ -237,6 +237,33 @@ impl Display for AlterWorkloadGroupStmt {
                 }
 
                 write!(f, " {} = '{}'", key, value)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct UnsetWorkloadGroupQuotasStmt {
+    pub name: Identifier,
+    #[drive(skip)]
+    pub quotas: Vec<Identifier>,
+}
+
+impl Display for UnsetWorkloadGroupQuotasStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ALTER WORKLOAD GROUP {}", self.name)?;
+
+        if !self.quotas.is_empty() {
+            write!(f, " UNSET")?;
+
+            for (idx, name) in self.quotas.iter().enumerate() {
+                if idx != 0 {
+                    write!(f, ",")?;
+                }
+
+                write!(f, " {}", name)?;
             }
         }
 

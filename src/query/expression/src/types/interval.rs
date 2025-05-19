@@ -20,6 +20,7 @@ use databend_common_column::types::months_days_micros;
 use databend_common_io::Interval;
 
 use super::number::SimpleDomain;
+use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -33,11 +34,11 @@ use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IntervalType;
+pub struct CoreInterval;
 
-impl SimpleValueType for IntervalType {}
+pub type IntervalType = SimpleValueType<CoreInterval>;
 
-impl SimpleType for IntervalType {
+impl SimpleType for CoreInterval {
     type Scalar = months_days_micros;
     type Domain = SimpleDomain<months_days_micros>;
 
@@ -129,7 +130,9 @@ impl ArgType for IntervalType {
             max: months_days_micros::new(12 * 200, 365 * 200, 7200000000000000000),
         }
     }
+}
 
+impl ReturnType for IntervalType {
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

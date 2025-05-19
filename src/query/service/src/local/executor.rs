@@ -22,9 +22,9 @@ use databend_common_base::base::tokio::io::AsyncRead;
 use databend_common_base::base::tokio::time::Instant;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserInfo;
@@ -61,7 +61,7 @@ pub(crate) struct SessionExecutor {
     keywords: Arc<Vec<String>>,
 }
 
-static PROMPT_SQL: &str = "select name from system.tables union all select name from system.columns union all select name from system.databases union all select name from system.functions";
+static PROMPT_SQL: &str = "select name from default.system.tables union all select name from default.system.columns union all select name from default.system.databases union all select name from default.system.functions";
 
 impl SessionExecutor {
     pub async fn try_new(is_repl: bool, output_format: &str) -> Result<Self> {

@@ -21,7 +21,6 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_virtual_column::VirtualColumnHandler;
 use databend_enterprise_virtual_column::VirtualColumnHandlerWrapper;
-use databend_storages_common_table_meta::meta::Location;
 
 use crate::storages::fuse::do_refresh_virtual_column;
 
@@ -33,10 +32,9 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         &self,
         ctx: Arc<dyn TableContext>,
         fuse_table: &FuseTable,
-        segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        do_refresh_virtual_column(ctx, fuse_table, segment_locs, pipeline).await
+        do_refresh_virtual_column(ctx, fuse_table, pipeline).await
     }
 }
 

@@ -467,6 +467,7 @@ mod tests {
     use databend_common_column::bitmap::Bitmap;
 
     use super::*;
+    use crate::types::AccessType;
     use crate::types::ArgType;
     use crate::types::Int32Type;
     use crate::types::NullableColumn;

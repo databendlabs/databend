@@ -51,12 +51,7 @@ impl PySessionContext {
                 .await
                 .unwrap();
 
-            let tenant = if let Some(tenant) = tenant {
-                tenant.to_owned()
-            } else {
-                uuid::Uuid::new_v4().to_string()
-            };
-
+            let tenant = tenant.unwrap_or("default");
             let tenant = Tenant::new_or_err(tenant, "PySessionContext::new()").map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Error: {}", e))
             })?;
@@ -66,7 +61,7 @@ impl PySessionContext {
             let session = session_manager.register_session(session).unwrap();
 
             let config = GlobalConfig::instance();
-            UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant, config.query.enable_meta_data_upgrade_json_to_pb_from_v307)
+            UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant)
                 .await
                 .unwrap();
 

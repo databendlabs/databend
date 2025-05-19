@@ -78,6 +78,10 @@ impl DescUserPlan {
                 "must_change_password",
                 DataType::Nullable(Box::new(DataType::Boolean)),
             ),
+            DataField::new(
+                "workload_group",
+                DataType::Nullable(Box::new(DataType::String)),
+            ),
         ])
     }
 }

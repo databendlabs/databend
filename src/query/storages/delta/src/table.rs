@@ -44,8 +44,9 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::init_operator;
 use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;
-use databend_common_storages_parquet::ParquetRSPruner;
-use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_common_storages_parquet::ParquetPruner;
+use databend_common_storages_parquet::ParquetReaderBuilder;
+use databend_common_storages_parquet::ParquetSourceType;
 use databend_storages_common_pruner::partition_prunner::FetchPartitionScalars;
 use databend_storages_common_pruner::partition_prunner::PartitionPruner;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -221,7 +222,7 @@ impl DeltaTable {
             read_options = read_options.with_do_prewhere(false);
         }
 
-        let pruner = ParquetRSPruner::try_create(
+        let pruner = ParquetPruner::try_create(
             ctx.get_function_context()?,
             table_schema.clone(),
             leaf_fields,
@@ -248,13 +249,14 @@ impl DeltaTable {
             None
         };
         let mut builder =
-            ParquetRSReaderBuilder::create(ctx.clone(), Arc::new(op), table_schema, arrow_schema)?
+            ParquetReaderBuilder::create(ctx.clone(), Arc::new(op), table_schema, arrow_schema)?
                 .with_options(read_options)
                 .with_push_downs(push_downs.as_ref())
                 .with_pruner(Some(pruner))
                 .with_partition_columns(self.meta.partition_columns.clone());
 
-        let parquet_reader = Arc::new(builder.build_full_reader(false)?);
+        let parquet_reader =
+            Arc::new(builder.build_full_reader(ParquetSourceType::DeltaLake, false)?);
 
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
         pipeline.add_source(
@@ -337,7 +339,7 @@ impl DeltaTable {
                 let partition_values = get_partition_values(add, &partition_fields)?;
                 Ok(Arc::new(Box::new(DeltaPartInfo {
                         partition_values,
-                        data: ParquetPart::ParquetFile(
+                        data: ParquetPart::File(
                             ParquetFilePart {
                                 file: add.path.clone(),
                                 compressed_size: add.size as u64,

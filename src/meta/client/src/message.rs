@@ -71,6 +71,10 @@ impl<T> Streamed<T> {
     }
 }
 
+/// A marker type to indicate that the watch response should return a flag event indicating the end of initialization.
+#[derive(Debug, Clone)]
+pub struct InitFlag;
+
 /// Meta-client handle-to-worker request body
 #[derive(Debug, Clone, derive_more::From)]
 pub enum Request {
@@ -88,6 +92,17 @@ pub enum Request {
 
     /// Watch KV changes, expecting a Stream that reports KV change events
     Watch(WatchRequest),
+
+    /// Watch KV changes with optional initialization flush of all existing values.
+    ///
+    /// When `initial_flush` is set to true in the WatchRequest:
+    /// - First sends all existing key-values with `is_initialization=true`
+    /// - Then sends a special event with no data to mark the end of initialization
+    /// - Finally streams real-time changes as they occur
+    ///
+    /// This provides a reliable way to initialize client-side caches and then
+    /// keep them synchronized with server state.
+    WatchWithInitialization((WatchRequest, InitFlag)),
 
     /// Export all data
     Export(ExportReq),
@@ -113,6 +128,7 @@ impl Request {
             Request::Upsert(_) => "Upsert",
             Request::Txn(_) => "Txn",
             Request::Watch(_) => "Watch",
+            Request::WatchWithInitialization(_) => "WatchWithInitialization",
             Request::Export(_) => "Export",
             Request::MakeEstablishedClient(_) => "MakeClient",
             Request::GetEndpoints(_) => "GetEndpoints",
@@ -130,6 +146,7 @@ pub enum Response {
     Upsert(Result<UpsertKVReply, MetaError>),
     Txn(Result<TxnReply, MetaError>),
     Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaClientError>),
+    WatchWithInitialization(Result<tonic::codec::Streaming<WatchResponse>, MetaClientError>),
     Export(Result<tonic::codec::Streaming<ExportedChunk>, MetaError>),
     MakeEstablishedClient(Result<EstablishedClient, MetaClientError>),
     GetEndpoints(Result<Vec<String>, MetaError>),
@@ -154,6 +171,9 @@ impl fmt::Debug for Response {
             }
             Response::Watch(x) => {
                 write!(f, "Watch({:?})", x)
+            }
+            Response::WatchWithInitialization(x) => {
+                write!(f, "WatchWithInitialization({:?})", x)
             }
             Response::Export(x) => {
                 write!(f, "Export({:?})", x)
@@ -194,6 +214,10 @@ impl Response {
                 .err()
                 .map(|x| x as &(dyn std::error::Error + 'static)),
             Response::Watch(res) => res
+                .as_ref()
+                .err()
+                .map(|x| x as &(dyn std::error::Error + 'static)),
+            Response::WatchWithInitialization(res) => res
                 .as_ref()
                 .err()
                 .map(|x| x as &(dyn std::error::Error + 'static)),

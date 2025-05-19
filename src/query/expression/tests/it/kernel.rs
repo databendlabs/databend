@@ -18,6 +18,7 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;

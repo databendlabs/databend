@@ -28,6 +28,7 @@ use crate::types::i256;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
+use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -35,8 +36,8 @@ use crate::types::DateType;
 use crate::types::DecimalSize;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
+use crate::types::ReturnType;
 use crate::types::TimestampType;
-use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -287,7 +288,7 @@ impl Payload {
     ) -> Column {
         let len = state.probe_state.row_count;
         let iter = (0..len).map(|idx| unsafe {
-            read::<<DecimalType<Num> as ValueType>::Scalar>(
+            read::<<DecimalType<Num> as AccessType>::Scalar>(
                 state.addresses[idx].add(col_offset) as _
             )
         });

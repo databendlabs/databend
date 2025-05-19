@@ -512,18 +512,18 @@ impl ClusterDiscovery {
             if let Ok(socket_addr) = SocketAddr::from_str(lookup_ip) {
                 let ip_addr = socket_addr.ip();
                 if ip_addr.is_loopback() || ip_addr.is_unspecified() {
-                    if let Some(local_addr) = self.warehouse_manager.get_local_addr().await? {
-                        let local_socket_addr = SocketAddr::from_str(&local_addr)?;
-                        let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
-                        warn!(
-                            "Detected loopback or unspecified address as {} endpoint. \
-                            We rewrite it(\"{}\" -> \"{}\") for advertising to other nodes. \
-                            If there are proxies between nodes, you can specify endpoint with --{}.",
-                            typ, lookup_ip, new_addr, typ
-                        );
+                    let local_addr = self.warehouse_manager.get_local_addr().await?;
 
-                        *lookup_ip = new_addr;
-                    }
+                    let local_socket_addr = SocketAddr::from_str(&local_addr)?;
+                    let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
+                    warn!(
+                        "Detected loopback or unspecified address as {} endpoint. \
+                        We rewrite it(\"{}\" -> \"{}\") for advertising to other nodes. \
+                        If there are proxies between nodes, you can specify endpoint with --{}.",
+                        typ, lookup_ip, new_addr, typ
+                    );
+
+                    *lookup_ip = new_addr;
                 }
             }
         }

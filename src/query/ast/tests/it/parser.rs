@@ -194,6 +194,9 @@ fn test_statement() {
         r#"ALTER USER u1 WITH DEFAULT_ROLE = role1, DISABLED=true, TENANTSETTING;"#,
         r#"ALTER USER u1 WITH SET NETWORK POLICY = 'policy1';"#,
         r#"ALTER USER u1 WITH UNSET NETWORK POLICY;"#,
+        r#"CREATE USER u1 IDENTIFIED BY '123456' WITH SET WORKLOAD GROUP='W1'"#,
+        r#"ALTER USER u1 WITH SET WORKLOAD GROUP = 'W1';"#,
+        r#"ALTER USER u1 WITH UNSET WORKLOAD GROUP;"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='policy1'"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH disabled=true"#,
@@ -248,6 +251,20 @@ fn test_statement() {
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
         r#"insert into table t select * from t2;"#,
+        r#"insert overwrite into table t select * from t2;"#,
+        r#"insert overwrite table t select * from t2;"#,
+        r#"INSERT ALL
+    WHEN c3 = 1 THEN
+      INTO t1
+    WHEN c3 = 3 THEN
+      INTO t2
+SELECT * from s;"#,
+        r#"INSERT overwrite ALL
+    WHEN c3 = 1 THEN
+      INTO t1
+    WHEN c3 = 3 THEN
+      INTO t2
+SELECT * from s;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"SELECT avg((number > 314)::UInt32);"#,
         r#"SELECT 1 - (2 + 3);"#,
@@ -941,6 +958,7 @@ fn test_statement_error() {
         r#"CREATE TABLE t(c1 int, c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"=33554432);"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
+        r#"insert table t select * from t2;"#,
         r#"truncate a"#,
         r#"drop a"#,
         r#"insert into t format"#,
