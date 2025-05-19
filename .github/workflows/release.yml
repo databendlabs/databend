@@ -418,7 +418,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
   bindings_python:
-    if: needs.create_release.outputs.type == 'stable'
+    # if: needs.create_release.outputs.type == 'stable'
     needs: create_release
     uses: ./.github/workflows/bindings.python.yml
     secrets: inherit
