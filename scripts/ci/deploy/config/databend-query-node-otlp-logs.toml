@@ -65,9 +65,18 @@ otlp_protocol = "http"
 pkey1 = "pvalue1"
 pkey2 = "pvalue2"
 
-[log.persistentlog]
+[log.history]
 on = true
 level = "INFO"
+
+[[log.history.tables]]
+table_name = "query_history"
+
+[[log.history.tables]]
+table_name = "profile_history"
+
+[[log.history.tables]]
+table_name = "login_history"
 
 [meta]
 endpoints = ["0.0.0.0:9191"]
