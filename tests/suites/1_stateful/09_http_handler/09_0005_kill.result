@@ -3,7 +3,7 @@
 ## kill
 200
 ## page
-{"error":{"code":400,"message":"query id QID canceled"}}
+{"error":{"code":400,"message":"[HTTP-QUERY] Query ID QID canceled"}}
 400
 ## final
 {

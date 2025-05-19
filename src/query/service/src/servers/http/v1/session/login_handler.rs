@@ -131,6 +131,8 @@ pub async fn login_handler(
                 }))
             }
         }
-        _ => unreachable!("/session/login expect password or JWT"),
+        _ => unreachable!(
+            "[HTTP-SESSION] /session/login endpoint requires password or JWT authentication"
+        ),
     }
 }

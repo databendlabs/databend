@@ -133,7 +133,7 @@ impl HttpQueryManager {
                 match expire_res {
                     ExpireResult::Expired => {
                         let msg = format!(
-                            "http query {} timeout after {} s",
+                            "[HTTP-QUERY] Query {} timed out after {} seconds",
                             &query_id_clone, query_result_timeout_secs
                         );
                         _ = self_clone
@@ -200,7 +200,7 @@ impl HttpQueryManager {
                 sleep(Duration::from_secs(timeout_secs)).await;
                 if self_clone.get_txn(&last_query_id_clone).is_some() {
                     log::info!(
-                        "transaction timeout after {} secs, last_query_id = {}.",
+                        "[HTTP-QUERY] Transaction timed out after {} seconds, last_query_id = {}",
                         timeout_secs,
                         last_query_id_clone
                     );
@@ -225,19 +225,19 @@ impl HttpQueryManager {
         if let Some(ServerInfo { id, start_time }) = last_server_info {
             if self.server_info.id != *id {
                 return Err(ErrorCode::InvalidSessionState(format!(
-                    "transaction is active, but the request routed to the wrong server: current server is {}, the last is {}.",
+                    "[HTTP-QUERY] Transaction is active but request was routed to the wrong server: current server is {}, expected server is {}",
                     self.server_info.id, id
                 )));
             }
             if self.server_info.start_time != *start_time {
                 return Err(ErrorCode::CurrentTransactionIsAborted(format!(
-                    "transaction is aborted because server restarted at {}.",
+                    "[HTTP-QUERY] Transaction was aborted because server restarted at {}",
                     start_time
                 )));
             }
         } else {
             return Err(ErrorCode::InvalidSessionState(
-                "transaction is active but missing server_info".to_string(),
+                "[HTTP-QUERY] Transaction is active but missing server_info".to_string(),
             ));
         }
         Ok(())
@@ -250,19 +250,20 @@ impl HttpQueryManager {
         if let Some(ServerInfo { id, start_time }) = last_server_info {
             if self.server_info.id != *id {
                 return Err(ErrorCode::InvalidSessionState(format!(
-                    "there are temp tables in session, but the request routed to the wrong server: current server is {}, the last is {}.",
+                    "[HTTP-QUERY] Session contains temporary tables but request was routed to the wrong server: current server is {}, expected server is {}",
                     self.server_info.id, id
                 )));
             }
             if self.server_info.start_time != *start_time {
                 return Err(ErrorCode::InvalidSessionState(format!(
-                    "temp table lost because server restarted at {}.",
+                    "[HTTP-QUERY] Temporary tables were lost because server restarted at {}",
                     start_time
                 )));
             }
         } else {
             return Err(ErrorCode::InvalidSessionState(
-                "there are temp tables in session, but missing field server_info".to_string(),
+                "[HTTP-QUERY] Session contains temporary tables but missing server_info field"
+                    .to_string(),
             ));
         }
         Ok(())

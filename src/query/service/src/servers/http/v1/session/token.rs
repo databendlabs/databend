@@ -82,7 +82,9 @@ impl SessionClaim {
 
     pub fn decode(token: &str) -> Result<(Self, TokenType)> {
         let fmt_err = |reason: String| {
-            ErrorCode::AuthenticateFailure(format!("fail to decode token({reason}): {token}"))
+            ErrorCode::AuthenticateFailure(format!(
+                "[HTTP-SESSION] Failed to decode token: {reason}, token: {token}"
+            ))
         };
         let t = Self::get_type(token)?;
         if token.len() < TOKEN_PREFIX.len() {
