@@ -84,7 +84,6 @@ where S: Serializer {
     let t = DateTime::from_timestamp(
         dt / 1_000_000,
         TryFrom::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
-        // u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
     )
     .unwrap()
     .naive_utc();

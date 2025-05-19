@@ -293,7 +293,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     }
     if conf.log.history.on {
         GlobalPersistentLog::instance().initialized();
-        println!("    history tables: {}", conf.log.history);
+        println!("    system history tables: {}", conf.log.history);
     }
 
     println!();
