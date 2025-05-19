@@ -276,6 +276,17 @@ impl Processor for TransformHashJoinBuild {
                     .load(Ordering::Acquire);
             }
             Step::Async(AsyncStep::WaitCollect) => {
+                if !self.is_spilled_partitions_added {
+                    let spilled_partitions = self.spiller.spilled_partitions();
+                    self.build_state
+                        .hash_join_state
+                        .add_spilled_partitions(&spilled_partitions);
+                    self.is_spilled_partitions_added = true;
+                }
+                if self.has_unrestored_data() {
+                    self.set_need_next_round()
+                }
+                self.build_state.barrier.wait().await;
                 if !self
                     .build_state
                     .is_runtime_filter_added
@@ -296,17 +307,6 @@ impl Processor for TransformHashJoinBuild {
                         .add_runtime_filter(&build_chunks, build_num_rows)
                         .await?;
                 }
-                if !self.is_spilled_partitions_added {
-                    let spilled_partitions = self.spiller.spilled_partitions();
-                    self.build_state
-                        .hash_join_state
-                        .add_spilled_partitions(&spilled_partitions);
-                    self.is_spilled_partitions_added = true;
-                }
-                if self.has_unrestored_data() {
-                    self.set_need_next_round()
-                }
-                self.build_state.barrier.wait().await;
             }
             Step::Async(AsyncStep::Spill) => {
                 self.spiller.spill(&self.data_blocks, None).await?;
