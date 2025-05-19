@@ -22,6 +22,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
@@ -30,6 +31,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -44,65 +46,51 @@ use crate::operations::MutationLogs;
 use crate::FuseTable;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
-#[allow(clippy::large_enum_variant)]
 enum State {
     Consume,
     Collect(DataBlock),
     Serialize,
     Finalize,
     Flush,
-    Write(BlockSerialization),
 }
 
-pub struct TransformBlockWriter {
+pub struct TransformBlockBuilder {
     state: State,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    kind: MutationKind,
 
     properties: Arc<StreamBlockProperties>,
+    max_block_rows: usize,
 
     builder: Option<StreamBlockBuilder>,
     need_flush: bool,
     input_data_size: usize,
     input_num_rows: usize,
 
-    dal: Operator,
-    // Only used in multi table insert
-    table_id: Option<u64>,
-
-    max_block_rows: usize,
     input_data: VecDeque<DataBlock>,
     output_data: Option<DataBlock>,
 }
 
-impl TransformBlockWriter {
+impl TransformBlockBuilder {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        kind: MutationKind,
         table: &FuseTable,
         table_meta_timestamps: TableMetaTimestamps,
-        with_tid: bool,
-        max_block_bytes: Option<usize>,
     ) -> Result<ProcessorPtr> {
         let max_block_rows = std::cmp::min(
             ctx.get_settings().get_max_block_size()? as usize,
             table.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT),
         );
-        let properties =
-            StreamBlockProperties::try_create(ctx, table, table_meta_timestamps, max_block_bytes)?;
-        Ok(ProcessorPtr::create(Box::new(TransformBlockWriter {
+        let properties = StreamBlockProperties::try_create(ctx, table, table_meta_timestamps)?;
+        Ok(ProcessorPtr::create(Box::new(TransformBlockBuilder {
             state: State::Consume,
             input,
             output,
-            kind,
             properties,
             builder: None,
-            dal: table.get_operator(),
             need_flush: false,
-            table_id: if with_tid { Some(table.get_id()) } else { None },
             input_data: VecDeque::new(),
             input_data_size: 0,
             input_num_rows: 0,
@@ -134,9 +122,9 @@ impl TransformBlockWriter {
 }
 
 #[async_trait]
-impl Processor for TransformBlockWriter {
+impl Processor for TransformBlockBuilder {
     fn name(&self) -> String {
-        "TransformBlockWriter".to_string()
+        "TransformBlockBuilder".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -144,12 +132,11 @@ impl Processor for TransformBlockWriter {
     }
 
     fn event(&mut self) -> Result<Event> {
-        match &self.state {
-            State::Collect(_) | State::Serialize | State::Flush | State::Finalize => {
-                return Ok(Event::Sync)
-            }
-            State::Write(_) => return Ok(Event::Async),
-            _ => {}
+        if matches!(
+            self.state,
+            State::Collect(_) | State::Serialize | State::Flush | State::Finalize
+        ) {
+            return Ok(Event::Sync);
         }
 
         if self.output.is_finished() {
@@ -169,7 +156,6 @@ impl Processor for TransformBlockWriter {
         if self.need_flush
             && self
                 .properties
-                .block_thresholds
                 .check_large_enough(self.input_num_rows, self.input_data_size)
         {
             self.state = State::Flush;
@@ -207,13 +193,9 @@ impl Processor for TransformBlockWriter {
                 block.check_valid()?;
                 self.input_data_size += block.estimate_block_size();
                 self.input_num_rows += block.num_rows();
-                if self.properties.max_block_bytes.is_some() {
-                    self.input_data.push_back(block);
-                } else {
-                    let max_rows_per_block = self.calc_max_block_rows(&block);
-                    let blocks = block.split_by_rows_no_tail(max_rows_per_block);
-                    self.input_data.extend(blocks);
-                }
+                let max_rows_per_block = self.calc_max_block_rows(&block);
+                let blocks = block.split_by_rows_no_tail(max_rows_per_block);
+                self.input_data.extend(blocks);
             }
             State::Serialize => {
                 while let Some(b) = self.input_data.pop_front() {
@@ -240,7 +222,7 @@ impl Processor for TransformBlockWriter {
                 let builder = self.builder.take().unwrap();
                 if !builder.is_empty() {
                     let serialized = builder.finish()?;
-                    self.state = State::Write(serialized);
+                    self.output_data = Some(DataBlock::empty_with_meta(Box::new(serialized)));
                 }
                 self.need_flush = false;
             }
@@ -248,11 +230,41 @@ impl Processor for TransformBlockWriter {
         }
         Ok(())
     }
+}
 
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Consume) {
-            State::Write(serialized) => {
+pub struct TransformBlockWriter {
+    kind: MutationKind,
+    dal: Operator,
+    ctx: Arc<dyn TableContext>,
+    // Only used in multi table insert
+    table_id: Option<u64>,
+}
+
+impl TransformBlockWriter {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        kind: MutationKind,
+        table: &FuseTable,
+        with_tid: bool,
+    ) -> Self {
+        Self {
+            ctx,
+            dal: table.get_operator(),
+            table_id: if with_tid { Some(table.get_id()) } else { None },
+            kind,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncAccumulatingTransform for TransformBlockWriter {
+    const NAME: &'static str = "TransformBlockWriter";
+
+    async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
+        debug_assert!(data.is_empty());
+
+        if let Some(ptr) = data.get_owned_meta() {
+            if let Some(serialized) = BlockSerialization::downcast_from(ptr) {
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
 
                 let bytes = if let Some(draft_virtual_block_meta) =
@@ -264,22 +276,19 @@ impl Processor for TransformBlockWriter {
                     extended_block_meta.block_meta.block_size as usize
                 };
 
-                self.properties
-                    .ctx
-                    .get_write_progress()
-                    .incr(&ProgressValues {
-                        rows: extended_block_meta.block_meta.row_count as usize,
-                        bytes,
-                    });
+                self.ctx.get_write_progress().incr(&ProgressValues {
+                    rows: extended_block_meta.block_meta.row_count as usize,
+                    bytes,
+                });
 
                 // appending new data block
                 if let Some(tid) = self.table_id {
-                    self.properties.ctx.update_multi_table_insert_status(
+                    self.ctx.update_multi_table_insert_status(
                         tid,
                         extended_block_meta.block_meta.row_count,
                     );
                 } else {
-                    self.properties.ctx.add_mutation_status(MutationStatus {
+                    self.ctx.add_mutation_status(MutationStatus {
                         insert_rows: extended_block_meta.block_meta.row_count,
                         update_rows: 0,
                         deleted_rows: 0,
@@ -299,10 +308,13 @@ impl Processor for TransformBlockWriter {
                         }],
                     }))
                 };
-                self.output_data = Some(output);
+
+                return Ok(Some(output));
             }
-            _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
-        Ok(())
+
+        Err(ErrorCode::Internal(
+            "Cannot downcast meta to BlockSerialization",
+        ))
     }
 }
