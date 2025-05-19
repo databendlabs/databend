@@ -14,6 +14,5 @@
 
 mod global_persistent_log;
 mod session;
-mod tables;
 
 pub use global_persistent_log::GlobalPersistentLog;

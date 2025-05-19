@@ -42,7 +42,9 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
 use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
+use databend_common_tracing::init_history_tables;
 use databend_common_tracing::GlobalLogger;
+use databend_common_tracing::HistoryTable;
 use futures_util::future::join_all;
 use futures_util::TryStreamExt;
 use log::error;
@@ -53,8 +55,6 @@ use uuid::Uuid;
 
 use crate::interpreters::InterpreterFactory;
 use crate::persistent_log::session::create_session;
-use crate::persistent_log::tables::init_tables;
-use crate::persistent_log::tables::HistoryTable;
 
 pub struct GlobalPersistentLog {
     meta_client: Arc<ClientHandle>,
@@ -85,7 +85,7 @@ impl GlobalPersistentLog {
             stage_name,
             initialized: AtomicBool::new(false),
             retention_interval: cfg.log.history.retention_interval,
-            tables: init_tables(cfg)?,
+            tables: init_history_tables(&cfg.log.history)?,
         });
         GlobalInstance::set(instance);
         GlobalIORuntime::instance().spawn(async move {
@@ -312,7 +312,6 @@ impl GlobalPersistentLog {
                 }
                 table.assemble_normal_transform(batch_number_begin, batch_number_end)
             };
-            dbg!(chrono::Local::now(), &table.name);
             self.execute_sql(&sql).await?;
             if table.name == "log_history" {
                 self.set_u64_to_meta(
