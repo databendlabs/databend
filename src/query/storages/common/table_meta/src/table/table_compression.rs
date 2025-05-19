@@ -92,7 +92,7 @@ impl From<meta::Compression> for ParquetCompression {
             meta::Compression::Snappy => ParquetCompression::SNAPPY,
             meta::Compression::Zstd => ParquetCompression::ZSTD(ZstdLevel::default()),
             meta::Compression::None => ParquetCompression::UNCOMPRESSED,
-            meta::Compression::Lz4 => panic!("deprecated lz4"),
+            meta::Compression::Lz4 => ParquetCompression::LZ4_RAW,
             meta::Compression::Gzip => ParquetCompression::GZIP(GzipLevel::default()),
         }
     }
