@@ -16,5 +16,5 @@ mod block_builder;
 mod cluster_statistics;
 mod column_statistics;
 
-pub(crate) use block_builder::StreamBlockBuilder;
-pub(crate) use block_builder::StreamBlockProperties;
+pub use block_builder::StreamBlockBuilder;
+pub use block_builder::StreamBlockProperties;

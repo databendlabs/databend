@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod compact_strategy;
-mod hilbert_partition_exchange;
-mod transform_hilbert_collect;
+mod recluster_partition_exchange;
+mod recluster_partition_strategy;
 
-pub use compact_strategy::CompactStrategy;
-pub use hilbert_partition_exchange::HilbertPartitionExchange;
-pub use transform_hilbert_collect::TransformHilbertCollect;
+pub use recluster_partition_exchange::ReclusterPartitionExchange;
+pub use recluster_partition_strategy::CompactPartitionStrategy;
+pub use recluster_partition_strategy::ReclusterPartitionStrategy;

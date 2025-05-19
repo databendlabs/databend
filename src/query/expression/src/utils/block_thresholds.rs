@@ -153,7 +153,7 @@ impl BlockThresholds {
         let bytes_per_block = total_bytes.div_ceil(block_num_by_compressed);
         // Adjust the number of blocks based on block size thresholds.
         let max_bytes_per_block = self.max_bytes_per_block.min(400 * 1024 * 1024);
-        let min_bytes_per_block = max_bytes_per_block / 2;
+        let min_bytes_per_block = (self.min_bytes_per_block / 2).min(50 * 1024 * 1024);
         let block_nums = if bytes_per_block > max_bytes_per_block {
             // Case 1: If the block size is too bigger.
             total_bytes.div_ceil(max_bytes_per_block)
@@ -201,7 +201,7 @@ impl BlockThresholds {
         // Adjust block count based on byte size thresholds.
         let bytes_per_block = total_bytes.div_ceil(by_compressed);
         let max_bytes = self.max_bytes_per_block.min(400 * 1024 * 1024);
-        let min_bytes = max_bytes / 2;
+        let min_bytes = (self.min_bytes_per_block / 2).min(50 * 1024 * 1024);
         let total_partitions = if bytes_per_block > max_bytes {
             // Block size is too large.
             total_bytes / max_bytes
