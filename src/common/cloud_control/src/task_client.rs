@@ -20,6 +20,7 @@ use tonic::Request;
 
 use crate::client_config::make_request;
 use crate::client_config::ClientConfig;
+use crate::client_config::GrpcConfig;
 use crate::pb::task_service_client::TaskServiceClient;
 use crate::pb::AlterTaskRequest;
 use crate::pb::AlterTaskResponse;
@@ -36,6 +37,11 @@ use crate::pb::ShowTasksResponse;
 
 pub(crate) const TASK_CLIENT_VERSION: &str = "v1";
 pub(crate) const TASK_CLIENT_VERSION_NAME: &str = "TASK_CLIENT_VERSION";
+/// Grpc default configuration.
+/// The hard limit of maximum message size the client or server can **send**.
+pub const MAX_ENCODING_SIZE: usize = 32 * 1024 * 1024;
+/// The hard limit of maximum message size the client or server can **receive**.
+pub const MAX_DECODING_SIZE: usize = 32 * 1024 * 1024;
 
 pub struct TaskClient {
     pub task_client: TaskServiceClient<Channel>,
@@ -44,7 +50,10 @@ pub struct TaskClient {
 impl TaskClient {
     // TODO: add auth interceptor
     pub async fn new(channel: Channel) -> Result<Arc<TaskClient>> {
-        let task_client = TaskServiceClient::new(channel);
+        let task_client = TaskServiceClient::new(channel)
+            .max_decoding_message_size(MAX_DECODING_SIZE)
+            .max_encoding_message_size(MAX_ENCODING_SIZE);
+
         Ok(Arc::new(TaskClient { task_client }))
     }
 
