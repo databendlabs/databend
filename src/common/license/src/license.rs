@@ -79,6 +79,8 @@ pub enum Feature {
     NgramIndex,
     #[serde(alias = "workload_group", alias = "WORKLOAD_GROUP")]
     WorkloadGroup,
+    #[serde(alias = "system_history", alias = "SYSTEM_HISTORY")]
+    SystemHistory,
     #[serde(other)]
     Unknown,
 }
@@ -128,6 +130,7 @@ impl fmt::Display for Feature {
             Feature::HilbertClustering => write!(f, "hilbert_clustering"),
             Feature::NgramIndex => write!(f, "ngram_index"),
             Feature::WorkloadGroup => write!(f, "workload_group"),
+            Feature::SystemHistory => write!(f, "system_history"),
             Feature::Unknown => write!(f, "unknown"),
         }
     }
@@ -351,6 +354,16 @@ mod tests {
         );
 
         assert_eq!(
+            Feature::WorkloadGroup,
+            serde_json::from_str::<Feature>("\"workload_group\"").unwrap()
+        );
+
+        assert_eq!(
+            Feature::SystemHistory,
+            serde_json::from_str::<Feature>("\"system_history\"").unwrap()
+        );
+
+        assert_eq!(
             Feature::Unknown,
             serde_json::from_str::<Feature>("\"ssss\"").unwrap()
         );
@@ -384,11 +397,13 @@ mod tests {
                 Feature::AmendTable,
                 Feature::HilbertClustering,
                 Feature::NgramIndex,
+                Feature::WorkloadGroup,
+                Feature::SystemHistory,
             ]),
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,storage_encryption,storage_quota(storage_usage: 1),stream,vacuum,virtual_column] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,storage_encryption,storage_quota(storage_usage: 1),stream,system_history,vacuum,virtual_column,workload_group] }",
             license_info.to_string()
         );
     }

@@ -43,6 +43,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -58,6 +60,7 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
 use crate::util::find_eq_or_filter;
+use crate::util::generate_catalog_meta;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,
@@ -160,21 +163,22 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let catalogs: Vec<Arc<dyn Catalog>> = catalog_mgr
-            .list_catalogs(&tenant, ctx.session_state())
-            .await?
-            .into_iter()
-            .map(|cat| cat.disable_table_info_refresh())
-            .collect::<Result<Vec<_>>>()?;
+        let catalog = catalog_mgr
+            .get_catalog(
+                tenant.tenant_name(),
+                self.get_table_info().catalog(),
+                ctx.session_state(),
+            )
+            .await?;
 
         // Optimization target:  Fast path for known iceberg catalog SHOW TABLES
         if let Some((catalog_name, db_name)) =
-            self.is_external_show_tables_query(&push_downs, &catalogs)
+            self.is_external_show_tables_query(&push_downs, &catalog)
         {
             self.show_tables_from_external_catalog(ctx, catalog_name, db_name)
                 .await
         } else {
-            self.get_full_data_from_catalogs(ctx, push_downs, catalogs)
+            self.get_full_data_from_catalogs(ctx, push_downs, catalog)
                 .await
         }
     }
@@ -282,12 +286,15 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        catalogs: Vec<Arc<dyn Catalog>>,
+        catalog_impl: Arc<dyn Catalog>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
 
-        let mut ctls: Vec<(String, Arc<dyn Catalog>)> =
-            catalogs.iter().map(|e| (e.name(), e.clone())).collect();
+        let visibility_checker = if catalog_impl.is_external() {
+            None
+        } else {
+            Some(ctx.get_visibility_checker(false).await?)
+        };
 
         let mut catalogs = vec![];
         let mut databases = vec![];
@@ -390,18 +397,22 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             }
         }
 
-        ctls = if !catalog_name.is_empty() && !invalid_optimize {
+        let ctl_name = catalog_impl.name();
+
+        let ctls = if !catalog_name.is_empty() && !invalid_optimize {
             let mut res = vec![];
             for name in &catalog_name {
-                let ctl = ctx.get_catalog(name).await?;
-                res.push((name.to_string(), ctl));
+                if *name == ctl_name {
+                    let ctl = ctx.get_catalog(name).await?;
+                    res.push((name.to_string(), ctl));
+                }
             }
+            // If empty return empty result
             res
         } else {
-            ctls
+            vec![(ctl_name, catalog_impl)]
         };
 
-        let visibility_checker = ctx.get_visibility_checker(false).await?;
         // from system.tables where database = 'db' and name = 'name'
         // from system.tables where database = 'db' and table_id = 123
         if db_name.len() == 1
@@ -441,35 +452,51 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             Ok(t) => {
                                 let db_id = db.get_db_info().database_id.db_id;
                                 let table_id = t.get_id();
-                                let role = user_api
-                                    .role_api(&tenant)
-                                    .get_ownership(&OwnershipObject::Table {
-                                        catalog_name: ctl_name.to_string(),
+                                if let Some(visibility_checker) = &visibility_checker {
+                                    let role = user_api
+                                        .role_api(&tenant)
+                                        .get_ownership(&OwnershipObject::Table {
+                                            catalog_name: ctl_name.to_string(),
+                                            db_id,
+                                            table_id,
+                                        })
+                                        .await?
+                                        .map(|o| o.role);
+                                    if visibility_checker.check_table_visibility(
+                                        ctl_name,
+                                        db.name(),
+                                        table_name,
                                         db_id,
-                                        table_id,
-                                    })
-                                    .await?
-                                    .map(|o| o.role);
-                                if visibility_checker.check_table_visibility(
-                                    ctl_name,
-                                    db.name(),
-                                    table_name,
-                                    db_id,
-                                    t.get_id(),
-                                ) {
-                                    catalogs.push(ctl_name.to_string());
-                                    databases.push(db.name().to_owned());
-                                    databases_ids.push(db.get_db_info().database_id.db_id);
-                                    database_tables.push(t);
-                                    owner.push(role);
-                                } else if let Some(role) = role {
-                                    let roles = ctx.get_all_effective_roles().await?;
-                                    if roles.iter().any(|r| r.name == role) {
-                                        catalogs.push(ctl_name.to_string());
-                                        databases.push(db.name().to_owned());
-                                        databases_ids.push(db.get_db_info().database_id.db_id);
-                                        database_tables.push(t);
-                                        owner.push(Some(role));
+                                        t.get_id(),
+                                    ) {
+                                        push_table_info(
+                                            &mut catalogs,
+                                            &mut databases,
+                                            &mut databases_ids,
+                                            &mut database_tables,
+                                            &mut owner,
+                                            ctl_name,
+                                            db.name(),
+                                            db.get_db_info().database_id.db_id,
+                                            t,
+                                            role,
+                                        );
+                                    } else if let Some(role) = role {
+                                        let roles = ctx.get_all_effective_roles().await?;
+                                        if roles.iter().any(|r| r.name == role) {
+                                            push_table_info(
+                                                &mut catalogs,
+                                                &mut databases,
+                                                &mut databases_ids,
+                                                &mut database_tables,
+                                                &mut owner,
+                                                ctl_name,
+                                                db.name(),
+                                                db.get_db_info().database_id.db_id,
+                                                t,
+                                                Some(role),
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -489,7 +516,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 }
             }
         } else {
-            let catalog_dbs = visibility_checker.get_visibility_database();
+            let catalog_dbs = visibility_checker
+                .as_ref()
+                .and_then(|c| c.get_visibility_database());
             for (ctl_name, ctl) in ctls.iter() {
                 let default_catalog = ctl.info().catalog_type() == CatalogType::Default;
 
@@ -510,18 +539,21 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             }
                         }
 
-                        match ctl
-                            .mget_table_names_by_ids(&tenant, &tables_ids, WITH_HISTORY)
-                            .await
-                        {
-                            Ok(tables) => {
-                                for table in tables.into_iter().flatten() {
-                                    tables_names.insert(table.clone());
+                        if visibility_checker.is_some() {
+                            match ctl
+                                .mget_table_names_by_ids(&tenant, &tables_ids, WITH_HISTORY)
+                                .await
+                            {
+                                Ok(tables) => {
+                                    for table in tables.into_iter().flatten() {
+                                        tables_names.insert(table.clone());
+                                    }
                                 }
-                            }
-                            Err(err) => {
-                                let msg = format!("Failed to get tables: {}, {}", ctl.name(), err);
-                                warn!("{}", msg);
+                                Err(err) => {
+                                    let msg =
+                                        format!("Failed to get tables: {}, {}", ctl.name(), err);
+                                    warn!("{}", msg);
+                                }
                             }
                         }
                     }
@@ -586,22 +618,27 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     .clone()
                     .into_iter()
                     .filter(|db| {
-                        visibility_checker.check_database_visibility(
-                            ctl_name,
-                            db.name(),
-                            db.get_db_info().database_id.db_id,
-                        )
+                        visibility_checker
+                            .as_ref()
+                            .map(|c| {
+                                c.check_database_visibility(
+                                    ctl_name,
+                                    db.name(),
+                                    db.get_db_info().database_id.db_id,
+                                )
+                            })
+                            .unwrap_or(true)
                     })
                     .collect::<Vec<_>>();
                 // Now we get the final dbs, need to clear dbs vec.
                 dbs.clear();
 
-                let ownership = if get_ownership && default_catalog {
+                let ownership = if get_ownership && visibility_checker.is_some() {
                     user_api.list_ownerships(&tenant).await.unwrap_or_default()
                 } else {
                     HashMap::new()
                 };
-                let mock_table = !default_catalog && only_get_name;
+                let mock_table = ctl.is_external() && only_get_name;
                 for db in final_dbs {
                     let db_id = db.get_db_info().database_id.db_id;
                     let db_name = db.name();
@@ -685,17 +722,18 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
                     for table in tables {
                         let table_id = table.get_id();
-                        let check_table_visibility = if default_catalog {
-                            visibility_checker.check_table_visibility(
-                                ctl_name,
-                                db_name,
-                                table.name(),
-                                db_id,
-                                table_id,
-                            )
-                        } else {
-                            true
-                        };
+                        let check_table_visibility = visibility_checker
+                            .as_ref()
+                            .map(|c| {
+                                c.check_table_visibility(
+                                    ctl_name,
+                                    db_name,
+                                    table.name(),
+                                    db_id,
+                                    table_id,
+                                )
+                            })
+                            .unwrap_or(true);
                         // If db1 is visible, do not mean db1.table1 is visible. A user may have a grant about db1.table2, so db1 is visible
                         // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
                         if (table.get_table_info().engine() == "VIEW" || WITHOUT_VIEW)
@@ -704,23 +742,29 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         {
                             // system.tables store view name but not store view query
                             // decrease information_schema.tables union.
-                            catalogs.push(ctl_name.to_string());
-                            databases.push(db_name.to_owned());
-                            databases_ids.push(db.get_db_info().database_id.db_id);
-                            database_tables.push(table);
-                            if ownership.is_empty() {
-                                owner.push(None);
+                            let role = if ownership.is_empty() {
+                                None
                             } else {
-                                owner.push(
-                                    ownership
-                                        .get(&OwnershipObject::Table {
-                                            catalog_name: ctl_name.to_string(),
-                                            db_id,
-                                            table_id,
-                                        })
-                                        .map(|role| role.to_string()),
-                                );
-                            }
+                                ownership
+                                    .get(&OwnershipObject::Table {
+                                        catalog_name: ctl_name.to_string(),
+                                        db_id,
+                                        table_id,
+                                    })
+                                    .map(|role| role.to_string())
+                            };
+                            push_table_info(
+                                &mut catalogs,
+                                &mut databases,
+                                &mut databases_ids,
+                                &mut database_tables,
+                                &mut owner,
+                                ctl_name,
+                                db.name(),
+                                db.get_db_info().database_id.db_id,
+                                table,
+                                role,
+                            );
                         }
                     }
                 }
@@ -963,7 +1007,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     fn is_external_show_tables_query(
         &self,
         push_downs: &Option<PushDownInfo>,
-        catalogs: &[Arc<dyn Catalog>],
+        catalog: &Arc<dyn Catalog>,
     ) -> Option<(String, String)> {
         if !WITH_HISTORY && WITHOUT_VIEW {
             let mut database_name = None;
@@ -1012,11 +1056,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     // Check iceberg catalog existence
                     if let Some(catalog_name) = catalog_name {
                         if let Some(database_name) = database_name {
-                            for catalog in catalogs {
-                                if catalog.name() == catalog_name {
-                                    if let CatalogType::Iceberg = catalog.info().catalog_type() {
-                                        return Some((catalog_name, database_name));
-                                    }
+                            if catalog.name() == catalog_name {
+                                if let CatalogType::Iceberg = catalog.info().catalog_type() {
+                                    return Some((catalog_name, database_name));
                                 }
                             }
                         }
@@ -1035,9 +1077,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(&catalog_name).await?;
-        let db = catalog.get_database(&tenant, &db_name).await?;
-        let all_table_names = db.list_tables_names().await?;
-
+        let all_table_names = catalog.list_tables_names(&tenant, &db_name).await?;
         let rows = all_table_names.len();
         Self::generate_tables_block(
             vec![catalog_name; rows],
@@ -1066,7 +1106,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         )
     }
 
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
         let name = Self::TABLE_NAME;
         let table_info = TableInfo {
             desc: format!("'system'.'{name}'"),
@@ -1078,9 +1118,33 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
                 ..Default::default()
             },
+            catalog_info: Arc::new(CatalogInfo {
+                name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
+                meta: generate_catalog_meta(ctl_name),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 
         AsyncOneBlockSystemTable::create(TablesTable::<WITH_HISTORY, WITHOUT_VIEW> { table_info })
     }
+}
+
+fn push_table_info(
+    catalogs: &mut Vec<String>,
+    databases: &mut Vec<String>,
+    databases_ids: &mut Vec<u64>,
+    database_tables: &mut Vec<Arc<dyn Table>>,
+    owner: &mut Vec<Option<String>>,
+    ctl_name: &str,
+    db_name: &str,
+    db_id: u64,
+    table: Arc<dyn Table>,
+    role: Option<String>,
+) {
+    catalogs.push(ctl_name.to_string());
+    databases.push(db_name.to_string());
+    databases_ids.push(db_id);
+    database_tables.push(table); // 如果 T: Copy, 这是 Copy; 如果 T: Clone, 外部调用时需要 .clone()
+    owner.push(role);
 }

@@ -156,17 +156,18 @@ impl<'a> Binder {
         }
         if !stmt.is_transaction_command() && self.ctx.txn_mgr().lock().is_fail() {
             let err = ErrorCode::CurrentTransactionIsAborted(
-                "current transaction is aborted, commands ignored until end of transaction block",
+                "[SQL-BINDER] Current transaction is aborted, commands ignored until end of transaction block",
             );
             return Err(err);
         }
         let start = Instant::now();
-        self.ctx.set_status_info("binding");
+        self.ctx
+            .set_status_info("[SQL-BINDER] Binding SQL statement");
         let mut bind_context = BindContext::new();
         let plan = self.bind_statement(&mut bind_context, stmt).await?;
         self.bind_query_index(&mut bind_context, &plan).await?;
         self.ctx.set_status_info(&format!(
-            "bind stmt to plan done, time used: {:?}",
+            "[SQL-BINDER] Statement binding completed, execution time: {:?}",
             start.elapsed()
         ));
         Ok(plan)
@@ -220,7 +221,9 @@ impl<'a> Binder {
             } => {
                 if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = query.as_ref()
                 {
-                    return Err(ErrorCode::SyntaxException("Invalid statement"));
+                    return Err(ErrorCode::SyntaxException(
+                        "[SQL-BINDER] Invalid statement: nested EXPLAIN not supported",
+                    ));
                 }
                 let plan = self.bind_statement(bind_context, query).await?;
                 Plan::ExplainAnalyze {
@@ -248,7 +251,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In Copy resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve COPY optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -260,7 +263,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In Copy resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve COPY optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -412,7 +415,7 @@ impl<'a> Binder {
             } => {
                 if illegal_ident_name(role_name) {
                     return Err(ErrorCode::IllegalRole(
-                        format!("Illegal Role Name: Illegal role name [{}], not support username contain ' or \" or \\b or \\f", role_name),
+                        format!("[SQL-BINDER] Illegal role name [{}]: role names cannot contain quotes (' or \") or control characters (\\b or \\f)", role_name),
                     ));
                 }
                 Plan::CreateRole(Box::new(CreateRolePlan {
@@ -469,7 +472,7 @@ impl<'a> Binder {
                 // Check user stage.
                 if stage_name == "~" {
                     return Err(ErrorCode::StagePermissionDenied(
-                        "user stage is not allowed to be dropped",
+                        "[SQL-BINDER] User stage (~) is not allowed to be dropped",
                     ));
                 }
                 Plan::DropStage(Box::new(DropStagePlan {
@@ -498,7 +501,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In REPLACE resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve REPLACE optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -509,7 +512,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In Merge resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve MERGE optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -520,7 +523,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In DELETE resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve DELETE optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -531,7 +534,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In UPDATE resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve UPDATE optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -561,7 +564,7 @@ impl<'a> Binder {
             } => {
                 if StageFileFormatType::from_str(name).is_ok() {
                     return Err(ErrorCode::SyntaxException(format!(
-                        "File format {name} is reserved"
+                        "[SQL-BINDER] File format '{name}' is reserved and cannot be used"
                     )));
                 }
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
@@ -718,7 +721,7 @@ impl<'a> Binder {
                     self.bind_create_procedure(stmt).await?
                 } else {
                     return Err(ErrorCode::SyntaxException(
-                        "CREATE PROCEDURE, set enable_experimental_procedure=1",
+                        "[SQL-BINDER] CREATE PROCEDURE requires enable_experimental_procedure=1",
                     ));
                 }
             }
@@ -731,7 +734,7 @@ impl<'a> Binder {
                     self.bind_drop_procedure(stmt).await?
                 } else {
                     return Err(ErrorCode::SyntaxException(
-                        "DROP PROCEDURE, set enable_experimental_procedure=1",
+                        "[SQL-BINDER] DROP PROCEDURE requires enable_experimental_procedure=1",
                     ));
                 }
             }
@@ -745,7 +748,7 @@ impl<'a> Binder {
                         .await?
                 } else {
                     return Err(ErrorCode::SyntaxException(
-                        "SHOW PROCEDURES, set enable_experimental_procedure=1",
+                        "[SQL-BINDER] SHOW PROCEDURES requires enable_experimental_procedure=1",
                     ));
                 }
             }
@@ -758,7 +761,7 @@ impl<'a> Binder {
                     self.bind_desc_procedure(stmt).await?
                 } else {
                     return Err(ErrorCode::SyntaxException(
-                        "DESC PROCEDURE, set enable_experimental_procedure=1",
+                        "[SQL-BINDER] DESC PROCEDURE requires enable_experimental_procedure=1",
                     ));
                 }
             }
@@ -771,7 +774,7 @@ impl<'a> Binder {
                     self.bind_call_procedure(bind_context, stmt).await?
                 } else {
                     return Err(ErrorCode::SyntaxException(
-                        "CALL PROCEDURE, set enable_experimental_procedure=1",
+                        "[SQL-BINDER] CALL PROCEDURE requires enable_experimental_procedure=1",
                     ));
                 }
             }
@@ -809,7 +812,7 @@ impl<'a> Binder {
                 let consume_streams = self.ctx.get_consume_streams(true)?;
                 if !consume_streams.is_empty() {
                     return Err(ErrorCode::SyntaxException(
-                        "WITH CONSUME only allowed in query",
+                        "[SQL-BINDER] WITH CONSUME is only allowed in query statements",
                     ));
                 }
             }
@@ -857,7 +860,10 @@ impl<'a> Binder {
                     hint_settings.entry(variable.to_string()).or_insert(value);
                 }
                 _ => {
-                    warn!("fold hints {:?} failed. value must be constant value", hint);
+                    warn!(
+                        "[SQL-BINDER] Failed to fold hint {:?}: value must be a constant",
+                        hint
+                    );
                 }
             }
         }
@@ -1109,7 +1115,8 @@ impl<'a> Binder {
         }
         if has_score && !has_matched {
             return Err(ErrorCode::SemanticError(
-                "score function must run with match or query function".to_string(),
+                "[SQL-BINDER] Score function must be used together with match or query function"
+                    .to_string(),
             ));
         }
 
@@ -1163,7 +1170,7 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
                 // other errors may occur, especially the version mismatch of streams,
                 // let's log it here for the convenience of diagnostics
                 error!(
-                    "Non-recoverable fault occurred during updating tables. {}",
+                    "[SQL-BINDER] Non-recoverable fault occurred during table metadata update: {}",
                     e
                 );
             }
@@ -1173,7 +1180,7 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
         match &mismatched_tids {
             Ok(_) => {
                 info!(
-                    "COMMIT: Commit explicit transaction success, targets updated {:?}",
+                    "[SQL-BINDER] Transaction committed successfully, updated targets: {:?}",
                     update_summary
                 );
             }
@@ -1183,10 +1190,13 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
                     e.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
                 );
                 info!(
-                    "Due to concurrent transactions, explicit transaction commit failed. Conflicting table IDs: {:?}",
+                    "[SQL-BINDER] Transaction commit failed due to concurrent modifications. Conflicting table IDs: {:?}",
                     e
                 );
-                return Err(ErrorCode::TableVersionMismatched(err_msg));
+                return Err(ErrorCode::TableVersionMismatched(format!(
+                    "[SQL-BINDER] {}",
+                    err_msg
+                )));
             }
         }
         let need_purge_files = ctx.txn_mgr().lock().need_purge_files();
@@ -1206,17 +1216,23 @@ async fn try_purge_files(ctx: Arc<dyn TableContext>, stage_info: &StageInfo, fil
         Ok(op) => {
             let file_op = Files::create(ctx, op);
             if let Err(e) = file_op.remove_file_in_batch(files).await {
-                error!("Failed to delete file: {:?}, error: {}", files, e);
+                error!(
+                    "[SQL-BINDER] Failed to delete files: {:?}, error: {}",
+                    files, e
+                );
             }
         }
         Err(e) => {
-            error!("Failed to get stage table op, error: {}", e);
+            error!(
+                "[SQL-BINDER] Failed to initialize stage operator, error: {}",
+                e
+            );
         }
     }
 
     let elapsed = start.elapsed();
     info!(
-        "purged files: number {}, time used {:?} ",
+        "[SQL-BINDER] Purged {} files, operation took {:?}",
         files.len(),
         elapsed
     );

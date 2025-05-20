@@ -26,6 +26,7 @@ use databend_common_ast::ast::ShowDatabasesStmt;
 use databend_common_ast::ast::ShowDropDatabasesStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::UndropDatabaseStmt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -60,15 +61,20 @@ impl Binder {
             limit,
         } = stmt;
 
-        let default_catalog = self.ctx.get_default_catalog()?.name();
-        let mut select_builder =
-            SelectBuilder::from(&format!("{}.system.databases", default_catalog));
-
         let ctl = if let Some(ctl) = catalog {
+            if let Err(err) = self.ctx.get_catalog(ctl.to_string().as_str()).await {
+                return Err(ErrorCode::UnknownCatalog(format!(
+                    "Get catalog {} with error: {}",
+                    ctl, err
+                )));
+            }
             normalize_identifier(ctl, &self.name_resolution_ctx).name
         } else {
             self.ctx.get_current_catalog().to_string()
         };
+
+        let mut select_builder =
+            SelectBuilder::from(&format!("{}.system.databases", ctl.to_lowercase()));
 
         select_builder.with_filter(format!("catalog = '{ctl}'"));
 
@@ -136,7 +142,7 @@ impl Binder {
             None => (),
         }
         let query = select_builder.build();
-        debug!("show databases rewrite to: {:?}", query);
+        debug!("show drop databases rewrite to: {:?}", query);
 
         self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowDropDatabases)
             .await

@@ -267,7 +267,10 @@ impl ThreadTracker {
     }
 
     pub fn should_log() -> bool {
-        TRACKER.with(|tracker| tracker.borrow().payload.should_log)
+        // To prevent crashes, logging will be skipped if thread local storage is inaccessible.
+        TRACKER
+            .try_with(|tracker| tracker.borrow().payload.should_log)
+            .unwrap_or(false)
     }
 }
 

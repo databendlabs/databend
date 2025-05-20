@@ -282,6 +282,12 @@ impl WindowInfo {
                 .insert(window.display_name.clone(), i);
         }
     }
+
+    pub fn get_window_info(&self, display_name: &str) -> Option<&WindowFunctionInfo> {
+        self.window_functions_map
+            .get(display_name)
+            .map(|index| &self.window_functions[*index])
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

@@ -91,10 +91,10 @@ impl HttpQueryContext {
                 let start_time = manager.server_info.start_time.clone();
                 let uptime = (Instant::now() - manager.start_instant).as_secs_f32();
                 let msg = format!(
-                    "route error: query {query_id} SHOULD be on server {expected_node_id}, but current server is {}, which started at {start_time}({uptime} secs ago)",
+                    "[HTTP-QUERY] Routing error: query {query_id} should be on server {expected_node_id}, but current server is {}, which started at {start_time} ({uptime} secs ago)",
                     self.node_id
                 );
-                warn!("{msg}");
+                warn!("{}", msg);
                 return Err(poem::Error::from_string(msg, StatusCode::NOT_FOUND));
             }
         }

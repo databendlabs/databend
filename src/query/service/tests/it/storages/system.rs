@@ -130,7 +130,7 @@ async fn test_columns_table() -> Result<()> {
 
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("columns_table.txt").unwrap();
-    let table = ColumnsTable::create(1);
+    let table = ColumnsTable::create(1, "default");
     run_table_tests(file, ctx, table).await?;
 
     Ok(())
@@ -274,7 +274,7 @@ async fn test_databases_table() -> Result<()> {
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    let table = DatabasesTableWithoutHistory::create(1);
+    let table = DatabasesTableWithoutHistory::create(1, "default");
 
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("databases_table.txt").unwrap();
@@ -290,7 +290,7 @@ async fn test_databases_history_table() -> Result<()> {
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    let table = DatabasesTableWithHistory::create(1);
+    let table = DatabasesTableWithHistory::create(1, "default");
 
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint

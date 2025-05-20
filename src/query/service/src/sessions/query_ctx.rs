@@ -40,6 +40,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -73,6 +74,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::FormatSettings;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
@@ -1160,6 +1163,18 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
+        // Queries to non-internal system_history databases require license checks to be enabled.
+        if database.eq_ignore_ascii_case("system_history") && ThreadTracker::should_log() {
+            LicenseManagerSwitch::instance().check_enterprise_enabled(
+                unsafe {
+                    self.get_settings()
+                        .get_enterprise_license()
+                        .unwrap_or_default()
+                },
+                Feature::SystemHistory,
+            )?;
+        }
+
         let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
         self.get_table_from_shared(catalog, database, table, batch_size)
             .await
@@ -1671,7 +1686,7 @@ impl TableContext for QueryContext {
                 };
                 OrcTable::try_create(info).await
             }
-            FileFormatParams::NdJson(..) => {
+            FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
                     "_$1", // TODO: this name should be in visible
                     TableDataType::Variant,
@@ -1731,7 +1746,7 @@ impl TableContext for QueryContext {
             }
             _ => {
                 return Err(ErrorCode::Unimplemented(format!(
-                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, CSV, and TSV. Provided format: '{}'.",
+                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, AVRO, CSV, and TSV. Provided format: '{}'.",
                     stage_info.file_format_params
                 )));
             }
