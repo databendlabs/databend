@@ -145,6 +145,7 @@ fn test_type_check() {
             run_ast(file, format!("{ty} = 1::uint64"), &columns);
             run_ast(file, format!("1::uint64 > {ty}"), &columns);
             run_ast(file, format!("1::uint64 = {ty}"), &columns);
+            run_ast(file, format!("{ty} = true"), &columns);
         }
     }
 }

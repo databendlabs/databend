@@ -686,8 +686,8 @@ pub fn common_super_type(
                 .collect::<Option<Vec<_>>>()?;
             Some(DataType::Tuple(tys))
         }
-        (DataType::Boolean, number_ty @ DataType::Number(_))
-        | (number_ty @ DataType::Number(_), DataType::Boolean) => Some(number_ty),
+        //(DataType::Boolean, DataType::Number(_))
+        //| (DataType::Number(_), DataType::Boolean) => Some(DataType::Boolean),
         (DataType::String, decimal_ty @ DataType::Decimal(_))
         | (decimal_ty @ DataType::Decimal(_), DataType::String) => Some(decimal_ty),
         (DataType::Decimal(a), DataType::Decimal(b)) => {

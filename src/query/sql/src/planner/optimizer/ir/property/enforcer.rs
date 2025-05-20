@@ -123,13 +123,14 @@ impl PropertyEnforcer {
             if let Distribution::Hash(probe_keys) = &mut probe_required_property[0].distribution
                 && let Distribution::Hash(build_keys) = &mut build_required_property[0].distribution
             {
+                let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
                 for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
                     let probe_key_data_type = probe_key.data_type()?;
                     let build_key_data_type = build_key.data_type()?;
                     let common_data_type = common_super_type(
                         probe_key_data_type.clone(),
                         build_key_data_type.clone(),
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                        cast_rules,
                     )
                     .ok_or_else(|| {
                         ErrorCode::IllegalDataType(format!(

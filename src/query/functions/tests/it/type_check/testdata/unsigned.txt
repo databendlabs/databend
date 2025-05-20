@@ -1570,23 +1570,9 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | u32 > '1'
-  |     ^ no function matches signature `gt(UInt32, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `UInt32` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `UInt32` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `UInt32` with `String`
-... and 33 more
-
-
-
-ast            : u32 = '1'
-raw expr       : eq(u32::UInt32, '1')
-checked expr   : eq<UInt64, UInt64>(CAST<UInt32>(u32 AS UInt64), CAST<String>("1" AS UInt64))
+ast            : u32 > '1'
+raw expr       : gt(u32::UInt32, '1')
+checked expr   : gt<UInt32, String>(u32, "1")
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1605,23 +1591,51 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > u32
-  |     ^ no function matches signature `gt(String, UInt32)`, you might need to add explicit type casts.
+ast            : u32 = '1'
+raw expr       : eq(u32::UInt32, '1')
+checked expr   : eq<UInt32, String>(u32, "1")
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `UInt32` with `String`
-... and 33 more
 
+ast            : '1' > u32
+raw expr       : gt('1', u32::UInt32)
+checked expr   : gt<String, UInt32>("1", u32)
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
 
 
 ast            : '1' = u32
 raw expr       : eq('1', u32::UInt32)
-checked expr   : eq<UInt64, UInt64>(CAST<String>("1" AS UInt64), CAST<UInt32>(u32 AS UInt64))
+checked expr   : eq<String, UInt32>("1", u32)
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1706,6 +1720,27 @@ evaluation (internal):
 ast            : 1::uint64 = u32
 raw expr       : eq(CAST(1 AS UInt64), u32::UInt32)
 checked expr   : eq<UInt64, UInt64>(CAST<UInt8>(1_u8 AS UInt64), CAST<UInt32>(u32 AS UInt64))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u32     | Output  |
++--------+---------+---------+
+| Type   | UInt32  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u32    | UInt32([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u32 = true
+raw expr       : eq(u32::UInt32, true)
+checked expr   : eq<Boolean, Boolean>(CAST<UInt32>(u32 AS Boolean), true)
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1892,23 +1927,9 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | u64 > '1'
-  |     ^ no function matches signature `gt(UInt64, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `UInt64` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `UInt64` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `UInt64` with `String`
-... and 33 more
-
-
-
-ast            : u64 = '1'
-raw expr       : eq(u64::UInt64, '1')
-checked expr   : eq<UInt64, UInt64>(u64, CAST<String>("1" AS UInt64))
+ast            : u64 > '1'
+raw expr       : gt(u64::UInt64, '1')
+checked expr   : gt<UInt64, String>(u64, "1")
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1927,23 +1948,51 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > u64
-  |     ^ no function matches signature `gt(String, UInt64)`, you might need to add explicit type casts.
+ast            : u64 = '1'
+raw expr       : eq(u64::UInt64, '1')
+checked expr   : eq<UInt64, String>(u64, "1")
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `UInt64` with `String`
-... and 33 more
 
+ast            : '1' > u64
+raw expr       : gt('1', u64::UInt64)
+checked expr   : gt<String, UInt64>("1", u64)
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
 
 
 ast            : '1' = u64
 raw expr       : eq('1', u64::UInt64)
-checked expr   : eq<UInt64, UInt64>(CAST<String>("1" AS UInt64), u64)
+checked expr   : eq<String, UInt64>("1", u64)
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -2028,6 +2077,27 @@ evaluation (internal):
 ast            : 1::uint64 = u64
 raw expr       : eq(CAST(1 AS UInt64), u64::UInt64)
 checked expr   : eq<UInt64, UInt64>(CAST<UInt8>(1_u8 AS UInt64), u64)
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | u64     | Output  |
++--------+---------+---------+
+| Type   | UInt64  | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| u64    | UInt64([0])           |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : u64 = true
+raw expr       : eq(u64::UInt64, true)
+checked expr   : eq<Boolean, Boolean>(CAST<UInt64>(u64 AS Boolean), true)
 optimized expr : false
 evaluation:
 +--------+---------+---------+

@@ -30,7 +30,9 @@ use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::GenericType;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::MutableBitmap;
+use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberClass;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringColumn;
@@ -38,9 +40,14 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::VariantType;
+use databend_common_expression::types::ALL_FLOAT_TYPES;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::ALL_NUMBER_CLASSES;
+use databend_common_expression::types::F64;
 use databend_common_expression::values::Value;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::with_float_mapped_type;
+use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::EvalContext;
@@ -55,6 +62,7 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
 use databend_functions_scalar_decimal::register_decimal_compare_op;
 use jsonb::RawJsonb;
+use num_traits::AsPrimitive;
 use regex::Regex;
 
 use crate::scalars::string_multi_args::regexp;
@@ -64,8 +72,9 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_string_cmp(registry);
     register_date_cmp(registry);
     register_timestamp_cmp(registry);
-    register_boolean_cmp(registry);
     register_number_cmp(registry);
+    register_string_number_cmp(registry);
+    register_boolean_cmp(registry);
     register_array_cmp(registry);
     register_tuple_cmp(registry);
     register_like(registry);
@@ -323,6 +332,418 @@ fn register_number_cmp(registry: &mut FunctionRegistry) {
                 // already registered in Decimal128 branch
             }
         });
+    }
+}
+
+fn register_string_number_cmp(registry: &mut FunctionRegistry) {
+    for num_type in ALL_INTEGER_TYPES {
+        with_integer_mapped_type!(|NUM_TYPE| match num_type {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "eq",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_integer_cmp(|cmp| cmp == Ordering::Equal),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "noteq",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_integer_cmp(|cmp| cmp != Ordering::Equal),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "gt",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_integer_cmp(|cmp| cmp == Ordering::Greater),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "gte",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_integer_cmp(|cmp| cmp != Ordering::Less),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "lt",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_integer_cmp(|cmp| cmp == Ordering::Less),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "lte",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_integer_cmp(|cmp| cmp != Ordering::Greater),
+                    );
+
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "eq",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_integer_string_cmp(|cmp| cmp == Ordering::Equal),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "noteq",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_integer_string_cmp(|cmp| cmp != Ordering::Equal),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "gt",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_integer_string_cmp(|cmp| cmp == Ordering::Greater),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "gte",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_integer_string_cmp(|cmp| cmp != Ordering::Less),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "lt",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_integer_string_cmp(|cmp| cmp == Ordering::Less),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "lte",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_integer_string_cmp(|cmp| cmp != Ordering::Greater),
+                    );
+            }
+            _ => {}
+        });
+    }
+
+    for num_type in ALL_FLOAT_TYPES {
+        with_float_mapped_type!(|NUM_TYPE| match num_type {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "eq",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_float_cmp(|cmp| cmp == Ordering::Equal),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "noteq",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_float_cmp(|cmp| cmp != Ordering::Equal),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "gt",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_float_cmp(|cmp| cmp == Ordering::Greater),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "gte",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_float_cmp(|cmp| cmp != Ordering::Less),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "lt",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_float_cmp(|cmp| cmp == Ordering::Less),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<StringType, NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "lte",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_string_float_cmp(|cmp| cmp != Ordering::Greater),
+                    );
+
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "eq",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_float_string_cmp(|cmp| cmp == Ordering::Equal),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "noteq",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_float_string_cmp(|cmp| cmp != Ordering::Equal),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "gt",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_float_string_cmp(|cmp| cmp == Ordering::Greater),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "gte",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_float_string_cmp(|cmp| cmp != Ordering::Less),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "lt",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_float_string_cmp(|cmp| cmp == Ordering::Less),
+                    );
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, StringType, BooleanType, _, _>(
+                        "lte",
+                        |_, _, _| FunctionDomain::MayThrow,
+                        vectorize_float_string_cmp(|cmp| cmp != Ordering::Greater),
+                    );
+            }
+            _ => {}
+        });
+    }
+}
+
+fn vectorize_string_integer_cmp<T: Number + std::str::FromStr + num_traits::AsPrimitive<F64>>(
+    func: impl Fn(Ordering) -> bool + Copy,
+) -> impl Fn(Value<StringType>, Value<NumberType<T>>, &mut EvalContext) -> Value<BooleanType> + Copy
+{
+    move |arg1, arg2, ctx| {
+        let input_all_scalars = arg1.as_scalar().is_some() && arg2.as_scalar().is_some();
+        let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
+        let mut builder = MutableBitmap::with_capacity(process_rows);
+        match arg1 {
+            Value::Scalar(arg1) => {
+                if let Ok(val1) = arg1.parse::<T>() {
+                    for index in 0..process_rows {
+                        let val2 = unsafe { arg2.index_unchecked(index) };
+                        let ord = val1.cmp(&val2);
+                        builder.push(func(ord));
+                    }
+                } else {
+                    match arg1.parse::<F64>() {
+                        Ok(val1) => {
+                            for index in 0..process_rows {
+                                let val2 = unsafe { arg2.index_unchecked(index) };
+                                let val2 = AsPrimitive::<F64>::as_(val2);
+                                let ord = val1.cmp(&val2);
+                                builder.push(func(ord));
+                            }
+                        }
+                        Err(_) => {
+                            ctx.set_error(
+                                0,
+                                format!("Could not convert string '{}' to number", arg1),
+                            );
+                            for _ in 0..process_rows {
+                                builder.push(false);
+                            }
+                        }
+                    }
+                }
+            }
+            Value::Column(arg1) => {
+                for index in 0..process_rows {
+                    let val1 = unsafe { arg1.index_unchecked(index) };
+                    let val2 = unsafe { arg2.index_unchecked(index) };
+                    if let Ok(val1) = val1.parse::<T>() {
+                        let ord = val1.cmp(&val2);
+                        builder.push(func(ord));
+                    } else {
+                        match val1.parse::<F64>() {
+                            Ok(val1) => {
+                                let val2 = AsPrimitive::<F64>::as_(val2);
+                                let ord = val1.cmp(&val2);
+                                builder.push(func(ord));
+                            }
+                            Err(_) => {
+                                ctx.set_error(
+                                    builder.len(),
+                                    format!("Could not convert string '{}' to number", val1),
+                                );
+                                builder.push(false);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if input_all_scalars {
+            Value::Scalar(builder.get(0))
+        } else {
+            Value::Column(builder.into())
+        }
+    }
+}
+
+fn vectorize_integer_string_cmp<T: Number + std::str::FromStr + num_traits::AsPrimitive<F64>>(
+    func: impl Fn(Ordering) -> bool + Copy,
+) -> impl Fn(Value<NumberType<T>>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy
+{
+    move |arg1, arg2, ctx| {
+        let input_all_scalars = arg1.as_scalar().is_some() && arg2.as_scalar().is_some();
+        let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
+        let mut builder = MutableBitmap::with_capacity(process_rows);
+        match arg2 {
+            Value::Scalar(arg2) => {
+                if let Ok(val2) = arg2.parse::<T>() {
+                    for index in 0..process_rows {
+                        let val1 = unsafe { arg1.index_unchecked(index) };
+                        let ord = val1.cmp(&val2);
+                        builder.push(func(ord));
+                    }
+                } else {
+                    match arg2.parse::<F64>() {
+                        Ok(val2) => {
+                            for index in 0..process_rows {
+                                let val1 = unsafe { arg1.index_unchecked(index) };
+                                let val1 = AsPrimitive::<F64>::as_(val1);
+                                let ord = val1.cmp(&val2);
+                                builder.push(func(ord));
+                            }
+                        }
+                        Err(_) => {
+                            ctx.set_error(
+                                0,
+                                format!("Could not convert string '{}' to number", arg2),
+                            );
+                            for _ in 0..process_rows {
+                                builder.push(false);
+                            }
+                        }
+                    }
+                }
+            }
+            Value::Column(arg2) => {
+                for index in 0..process_rows {
+                    let val1 = unsafe { arg1.index_unchecked(index) };
+                    let val2 = unsafe { arg2.index_unchecked(index) };
+                    if let Ok(val2) = val2.parse::<T>() {
+                        let ord = val1.cmp(&val2);
+                        builder.push(func(ord));
+                    } else {
+                        match val2.parse::<F64>() {
+                            Ok(val2) => {
+                                let val1 = AsPrimitive::<F64>::as_(val1);
+                                let ord = val1.cmp(&val2);
+                                builder.push(func(ord));
+                            }
+                            Err(_) => {
+                                ctx.set_error(
+                                    builder.len(),
+                                    format!("Could not convert string '{}' to number", val2),
+                                );
+                                builder.push(false);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if input_all_scalars {
+            Value::Scalar(builder.get(0))
+        } else {
+            Value::Column(builder.into())
+        }
+    }
+}
+
+fn vectorize_string_float_cmp<T: Number + std::str::FromStr>(
+    func: impl Fn(Ordering) -> bool + Copy,
+) -> impl Fn(Value<StringType>, Value<NumberType<T>>, &mut EvalContext) -> Value<BooleanType> + Copy
+{
+    move |arg1, arg2, ctx| {
+        let input_all_scalars = arg1.as_scalar().is_some() && arg2.as_scalar().is_some();
+        let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
+        let mut builder = MutableBitmap::with_capacity(process_rows);
+        match arg1 {
+            Value::Scalar(arg1) => match arg1.parse::<T>() {
+                Ok(val1) => {
+                    for index in 0..process_rows {
+                        let val2 = unsafe { arg2.index_unchecked(index) };
+                        let ord = val1.cmp(&val2);
+                        builder.push(func(ord));
+                    }
+                }
+                Err(_) => {
+                    ctx.set_error(0, format!("Could not convert string '{}' to number", arg1));
+                    for _ in 0..process_rows {
+                        builder.push(false);
+                    }
+                }
+            },
+            Value::Column(arg1) => {
+                for index in 0..process_rows {
+                    let val1 = unsafe { arg1.index_unchecked(index) };
+                    let val2 = unsafe { arg2.index_unchecked(index) };
+                    match val1.parse::<T>() {
+                        Ok(val1) => {
+                            let ord = val1.cmp(&val2);
+                            builder.push(func(ord));
+                        }
+                        Err(_) => {
+                            ctx.set_error(
+                                builder.len(),
+                                format!("Could not convert string '{}' to number", val1),
+                            );
+                            builder.push(false);
+                        }
+                    }
+                }
+            }
+        }
+        if input_all_scalars {
+            Value::Scalar(builder.get(0))
+        } else {
+            Value::Column(builder.into())
+        }
+    }
+}
+
+fn vectorize_float_string_cmp<T: Number + std::str::FromStr>(
+    func: impl Fn(Ordering) -> bool + Copy,
+) -> impl Fn(Value<NumberType<T>>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy
+{
+    move |arg1, arg2, ctx| {
+        let input_all_scalars = arg1.as_scalar().is_some() && arg2.as_scalar().is_some();
+        let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
+        let mut builder = MutableBitmap::with_capacity(process_rows);
+        match arg2 {
+            Value::Scalar(arg2) => match arg2.parse::<T>() {
+                Ok(val2) => {
+                    for index in 0..process_rows {
+                        let val1 = unsafe { arg1.index_unchecked(index) };
+                        let ord = val1.cmp(&val2);
+                        builder.push(func(ord));
+                    }
+                }
+                Err(_) => {
+                    ctx.set_error(0, format!("Could not convert string '{}' to number", arg2));
+                    for _ in 0..process_rows {
+                        builder.push(false);
+                    }
+                }
+            },
+            Value::Column(arg2) => {
+                for index in 0..process_rows {
+                    let val1 = unsafe { arg1.index_unchecked(index) };
+                    let val2 = unsafe { arg2.index_unchecked(index) };
+                    match val2.parse::<T>() {
+                        Ok(val2) => {
+                            let ord = val1.cmp(&val2);
+                            builder.push(func(ord));
+                        }
+                        Err(_) => {
+                            ctx.set_error(
+                                builder.len(),
+                                format!("Could not convert string '{}' to number", val2),
+                            );
+                            builder.push(false);
+                        }
+                    }
+                }
+            }
+        }
+        if input_all_scalars {
+            Value::Scalar(builder.get(0))
+        } else {
+            Value::Column(builder.into())
+        }
     }
 }
 

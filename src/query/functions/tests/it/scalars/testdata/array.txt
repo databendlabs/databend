@@ -15,13 +15,15 @@ error:
 
 
 
-ast            : [-1, true]
-raw expr       : array(minus(1), true)
-checked expr   : array<T0=Int16><T0, T0>(minus<UInt8>(1_u8), CAST<Boolean>(true AS Int16))
-optimized expr : [-1, 1]
-output type    : Array(Int16)
-output domain  : [{-1..=1}]
-output         : [-1, 1]
+error: 
+  --> SQL:1:1
+  |
+1 | [-1, true]
+  | ^^^^^^^^^^ no function matches signature `array(Int16, Boolean)`, you might need to add explicit type casts.
+
+candidate functions:
+  array(T0, T0) :: Array(T0)  : unable to find a common super type for `Int16` and `Boolean`
+
 
 
 ast            : [NULL, 8, -10]
@@ -584,28 +586,15 @@ evaluation (internal):
 +--------------+---------------------------------------------------------------------------+
 
 
-ast            : nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
-raw expr       : contains(array(1, '9', 3, 10, 12, true), nullable_col::Int64 NULL)
-checked expr   : contains<Array(Int64) NULL, Int64 NULL>(CAST<Array(Int64)>(array<T0=Int64><T0, T0, T0, T0, T0, T0>(CAST<UInt8>(1_u8 AS Int64), CAST<String>("9" AS Int64), CAST<UInt8>(3_u8 AS Int64), CAST<UInt8>(10_u8 AS Int64), CAST<UInt8>(12_u8 AS Int64), CAST<Boolean>(true AS Int64)) AS Array(Int64) NULL), nullable_col)
-optimized expr : contains<Array(Int64) NULL, Int64 NULL>([1, 9, 3, 10, 12, 1], nullable_col)
-evaluation:
-+--------+-------------------+------------------------+
-|        | nullable_col      | Output                 |
-+--------+-------------------+------------------------+
-| Type   | Int64 NULL        | Boolean NULL           |
-| Domain | {9..=10} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | 9                 | true                   |
-| Row 1  | 10                | true                   |
-| Row 2  | NULL              | NULL                   |
-| Row 3  | NULL              | NULL                   |
-+--------+-------------------+------------------------+
-evaluation (internal):
-+--------------+---------------------------------------------------------------------------+
-| Column       | Data                                                                      |
-+--------------+---------------------------------------------------------------------------+
-| nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] } |
-| Output       | NullableColumn { column: Boolean([0b____1011]), validity: [0b____0011] }  |
-+--------------+---------------------------------------------------------------------------+
+error: 
+  --> SQL:1:14
+  |
+1 | nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `array(UInt8, String, UInt8, UInt8, UInt8, Boolean)`, you might need to add explicit type casts.
+
+candidate functions:
+  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Int64` and `Boolean`
+
 
 
 ast            : array_remove_first([])
@@ -771,13 +760,18 @@ output domain  : [{FALSE, TRUE}]
 output         : [false, true]
 
 
-ast            : array_concat([false, true], [1,2])
-raw expr       : array_concat(array(false, true), array(1, 2))
-checked expr   : array_concat<T0=UInt8><Array(T0), Array(T0)>(CAST<Array(Boolean)>(array<T0=Boolean><T0, T0>(false, true) AS Array(UInt8)), array<T0=UInt8><T0, T0>(1_u8, 2_u8))
-optimized expr : [0, 1, 1, 2]
-output type    : Array(UInt8)
-output domain  : [{0..=2}]
-output         : [0, 1, 1, 2]
+error: 
+  --> SQL:1:1
+  |
+1 | array_concat([false, true], [1,2])
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `array_concat(Array(Boolean), Array(UInt8))`, you might need to add explicit type casts.
+
+candidate functions:
+  array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)                 : unable to unify `Array(Boolean)` with `Array(Nothing)`
+  array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL  : unable to unify `Array(Boolean)` with `Array(Nothing)`
+  array_concat(Array(T0), Array(T0)) :: Array(T0)                                : unable to find a common super type for `Boolean` and `UInt8`
+... and 1 more
+
 
 
 ast            : array_concat([false, true], [true, false])
@@ -1028,13 +1022,17 @@ output domain  : {0..=0}
 output         : 0
 
 
-ast            : array_indexof([false, true], 0)
-raw expr       : array_indexof(array(false, true), 0)
-checked expr   : array_indexof<T0=UInt8><Array(T0), T0>(CAST<Array(Boolean)>(array<T0=Boolean><T0, T0>(false, true) AS Array(UInt8)), 0_u8)
-optimized expr : 1_u64
-output type    : UInt64
-output domain  : {1..=1}
-output         : 1
+error: 
+  --> SQL:1:1
+  |
+1 | array_indexof([false, true], 0)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `array_indexof(Array(Boolean), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  array_indexof(NULL, NULL) :: NULL                      : unable to unify `Array(Boolean)` with `NULL`
+  array_indexof(Array(T0), T0) :: UInt64                 : unable to find a common super type for `Boolean` and `UInt8`
+  array_indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL  : unable to find a common super type for `Boolean` and `UInt8`
+
 
 
 error: 

@@ -30,9 +30,48 @@ select 1 = '1', 1::Int16 = '1', number from numbers(10) where number = '1'
 1 1 1
 
 query I
-select number from numbers(10) where number = true
+select number from numbers(10) where number > '5'
+----
+6
+7
+8
+9
+
+query I
+select number from numbers(10) where number <= '5'
+----
+0
+1
+2
+3
+4
+5
+
+query I
+select number from numbers(3) where number = true
 ----
 1
+2
+
+query BBBBBB
+select 10 > true, 10 >= true, 10 = true, 10 != true, 10 < true, 10 <= true;
+----
+0 1 1 0 0 1
+
+query BBBBBB
+select 10 > false, 10 >= false, 10 = false, 10 != false, 10 < false, 10 <= false;
+----
+1 1 0 1 0 0
+
+query BBBBBB
+select 0 > true, 0 >= true, 0 = true, 0 != true, 0 < true, 0 <= true;
+----
+0 0 0 1 1 1
+
+query BBBBBB
+select 0 > false, 0 >= false, 0 = false, 0 != false, 0 < false, 0 <= false;
+----
+0 1 1 0 0 1
 
 query I
 select number from numbers_mt(10) where number between 4 + 0.1  and 8 - 0.1  order by number
