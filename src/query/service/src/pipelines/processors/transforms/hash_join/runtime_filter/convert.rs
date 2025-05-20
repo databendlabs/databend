@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::NumberDomain;
@@ -54,9 +55,11 @@ pub fn build_runtime_filter_infos(
                 .push(build_inlist_filter(inlist, &desc.probe_key)?);
         }
         if let Some(min_max) = packet.min_max {
-            entry
-                .min_max
-                .push(build_min_max_filter(min_max, &desc.probe_key)?);
+            entry.min_max.push(build_min_max_filter(
+                min_max,
+                &desc.probe_key,
+                &desc.build_key,
+            )?);
         }
         if let Some(bloom) = packet.bloom {
             entry
@@ -96,8 +99,13 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<
 fn build_min_max_filter(
     min_max: SerializableDomain,
     probe_key: &Expr<String>,
+    build_key: &Expr,
 ) -> Result<Expr<String>> {
-    let min_max = Domain::from_min_max(min_max.min, min_max.max, &min_max.data_type);
+    let min_max = Domain::from_min_max(
+        min_max.min,
+        min_max.max,
+        &build_key.data_type().remove_nullable(),
+    );
     let min_max_filter = match min_max {
         Domain::Number(domain) => match domain {
             NumberDomain::UInt8(simple_domain) => {
@@ -161,7 +169,12 @@ fn build_min_max_filter(
             let max = Scalar::Date(date_domain.max);
             min_max_filter(min, max, probe_key)?
         }
-        _ => unreachable!(),
+        _ => {
+            return Err(ErrorCode::UnsupportedDataType(format!(
+                "Unsupported domain {:?} for runtime filter",
+                min_max,
+            )))
+        }
     };
     Ok(min_max_filter)
 }

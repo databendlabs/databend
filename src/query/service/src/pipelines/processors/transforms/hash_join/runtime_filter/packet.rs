@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
@@ -62,5 +61,4 @@ impl BlockMetaInfo for JoinRuntimeFilterPacket {
 pub struct SerializableDomain {
     pub min: Scalar,
     pub max: Scalar,
-    pub data_type: DataType,
 }

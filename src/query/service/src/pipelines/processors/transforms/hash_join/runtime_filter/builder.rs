@@ -52,7 +52,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
     fn build(&self, desc: &RuntimeFilterDesc) -> Result<RuntimeFilterPacket> {
         let min_max = self
             .enable_min_max(desc)
-            .then(|| self.build_min_max(desc))
+            .then(|| self.build_min_max())
             .transpose()?;
         let inlist = self
             .enable_inlist(desc)
@@ -83,15 +83,10 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         desc.enable_bloom_runtime_filter
     }
 
-    fn build_min_max(&self, desc: &RuntimeFilterDesc) -> Result<SerializableDomain> {
+    fn build_min_max(&self) -> Result<SerializableDomain> {
         let domain = self.build_key_column.remove_nullable().domain();
         let (min, max) = domain.to_minmax();
-        let data_type = desc.build_key.data_type().clone();
-        Ok(SerializableDomain {
-            min,
-            max,
-            data_type,
-        })
+        Ok(SerializableDomain { min, max })
     }
 
     fn build_inlist(&self) -> Result<Column> {

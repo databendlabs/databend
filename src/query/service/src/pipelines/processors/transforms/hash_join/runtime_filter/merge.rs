@@ -106,18 +106,7 @@ fn merge_min_max(
         })
         .max()
         .unwrap();
-    Some(SerializableDomain {
-        min,
-        max,
-        data_type: packets[0]
-            .get(&rf_id)
-            .unwrap()
-            .min_max
-            .as_ref()
-            .unwrap()
-            .data_type
-            .clone(),
-    })
+    Some(SerializableDomain { min, max })
 }
 
 fn merge_bloom(
