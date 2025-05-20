@@ -23,6 +23,7 @@ use crate::notification_client::NotificationClient;
 use crate::task_client::TaskClient;
 
 pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 5; // 5 seconds
+const MAX_DECODING_MESSAGE_SIZE: usize = 16 * 1024 * 1024 * 1024;
 
 pub struct CloudControlApiProvider {
     pub task_client: Arc<TaskClient>,
@@ -40,11 +41,15 @@ impl CloudControlApiProvider {
 
         let endpoint = Self::get_endpoint(endpoint, timeout).await?;
         let channel = endpoint.connect_lazy();
-        let task_client = TaskClient::new(channel.clone()).await?;
-        let notification_client = NotificationClient::new(channel).await?;
+        let task_client = TaskClient::new(channel.clone())
+            .await?
+            .with_max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
+        let notification_client = NotificationClient::new(channel)
+            .await?
+            .with_max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
         Ok(Arc::new(CloudControlApiProvider {
-            task_client,
-            notification_client,
+            task_client: Arc::new(task_client),
+            notification_client: Arc::new(notification_client),
             timeout,
         }))
     }

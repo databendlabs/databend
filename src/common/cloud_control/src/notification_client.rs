@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use tonic::transport::Channel;
 use tonic::Request;
 
@@ -35,11 +33,14 @@ pub struct NotificationClient {
 
 impl NotificationClient {
     // TODO: add auth interceptor
-    pub async fn new(
-        channel: Channel,
-    ) -> databend_common_exception::Result<Arc<NotificationClient>> {
+    pub async fn new(channel: Channel) -> databend_common_exception::Result<NotificationClient> {
         let client = NotificationServiceClient::new(channel);
-        Ok(Arc::new(NotificationClient { client }))
+        Ok(NotificationClient { client })
+    }
+
+    pub fn with_max_decoding_message_size(mut self, limit: usize) -> Self {
+        self.client = self.client.max_decoding_message_size(limit);
+        self
     }
 
     // TODO: richer error handling on Task Error
