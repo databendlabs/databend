@@ -17,12 +17,14 @@ use std::collections::HashSet;
 
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::packet::JoinRuntimeFilterPacket;
@@ -120,19 +122,10 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
     }
 
     fn dedup_column(&self, column: &Column) -> Result<Column> {
-        let mut list = Vec::with_capacity(column.len());
-        for value in column.iter() {
-            list.push(RawExpr::Constant {
-                span: None,
-                scalar: value.to_owned(),
-                data_type: None,
-            })
-        }
-        let array = RawExpr::FunctionCall {
+        let array = RawExpr::Constant {
             span: None,
-            name: "array".to_string(),
-            params: vec![],
-            args: list,
+            scalar: Scalar::Array(column.clone()),
+            data_type: Some(DataType::Array(Box::new(column.data_type()))),
         };
         let distinct_list = RawExpr::FunctionCall {
             span: None,
