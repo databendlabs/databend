@@ -656,8 +656,8 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
-	cargo install cargo-quickinstall
-	cargo quickinstall cargo-binstall
+	## install cargo-binstall
+	curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 	cargo binstall -y sccache
 	cargo binstall -y cargo-zigbuild
 	cargo binstall -y cargo-nextest
