@@ -20,7 +20,6 @@ use tonic::Request;
 
 use crate::client_config::make_request;
 use crate::client_config::ClientConfig;
-use crate::client_config::GrpcConfig;
 use crate::pb::task_service_client::TaskServiceClient;
 use crate::pb::AlterTaskRequest;
 use crate::pb::AlterTaskResponse;
