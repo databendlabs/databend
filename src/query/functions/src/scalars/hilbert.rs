@@ -21,24 +21,33 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GenericType;
 use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ReturnType;
+use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::types::ALL_NUMERICS_TYPES;
+use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::FixedLengthEncoding;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactory;
+use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use rand::rngs::SmallRng;
+use rand::Rng;
+use rand::SeedableRng;
 
 /// Registers Hilbert curve related functions with the function registry.
 pub fn register(registry: &mut FunctionRegistry) {
-    // Register the hilbert_range_index function that calculates Hilbert indices for multi-dimensional data
+    // Register the hilbert_range_index function that calculates Hilbert indices for multidimensional data
     let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let args_num = args_type.len();
         // The function supports 2, 3, 4, or 5 dimensions (each dimension requires 2 arguments)
@@ -97,7 +106,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             points.push(key);
                         }
 
-                        // Convert the multi-dimensional point to a Hilbert index
+                        // Convert the multidimensional point to a Hilbert index
                         // This maps the n-dimensional point to a 1-dimensional value
                         let points = points
                             .iter()
@@ -153,6 +162,88 @@ pub fn register(registry: &mut FunctionRegistry) {
             builder.push(id);
         }),
     );
+
+    // We use true randomness by appending a random u8 value at the end of the binary key.
+    // This introduces noise to break tie cases in clustering keys that are not uniformly distributed.
+    // Although this may slightly affect the accuracy of range_bound estimation,
+    // it ensures that Hilbert index + scatter will no longer suffer from data skew.
+    // Moreover, since the noise is added at the tail, the original order of the keys is preserved.
+    registry.properties.insert(
+        "add_noise".to_string(),
+        FunctionProperty::default().non_deterministic(),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, BinaryType, _, _>(
+        "add_noise",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<StringType, BinaryType>(|val, builder, _| {
+            let mut bytes = val.as_bytes().to_vec();
+            let mut rng = SmallRng::from_entropy();
+            bytes.push(rng.gen::<u8>());
+            builder.put_slice(&bytes);
+            builder.commit_row();
+        }),
+    );
+
+    for ty in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, BinaryType, _, _>(
+                        "add_noise",
+                        |_, _| FunctionDomain::Full,
+                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, BinaryType>(
+                            |val, builder, _| {
+                                let mut encoded = val.encode().to_vec();
+                                let mut rng = SmallRng::from_entropy();
+                                encoded.push(rng.gen::<u8>());
+                                builder.put_slice(&encoded);
+                                builder.commit_row();
+                            },
+                        ),
+                    );
+            }
+        })
+    }
+
+    registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, BinaryType, _, _>(
+        "add_noise",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<StringType, NumberType<u64>, BinaryType>(
+            |val, level, builder, _| {
+                let mut bytes = val.as_bytes().to_vec();
+                let mut rng = SmallRng::from_entropy();
+                for _ in 0..level {
+                    bytes.push(rng.gen::<u8>());
+                }
+                builder.put_slice(&bytes);
+                builder.commit_row();
+            },
+        ),
+    );
+
+    for ty in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, NumberType<u64>, BinaryType, _, _>(
+                        "add_noise",
+                        |_, _, _| FunctionDomain::Full,
+                        vectorize_with_builder_2_arg::<NumberType<NUM_TYPE>, NumberType<u64>, BinaryType>(
+                            |val, level, builder, _| {
+                                let mut encoded = val.encode().to_vec();
+                                let mut rng = SmallRng::from_entropy();
+                                for _ in 0..level {
+                                    encoded.push(rng.gen::<u8>());
+                                }
+                                builder.put_slice(&encoded);
+                                builder.commit_row();
+                            },
+                        ),
+                    );
+            }
+        })
+    }
 }
 
 /// Calculates the partition ID for a value based on range boundaries.
