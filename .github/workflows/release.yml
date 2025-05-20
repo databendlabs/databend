@@ -417,13 +417,13 @@ jobs:
           version: ${{ needs.create_release.outputs.version }}
           arch: ${{ matrix.arch }}
 
-  # bindings_python:
-  #   if: needs.create_release.outputs.type == 'stable'
-  #   needs: create_release
-  #   uses: ./.github/workflows/bindings.python.yml
-  #   secrets: inherit
-  #   with:
-  #     tag: ${{ needs.create_release.outputs.version }}
+  bindings_python:
+    # if: needs.create_release.outputs.type == 'stable'
+    needs: create_release
+    uses: ./.github/workflows/bindings.python.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.create_release.outputs.version }}
 
   notify:
     runs-on: ubuntu-latest

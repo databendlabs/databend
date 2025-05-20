@@ -105,6 +105,16 @@ SELECT AVG(1 + a), sum(1 + a), count(1 + a) FROM tc;
 ----
 3.0 9 3
 
+## Aggregate with alias and window function
+statement ok
+select avg(1+a) score, a, percent_rank() over (partition by a % 3 order by score) d, d + 3 from tc group by a;
+
+statement ok
+select avg(1+a) score, a, percent_rank() over (partition by a % 3 order by a) d, d + 3 from tc group by a;
+
+statement error
+select avg(1+a) score, a, percent_rank() over (partition by a % 3 order by b) d, d + 3 from tc group by a;
+
 ## Create dimension tables with generic names
 statement ok
 CREATE or replace TABLE date_ranges (

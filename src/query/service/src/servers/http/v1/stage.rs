@@ -50,7 +50,8 @@ impl UploadToStageArgs {
         let stage_name = Self::read_arg(req, "stage-name")
             .ok_or_else(|| {
                 poem::Error::from_string(
-                    "Parse stage_name error, please check your arguments".to_string(),
+                    "[HTTP-STAGE] Missing required parameter 'stage-name' in request headers"
+                        .to_string(),
                     StatusCode::BAD_REQUEST,
                 )
             })?
