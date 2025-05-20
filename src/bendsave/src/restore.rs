@@ -61,7 +61,10 @@ pub async fn restore_meta(efs: Operator, meta_cfg: &databend_meta::configs::Conf
     let import_args = ImportArgs {
         raft_dir: Some(meta_cfg.raft_config.raft_dir.to_string()),
         db: DATABEND_META_BACKUP_PATH.to_string(),
-        initial_cluster: vec![],
+
+        // when restoring, create a single node cluster, so that it will serve at once.
+        // And the address in the following will be replaced with the content in the config upon `databend-meta` startup.
+        initial_cluster: vec![format!("{id}=127.0.0.1:28004")],
         id: meta_cfg.raft_config.id,
     };
     import_data(&import_args).await?;
