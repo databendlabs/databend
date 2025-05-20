@@ -22,6 +22,7 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 
+use super::runtime_filter::build_and_push_down_runtime_filter;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
 use crate::pipelines::processors::Event;
@@ -303,9 +304,12 @@ impl Processor for TransformHashJoinBuild {
                             .generation_state
                             .build_num_rows
                     };
-                    self.build_state
-                        .add_runtime_filter(&build_chunks, build_num_rows)
-                        .await?;
+                    build_and_push_down_runtime_filter(
+                        &build_chunks,
+                        build_num_rows,
+                        &self.build_state,
+                    )
+                    .await?;
                 }
             }
             Step::Async(AsyncStep::Spill) => {

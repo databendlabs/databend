@@ -1,6 +1,6 @@
 # Q57
 query I
-WITH v1 AS
+explain WITH v1 AS
   (SELECT i_category,
           i_brand,
           cc_name,

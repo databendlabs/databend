@@ -55,8 +55,8 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterShard;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
@@ -1422,17 +1422,13 @@ impl TableContext for QueryContext {
         runtime_filters.clear();
     }
 
-    fn set_runtime_filter(&self, filter: RuntimeFilterShard) {
+    fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
         let mut runtime_filters = self.shared.runtime_filters.write();
-        let entry = runtime_filters.entry(filter.scan_id).or_default();
-        if let Some(inlist) = filter.inlist {
-            entry.add_inlist(inlist);
-        }
-        if let Some(min_max) = filter.min_max {
-            entry.add_min_max(min_max);
-        }
-        if let Some(bloom) = filter.bloom {
-            entry.add_bloom(bloom);
+        for (scan_id, filter) in filters {
+            let entry = runtime_filters.entry(scan_id).or_default();
+            entry.inlist.extend(filter.inlist);
+            entry.min_max.extend(filter.min_max);
+            entry.bloom.extend(filter.bloom);
         }
     }
 
@@ -1481,7 +1477,7 @@ impl TableContext for QueryContext {
     fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_bloom()).clone(),
+            Some(v) => v.bloom.clone(),
             None => vec![],
         }
     }
@@ -1489,7 +1485,7 @@ impl TableContext for QueryContext {
     fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_inlist()).clone(),
+            Some(v) => v.inlist.clone(),
             None => vec![],
         }
     }
@@ -1497,14 +1493,14 @@ impl TableContext for QueryContext {
     fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_min_max()).clone(),
+            Some(v) => v.min_max.clone(),
             None => vec![],
         }
     }
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool {
         if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
-            return !runtime_filter.get_bloom().is_empty();
+            return !runtime_filter.bloom.is_empty();
         }
         false
     }
