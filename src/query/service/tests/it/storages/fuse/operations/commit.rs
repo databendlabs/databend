@@ -95,6 +95,8 @@ use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
+use databend_common_meta_app::schema::ListSequencesReply;
+use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -1140,7 +1142,9 @@ impl Catalog for FakedCatalog {
     async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
         unimplemented!()
     }
-
+    async fn list_sequences(&self, _req: ListSequencesReq) -> Result<ListSequencesReply> {
+        unimplemented!()
+    }
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,

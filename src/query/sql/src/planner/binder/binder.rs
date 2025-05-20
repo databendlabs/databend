@@ -700,6 +700,10 @@ impl<'a> Binder {
             Statement::DescribeNotification(stmt) => self.bind_desc_notification(stmt).await?,
             Statement::CreateSequence(stmt) => self.bind_create_sequence(stmt).await?,
             Statement::DropSequence(stmt) => self.bind_drop_sequence(stmt).await?,
+            Statement::ShowSequences { show_options } => {
+                self.bind_show_sequences(bind_context, show_options).await?
+            }
+            Statement::DescSequence { name } => self.bind_desc_sequence(name).await?,
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,

@@ -101,6 +101,7 @@ mod interpreter_role_set;
 mod interpreter_role_set_secondary;
 mod interpreter_select;
 mod interpreter_sequence_create;
+mod interpreter_sequence_desc;
 mod interpreter_sequence_drop;
 mod interpreter_set;
 mod interpreter_set_priority;

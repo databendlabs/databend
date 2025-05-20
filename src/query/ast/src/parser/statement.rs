@@ -2500,7 +2500,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ( DESC | DESCRIBE ) ~ PROCEDURE ~ #ident ~ #procedure_type_name
         },
         |(_, _, name, args)| {
-            // TODO: modify to ProcedureIdentify
             Statement::DescProcedure(DescProcedureStmt {
                 name: ProcedureIdentity {
                     name: name.to_string(),

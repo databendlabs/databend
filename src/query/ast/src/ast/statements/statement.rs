@@ -368,6 +368,12 @@ pub enum Statement {
     // Sequence
     CreateSequence(CreateSequenceStmt),
     DropSequence(DropSequenceStmt),
+    ShowSequences {
+        show_options: Option<ShowOptions>,
+    },
+    DescSequence {
+        name: Identifier,
+    },
 
     // Set priority for query
     SetPriority {
@@ -504,6 +510,8 @@ impl Statement {
             | Statement::DescribeNotification(..)
             | Statement::ExecuteImmediate(..)
             | Statement::ShowProcedures { .. }
+            | Statement::ShowSequences { .. }
+            | Statement::DescSequence { .. }
             | Statement::DescProcedure(..)
             | Statement::CallProcedure(..)
             | Statement::ShowWarehouses(..)
@@ -1006,6 +1014,15 @@ impl Display for Statement {
             }
             Statement::CreateSequence(stmt) => write!(f, "{stmt}")?,
             Statement::DropSequence(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowSequences { show_options } => {
+                write!(f, "SHOW SEQUENCES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::DescSequence { name } => {
+                write!(f, "DESC SEQUENCE {name}")?;
+            }
             Statement::CreateDynamicTable(stmt) => write!(f, "{stmt}")?,
             Statement::SetPriority {
                 priority,
