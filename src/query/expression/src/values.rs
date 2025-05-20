@@ -1611,8 +1611,8 @@ impl Column {
             Column::Number(NumberColumn::Int32(col)) | Column::Date(col) => col.len() * 4,
             Column::Number(NumberColumn::Int64(col)) | Column::Timestamp(col) => col.len() * 8,
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
-            Column::Interval(col) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
+            Column::Interval(col) => col.len() * 16,
             Column::Geography(col) => GeographyType::column_memory_size(col),
             Column::Boolean(c) => c.len(),
             // 8 * len + size of bytes
