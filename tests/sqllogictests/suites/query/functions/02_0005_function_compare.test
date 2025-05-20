@@ -54,6 +54,11 @@ select number from numbers(3) where number = true
 2
 
 query BBBBBB
+select '3.1' = 3, '3.0' = 3, '3.1' >= 3.1, 3 = '3.1', 3 = '3.0' = 3, 3.1 >= '3.1';
+----
+0 1 1 0 1 1
+
+query BBBBBB
 select 10 > true, 10 >= true, 10 = true, 10 != true, 10 < true, 10 <= true;
 ----
 0 1 1 0 0 1
