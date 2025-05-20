@@ -149,6 +149,7 @@ use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::Planner;
+use crate::ScalarExpr;
 use crate::SelectBuilder;
 
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
@@ -1767,12 +1768,20 @@ impl Binder {
 
         let mut cluster_keys = Vec::with_capacity(expr_len);
         for cluster_expr in cluster_exprs.iter() {
-            let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
+            let (mut cluster_key, _) = scalar_binder.bind(cluster_expr)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is invalid",
                     cluster_expr
                 )));
+            }
+
+            if let ScalarExpr::FunctionCall(func) = &cluster_key {
+                if func.func_name == "add_noise" && matches!(cluster_type, AstClusterType::Hilbert)
+                {
+                    debug_assert!(func.arguments.len() == 1);
+                    cluster_key = func.arguments[0].clone();
+                }
             }
 
             let expr = cluster_key.as_expr()?;
