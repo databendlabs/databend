@@ -103,9 +103,17 @@ pub trait Interpreter: Sync + Send {
         ctx.set_status_info("building pipeline");
         ctx.check_aborting().with_context(make_error)?;
 
-        CacheManager::instance().set_allows_disk_cache(
-            LicenseManagerSwitch::instance().is_license_valid(ctx.get_license_key()),
-        );
+        let enable_disk_cache = match LicenseManagerSwitch::instance()
+            .check_license(ctx.get_license_key())
+        {
+            Ok(_) => true,
+            Err(e) => {
+                log::error!("Missing valid license: enterprise features disabled, may impact functionality and performance: {}", e);
+                false
+            }
+        };
+
+        CacheManager::instance().set_allows_disk_cache(enable_disk_cache);
 
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,

@@ -57,8 +57,7 @@ impl RealLicenseManager {
                 Ok(v) => Ok(v),
                 Err(cause) => match cause.downcast_ref::<JWTError>() {
                     Some(JWTError::TokenHasExpired) => {
-                        warn!("License expired");
-                        Err(ErrorCode::LicenseKeyExpired("license key is expired."))
+                        Err(ErrorCode::LicenseKeyExpired("license key is expired"))
                     }
                     Some(JWTError::InvalidSignature) => {
                         continue;
