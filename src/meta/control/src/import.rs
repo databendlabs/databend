@@ -284,6 +284,8 @@ fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap
         return Ok(nodes);
     }
 
+    eprintln!("new cluster: {:?}", nodes);
+
     if !nodes.contains_key(&id) {
         return Err(anyhow::anyhow!(
             "node id ({}) has to be one of cluster member({:?})",

@@ -15,4 +15,4 @@ runs:
     - name: Test metactl restore new cluster
       shell: bash
       run: |
-        bash ./tests/metactl/test-metactl-restore-new-cluster.sh
+        python ./tests/metactl/test-metactl-restore-new-cluster.py

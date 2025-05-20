@@ -148,7 +148,24 @@ pub struct ImportArgs {
     #[clap(long, default_value = "")]
     pub db: String,
 
-    /// initial_cluster format: node_id=endpoint,grpc_api_addr
+    /// initial_cluster format: <node_id>=<raft_api_host>:<raft_api_port>
+    ///
+    /// For example, the following command restores the node(id=1) of a cluster of two:
+    /// ```text
+    /// $0 \
+    /// --raft-dir ./meta_dir \
+    /// --db meta.db \
+    /// --id=1 \
+    /// --initial-cluster 1=localhost:29103 \
+    /// --initial-cluster 1=localhost:29103
+    /// ```
+    ///
+    /// If it is empty, the cluster information in the imported data is kept.
+    /// For example:
+    /// ```text
+    /// ["state_machine/0",{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":null,"membership":{"configs":[[4]],"nodes":{"4":{}}}}}}}]
+    /// ["state_machine/0",{"Nodes":{"key":4,"value":{"name":"4","endpoint":{"addr":"127.0.0.1","port":28004},"grpc_api_advertise_address":null}}}]
+    /// ```
     #[clap(long)]
     pub initial_cluster: Vec<String>,
 
