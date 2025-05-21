@@ -158,8 +158,9 @@ def main():
 
     print_title("2. Export meta node data")
 
-    exported = metactl_export("./.databend/meta1", None)
+    metactl_export("./.databend/meta1", "meta.db")
 
+    exported = metactl_export("./.databend/meta1", None)
     print_step("Exported meta data. start")
     print(exported)
     print_step("Exported meta data. end")
