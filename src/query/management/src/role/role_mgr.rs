@@ -248,9 +248,21 @@ impl RoleApi for RoleMgr {
         let cached = {
             let mut cache = self.ownership_cache.lock().await;
             let kvs = cache.try_list_dir(object_owner_prefix.as_str()).await;
-            if let Some(err) = kvs.as_ref().err() {
-                warn!("list ownerships from cache failed, err: {}", err);
+
+            match &kvs {
+                Ok(kvs) => {
+                    info!(
+                        "RoleMgr::list_ownerships() returned from cache: {} keys; first key: {:?}; last key: {:?}",
+                        kvs.len(),
+                        kvs.first().map(|(k, _)| k),
+                        kvs.last().map(|(k, _)| k),
+                    );
+                }
+                Err(err) => {
+                    warn!("list ownerships from cache failed. err: {}; It is not a functional issue but may be a performance issue with more than 100_000 ownership records", err);
+                }
             }
+
             kvs.ok()
         };
 

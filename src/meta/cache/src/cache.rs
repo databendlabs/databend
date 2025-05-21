@@ -20,6 +20,7 @@ use databend_common_base::runtime::spawn_named;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_types::SeqV;
 use futures::FutureExt;
+use log::debug;
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
@@ -146,6 +147,7 @@ impl Cache {
 
     /// Get a SeqV from the cache by key.
     pub async fn try_get(&mut self, key: &str) -> Result<Option<SeqV>, Unsupported> {
+        debug!("Cache::access: try_get({})", key);
         self.try_access(|cache_data| cache_data.data.get(key).cloned())
             .await
     }
@@ -160,6 +162,8 @@ impl Cache {
         let prefix = prefix.trim_end_matches('/');
         let left = format!("{}/", prefix);
         let right = format!("{}0", prefix);
+
+        debug!("Cache::access: try_list_dir({})", prefix);
 
         self.try_access(|cache_data| {
             cache_data
