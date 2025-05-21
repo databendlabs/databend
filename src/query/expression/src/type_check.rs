@@ -686,6 +686,18 @@ pub fn common_super_type(
                 .collect::<Option<Vec<_>>>()?;
             Some(DataType::Tuple(tys))
         }
+        (DataType::String, DataType::Number(num_ty))
+        | (DataType::Number(num_ty), DataType::String) => {
+            if num_ty.is_float() {
+                Some(DataType::Number(num_ty))
+            } else {
+                let precision = MAX_DECIMAL128_PRECISION;
+                let scale = 5;
+                Some(DataType::Decimal(
+                    DecimalDataType::from_size(DecimalSize { precision, scale }).ok()?,
+                ))
+            }
+        }
         (DataType::String, decimal_ty @ DataType::Decimal(_))
         | (decimal_ty @ DataType::Decimal(_), DataType::String) => Some(decimal_ty),
         (DataType::Decimal(a), DataType::Decimal(b)) => {

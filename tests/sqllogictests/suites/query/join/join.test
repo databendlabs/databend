@@ -279,20 +279,27 @@ statement error
 select * from (select number from numbers(5)) t2 full outer join (select a, 'A' as name from t) t1 on t1.a = t2.number and 11981933213501947393::DATE;
 
 statement ok
-create or replace table t1(a bool);
+create or replace table t1(a string, b bool);
 
 statement ok
-insert into t1 values(true),(false),(true);
+insert into t1 values('1', true),('1.0', false),('2.0', true),('2.1', false);
 
-query IB
+query ITB
 select * from t join t1 on t.a = t1.a
 ----
-1 1
-1 1
-2 1
-2 1
-3 1
-3 1
+1 1 1
+1 1.0 0
+2 2.0 1
+
+query ITB
+select * from t join t1 on t.a = t1.b
+----
+3 1 1
+2 1 1
+1 1 1
+3 2.0 1
+2 2.0 1
+1 2.0 1
 
 statement ok
 drop table if exists t;
@@ -302,3 +309,4 @@ drop table if exists t1;
 
 statement ok
 with v2 as (SELECT 'xx' || cast(number as string) AS invoice_nr FROM numbers(135) group by invoice_nr order by invoice_nr) select v2.invoice_nr from v2 where EXISTS (SELECT cast(number as string) AS invoice_nr FROM numbers(800) where v2.invoice_nr = cast(number as string)) ignore_result;
+

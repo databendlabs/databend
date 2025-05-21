@@ -157,14 +157,8 @@ query I
 statement error 1005
 ((SELECT a FROM t ORDER BY a)) ORDER BY a
 
-query I
+statement error 1065
 SELECT CASE a WHEN 1 THEN b ELSE c END as val FROM t ORDER BY val
-----
-0
-9
-NULL
-NULL
-NULL
 
 statement error 1065
 SELECT * FROM t ORDER BY 0
