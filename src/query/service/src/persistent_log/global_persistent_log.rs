@@ -19,7 +19,6 @@ use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::spawn;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
@@ -50,6 +49,7 @@ use futures_util::TryStreamExt;
 use log::error;
 use log::info;
 use rand::random;
+use tokio::sync::Mutex;
 use tokio::time::sleep;
 use uuid::Uuid;
 
@@ -66,6 +66,12 @@ pub struct GlobalPersistentLog {
     initialized: AtomicBool,
     retention_interval: usize,
     tables: Vec<Arc<HistoryTable>>,
+    _runtime: Arc<Runtime>,
+
+    // Observe transform and clean hang for the concurrent execution, so add a
+    // lock to prevent it.
+    local_transform_lock: Arc<Mutex<()>>,
+    local_clean_lock: Arc<Mutex<()>>,
 }
 
 impl GlobalPersistentLog {
@@ -76,6 +82,11 @@ impl GlobalPersistentLog {
                 ErrorCode::Internal("Create MetaClient failed for GlobalPersistentLog")
             })?;
         let stage_name = cfg.log.history.stage_name.clone();
+        let runtime = Arc::new(Runtime::with_worker_threads(
+            4,
+            Some("log-transform-worker".to_owned()),
+        )?);
+
         let instance = Arc::new(Self {
             meta_client,
             interval: cfg.log.history.interval as u64,
@@ -86,18 +97,15 @@ impl GlobalPersistentLog {
             initialized: AtomicBool::new(false),
             retention_interval: cfg.log.history.retention_interval,
             tables: init_history_tables(&cfg.log.history)?,
+            local_transform_lock: Arc::new(Mutex::new(())),
+            local_clean_lock: Arc::new(Mutex::new(())),
+            _runtime: runtime.clone(),
         });
         GlobalInstance::set(instance);
-        GlobalIORuntime::instance().spawn(async move {
-            let runtime = Runtime::with_worker_threads(2, Some("log-transform-worker".to_owned()))?;
-            runtime
-                .spawn(async move {
-                    if let Err(e) = GlobalPersistentLog::instance().work().await {
-                        error!("System history exit with {}", e);
-                    }
-                })
-                .await?;
-            Ok::<(), ErrorCode>(())
+        runtime.spawn(async move {
+            if let Err(e) = GlobalPersistentLog::instance().work().await {
+                error!("System history exit with {}", e);
+            }
         });
         Ok(())
     }
@@ -291,6 +299,7 @@ impl GlobalPersistentLog {
     }
 
     pub async fn transform(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
+        let _local_lock_guard = self.local_transform_lock.lock().await;
         let may_permit = self
             .acquire(&format!("{}/{}/lock", meta_key, table.name), self.interval)
             .await?;
@@ -329,10 +338,12 @@ impl GlobalPersistentLog {
             drop(_guard);
             return Ok(true);
         }
+        drop(_local_lock_guard);
         Ok(false)
     }
 
     pub async fn clean(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
+        let _local_lock_guard = self.local_clean_lock.lock().await;
         let may_permit = self
             .acquire(
                 &format!("{}/{}/lock", meta_key, table.name),
@@ -355,6 +366,7 @@ impl GlobalPersistentLog {
             drop(_guard);
             return Ok(true);
         }
+        drop(_local_lock_guard);
         Ok(false)
     }
 
