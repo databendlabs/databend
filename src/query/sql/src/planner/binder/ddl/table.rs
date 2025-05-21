@@ -1882,7 +1882,10 @@ async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
         }
 
         // verify privilege to list
-        if let Err(e) = dal.list(VERIFICATION_KEY).await {
+        // Append "/" to the verification key to ensure we are listing the contents of the directory/prefix
+        // rather than attempting to list a single object.
+        // Like aws s3 express one, the list requires a end delimiter.
+        if let Err(e) = dal.list(&format!("{}{}", VERIFICATION_KEY, "/")).await {
             errors.push(format!("Permission check for [List] failed: {}", e));
         }
 
