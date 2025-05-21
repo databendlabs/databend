@@ -103,15 +103,17 @@ pub trait Interpreter: Sync + Send {
         ctx.set_status_info("building pipeline");
         ctx.check_aborting().with_context(make_error)?;
 
-        let enable_disk_cache = match LicenseManagerSwitch::instance()
-            .check_license(ctx.get_license_key())
-        {
-            Ok(_) => true,
-            Err(e) => {
-                log::error!("Missing valid license: enterprise features disabled, may impact functionality and performance: {}", e);
-                false
-            }
-        };
+        let enable_disk_cache =
+            match LicenseManagerSwitch::instance().check_license(ctx.get_license_key()) {
+                Ok(_) => true,
+                Err(e) => {
+                    log::error!(
+                        "[Interpreter] Enterprise features disabled due to invalid license: {}",
+                        e
+                    );
+                    false
+                }
+            };
 
         CacheManager::instance().set_allows_disk_cache(enable_disk_cache);
 
@@ -187,7 +189,7 @@ fn log_query_start(ctx: &QueryContext) {
     }
 
     if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
-        error!("interpreter.start.error: {:?}", error)
+        error!("[Interpreter] Query start logging failed: {:?}", error)
     }
 }
 
@@ -214,7 +216,7 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
-        error!("interpreter.finish.error: {:?}", error)
+        error!("[Interpreter] Query finish logging failed: {:?}", error)
     }
 }
 
