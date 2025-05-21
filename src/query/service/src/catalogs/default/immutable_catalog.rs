@@ -65,6 +65,8 @@ use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
+use databend_common_meta_app::schema::ListSequencesReply;
+use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -518,6 +520,9 @@ impl Catalog for ImmutableCatalog {
     }
 
     async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+        unimplemented!()
+    }
+    async fn list_sequences(&self, _req: ListSequencesReq) -> Result<ListSequencesReply> {
         unimplemented!()
     }
 

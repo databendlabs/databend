@@ -39,7 +39,7 @@ impl Display for CreateSequenceStmt {
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write!(f, " {}", self.sequence)?;
+        write!(f, "{}", self.sequence)?;
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
         }
@@ -59,7 +59,7 @@ impl Display for DropSequenceStmt {
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
-        write!(f, " {}", self.sequence)?;
+        write!(f, "{}", self.sequence)?;
         Ok(())
     }
 }

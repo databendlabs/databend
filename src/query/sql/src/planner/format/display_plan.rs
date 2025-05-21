@@ -226,6 +226,7 @@ impl Plan {
             // sequence
             Plan::CreateSequence(_) => Ok("CreateSequence".to_string()),
             Plan::DropSequence(_) => Ok("DropSequence".to_string()),
+            Plan::DescSequence(_) => Ok("DescSequence".to_string()),
 
             Plan::SetPriority(_) => Ok("SetPriority".to_string()),
             Plan::System(_) => Ok("System".to_string()),

@@ -57,6 +57,7 @@ use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::show_grants::ShowGrants;
 use crate::table_functions::show_roles::ShowRoles;
+use crate::table_functions::show_sequences::ShowSequences;
 use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
@@ -367,6 +368,11 @@ impl TableFunctionFactory {
         creators.insert(
             "iceberg_manifest".to_string(),
             (next_id(), Arc::new(IcebergInspectTable::create)),
+        );
+
+        creators.insert(
+            "show_sequences".to_string(),
+            (next_id(), Arc::new(ShowSequences::create)),
         );
 
         TableFunctionFactory {
