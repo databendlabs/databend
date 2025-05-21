@@ -471,6 +471,7 @@ pub fn convert_to_decimal_domain(
         validity: None,
         errors: None,
         suppress_error: false,
+        strict_eval: true,
     };
     let dest_size = dest_type.size();
     let res = convert_to_decimal(&value, &mut ctx, &from_type, dest_type);
@@ -905,6 +906,7 @@ pub fn strict_decimal_data_type(mut data: DataBlock) -> Result<DataBlock, String
         validity: None,
         errors: None,
         suppress_error: false,
+        strict_eval: true,
     };
     for entry in data.columns_mut() {
         if entry.value.is_scalar_null() {

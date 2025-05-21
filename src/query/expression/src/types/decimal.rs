@@ -58,6 +58,7 @@ use super::ReturnType;
 use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
+use super::ValueType;
 use crate::utils::arrow::buffer_into_mut;
 use crate::with_decimal_type;
 use crate::Column;
@@ -1080,6 +1081,14 @@ impl DecimalDataType {
 
         Ok((a_type, b_type))
     }
+
+    pub fn is_strict(&self) -> bool {
+        match self {
+            DecimalDataType::Decimal128(size) if size.can_carried_by_128() => true,
+            DecimalDataType::Decimal256(size) if !size.can_carried_by_128() => true,
+            _ => false,
+        }
+    }
 }
 
 impl DecimalScalar {
@@ -1220,6 +1229,35 @@ impl DecimalColumn {
                 "Unsupported data type: {:?} into decimal column",
                 data_type
             ))),
+        }
+    }
+
+    pub fn strict_decimal_data_type(self) -> Self {
+        match &self {
+            DecimalColumn::Decimal128(buffer, size) => {
+                if size.can_carried_by_128() {
+                    self
+                } else {
+                    let builder = Decimal128As256Type::iter_column(buffer).collect::<Vec<_>>();
+                    DecimalColumn::Decimal256(Decimal256Type::build_column(builder), *size)
+                }
+            }
+            DecimalColumn::Decimal256(buffer, size) => {
+                if size.can_carried_by_128() {
+                    let builder = Decimal256As128Type::iter_column(buffer).collect::<Vec<_>>();
+                    DecimalColumn::Decimal128(Decimal128Type::build_column(builder), *size)
+                } else {
+                    self
+                }
+            }
+        }
+    }
+
+    pub fn is_strict_decimal_data_type(&self) -> bool {
+        match self {
+            DecimalColumn::Decimal128(_, size) if size.can_carried_by_128() => true,
+            DecimalColumn::Decimal256(_, size) if !size.can_carried_by_128() => true,
+            _ => false,
         }
     }
 }

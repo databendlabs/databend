@@ -268,7 +268,8 @@ impl Column {
             DataType::Boolean => Column::Boolean(Bitmap::from_array_data(array.to_data())),
             DataType::String => Column::String(try_to_string_column(array)?),
             DataType::Decimal(_) => {
-                Column::Decimal(DecimalColumn::try_from_arrow_data(array.to_data())?)
+                let col = DecimalColumn::try_from_arrow_data(array.to_data())?;
+                Column::Decimal(col.strict_decimal_data_type())
             }
             DataType::Timestamp => {
                 let array = arrow_cast::cast(

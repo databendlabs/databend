@@ -299,6 +299,7 @@ impl From<&Column> for ArrayData {
             Column::Boolean(col) => col.into(),
             Column::Number(c) => c.arrow_data(arrow_type),
             Column::Decimal(c) => {
+                let c = c.clone().strict_decimal_data_type();
                 let arrow_type = match c {
                     DecimalColumn::Decimal128(_, size) => {
                         ArrowDataType::Decimal128(size.precision(), size.scale() as _)

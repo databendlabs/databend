@@ -208,6 +208,9 @@ pub struct EvalContext<'a> {
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
     pub suppress_error: bool,
+    /// At the top level expressions require eval to have stricter behavior
+    /// to ensure that some internal complexity is not leaking out
+    pub strict_eval: bool,
 }
 
 /// `FunctionID` is a unique identifier for a function in the registry. It's used to

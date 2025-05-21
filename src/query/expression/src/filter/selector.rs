@@ -504,6 +504,7 @@ impl<'a> Selector<'a> {
                     errors: None,
                     func_ctx: self.evaluator.func_ctx(),
                     suppress_error: eval_options.suppress_error,
+                    strict_eval: eval_options.strict_eval,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(&args, &mut ctx);
