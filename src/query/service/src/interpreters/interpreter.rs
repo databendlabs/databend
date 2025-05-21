@@ -103,17 +103,18 @@ pub trait Interpreter: Sync + Send {
         ctx.set_status_info("building pipeline");
         ctx.check_aborting().with_context(make_error)?;
 
-        let enable_disk_cache =
-            match LicenseManagerSwitch::instance().check_license(ctx.get_license_key()) {
-                Ok(_) => true,
-                Err(e) => {
-                    log::error!(
-                        "[Interpreter] Enterprise features disabled due to invalid license: {}",
+        let enable_disk_cache = match LicenseManagerSwitch::instance()
+            .check_license(ctx.get_license_key())
+        {
+            Ok(_) => true,
+            Err(e) => {
+                log::error!(
+                        "[Interpreter] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
                         e
                     );
-                    false
-                }
-            };
+                false
+            }
+        };
 
         CacheManager::instance().set_allows_disk_cache(enable_disk_cache);
 
