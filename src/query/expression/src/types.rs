@@ -17,6 +17,7 @@ pub mod array;
 pub mod binary;
 pub mod bitmap;
 pub mod boolean;
+pub mod compute_view;
 pub mod date;
 pub mod decimal;
 pub mod empty_array;

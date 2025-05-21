@@ -49,6 +49,8 @@ use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::compute_view::Compute;
+use super::compute_view::ComputeView;
 use super::AccessType;
 use super::AnyType;
 use super::ArgType;
@@ -2537,139 +2539,41 @@ impl Ord for i256 {
     }
 }
 
-pub trait DecimalCast<F, T>: Debug + Clone + PartialEq + 'static {
-    fn cast(value: &F) -> T;
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct I128AsI256;
 
-impl DecimalCast<i128, i256> for I128AsI256 {
-    fn cast(value: &i128) -> i256 {
+impl Compute<CoreDecimal<i128>, CoreDecimal<i256>> for I128AsI256 {
+    fn compute(value: &i128) -> i256 {
         i256::from(*value)
+    }
+
+    fn compute_domain(domain: &SimpleDomain<i128>) -> SimpleDomain<i256> {
+        SimpleDomain {
+            min: i256::from(domain.min),
+            max: i256::from(domain.max),
+        }
     }
 }
 
-pub type Decimal128As256Type = DecimalView<i128, i256, I128AsI256>;
+pub type Decimal128As256Type = ComputeView<CoreDecimal<i128>, CoreDecimal<i256>, I128AsI256>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct I256ToI128;
 
-impl DecimalCast<i256, i128> for I256ToI128 {
-    fn cast(value: &i256) -> i128 {
+impl Compute<CoreDecimal<i256>, CoreDecimal<i128>> for I256ToI128 {
+    fn compute(value: &i256) -> i128 {
         value.as_i128()
     }
-}
 
-pub type Decimal256As128Type = DecimalView<i256, i128, I256ToI128>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecimalView<F, T, C>(PhantomData<(F, T, C)>);
-
-impl<F, T, C> AccessType for DecimalView<F, T, C>
-where
-    F: Decimal,
-    T: Decimal,
-    C: DecimalCast<F, T>,
-{
-    type Scalar = T;
-    type ScalarRef<'a> = T;
-    type Column = Buffer<F>;
-    type Domain = SimpleDomain<T>;
-    type ColumnIterator<'a> = std::iter::Map<std::slice::Iter<'a, F>, fn(&'a F) -> T>;
-
-    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        scalar
-    }
-
-    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        *scalar
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        <CoreDecimal<F> as SimpleType>::downcast_scalar(scalar).map(|v| C::cast(&v))
-    }
-
-    fn upcast_scalar(_: Self::Scalar) -> Scalar {
-        unimplemented!()
-    }
-
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        <CoreDecimal<F> as SimpleType>::downcast_column(col)
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        <CoreDecimal<F> as SimpleType>::upcast_column(col)
-    }
-
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        <CoreDecimal<F> as SimpleType>::downcast_domain(domain).map(|domain| SimpleDomain {
-            max: C::cast(&domain.max),
-            min: C::cast(&domain.min),
-        })
-    }
-
-    fn upcast_domain(_: Self::Domain) -> Domain {
-        unimplemented!()
-    }
-
-    fn column_len(col: &Self::Column) -> usize {
-        col.len()
-    }
-
-    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.get(index).map(C::cast)
-    }
-
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        debug_assert!(index < col.len());
-        C::cast(col.get_unchecked(index))
-    }
-
-    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
-    }
-
-    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter().map(C::cast as fn(&F) -> T)
-    }
-
-    fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
-        std::mem::size_of::<F>()
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.len() * std::mem::size_of::<F>()
-    }
-
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(&rhs)
-    }
-
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left == right
-    }
-
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left != right
-    }
-
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left > right
-    }
-
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left < right
-    }
-
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left >= right
-    }
-
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left <= right
+    fn compute_domain(domain: &SimpleDomain<i256>) -> SimpleDomain<i128> {
+        SimpleDomain {
+            min: domain.min.as_i128(),
+            max: domain.max.as_i128(),
+        }
     }
 }
+
+pub type Decimal256As128Type = ComputeView<CoreDecimal<i256>, CoreDecimal<i128>, I256ToI128>;
 
 #[cfg(test)]
 mod tests {
