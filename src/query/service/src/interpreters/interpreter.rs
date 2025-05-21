@@ -28,6 +28,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_license::license_manager::get_license_manager;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
@@ -91,6 +92,20 @@ pub trait Interpreter: Sync + Send {
 
         ctx.set_status_info("building pipeline");
         ctx.check_aborting().with_context(make_error)?;
+
+        match get_license_manager()
+            .manager
+            .parse_license(ctx.get_license_key().as_str())
+        {
+            Ok(_) => (),
+            Err(e) => {
+                log::error!(
+                    "[Interpreter] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
+                    e
+                );
+            }
+        };
+
         if self.is_ddl() {
             CommitInterpreter::try_create(ctx.clone())?
                 .execute2()
@@ -175,7 +190,7 @@ fn log_query_start(ctx: &QueryContext) {
     }
 
     if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
-        error!("interpreter.start.error: {:?}", error)
+        error!("[Interpreter] Query start logging failed: {:?}", error)
     }
 }
 
@@ -192,7 +207,7 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
-        error!("interpreter.finish.error: {:?}", error)
+        error!("[Interpreter] Query finish logging failed: {:?}", error)
     }
 }
 
