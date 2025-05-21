@@ -103,9 +103,20 @@ pub trait Interpreter: Sync + Send {
         ctx.set_status_info("building pipeline");
         ctx.check_aborting().with_context(make_error)?;
 
-        CacheManager::instance().set_allows_disk_cache(
-            LicenseManagerSwitch::instance().is_license_valid(ctx.get_license_key()),
-        );
+        let enable_disk_cache = match LicenseManagerSwitch::instance()
+            .check_license(ctx.get_license_key())
+        {
+            Ok(_) => true,
+            Err(e) => {
+                log::error!(
+                        "[Interpreter] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
+                        e
+                    );
+                false
+            }
+        };
+
+        CacheManager::instance().set_allows_disk_cache(enable_disk_cache);
 
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
@@ -179,7 +190,7 @@ fn log_query_start(ctx: &QueryContext) {
     }
 
     if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
-        error!("interpreter.start.error: {:?}", error)
+        error!("[Interpreter] Query start logging failed: {:?}", error)
     }
 }
 
@@ -206,7 +217,7 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
-        error!("interpreter.finish.error: {:?}", error)
+        error!("[Interpreter] Query finish logging failed: {:?}", error)
     }
 }
 
