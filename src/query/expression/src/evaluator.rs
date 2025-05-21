@@ -259,9 +259,12 @@ impl<'a> Evaluator<'a> {
             Value::Column(col) => assert_eq!(&col.data_type(), expr.data_type()),
         }
 
-        if options.strict_eval {
+        if !expr.is_column_ref() && options.strict_eval {
             let mut check = CheckStrictValue;
-            assert!(check.visit_value(result.clone()).is_ok())
+            assert!(
+                check.visit_value(result.clone()).is_ok(),
+                "result {result:?}",
+            )
         }
 
         Ok(result)
