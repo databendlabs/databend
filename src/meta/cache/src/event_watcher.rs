@@ -18,7 +18,6 @@ use std::time::Duration;
 
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_types::anyerror::func_name;
-use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::MetaClientError;
@@ -32,7 +31,6 @@ use log::info;
 use log::warn;
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
-use tokio::sync::MutexGuard;
 use tonic::Status;
 use tonic::Streaming;
 
@@ -44,14 +42,18 @@ use crate::errors::Unsupported;
 pub(crate) struct EventWatcher {
     /// The left-closed bound of the key range to watch.
     pub(crate) left: String,
+
     /// The right-open bound of the key range to watch.
     pub(crate) right: String,
+
     /// The metadata client to interact with the remote meta-service.
     pub(crate) meta_client: Arc<ClientHandle>,
+
     /// The shared cache data protected by a mutex.
     pub(crate) data: Arc<Mutex<Result<CacheData, Unsupported>>>,
-    /// Contains descriptive information about the context of this watcher.
-    pub(crate) ctx: String,
+
+    /// Contains descriptive information of this watcher.
+    pub(crate) name: String,
 }
 
 impl EventWatcher {
@@ -76,14 +78,25 @@ impl EventWatcher {
         mut started: Option<oneshot::Sender<()>>,
         mut cancel: impl Future<Output = ()> + Send + 'static,
     ) {
+        // sleep time and reason
+        let mut sleep = None::<(Duration, String)>;
+
         let mut c = std::pin::pin!(cancel);
 
         loop {
-            // 1. Retry until a successful connection is established.
+            if let Some((sleep_time, reason)) = sleep.take() {
+                info!(
+                    "{}: retry establish cache watcher in {:?} because {}",
+                    self.name, sleep_time, reason
+                );
+                tokio::time::sleep(sleep_time).await;
+            }
+
+            // 1. Retry until a successful connection is established and cache is initialized.
 
             let strm = {
                 // Hold the lock until the cache is fully initialized.
-                let mut d = self.data.lock().await;
+                let mut cache_data = self.data.lock().await;
 
                 // The data lock is acquired and will be kept until the cache is fully initialized.
                 // At this point, we notify the caller that initialization has started by consuming
@@ -91,24 +104,49 @@ impl EventWatcher {
                 // acquire the data lock, as we're about to populate the cache with initial data.
                 started.take();
 
-                let strm_res = self.retry_initialize_cache(&mut d).await;
+                let strm_res = self.retry_new_stream().await;
 
-                match strm_res {
+                // Everytime when establishing a cache, the old data must be cleared and receive a new one.
+                *cache_data = Ok(Default::default());
+
+                let mut strm = match strm_res {
                     Ok(strm) => {
-                        info!("{}: cache initialized", self.ctx);
+                        info!("{}: cache watch stream established", self.name);
                         strm
                     }
                     Err(unsupported) => {
                         let sleep_time = Duration::from_secs(60 * 5);
 
-                        warn!(
+                        let mes = format!(
                             "{}: watch stream not supported: {}; retry in {:?}",
-                            self.ctx, unsupported, sleep_time
+                            self.name, unsupported, sleep_time
                         );
 
-                        *d = Err(unsupported);
+                        warn!("{}", mes);
+                        sleep = Some((sleep_time, mes));
 
-                        tokio::time::sleep(sleep_time).await;
+                        // Mark the cache as unavailable
+                        *cache_data = Err(unsupported);
+                        continue;
+                    }
+                };
+
+                let init_res = {
+                    // Safe unwrap: before entering this method, the cache data is ensured to be Ok.
+                    let d = cache_data.as_mut().unwrap();
+                    self.initialize_cache(d, &mut strm).await
+                };
+
+                match init_res {
+                    Ok(_) => {
+                        info!("{}: cache initialized successfully", self.name);
+                        strm
+                    }
+                    Err(conn_err) => {
+                        error!(
+                            "{}: cache initialization failed: {}; retry re-establish cache",
+                            self.name, conn_err
+                        );
                         continue;
                     }
                 }
@@ -119,32 +157,51 @@ impl EventWatcher {
             let res = self.watch_kv_changes(strm, c.as_mut()).await;
             match res {
                 Ok(_) => {
-                    info!("{} watch loop exited normally(canceled by user)", self.ctx);
+                    info!("{} watch loop exited normally(canceled by user)", self.name);
                     return;
                 }
                 Err(e) => {
-                    error!("{} watcher loop exited with error: {}; reset cache and re-fetch all data to re-establish", self.ctx, e);
+                    error!("{} watcher loop exited with error: {}; reset cache and re-fetch all data to re-establish", self.name, e);
                     // continue
                 }
             }
         }
     }
 
-    /// Repeatedly attempts to initialize the cache until successful or until it's determined that
-    /// the databend-meta service doesn't support the required functionality.
-    ///
-    /// This method will:
-    /// 1. If a connection error occurs, wait with exponential backoff and retry
-    /// 2. If an unsupported operation error occurs, return that error
-    async fn retry_initialize_cache(
+    /// Drain all initialization events from the watch stream and apply them to the cache.
+    async fn initialize_cache(
         &self,
-        cache_data: &mut MutexGuard<'_, Result<CacheData, Unsupported>>,
-    ) -> Result<Streaming<WatchResponse>, Unsupported> {
+        cache_data: &mut CacheData,
+        strm: &mut Streaming<WatchResponse>,
+    ) -> Result<(), ConnectionClosed> {
+        while let Some(watch_response) = strm.try_next().await? {
+            if watch_response.is_initialization_complete_flag() {
+                info!(
+                    "{}: cache is ready, initial_flush finished upto seq={}",
+                    self.name, cache_data.last_seq
+                );
+                break;
+            }
+
+            let Some((key, before, after)) = Self::decode_watch_response(watch_response) else {
+                continue;
+            };
+
+            cache_data.apply_update(key, before, after);
+        }
+
+        Ok(())
+    }
+
+    /// Keep retrying to establish a new watch stream until a successful one is established, or the server
+    /// reports that the watch stream is not supported.
+    async fn retry_new_stream(&self) -> Result<Streaming<WatchResponse>, Unsupported> {
         let mut sleep_duration = Duration::from_millis(50);
         let max_sleep = Duration::from_secs(5);
 
         loop {
-            let res = self.initialize_cache(cache_data).await;
+            let res = self.new_watch_stream().await;
+
             let conn_err = match res {
                 Ok(strm_res) => return strm_res,
                 Err(conn_err) => conn_err,
@@ -152,65 +209,12 @@ impl EventWatcher {
 
             error!(
                 "{}: while establish cache, error: {}; retrying in {:?}",
-                self.ctx, conn_err, sleep_duration
+                self.name, conn_err, sleep_duration
             );
 
             tokio::time::sleep(sleep_duration).await;
             sleep_duration = std::cmp::min(sleep_duration * 3 / 2, max_sleep);
         }
-    }
-
-    /// Reset the cache by creating a watch stream and processing the initial flush.
-    ///
-    /// This method ensures the cache is in a consistent state by:
-    /// 1. Clearing existing cache data
-    /// 2. Establishing a new watch stream
-    /// 3. Fetching the last sequence number
-    /// 4. Processing all events until the cache is fully synchronized
-    async fn initialize_cache(
-        &self,
-        cache_data: &mut MutexGuard<'_, Result<CacheData, Unsupported>>,
-    ) -> Result<Result<Streaming<WatchResponse>, Unsupported>, ConnectionClosed> {
-        // Everytime when establishing a cache, the old data must be cleared and receive a new one.
-        **cache_data = Ok(Default::default());
-
-        let strm_res = self.new_watch_stream().await?;
-
-        let mut strm = match strm_res {
-            Ok(strm) => strm,
-            Err(unsupported) => {
-                return Ok(Err(unsupported));
-            }
-        };
-
-        // strm is established before getting last_seq thus the stream does not miss any events before last_seq.
-        // Thus, we can always see an event with seq >= last_seq.
-        //
-        // In other side, if we list the prefix and get the last_seq before establishing the stream, we may miss some events.
-        // For example, after listing key values `a->SeqV(1, b"foo")`,
-        // then key `a` is deleted.
-        // Then the watch stream is established, no event will be received.
-        let last_seq = self.get_last_seq().await?;
-
-        while let Some(watch_response) = strm.try_next().await? {
-            let Some((key, prev, current)) = Self::decode_watch_response(watch_response) else {
-                continue;
-            };
-
-            // Safe unwrap: before entering this method, the cache data is ensured to be Ok.
-            let d = cache_data.as_mut().unwrap();
-
-            let new_seq = d.apply_update(key, prev, current);
-
-            if new_seq >= last_seq {
-                info!(
-                    "{}: cache is ready, initial_flush finished upto seq={}",
-                    self.ctx, last_seq
-                );
-                break;
-            }
-        }
-        Ok(Ok(strm))
     }
 
     /// Create a new watch stream to watch the key-value change event in the interested range.
@@ -220,11 +224,11 @@ impl EventWatcher {
         let watch =
             WatchRequest::new(self.left.clone(), Some(self.right.clone())).with_initial_flush(true);
 
-        let res = self.meta_client.request(watch).await;
+        let res = self.meta_client.watch_with_initialization(watch).await;
 
         let client_err = match res {
             Ok(strm) => {
-                debug!("{}: watch stream established", self.ctx);
+                debug!("{}: watch stream established", self.name);
                 return Ok(Ok(strm));
             }
             Err(client_err) => client_err,
@@ -232,21 +236,21 @@ impl EventWatcher {
 
         warn!(
             "{}: error when establishing watch stream: {}",
-            self.ctx, client_err
+            self.name, client_err
         );
 
         match client_err {
             MetaClientError::HandshakeError(hs_err) => {
                 let unsupported = Unsupported::new(hs_err)
                     .context(func_name!())
-                    .context(&self.ctx);
+                    .context(&self.name);
                 Ok(Err(unsupported))
             }
 
             MetaClientError::NetworkError(net_err) => {
                 let conn_err = ConnectionClosed::new_str(net_err.to_string())
-                    .context("send watch request")
-                    .context(&self.ctx);
+                    .context(func_name!())
+                    .context(&self.name);
 
                 Err(conn_err)
             }
@@ -287,11 +291,11 @@ impl EventWatcher {
             };
 
             let Some(watch_response) = watch_result? else {
-                error!("{} watch-stream closed", self.ctx);
-                return Err(ConnectionClosed::new_str("watch-stream closed").context(&self.ctx));
+                error!("{} watch-stream closed", self.name);
+                return Err(ConnectionClosed::new_str("watch-stream closed").context(&self.name));
             };
 
-            let Some((key, prev, current)) = Self::decode_watch_response(watch_response) else {
+            let Some((key, before, after)) = Self::decode_watch_response(watch_response) else {
                 continue;
             };
 
@@ -300,40 +304,13 @@ impl EventWatcher {
             // Safe unwrap: before entering this method, the cache data is ensured to be Ok.
             let d = cache_data.as_mut().unwrap();
 
-            let new_seq = d.apply_update(key.clone(), prev.clone(), current.clone());
+            let new_seq = d.apply_update(key.clone(), before.clone(), after.clone());
 
             debug!(
                 "{}: process update(key: {}, prev: {:?}, current: {:?}), new_seq={:?}",
-                self.ctx, key, prev, current, new_seq
+                self.name, key, before, after, new_seq
             );
         }
-    }
-
-    /// List all the key under the range and find out the greatest seq.
-    async fn get_last_seq(&self) -> Result<u64, ConnectionClosed> {
-        let mut strm = self.meta_client.list(&self.left).await.map_err(|e| {
-            ConnectionClosed::new_str(e.to_string())
-                .context("list-to-get-last-seq")
-                .context(&self.ctx)
-        })?;
-
-        let mut last_seq = 0;
-
-        while let Some(item) = strm.try_next().await? {
-            let StreamItem { key, value } = item;
-            debug!(
-                "{}: list_kv to get last_seq: key: {}, value: {:?}",
-                self.ctx, key, value
-            );
-            let seq = value.map(|v| v.seq).unwrap_or(0);
-            if seq > last_seq {
-                last_seq = seq;
-            }
-        }
-
-        debug!("{}: get last_seq from list_kv: {}", self.ctx, last_seq);
-
-        Ok(last_seq)
     }
 
     fn decode_watch_response(
