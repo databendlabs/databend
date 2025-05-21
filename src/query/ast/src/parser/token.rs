@@ -1130,6 +1130,8 @@ pub enum TokenKind {
     UPLOAD,
     #[token("SEQUENCE", ignore(ascii_case))]
     SEQUENCE,
+    #[token("SEQUENCES", ignore(ascii_case))]
+    SEQUENCES,
     #[token("SHARE", ignore(ascii_case))]
     SHARE,
     #[token("SHARES", ignore(ascii_case))]
@@ -1686,6 +1688,7 @@ impl TokenKind {
             | TokenKind::ANY
             | TokenKind::FUNCTION
             | TokenKind::PROCEDURE
+            | TokenKind::SEQUENCE
             | TokenKind::ASC
             | TokenKind::ANTI
             // | TokenKind::ASYMMETRIC

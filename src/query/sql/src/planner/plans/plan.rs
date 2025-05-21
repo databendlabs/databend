@@ -76,6 +76,7 @@ use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescProcedurePlan;
+use crate::plans::DescSequencePlan;
 use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
@@ -412,6 +413,7 @@ pub enum Plan {
     // sequence
     CreateSequence(Box<CreateSequencePlan>),
     DropSequence(Box<DropSequencePlan>),
+    DescSequence(Box<DescSequencePlan>),
 
     // Dictionary
     CreateDictionary(Box<CreateDictionaryPlan>),
@@ -456,6 +458,7 @@ pub enum RewriteKind {
 
     Call,
     ShowProcedures,
+    ShowSequences,
 }
 
 impl Plan {
@@ -559,6 +562,7 @@ impl Plan {
                 DataField::new("max_concurrency", DataType::String),
                 DataField::new("query_queued_timeout", DataType::String),
             ]),
+            Plan::DescSequence(plan) => plan.schema(),
             _ => Arc::new(DataSchema::empty()),
         }
     }
