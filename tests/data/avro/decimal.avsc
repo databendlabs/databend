@@ -1,0 +1,10 @@
+{
+  "namespace": "example.avro",
+  "type": "record",
+  "name": "user",
+  "fields": [
+    {"name":  "c_4_2", "type": { "name": "c_4_2", "type": "fixed", "size": 2, "logicalType": "decimal", "precision": 4, "scale": 2 } },
+    {"name":  "c_39_2", "type": { "name": "c_39_2", "type": "fixed", "size": 17, "logicalType": "decimal", "precision": 39, "scale": 2 } },
+    {"name":  "c_76_2", "type": { "name": "c_76_2", "type": "fixed", "size": 32, "logicalType": "decimal", "precision": 76, "scale": 2 } }
+  ]
+}
