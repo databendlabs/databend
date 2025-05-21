@@ -220,5 +220,41 @@ def main():
     shutil.rmtree(".databend")
 
 
+    print_title("4. Import with --initial-cluster of one node")
+
+    cluster = {
+        # This will be replaced when meta node starts
+        4: "127.0.0.1:12345",
+    }
+
+    metactl_import("./.databend/new_meta1", 4, "meta.db", cluster)
+
+    print_step("4.1 Check if state machine is complete by checking key 'LastMembership'")
+    meta1_data = metactl_export("./.databend/new_meta1", None)
+    print(meta1_data)
+    assert "LastMembership" in meta1_data
+
+    print_title("4.2 Start new meta node cluster")
+
+    start_meta_node(1, True)
+
+    print_step("sleep 3 sec to wait for membership to commit")
+    time.sleep(3)
+
+    print_title("4.3 Check membership in new cluster")
+
+    new_status = cluster_status("new single node cluster")
+    print(json.dumps(new_status, indent=2))
+
+    voters = new_status["voters"]
+
+    names = dict([(voter["name"], voter) for voter in voters])
+
+    # The address is replaced with the content in config.
+    assert names["4"]["endpoint"] == {"addr": "localhost", "port": 29103}
+
+    kill_databend_meta()
+    shutil.rmtree(".databend")
+
 if __name__ == "__main__":
     main()
