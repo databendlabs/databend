@@ -153,11 +153,7 @@ async fn try_purge_files(ctx: Arc<dyn TableContext>, stage_info: &StageInfo, fil
     }
 
     let elapsed = start.elapsed();
-    info!(
-        "Purged {} files, operation took {:?}",
-        files.len(),
-        elapsed
-    );
+    info!("Purged {} files, operation took {:?}", files.len(), elapsed);
 
     // Perf.
     {
