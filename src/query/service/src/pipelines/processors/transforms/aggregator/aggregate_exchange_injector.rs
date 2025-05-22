@@ -233,6 +233,7 @@ impl ExchangeInjector for AggregateInjector {
         match exchange {
             DataExchange::Merge(_) => unreachable!(),
             DataExchange::Broadcast(_) => unreachable!(),
+            DataExchange::Modulo(_) => unreachable!(),
             DataExchange::ShuffleDataExchange(exchange) => {
                 Ok(Arc::new(Box::new(HashTableHashScatter {
                     buckets: exchange.destination_ids.len(),

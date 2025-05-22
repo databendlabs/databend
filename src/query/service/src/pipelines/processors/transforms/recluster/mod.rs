@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_builder;
-mod cluster_statistics;
-mod column_statistics;
+mod recluster_partition_exchange;
+mod recluster_partition_strategy;
 
-pub use block_builder::StreamBlockBuilder;
-pub use block_builder::StreamBlockProperties;
+pub use recluster_partition_exchange::ReclusterPartitionExchange;
+pub use recluster_partition_strategy::CompactPartitionStrategy;
+pub use recluster_partition_strategy::ReclusterPartitionStrategy;
