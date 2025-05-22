@@ -41,6 +41,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use num_traits::AsPrimitive;
 
+use crate::cast_from_jsonb::variant_to_decimal;
+
 // int float to decimal
 pub fn register_to_decimal(registry: &mut FunctionRegistry) {
     let factory = |params: &[Scalar], args_type: &[DataType]| {
@@ -55,7 +57,11 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
 
         if !matches!(
             from_type,
-            DataType::Boolean | DataType::Number(_) | DataType::Decimal(_) | DataType::String
+            DataType::Boolean
+                | DataType::Number(_)
+                | DataType::Decimal(_)
+                | DataType::String
+                | DataType::Variant
         ) {
             return None;
         }
@@ -72,11 +78,15 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
                 return_type: DataType::Decimal(decimal_type.size()),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |ctx, d| {
-                    convert_to_decimal_domain(ctx, d[0].clone(), decimal_type)
-                        .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
-                        .unwrap_or(FunctionDomain::MayThrow)
-                }),
+                calc_domain: if matches!(from_type, DataType::Variant) {
+                    Box::new(|_, _| FunctionDomain::MayThrow)
+                } else {
+                    Box::new(move |ctx, d| {
+                        convert_to_decimal_domain(ctx, d[0].clone(), decimal_type)
+                            .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
+                            .unwrap_or(FunctionDomain::MayThrow)
+                    })
+                },
                 eval: Box::new(move |args, ctx| {
                     convert_to_decimal(&args[0], ctx, &from_type, decimal_type)
                 }),
@@ -374,7 +384,7 @@ pub fn other_to_decimal<T>(
     dest_type: DecimalDataType,
 ) -> Value<AnyType>
 where
-    T: Decimal + Mul<Output = T>,
+    T: Decimal + Mul<Output = T> + Div<Output = T>,
 {
     let size = dest_type.size();
     let result = match from_type {
@@ -415,6 +425,10 @@ where
         DataType::String => {
             let arg = arg.try_downcast().unwrap();
             string_to_decimal::<T>(arg, ctx, size)
+        }
+        DataType::Variant => {
+            let arg = arg.try_downcast().unwrap();
+            variant_to_decimal::<T>(arg, ctx, dest_type)
         }
         _ => unreachable!("to_decimal not support this DataType"),
     };
@@ -613,7 +627,7 @@ where
 }
 
 #[inline]
-fn get_round_val<T: Decimal>(x: T, scale: u32, ctx: &mut EvalContext) -> Option<T> {
+pub(super) fn get_round_val<T: Decimal>(x: T, scale: u32, ctx: &mut EvalContext) -> Option<T> {
     let mut round_val = None;
     if ctx.func_ctx.rounding_mode && scale > 0 {
         // Checking whether numbers need to be added or subtracted to calculate rounding
