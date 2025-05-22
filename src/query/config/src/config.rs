@@ -353,8 +353,6 @@ pub struct StorageConfig {
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
 
-    // #[clap(flatten)]
-    // pub network_config: StorageNetworkConfig,
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub storage_retry_timeout: u64,
 
