@@ -33,6 +33,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt8Type;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::Column;
 use databend_common_expression::EvalContext;
@@ -65,6 +66,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         "try_to_string",
         |_, _| FunctionDomain::Full,
         error_to_null(eval_binary_to_string),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BinaryType, _, _>(
+        "to_jsonb_binary",
+        |_, _| FunctionDomain::Full,
+        |val, _| match val {
+            Value::Scalar(val) => Value::Scalar(val.to_vec()),
+            Value::Column(col) => Value::Column(col),
+        },
     );
 
     registry.register_passthrough_nullable_1_arg::<BitmapType, BinaryType, _, _>(
