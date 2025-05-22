@@ -20,6 +20,7 @@ use databend_common_base::runtime::spawn_named;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_types::SeqV;
 use futures::FutureExt;
+use log::debug;
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
@@ -73,9 +74,6 @@ pub struct Cache {
     /// Such as `foo`, not `foo/`
     prefix: String,
 
-    /// The metadata client to interact with the remote meta-service.
-    meta_client: Arc<ClientHandle>,
-
     /// The background watcher task handle.
     watcher_task_handle: Option<JoinHandle<()>>,
 
@@ -91,7 +89,8 @@ pub struct Cache {
     /// A process-wide unique identifier for the cache. Used for debugging purposes.
     uniq: u64,
 
-    ctx: String,
+    /// The name for this cache instance, for debugging.
+    name: String,
 }
 
 impl fmt::Display for Cache {
@@ -99,7 +98,7 @@ impl fmt::Display for Cache {
         write!(
             f,
             "Cache({})({}/)[uniq={}]",
-            self.ctx, self.uniq, self.prefix
+            self.name, self.prefix, self.uniq
         )
     }
 }
@@ -122,7 +121,7 @@ impl Cache {
     pub async fn new(
         meta_client: Arc<ClientHandle>,
         prefix: impl ToString,
-        ctx: impl ToString,
+        name: impl ToString,
     ) -> Self {
         let prefix = prefix.to_string();
         let prefix = prefix.trim_end_matches('/').to_string();
@@ -134,21 +133,21 @@ impl Cache {
 
         let mut cache = Cache {
             prefix,
-            meta_client,
             watcher_task_handle: None,
             watcher_cancel_tx: cancel_tx,
             data: Arc::new(Mutex::new(Err(Unsupported::new("Cache not initialized")))),
             uniq,
-            ctx: ctx.to_string(),
+            name: name.to_string(),
         };
 
-        cache.spawn_watcher_task(cancel_rx).await;
+        cache.spawn_watcher_task(meta_client, cancel_rx).await;
 
         cache
     }
 
     /// Get a SeqV from the cache by key.
     pub async fn try_get(&mut self, key: &str) -> Result<Option<SeqV>, Unsupported> {
+        debug!("Cache::access: try_get({})", key);
         self.try_access(|cache_data| cache_data.data.get(key).cloned())
             .await
     }
@@ -163,6 +162,8 @@ impl Cache {
         let prefix = prefix.trim_end_matches('/');
         let left = format!("{}/", prefix);
         let right = format!("{}0", prefix);
+
+        debug!("Cache::access: try_list_dir({})", prefix);
 
         self.try_access(|cache_data| {
             cache_data
@@ -195,23 +196,27 @@ impl Cache {
     /// Spawns a background task to watch to the meta-service key value change events, feed to the cache.
     ///
     /// It does not return until a full copy of the cache is received.
-    async fn spawn_watcher_task(&mut self, cancel_rx: oneshot::Receiver<()>) {
+    async fn spawn_watcher_task(
+        &mut self,
+        meta_client: Arc<ClientHandle>,
+        cancel_rx: oneshot::Receiver<()>,
+    ) {
         let (left, right) = self.key_range();
 
-        let ctx = format!("{}-watcher", self);
+        let watcher_name = format!("{}-watcher", self);
         let watcher = EventWatcher {
             left,
             right,
-            meta_client: self.meta_client.clone(),
+            meta_client,
             data: self.data.clone(),
-            ctx: ctx.to_string(),
+            name: watcher_name.to_string(),
         };
 
         // For receiving a signal when the cache has started to initialize and safe to use:
         // i.e., if the user acquired the data lock, they can see a complete view of the data(fully initialized).
         let (started_tx, started_rx) = oneshot::channel::<()>();
 
-        let task_name = ctx.to_string();
+        let task_name = watcher_name.to_string();
         let fu = watcher.main(Some(started_tx), cancel_rx.map(|_| ()));
 
         let handle = spawn_named(fu, task_name);

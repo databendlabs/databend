@@ -36,6 +36,7 @@ jobs:
         with:
           target: ${{ matrix.arch }}-unknown-linux-gnu
           version: ${{ inputs.tag }}
+          tag: ${{ inputs.tag }}
       - name: upload
         if: inputs.tag
         uses: actions/upload-artifact@v4

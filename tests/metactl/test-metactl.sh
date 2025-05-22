@@ -42,11 +42,11 @@ metactl_import_export () {
     echo " === ${title} 1.1. Check snapshot data"
     echo " === "
 
-    snapshot_path="$(ls $meta_dir/df_meta/V004/snapshot/1-0-83-*.snap)"
+    snapshot_path="$(ls $meta_dir/df_meta/V004/snapshot/1-0-83-*.snap | tail -1)"
     echo "=== snapshot path:"
     ls $snapshot_path
 
-    echo "=== check snapshot content"
+    echo "=== check snapshot content: want: $want_snapshot got: $snapshot_path"
     diff "$want_snapshot" "$snapshot_path"
 
 

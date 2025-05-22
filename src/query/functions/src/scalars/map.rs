@@ -40,6 +40,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::ScalarRef;
@@ -237,7 +238,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |map, _| map.len() as u64,
     );
 
-    registry.register_function_factory("map_delete", |_, args_type| {
+    let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let return_type = check_map_arg_types(args_type)?;
         Some(Arc::new(Function {
             signature: FunctionSignature {
@@ -329,7 +330,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("map_delete", factory);
 
     registry.register_2_arg_core::<EmptyMapType, GenericType<0>, BooleanType, _, _>(
         "map_contains_key",
@@ -433,7 +435,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
     );
 
-    registry.register_function_factory("map_pick", |_, args_type: &[DataType]| {
+    let map_pick_factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let return_type = check_map_arg_types(args_type)?;
         Some(Arc::new(Function {
             signature: FunctionSignature {
@@ -525,7 +527,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("map_pick", map_pick_factory);
 }
 
 // Check map function arg types

@@ -32,7 +32,6 @@ use databend_common_expression::types::number::F64;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NullableType;
@@ -49,7 +48,6 @@ use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::values::Value;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
-use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_number_mapped_type_without_64;
@@ -59,6 +57,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_functions_scalar_decimal::register_decimal_to_float;
@@ -305,7 +304,7 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
 }
 
 pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("minus", |_params, args_type| {
+    registry.register_function_factory("minus", FunctionFactory::Closure(Box::new(|_params, args_type| {
         if args_type.len() != 1 {
             return None;
         }
@@ -344,7 +343,7 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
                     }
                     _ => unreachable!(),
                 }),
-                eval: Box::new(move |args, ctx| unary_minus_decimal(args, arg_type.clone(), ctx)),
+                eval: Box::new(unary_minus_decimal),
             },
         };
 
@@ -353,23 +352,24 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
         } else {
             Some(Arc::new(function))
         }
-    });
+    })));
 }
 
-fn unary_minus_decimal(
-    args: &[Value<AnyType>],
-    arg_type: DataType,
-    ctx: &mut EvalContext,
-) -> Value<AnyType> {
+fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let arg = &args[0];
-    let arg_type = arg_type.as_decimal().unwrap();
-    with_decimal_mapped_type!(|DECIMAL_TYPE| match arg_type {
-        DecimalDataType::DECIMAL_TYPE(size) => {
-            type Type = DecimalType<DECIMAL_TYPE>;
+    let (decimal, _) = DecimalDataType::from_value(arg).unwrap();
+    match decimal {
+        DecimalDataType::Decimal128(size) => {
             let arg = arg.try_downcast().unwrap();
-            vectorize_1_arg::<Type, Type>(|t, _| -t)(arg, ctx).upcast_decimal(*size)
+            type T = DecimalType<i128>;
+            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
         }
-    })
+        DecimalDataType::Decimal256(size) => {
+            let arg = arg.try_downcast().unwrap();
+            type T = DecimalType<i256>;
+            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
+        }
+    }
 }
 
 #[inline]

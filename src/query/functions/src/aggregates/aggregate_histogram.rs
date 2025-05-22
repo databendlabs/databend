@@ -118,28 +118,16 @@ where
         };
 
         let mut buckets = build_histogram(&self.value_map, histogram_data.max_num_buckets);
-
-        let decimal_i128_size = histogram_data
-            .data_type
-            .clone()
-            .into_decimal()
-            .ok()
-            .and_then(|d| d.into_decimal128().ok());
-        let decimal_i256_size = histogram_data
-            .data_type
-            .clone()
-            .into_decimal()
-            .ok()
-            .and_then(|d| d.into_decimal256().ok());
+        let decimal_size = histogram_data.data_type.as_decimal().copied();
 
         let format_scalar = |scalar| {
             let scalar = T::upcast_scalar(scalar);
             let scalar = match scalar {
                 Scalar::Decimal(DecimalScalar::Decimal128(value, _)) => {
-                    i128::upcast_scalar(value, decimal_i128_size.unwrap())
+                    i128::upcast_scalar(value, decimal_size.unwrap())
                 }
                 Scalar::Decimal(DecimalScalar::Decimal256(value, _)) => {
-                    i256::upcast_scalar(value, decimal_i256_size.unwrap())
+                    i256::upcast_scalar(value, decimal_size.unwrap())
                 }
                 _ => scalar,
             };
@@ -191,7 +179,7 @@ pub fn try_create_aggregate_histogram_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(s) if s.can_carried_by_128() => {
             let func = AggregateUnaryFunction::<
                 HistogramState<Decimal128Type>,
                 Decimal128Type,
@@ -206,7 +194,7 @@ pub fn try_create_aggregate_histogram_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             let func = AggregateUnaryFunction::<
                 HistogramState<Decimal256Type>,
                 Decimal256Type,

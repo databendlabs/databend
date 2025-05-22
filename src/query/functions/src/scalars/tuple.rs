@@ -23,13 +23,14 @@ use databend_common_expression::Domain;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("tuple", |_, args_type| {
+    let tuple = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.is_empty() {
             return None;
         }
@@ -75,9 +76,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("tuple", tuple);
 
-    registry.register_function_factory("get", |params, args_type| {
+    let get = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
         // Tuple index starts from 1
         let idx = (params.first()?.get_i64()? as usize).checked_sub(1)?;
 
@@ -108,9 +110,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("get", get);
 
-    registry.register_function_factory("get", |params, args_type| {
+    let get = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
         // Tuple index starts from 1
         let idx = usize::try_from(params.first()?.get_i64()? - 1).ok()?;
         let fields_ty = match args_type.first()? {
@@ -168,9 +171,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("get", get);
 
-    registry.register_function_factory("get", |params, args_type| {
+    let get = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
         // Tuple index starts from 1
         let idx = usize::try_from(params.first()?.get_i64()? - 1).ok()?;
         let fields_ty = match args_type.first()? {
@@ -202,5 +206,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(move |_, _| Value::Scalar(Scalar::Null)),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("get", get);
 }

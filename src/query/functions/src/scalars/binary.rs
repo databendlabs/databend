@@ -40,6 +40,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
@@ -227,7 +228,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         error_to_null(eval_from_base64),
     );
 
-    registry.register_function_factory("char", |_, args_type| {
+    let char = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.is_empty() {
             return None;
         }
@@ -249,10 +250,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         } else {
             Some(Arc::new(f))
         }
-    });
+    }));
+    registry.register_function_factory("char", char);
 
-    // nullable char
-    registry.register_function_factory("char", |_, args_type| {
+    let nullable_char = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.is_empty() {
             return None;
         }
@@ -272,7 +273,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(passthrough_nullable(char_fn)),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("char", nullable_char);
 }
 
 fn eval_binary_to_string(val: Value<BinaryType>, ctx: &mut EvalContext) -> Value<StringType> {

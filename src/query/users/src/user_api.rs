@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 
+use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -40,6 +42,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_cache::Cache;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
@@ -53,6 +56,17 @@ use crate::BUILTIN_ROLE_PUBLIC;
 pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
+
+    /// Optional cache for ownership information for all keys [`TenantOwnershipObjectIdent`] in meta-service.
+    ///
+    /// All the key-values under "__fd_object_owners/" will be cached.
+    /// This instance is shared between all `role_api()` return values.
+    ///
+    /// When UserApiProvider is created, the cache will be created and initialized.
+    /// The `Cache` instance internally stores the status about if databend-meta service supports cache.
+    /// If not, every access returns [`Unsupported`] error.
+    ownership_cache: Arc<Mutex<Cache>>,
+
     builtin: BuiltIn,
 }
 
@@ -81,15 +95,22 @@ impl UserApiProvider {
         builtin: BuiltIn,
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
-        let client = MetaStoreProvider::new(conf)
+        let meta_store = MetaStoreProvider::new(conf)
             .create_meta_store()
             .await
             .map_err(|e| {
                 ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
             })?;
+
+        let client = meta_store.deref().clone();
+
+        let cache = RoleMgr::new_cache(client.clone()).await;
+        let cache = Arc::new(Mutex::new(cache));
+
         let user_mgr = UserApiProvider {
-            meta: client.clone(),
-            client: client.arc(),
+            meta: meta_store.clone(),
+            client: meta_store.arc(),
+            ownership_cache: cache,
             builtin,
         };
 
@@ -137,6 +158,7 @@ impl UserApiProvider {
             self.client.clone(),
             tenant,
             GlobalConfig::instance().query.upgrade_to_pb,
+            self.ownership_cache.clone(),
         );
         debug!("RoleMgr created");
         role_mgr

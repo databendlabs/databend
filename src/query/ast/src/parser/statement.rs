@@ -45,6 +45,7 @@ use crate::span::merge_span;
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
     GrantObjectName(GrantObjectName),
+    OfRole(String),
 }
 
 // (tenant, share name, endpoint name)
@@ -1740,6 +1741,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Some(ShowGrantOption::GrantObjectName(object)) => {
                 Statement::ShowObjectPrivileges(ShowObjectPrivilegesStmt {
                     object,
+                    show_option: opt_limit,
+                })
+            }
+            Some(ShowGrantOption::OfRole(name)) => {
+                Statement::ShowGrantsOfRole(ShowGranteesOfRoleStmt {
+                    name,
                     show_option: opt_limit,
                 })
             }
@@ -3656,9 +3663,17 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
         |(_, object_name)| ShowGrantOption::GrantObjectName(object_name),
     );
 
+    let role_granted = map(
+        rule! {
+            OF ~ ROLE ~ #role_name
+        },
+        |(_, _, role_name)| ShowGrantOption::OfRole(role_name),
+    );
+
     rule!(
         #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
         | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> }"
+        | #role_granted: "OF ROLE <role_name>"
     )(i)
 }
 

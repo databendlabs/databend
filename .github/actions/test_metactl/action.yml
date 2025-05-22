@@ -15,4 +15,5 @@ runs:
     - name: Test metactl restore new cluster
       shell: bash
       run: |
-        bash ./tests/metactl/test-metactl-restore-new-cluster.sh
+        python -m pip install -r ./tests/metactl/requirements.txt
+        python ./tests/metactl/test-metactl-restore-new-cluster.py
