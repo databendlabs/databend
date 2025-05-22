@@ -96,6 +96,7 @@ pub enum EndpointKind {
     SystemInfo,
     Catalog,
     Metadata,
+    StreamingLoad,
 }
 
 impl EndpointKind {
@@ -122,6 +123,7 @@ impl EndpointKind {
             | EndpointKind::Logout
             | EndpointKind::SystemInfo
             | EndpointKind::HeartBeat
+            | EndpointKind::StreamingLoad
             | EndpointKind::UploadToStage
             | EndpointKind::Metadata
             | EndpointKind::Catalog => {
@@ -132,7 +134,7 @@ impl EndpointKind {
                 }
             }
             EndpointKind::Login | EndpointKind::Clickhouse => Err(ErrorCode::AuthenticateFailure(
-                format!("should not use databend token for {self:?}",),
+                format!("[HTTP-SESSION] Invalid token usage: databend token cannot be used for {self:?}",),
             )),
         }
     }
@@ -196,7 +198,10 @@ fn get_credential(
     }
     let std_auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if std_auth_headers.len() > 1 {
-        let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
+        let msg = &format!(
+            "[HTTP-SESSION] Authentication error: multiple {} headers detected",
+            AUTHORIZATION
+        );
         return Err(ErrorCode::AuthenticateFailure(msg));
     }
     let client_ip = get_client_ip(req);
@@ -205,7 +210,7 @@ fn get_credential(
             get_clickhouse_name_password(req, client_ip)
         } else {
             Err(ErrorCode::AuthenticateFailure(
-                "No authorization header detected",
+                "[HTTP-SESSION] Authentication error: no authorization header provided",
             ))
         }
     } else {
@@ -259,7 +264,9 @@ fn get_credential_from_header(
                 };
                 Ok(c)
             }
-            None => Err(ErrorCode::AuthenticateFailure("bad Basic auth header")),
+            None => Err(ErrorCode::AuthenticateFailure(
+                "[HTTP-SESSION] Authentication error: invalid Basic auth header format",
+            )),
         }
     } else if value.as_bytes().starts_with(b"Bearer ") {
         match Bearer::decode(value) {
@@ -268,7 +275,7 @@ fn get_credential_from_header(
                 if SessionClaim::is_databend_token(&token) {
                     if let Some(t) = endpoint_kind.require_databend_token_type()? {
                         if t != SessionClaim::get_type(&token)? {
-                            return Err(ErrorCode::AuthenticateFailure("wrong data token type"));
+                            return Err(ErrorCode::AuthenticateFailure("[HTTP-SESSION] Authentication error: incorrect token type for this endpoint"));
                         }
                     }
                     Ok(Credential::DatabendToken { token })
@@ -276,10 +283,14 @@ fn get_credential_from_header(
                     Ok(Credential::Jwt { token, client_ip })
                 }
             }
-            None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
+            None => Err(ErrorCode::AuthenticateFailure(
+                "[HTTP-SESSION] Authentication error: invalid Bearer auth header format",
+            )),
         }
     } else {
-        Err(ErrorCode::AuthenticateFailure("bad auth header"))
+        Err(ErrorCode::AuthenticateFailure(
+            "[HTTP-SESSION] Authentication error: unsupported authorization header format",
+        ))
     }
 }
 
@@ -298,7 +309,12 @@ fn get_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Res
     } else {
         let query_str = req.uri().query().unwrap_or_default();
         let query_params = serde_urlencoded::from_str::<HashMap<String, String>>(query_str)
-            .map_err(|e| ErrorCode::BadArguments(format!("{}", e)))?;
+            .map_err(|e| {
+                ErrorCode::BadArguments(format!(
+                    "[HTTP-SESSION] Failed to parse query parameters: {}",
+                    e
+                ))
+            })?;
         let (user, key) = (query_params.get("user"), query_params.get("password"));
         if let (Some(name), Some(password)) = (user, key) {
             Ok(Credential::Password {
@@ -308,7 +324,7 @@ fn get_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Res
             })
         } else {
             Err(ErrorCode::AuthenticateFailure(
-                "No header or query parameters for authorization detected",
+                "[HTTP-SESSION] Authentication error: no credentials found in headers or query parameters",
             ))
         }
     }
@@ -374,7 +390,7 @@ impl<E> HTTPSessionEndpoint<E> {
             (Some(id1), Some(id2)) => {
                 if id1 != id2 {
                     return Err(ErrorCode::AuthenticateFailure(format!(
-                        "session id in token ({}) != session id in cookie({}) ",
+                        "[HTTP-SESSION] Session ID mismatch: token session ID '{}' does not match cookie session ID '{}'",
                         id1, id2
                     )));
                 }
@@ -388,7 +404,7 @@ impl<E> HTTPSessionEndpoint<E> {
             (None, None) => {
                 if cookie_enabled {
                     let id = Uuid::new_v4().to_string();
-                    info!("new session id: {}", id);
+                    info!("[HTTP-SESSION] Created new session with ID: {}", id);
                     req.cookie().add(make_cookie(COOKIE_SESSION_ID, &id));
                     Some(id)
                 } else {
@@ -403,13 +419,16 @@ impl<E> HTTPSessionEndpoint<E> {
                 .get(COOKIE_LAST_ACCESS_TIME)
                 .map(|s| s.value_str().to_string());
             if let Some(ts) = &last_access_time {
-                let ts = ts
-                    .parse::<u64>()
-                    .map_err(|_| ErrorCode::BadArguments(format!("bad last_access_time {ts}")))?;
+                let ts = ts.parse::<u64>().map_err(|_| {
+                    ErrorCode::BadArguments(format!(
+                        "[HTTP-SESSION] Invalid last_access_time value: {}",
+                        ts
+                    ))
+                })?;
                 let ts = SystemTime::UNIX_EPOCH + Duration::from_secs(ts);
                 if let Err(err) = ts.elapsed() {
                     log::error!(
-                        "last_access_time is incorrect or has clock drift, difference: {:?}",
+                        "[HTTP-SESSION] Invalid last_access_time: detected clock drift or incorrect timestamp, difference: {:?}",
                         err.duration()
                     );
                 };

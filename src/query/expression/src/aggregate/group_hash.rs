@@ -16,26 +16,29 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::Index;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::types::i256;
+use crate::types::number::Number;
 use crate::types::AnyType;
-use crate::types::ArgType;
+use crate::types::BinaryColumn;
 use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
-use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalColumn;
-use crate::types::DecimalDataType;
 use crate::types::DecimalScalar;
 use crate::types::DecimalType;
+use crate::types::GeographyColumn;
 use crate::types::GeographyType;
 use crate::types::GeometryType;
+use crate::types::NullableColumn;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
 use crate::types::NumberScalar;
 use crate::types::NumberType;
+use crate::types::StringColumn;
 use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
@@ -54,105 +57,174 @@ const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
 pub fn group_hash_columns(cols: InputColumns, values: &mut [u64]) {
     debug_assert!(!cols.is_empty());
-    let mut iter = cols.iter();
-    combine_group_hash_column::<true>(iter.next().unwrap(), values);
-    for col in iter {
-        combine_group_hash_column::<false>(col, values);
+    for (i, col) in cols.iter().enumerate() {
+        if i == 0 {
+            combine_group_hash_column::<true>(col, values);
+        } else {
+            combine_group_hash_column::<false>(col, values);
+        }
     }
 }
 
 pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut [u64]) {
-    match c.data_type() {
-        DataType::Null => {}
-        DataType::EmptyArray => {}
-        DataType::EmptyMap => {}
-        DataType::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
+    HashVisitor::<IS_FIRST> { values }
+        .visit_column(c.clone())
+        .unwrap()
+}
+
+struct HashVisitor<'a, const IS_FIRST: bool> {
+    values: &'a mut [u64],
+}
+
+impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
+    type Error = ErrorCode;
+
+    fn visit_scalar(&mut self, _: Scalar) -> Result<()> {
+        unreachable!()
+    }
+
+    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
+        self.combine_group_hash_type_column::<AnyType>(&T::upcast_column(column));
+        Ok(())
+    }
+
+    fn visit_any_number(&mut self, column: NumberColumn) -> Result<()> {
+        with_number_mapped_type!(|NUM_TYPE| match column.data_type() {
             NumberDataType::NUM_TYPE => {
-                combine_group_hash_type_column::<IS_FIRST, NumberType<NUM_TYPE>>(c, values)
+                let c = NUM_TYPE::try_downcast_column(&column).unwrap();
+                self.combine_group_hash_type_column::<NumberType<NUM_TYPE>>(&c)
             }
-        }),
-        DataType::Decimal(v) => match v {
-            DecimalDataType::Decimal128(_) => {
-                combine_group_hash_type_column::<IS_FIRST, DecimalType<i128>>(c, values)
-            }
-            DecimalDataType::Decimal256(_) => {
-                combine_group_hash_type_column::<IS_FIRST, DecimalType<i256>>(c, values)
-            }
-        },
-        DataType::Boolean => combine_group_hash_type_column::<IS_FIRST, BooleanType>(c, values),
-        DataType::Timestamp => combine_group_hash_type_column::<IS_FIRST, TimestampType>(c, values),
-        DataType::Date => combine_group_hash_type_column::<IS_FIRST, DateType>(c, values),
-        DataType::Binary => combine_group_hash_string_column::<IS_FIRST, BinaryType>(c, values),
-        DataType::String => combine_group_hash_string_column::<IS_FIRST, StringType>(c, values),
-        DataType::Bitmap => combine_group_hash_string_column::<IS_FIRST, BitmapType>(c, values),
-        DataType::Variant => combine_group_hash_string_column::<IS_FIRST, VariantType>(c, values),
-        DataType::Geometry => combine_group_hash_string_column::<IS_FIRST, GeometryType>(c, values),
-        DataType::Geography => {
-            combine_group_hash_string_column::<IS_FIRST, GeographyType>(c, values)
-        }
-        DataType::Nullable(_) => {
-            let col = c.as_nullable().unwrap();
-            if IS_FIRST {
-                combine_group_hash_column::<IS_FIRST>(&col.column, values);
-                for (val, ok) in values.iter_mut().zip(col.validity.iter()) {
-                    if !ok {
-                        *val = NULL_HASH_VAL;
-                    }
-                }
-            } else {
-                let mut values2 = vec![0; c.len()];
-                combine_group_hash_column::<true>(&col.column, &mut values2);
+        });
+        Ok(())
+    }
 
-                for ((x, val), ok) in values2
-                    .iter()
-                    .zip(values.iter_mut())
-                    .zip(col.validity.iter())
-                {
-                    if ok {
-                        *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ *x;
-                    } else {
-                        *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ NULL_HASH_VAL;
-                    }
+    fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
+        match column {
+            DecimalColumn::Decimal128(buffer, _) => {
+                self.combine_group_hash_type_column::<DecimalType<i128>>(&buffer);
+            }
+            DecimalColumn::Decimal256(buffer, _) => {
+                self.combine_group_hash_type_column::<DecimalType<i256>>(&buffer);
+            }
+        }
+        Ok(())
+    }
+
+    fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
+        if IS_FIRST {
+            self.visit_column(column.column)?;
+            for (val, ok) in self.values.iter_mut().zip(column.validity.iter()) {
+                if !ok {
+                    *val = NULL_HASH_VAL;
+                }
+            }
+        } else {
+            let mut values2 = vec![0; column.len()];
+            HashVisitor::<true> {
+                values: &mut values2,
+            }
+            .visit_column(column.column)?;
+            for ((x, val), ok) in values2
+                .iter()
+                .zip(self.values.iter_mut())
+                .zip(column.validity.iter())
+            {
+                if ok {
+                    *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ *x;
+                } else {
+                    *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ NULL_HASH_VAL;
                 }
             }
         }
-        DataType::Generic(_) => unreachable!(),
-        _ => combine_group_hash_type_column::<IS_FIRST, AnyType>(c, values),
+        Ok(())
+    }
+
+    fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<()> {
+        self.combine_group_hash_type_column::<BooleanType>(&bitmap);
+        Ok(())
+    }
+
+    fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
+        self.combine_group_hash_type_column::<TimestampType>(&buffer);
+        Ok(())
+    }
+
+    fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<()> {
+        self.combine_group_hash_type_column::<DateType>(&buffer);
+        Ok(())
+    }
+
+    fn visit_binary(&mut self, column: BinaryColumn) -> Result<()> {
+        self.combine_group_hash_string_column::<BinaryType>(&column);
+        Ok(())
+    }
+
+    fn visit_string(&mut self, column: StringColumn) -> Result<()> {
+        self.combine_group_hash_string_column::<StringType>(&column);
+        Ok(())
+    }
+
+    fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<()> {
+        self.combine_group_hash_string_column::<BitmapType>(&column);
+        Ok(())
+    }
+
+    fn visit_variant(&mut self, column: BinaryColumn) -> Result<()> {
+        self.combine_group_hash_string_column::<VariantType>(&column);
+        Ok(())
+    }
+
+    fn visit_geometry(&mut self, column: BinaryColumn) -> Result<()> {
+        self.combine_group_hash_string_column::<GeometryType>(&column);
+        Ok(())
+    }
+
+    fn visit_geography(&mut self, column: GeographyColumn) -> Result<()> {
+        self.combine_group_hash_string_column::<GeographyType>(&column);
+        Ok(())
+    }
+
+    fn visit_column(&mut self, column: Column) -> Result<()> {
+        match column {
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => (),
+            _ => {
+                Self::default_visit_column(column, self)?;
+            }
+        };
+        Ok(())
     }
 }
 
-fn combine_group_hash_type_column<const IS_FIRST: bool, T: ValueType>(
-    col: &Column,
-    values: &mut [u64],
-) where
-    for<'a> T::ScalarRef<'a>: AggHash,
-{
-    let c = T::try_downcast_column(col).unwrap();
-    if IS_FIRST {
-        for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
-            *val = x.agg_hash();
-        }
-    } else {
-        for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
-            *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.agg_hash();
+impl<const IS_FIRST: bool> HashVisitor<'_, IS_FIRST> {
+    fn combine_group_hash_type_column<T>(&mut self, col: &T::Column)
+    where
+        T: ValueType,
+        for<'a> T::ScalarRef<'a>: AggHash,
+    {
+        if IS_FIRST {
+            for (x, val) in T::iter_column(col).zip(self.values.iter_mut()) {
+                *val = x.agg_hash();
+            }
+        } else {
+            for (x, val) in T::iter_column(col).zip(self.values.iter_mut()) {
+                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.agg_hash();
+            }
         }
     }
-}
 
-fn combine_group_hash_string_column<const IS_FIRST: bool, T: ArgType>(
-    col: &Column,
-    values: &mut [u64],
-) where
-    for<'a> T::ScalarRef<'a>: AsRef<[u8]>,
-{
-    let c = T::try_downcast_column(col).unwrap();
-    if IS_FIRST {
-        for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
-            *val = x.as_ref().agg_hash();
-        }
-    } else {
-        for (x, val) in T::iter_column(&c).zip(values.iter_mut()) {
-            *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.as_ref().agg_hash();
+    fn combine_group_hash_string_column<T>(&mut self, col: &T::Column)
+    where
+        T: ValueType,
+        for<'a> T::ScalarRef<'a>: AsRef<[u8]>,
+    {
+        if IS_FIRST {
+            for (x, val) in T::iter_column(col).zip(self.values.iter_mut()) {
+                *val = x.as_ref().agg_hash();
+            }
+        } else {
+            for (x, val) in T::iter_column(col).zip(self.values.iter_mut()) {
+                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.as_ref().agg_hash();
+            }
         }
     }
 }
@@ -467,6 +539,7 @@ mod tests {
     use databend_common_column::bitmap::Bitmap;
 
     use super::*;
+    use crate::types::AccessType;
     use crate::types::ArgType;
     use crate::types::Int32Type;
     use crate::types::NullableColumn;

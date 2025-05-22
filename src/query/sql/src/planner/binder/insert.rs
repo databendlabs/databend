@@ -12,16 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::InsertStmt;
+use databend_common_ast::ast::OnErrorMode;
 use databend_common_ast::ast::Statement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::principal::FileFormatOptionsReader;
+use databend_common_meta_app::principal::FileFormatParams;
 
 use super::util::TableIdentifier;
 use crate::binder::Binder;
@@ -32,6 +37,7 @@ use crate::plans::InsertInputSource;
 use crate::plans::InsertValue;
 use crate::plans::Plan;
 use crate::BindContext;
+use crate::DefaultExprBinder;
 
 impl Binder {
     pub fn schema_project(
@@ -149,6 +155,36 @@ impl Binder {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
                 Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
+            }
+            InsertSource::StreamingLoad {
+                format_options,
+                on_error_mode,
+            } => {
+                let file_format_params = FileFormatParams::try_from_reader(
+                    FileFormatOptionsReader::from_ast(&format_options),
+                    false,
+                )?;
+                let required_values_schema: DataSchemaRef = Arc::new(schema.clone().into());
+
+                let default_exprs = if file_format_params.need_field_default() {
+                    Some(
+                        DefaultExprBinder::try_new(self.ctx.clone())?
+                            .prepare_default_values(&required_values_schema)?,
+                    )
+                } else {
+                    None
+                };
+                Ok(InsertInputSource::StreamingLoad {
+                    file_format: Box::new(file_format_params),
+                    schema: schema.clone(),
+                    on_error_mode: OnErrorMode::from_str(
+                        &on_error_mode.unwrap_or("abort".to_string()),
+                    )?,
+                    block_thresholds: table.get_block_thresholds(),
+                    default_exprs,
+                    // fill it in HTTP handler
+                    receiver: Default::default(),
+                })
             }
         };
 

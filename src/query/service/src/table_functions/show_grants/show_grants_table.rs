@@ -37,6 +37,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_management::RoleApi;
+use databend_common_management::UserApi;
 use databend_common_management::WarehouseInfo;
 use databend_common_meta_app::principal::GrantEntry;
 use databend_common_meta_app::principal::GrantObject;
@@ -107,7 +108,7 @@ impl ShowGrants {
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: Self::schema(),
+                schema: Self::schema(&grant_type),
                 engine: SHOW_GRANTS.to_owned(),
                 ..Default::default()
             },
@@ -123,18 +124,26 @@ impl ShowGrants {
         }))
     }
 
-    fn schema() -> Arc<TableSchema> {
-        TableSchemaRefExt::create(vec![
-            TableField::new("privileges", TableDataType::String),
-            TableField::new("object_name", TableDataType::String),
-            TableField::new(
-                "object_id",
-                TableDataType::Nullable(Box::from(TableDataType::String)),
-            ),
-            TableField::new("grant_to", TableDataType::String),
-            TableField::new("name", TableDataType::String),
-            TableField::new("grants", TableDataType::String),
-        ])
+    fn schema(grant_type: &str) -> Arc<TableSchema> {
+        if grant_type.to_lowercase() == "role_grantee" {
+            TableSchemaRefExt::create(vec![
+                TableField::new("role", TableDataType::String),
+                TableField::new("granted_to", TableDataType::String),
+                TableField::new("grantee_name", TableDataType::String),
+            ])
+        } else {
+            TableSchemaRefExt::create(vec![
+                TableField::new("privileges", TableDataType::String),
+                TableField::new("object_name", TableDataType::String),
+                TableField::new(
+                    "object_id",
+                    TableDataType::Nullable(Box::from(TableDataType::String)),
+                ),
+                TableField::new("grant_to", TableDataType::String),
+                TableField::new("name", TableDataType::String),
+                TableField::new("grants", TableDataType::String),
+            ])
+        }
     }
 }
 
@@ -245,9 +254,10 @@ impl AsyncSource for ShowGrantsSource {
                 )
                 .await?
             }
+            "role_grantee" => show_role_grantees(self.ctx.clone(), &self.name).await?,
             _ => {
                 return Err(ErrorCode::InvalidArgument(format!(
-                    "Expected 'user|role|table|database|udf|stage|warehouse', but got {:?}",
+                    "Expected 'user|role|table|database|udf|stage|warehouse|role_grantee', but got {:?}",
                     self.grant_type
                 )));
             }
@@ -257,6 +267,63 @@ impl AsyncSource for ShowGrantsSource {
         self.finished = true;
         Ok(res)
     }
+}
+
+async fn show_role_grantees(ctx: Arc<dyn TableContext>, name: &str) -> Result<Option<DataBlock>> {
+    let tenant = ctx.get_tenant();
+    let user_api = UserApiProvider::instance();
+
+    let name = name.to_string();
+
+    let user_type_str = "USER".to_string();
+    let role_type_str = "ROLE".to_string();
+
+    let mut collected_grantees: Vec<(String, String)> = Vec::new();
+
+    let f = |roles: Vec<String>,
+             type_str: String,
+             grantee_name: String,
+             name: &String|
+     -> Option<(String, String)> {
+        if roles.contains(name) {
+            Some((type_str, grantee_name))
+        } else {
+            None
+        }
+    };
+    let users = user_api.user_api(&tenant).get_users().await?;
+    let user_grantees = users.into_iter().filter_map(|user| {
+        f(
+            user.grants.roles(),
+            user_type_str.to_string(),
+            user.name.to_string(),
+            &name,
+        )
+    });
+    collected_grantees.extend(user_grantees);
+
+    let roles = user_api.role_api(&tenant).get_meta_roles().await?;
+    let role_grantees = roles.into_iter().filter_map(|role_item| {
+        f(
+            role_item.grants.roles(),
+            role_type_str.to_string(),
+            role_item.name.to_string(),
+            &name,
+        )
+    });
+    collected_grantees.extend(role_grantees);
+
+    let (granted_to_vec, grantee_name_vec): (Vec<String>, Vec<String>) =
+        collected_grantees.into_iter().unzip();
+
+    let len = grantee_name_vec.len();
+    let role_column: Vec<String> = std::iter::repeat_n(name, len).collect();
+
+    Ok(Some(DataBlock::new_from_columns(vec![
+        StringType::from_data(role_column),
+        StringType::from_data(granted_to_vec),
+        StringType::from_data(grantee_name_vec),
+    ])))
 }
 
 async fn show_account_grants(

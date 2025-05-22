@@ -31,7 +31,7 @@ use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::ArgType;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::GenericType;
@@ -41,6 +41,7 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -54,6 +55,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
@@ -177,7 +179,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, ctx| Value::Scalar(ctx.generics[0].sql_name()),
     );
 
-    registry.register_function_factory("ignore", |_, args_type| {
+    let ignore = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "ignore".to_string(),
@@ -194,7 +196,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(|_, _| Value::Scalar(Scalar::Boolean(false))),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("ignore", ignore);
 
     registry.register_1_arg_core::<NullableType<GenericType<0>>, GenericType<0>, _, _>(
         "assume_not_null",
@@ -357,7 +360,7 @@ fn register_run_diff(registry: &mut FunctionRegistry) {
 }
 
 fn register_grouping(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("grouping", |params, arg_type| {
+    let grouping = FunctionFactory::Closure(Box::new(|params, arg_type: &[DataType]| {
         if arg_type.len() != 1 {
             return None;
         }
@@ -387,7 +390,8 @@ fn register_grouping(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    })
+    }));
+    registry.register_function_factory("grouping", grouping)
 }
 
 fn register_num_to_char(registry: &mut FunctionRegistry) {

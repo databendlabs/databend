@@ -23,6 +23,7 @@ mod openai;
 mod others;
 mod show_grants;
 mod show_roles;
+mod show_sequences;
 mod show_variables;
 mod srf;
 mod sync_crash_me;

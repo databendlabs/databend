@@ -207,6 +207,16 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
             .get_aggregate_function(&column.column.column_name)
             .is_some()
         {
+            // Be replaced by `AggregateRewriter`.
+            return Ok(());
+        }
+
+        if self
+            .bind_context
+            .windows
+            .get_window_info(&column.column.column_name)
+            .is_some()
+        {
             // Be replaced by `WindowRewriter`.
             return Ok(());
         }

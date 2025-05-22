@@ -86,17 +86,20 @@ pub(super) struct AvroDecoder {
     pub error_handler: Arc<ErrorHandler>,
     pub schema: TableSchemaRef,
     pub default_expr_evaluator: Option<Arc<DefaultExprEvaluator>>,
+    is_select: bool,
 }
 
 impl AvroDecoder {
     pub fn new(ctx: Arc<LoadContext>, params: AvroFileFormatParams) -> Self {
         let is_rounding_mode = ctx.file_format_options_ext.is_rounding_mode;
+        let is_select = ctx.file_format_options_ext.is_select;
         Self {
             is_rounding_mode,
             params,
             schema: ctx.schema.clone(),
             error_handler: ctx.error_handler.clone(),
             default_expr_evaluator: ctx.default_exprs.clone(),
+            is_select,
         }
     }
 
@@ -104,8 +107,33 @@ impl AvroDecoder {
         self.read_file(&data.data, state)
     }
 
+    fn read_file_for_select(
+        &self,
+        reader: Reader<&[u8]>,
+        state: &mut BlockBuilderState,
+    ) -> Result<()> {
+        let schema = MatchedSchema::Primary(reader.writer_schema().clone());
+        for (row, value) in reader.enumerate() {
+            let column_builder = if let ColumnBuilder::Variant(b) = &mut state.column_builders[0] {
+                b
+            } else {
+                return Err(ErrorCode::Internal(
+                    "invalid column builder when querying avro",
+                ));
+            };
+            self.read_variant(column_builder, value.unwrap(), &schema)
+                .map_err(|e| {
+                    ErrorCode::BadBytes(format!("fail to read row {row}: {:?}", e.reason))
+                })?;
+            state.add_row(row)
+        }
+        Ok(())
+    }
     fn read_file(&self, file_data: &[u8], state: &mut BlockBuilderState) -> Result<()> {
         let reader = Reader::new(file_data).unwrap();
+        if self.is_select {
+            return self.read_file_for_select(reader, state);
+        }
         let src_schema = reader.writer_schema().clone();
         let src_schema = if let Schema::Record(record) = src_schema {
             record
@@ -248,17 +276,18 @@ impl AvroDecoder {
                     }
                 }
             }),
-            ColumnBuilder::Variant(c) => self.read_variant(c, value),
             ColumnBuilder::Date(c) => self.read_date(c, value),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, value),
             ColumnBuilder::Interval(c) => self.read_interval(c, value),
-            ColumnBuilder::Array(c) => self.read_array(c, value, matched_schema),
-            ColumnBuilder::Map(c) => self.read_map(c, value, matched_schema),
-            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value, matched_schema),
+            ColumnBuilder::Variant(c) => self.read_variant(c, value, matched_schema),
             ColumnBuilder::Decimal(c) => with_decimal_type!(|DECIMAL_TYPE| match c {
                 DecimalColumnBuilder::DECIMAL_TYPE(c, size) =>
                     self.read_decimal(c, *size, value, matched_schema),
             }),
+            ColumnBuilder::Array(c) => self.read_array(c, value, matched_schema),
+            ColumnBuilder::Map(c) => self.read_map(c, value, matched_schema),
+            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value, matched_schema),
+
             // todo: Bitmap, Geometry, Geography
             _ => Err(Error::new_reason(format!(
                 "loading avro to table with column of type {} not supported yet",
@@ -373,20 +402,19 @@ impl AvroDecoder {
                 let v_precision = v.digits() as i64;
                 let v_leading_digits = v_precision - v.fractional_digit_count();
                 let (big_int, v_scale) = v.into_bigint_and_exponent();
-                if v_leading_digits <= (size.precision - size.scale) as i64
-                    && v_scale <= size.scale as i64
+                if v_leading_digits <= size.leading_digits() as i64
+                    && v_scale <= size.scale() as i64
                 {
-                    if let Some(mut d1) = <D>::from_bigint(big_int) {
-                        let scale_diff = (size.scale as i64) - v_scale;
-                        if scale_diff > 0 {
-                            d1 = d1
-                                .checked_mul(D::e(scale_diff as u32))
-                                .expect("rescale should not overflow");
-                        }
-                        column.push(d1);
-                    } else {
+                    let Some(mut d1) = <D>::from_bigint(big_int) else {
                         return Err(Error::default());
+                    };
+                    let scale_diff = (size.scale() as i64) - v_scale;
+                    if scale_diff > 0 {
+                        d1 = d1
+                            .checked_mul(D::e(scale_diff as u32))
+                            .expect("rescale should not overflow");
                     }
+                    column.push(d1);
                 } else {
                     return Err(Error::default());
                 }
@@ -413,11 +441,20 @@ impl AvroDecoder {
         }
     }
 
-    fn read_variant(&self, column: &mut BinaryColumnBuilder, value: Value) -> ReadFieldResult {
-        let v = to_jsonb(&value).map_err(Error::new_reason)?;
-        v.write_to_vec(&mut column.data);
-        column.commit_row();
-        Ok(())
+    fn read_variant(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        value: Value,
+        matched_schema: &MatchedSchema,
+    ) -> ReadFieldResult {
+        if let MatchedSchema::Primary(schema) = matched_schema {
+            let v = to_jsonb(&value, schema).map_err(Error::new_reason)?;
+            v.write_to_vec(&mut column.data);
+            column.commit_row();
+            Ok(())
+        } else {
+            Err(Error::default())
+        }
     }
 
     fn read_nullable(
@@ -530,7 +567,6 @@ mod test {
     use apache_avro::Decimal;
     use apache_avro::Schema;
     use apache_avro::Writer;
-    use databend_common_expression::types::i256;
     use databend_common_expression::types::DecimalDataType;
     use databend_common_expression::types::DecimalScalar;
     use databend_common_expression::types::DecimalSize;
@@ -592,6 +628,7 @@ mod test {
             }),
             schema: table_schema,
             default_expr_evaluator: None,
+            is_select: false,
         }
     }
 
@@ -656,13 +693,10 @@ mod test {
             Value::Decimal(Decimal::from(big_int.to_signed_bytes_be()))
         };
         let value = make_value("12345");
-        let decimal_size = DecimalSize {
-            precision: 7,
-            scale: 4,
-        };
+        let decimal_size = DecimalSize::new_unchecked(7, 4);
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
         let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
+            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
         test_single_field(
             table_field,
             avro_schema.clone(),
@@ -672,10 +706,7 @@ mod test {
         .unwrap();
 
         // smaller leading digits (p - s)
-        let decimal_size = DecimalSize {
-            precision: 6,
-            scale: 4,
-        };
+        let decimal_size = DecimalSize::new_unchecked(6, 4);
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
         assert!(test_single_field(table_field, avro_schema, value, expected).is_err());
 
@@ -693,14 +724,12 @@ mod test {
             let big_int = BigInt::from_str(s).unwrap();
             Value::BigDecimal(BigDecimal::new(big_int, 2))
         };
-        let value = make_value("12345");
-        let decimal_size = DecimalSize {
-            precision: 7,
-            scale: 4,
-        };
+        let decimal_size = DecimalSize::new_unchecked(7, 4);
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
+
+        let value = make_value("12345");
         let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal256(i256::from(1234500), decimal_size));
+            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
         test_single_field(
             table_field.clone(),
             avro_schema.clone(),

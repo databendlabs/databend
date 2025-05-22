@@ -27,7 +27,7 @@ fn test_disable_system_table() -> Result<()> {
     {
         let mut sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
         sys_db_meta.init_db("system");
-        let _ = SystemDatabase::create(&mut sys_db_meta, &conf);
+        let _ = SystemDatabase::create(&mut sys_db_meta, Some(&conf), "default");
         let t1 = sys_db_meta.get_by_name("system", "clusters");
         assert!(t1.is_ok());
     }
@@ -38,7 +38,7 @@ fn test_disable_system_table() -> Result<()> {
 
         let mut sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
         sys_db_meta.init_db("system");
-        let _ = SystemDatabase::create(&mut sys_db_meta, &conf);
+        let _ = SystemDatabase::create(&mut sys_db_meta, Some(&conf), "default");
         let t1 = sys_db_meta.get_by_name("system", "clusters");
         assert!(t1.is_err());
     }

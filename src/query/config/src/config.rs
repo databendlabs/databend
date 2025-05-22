@@ -159,6 +159,8 @@ pub enum Commands {
         query: String,
         #[clap(long, default_value_t)]
         output_format: String,
+        #[clap(long, short = 'c')]
+        config: String,
     },
 }
 

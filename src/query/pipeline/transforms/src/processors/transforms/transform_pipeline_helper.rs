@@ -145,6 +145,15 @@ pub trait TransformPipelineHelper {
     where
         F: Fn() -> Result<R>,
         R: Transform + 'static;
+
+    fn try_create_async_transform_pipeline_builder_with_len<F, R>(
+        &mut self,
+        f: F,
+        transform_len: usize,
+    ) -> Result<TransformPipeBuilder>
+    where
+        F: Fn() -> Result<R>,
+        R: AsyncTransform + 'static;
 }
 
 impl TransformPipelineHelper for Pipeline {
@@ -171,6 +180,27 @@ impl TransformPipelineHelper for Pipeline {
         self.add_transform_with_specified_len(
             |input, output| {
                 Ok(ProcessorPtr::create(Transformer::create(
+                    input,
+                    output,
+                    f()?,
+                )))
+            },
+            transform_len,
+        )
+    }
+
+    fn try_create_async_transform_pipeline_builder_with_len<F, R>(
+        &mut self,
+        f: F,
+        transform_len: usize,
+    ) -> Result<TransformPipeBuilder>
+    where
+        F: Fn() -> Result<R>,
+        R: AsyncTransform + 'static,
+    {
+        self.add_transform_with_specified_len(
+            |input, output| {
+                Ok(ProcessorPtr::create(AsyncTransformer::create(
                     input,
                     output,
                     f()?,

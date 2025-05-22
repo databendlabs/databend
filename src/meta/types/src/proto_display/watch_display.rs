@@ -34,7 +34,12 @@ impl fmt::Display for Event {
 
 impl fmt::Display for WatchResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.event.display())
+        let typ = if self.is_initialization {
+            "INIT"
+        } else {
+            "CHANGE"
+        };
+        write!(f, "{typ}:{}", self.event.display())
     }
 }
 
@@ -79,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_watch_response_display() {
-        let watch_response = WatchResponse {
+        let mut watch_response = WatchResponse {
             event: Some(Event {
                 key: "test_key".to_string(),
                 prev: Some(SeqV {
@@ -95,11 +100,24 @@ mod tests {
                     meta: None,
                 }),
             }),
+            is_initialization: false,
         };
-        assert_eq!(watch_response.to_string(), "(test_key: (seq=1 [expire=1970-01-01T00:16:40.000] 'test_prev') -> (seq=2 [] 'test_current'))");
+        assert_eq!(watch_response.to_string(), "CHANGE:(test_key: (seq=1 [expire=1970-01-01T00:16:40.000] 'test_prev') -> (seq=2 [] 'test_current'))");
 
-        let watch_response = WatchResponse { event: None };
-        assert_eq!(watch_response.to_string(), "None");
+        watch_response.is_initialization = true;
+        assert_eq!(watch_response.to_string(), "INIT:(test_key: (seq=1 [expire=1970-01-01T00:16:40.000] 'test_prev') -> (seq=2 [] 'test_current'))");
+
+        let watch_response = WatchResponse {
+            event: None,
+            is_initialization: true,
+        };
+        assert_eq!(watch_response.to_string(), "INIT:None");
+
+        let watch_response = WatchResponse {
+            event: None,
+            is_initialization: false,
+        };
+        assert_eq!(watch_response.to_string(), "CHANGE:None");
     }
 
     #[test]

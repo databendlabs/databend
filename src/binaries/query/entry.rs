@@ -61,9 +61,18 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool, MainError> {
         Some(Commands::Local {
             query,
             output_format,
-        }) => local::query_local(query, output_format)
-            .await
-            .with_context(make_error)?,
+            config,
+        }) => {
+            let mut conf = conf.clone();
+            if !config.is_empty() {
+                let c =
+                    databend_common_config::Config::load_with_config_file(config.as_str()).unwrap();
+                conf = c.try_into().unwrap();
+            }
+            local::query_local(conf, query, output_format)
+                .await
+                .with_context(make_error)?
+        }
     }
 
     Ok(true)
@@ -104,7 +113,7 @@ async fn precheck_services(conf: &InnerConfig) -> Result<(), MainError> {
     if conf.query.max_memory_limit_enabled {
         let size = conf.query.max_server_memory_usage as i64;
         info!("Set memory limit: {}", size);
-        GLOBAL_MEM_STAT.set_limit(size);
+        GLOBAL_MEM_STAT.set_limit(size, false);
     }
 
     #[cfg(not(target_os = "macos"))]

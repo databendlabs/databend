@@ -13,7 +13,10 @@
 // limitations under the License.
 
 pub mod default;
+mod iceberg;
+
 pub use databend_common_catalog::catalog::Catalog;
 pub use databend_common_storages_hive as hive;
 pub use default::table_memory_meta::InMemoryMetas;
 pub use default::DatabaseCatalog;
+pub use iceberg::IcebergCreator;

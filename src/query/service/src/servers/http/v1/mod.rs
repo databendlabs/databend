@@ -19,6 +19,7 @@ mod query;
 pub mod roles;
 mod session;
 mod stage;
+mod streaming_load;
 pub mod users;
 mod verify;
 
@@ -48,6 +49,8 @@ pub use session::ClientSessionManager;
 pub(crate) use session::SessionClaim;
 pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
+pub use streaming_load::streaming_load_handler;
+pub use streaming_load::LoadResponse;
 pub use users::create_user_handler;
 pub use users::list_users_handler;
 pub use verify::verify_handler;

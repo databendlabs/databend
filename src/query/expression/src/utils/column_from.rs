@@ -37,12 +37,12 @@ pub trait FromData<D> {
 
 macro_rules! impl_from_data {
     ($T: ident) => {
-        impl FromData<<$T as ValueType>::Scalar> for $T {
-            fn from_data(d: Vec<<$T as ValueType>::Scalar>) -> Column {
-                $T::upcast_column($T::column_from_iter(d.into_iter(), &[]))
+        impl FromData<<$T as AccessType>::Scalar> for $T {
+            fn from_data(d: Vec<<$T as AccessType>::Scalar>) -> Column {
+                <$T as AccessType>::upcast_column($T::column_from_iter(d.into_iter(), &[]))
             }
 
-            fn from_opt_data(d: Vec<Option<<$T as ValueType>::Scalar>>) -> Column {
+            fn from_opt_data(d: Vec<Option<<$T as AccessType>::Scalar>>) -> Column {
                 type NT = NullableType<$T>;
                 NT::upcast_column(NT::column_from_iter(d.into_iter(), &[]))
             }

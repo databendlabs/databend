@@ -28,6 +28,7 @@ use crate::types::i256;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
+use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -35,8 +36,8 @@ use crate::types::DateType;
 use crate::types::DecimalSize;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
+use crate::types::ReturnType;
 use crate::types::TimestampType;
-use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -237,14 +238,13 @@ impl Payload {
                 NumberDataType::NUM_TYPE =>
                     self.flush_type_column::<NumberType<NUM_TYPE>>(col_offset, state),
             }),
-            DataType::Decimal(v) => match v {
-                crate::types::DecimalDataType::Decimal128(s) => {
-                    self.flush_decimal_column::<i128>(col_offset, state, s)
+            DataType::Decimal(size) => {
+                if size.can_carried_by_128() {
+                    self.flush_decimal_column::<i128>(col_offset, state, size)
+                } else {
+                    self.flush_decimal_column::<i256>(col_offset, state, size)
                 }
-                crate::types::DecimalDataType::Decimal256(s) => {
-                    self.flush_decimal_column::<i256>(col_offset, state, s)
-                }
-            },
+            }
             DataType::Timestamp => self.flush_type_column::<TimestampType>(col_offset, state),
             DataType::Date => self.flush_type_column::<DateType>(col_offset, state),
             DataType::Binary => Column::Binary(self.flush_binary_column(col_offset, state)),
@@ -287,7 +287,7 @@ impl Payload {
     ) -> Column {
         let len = state.probe_state.row_count;
         let iter = (0..len).map(|idx| unsafe {
-            read::<<DecimalType<Num> as ValueType>::Scalar>(
+            read::<<DecimalType<Num> as AccessType>::Scalar>(
                 state.addresses[idx].add(col_offset) as _
             )
         });

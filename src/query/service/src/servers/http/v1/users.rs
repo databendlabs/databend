@@ -93,12 +93,16 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
     let user = ctx.session.get_current_user()?;
     if !user.is_account_admin() {
         return Err(ErrorCode::PermissionDenied(
-            "only account admin can create or update user",
+            "[HTTP-USERS] Permission denied: only account admin can create or update users",
         ));
     }
     let user_api = UserApiProvider::instance();
-    let auth_info = AuthInfo::create(&req.auth_type, &req.auth_string)
-        .map_err(|e| ErrorCode::InvalidArgument(format!("invalid auth info: {}", e)))?;
+    let auth_info = AuthInfo::create(&req.auth_type, &req.auth_string).map_err(|e| {
+        ErrorCode::InvalidArgument(format!(
+            "[HTTP-USERS] Invalid authentication information: {}",
+            e
+        ))
+    })?;
     let mut user_info = UserInfo::new(
         &req.name,
         &req.hostname.unwrap_or("%".to_string()),

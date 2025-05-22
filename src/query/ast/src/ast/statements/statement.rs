@@ -30,10 +30,10 @@ use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::statements::warehouse::ShowWarehousesStmt;
-use crate::ast::statements::workload::AlterWorkloadGroupStmt;
 use crate::ast::statements::workload::CreateWorkloadGroupStmt;
 use crate::ast::statements::workload::DropWorkloadGroupStmt;
 use crate::ast::statements::workload::RenameWorkloadGroupStmt;
+use crate::ast::statements::workload::SetWorkloadGroupQuotasStmt;
 use crate::ast::statements::workload::ShowWorkloadGroupsStmt;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
@@ -156,7 +156,8 @@ pub enum Statement {
     CreateWorkloadGroup(CreateWorkloadGroupStmt),
     DropWorkloadGroup(DropWorkloadGroupStmt),
     RenameWorkloadGroup(RenameWorkloadGroupStmt),
-    AlterWorkloadGroup(AlterWorkloadGroupStmt),
+    SetWorkloadQuotasGroup(SetWorkloadGroupQuotasStmt),
+    UnsetWorkloadQuotasGroup(UnsetWorkloadGroupQuotasStmt),
 
     // Databases
     ShowDatabases(ShowDatabasesStmt),
@@ -224,9 +225,6 @@ pub enum Statement {
     DropNgramIndex(DropNgramIndexStmt),
 
     // VirtualColumns
-    CreateVirtualColumn(CreateVirtualColumnStmt),
-    AlterVirtualColumn(AlterVirtualColumnStmt),
-    DropVirtualColumn(DropVirtualColumnStmt),
     RefreshVirtualColumn(RefreshVirtualColumnStmt),
     ShowVirtualColumns(ShowVirtualColumnsStmt),
 
@@ -260,6 +258,7 @@ pub enum Statement {
         show_options: Option<ShowOptions>,
     },
     ShowObjectPrivileges(ShowObjectPrivilegesStmt),
+    ShowGrantsOfRole(ShowGranteesOfRoleStmt),
     Revoke(RevokeStmt),
 
     // UDF
@@ -370,6 +369,12 @@ pub enum Statement {
     // Sequence
     CreateSequence(CreateSequenceStmt),
     DropSequence(DropSequenceStmt),
+    ShowSequences {
+        show_options: Option<ShowOptions>,
+    },
+    DescSequence {
+        name: Identifier,
+    },
 
     // Set priority for query
     SetPriority {
@@ -483,6 +488,7 @@ impl Statement {
             | Statement::ShowRoles { .. }
             | Statement::ShowGrants { .. }
             | Statement::ShowObjectPrivileges(..)
+            | Statement::ShowGrantsOfRole(..)
             | Statement::ShowStages { .. }
             | Statement::DescribeStage { .. }
             | Statement::RemoveStage { .. }
@@ -506,6 +512,8 @@ impl Statement {
             | Statement::DescribeNotification(..)
             | Statement::ExecuteImmediate(..)
             | Statement::ShowProcedures { .. }
+            | Statement::ShowSequences { .. }
+            | Statement::DescSequence { .. }
             | Statement::DescProcedure(..)
             | Statement::CallProcedure(..)
             | Statement::ShowWarehouses(..)
@@ -545,9 +553,6 @@ impl Statement {
             | Statement::DropInvertedIndex(..)
             | Statement::CreateNgramIndex(..)
             | Statement::DropNgramIndex(..)
-            | Statement::CreateVirtualColumn(..)
-            | Statement::AlterVirtualColumn(..)
-            | Statement::DropVirtualColumn(..)
             | Statement::CreateUser(..)
             | Statement::DropUser { .. }
             | Statement::CreateRole { .. }
@@ -595,7 +600,8 @@ impl Statement {
             | Statement::CreateWorkloadGroup(..)
             | Statement::DropWorkloadGroup(..)
             | Statement::RenameWorkloadGroup(..)
-            | Statement::AlterWorkloadGroup(..) => false,
+            | Statement::SetWorkloadQuotasGroup(..)
+            | Statement::UnsetWorkloadQuotasGroup(..) => false,
             Statement::StatementWithSettings { stmt, settings: _ } => {
                 stmt.allowed_in_multi_statement()
             }
@@ -831,9 +837,6 @@ impl Display for Statement {
             Statement::CreateNgramIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropNgramIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshInvertedIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateVirtualColumn(stmt) => write!(f, "{stmt}")?,
-            Statement::AlterVirtualColumn(stmt) => write!(f, "{stmt}")?,
-            Statement::DropVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers { show_options } => {
@@ -893,6 +896,7 @@ impl Display for Statement {
                 }
             }
             Statement::ShowObjectPrivileges(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowGrantsOfRole(stmt) => write!(f, "{stmt}")?,
             Statement::Revoke(stmt) => write!(f, "{stmt}")?,
             Statement::CreateUDF(stmt) => write!(f, "{stmt}")?,
             Statement::DropUDF {
@@ -1013,6 +1017,15 @@ impl Display for Statement {
             }
             Statement::CreateSequence(stmt) => write!(f, "{stmt}")?,
             Statement::DropSequence(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowSequences { show_options } => {
+                write!(f, "SHOW SEQUENCES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::DescSequence { name } => {
+                write!(f, "DESC SEQUENCE {name}")?;
+            }
             Statement::CreateDynamicTable(stmt) => write!(f, "{stmt}")?,
             Statement::SetPriority {
                 priority,
@@ -1043,7 +1056,8 @@ impl Display for Statement {
             Statement::CreateWorkloadGroup(stmt) => write!(f, "{stmt}")?,
             Statement::DropWorkloadGroup(stmt) => write!(f, "{stmt}")?,
             Statement::RenameWorkloadGroup(stmt) => write!(f, "{stmt}")?,
-            Statement::AlterWorkloadGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::SetWorkloadQuotasGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::UnsetWorkloadQuotasGroup(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

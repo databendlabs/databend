@@ -16,7 +16,7 @@ use databend_common_compress::CompressAlgorithm;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::StageFileCompression;
 
-pub fn get_compression_alg_copy(
+pub fn get_compression_with_path(
     compress_option: StageFileCompression,
     path: &str,
 ) -> databend_common_exception::Result<Option<CompressAlgorithm>> {

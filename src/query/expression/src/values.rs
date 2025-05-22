@@ -99,7 +99,7 @@ use crate::with_number_mapped_type;
 use crate::with_number_type;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
-pub enum Value<T: ValueType> {
+pub enum Value<T: AccessType> {
     Scalar(T::Scalar),
     Column(T::Column),
 }
@@ -239,7 +239,7 @@ pub enum ColumnBuilder {
     Geography(BinaryColumnBuilder),
 }
 
-impl<T: ValueType> Value<T> {
+impl<T: AccessType> Value<T> {
     pub fn semantically_eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::Scalar(s1), Value::Scalar(s2)) => s1 == s2,
@@ -283,7 +283,7 @@ impl<T: ValueType> Value<T> {
     }
 }
 
-impl<T: ArgType> Value<T> {
+impl<T: ReturnType> Value<T> {
     pub fn upcast(self) -> Value<AnyType> {
         match self {
             Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar(scalar)),
@@ -292,7 +292,7 @@ impl<T: ArgType> Value<T> {
     }
 }
 
-impl<T: ValueType> Value<NullableType<T>> {
+impl<T: AccessType> Value<NullableType<T>> {
     pub fn validity(&self, num_rows: usize) -> Bitmap {
         match self {
             Value::Scalar(None) => Bitmap::new_zeroed(num_rows),
@@ -340,7 +340,7 @@ impl Value<AnyType> {
         }
     }
 
-    pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
+    pub fn try_downcast<T: AccessType>(&self) -> Option<Value<T>> {
         Some(match self {
             Value::Scalar(scalar) => Value::Scalar(T::to_owned_scalar(T::try_downcast_scalar(
                 &scalar.as_ref(),
@@ -373,6 +373,10 @@ impl Value<AnyType> {
             Value::Scalar(scalar) => scalar.as_ref().domain(data_type),
             Value::Column(col) => col.domain(),
         }
+    }
+
+    pub fn is_scalar_null(&self) -> bool {
+        *self == Value::Scalar(Scalar::Null)
     }
 }
 
@@ -420,7 +424,14 @@ impl Scalar {
                 NumberDataType::Float32 => NumberScalar::Float32(OrderedFloat(0.0)),
                 NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0.0)),
             }),
-            DataType::Decimal(ty) => Scalar::Decimal(ty.default_scalar()),
+            DataType::Decimal(size) => {
+                let scalar = if size.can_carried_by_128() {
+                    DecimalDataType::Decimal128(*size).default_scalar()
+                } else {
+                    DecimalDataType::Decimal256(*size).default_scalar()
+                };
+                Scalar::Decimal(scalar)
+            }
             DataType::Timestamp => Scalar::Timestamp(0),
             DataType::Date => Scalar::Date(0),
             DataType::Interval => Scalar::Interval(months_days_micros(0)),
@@ -629,8 +640,7 @@ impl ScalarRef<'_> {
             ScalarRef::EmptyMap => DataType::EmptyMap,
             ScalarRef::Number(s) => DataType::Number(s.data_type()),
             ScalarRef::Decimal(s) => with_decimal_type!(|DECIMAL_TYPE| match s {
-                DecimalScalar::DECIMAL_TYPE(_, size) =>
-                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+                DecimalScalar::DECIMAL_TYPE(_, size) => DataType::Decimal(*size),
             }),
             ScalarRef::Boolean(_) => DataType::Boolean,
             ScalarRef::Binary(_) => DataType::Binary,
@@ -686,7 +696,7 @@ impl ScalarRef<'_> {
                         DecimalScalar::DECIMAL_TYPE(_, size2),
                     ) => {
                         if size1 == size2 {
-                            Some(DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size1)))
+                            Some(DataType::Decimal(*size1))
                         } else {
                             None
                         }
@@ -1266,8 +1276,7 @@ impl Column {
                 NumberColumn::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
             }),
             Column::Decimal(c) => with_decimal_type!(|DECIMAL_TYPE| match c {
-                DecimalColumn::DECIMAL_TYPE(_, size) =>
-                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+                DecimalColumn::DECIMAL_TYPE(_, size) => DataType::Decimal(*size),
             }),
             Column::Boolean(_) => DataType::Boolean,
             Column::Binary(_) => DataType::Binary,
@@ -1397,20 +1406,19 @@ impl Column {
                     }
                 })
             }
-            DataType::Decimal(t) => match t {
-                DecimalDataType::Decimal128(size) => {
+            DataType::Decimal(size) => {
+                if size.can_carried_by_128() {
                     let values = (0..len)
                         .map(|_| i128::from(rng.gen::<i16>()))
                         .collect::<Vec<i128>>();
                     Column::Decimal(DecimalColumn::Decimal128(values.into(), *size))
-                }
-                DecimalDataType::Decimal256(size) => {
+                } else {
                     let values = (0..len)
                         .map(|_| i256::from(rng.gen::<i16>()))
                         .collect::<Vec<i256>>();
                     Column::Decimal(DecimalColumn::Decimal256(values.into(), *size))
                 }
-            },
+            }
             DataType::Timestamp => TimestampType::from_data(
                 (0..len)
                     .map(|_| rng.gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
@@ -1603,8 +1611,8 @@ impl Column {
             Column::Number(NumberColumn::Int32(col)) | Column::Date(col) => col.len() * 4,
             Column::Number(NumberColumn::Int64(col)) | Column::Timestamp(col) => col.len() * 8,
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
-            Column::Interval(col) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
+            Column::Interval(col) => col.len() * 16,
             Column::Geography(col) => GeographyType::column_memory_size(col),
             Column::Boolean(c) => c.len(),
             // 8 * len + size of bytes
@@ -1835,19 +1843,19 @@ impl ColumnBuilder {
                 builder.len() * 32
             }
             ColumnBuilder::Boolean(c) => c.as_slice().len(),
-            ColumnBuilder::Binary(col) => col.data.len() + col.offsets.len() * 8,
+            ColumnBuilder::Binary(col) => col.memory_size(),
             ColumnBuilder::String(col) => col.memory_size(),
             ColumnBuilder::Timestamp(col) => col.len() * 8,
             ColumnBuilder::Date(col) => col.len() * 4,
             ColumnBuilder::Interval(col) => col.len() * 16,
-            ColumnBuilder::Array(col) => col.builder.memory_size() + col.offsets.len() * 8,
-            ColumnBuilder::Map(col) => col.builder.memory_size() + col.offsets.len() * 8,
-            ColumnBuilder::Bitmap(col) => col.data.len() + col.offsets.len() * 8,
-            ColumnBuilder::Nullable(c) => c.builder.memory_size() + c.validity.as_slice().len(),
+            ColumnBuilder::Array(b) => b.builder.memory_size() + b.offsets.len() * 8,
+            ColumnBuilder::Map(b) => b.builder.memory_size() + b.offsets.len() * 8,
+            ColumnBuilder::Bitmap(b) => b.memory_size(),
+            ColumnBuilder::Nullable(b) => b.builder.memory_size() + b.validity.as_slice().len(),
             ColumnBuilder::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
-            ColumnBuilder::Variant(col) => col.data.len() + col.offsets.len() * 8,
-            ColumnBuilder::Geometry(col) => col.data.len() + col.offsets.len() * 8,
-            ColumnBuilder::Geography(builder) => builder.memory_size(),
+            ColumnBuilder::Variant(b) => b.memory_size(),
+            ColumnBuilder::Geometry(b) => b.memory_size(),
+            ColumnBuilder::Geography(b) => b.memory_size(),
         }
     }
 
@@ -1860,8 +1868,7 @@ impl ColumnBuilder {
                 NumberColumnBuilder::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
             }),
             ColumnBuilder::Decimal(col) => with_decimal_type!(|DECIMAL_TYPE| match col {
-                DecimalColumnBuilder::DECIMAL_TYPE(_, size) =>
-                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+                DecimalColumnBuilder::DECIMAL_TYPE(_, size) => DataType::Decimal(*size),
             }),
             ColumnBuilder::Boolean(_) => DataType::Boolean,
             ColumnBuilder::Binary(_) => DataType::Binary,
@@ -1906,8 +1913,13 @@ impl ColumnBuilder {
             DataType::Number(num_ty) => {
                 ColumnBuilder::Number(NumberColumnBuilder::with_capacity(num_ty, capacity))
             }
-            DataType::Decimal(decimal_ty) => {
-                ColumnBuilder::Decimal(DecimalColumnBuilder::with_capacity(decimal_ty, capacity))
+            DataType::Decimal(size) => {
+                let decimal_type = if size.can_carried_by_128() {
+                    DecimalDataType::Decimal128(*size)
+                } else {
+                    DecimalDataType::Decimal256(*size)
+                };
+                ColumnBuilder::Decimal(DecimalColumnBuilder::with_capacity(&decimal_type, capacity))
             }
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
             DataType::Binary => {
@@ -1991,8 +2003,13 @@ impl ColumnBuilder {
             DataType::Number(num_ty) => {
                 ColumnBuilder::Number(NumberColumnBuilder::repeat_default(num_ty, len))
             }
-            DataType::Decimal(decimal_ty) => {
-                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat_default(decimal_ty, len))
+            DataType::Decimal(size) => {
+                let decimal_type = if size.can_carried_by_128() {
+                    DecimalDataType::Decimal128(*size)
+                } else {
+                    DecimalDataType::Decimal256(*size)
+                };
+                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat_default(&decimal_type, len))
             }
             DataType::Timestamp => ColumnBuilder::Timestamp(vec![0; len]),
             DataType::Date => ColumnBuilder::Date(vec![0; len]),
@@ -2528,31 +2545,42 @@ impl ColumnBuilder {
     }
 
     pub fn build(self) -> Column {
-        match self {
-            ColumnBuilder::Null { len } => Column::Null { len },
-            ColumnBuilder::EmptyArray { len } => Column::EmptyArray { len },
-            ColumnBuilder::EmptyMap { len } => Column::EmptyMap { len },
-            ColumnBuilder::Number(builder) => Column::Number(builder.build()),
-            ColumnBuilder::Decimal(builder) => Column::Decimal(builder.build()),
-            ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
-            ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
-            ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
-            ColumnBuilder::Tuple(fields) => {
-                assert!(fields.iter().map(|field| field.len()).all_equal());
-                Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
-            }
+        match_template::match_template! {
+            T = [
+                Date => DateType,
+                Timestamp => TimestampType,
+                Interval => IntervalType,
+            ],
+            match self {
+                ColumnBuilder::T(b) => {
+                    Self::type_build::<T>(b)
+                }
+                ColumnBuilder::Null { len } => Column::Null { len },
+                ColumnBuilder::EmptyArray { len } => Column::EmptyArray { len },
+                ColumnBuilder::EmptyMap { len } => Column::EmptyMap { len },
+                ColumnBuilder::Number(builder) => Column::Number(builder.build()),
+                ColumnBuilder::Decimal(builder) => Column::Decimal(builder.build()),
+                ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
+                ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
+                ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
+                ColumnBuilder::Tuple(fields) => {
+                    assert!(fields.iter().map(|field| field.len()).all_equal());
+                    Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
+                }
 
-            ColumnBuilder::Boolean(b) => Column::Boolean(BooleanType::build_column(b)),
-            ColumnBuilder::Binary(b) => Column::Binary(BinaryType::build_column(b)),
-            ColumnBuilder::String(b) => Column::String(StringType::build_column(b)),
-            ColumnBuilder::Timestamp(b) => Column::Timestamp(TimestampType::build_column(b)),
-            ColumnBuilder::Date(b) => Column::Date(DateType::build_column(b)),
-            ColumnBuilder::Interval(b) => Column::Interval(IntervalType::build_column(b)),
-            ColumnBuilder::Bitmap(b) => Column::Bitmap(BitmapType::build_column(b)),
-            ColumnBuilder::Variant(b) => Column::Variant(VariantType::build_column(b)),
-            ColumnBuilder::Geometry(b) => Column::Geometry(GeometryType::build_column(b)),
-            ColumnBuilder::Geography(b) => Column::Geography(GeographyType::build_column(b)),
+                ColumnBuilder::Boolean(b) => Column::Boolean(BooleanType::build_column(b)),
+                ColumnBuilder::Binary(b) => Column::Binary(BinaryType::build_column(b)),
+                ColumnBuilder::String(b) => Column::String(StringType::build_column(b)),
+                ColumnBuilder::Bitmap(b) => Column::Bitmap(BitmapType::build_column(b)),
+                ColumnBuilder::Variant(b) => Column::Variant(VariantType::build_column(b)),
+                ColumnBuilder::Geometry(b) => Column::Geometry(GeometryType::build_column(b)),
+                ColumnBuilder::Geography(b) => Column::Geography(GeographyType::build_column(b)),
+            }
         }
+    }
+
+    fn type_build<T: ValueType>(builder: T::ColumnBuilder) -> Column {
+        T::upcast_column(T::build_column(builder))
     }
 
     pub fn build_scalar(self) -> Scalar {

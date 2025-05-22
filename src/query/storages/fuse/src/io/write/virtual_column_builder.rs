@@ -36,6 +36,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_common_expression::VariantDataType;
@@ -43,8 +44,8 @@ use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_cache::Table;
 use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -58,6 +59,7 @@ use parquet::format::FileMetaData;
 use crate::io::write::WriteSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::statistics::gen_columns_statistics;
+use crate::FuseTable;
 
 #[derive(Debug, Clone)]
 pub struct VirtualColumnState {
@@ -74,34 +76,47 @@ pub struct VirtualColumnBuilder {
 impl VirtualColumnBuilder {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        table_info: &TableInfo,
-    ) -> Option<VirtualColumnBuilder> {
-        if LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
-            .is_err()
+        table: &FuseTable,
+        schema: TableSchemaRef,
+    ) -> Result<VirtualColumnBuilder> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)?;
+        if !ctx
+            .get_settings()
+            .get_enable_experimental_virtual_column()
+            .unwrap_or_default()
         {
-            return None;
+            return Err(ErrorCode::VirtualColumnError(
+                "Virtual column is an experimental feature, `set enable_experimental_virtual_column=1` to use this feature."
+            ));
         }
+        if !table.support_virtual_columns() {
+            return Err(ErrorCode::VirtualColumnError(format!(
+                "storage format {:?} don't support virtual column",
+                table.get_storage_format()
+            )));
+        }
+
         // ignore persistent system tables {
-        if let Ok(database_name) = table_info.database_name() {
+        if let Ok(database_name) = table.table_info.database_name() {
             if database_name == "persistent_system" {
-                return None;
+                return Err(ErrorCode::VirtualColumnError(format!(
+                    "system database {} don't support virtual column",
+                    database_name
+                )));
             }
         }
 
-        let table_meta = &table_info.meta;
         let mut variant_fields = Vec::new();
-        for (i, field) in table_meta.schema.fields.iter().enumerate() {
+        for (i, field) in schema.fields.iter().enumerate() {
             if field.data_type().remove_nullable() == TableDataType::Variant {
                 variant_fields.push((i, field.clone()));
             }
         }
-
-        if !variant_fields.is_empty() {
-            Some(VirtualColumnBuilder { variant_fields })
-        } else {
-            None
+        if variant_fields.is_empty() {
+            return Err(ErrorCode::VirtualColumnError("Virtual column only support variant type, but this table don't have variant type fields"));
         }
+        Ok(VirtualColumnBuilder { variant_fields })
     }
 
     pub fn add_block(

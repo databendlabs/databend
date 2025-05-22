@@ -381,19 +381,19 @@ fn try_set_txn(
             http_query_manager.check_sticky_for_txn(&session_conf.last_server_info)?;
             let last_query_id = session_conf.last_query_ids.first().ok_or_else(|| {
                 ErrorCode::InvalidSessionState(
-                    "transaction is active but last_query_ids is empty".to_string(),
+                    "[HTTP-QUERY] Invalid transaction state: transaction is active but last_query_ids is empty".to_string(),
                 )
             })?;
             if let Some(txn_mgr) = http_query_manager.get_txn(last_query_id) {
                 session.set_txn_mgr(txn_mgr);
                 info!(
-                    "{}: continue transaction from last query {}",
+                    "[HTTP-QUERY] Query {} continuing transaction from previous query {}",
                     query_id, last_query_id
                 );
             } else {
                 // the returned TxnState should be Fail
                 return Err(ErrorCode::TransactionTimeout(format!(
-                    "transaction timeout: last_query_id {} not found",
+                    "[HTTP-QUERY] Transaction timeout: last_query_id {} not found on this server",
                     last_query_id
                 )));
             }
@@ -409,9 +409,9 @@ impl HttpQuery {
     #[fastrace::trace]
     pub async fn try_create(ctx: &HttpQueryContext, req: HttpQueryRequest) -> Result<HttpQuery> {
         let http_query_manager = HttpQueryManager::instance();
-        let session = ctx
-            .upgrade_session(SessionType::HTTPQuery)
-            .map_err(|err| ErrorCode::Internal(format!("{err}")))?;
+        let session = ctx.upgrade_session(SessionType::HTTPQuery).map_err(|err| {
+            ErrorCode::Internal(format!("[HTTP-QUERY] Failed to upgrade session: {err}"))
+        })?;
 
         // Read the session variables in the request, and set them to the current session.
         // the session variables includes:
@@ -442,7 +442,7 @@ impl HttpQuery {
                         .set_setting(k.to_string(), v.to_string())
                         .or_else(|e| {
                             if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                                warn!("http query unknown session setting: {}", k);
+                                warn!("[HTTP-QUERY] Unknown session setting ignored: {}", k);
                                 Ok(())
                             } else {
                                 Err(e)
@@ -491,7 +491,7 @@ impl HttpQuery {
         let session_id = session.get_id().clone();
         let node_id = ctx.get_cluster().local_id.clone();
         let sql = &req.sql;
-        info!(query_id = query_id, session_id = session_id, node_id = node_id, sql = sql; "create query");
+        info!(query_id = query_id, session_id = session_id, node_id = node_id, sql = sql; "[HTTP-QUERY] Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
@@ -721,7 +721,9 @@ impl HttpQuery {
         let (block_sender, query_context) = {
             let state = self.state.lock();
             let ExecuteState::Starting(state) = &state.state else {
-                return Err(ErrorCode::Internal("Query state must be Starting."));
+                return Err(ErrorCode::Internal(
+                    "[HTTP-QUERY] Invalid query state: expected Starting state",
+                ));
             };
 
             (state.sender.clone(), state.ctx.clone())
@@ -763,7 +765,10 @@ impl HttpQuery {
                         warnings: query_context.pop_warnings(),
                     };
 
-                    info!("http query change state to Stopped, fail to start {:?}", e);
+                    info!(
+                        "[HTTP-QUERY] Query state changed to Stopped, failed to start: {:?}",
+                        e
+                    );
                     Executor::start_to_stop(&query_state, ExecuteState::Stopped(Box::new(state)));
                     block_sender.close();
                 }
@@ -859,7 +864,7 @@ impl HttpQuery {
         if *id != self.client_session_id {
             return Err(poem::error::Error::from_string(
                 format!(
-                    "wrong client_session_id, expect {:?}, got {id:?}",
+                    "[HTTP-QUERY] Authentication error: wrong client_session_id, expected {:?}, got {id:?}",
                     &self.client_session_id
                 ),
                 StatusCode::UNAUTHORIZED,

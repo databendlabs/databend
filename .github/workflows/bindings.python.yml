@@ -3,18 +3,18 @@ name: Bindings Python
 on:
   ## uncomment it when bendpy is enabled
   workflow_dispatch:
-  # pull_request:
-  #   branches:
-  #     - main
-  #   paths:
-  #     - "src/**"
-  #     - ".github/workflows/bindings.python.yml"
-  # workflow_call:
-  #   inputs:
-  #     tag:
-  #       description: Tag to release
-  #       required: true
-  #       type: string
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - ".github/workflows/bindings.python.yml"
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag to release
+        required: true
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -36,6 +36,7 @@ jobs:
         with:
           target: ${{ matrix.arch }}-unknown-linux-gnu
           version: ${{ inputs.tag }}
+          tag: ${{ inputs.tag }}
       - name: upload
         if: inputs.tag
         uses: actions/upload-artifact@v4
@@ -43,32 +44,32 @@ jobs:
           name: python-linux-${{ matrix.arch }}
           path: src/bendpy/dist/*.whl
 
-  macos:
-    if: inputs.tag
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        arch:
-          - aarch64
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: ./.github/actions/build_bindings_python
-        with:
-          target: ${{ matrix.arch }}-apple-darwin
-          version: ${{ inputs.tag }}
-      - name: upload
-        if: inputs.tag
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-macos-${{ matrix.arch }}
-          path: src/bendpy/dist/*.whl
+  # macos:
+  #   if: inputs.tag
+  #   runs-on: macos-latest
+  #   strategy:
+  #     matrix:
+  #       arch:
+  #         - aarch64
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  #     - uses: ./.github/actions/build_bindings_python
+  #       with:
+  #         target: ${{ matrix.arch }}-apple-darwin
+  #         version: ${{ inputs.tag }}
+  #     - name: upload
+  #       if: inputs.tag
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: python-macos-${{ matrix.arch }}
+  #         path: src/bendpy/dist/*.whl
 
   publish:
     if: inputs.tag
     name: Publish
-    needs: [linux, macos]
+    needs: [linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

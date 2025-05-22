@@ -12,55 +12,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
-use std::ops::Range;
-
 use super::nullable::NullableDomain;
+use super::ReturnType;
+use super::ZeroSizeType;
+use super::ZeroSizeValueType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
-use crate::types::DecimalSize;
 use crate::types::GenericMap;
-use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NullType;
+#[derive(Debug, PartialEq, Clone)]
+pub struct CoreNull;
 
-impl ValueType for NullType {
-    type Scalar = ();
-    type ScalarRef<'a> = ();
-    type Column = usize;
-    type Domain = ();
-    type ColumnIterator<'a> = std::iter::RepeatN<()>;
-    type ColumnBuilder = usize;
+pub type NullType = ZeroSizeValueType<CoreNull>;
 
-    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        scalar
-    }
-
-    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        *scalar
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+impl ZeroSizeType for CoreNull {
+    fn downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<()> {
         match scalar {
             ScalarRef::Null => Some(()),
             _ => None,
         }
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+    fn upcast_scalar() -> Scalar {
+        Scalar::Null
+    }
+
+    fn downcast_column(col: &Column) -> Option<usize> {
         match col {
             Column::Null { len } => Some(*len),
             _ => None,
         }
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn upcast_column(len: usize) -> Column {
+        Column::Null { len }
+    }
+
+    fn downcast_domain(domain: &Domain) -> Option<()> {
         match domain {
             Domain::Nullable(NullableDomain {
                 has_null: true,
@@ -70,109 +63,29 @@ impl ValueType for NullType {
         }
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Null { len } => Some(len),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Null { len } => Some(len),
-            _ => None,
-        }
-    }
-
-    fn try_upcast_column_builder(
-        len: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::Null { len })
-    }
-
-    fn upcast_scalar(_: Self::Scalar) -> Scalar {
-        Scalar::Null
-    }
-
-    fn upcast_column(len: Self::Column) -> Column {
-        Column::Null { len }
-    }
-
-    fn upcast_domain(_: Self::Domain) -> Domain {
+    fn upcast_domain() -> Domain {
         Domain::Nullable(NullableDomain {
             has_null: true,
             value: None,
         })
     }
 
-    fn column_len(len: &Self::Column) -> usize {
-        *len
-    }
-
-    fn index_column(len: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        if index < *len {
-            Some(())
-        } else {
-            None
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut usize> {
+        match builder {
+            ColumnBuilder::Null { len } => Some(len),
+            _ => None,
         }
     }
 
-    #[inline(always)]
-    unsafe fn index_column_unchecked(_col: &Self::Column, _index: usize) -> Self::ScalarRef<'_> {}
-
-    fn slice_column(len: &Self::Column, range: Range<usize>) -> Self::Column {
-        assert!(range.start < *len, "range {range:?} out of 0..{len}");
-        range.end - range.start
+    fn downcast_owned_builder(builder: ColumnBuilder) -> Option<usize> {
+        match builder {
+            ColumnBuilder::Null { len } => Some(len),
+            _ => None,
+        }
     }
 
-    fn iter_column(len: &Self::Column) -> Self::ColumnIterator<'_> {
-        std::iter::repeat_n((), *len)
-    }
-
-    fn column_to_builder(len: Self::Column) -> Self::ColumnBuilder {
-        len
-    }
-
-    fn builder_len(len: &Self::ColumnBuilder) -> usize {
-        *len
-    }
-
-    fn push_item(len: &mut Self::ColumnBuilder, _item: Self::Scalar) {
-        *len += 1
-    }
-
-    fn push_item_repeat(len: &mut Self::ColumnBuilder, _: Self::ScalarRef<'_>, n: usize) {
-        *len += n
-    }
-
-    fn push_default(len: &mut Self::ColumnBuilder) {
-        *len += 1
-    }
-
-    fn append_column(len: &mut Self::ColumnBuilder, other_len: &Self::Column) {
-        *len += other_len
-    }
-
-    fn build_column(len: Self::ColumnBuilder) -> Self::Column {
-        len
-    }
-
-    fn build_scalar(len: Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(len, 1);
-    }
-
-    fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
-        0
-    }
-
-    fn column_memory_size(_: &Self::Column) -> usize {
-        std::mem::size_of::<usize>()
-    }
-
-    #[inline(always)]
-    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Ordering {
-        Ordering::Equal
+    fn upcast_column_builder(len: usize) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Null { len })
     }
 }
 
@@ -182,7 +95,9 @@ impl ArgType for NullType {
     }
 
     fn full_domain() -> Self::Domain {}
+}
 
+impl ReturnType for NullType {
     fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         0
     }

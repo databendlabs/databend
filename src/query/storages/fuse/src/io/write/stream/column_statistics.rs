@@ -15,16 +15,15 @@
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
-use databend_common_expression::types::Decimal128Type;
-use databend_common_expression::types::Decimal256Type;
-use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalColumn;
+use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
@@ -193,17 +192,20 @@ fn column_update_hll_cardinality(col: &Column, ty: &DataType, hll: &mut ColumnDi
                 hll.add_object(v);
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
-            let col = Decimal128Type::try_downcast_column(col).unwrap();
-            for v in col.iter() {
-                hll.add_object(v);
-            }
-        }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
-            let col = Decimal256Type::try_downcast_column(col).unwrap();
-            for v in col.iter() {
-                hll.add_object(v);
-            }
+        DataType::Decimal(_) => {
+            match col {
+                Column::Decimal(DecimalColumn::Decimal128(col, _)) => {
+                    for v in col.iter() {
+                        hll.add_object(v);
+                    }
+                }
+                Column::Decimal(DecimalColumn::Decimal256(col, _)) => {
+                    for v in col.iter() {
+                        hll.add_object(v);
+                    }
+                }
+                _ => unreachable!(),
+            };
         }
         _ => unreachable!("Unsupported data type: {:?}", ty),
     });
@@ -233,13 +235,12 @@ fn scalar_update_hll_cardinality(scalar: &ScalarRef, ty: &DataType, hll: &mut Co
             let val = TimestampType::try_downcast_scalar(scalar).unwrap();
             hll.add_object(&val);
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
-            let val = Decimal128Type::try_downcast_scalar(scalar).unwrap();
-            hll.add_object(&val);
-        }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
-            let val = Decimal256Type::try_downcast_scalar(scalar).unwrap();
-            hll.add_object(&val);
+        DataType::Decimal(_) => {
+            match scalar {
+                ScalarRef::Decimal(DecimalScalar::Decimal128(v, _)) => hll.add_object(&v),
+                ScalarRef::Decimal(DecimalScalar::Decimal256(v, _)) => hll.add_object(&v),
+                _ => unreachable!(),
+            }
         }
         _ => unreachable!("Unsupported data type: {:?}", ty),
     });

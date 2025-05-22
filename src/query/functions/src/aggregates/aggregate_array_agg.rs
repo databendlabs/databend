@@ -105,8 +105,7 @@ where
 
         let mut inner_builder = ColumnBuilder::with_capacity(inner_type, self.values.len());
         match inner_type.remove_nullable() {
-            DataType::Decimal(decimal_type) => {
-                let size = decimal_type.size();
+            DataType::Decimal(size) => {
                 let values = mem::take(&mut self.values);
                 for value in values.into_iter() {
                     let val = T::upcast_scalar(value);
@@ -209,8 +208,7 @@ where
 
         let mut inner_builder = ColumnBuilder::with_capacity(inner_type, self.values.len());
         match inner_type.remove_nullable() {
-            DataType::Decimal(decimal_type) => {
-                let size = decimal_type.size();
+            DataType::Decimal(size) => {
                 for value in &self.values {
                     match value {
                         Some(value) => {
@@ -454,7 +452,7 @@ pub fn try_create_aggregate_array_agg_function(
                 }
             })
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(size) if size.can_carried_by_128() => {
             if is_nullable {
                 type State = NullableArrayAggState<DecimalType<i128>>;
                 AggregateArrayAggFunction::<DecimalType<i128>, State>::try_create(
@@ -469,7 +467,7 @@ pub fn try_create_aggregate_array_agg_function(
                 )
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             if is_nullable {
                 type State = NullableArrayAggState<DecimalType<i256>>;
                 AggregateArrayAggFunction::<DecimalType<i256>, State>::try_create(

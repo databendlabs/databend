@@ -42,15 +42,7 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
-use databend_common_meta_app::principal::StageInfo;
-use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
-use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
-use databend_common_storage::init_stage_operator;
-use databend_storages_common_io::Files;
-use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::table::is_stream_name;
-use log::error;
-use log::info;
 use log::warn;
 
 use super::Finder;
@@ -151,22 +143,14 @@ impl<'a> Binder {
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
-        if !stmt.allowed_in_multi_statement() {
-            execute_commit_statement(self.ctx.clone()).await?;
-        }
-        if !stmt.is_transaction_command() && self.ctx.txn_mgr().lock().is_fail() {
-            let err = ErrorCode::CurrentTransactionIsAborted(
-                "current transaction is aborted, commands ignored until end of transaction block",
-            );
-            return Err(err);
-        }
         let start = Instant::now();
-        self.ctx.set_status_info("binding");
+        self.ctx
+            .set_status_info("[SQL-BINDER] Binding SQL statement");
         let mut bind_context = BindContext::new();
         let plan = self.bind_statement(&mut bind_context, stmt).await?;
         self.bind_query_index(&mut bind_context, &plan).await?;
         self.ctx.set_status_info(&format!(
-            "bind stmt to plan done, time used: {:?}",
+            "[SQL-BINDER] Statement binding completed, execution time: {:?}",
             start.elapsed()
         ));
         Ok(plan)
@@ -220,7 +204,9 @@ impl<'a> Binder {
             } => {
                 if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = query.as_ref()
                 {
-                    return Err(ErrorCode::SyntaxException("Invalid statement"));
+                    return Err(ErrorCode::SyntaxException(
+                        "[SQL-BINDER] Invalid statement: nested EXPLAIN not supported",
+                    ));
                 }
                 let plan = self.bind_statement(bind_context, query).await?;
                 Plan::ExplainAnalyze {
@@ -248,7 +234,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In Copy resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve COPY optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -260,7 +246,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In Copy resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve COPY optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -377,9 +363,6 @@ impl<'a> Binder {
             }
 
             // Virtual Columns
-            Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
-            Statement::AlterVirtualColumn(stmt) => self.bind_alter_virtual_column(stmt).await?,
-            Statement::DropVirtualColumn(stmt) => self.bind_drop_virtual_column(stmt).await?,
             Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
             Statement::ShowVirtualColumns(stmt) => {
                 self.bind_show_virtual_columns(bind_context, stmt).await?
@@ -394,7 +377,7 @@ impl<'a> Binder {
             Statement::ShowUsers { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM system.users {} ORDER BY name {}",
+                    "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM default.system.users {} ORDER BY name {}",
                     show_limit, limit_str
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowUsers)
@@ -415,7 +398,7 @@ impl<'a> Binder {
             } => {
                 if illegal_ident_name(role_name) {
                     return Err(ErrorCode::IllegalRole(
-                        format!("Illegal Role Name: Illegal role name [{}], not support username contain ' or \" or \\b or \\f", role_name),
+                        format!("[SQL-BINDER] Illegal role name [{}]: role names cannot contain quotes (' or \") or control characters (\\b or \\f)", role_name),
                     ));
                 }
                 Plan::CreateRole(Box::new(CreateRolePlan {
@@ -435,7 +418,7 @@ impl<'a> Binder {
             Statement::ShowStages { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM system.stages {} ORDER BY name {}",
+                    "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM default.system.stages {} ORDER BY name {}",
                     show_limit, limit_str,
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowStages)
@@ -458,7 +441,8 @@ impl<'a> Binder {
             Statement::DescribeStage { stage_name } => {
                 self.bind_rewrite_to_query(
                     bind_context,
-                    format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(),
+                    format!("SELECT * FROM default.system.stages WHERE name = '{stage_name}'")
+                        .as_str(),
                     RewriteKind::DescribeStage,
                 )
                 .await?
@@ -471,7 +455,7 @@ impl<'a> Binder {
                 // Check user stage.
                 if stage_name == "~" {
                     return Err(ErrorCode::StagePermissionDenied(
-                        "user stage is not allowed to be dropped",
+                        "[SQL-BINDER] User stage (~) is not allowed to be dropped",
                     ));
                 }
                 Plan::DropStage(Box::new(DropStagePlan {
@@ -500,7 +484,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In REPLACE resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve REPLACE optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -511,7 +495,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In Merge resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve MERGE optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -522,7 +506,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In DELETE resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve DELETE optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -533,7 +517,7 @@ impl<'a> Binder {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!(
-                            "In UPDATE resolve optimize hints {:?} failed, err: {:?}",
+                            "[SQL-BINDER] Failed to resolve UPDATE optimize hints {:?}, error: {:?}",
                             hints, e
                         );
                     }
@@ -553,6 +537,9 @@ impl<'a> Binder {
             Statement::ShowObjectPrivileges(stmt) => {
                 self.bind_show_object_privileges(bind_context, stmt).await?
             }
+            Statement::ShowGrantsOfRole(stmt) => {
+                self.bind_show_role_grantees(bind_context, stmt).await?
+            }
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats
@@ -563,7 +550,7 @@ impl<'a> Binder {
             } => {
                 if StageFileFormatType::from_str(name).is_ok() {
                     return Err(ErrorCode::SyntaxException(format!(
-                        "File format {name} is reserved"
+                        "[SQL-BINDER] File format '{name}' is reserved and cannot be used"
                     )));
                 }
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
@@ -702,6 +689,10 @@ impl<'a> Binder {
             Statement::DescribeNotification(stmt) => self.bind_desc_notification(stmt).await?,
             Statement::CreateSequence(stmt) => self.bind_create_sequence(stmt).await?,
             Statement::DropSequence(stmt) => self.bind_drop_sequence(stmt).await?,
+            Statement::ShowSequences { show_options } => {
+                self.bind_show_sequences(bind_context, show_options).await?
+            }
+            Statement::DescSequence { name } => self.bind_desc_sequence(name).await?,
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
@@ -720,7 +711,7 @@ impl<'a> Binder {
                     self.bind_create_procedure(stmt).await?
                 } else {
                     return Err(ErrorCode::SyntaxException(
-                        "CREATE PROCEDURE, set enable_experimental_procedure=1",
+                        "[SQL-BINDER] CREATE PROCEDURE requires enable_experimental_procedure=1",
                     ));
                 }
             }
@@ -733,7 +724,7 @@ impl<'a> Binder {
                     self.bind_drop_procedure(stmt).await?
                 } else {
                     return Err(ErrorCode::SyntaxException(
-                        "DROP PROCEDURE, set enable_experimental_procedure=1",
+                        "[SQL-BINDER] DROP PROCEDURE requires enable_experimental_procedure=1",
                     ));
                 }
             }
@@ -747,7 +738,7 @@ impl<'a> Binder {
                         .await?
                 } else {
                     return Err(ErrorCode::SyntaxException(
-                        "SHOW PROCEDURES, set enable_experimental_procedure=1",
+                        "[SQL-BINDER] SHOW PROCEDURES requires enable_experimental_procedure=1",
                     ));
                 }
             }
@@ -760,7 +751,7 @@ impl<'a> Binder {
                     self.bind_desc_procedure(stmt).await?
                 } else {
                     return Err(ErrorCode::SyntaxException(
-                        "DESC PROCEDURE, set enable_experimental_procedure=1",
+                        "[SQL-BINDER] DESC PROCEDURE requires enable_experimental_procedure=1",
                     ));
                 }
             }
@@ -773,7 +764,7 @@ impl<'a> Binder {
                     self.bind_call_procedure(bind_context, stmt).await?
                 } else {
                     return Err(ErrorCode::SyntaxException(
-                        "CALL PROCEDURE, set enable_experimental_procedure=1",
+                        "[SQL-BINDER] CALL PROCEDURE requires enable_experimental_procedure=1",
                     ));
                 }
             }
@@ -795,7 +786,8 @@ impl<'a> Binder {
             Statement::CreateWorkloadGroup(v) => self.bind_create_workload_group(v)?,
             Statement::DropWorkloadGroup(v) => self.bind_drop_workload_group(v)?,
             Statement::RenameWorkloadGroup(v) => self.bind_rename_workload_group(v)?,
-            Statement::AlterWorkloadGroup(v) => self.bind_alter_workload_group(v)?,
+            Statement::SetWorkloadQuotasGroup(v) => self.bind_set_workload_group_quotas(v)?,
+            Statement::UnsetWorkloadQuotasGroup(v) => self.bind_unset_workload_group_quotas(v)?,
         };
 
         match &plan {
@@ -810,7 +802,7 @@ impl<'a> Binder {
                 let consume_streams = self.ctx.get_consume_streams(true)?;
                 if !consume_streams.is_empty() {
                     return Err(ErrorCode::SyntaxException(
-                        "WITH CONSUME only allowed in query",
+                        "[SQL-BINDER] WITH CONSUME is only allowed in query statements",
                     ));
                 }
             }
@@ -858,7 +850,10 @@ impl<'a> Binder {
                     hint_settings.entry(variable.to_string()).or_insert(value);
                 }
                 _ => {
-                    warn!("fold hints {:?} failed. value must be constant value", hint);
+                    warn!(
+                        "[SQL-BINDER] Failed to fold hint {:?}: value must be a constant",
+                        hint
+                    );
                 }
             }
         }
@@ -1110,7 +1105,8 @@ impl<'a> Binder {
         }
         if has_score && !has_matched {
             return Err(ErrorCode::SemanticError(
-                "score function must run with match or query function".to_string(),
+                "[SQL-BINDER] Score function must be used together with match or query function"
+                    .to_string(),
             ));
         }
 
@@ -1122,109 +1118,5 @@ impl<'a> Binder {
             s_expr = s_expr.add_column_index_to_scans(*table_index, *column_index, &inverted_index);
         }
         Ok(s_expr)
-    }
-}
-
-struct ClearTxnManagerGuard(TxnManagerRef);
-
-impl Drop for ClearTxnManagerGuard {
-    fn drop(&mut self) {
-        self.0.lock().clear();
-    }
-}
-
-pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> {
-    // After commit statement, current session should be in auto commit mode, no matter update meta success or not.
-    // Use this guard to clear txn manager before return.
-    let _guard = ClearTxnManagerGuard(ctx.txn_mgr().clone());
-    let is_active = ctx.txn_mgr().lock().is_active();
-    if is_active {
-        let catalog = ctx.get_default_catalog()?;
-
-        let req = ctx.txn_mgr().lock().req();
-
-        let update_summary = {
-            let table_descriptions = req
-                .update_table_metas
-                .iter()
-                .map(|(req, _)| (req.table_id, req.seq, req.new_table_meta.engine.clone()))
-                .collect::<Vec<_>>();
-            let stream_descriptions = req
-                .update_stream_metas
-                .iter()
-                .map(|s| (s.stream_id, s.seq, "stream"))
-                .collect::<Vec<_>>();
-            (table_descriptions, stream_descriptions)
-        };
-
-        let mismatched_tids = {
-            ctx.txn_mgr().lock().set_auto_commit();
-            let ret = catalog.retryable_update_multi_table_meta(req).await;
-            if let Err(ref e) = ret {
-                // other errors may occur, especially the version mismatch of streams,
-                // let's log it here for the convenience of diagnostics
-                error!(
-                    "Non-recoverable fault occurred during updating tables. {}",
-                    e
-                );
-            }
-            ret?
-        };
-
-        match &mismatched_tids {
-            Ok(_) => {
-                info!(
-                    "COMMIT: Commit explicit transaction success, targets updated {:?}",
-                    update_summary
-                );
-            }
-            Err(e) => {
-                let err_msg = format!(
-                    "Due to concurrent transactions, explicit transaction commit failed. Conflicting table IDs: {:?}",
-                    e.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
-                );
-                info!(
-                    "Due to concurrent transactions, explicit transaction commit failed. Conflicting table IDs: {:?}",
-                    e
-                );
-                return Err(ErrorCode::TableVersionMismatched(err_msg));
-            }
-        }
-        let need_purge_files = ctx.txn_mgr().lock().need_purge_files();
-        for (stage_info, files) in need_purge_files {
-            try_purge_files(ctx.clone(), &stage_info, &files).await;
-        }
-    }
-    Ok(())
-}
-
-#[async_backtrace::framed]
-async fn try_purge_files(ctx: Arc<dyn TableContext>, stage_info: &StageInfo, files: &[String]) {
-    let start = Instant::now();
-    let op = init_stage_operator(stage_info);
-
-    match op {
-        Ok(op) => {
-            let file_op = Files::create(ctx, op);
-            if let Err(e) = file_op.remove_file_in_batch(files).await {
-                error!("Failed to delete file: {:?}, error: {}", files, e);
-            }
-        }
-        Err(e) => {
-            error!("Failed to get stage table op, error: {}", e);
-        }
-    }
-
-    let elapsed = start.elapsed();
-    info!(
-        "purged files: number {}, time used {:?} ",
-        files.len(),
-        elapsed
-    );
-
-    // Perf.
-    {
-        metrics_inc_copy_purge_files_counter(files.len() as u32);
-        metrics_inc_copy_purge_files_cost_milliseconds(elapsed.as_millis() as u32);
     }
 }

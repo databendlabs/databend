@@ -20,9 +20,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::number::*;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
@@ -71,11 +68,7 @@ where C: ChangeIf<StringType> + Default
 impl<C> UnaryState<StringType, StringType> for MinMaxStringState<C>
 where C: ChangeIf<StringType> + Default
 {
-    fn add(
-        &mut self,
-        other: <StringType as ValueType>::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: &str, _function_data: Option<&dyn FunctionData>) -> Result<()> {
         match &self.value {
             Some(v) => {
                 if C::change_if(&StringType::to_scalar_ref(v), &other) {
@@ -321,12 +314,8 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         }
                     })
                 }
-                DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-                    let decimal_size = DecimalSize {
-                        precision: s.precision,
-                        scale: s.scale,
-                    };
-                    let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+                DataType::Decimal(size) if size.can_carried_by_128() => {
+                    let return_type = DataType::Decimal(size);
                     AggregateUnaryFunction::<
                         MinMaxAnyDecimalState<DecimalType<i128>, CMP>,
                         DecimalType<i128>,
@@ -335,12 +324,8 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         display_name, return_type, params, data_type
                     )
                 }
-                DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-                    let decimal_size = DecimalSize {
-                        precision: s.precision,
-                        scale: s.scale,
-                    };
-                    let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+                DataType::Decimal(size) => {
+                    let return_type = DataType::Decimal(size);
                     AggregateUnaryFunction::<
                         MinMaxAnyDecimalState<DecimalType<i256>, CMP>,
                         DecimalType<i256>,

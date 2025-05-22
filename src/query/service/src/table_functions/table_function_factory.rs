@@ -30,6 +30,7 @@ use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropInvertedIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
+use databend_common_storages_fuse::table_functions::FuseVirtualColumnFunc;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_iceberg::IcebergInspectTable;
@@ -56,6 +57,7 @@ use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::show_grants::ShowGrants;
 use crate::table_functions::show_roles::ShowRoles;
+use crate::table_functions::show_sequences::ShowSequences;
 use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
@@ -188,6 +190,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseColumnFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_virtual_column".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVirtualColumnFunc>::create),
             ),
         );
 
@@ -358,6 +368,11 @@ impl TableFunctionFactory {
         creators.insert(
             "iceberg_manifest".to_string(),
             (next_id(), Arc::new(IcebergInspectTable::create)),
+        );
+
+        creators.insert(
+            "show_sequences".to_string(),
+            (next_id(), Arc::new(ShowSequences::create)),
         );
 
         TableFunctionFactory {

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use chrono::Utc;
 use databend_common_ast::ast::AccountMgrLevel;
 use databend_common_ast::ast::AccountMgrSource;
@@ -21,10 +23,14 @@ use databend_common_ast::ast::GrantObjectName;
 use databend_common_ast::ast::GrantStmt;
 use databend_common_ast::ast::PrincipalIdentity as AstPrincipalIdentity;
 use databend_common_ast::ast::RevokeStmt;
+use databend_common_ast::ast::ShowGranteesOfRoleStmt;
 use databend_common_ast::ast::ShowObjectPrivilegesStmt;
 use databend_common_ast::ast::ShowOptions;
+use databend_common_ast::ast::UserOptionItem;
+use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_management::WorkloadMgr;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
@@ -271,7 +277,13 @@ impl Binder {
         }
         let mut user_option = UserOption::default();
         for option in user_options {
-            user_option.apply(option);
+            if let UserOptionItem::SetWorkloadGroup(name) = &option {
+                let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
+                let workload_group = workload_mgr.get_id_by_name(name).await?;
+                user_option.apply(&UserOptionItem::SetWorkloadGroup(workload_group));
+            } else {
+                user_option.apply(option);
+            }
         }
         UserApiProvider::instance()
             .verify_password(
@@ -325,7 +337,13 @@ impl Binder {
         // TODO: Only user with OWNERSHIP privilege can change user options.
         let mut user_option = user_info.option.clone();
         for option in user_options {
-            user_option.apply(option);
+            if let UserOptionItem::SetWorkloadGroup(name) = &option {
+                let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
+                let workload_group = workload_mgr.get_id_by_name(name).await?;
+                user_option.apply(&UserOptionItem::SetWorkloadGroup(workload_group));
+            } else {
+                user_option.apply(option);
+            }
         }
 
         // If `must_change_password` is set, user need to change password first when login.
@@ -406,6 +424,25 @@ impl Binder {
 
         let (show_limit, limit_str) =
             get_show_options(show_options, Some("object_name".to_string()));
+        let query = format!("{} {} {}", query, show_limit, limit_str,);
+
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_role_grantees(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowGranteesOfRoleStmt,
+    ) -> Result<Plan> {
+        let query = format!(
+            "SELECT * FROM show_grants('role_grantee', '{}')",
+            &stmt.name
+        );
+
+        let (show_limit, limit_str) =
+            get_show_options(&stmt.show_option, Some("grantee_name".to_string()));
         let query = format!("{} {} {}", query, show_limit, limit_str,);
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)

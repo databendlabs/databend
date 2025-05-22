@@ -172,13 +172,22 @@ impl Binder {
             with_history,
         } = stmt;
 
-        let default_catalog = self.ctx.get_default_catalog()?.name();
+        let catalog_name = match catalog {
+            None => self.ctx.get_current_catalog(),
+            Some(ident) => {
+                // check in check_database_exist
+                normalize_identifier(ident, &self.name_resolution_ctx).name
+            }
+        };
         let database = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = if stmt.with_history {
-            SelectBuilder::from(&format!("{}.system.tables_with_history", default_catalog))
+            SelectBuilder::from(&format!(
+                "{}.system.tables_with_history",
+                catalog_name.to_lowercase()
+            ))
         } else {
-            SelectBuilder::from(&format!("{}.system.tables", default_catalog))
+            SelectBuilder::from(&format!("{}.system.tables", catalog_name.to_lowercase()))
         };
 
         if *full {
@@ -214,15 +223,6 @@ impl Binder {
 
         select_builder.with_filter(format!("database = '{database}'"));
         select_builder.with_filter("table_type = 'BASE TABLE'".to_string());
-
-        let catalog_name = match catalog {
-            None => self.ctx.get_current_catalog(),
-            Some(ident) => {
-                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
-                self.ctx.get_catalog(&catalog).await?;
-                catalog
-            }
-        };
 
         select_builder.with_filter(format!("catalog = '{catalog_name}'"));
         let query = match limit {
@@ -310,7 +310,7 @@ impl Binder {
     ) -> Result<Plan> {
         let ShowTablesStatusStmt { database, limit } = stmt;
 
-        let default_catalog = self.ctx.get_default_catalog()?.name();
+        let default_catalog = self.ctx.get_current_catalog();
         let database = self.check_database_exist(&None, database).await?;
 
         let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
@@ -1882,7 +1882,10 @@ async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
         }
 
         // verify privilege to list
-        if let Err(e) = dal.list(VERIFICATION_KEY).await {
+        // Append "/" to the verification key to ensure we are listing the contents of the directory/prefix
+        // rather than attempting to list a single object.
+        // Like aws s3 express one, the list requires a end delimiter.
+        if let Err(e) = dal.list(&format!("{}{}", VERIFICATION_KEY, "/")).await {
             errors.push(format!("Permission check for [List] failed: {}", e));
         }
 

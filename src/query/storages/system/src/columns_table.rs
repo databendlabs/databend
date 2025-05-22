@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::database::Database;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -29,9 +32,12 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -39,6 +45,7 @@ use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use log::warn;
 
+use crate::generate_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
@@ -61,7 +68,15 @@ impl AsyncSystemTable for ColumnsTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let rows = self.dump_table_columns(ctx, push_downs).await?;
+        let catalog_mgr = CatalogManager::instance();
+        let catalog = catalog_mgr
+            .get_catalog(
+                ctx.get_tenant().tenant_name(),
+                self.get_table_info().catalog(),
+                ctx.session_state(),
+            )
+            .await?;
+        let rows = self.dump_table_columns(ctx, push_downs, &catalog).await?;
         let mut names: Vec<String> = Vec::with_capacity(rows.len());
         let mut tables: Vec<String> = Vec::with_capacity(rows.len());
         let mut databases: Vec<String> = Vec::with_capacity(rows.len());
@@ -111,7 +126,7 @@ impl AsyncSystemTable for ColumnsTable {
 }
 
 impl ColumnsTable {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(table_id: u64, ctl_name: &str) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
             TableField::new("database", TableDataType::String),
@@ -135,6 +150,11 @@ impl ColumnsTable {
                 engine: "SystemColumns".to_string(),
                 ..Default::default()
             },
+            catalog_info: Arc::new(CatalogInfo {
+                name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
+                meta: generate_catalog_meta(ctl_name),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 
@@ -146,8 +166,9 @@ impl ColumnsTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        catalog: &Arc<dyn Catalog>,
     ) -> Result<Vec<(String, String, String, TableField)>> {
-        let database_and_tables = dump_tables(&ctx, push_downs).await?;
+        let database_and_tables = dump_tables(&ctx, push_downs, catalog).await?;
 
         let mut rows: Vec<(String, String, String, TableField)> = vec![];
         for (database, tables) in database_and_tables {
@@ -237,24 +258,24 @@ impl ColumnsTable {
 pub(crate) async fn dump_tables(
     ctx: &Arc<dyn TableContext>,
     push_downs: Option<PushDownInfo>,
+    catalog: &Arc<dyn Catalog>,
 ) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
     let tenant = ctx.get_tenant();
 
     // For performance considerations, we do not require the most up-to-date table information here:
     // - for regular tables, the data is certainly fresh
     // - for read-only attached tables, the data may be outdated
+    let catalog = catalog.clone().disable_table_info_refresh()?;
 
-    let catalog = ctx
-        .get_catalog(CATALOG_DEFAULT)
-        .await?
-        .disable_table_info_refresh()?;
-
-    let mut tables: Vec<String> = Vec::new();
-    let mut databases: Vec<String> = Vec::new();
+    let mut filtered_db_names: Option<Vec<String>> = None;
+    let mut filtered_table_names: Option<Vec<String>> = None;
 
     if let Some(push_downs) = push_downs {
         if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
             let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+            let mut databases: Vec<String> = Vec::new();
+            let mut tables: Vec<String> = Vec::new();
+
             find_eq_filter(&expr, &mut |col_name, scalar| {
                 if col_name == "database" {
                     if let Scalar::String(database) = scalar {
@@ -271,102 +292,134 @@ pub(crate) async fn dump_tables(
                 }
                 Ok(())
             });
+            if !databases.is_empty() {
+                filtered_db_names = Some(databases);
+            }
+            if !tables.is_empty() {
+                filtered_table_names = Some(tables);
+            }
         }
     }
 
-    let visibility_checker = ctx.get_visibility_checker(false).await?;
+    let visibility_checker = if catalog.is_external() {
+        None
+    } else {
+        Some(ctx.get_visibility_checker(false).await?)
+    };
 
-    let mut final_dbs: Vec<(String, u64)> = Vec::new();
+    let mut final_dbs: Vec<Arc<dyn Database>> = Vec::new();
 
-    if !databases.is_empty() {
-        for db in databases {
-            let db_id = catalog
-                .get_database(&tenant, &db)
-                .await?
-                .get_db_info()
-                .database_id
-                .db_id;
-            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, &db, db_id) {
-                final_dbs.push((db.to_string(), db_id));
+    match (filtered_db_names, &visibility_checker) {
+        (Some(db_names), Some(checker)) => {
+            // Filtered databases + Visibility check
+            for db_name in db_names {
+                let db = catalog.get_database(&tenant, &db_name).await?;
+                let db_id = db.get_db_info().database_id.db_id;
+                if checker.check_database_visibility(CATALOG_DEFAULT, &db_name, db_id) {
+                    final_dbs.push(db);
+                }
             }
         }
-    } else {
-        let catalog_dbs = visibility_checker.get_visibility_database();
-        // None means has global level privileges
-        if let Some(catalog_dbs) = catalog_dbs {
-            for (catalog_name, dbs) in catalog_dbs {
-                if catalog_name == CATALOG_DEFAULT {
-                    let mut catalog_db_ids = vec![];
-                    let mut catalog_db_names = vec![];
-                    catalog_db_names.extend(
-                        dbs.iter()
-                            .filter_map(|(db_name, _)| *db_name)
-                            .map(|db_name| db_name.to_string()),
-                    );
-                    catalog_db_ids.extend(dbs.iter().filter_map(|(_, db_id)| *db_id));
-                    if let Ok(databases) = catalog
-                        .mget_database_names_by_ids(&tenant, &catalog_db_ids)
-                        .await
-                    {
-                        catalog_db_names.extend(databases.into_iter().flatten());
-                    } else {
-                        let msg = format!("Failed to get database name by id: {}", catalog.name());
-                        warn!("{}", msg);
-                    }
-                    let db_idents = catalog_db_names
+        (Some(db_names), None) => {
+            // Filtered databases + No visibility check
+            for db_name in db_names {
+                let db = catalog.get_database(&tenant, &db_name).await?;
+                final_dbs.push(db);
+            }
+        }
+        (None, Some(checker)) => {
+            // All databases + Visibility check
+            let catalog_dbs = checker.get_visibility_database();
+            if let Some(catalog_dbs) = catalog_dbs {
+                if let Some(dbs_in_default_catalog) =
+                    catalog_dbs.get(&ctx.get_default_catalog()?.name())
+                {
+                    let db_idents = dbs_in_default_catalog
                         .iter()
-                        .map(|name| DatabaseNameIdent::new(&tenant, name))
+                        .filter_map(|(db_name, _)| *db_name) // Get only names provided by checker
+                        .map(|db_name| DatabaseNameIdent::new(&tenant, db_name))
                         .collect::<Vec<DatabaseNameIdent>>();
-                    let dbs: Vec<(String, u64)> = catalog
-                        .mget_databases(&tenant, &db_idents)
-                        .await?
-                        .iter()
-                        .map(|db| (db.name().to_string(), db.get_db_info().database_id.db_id))
-                        .collect();
-                    final_dbs.extend(dbs);
+
+                    let databases = catalog.mget_databases(&tenant, &db_idents).await?;
+                    // mget_databases returns Vec<Arc<dyn Database>>, checker already filtered by ID/Name
+                    for db in databases {
+                        // Double check visibility in case mget_databases returned something unexpected,
+                        // although checker should be the source of truth here.
+                        let db_id = db.get_db_info().database_id.db_id;
+                        if checker.check_database_visibility(CATALOG_DEFAULT, db.name(), db_id) {
+                            final_dbs.push(db);
+                        } else {
+                            // This case should ideally not happen if checker is correct, but good for safety
+                            warn!("Visibility checker returned database {} but check_database_visibility failed.", db.name());
+                        }
+                    }
+                }
+            } else {
+                // User has global privileges, check all
+                let all_databases = catalog.list_databases(&tenant).await?;
+                for db in all_databases {
+                    let db_id = db.get_db_info().database_id.db_id;
+                    let db_name = db.name();
+                    if checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
+                        final_dbs.push(db);
+                    }
                 }
             }
-        } else {
-            let all_databases = catalog.list_databases(&tenant).await?;
-            for db in all_databases {
-                let db_id = db.get_db_info().database_id.db_id;
-                let db_name = db.name();
-                if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
-                    final_dbs.push((db_name.to_string(), db_id));
-                }
-            }
+        }
+        (None, None) => {
+            // All databases + No visibility check
+            final_dbs = catalog.list_databases(&tenant).await?;
         }
     }
 
     let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::with_capacity(final_dbs.len());
-    for (database, db_id) in final_dbs {
-        let tables = if tables.is_empty() {
-            catalog
-                .list_tables(&tenant, &database)
-                .await
-                .unwrap_or_default()
-        } else {
-            let mut res = Vec::new();
-            for table in &tables {
-                if let Ok(table) = catalog.get_table(&tenant, &database, table).await {
-                    res.push(table);
+
+    for db in final_dbs {
+        let db_name = db.name().to_string();
+        let db_id = db.get_db_info().database_id.db_id;
+
+        let tables_in_db = match &filtered_table_names {
+            Some(table_names) => {
+                // Filtered tables
+                let mut res = Vec::new();
+                for table_name in table_names {
+                    // Use get_table for specific names
+                    if let Ok(table) = catalog.get_table(&tenant, &db_name, table_name).await {
+                        res.push(table);
+                    }
                 }
+                res
             }
-            res
+            None => {
+                // All tables in database
+                // Use list_tables for all tables, handle error by returning empty vec
+                catalog
+                    .list_tables(&tenant, &db_name)
+                    .await
+                    .unwrap_or_default()
+            }
         };
-        let mut filtered_tables = Vec::with_capacity(tables.len());
-        for table in tables {
-            if visibility_checker.check_table_visibility(
-                CATALOG_DEFAULT,
-                &database,
-                table.name(),
-                db_id,
-                table.get_id(),
-            ) {
+
+        let mut filtered_tables = Vec::with_capacity(tables_in_db.len());
+        for table in tables_in_db {
+            // Apply table visibility check if checker exists
+            let is_visible = match &visibility_checker {
+                Some(checker) => checker.check_table_visibility(
+                    CATALOG_DEFAULT,
+                    &db_name,
+                    table.name(),
+                    db_id,
+                    table.get_id(),
+                ),
+                None => true, // No checker, all tables are visible
+            };
+
+            if is_visible {
                 filtered_tables.push(table);
             }
         }
-        final_tables.push((database, filtered_tables));
+        final_tables.push((db_name, filtered_tables));
     }
+
     Ok(final_tables)
 }

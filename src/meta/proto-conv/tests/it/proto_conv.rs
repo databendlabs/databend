@@ -199,17 +199,15 @@ pub(crate) fn new_latest_schema() -> TableSchema {
         TableField::new("c", TableDataType::Number(NumberDataType::UInt64)),
         TableField::new(
             "decimal128",
-            TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                precision: 18,
-                scale: 3,
-            })),
+            TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new_unchecked(
+                18, 3,
+            ))),
         ),
         TableField::new(
             "decimal256",
-            TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-                precision: 46,
-                scale: 6,
-            })),
+            TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new_unchecked(
+                46, 6,
+            ))),
         ),
         TableField::new("empty_map", TableDataType::EmptyMap),
         TableField::new("bitmap", TableDataType::Bitmap),

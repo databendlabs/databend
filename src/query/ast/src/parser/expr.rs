@@ -1038,100 +1038,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let function_call = map(
-        rule! {
-            #function_name
-            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-        },
-        |(name, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
-            func: FunctionCall {
-                distinct: opt_distinct.is_some(),
-                name,
-                args: opt_args.unwrap_or_default(),
-                params: vec![],
-                order_by: vec![],
-                window: None,
-                lambda: None,
-            },
-        },
-    );
-    let function_call_with_lambda = map(
-        rule! {
-            #function_name
-            ~ "(" ~ #subexpr(0) ~ "," ~ #lambda_params ~ "->" ~ #subexpr(0) ~ ")"
-        },
-        |(name, _, arg, _, params, _, expr, _)| ExprElement::FunctionCall {
-            func: FunctionCall {
-                distinct: false,
-                name,
-                args: vec![arg],
-                params: vec![],
-                order_by: vec![],
-                window: None,
-                lambda: Some(Lambda {
-                    params,
-                    expr: Box::new(expr),
-                }),
-            },
-        },
-    );
-    let function_call_with_window = map(
-        rule! {
-            #function_name
-            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-            ~ #window_function
-        },
-        |(name, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
-            func: FunctionCall {
-                distinct: opt_distinct.is_some(),
-                name,
-                args: opt_args.unwrap_or_default(),
-                params: vec![],
-                order_by: vec![],
-                window: Some(window),
-                lambda: None,
-            },
-        },
-    );
-    let function_call_with_within_group_window = map(
-        rule! {
-            #function_name
-            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-            ~ #within_group
-            ~ #window_function?
-        },
-        |(name, _, opt_distinct, opt_args, _, order_by, window)| ExprElement::FunctionCall {
-            func: FunctionCall {
-                distinct: opt_distinct.is_some(),
-                name,
-                args: opt_args.unwrap_or_default(),
-                params: vec![],
-                order_by,
-                window,
-                lambda: None,
-            },
-        },
-    );
-    let function_call_with_params_window = map(
-        rule! {
-            #function_name
-            ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
-            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-            ~ #window_function?
-        },
-        |(name, _, params, _, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
-            func: FunctionCall {
-                distinct: opt_distinct.is_some(),
-                name,
-                args: opt_args.unwrap_or_default(),
-                params,
-                order_by: vec![],
-                window,
-                lambda: None,
-            },
-        },
-    );
-
     let case = map(
         rule! {
             CASE ~ #subexpr(0)?
@@ -1429,11 +1335,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #chain_function_call : "x.function(...)"
                 | #list_comprehensions: "[expr for x in ... [if ...]]"
                 | #count_all_with_window : "`COUNT(*) OVER ...`"
-                | #function_call_with_lambda : "`function(..., x -> ...)`"
-                | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-                | #function_call_with_within_group_window: "`function(...) [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-                | #function_call_with_params_window : "`function(...)(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-                | #function_call : "`function(...)`"
+                | #function_call
             ),
             rule!(
                 #case : "`CASE ... END`"
@@ -2035,6 +1937,166 @@ pub fn map_element(i: Input) -> IResult<(Literal, Expr)> {
             #literal ~ ":" ~ #subexpr(0)
         },
         |(key, _, value)| (key, value),
+    )(i)
+}
+
+pub fn function_call(i: Input) -> IResult<ExprElement> {
+    enum FunctionCallSuffix {
+        Simple {
+            distinct: bool,
+            args: Vec<Expr>,
+        },
+        Lambda {
+            arg: Expr,
+            params: Vec<Identifier>,
+            expr: Box<Expr>,
+        },
+        Window {
+            distinct: bool,
+            args: Vec<Expr>,
+            window: WindowDesc,
+        },
+        WithInGroupWindow {
+            distinct: bool,
+            args: Vec<Expr>,
+            order_by: Vec<OrderByExpr>,
+            window: Option<WindowDesc>,
+        },
+        ParamsWindow {
+            distinct: bool,
+            params: Vec<Expr>,
+            args: Vec<Expr>,
+            window: Option<WindowDesc>,
+        },
+    }
+    let function_call_with_lambda_body = map(
+        rule! {
+            "(" ~ #subexpr(0) ~ "," ~ #lambda_params ~ "->" ~ #subexpr(0) ~ ")"
+        },
+        |(_, arg, _, params, _, expr, _)| FunctionCallSuffix::Lambda {
+            arg,
+            params,
+            expr: Box::new(expr),
+        },
+    );
+    let function_call_with_within_group_window_body = map(
+        rule! {
+            "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+            ~ #within_group?
+            ~ #window_function?
+        },
+        |(_, opt_distinct, opt_args, _, order_by, window)| match (order_by, window) {
+            (Some(order_by), window) => FunctionCallSuffix::WithInGroupWindow {
+                distinct: opt_distinct.is_some(),
+                args: opt_args.unwrap_or_default(),
+                order_by,
+                window,
+            },
+            (None, Some(window)) => FunctionCallSuffix::Window {
+                distinct: opt_distinct.is_some(),
+                args: opt_args.unwrap_or_default(),
+                window,
+            },
+            (None, None) => FunctionCallSuffix::Simple {
+                distinct: opt_distinct.is_some(),
+                args: opt_args.unwrap_or_default(),
+            },
+        },
+    );
+    let function_call_with_params_window_body = map(
+        rule! {
+            "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+            ~ #window_function?
+        },
+        |(_, params, _, _, opt_distinct, opt_args, _, window)| FunctionCallSuffix::ParamsWindow {
+            distinct: opt_distinct.is_some(),
+            params,
+            args: opt_args.unwrap_or_default(),
+            window,
+        },
+    );
+
+    map(
+        rule!(
+            #function_name
+            ~ (
+                    #function_call_with_lambda_body : "`function(..., x -> ...)`"
+                    | #function_call_with_params_window_body : "`function(...)(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
+                    | #function_call_with_within_group_window_body : "`function(...) [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`"
+                )
+        ),
+        |(name, suffix)| match suffix {
+            FunctionCallSuffix::Simple { distinct, args } => ExprElement::FunctionCall {
+                func: FunctionCall {
+                    distinct,
+                    name,
+                    args,
+                    params: vec![],
+                    order_by: vec![],
+                    window: None,
+                    lambda: None,
+                },
+            },
+            FunctionCallSuffix::Lambda { arg, params, expr } => ExprElement::FunctionCall {
+                func: FunctionCall {
+                    distinct: false,
+                    name,
+                    args: vec![arg],
+                    params: vec![],
+                    order_by: vec![],
+                    window: None,
+                    lambda: Some(Lambda { params, expr }),
+                },
+            },
+            FunctionCallSuffix::Window {
+                distinct,
+                args,
+                window,
+            } => ExprElement::FunctionCall {
+                func: FunctionCall {
+                    distinct,
+                    name,
+                    args,
+                    params: vec![],
+                    order_by: vec![],
+                    window: Some(window),
+                    lambda: None,
+                },
+            },
+            FunctionCallSuffix::WithInGroupWindow {
+                distinct,
+                args,
+                order_by,
+                window,
+            } => ExprElement::FunctionCall {
+                func: FunctionCall {
+                    distinct,
+                    name,
+                    args,
+                    params: vec![],
+                    order_by,
+                    window,
+                    lambda: None,
+                },
+            },
+            FunctionCallSuffix::ParamsWindow {
+                distinct,
+                params,
+                args,
+                window,
+            } => ExprElement::FunctionCall {
+                func: FunctionCall {
+                    distinct,
+                    name,
+                    args,
+                    params,
+                    order_by: vec![],
+                    window,
+                    lambda: None,
+                },
+            },
+        },
     )(i)
 }
 

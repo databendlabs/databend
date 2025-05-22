@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
+use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
 use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
@@ -32,7 +33,6 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
-use databend_common_storages_iceberg::IcebergCreator;
 use databend_common_storages_system::ProfilesLogQueue;
 use databend_common_tracing::GlobalLogger;
 use databend_common_users::builtin::BuiltIn;
@@ -46,6 +46,7 @@ use crate::auth::AuthMgr;
 use crate::builtin::BuiltinUDFs;
 use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::IcebergCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
 use crate::persistent_log::GlobalPersistentLog;
@@ -103,7 +104,6 @@ impl GlobalServices {
         // Maybe we can do some refactor to simplify the logic here.
         {
             // Init default catalog.
-
             let default_catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
 
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
@@ -178,6 +178,9 @@ impl GlobalServices {
         if config.log.persistentlog.on {
             GlobalPersistentLog::init(config).await?;
         }
+
+        GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
+
         Ok(())
     }
 
@@ -195,4 +198,15 @@ impl GlobalServices {
         GlobalInstance::set(Arc::new(WorkloadMgr::create(meta_store, &tenant)?));
         Ok(())
     }
+}
+
+pub fn memory_gc_handle(query_id: &String, _force: bool) -> bool {
+    log::info!("memory_gc_handle {}", query_id);
+    let sessions_manager = SessionManager::instance();
+    // TODO: dealloc jemalloc dirty page?
+    // TODO: page cache?
+    // TODO: databend cache?
+    // TODO: spill query?
+    sessions_manager.kill_by_query_id(query_id);
+    true
 }

@@ -267,7 +267,7 @@ impl Executor {
         let state = match &guard.state {
             Starting(s) => {
                 info!(
-                    "{}: http query begin changing state from Staring to Stopped, reason {:?}",
+                    "[HTTP-QUERY] Query {} state transitioning from Starting to Stopped, reason: {:?}",
                     &guard.query_id, reason
                 );
                 if let Err(e) = &reason {
@@ -277,7 +277,7 @@ impl Executor {
                         Some(e.clone()),
                         false,
                     )
-                    .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
+                    .unwrap_or_else(|e| error!("[HTTP-QUERY] Failed to write query_log: {:?}", e));
                 }
                 if let Err(e) = &reason {
                     if e.code() != ErrorCode::CLOSED_QUERY {
@@ -297,7 +297,7 @@ impl Executor {
             }
             Running(r) => {
                 info!(
-                    "{}: http query changing state from Running to Stopped, reason {:?}",
+                    "[HTTP-QUERY] Query {} state transitioning from Running to Stopped, reason: {:?}",
                     &guard.query_id, reason,
                 );
                 if let Err(e) = &reason {
@@ -319,14 +319,14 @@ impl Executor {
             }
             Stopped(s) => {
                 debug!(
-                    "{}: http query already stopped, reason {:?}, new reason {:?}",
+                    "[HTTP-QUERY] Query {} already in Stopped state, original reason: {:?}, new reason: {:?}",
                     &guard.query_id, s.reason, reason
                 );
                 return;
             }
         };
         info!(
-            "{}: http query has change state to Stopped, reason {:?}",
+            "[HTTP-QUERY] Query {} state changed to Stopped, reason: {:?}",
             &guard.query_id, reason
         );
         guard.state = Stopped(Box::new(state));
@@ -345,7 +345,7 @@ impl ExecuteState {
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to start query: {sql}");
 
-        info!("http query prepare to plan sql");
+        info!("[HTTP-QUERY] Preparing to plan SQL query");
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, _, queue_guard) = interpreter_plan_sql(ctx.clone(), &sql, true)
@@ -375,7 +375,7 @@ impl ExecuteState {
             schema,
             has_result_set,
         };
-        info!("http query change state to Running");
+        info!("[HTTP-QUERY] Query state changed to Running");
         Executor::start_to_running(&executor, Running(running_state));
 
         let executor_clone = executor.clone();

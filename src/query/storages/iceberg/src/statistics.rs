@@ -199,8 +199,7 @@ fn get_column_stats(
     upper: &HashMap<i32, Datum>,
     null_counts: &HashMap<i32, u64>,
 ) -> BasicColumnStatistics {
-    // The column id in iceberg is 1-based while the column id in Databend is 0-based.
-    let iceberg_col_id = field.column_id as i32 + 1;
+    let iceberg_col_id = field.column_id as i32;
     BasicColumnStatistics {
         min: lower
             .get(&iceberg_col_id)
@@ -235,10 +234,10 @@ pub fn parse_datum(data: &Datum) -> Option<Scalar> {
         // Iceberg use i128 to represent decimal
         PrimitiveLiteral::Int128(v) => {
             if let PrimitiveType::Decimal { precision, scale } = data.data_type() {
-                Some(Scalar::Decimal(v.to_scalar(DecimalSize {
-                    precision: *precision as u8,
-                    scale: *scale as u8,
-                })))
+                Some(Scalar::Decimal(v.to_scalar(DecimalSize::new_unchecked(
+                    *precision as u8,
+                    *scale as u8,
+                ))))
             } else {
                 None
             }

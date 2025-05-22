@@ -16,8 +16,8 @@ use std::io::Cursor;
 
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::IntervalType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 

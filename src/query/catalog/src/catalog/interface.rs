@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::unimplemented;
 
 use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
@@ -38,7 +39,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -50,7 +50,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -73,7 +72,8 @@ use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use databend_common_meta_app::schema::ListSequencesReply;
+use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -101,10 +101,8 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
@@ -233,17 +231,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         Ok(vec![])
     }
-
-    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<()>;
-
-    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<()>;
-
-    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<()>;
-
-    async fn list_virtual_columns(
-        &self,
-        req: ListVirtualColumnsReq,
-    ) -> Result<Vec<VirtualColumnMeta>>;
 
     #[async_backtrace::framed]
     async fn exists_database(&self, tenant: &Tenant, db_name: &str) -> Result<bool> {
@@ -564,6 +551,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply>;
     async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply>;
+
+    async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply>;
 
     async fn get_sequence_next_value(
         &self,

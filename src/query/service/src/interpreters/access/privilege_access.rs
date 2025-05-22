@@ -694,6 +694,7 @@ impl PrivilegeAccess {
                 self.check(ctx, plan).await?;
             }
             InsertInputSource::Values(_) => {}
+            InsertInputSource::StreamingLoad { .. } => {}
         }
         Ok(())
     }
@@ -811,6 +812,10 @@ impl AccessChecker for PrivilegeAccess {
                                 identity, database, table
                             )))
                         };
+                    }
+                    Some(RewriteKind::ShowSequences) => {
+                        self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                            .await?;
                     }
                     _ => {}
                 };
@@ -945,15 +950,6 @@ impl AccessChecker for PrivilegeAccess {
             }
 
             // Virtual Column.
-            Plan::CreateVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Create, false, false).await?
-            }
-            Plan::AlterVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
-            }
-            Plan::DropVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Drop, plan.if_exists, false).await?
-            }
             Plan::RefreshVirtualColumn(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
@@ -1286,6 +1282,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropTask(_)     // TODO: need to build ownership info for task
             | Plan::AlterTask(_)
             | Plan::CreateSequence(_)
+            | Plan::DescSequence(_)
             | Plan::DropSequence(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
@@ -1381,7 +1378,8 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateWorkloadGroup(_) => {}
             Plan::DropWorkloadGroup(_) => {}
             Plan::RenameWorkloadGroup(_) => {}
-            Plan::AlterWorkloadGroup(_) => {}
+            Plan::SetWorkloadGroupQuotas(_) => {}
+            Plan::UnsetWorkloadGroupQuotas(_) => {}
         }
 
         Ok(())

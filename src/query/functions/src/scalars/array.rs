@@ -22,6 +22,7 @@ use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayColumn;
@@ -35,9 +36,9 @@ use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
@@ -54,6 +55,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
@@ -109,7 +111,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| Value::Scalar(()),
     );
 
-    registry.register_function_factory("array", |_, args_type| {
+    let array_factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.is_empty() {
             return None;
         }
@@ -157,10 +159,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("array", array_factory);
 
     // Returns a merged array of tuples in which the nth tuple contains all nth values of input arrays.
-    registry.register_function_factory("arrays_zip", |_, args_type| {
+    let array_zip_factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.is_empty() {
             return None;
         }
@@ -280,7 +283,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("arrays_zip", array_zip_factory);
 
     registry.register_1_arg::<EmptyArrayType, NumberType<u8>, _, _>(
         "length",
@@ -876,6 +880,42 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
+
+    registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>,  ArrayType<GenericType<0>> , _, _>(
+        "array_intersection",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>,  ArrayType<GenericType<0>> >(
+            |left, right, output, _| {
+                let mut set: StackHashSet<u128, 16> = StackHashSet::with_capacity(left.len());
+                let builder = &mut  output.builder;
+                for val in left.iter() {
+                    if val == ScalarRef::Null {
+                        continue;
+                    }
+                    let mut hasher = SipHasher24::new();
+                    val.hash(&mut hasher);
+                    let hash128 = hasher.finish128();
+                    let key = hash128.into();
+                    let _ = set.set_insert(key);
+                }
+
+                for val in right.iter() {
+                    if val == ScalarRef::Null {
+                        continue;
+                    }
+                    let mut hasher = SipHasher24::new();
+                    val.hash(&mut hasher);
+                    let hash128 = hasher.finish128();
+                    let key = hash128.into();
+
+                    if set.contains(&key) {
+                        builder.push(val);
+                    }
+                }
+                output.commit_row()
+            },
+        ),
+    );
 }
 
 fn register_array_aggr(registry: &mut FunctionRegistry) {
@@ -958,7 +998,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
     }
 
     for (fn_name, name) in ARRAY_AGGREGATE_FUNCTIONS {
-        registry.register_function_factory(fn_name, |_, args_type| {
+        let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
             let return_type = eval_aggr_return_type(name, args_type)?;
             Some(Arc::new(Function {
                 signature: FunctionSignature {
@@ -971,7 +1011,8 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     eval: Box::new(|args, ctx| eval_array_aggr(name, args, ctx)),
                 },
             }))
-        });
+        }));
+        registry.register_function_factory(fn_name, factory);
     }
 
     for (fn_name, sort_desc) in ARRAY_SORT_FUNCTIONS {

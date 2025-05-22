@@ -55,6 +55,7 @@ mod table;
 mod table_args;
 mod udf;
 mod util;
+mod virtual_column;
 mod window;
 
 pub use aggregate::AggregateInfo;
@@ -64,7 +65,6 @@ pub use bind_mutation::MutationStrategy;
 pub use bind_mutation::MutationType;
 pub use bind_query::bind_values;
 pub use bind_table_reference::parse_result_scan_args;
-pub use binder::execute_commit_statement;
 pub use binder::Binder;
 pub use builders::*;
 pub use column_binding::ColumnBinding;

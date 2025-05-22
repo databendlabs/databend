@@ -32,6 +32,7 @@ use databend_common_storages_fuse::segment_format_from_location;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
@@ -52,6 +53,7 @@ use crate::interpreters::common::table_option_validation::is_valid_block_per_seg
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
+use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -120,6 +122,10 @@ impl Interpreter for SetOptionsInterpreter {
                 OPT_KEY_CLUSTER_TYPE
             )));
         }
+
+        // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
+        is_valid_option_of_type::<u32>(&self.plan.set_options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
+
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let database = self.plan.database.as_str();
         let table_name = self.plan.table.as_str();

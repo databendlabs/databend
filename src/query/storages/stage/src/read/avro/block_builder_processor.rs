@@ -45,7 +45,7 @@ impl BlockBuilderProcessor {
 }
 
 impl AccumulatingTransform for BlockBuilderProcessor {
-    const NAME: &'static str = "BlockBuilder";
+    const NAME: &'static str = "AvroBlockBuilder";
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         let data = data
@@ -53,8 +53,11 @@ impl AccumulatingTransform for BlockBuilderProcessor {
             .and_then(WholeFileData::downcast_from)
             .unwrap();
         self.state.file_path = data.path.clone();
+        let num_rows = self.state.num_rows;
         self.state.file_full_path = format!("{}{}", self.ctx.stage_root, data.path);
         self.decoder.add(&mut self.state, data)?;
+        self.state
+            .add_internals_columns_batch(self.state.num_rows - num_rows);
 
         self.state.flush_status(&self.ctx.table_context)?;
         let blocks = self.state.try_flush_block_by_memory(&self.ctx)?;

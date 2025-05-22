@@ -129,7 +129,7 @@ pub fn try_create_aggregate_mode_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(s) if s.can_carried_by_128() => {
             let func = AggregateUnaryFunction::<
                 ModeState<Decimal128Type>,
                 Decimal128Type,
@@ -140,7 +140,7 @@ pub fn try_create_aggregate_mode_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             let func = AggregateUnaryFunction::<
                 ModeState<Decimal256Type>,
                 Decimal256Type,

@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::AlterWorkloadGroupStmt;
 use databend_common_ast::ast::CreateWorkloadGroupStmt;
 use databend_common_ast::ast::DropWorkloadGroupStmt;
 use databend_common_ast::ast::RenameWorkloadGroupStmt;
+use databend_common_ast::ast::SetWorkloadGroupQuotasStmt;
 use databend_common_ast::ast::ShowWorkloadGroupsStmt;
+use databend_common_ast::ast::UnsetWorkloadGroupQuotasStmt;
 use databend_common_exception::Result;
 
-use crate::plans::AlterWorkloadGroupPlan;
 use crate::plans::CreateWorkloadGroupPlan;
 use crate::plans::DropWorkloadGroupPlan;
 use crate::plans::Plan;
 use crate::plans::RenameWorkloadGroupPlan;
+use crate::plans::SetWorkloadGroupQuotasPlan;
+use crate::plans::UnsetWorkloadGroupQuotasPlan;
 use crate::Binder;
 
 impl Binder {
@@ -69,13 +71,33 @@ impl Binder {
         )))
     }
 
-    pub(in crate::planner::binder) fn bind_alter_workload_group(
+    pub(in crate::planner::binder) fn bind_set_workload_group_quotas(
         &mut self,
-        stmt: &AlterWorkloadGroupStmt,
+        stmt: &SetWorkloadGroupQuotasStmt,
     ) -> Result<Plan> {
-        Ok(Plan::AlterWorkloadGroup(Box::new(AlterWorkloadGroupPlan {
-            name: stmt.name.to_string(),
-            quotas: stmt.quotas.clone(),
-        })))
+        Ok(Plan::SetWorkloadGroupQuotas(Box::new(
+            SetWorkloadGroupQuotasPlan {
+                name: stmt.name.to_string(),
+                quotas: stmt.quotas.clone(),
+            },
+        )))
+    }
+
+    pub(in crate::planner::binder) fn bind_unset_workload_group_quotas(
+        &mut self,
+        stmt: &UnsetWorkloadGroupQuotasStmt,
+    ) -> Result<Plan> {
+        let mut unset_names = Vec::with_capacity(stmt.quotas.len());
+
+        for quota in &stmt.quotas {
+            unset_names.push(quota.name.clone());
+        }
+
+        Ok(Plan::UnsetWorkloadGroupQuotas(Box::new(
+            UnsetWorkloadGroupQuotasPlan {
+                name: stmt.name.to_string(),
+                quotas: unset_names,
+            },
+        )))
     }
 }

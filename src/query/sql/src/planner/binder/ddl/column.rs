@@ -67,9 +67,9 @@ impl Binder {
             table
         };
 
-        let default_catalog = self.ctx.get_default_catalog()?.name();
+        let current_catalog = catalog.name();
         let mut select_builder =
-            SelectBuilder::from(&format!("{}.information_schema.columns", default_catalog));
+            SelectBuilder::from(&format!("{}.information_schema.columns", current_catalog));
 
         select_builder
             .with_column("column_name AS `Field`")

@@ -37,6 +37,10 @@ use jsonb::OwnedJsonb;
 async fn test_virtual_column_builder() -> Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
+    fixture
+        .default_session()
+        .get_settings()
+        .set_enable_experimental_virtual_column(1)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 
@@ -44,6 +48,7 @@ async fn test_virtual_column_builder() -> Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
+    let schema = table_info.meta.schema.clone();
 
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
@@ -53,7 +58,7 @@ async fn test_virtual_column_builder() -> Result<()> {
         0,
     ); // Dummy location
 
-    let builder = VirtualColumnBuilder::try_create(ctx, table_info).unwrap();
+    let builder = VirtualColumnBuilder::try_create(ctx, fuse_table, schema).unwrap();
 
     let block = DataBlock::new(
         vec![

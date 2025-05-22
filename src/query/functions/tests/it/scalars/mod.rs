@@ -18,12 +18,14 @@ use std::io::Write;
 use comfy_table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
@@ -99,7 +101,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         );
 
         columns.iter().for_each(|(_, col)| {
-            test_arrow_conversion(col);
+            test_arrow_conversion_input(col);
         });
 
         let func_ctx = FunctionContext::default();
@@ -151,7 +153,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
                     writeln!(file, "output         : {}", output_scalar.as_ref()).unwrap();
                 }
                 Value::Column(output_col) => {
-                    test_arrow_conversion(&output_col);
+                    test_arrow_conversion_output(&output_col);
 
                     // Only display the used input columns
                     let used_columns = raw_expr
@@ -222,7 +224,26 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
     }
 }
 
-fn test_arrow_conversion(col: &Column) {
+fn test_arrow_conversion_input(col: &Column) {
+    let data_type = col.data_type();
+    let col = match col {
+        Column::Decimal(decimal) => Column::Decimal(decimal.clone().strict_decimal_data_type()),
+        col @ Column::Nullable(nullable) => match &nullable.column {
+            Column::Decimal(decimal) => Column::Nullable(Box::new(NullableColumn {
+                column: Column::Decimal(decimal.clone().strict_decimal_data_type()),
+                validity: nullable.validity.clone(),
+            })),
+            _ => col.clone(),
+        },
+        col => col.clone(),
+    };
+
+    let arrow_col = col.clone().into_arrow_rs();
+    let new_col = Column::from_arrow_rs(arrow_col, &data_type).unwrap();
+    assert_eq!(col, new_col, "arrow conversion went wrong");
+}
+
+fn test_arrow_conversion_output(col: &Column) {
     let arrow_col = col.clone().into_arrow_rs();
     let new_col = Column::from_arrow_rs(arrow_col, &col.data_type()).unwrap();
     assert_eq!(col, &new_col, "arrow conversion went wrong");
@@ -259,9 +280,15 @@ fn list_all_builtin_functions() {
         .factories
         .iter()
         .flat_map(|(name, funcs)| {
-            funcs
-                .iter()
-                .map(|(_, id)| ((name.clone(), *id), format!("{} FACTORY", name.clone())))
+            funcs.iter().map(move |(factor, id)| {
+                let display = match factor {
+                    FunctionFactory::Closure(_) => format!("{name} FACTORY"),
+                    FunctionFactory::Helper(helper) => {
+                        format!("{name} {helper:?}")
+                    }
+                };
+                ((name.clone(), *id), display)
+            })
         })
         .collect_into(&mut funcs);
     funcs.sort_by_key(|(key, _)| key.clone());

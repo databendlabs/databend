@@ -195,7 +195,7 @@ async fn test_settings() -> PoemResult<()> {
 
     // unknown setting
     {
-        let sql = "select value from system.settings where name = 'max_block_size'";
+        let sql = "select value from default.system.settings where name = 'max_block_size'";
         let (status, _body) = server
             .get_response(
                 QueryBuilder::new(sql)
@@ -208,7 +208,7 @@ async fn test_settings() -> PoemResult<()> {
     }
 
     {
-        let sql = "select value from system.settings where name = 'max_block_size'";
+        let sql = "select value from default.system.settings where name = 'max_block_size'";
         let (status, body) = server
             .get_response(
                 QueryBuilder::new(sql)
@@ -224,7 +224,7 @@ async fn test_settings() -> PoemResult<()> {
     }
 
     {
-        let sql = "select value from system.settings where name = 'max_block_size' or name = 'enable_cbo' order by value";
+        let sql = "select value from default.system.settings where name = 'max_block_size' or name = 'enable_cbo' order by value";
         let (status, body) = server
             .get_response(
                 QueryBuilder::new(sql)

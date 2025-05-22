@@ -84,7 +84,10 @@ impl SnapshotsIO {
             ver,
             put_cache: true,
         };
-        info!("read_snapshot will read: {:?}", load_params);
+        info!(
+            "[FUSE-SNAPSHOT] Reading snapshot with parameters: {:?}",
+            load_params
+        );
         let snapshot = reader.read(&load_params).await?;
         Ok((snapshot, ver))
     }
@@ -115,7 +118,7 @@ impl SnapshotsIO {
             // Error is directly returned, since it can be ignored through flatten
             // in read_snapshot_lites_ext.
             return Err(ErrorCode::StorageOther(
-                "The timestamp of snapshot need less than the min_snapshot_timestamp",
+                "[FUSE-SNAPSHOT] Invalid snapshot: timestamp must be less than min_snapshot_timestamp",
             ));
         }
         Ok(TableSnapshotLite::from((snapshot.as_ref(), ver)))
@@ -197,7 +200,7 @@ impl SnapshotsIO {
                     snapshot_files.len(),
                     start.elapsed()
                 );
-                info!("{}", status);
+                info!("[FUSE-SNAPSHOT] {}", status);
                 (status_callback)(status);
             }
         }
@@ -261,7 +264,7 @@ impl SnapshotsIO {
             // members of precedents of the current snapshot, though.
             // Error is directly returned, since we can be ignored through flatten.
             return Err(ErrorCode::StorageOther(
-                "The timestamp of snapshot need less than the min_snapshot_timestamp",
+                "[FUSE-SNAPSHOT] Invalid snapshot: timestamp must be less than root snapshot timestamp",
             ));
         }
         let mut segments = HashSet::new();
@@ -377,7 +380,10 @@ impl SnapshotsIO {
                     }
                 },
                 _ => {
-                    warn!("non-file entry found in {:}, the entry: {:?}", prefix, de);
+                    warn!(
+                        "[FUSE-SNAPSHOT] Non-file entry found in prefix '{}', entry: {:?}",
+                        prefix, de
+                    );
                     continue;
                 }
             }

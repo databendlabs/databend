@@ -343,7 +343,7 @@ impl<OP, AGG> fmt::Display for AggregateBitmapFunction<OP, AGG> {
 struct AggregateBitmapIntersectCountFunction<T>
 where
     T: ValueType + Send + Sync,
-    <T as ValueType>::Scalar: Send + Sync,
+    T::Scalar: Send + Sync,
 {
     display_name: String,
     inner: AggregateBitmapFunction<BitmapAndOp, BitmapCountResult>,
@@ -354,7 +354,7 @@ where
 impl<T> AggregateBitmapIntersectCountFunction<T>
 where
     T: ValueType + Send + Sync,
-    <T as ValueType>::Scalar: Send + Sync,
+    T::Scalar: Send + Sync,
 {
     fn try_create(
         display_name: &str,
@@ -423,7 +423,7 @@ where
 impl<T> AggregateFunction for AggregateBitmapIntersectCountFunction<T>
 where
     T: ValueType + Send + Sync,
-    <T as ValueType>::Scalar: Send + Sync,
+    T::Scalar: Send + Sync,
 {
     fn name(&self) -> &str {
         "AggregateBitmapIntersectCountFunction"
@@ -503,7 +503,7 @@ where
 impl<T> fmt::Display for AggregateBitmapIntersectCountFunction<T>
 where
     T: ValueType + Send + Sync,
-    <T as ValueType>::Scalar: Send + Sync,
+    T::Scalar: Send + Sync,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
@@ -585,13 +585,13 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
                 }
             })
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(decimal) if decimal.can_carried_by_128() => {
             AggregateBitmapIntersectCountFunction::<DecimalType<i128>>::try_create(
                 display_name,
                 extract_params::<DecimalType<i128>>(display_name, filter_column_type, params)?,
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             AggregateBitmapIntersectCountFunction::<DecimalType<i256>>::try_create(
                 display_name,
                 extract_params::<DecimalType<i256>>(display_name, filter_column_type, params)?,
@@ -606,7 +606,7 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
     })
 }
 
-fn extract_params<T: ValueType>(
+fn extract_params<T: AccessType>(
     display_name: &str,
     val_type: DataType,
     params: Vec<Scalar>,

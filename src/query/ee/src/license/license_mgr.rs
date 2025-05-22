@@ -51,24 +51,29 @@ impl RealLicenseManager {
     fn parse_license_impl(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
         for public_key in &self.public_keys {
             let public_key = ES256PublicKey::from_pem(public_key)
-                .map_err_to_code(ErrorCode::LicenseKeyParseError, || "public key load failed")?;
+                .map_err_to_code(ErrorCode::LicenseKeyParseError, || {
+                    "[LicenseManager] Public key load failed"
+                })?;
 
             return match public_key.verify_token::<LicenseInfo>(raw, None) {
                 Ok(v) => Ok(v),
                 Err(cause) => match cause.downcast_ref::<JWTError>() {
-                    Some(JWTError::TokenHasExpired) => {
-                        warn!("License expired");
-                        Err(ErrorCode::LicenseKeyExpired("license key is expired."))
-                    }
+                    Some(JWTError::TokenHasExpired) => Err(ErrorCode::LicenseKeyExpired(
+                        "[LicenseManager] License key is expired",
+                    )),
                     Some(JWTError::InvalidSignature) => {
                         continue;
                     }
-                    _ => Err(ErrorCode::LicenseKeyParseError("jwt claim decode failed")),
+                    _ => Err(ErrorCode::LicenseKeyParseError(
+                        "[LicenseManager] JWT claim decode failed",
+                    )),
                 },
             };
         }
 
-        Err(ErrorCode::LicenseKeyParseError("wt claim decode failed"))
+        Err(ErrorCode::LicenseKeyParseError(
+            "[LicenseManager] JWT claim decode failed",
+        ))
     }
 }
 
@@ -107,8 +112,8 @@ impl LicenseManager for RealLicenseManager {
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
         if license_key.is_empty() {
             return feature.verify_default(format!(
-                "The use of this feature requires a Databend Enterprise Edition license. No license key found for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at {}",
-                self.tenant, LICENSE_URL
+                "[LicenseManager] Feature '{}' requires Databend Enterprise Edition license. No license key found for tenant: {}. Learn more at {}",
+                feature, self.tenant, LICENSE_URL
             ));
         }
 
@@ -134,8 +139,10 @@ impl LicenseManager for RealLicenseManager {
             // Previously cached valid license might be expired
             let claim = v.value();
             if Self::verify_license_expired(claim)? {
-                warn!("Cached License expired");
-                Err(ErrorCode::LicenseKeyExpired("license key is expired."))
+                warn!("[LicenseManager] Cached license expired");
+                Err(ErrorCode::LicenseKeyExpired(
+                    "[LicenseManager] License key is expired.",
+                ))
             } else {
                 Ok((*claim).clone())
             }
@@ -154,7 +161,7 @@ impl LicenseManager for RealLicenseManager {
         if let Some(v) = self.cache.get(&license_key) {
             if Self::verify_license_expired(v.value())? {
                 return Err(ErrorCode::LicenseKeyExpired(format!(
-                    "license key expired in {:?}",
+                    "[LicenseManager] License key expired at {:?}",
                     v.value().expires_at,
                 )));
             }
@@ -163,12 +170,12 @@ impl LicenseManager for RealLicenseManager {
 
         let license = self.parse_license(&license_key).map_err_to_code(
             ErrorCode::LicenseKeyInvalid,
-            || format!("use of storage requires an enterprise license. current license is invalid for {}", self.tenant),
+            || format!("[LicenseManager] Storage use requires enterprise license. Current license invalid for tenant: {}", self.tenant),
         )?;
 
         if Self::verify_license_expired(&license)? {
             return Err(ErrorCode::LicenseKeyExpired(format!(
-                "license key expired in {:?}",
+                "[LicenseManager] License key expired at {:?}",
                 license.expires_at,
             )));
         }
@@ -194,7 +201,7 @@ impl RealLicenseManager {
         match l.expires_at {
             Some(expire_at) => Ok(now > expire_at),
             None => Err(ErrorCode::LicenseKeyInvalid(
-                "cannot find valid expire time",
+                "[LicenseManager] Cannot find valid expiration time",
             )),
         }
     }
@@ -216,7 +223,7 @@ impl RealLicenseManager {
         }
 
         Err(ErrorCode::LicenseKeyInvalid(format!(
-            "license key does not support feature {}, supported features: {}",
+            "[LicenseManager] License does not support feature: {}. Supported features: {}",
             feature,
             l.custom.display_features()
         )))
@@ -225,8 +232,8 @@ impl RealLicenseManager {
     fn verify_if_expired(&self, feature: Feature) -> Result<()> {
         feature.verify_default("").map_err(|_|
             ErrorCode::LicenseKeyExpired(format!(
-                "The use of this feature requires a Databend Enterprise Edition license. License key has expired for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/",
-                self.tenant
+                "[LicenseManager] Feature '{}' requires Databend Enterprise Edition license. License key expired for tenant: {}. Learn more at {}",
+                feature, self.tenant, LICENSE_URL
             ))
         )
     }
@@ -245,12 +252,12 @@ fn embedded_public_keys() -> Result<String> {
 
     match decode_res {
         Err(e) => Err(ErrorCode::Internal(format!(
-            "Cannot parse embedded public key {:?}",
+            "[LicenseManager] Cannot parse embedded public key: {:?}",
             e
         ))),
         Ok(bytes) => match String::from_utf8(bytes) {
             Err(e) => Err(ErrorCode::Internal(format!(
-                "Cannot parse embedded public key {:?}",
+                "[LicenseManager] Cannot parse embedded public key: {:?}",
                 e
             ))),
             Ok(keys) => Ok(keys),

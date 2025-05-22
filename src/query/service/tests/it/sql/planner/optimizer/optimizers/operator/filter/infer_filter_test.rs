@@ -970,6 +970,7 @@ fn test_different_data_types() -> Result<()> {
         "",
         0,
     );
+    let col_variant = builder.column("variant", 3, "variant", DataType::Variant, "", 0);
     let _col_a = builder.column("A", 3, "A", DataType::Number(NumberDataType::Int64), "", 0);
 
     // Test: int8 column with values at type boundaries
@@ -1021,6 +1022,19 @@ fn test_different_data_types() -> Result<()> {
             get_function_name(&result[0]) == Some("eq"),
             "Should infer float = 5.0 predicate"
         );
+    }
+
+    // Test: mixing integer and variant types
+    {
+        let const_5_int = builder.int(5);
+
+        // Test: variant = int8 AND variant = 5
+        let pred_variant_eq_int = builder.eq(col_variant.clone(), col_int8.clone());
+        let pred_variant_eq_5 = builder.eq(col_variant.clone(), const_5_int.clone());
+
+        let result = run_optimizer(vec![pred_variant_eq_int, pred_variant_eq_5])?;
+
+        assert_eq!(result.len(), 2, "Shouldn't add transitive equality");
     }
 
     // Different data type not work yet, need fix.

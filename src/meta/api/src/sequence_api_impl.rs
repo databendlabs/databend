@@ -26,12 +26,15 @@ use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
+use futures::TryStreamExt;
 use log::debug;
 
 use crate::databend_common_meta_types::With;
@@ -90,6 +93,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         debug!(req :? =name_ident; "SchemaApi: {}", func_name!());
         let seq_meta = self.get_pb(name_ident).await?;
         Ok(seq_meta)
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn list_sequences(
+        &self,
+        tenant: &Tenant,
+    ) -> Result<Vec<(String, SequenceMeta)>, MetaError> {
+        let dir_name = DirName::new(SequenceIdent::new(tenant, "dummy"));
+        self.list_pb(&dir_name)
+            .await?
+            .map_ok(|itm| (itm.key.name().to_string(), itm.seqv.data))
+            .try_collect::<Vec<_>>()
+            .await
     }
 
     async fn get_sequence_next_value(

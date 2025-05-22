@@ -121,9 +121,6 @@ impl Plan {
             Plan::RefreshTableIndex(_) => Ok("RefreshTableIndex".to_string()),
 
             // Virtual Columns
-            Plan::CreateVirtualColumn(_) => Ok("CreateVirtualColumn".to_string()),
-            Plan::AlterVirtualColumn(_) => Ok("AlterVirtualColumn".to_string()),
-            Plan::DropVirtualColumn(_) => Ok("DropVirtualColumn".to_string()),
             Plan::RefreshVirtualColumn(_) => Ok("RefreshVirtualColumn".to_string()),
 
             // Insert
@@ -229,6 +226,7 @@ impl Plan {
             // sequence
             Plan::CreateSequence(_) => Ok("CreateSequence".to_string()),
             Plan::DropSequence(_) => Ok("DropSequence".to_string()),
+            Plan::DescSequence(_) => Ok("DescSequence".to_string()),
 
             Plan::SetPriority(_) => Ok("SetPriority".to_string()),
             Plan::System(_) => Ok("System".to_string()),
@@ -256,7 +254,8 @@ impl Plan {
             Plan::CreateWorkloadGroup(_) => Ok("CreateWorkloadGroup".to_string()),
             Plan::DropWorkloadGroup(_) => Ok("DropWorkloadGroup".to_string()),
             Plan::RenameWorkloadGroup(_) => Ok("RenameWorkloadGroup".to_string()),
-            Plan::AlterWorkloadGroup(_) => Ok("AlterWorkloadGroup".to_string()),
+            Plan::SetWorkloadGroupQuotas(_) => Ok("SetWorkloadGroupQuotas".to_string()),
+            Plan::UnsetWorkloadGroupQuotas(_) => Ok("UnsetWorkloadGroupQuotas".to_string()),
         }
     }
 }

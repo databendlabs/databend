@@ -18,9 +18,9 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::IntervalType;
@@ -321,10 +321,8 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
         }
     }
 
-    let column_vec = data_types
-        .iter()
-        .enumerate()
-        .map(|(index, data_type)| {
+    let column_vec = (0..data_types.len())
+        .map(|index| {
             let columns = blocks
                 .iter()
                 .map(|block| {
@@ -336,7 +334,7 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
                         .unwrap()
                 })
                 .collect_vec();
-            Column::take_downcast_column_vec(&columns, data_type.clone())
+            Column::take_downcast_column_vec(&columns)
         })
         .collect_vec();
 
@@ -686,14 +684,11 @@ fn test_estimated_scalar_repeat_size() {
 
     // decimal
     {
-        let scalar = ScalarRef::Decimal(DecimalScalar::Decimal128(233, DecimalSize {
-            precision: 46,
-            scale: 6,
-        }));
-        let ty = DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-            precision: 46,
-            scale: 6,
-        }));
+        let scalar = ScalarRef::Decimal(DecimalScalar::Decimal128(
+            233,
+            DecimalSize::new_unchecked(46, 6),
+        ));
+        let ty = DataType::Decimal(DecimalSize::new_unchecked(46, 6));
         assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 

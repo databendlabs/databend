@@ -49,7 +49,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
@@ -63,7 +62,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -88,7 +86,8 @@ use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use databend_common_meta_app::schema::ListSequencesReply;
+use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -113,10 +112,8 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::KeyWithTenant;
@@ -461,31 +458,6 @@ impl Catalog for MutableCatalog {
         self.list_indexes(req).await
     }
 
-    // Virtual column
-
-    #[async_backtrace::framed]
-    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<()> {
-        Ok(self.ctx.meta.create_virtual_column(req).await?)
-    }
-
-    #[async_backtrace::framed]
-    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<()> {
-        Ok(self.ctx.meta.update_virtual_column(req).await?)
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<()> {
-        Ok(self.ctx.meta.drop_virtual_column(req).await?)
-    }
-
-    #[async_backtrace::framed]
-    async fn list_virtual_columns(
-        &self,
-        req: ListVirtualColumnsReq,
-    ) -> Result<Vec<VirtualColumnMeta>> {
-        Ok(self.ctx.meta.list_virtual_columns(req).await?)
-    }
-
     #[async_backtrace::framed]
     async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
         let res = self.ctx.meta.undrop_database(req).await?;
@@ -822,6 +794,12 @@ impl Catalog for MutableCatalog {
         Ok(GetSequenceReply {
             meta: seq_meta.data,
         })
+    }
+
+    async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply> {
+        let info = self.ctx.meta.list_sequences(&req.tenant).await?;
+
+        Ok(ListSequencesReply { info })
     }
 
     async fn get_sequence_next_value(

@@ -420,13 +420,20 @@ impl ExecutingGraph {
                 let node = &locker.graph[schedule_index];
 
                 let event = {
-                    let _guard = ThreadTracker::tracking(node.tracking_payload.clone());
+                    let guard = ThreadTracker::tracking(node.tracking_payload.clone());
 
                     if state_guard_cache.is_none() {
                         state_guard_cache = Some(node.state.lock().unwrap());
                     }
 
-                    node.processor.event(event_cause)
+                    let event = node.processor.event(event_cause)?;
+
+                    match guard.flush() {
+                        Ok(_) => Ok(event),
+                        Err(out_of_limit) => {
+                            Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)))
+                        }
+                    }
                 }?;
 
                 trace!(

@@ -171,12 +171,10 @@ use crate::plans::WindowOrderBy;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
-use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::Visibility;
 
 /// A helper for type checking.
 ///
@@ -601,15 +599,6 @@ impl<'a> TypeChecker<'a> {
                 // as we cast JSON null to SQL NULL.
                 let target_type = if data_type.remove_nullable() == DataType::Variant {
                     let target_type = checked_expr.data_type().nest_wrap_nullable();
-
-                    if let Some(new_scalar) = self.try_rewrite_virtual_column_cast(
-                        expr.span(),
-                        &scalar,
-                        &target_type,
-                        false,
-                    ) {
-                        return Ok(Box::new((new_scalar, target_type)));
-                    }
                     target_type
                 // if the source type is nullable, cast target type should also be nullable.
                 } else if data_type.is_nullable_or_null() {
@@ -659,15 +648,6 @@ impl<'a> TypeChecker<'a> {
                 // as we cast JSON null to SQL NULL.
                 let target_type = if data_type.remove_nullable() == DataType::Variant {
                     let target_type = checked_expr.data_type().nest_wrap_nullable();
-
-                    if let Some(new_scalar) = self.try_rewrite_virtual_column_cast(
-                        expr.span(),
-                        &scalar,
-                        &target_type,
-                        true,
-                    ) {
-                        return Ok(Box::new((new_scalar, target_type)));
-                    }
                     target_type
                 } else {
                     checked_expr.data_type().clone()
@@ -1192,105 +1172,6 @@ impl<'a> TypeChecker<'a> {
             }
         };
         Ok(Box::new((scalar, data_type)))
-    }
-
-    fn try_rewrite_virtual_column_cast(
-        &mut self,
-        span: Span,
-        scalar: &ScalarExpr,
-        target_type: &DataType,
-        is_try: bool,
-    ) -> Option<ScalarExpr> {
-        let Ok(cast_ty) = infer_schema_type(target_type) else {
-            return None;
-        };
-        let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar else {
-            return None;
-        };
-        let table_index = column.table_index?;
-
-        if column.index >= self.metadata.read().columns().len() {
-            return None;
-        }
-
-        // Change the type of virtual column to user specified cast type avoids additional casting overhead,
-        // since the user usually knows the real type.
-        let column_entry = self.metadata.read().column(column.index).clone();
-        let ColumnEntry::VirtualColumn(virtual_column) = column_entry else {
-            return None;
-        };
-
-        let virtual_column_name = if is_try {
-            format!(
-                "try_cast({} as {})",
-                column.column_name,
-                target_type.remove_nullable().to_string().to_lowercase()
-            )
-        } else {
-            format!(
-                "{}::{}",
-                column.column_name,
-                target_type.remove_nullable().to_string().to_lowercase()
-            )
-        };
-
-        // Try resolve the virtual column with the cast type.
-        if let Ok(box (new_scalar, _)) = self.resolve(&Expr::ColumnRef {
-            span,
-            column: ColumnRef {
-                database: column
-                    .database_name
-                    .as_ref()
-                    .map(|name| Identifier::from_name(span, name)),
-                table: column
-                    .table_name
-                    .as_ref()
-                    .map(|name| Identifier::from_name(span, name)),
-                column: ColumnID::Name(Identifier::from_name(span, &virtual_column_name)),
-            },
-        }) {
-            return Some(new_scalar);
-        }
-
-        // Generate a new virtual column with the cast type.
-        let database_name = column.database_name.clone();
-        let table_name = column.table_name.clone();
-
-        let mut guard = self.metadata.write();
-        let new_column_index = guard.add_virtual_column(
-            virtual_column.table_index,
-            virtual_column.source_column_name.clone(),
-            virtual_column.source_column_id,
-            virtual_column.column_id,
-            virtual_column_name.clone(),
-            cast_ty,
-            is_try,
-        );
-
-        let new_column_binding = ColumnBindingBuilder::new(
-            virtual_column_name,
-            new_column_index,
-            Box::new(target_type.clone()),
-            Visibility::InVisible,
-        )
-        .table_name(table_name)
-        .database_name(database_name)
-        .table_index(Some(table_index))
-        .build();
-        // Add virtual column with the cast type to the context.
-        self.bind_context
-            .add_column_binding(new_column_binding.clone());
-
-        if let Some(scan_id) = guard.base_column_scan_id(virtual_column.column_index) {
-            let mut base_column_scan_id = HashMap::new();
-            base_column_scan_id.insert(new_column_index, scan_id);
-            guard.add_base_column_scan_id(base_column_scan_id);
-        }
-
-        Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
-            span,
-            column: new_column_binding,
-        }))
     }
 
     // TODO: remove this function
@@ -2007,21 +1888,13 @@ impl<'a> TypeChecker<'a> {
                     DataType::Number(NumberDataType::Int64)
                 }
             }
-            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-                let p = MAX_DECIMAL128_PRECISION;
-                let decimal_size = DecimalSize {
-                    precision: p,
-                    scale: s.scale,
-                };
-                DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
+            DataType::Decimal(s) if s.can_carried_by_128() => {
+                let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
+                DataType::Decimal(decimal_size)
             }
-            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-                let p = MAX_DECIMAL256_PRECISION;
-                let decimal_size = DecimalSize {
-                    precision: p,
-                    scale: s.scale,
-                };
-                DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
+            DataType::Decimal(s) => {
+                let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale());
+                DataType::Decimal(decimal_size)
             }
             DataType::Null => DataType::Null,
             DataType::Binary => DataType::Binary,
@@ -3542,6 +3415,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("connection_id"),
             Ascii::new("timezone"),
             Ascii::new("nullif"),
+            Ascii::new("iff"),
             Ascii::new("ifnull"),
             Ascii::new("nvl"),
             Ascii::new("nvl2"),
@@ -3556,6 +3430,8 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("try_to_variant"),
             Ascii::new("greatest"),
             Ascii::new("least"),
+            Ascii::new("greatest_ignore_nulls"),
+            Ascii::new("least_ignore_nulls"),
             Ascii::new("stream_has_data"),
             Ascii::new("getvariable"),
         ];
@@ -3628,6 +3504,7 @@ impl<'a> TypeChecker<'a> {
                     arg_x,
                 ]))
             }
+            ("iff", args) => Some(self.resolve_function(span, "if", vec![], args)),
             ("ifnull" | "nvl", args) => {
                 if args.len() == 2 {
                     // Rewrite ifnull(x, y) | nvl(x, y) to if(is_null(x), y, x)
@@ -3924,11 +3801,40 @@ impl<'a> TypeChecker<'a> {
                 let box (scalar, data_type) = self.resolve(args[0]).ok()?;
                 self.resolve_cast_to_variant(span, &data_type, &scalar, true)
             }
-            ("greatest", args) => {
+            (name @ ("greatest" | "least"), args) => {
+                let array_func = if name == "greatest" {
+                    "array_max"
+                } else {
+                    "array_min"
+                };
+                let (array, _) = *self.resolve_function(span, "array", vec![], args).ok()?;
+                let null_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Null,
+                });
+
+                let contains_null = self
+                    .resolve_scalar_function_call(span, "array_contains", vec![], vec![
+                        array.clone(),
+                        null_scalar.clone(),
+                    ])
+                    .ok()?;
+
+                let max = self
+                    .resolve_scalar_function_call(span, array_func, vec![], vec![array])
+                    .ok()?;
+
+                Some(self.resolve_scalar_function_call(span, "if", vec![], vec![
+                    contains_null.0.clone(),
+                    null_scalar.clone(),
+                    max.0.clone(),
+                ]))
+            }
+            ("greatest_ignore_nulls", args) => {
                 let (array, _) = *self.resolve_function(span, "array", vec![], args).ok()?;
                 Some(self.resolve_scalar_function_call(span, "array_max", vec![], vec![array]))
             }
-            ("least", args) => {
+            ("least_ignore_nulls", args) => {
                 let (array, _) = *self.resolve_function(span, "array", vec![], args).ok()?;
                 Some(self.resolve_scalar_function_call(span, "array_min", vec![], vec![array]))
             }
@@ -3996,22 +3902,12 @@ impl<'a> TypeChecker<'a> {
                     {
                         if data_type.remove_nullable() == DataType::Variant {
                             let target_type = DataType::Nullable(Box::new(DataType::String));
-                            let new_scalar = if let Some(new_scalar) = self
-                                .try_rewrite_virtual_column_cast(
-                                    scalar.span(),
-                                    &scalar,
-                                    &target_type,
-                                    false,
-                                ) {
-                                new_scalar
-                            } else {
-                                ScalarExpr::CastExpr(CastExpr {
-                                    span: scalar.span(),
-                                    is_try: false,
-                                    argument: Box::new(scalar),
-                                    target_type: Box::new(target_type.clone()),
-                                })
-                            };
+                            let new_scalar = ScalarExpr::CastExpr(CastExpr {
+                                span: scalar.span(),
+                                is_try: false,
+                                argument: Box::new(scalar),
+                                target_type: Box::new(target_type.clone()),
+                            });
                             return Some(Ok(Box::new((new_scalar, target_type))));
                         }
                     }
@@ -4161,21 +4057,12 @@ impl<'a> TypeChecker<'a> {
             ) {
                 if func_name == "get_by_keypath_string" {
                     let target_type = DataType::Nullable(Box::new(DataType::String));
-                    let new_scalar = if let Some(new_scalar) = self.try_rewrite_virtual_column_cast(
-                        scalar.span(),
-                        &scalar,
-                        &target_type,
-                        false,
-                    ) {
-                        new_scalar
-                    } else {
-                        ScalarExpr::CastExpr(CastExpr {
-                            span: scalar.span(),
-                            is_try: false,
-                            argument: Box::new(scalar),
-                            target_type: Box::new(target_type.clone()),
-                        })
-                    };
+                    let new_scalar = ScalarExpr::CastExpr(CastExpr {
+                        span: scalar.span(),
+                        is_try: false,
+                        argument: Box::new(scalar),
+                        target_type: Box::new(target_type.clone()),
+                    });
                     return Some(Ok(Box::new((new_scalar, target_type))));
                 } else {
                     return Some(Ok(Box::new((scalar, data_type))));
@@ -4227,10 +4114,10 @@ impl<'a> TypeChecker<'a> {
                 value,
                 precision,
                 scale,
-            } => Scalar::Decimal(DecimalScalar::Decimal256(i256(*value), DecimalSize {
-                precision: *precision,
-                scale: *scale,
-            })),
+            } => Scalar::Decimal(DecimalScalar::Decimal256(
+                i256(*value),
+                DecimalSize::new_unchecked(*precision, *scale),
+            )),
             Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
             Literal::String(string) => Scalar::String(string.clone()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
@@ -5715,12 +5602,9 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
         TypeName::Int64 => TableDataType::Number(NumberDataType::Int64),
         TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
         TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
-        TypeName::Decimal { precision, scale } => {
-            TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
-                precision: *precision,
-                scale: *scale,
-            })?)
-        }
+        TypeName::Decimal { precision, scale } => TableDataType::Decimal(
+            DecimalDataType::from_size(DecimalSize::new_unchecked(*precision, *scale))?,
+        ),
         TypeName::Binary => TableDataType::Binary,
         TypeName::String => TableDataType::String,
         TypeName::Timestamp => TableDataType::Timestamp,

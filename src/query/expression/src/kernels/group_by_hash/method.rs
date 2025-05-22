@@ -27,7 +27,6 @@ use crate::types::binary::BinaryColumn;
 use crate::types::decimal::Decimal;
 use crate::types::i256;
 use crate::types::DataType;
-use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
 use crate::types::StringColumn;
 use crate::Column;
@@ -136,12 +135,8 @@ impl HashMethodKind {
             HashMethodKind::KeysU16(_) => DataType::Number(NumberDataType::UInt16),
             HashMethodKind::KeysU32(_) => DataType::Number(NumberDataType::UInt32),
             HashMethodKind::KeysU64(_) => DataType::Number(NumberDataType::UInt64),
-            HashMethodKind::KeysU128(_) => {
-                DataType::Decimal(DecimalDataType::Decimal128(i128::default_decimal_size()))
-            }
-            HashMethodKind::KeysU256(_) => {
-                DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
-            }
+            HashMethodKind::KeysU128(_) => DataType::Decimal(i128::default_decimal_size()),
+            HashMethodKind::KeysU256(_) => DataType::Decimal(i256::default_decimal_size()),
         }
     }
 }

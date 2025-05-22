@@ -39,6 +39,7 @@ pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::MetaGrpcClient;
 pub use message::ClientWorkerRequest;
+pub use message::InitFlag;
 pub use message::Streamed;
 pub use required::FeatureSpec;
 pub use required::VersionTuple;
@@ -134,8 +135,11 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 ///   👥 client: semaphore(watch) requires `WatchRequest::initial_flush`(`1,2.677`),
 ///   other RPC does not require `1.2.677`, requires only `1.2.259`.
 ///
-/// - 2025-04-15: since TODO: add version when merged.
+/// - 2025-04-15: since 1.2.726
 ///   👥 client: requires `1,2.677`.
+///
+/// - 2025-05-08: since TODO: add version when merged.
+///   🖥 server: add `WatchResponse::is_initialization`,
 ///
 ///
 /// Server feature set:
