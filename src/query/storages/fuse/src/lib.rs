@@ -29,6 +29,7 @@ mod fuse_column;
 mod fuse_part;
 mod fuse_table;
 mod fuse_type;
+mod retry;
 
 pub mod io;
 pub mod operations;

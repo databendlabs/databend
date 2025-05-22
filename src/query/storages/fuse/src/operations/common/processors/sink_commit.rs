@@ -206,8 +206,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
         let code = e.code();
         // When prev_snapshot_id is some, means it is an alter table column modification or truncate.
-        // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
         if self.prev_snapshot_id.is_some() && code == ErrorCode::TABLE_VERSION_MISMATCHED {
+            // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
             return false;
         }
 
