@@ -20,6 +20,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   linux:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c16g, aws]
@@ -74,8 +78,6 @@ jobs:
     environment:
       name: pypi
       url: https://pypi.org/p/databend
-    permissions:
-      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
