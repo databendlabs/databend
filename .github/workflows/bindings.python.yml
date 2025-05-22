@@ -22,7 +22,9 @@ concurrency:
 
 permissions:
   id-token: write
+  pull-requests: write
   contents: read
+  packages: write
 
 jobs:
   linux:
