@@ -3804,7 +3804,7 @@ Functions overloads:
 1 timestamp_diff(Timestamp NULL, Timestamp NULL) :: Interval NULL
 0 to_base64(Binary) :: String
 1 to_base64(Binary NULL) :: String NULL
-0 to_binary(Variant) :: Binary
+0 to_binary(Variant) :: Binary NULL
 1 to_binary(Variant NULL) :: Binary NULL
 2 to_binary(Bitmap) :: Binary
 3 to_binary(Bitmap NULL) :: Binary NULL
@@ -4064,12 +4064,16 @@ Functions overloads:
 23 to_int8(Float64 NULL) :: Int8 NULL
 24 to_int8(Boolean) :: Int8
 25 to_int8(Boolean NULL) :: Int8 NULL
-0 to_interval(String) :: Interval
-1 to_interval(String NULL) :: Interval NULL
+0 to_interval(Variant) :: Interval NULL
+1 to_interval(Variant NULL) :: Interval NULL
+2 to_interval(String) :: Interval
+3 to_interval(String NULL) :: Interval NULL
 0 to_iso_year(Date) :: UInt16
 1 to_iso_year(Date NULL) :: UInt16 NULL
 2 to_iso_year(Timestamp) :: UInt16
 3 to_iso_year(Timestamp NULL) :: UInt16 NULL
+0 to_jsonb_binary(Variant) :: Binary
+1 to_jsonb_binary(Variant NULL) :: Binary NULL
 0 to_last_of_month(Date) :: Date
 1 to_last_of_month(Date NULL) :: Date NULL
 2 to_last_of_month(Timestamp) :: Date
@@ -4690,8 +4694,10 @@ Functions overloads:
 23 try_to_int8(Float64 NULL) :: Int8 NULL
 24 try_to_int8(Boolean) :: Int8 NULL
 25 try_to_int8(Boolean NULL) :: Int8 NULL
-0 try_to_interval(String) :: Interval NULL
-1 try_to_interval(String NULL) :: Interval NULL
+0 try_to_interval(Variant) :: Interval NULL
+1 try_to_interval(Variant NULL) :: Interval NULL
+2 try_to_interval(String) :: Interval NULL
+3 try_to_interval(String NULL) :: Interval NULL
 0 try_to_string(Variant) :: String NULL
 1 try_to_string(Variant NULL) :: String NULL
 2 try_to_string(UInt8) :: String NULL
