@@ -154,7 +154,7 @@ async fn try_purge_files(ctx: Arc<dyn TableContext>, stage_info: &StageInfo, fil
 
     let elapsed = start.elapsed();
     info!(
-        "[SQL-BINDER] Purged {} files, operation took {:?}",
+        "Purged {} files, operation took {:?}",
         files.len(),
         elapsed
     );
