@@ -139,7 +139,7 @@ mod tests {
             let new_snapshot = snapshot_from_segments(vec!["x", "y", "b", "m", "n", "f", "p"]);
             let segments_edition =
                 SegmentsDiff::new(&base_snapshot.segments, &new_snapshot.segments);
-            let replaced = segments_edition
+            let mut replaced = segments_edition
                 .replaced
                 .iter()
                 .map(|(l, o)| {
@@ -149,6 +149,7 @@ mod tests {
                     )
                 })
                 .collect::<Vec<_>>();
+            replaced.sort_by_key(|(k, _)| k.to_string());
             let appended: Vec<&str> = segments_edition
                 .appended
                 .iter()
@@ -170,7 +171,7 @@ mod tests {
                 let new_snapshot = snapshot_from_segments(vec![]);
                 let segments_edition =
                     SegmentsDiff::new(&base_snapshot.segments, &new_snapshot.segments);
-                let replaced = segments_edition
+                let mut replaced = segments_edition
                     .replaced
                     .iter()
                     .map(|(l, o)| {
@@ -180,6 +181,7 @@ mod tests {
                         )
                     })
                     .collect::<Vec<_>>();
+                replaced.sort_by_key(|(k, _)| k.to_string());
                 let appended = segments_edition
                     .appended
                     .iter()
@@ -204,7 +206,7 @@ mod tests {
                 let new_snapshot = snapshot_from_segments(vec!["z"]);
                 let segments_edition =
                     SegmentsDiff::new(&base_snapshot.segments, &new_snapshot.segments);
-                let replaced = segments_edition
+                let mut replaced = segments_edition
                     .replaced
                     .iter()
                     .map(|(l, o)| {
@@ -214,6 +216,7 @@ mod tests {
                         )
                     })
                     .collect::<Vec<_>>();
+                replaced.sort_by_key(|(k, _)| k.to_string());
                 let appended = segments_edition
                     .appended
                     .iter()
