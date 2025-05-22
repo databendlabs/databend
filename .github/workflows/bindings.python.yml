@@ -38,7 +38,7 @@ jobs:
           version: ${{ inputs.tag }}
           tag: ${{ inputs.tag }}
       - name: upload
-        if: inputs.tag
+        # if: inputs.tag
         uses: actions/upload-artifact@v4
         with:
           name: python-linux-${{ matrix.arch }}
@@ -67,7 +67,7 @@ jobs:
   #         path: src/bendpy/dist/*.whl
 
   publish:
-    if: inputs.tag
+    # if: inputs.tag
     name: Publish
     needs: [linux]
     runs-on: ubuntu-latest
