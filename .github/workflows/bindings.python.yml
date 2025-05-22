@@ -77,9 +77,11 @@ jobs:
     name: Publish
     needs: [linux]
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/databend
+    permissions:
+      id-token: write
+      pull-requests: write
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -87,11 +89,23 @@ jobs:
           pattern: python-*
           merge-multiple: true
           path: src/bendpy/dist
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # if: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref, '-') }}
+        continue-on-error: true
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+          packages-dir: src/bendpy/dist
+
       - name: Publish to PyPI
         timeout-minutes: 10
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
           skip-existing: true
           verify-metadata: false
+          attestations: false
           verbose: true
           packages-dir: src/bendpy/dist
