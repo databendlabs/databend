@@ -235,6 +235,7 @@ pub struct StorageAzblobConfig {
     pub account_name: String,
     pub account_key: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageAzblobConfig {
@@ -272,6 +273,7 @@ pub struct StorageFtpConfig {
     pub root: String,
     pub username: String,
     pub password: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Default for StorageFtpConfig {
@@ -281,6 +283,7 @@ impl Default for StorageFtpConfig {
             username: "".to_string(),
             password: "".to_string(),
             root: "/".to_string(),
+            network_config: Default::default(),
         }
     }
 }
@@ -305,6 +308,7 @@ pub struct StorageGcsConfig {
     pub bucket: String,
     pub root: String,
     pub credential: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Default for StorageGcsConfig {
@@ -314,6 +318,7 @@ impl Default for StorageGcsConfig {
             bucket: String::new(),
             root: String::new(),
             credential: String::new(),
+            network_config: Default::default(),
         }
     }
 }
@@ -340,6 +345,7 @@ impl Debug for StorageGcsConfig {
 pub struct StorageHdfsConfig {
     pub name_node: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 pub static STORAGE_S3_DEFAULT_ENDPOINT: &str = "https://s3.amazonaws.com";
@@ -373,6 +379,7 @@ pub struct StorageS3Config {
     pub role_arn: String,
     /// The ExternalId that used for AssumeRole.
     pub external_id: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Default for StorageS3Config {
@@ -390,6 +397,7 @@ impl Default for StorageS3Config {
             enable_virtual_host_style: false,
             role_arn: "".to_string(),
             external_id: "".to_string(),
+            network_config: Default::default(),
         }
     }
 }
@@ -421,6 +429,7 @@ impl Debug for StorageS3Config {
 pub struct StorageHttpConfig {
     pub endpoint_url: String,
     pub paths: Vec<String>,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
@@ -430,6 +439,7 @@ pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
 pub struct StorageIpfsConfig {
     pub endpoint_url: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 /// Config for storage backend obs.
@@ -440,6 +450,7 @@ pub struct StorageObsConfig {
     pub access_key_id: String,
     pub secret_access_key: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageObsConfig {
@@ -474,6 +485,7 @@ pub struct StorageOssConfig {
     ///
     /// Only effective when `server_side_encryption` is "KMS"
     pub server_side_encryption_key_id: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageOssConfig {
@@ -530,6 +542,7 @@ pub struct StorageWebhdfsConfig {
     pub delegation: String,
     pub disable_list_batch: bool,
     pub user_name: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageWebhdfsConfig {
@@ -554,6 +567,7 @@ pub struct StorageCosConfig {
     pub bucket: String,
     pub endpoint_url: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageCosConfig {
@@ -589,6 +603,7 @@ pub struct StorageHuggingfaceConfig {
     /// Only needed for private repo.
     pub token: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageHuggingfaceConfig {
@@ -617,4 +632,14 @@ pub fn mask_string(s: &str, unmask_len: usize) -> String {
         ret.push_str(&s[(s.len() - unmask_len)..]);
         ret
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageNetworkParams {
+    pub retry_timeout: u64,
+    pub retry_io_timeout: u64,
+    pub tcp_keepalive: u64,
+    pub connect_timeout: u64,
+    pub pool_max_idle_per_host: usize,
+    pub max_concurrent_io_requests: usize,
 }

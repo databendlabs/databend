@@ -15,6 +15,7 @@
 use std::env;
 use std::sync::Arc;
 use std::sync::LazyLock;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use hickory_resolver::config::LookupIpStrategy;
@@ -44,7 +45,37 @@ static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> = LazyLock::new(|
 /// Global shared http client.
 ///
 /// Please create your own http client if you want dedicated http connection pool.
-pub static GLOBAL_HTTP_CLIENT: LazyLock<HttpClient> = LazyLock::new(HttpClient::new);
+pub static GLOBAL_HTTP_CLIENT: OnceLock<HttpClient> = OnceLock::new();
+
+pub fn get_global_http_client(
+    pool_max_idle_per_host: usize,
+    connect_timeout: u64,
+    keepalive: u64,
+) -> &'static HttpClient {
+    GLOBAL_HTTP_CLIENT.get_or_init(move || {
+        let mut builder = reqwest::ClientBuilder::new();
+
+        // Disable http2 for better performance.
+        builder = builder.http1_only();
+
+        // Enforce to use native tls backend.
+        builder = builder.use_native_tls();
+
+        // Set dns resolver.
+        builder = builder.dns_resolver(GLOBAL_HICKORY_RESOLVER.clone());
+        // Pool max idle per host controls connection pool size.
+        builder = builder.pool_max_idle_per_host(pool_max_idle_per_host);
+        // Set connect timeout if need
+        builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
+        // Enable TCP keepalive if set.
+        if keepalive != 0 {
+            builder = builder.tcp_keepalive(Duration::from_secs(keepalive));
+        }
+
+        let client = builder.build().expect("http client must be created");
+        HttpClient { client }
+    })
+}
 
 /// HttpClient that used by databend.
 pub struct HttpClient {

@@ -55,6 +55,7 @@ fn test_decode_v30_user_stage() -> anyhow::Result<()> {
                 delegation: "<delegation_token>".to_string(),
                 disable_list_batch: false,
                 user_name: String::new(),
+                network_config: None,
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(

@@ -30,6 +30,18 @@ message StorageConfig {
   }
 }
 
+message NetworkConfig {
+   uint64 version = 100;
+   uint64 min_reader_ver = 101;
+
+   uint64 retry_timeout = 1;
+   uint64 retry_io_timeout = 2;
+   uint64 tcp_keepalive = 3;
+   uint64 connect_timeout = 4;
+   uint64 pool_max_idle_per_host = 5;
+   uint64 max_concurrent_io_requests = 6;
+}
+
 message S3StorageConfig {
   uint64 version = 100;
   uint64 min_reader_ver = 101;
@@ -50,6 +62,8 @@ message S3StorageConfig {
   // allow_anonymous has been removed.
   // bool allow_anonymous = 13;
   reserved 13;
+
+  NetworkConfig network_config = 14;
 }
 
 message FsStorageConfig {
@@ -67,6 +81,7 @@ message GcsStorageConfig {
   string bucket = 2;
   string root = 3;
   string credential = 4;
+  NetworkConfig network_config = 5;
 }
 
 message OssStorageConfig {
@@ -86,6 +101,7 @@ message OssStorageConfig {
 
   string server_side_encryption = 8;
   string server_side_encryption_key_id = 9;
+  NetworkConfig network_config = 10;
 }
 
 message WebhdfsStorageConfig {
@@ -103,6 +119,7 @@ message WebhdfsStorageConfig {
   reserved 5;
 
   bool disable_list_batch = 6;
+  NetworkConfig network_config = 7;
 }
 
 message ObsStorageConfig {
@@ -114,6 +131,7 @@ message ObsStorageConfig {
   string root = 3;
   string access_key_id = 4;
   string secret_access_key = 5;
+  NetworkConfig network_config = 6;
 }
 
 message CosStorageConfig {
@@ -125,6 +143,7 @@ message CosStorageConfig {
   string root = 3;
   string secret_id = 4;
   string secret_key = 5;
+  NetworkConfig network_config = 6;
 }
 
 message HdfsStorageConfig {
@@ -133,6 +152,7 @@ message HdfsStorageConfig {
 
   string root = 1;
   string name_node = 2;
+  NetworkConfig network_config = 3;
 }
 
 message HuggingfaceStorageConfig {
@@ -144,4 +164,5 @@ message HuggingfaceStorageConfig {
   string revision = 3;
   string root = 4;
   string token = 5;
+  NetworkConfig network_config = 6;
 }
