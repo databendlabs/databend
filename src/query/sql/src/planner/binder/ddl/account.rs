@@ -23,6 +23,7 @@ use databend_common_ast::ast::GrantObjectName;
 use databend_common_ast::ast::GrantStmt;
 use databend_common_ast::ast::PrincipalIdentity as AstPrincipalIdentity;
 use databend_common_ast::ast::RevokeStmt;
+use databend_common_ast::ast::ShowGranteesOfRoleStmt;
 use databend_common_ast::ast::ShowObjectPrivilegesStmt;
 use databend_common_ast::ast::ShowOptions;
 use databend_common_ast::ast::UserOptionItem;
@@ -423,6 +424,25 @@ impl Binder {
 
         let (show_limit, limit_str) =
             get_show_options(show_options, Some("object_name".to_string()));
+        let query = format!("{} {} {}", query, show_limit, limit_str,);
+
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_role_grantees(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowGranteesOfRoleStmt,
+    ) -> Result<Plan> {
+        let query = format!(
+            "SELECT * FROM show_grants('role_grantee', '{}')",
+            &stmt.name
+        );
+
+        let (show_limit, limit_str) =
+            get_show_options(&stmt.show_option, Some("grantee_name".to_string()));
         let query = format!("{} {} {}", query, show_limit, limit_str,);
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)

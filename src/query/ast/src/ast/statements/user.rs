@@ -136,6 +136,23 @@ impl Display for RevokeStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ShowGranteesOfRoleStmt {
+    pub name: String,
+    pub show_option: Option<ShowOptions>,
+}
+
+impl Display for ShowGranteesOfRoleStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SHOW GRANTS OF ROLE {}", self.name)?;
+
+        if let Some(show_option) = &self.show_option {
+            write!(f, " {show_option}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowObjectPrivilegesStmt {
     pub object: GrantObjectName,
     pub show_option: Option<ShowOptions>,
