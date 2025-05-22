@@ -157,7 +157,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (125, "2025-04-16: Add: add index_type in table.proto/TableIndex"),
     (126, "2025-05-11: Add: add iceberg Storage catalog type and add address field in Glue catalog"),
     (127, "2025-05-18: Add: UserOption::workload_group"),
-    (127, "2025-05-22: Add: Storage Network config"),
+    (128, "2025-05-22: Add: Storage Network config"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
