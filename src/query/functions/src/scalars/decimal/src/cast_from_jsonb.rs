@@ -15,6 +15,7 @@
 use std::ops::Div;
 use std::ops::Mul;
 
+use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Decimal;
@@ -102,6 +103,31 @@ where
     let max = T::max_for_precision(size.precision());
     let f = |val: &[u8], builder: &mut Vec<T>, ctx: &mut EvalContext| {
         let raw_jsonb = RawJsonb::new(val);
+        if let Ok(Some(b)) = raw_jsonb.as_bool() {
+            let value = if b {
+                T::e(size.scale() as u32)
+            } else {
+                T::zero()
+            };
+            builder.push(value);
+            return;
+        }
+        if let Ok(Some(x)) = raw_jsonb.as_str() {
+            let value = match read_decimal_with_size::<T>(
+                x.as_bytes(),
+                size,
+                true,
+                ctx.func_ctx.rounding_mode,
+            ) {
+                Ok((d, _)) => d,
+                Err(e) => {
+                    ctx.set_error(builder.len(), e);
+                    T::zero()
+                }
+            };
+            builder.push(value);
+            return;
+        }
         let value = match raw_jsonb
             .as_number()
             .map_err(|e| format!("{e}"))
