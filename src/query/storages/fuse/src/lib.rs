@@ -54,6 +54,7 @@ pub use fuse_type::FuseStorageFormat;
 pub use fuse_type::FuseTableType;
 pub use io::BlockReadResult;
 pub use pruning::SegmentLocation;
+pub use retry::commit_with_backoff;
 mod sessions {
     pub use databend_common_catalog::table_context::TableContext;
 }

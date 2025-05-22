@@ -807,6 +807,7 @@ pub struct UpdateTableMetaReq {
     pub table_id: u64,
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
+    pub base_snapshot_location: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -12,5 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod diff;
 mod commit;
+mod diff;
+
+pub use commit::commit_with_backoff;

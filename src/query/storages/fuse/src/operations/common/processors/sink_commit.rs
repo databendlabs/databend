@@ -550,19 +550,21 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 self.dal.write(&location, data).await?;
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
-                match FuseTable::update_table_meta(
-                    self.ctx.as_ref(),
-                    catalog.clone(),
-                    &table_info,
-                    &self.location_gen,
-                    snapshot,
-                    location,
-                    &self.copied_files,
-                    &self.update_stream_meta,
-                    &self.dal,
-                    self.deduplicated_label.clone(),
-                )
-                .await
+                let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
+                match fuse_table
+                    .update_table_meta(
+                        self.ctx.as_ref(),
+                        catalog.clone(),
+                        &table_info,
+                        &self.location_gen,
+                        snapshot,
+                        location,
+                        &self.copied_files,
+                        &self.update_stream_meta,
+                        &self.dal,
+                        self.deduplicated_label.clone(),
+                    )
+                    .await
                 {
                     Ok(_) => {
                         if self.need_truncate() {
