@@ -15267,6 +15267,28 @@ ShowGrants {
 
 
 ---------- Input ----------
+SHOW GRANTS OF ROLE 'role1' like 'r';
+---------- Output ---------
+SHOW GRANTS OF ROLE role1 LIKE 'r'
+---------- AST ------------
+ShowGrantsOfRole(
+    ShowGranteesOfRoleStmt {
+        name: "role1",
+        show_option: Some(
+            ShowOptions {
+                show_limit: Some(
+                    Like {
+                        pattern: "r",
+                    },
+                ),
+                limit: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 SHOW GRANTS ON TABLE t;
 ---------- Output ---------
 SHOW GRANTS ON TABLE t 
