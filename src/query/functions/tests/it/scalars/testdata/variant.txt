@@ -1812,7 +1812,7 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(1, 1)(to_variant(1.23))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 923) while evaluating function `to_decimal(1, 1)('1.23')` in expr `to_decimal(1, 1)(to_variant(1.23))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 205) while evaluating function `to_decimal(1, 1)('1.23')` in expr `to_decimal(1, 1)(to_variant(1.23))`
 
 
 
@@ -1838,7 +1838,7 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(3, 3)(to_variant(1.23))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 929) while evaluating function `to_decimal(3, 3)('1.23')` in expr `to_decimal(3, 3)(to_variant(1.23))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 211) while evaluating function `to_decimal(3, 3)('1.23')` in expr `to_decimal(3, 3)(to_variant(1.23))`
 
 
 
@@ -1873,7 +1873,7 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 929) while evaluating function `to_decimal(38, 3)('1e36')` in expr `to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 211) while evaluating function `to_decimal(38, 3)('1e36')` in expr `to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))`
 
 
 
@@ -1890,7 +1890,7 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 929) while evaluating function `to_decimal(39, 3)('1e36')` in expr `to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 211) while evaluating function `to_decimal(39, 3)('1e36')` in expr `to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))`
 
 
 
