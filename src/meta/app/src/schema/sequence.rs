@@ -17,6 +17,7 @@ use chrono::Utc;
 pub use kvapi_impl::SequenceRsc;
 
 use super::CreateOption;
+use crate::tenant::Tenant;
 use crate::tenant_key::ident::TIdent;
 
 /// Defines the meta-service key for sequence.
@@ -78,6 +79,16 @@ pub struct GetSequenceReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceReply {
     pub meta: SequenceMeta,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListSequencesReq {
+    pub tenant: Tenant,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListSequencesReply {
+    pub info: Vec<(String, SequenceMeta)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -5786,6 +5786,23 @@ impl SchemaApiTestSuite {
             assert_eq!(resp.current, 1);
         }
 
+        info!("--- list sequence");
+        {
+            let req = CreateSequenceReq {
+                create_option: CreateOption::Create,
+                ident: SequenceIdent::new(&tenant, "seq1"),
+                create_on,
+                comment: Some("seq1".to_string()),
+            };
+
+            let seqs = ["seq", "seq1"];
+            let _resp = mt.create_sequence(req).await?;
+            let values = mt.list_sequences(&tenant).await?;
+            for (i, (name, _)) in values.iter().enumerate() {
+                assert_eq!(name, seqs[i]);
+            }
+        }
+
         info!("--- get sequence nextval");
         {
             let req = GetSequenceNextValueReq {

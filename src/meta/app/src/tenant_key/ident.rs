@@ -41,7 +41,7 @@ where
     N: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let type_name = self.type_name();
+        let type_name = Self::type_name();
 
         f.debug_struct("TIdent")
             .field("type", &type_name)
@@ -57,7 +57,7 @@ where
     R: TenantResource,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let type_name = self.type_name();
+        let type_name = Self::type_name();
 
         write!(
             f,
@@ -153,7 +153,7 @@ impl<R, N> TIdent<R, N> {
 
     /// If there is a specified type name for this alias, use it.
     /// Otherwise, use the default name
-    pub fn type_name(&self) -> &'static str
+    pub fn type_name() -> &'static str
     where R: TenantResource {
         if R::TYPE.is_empty() {
             type_name::<R>().rsplit("::").next().unwrap_or("TIdent")

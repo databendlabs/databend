@@ -920,6 +920,10 @@ SELECT * from s;"#,
                 RETURN sum;
             END;
             $$;"#,
+        r#"DROP SEQUENCE IF EXISTS seq"#,
+        r#"CREATE SEQUENCE seq comment='test'"#,
+        r#"DESCRIBE SEQUENCE seq"#,
+        r#"SHOW SEQUENCES LIKE '%seq%'"#,
     ];
 
     for case in cases {
