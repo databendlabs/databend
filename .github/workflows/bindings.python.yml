@@ -71,6 +71,11 @@ jobs:
     name: Publish
     needs: [linux]
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/databend
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -83,5 +88,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
-          attestations: false
+          verify-metadata: false
+          verbose: true
           packages-dir: src/bendpy/dist
