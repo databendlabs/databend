@@ -348,8 +348,8 @@ impl ReplaceIntoOperationAggregator {
             let mut opt_segment_info: Option<SegmentInfo> = None;
 
             for (block_index, keys) in block_deletion {
-                let block_cache_key = format!("{segment_path}-{block_index}");
-                let block_meta = match block_meta_cache.get(&block_cache_key) {
+                let block_meta_cache_key = format!("{segment_path}-{block_index}");
+                let block_meta = match block_meta_cache.get(&block_meta_cache_key) {
                     Some(block_meta) => block_meta,
                     None => {
                         let block_meta = if let Some(segment_info) = &opt_segment_info {
@@ -364,7 +364,7 @@ impl ReplaceIntoOperationAggregator {
                         };
                         // A query node typically processes only a subset of the BlockMeta in a given segment.
                         // Therefore, even though all BlockMeta of a segment are available here, not all are populated into the cache.
-                        block_meta_cache.insert(block_cache_key, block_meta.as_ref().clone());
+                        block_meta_cache.insert(block_meta_cache_key, block_meta.as_ref().clone());
                         block_meta
                     }
                 };
@@ -372,10 +372,8 @@ impl ReplaceIntoOperationAggregator {
                 let permit =
                     acquire_task_permit(aggregation_ctx.io_request_semaphore.clone()).await?;
 
-                // let block_meta = segment_info.blocks[block_index].clone();
                 let aggregation_ctx = aggregation_ctx.clone();
                 num_rows_mutated += block_meta.row_count;
-                // self.aggregation_ctx.
                 let handle = io_runtime.spawn(async move {
                     let mutation_log_entry = aggregation_ctx
                         .apply_deletion_to_data_block(segment_idx, block_index, &block_meta, &keys)
