@@ -1,0 +1,9 @@
+{
+  "namespace": "example.avro",
+  "type": "record",
+  "name": "user",
+  "fields": [
+    {"name":  "c_date", "type": { "type": "int", "logicalType": "date" } },
+    {"name":  "c_uuid", "type": { "type": "string", "logicalType": "uuid" } }
+  ]
+}

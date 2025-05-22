@@ -26,6 +26,7 @@
 
 mod arithmetic;
 mod cast;
+mod cast_from_jsonb;
 mod comparison;
 mod hash;
 mod math;

@@ -1502,6 +1502,142 @@ pub fn register(registry: &mut FunctionRegistry) {
         });
     }
 
+    registry.register_combine_nullable_1_arg::<VariantType, IntervalType, _, _>(
+        "to_interval",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<IntervalType>>(
+            |val, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                let raw_jsonb = RawJsonb::new(val);
+                if raw_jsonb.is_null().unwrap_or_default() {
+                    output.push_null();
+                    return;
+                }
+                match raw_jsonb
+                    .as_interval()
+                    .map_err(|e| format!("{e}"))
+                    .and_then(|r| r.ok_or(format!("invalid json type")))
+                {
+                    Ok(interval) => output.push(months_days_micros::new(
+                        interval.months,
+                        interval.days,
+                        interval.micros,
+                    )),
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("unable to cast to type `INTERVAL` {}.", e),
+                        );
+                        output.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, IntervalType, _, _>(
+        "try_to_interval",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<IntervalType>>(
+            |val, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                let raw_jsonb = RawJsonb::new(val);
+                if raw_jsonb.is_null().unwrap_or_default() {
+                    output.push_null();
+                    return;
+                }
+                match raw_jsonb
+                    .as_interval()
+                    .map_err(|e| format!("{e}"))
+                    .and_then(|r| r.ok_or(format!("invalid json type")))
+                {
+                    Ok(interval) => output.push(months_days_micros::new(
+                        interval.months,
+                        interval.days,
+                        interval.micros,
+                    )),
+                    Err(_) => {
+                        output.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, BinaryType, _, _>(
+        "to_binary",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<BinaryType>>(
+            |val, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                let raw_jsonb = RawJsonb::new(val);
+                if raw_jsonb.is_null().unwrap_or_default() {
+                    output.push_null();
+                    return;
+                }
+                match raw_jsonb
+                    .as_binary()
+                    .map_err(|e| format!("{e}"))
+                    .and_then(|r| r.ok_or(format!("invalid json type")))
+                {
+                    Ok(buf) => output.push(&buf),
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("unable to cast to type `BINARY` {}.", e),
+                        );
+                        output.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, BinaryType, _, _>(
+        "try_to_binary",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<BinaryType>>(
+            |val, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                let raw_jsonb = RawJsonb::new(val);
+                if raw_jsonb.is_null().unwrap_or_default() {
+                    output.push_null();
+                    return;
+                }
+                match raw_jsonb
+                    .as_binary()
+                    .map_err(|e| format!("{e}"))
+                    .and_then(|r| r.ok_or(format!("invalid json type")))
+                {
+                    Ok(buf) => output.push(&buf),
+                    Err(_) => {
+                        output.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
     registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
         "json_pretty",
         |_, _| FunctionDomain::Full,

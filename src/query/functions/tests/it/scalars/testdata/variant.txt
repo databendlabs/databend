@@ -1790,6 +1790,128 @@ output domain  : {"abc"..="abc"}
 output         : 'abc'
 
 
+ast            : to_decimal(3, 2)(to_variant(1.23))
+raw expr       : to_decimal(3, 2)(to_variant(1.23))
+checked expr   : to_decimal<Variant>(3, 2)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+optimized expr : 1.23_d128(3,2)
+output type    : Decimal(3, 2)
+output domain  : {1.23..=1.23}
+output         : 1.23
+
+
+ast            : to_decimal(2, 1)(to_variant(1.23))
+raw expr       : to_decimal(2, 1)(to_variant(1.23))
+checked expr   : to_decimal<Variant>(2, 1)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+optimized expr : 1.2_d128(2,1)
+output type    : Decimal(2, 1)
+output domain  : {1.2..=1.2}
+output         : 1.2
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_decimal(1, 1)(to_variant(1.23))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 205) while evaluating function `to_decimal(1, 1)('1.23')` in expr `to_decimal(1, 1)(to_variant(1.23))`
+
+
+
+ast            : to_decimal(76, 1)(to_variant(1.23))
+raw expr       : to_decimal(76, 1)(to_variant(1.23))
+checked expr   : to_decimal<Variant>(76, 1)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+optimized expr : 1.2_d256(76,1)
+output type    : Decimal(76, 1)
+output domain  : {1.2..=1.2}
+output         : 1.2
+
+
+ast            : to_decimal(4, 3)(to_variant(1.23))
+raw expr       : to_decimal(4, 3)(to_variant(1.23))
+checked expr   : to_decimal<Variant>(4, 3)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+optimized expr : 1.230_d128(4,3)
+output type    : Decimal(4, 3)
+output domain  : {1.230..=1.230}
+output         : 1.230
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_decimal(3, 3)(to_variant(1.23))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 211) while evaluating function `to_decimal(3, 3)('1.23')` in expr `to_decimal(3, 3)(to_variant(1.23))`
+
+
+
+ast            : to_decimal(38, 2)(to_variant(100000000000000000000000000000000000.01))
+raw expr       : to_decimal(38, 2)(to_variant(100000000000000000000000000000000000.01))
+checked expr   : to_decimal<Variant>(38, 2)(to_variant<T0=Decimal(38, 2)><T0>(100000000000000000000000000000000000.01_d128(38,2)))
+optimized expr : 100000000000000000000000000000000000.01_d128(38,2)
+output type    : Decimal(38, 2)
+output domain  : {100000000000000000000000000000000000.01..=100000000000000000000000000000000000.01}
+output         : 100000000000000000000000000000000000.01
+
+
+ast            : to_decimal(39, 2)(to_variant(1000000000000000000000000000000000000.01))
+raw expr       : to_decimal(39, 2)(to_variant(1000000000000000000000000000000000000.01))
+checked expr   : to_decimal<Variant>(39, 2)(to_variant<T0=Decimal(39, 2)><T0>(1000000000000000000000000000000000000.01_d256(39,2)))
+optimized expr : 1000000000000000000000000000000000000.01_d256(39,2)
+output type    : Decimal(39, 2)
+output domain  : {1000000000000000000000000000000000000.01..=1000000000000000000000000000000000000.01}
+output         : 1000000000000000000000000000000000000.01
+
+
+ast            : to_decimal(38, 1)(to_variant(1000000000000000000000000000000000000.01))
+raw expr       : to_decimal(38, 1)(to_variant(1000000000000000000000000000000000000.01))
+checked expr   : to_decimal<Variant>(38, 1)(to_variant<T0=Decimal(39, 2)><T0>(1000000000000000000000000000000000000.01_d256(39,2)))
+optimized expr : 1000000000000000000000000000000000000.0_d128(38,1)
+output type    : Decimal(38, 1)
+output domain  : {1000000000000000000000000000000000000.0..=1000000000000000000000000000000000000.0}
+output         : 1000000000000000000000000000000000000.0
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 211) while evaluating function `to_decimal(38, 3)('1e36')` in expr `to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))`
+
+
+
+ast            : to_decimal(39, 1)(to_variant(1000000000000000000000000000000000000.01))
+raw expr       : to_decimal(39, 1)(to_variant(1000000000000000000000000000000000000.01))
+checked expr   : to_decimal<Variant>(39, 1)(to_variant<T0=Decimal(39, 2)><T0>(1000000000000000000000000000000000000.01_d256(39,2)))
+optimized expr : 1000000000000000000000000000000000000.0_d256(39,1)
+output type    : Decimal(39, 1)
+output domain  : {1000000000000000000000000000000000000.0..=1000000000000000000000000000000000000.0}
+output         : 1000000000000000000000000000000000000.0
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow at line: 211) while evaluating function `to_decimal(39, 3)('1e36')` in expr `to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))`
+
+
+
+ast            : to_decimal(3, 2)(parse_json('"3.14"'))
+raw expr       : to_decimal(3, 2)(parse_json('"3.14"'))
+checked expr   : to_decimal<Variant>(3, 2)(CAST<String>("\"3.14\"" AS Variant))
+optimized expr : 3.14_d128(3,2)
+output type    : Decimal(3, 2)
+output domain  : {3.14..=3.14}
+output         : 3.14
+
+
+ast            : to_decimal(2, 1)(parse_json('true'))
+raw expr       : to_decimal(2, 1)(parse_json('true'))
+checked expr   : to_decimal<Variant>(2, 1)(CAST<String>("true" AS Variant))
+optimized expr : 1.0_d128(2,1)
+output type    : Decimal(2, 1)
+output domain  : {1.0..=1.0}
+output         : 1.0
+
+
 ast            : to_boolean(parse_json(s))
 raw expr       : to_boolean(parse_json(s::String NULL))
 checked expr   : CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS Boolean NULL)

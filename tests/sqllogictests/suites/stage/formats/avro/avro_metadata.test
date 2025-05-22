@@ -1,4 +1,4 @@
-query 
+query
 SELECT metadata$filename, metadata$file_row_number, $1 FROM '@data_s3/avro/' ( FILES => ('map.avro', 'number.avro', 'array.avro', 'nested_record.avro'), FILE_FORMAT => 'avro') order by metadata$filename, metadata$file_row_number
 ----
 testbucket/data/avro/array.avro 0 {"tags":["tall","rich","handsome"]}

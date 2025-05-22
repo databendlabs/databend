@@ -69,23 +69,11 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BinaryType, _, _>(
-        "to_binary",
+        "to_jsonb_binary",
         |_, _| FunctionDomain::Full,
         |val, _| match val {
             Value::Scalar(val) => Value::Scalar(val.to_vec()),
             Value::Column(col) => Value::Column(col),
-        },
-    );
-
-    registry.register_combine_nullable_1_arg::<VariantType, BinaryType, _, _>(
-        "try_to_binary",
-        |_, _| FunctionDomain::Full,
-        |val, _| match val {
-            Value::Scalar(val) => Value::Scalar(Some(val.to_vec())),
-            Value::Column(col) => {
-                let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new(col, validity))
-            }
         },
     );
 
