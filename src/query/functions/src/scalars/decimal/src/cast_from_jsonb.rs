@@ -131,7 +131,7 @@ where
         let value = match raw_jsonb
             .as_number()
             .map_err(|e| format!("{e}"))
-            .and_then(|r| r.ok_or(format!("invalid json type")))
+            .and_then(|r| r.ok_or("invalid json type".to_string()))
             .and_then(|v| {
                 json_number_to_decimal(v, dest_type, max, min, multiplier, multiplier_f64, ctx)
                     .map_err(|line| format!("decimal overflow at line: {line})"))
