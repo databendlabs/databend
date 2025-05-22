@@ -25,7 +25,6 @@ use databend_common_expression::types::decimal::Decimal256Type;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
@@ -215,7 +214,7 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                 NullableType<Float64Type>,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
-        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+        DataType::Decimal(s) if s.can_carried_by_128() => {
             let func = AggregateUnaryFunction::<
                 DecimalNumberAggregateStddevState<TYPE>,
                 Decimal128Type,
@@ -223,10 +222,10 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
             >::try_create(
                 display_name, return_type, params, arguments[0].clone()
             )
-            .with_function_data(Box::new(DecimalFuncData { scale: s.scale }));
+            .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
             Ok(Arc::new(func))
         }
-        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+        DataType::Decimal(s) => {
             let func = AggregateUnaryFunction::<
                 DecimalNumberAggregateStddevState<TYPE>,
                 Decimal256Type,
@@ -234,7 +233,7 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
             >::try_create(
                 display_name, return_type, params, arguments[0].clone()
             )
-            .with_function_data(Box::new(DecimalFuncData { scale: s.scale }));
+            .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
             Ok(Arc::new(func))
         }
         _ => Err(ErrorCode::BadDataValueType(format!(

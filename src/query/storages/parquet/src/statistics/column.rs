@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;

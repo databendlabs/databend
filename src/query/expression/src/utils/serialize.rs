@@ -39,11 +39,11 @@ pub fn read_decimal_with_size<T: Decimal>(
 ) -> Result<(T, usize), String> {
     // Read one more digit for round
     let (n, d, e, n_read) =
-        read_decimal::<T>(buf, (size.precision + 1) as u32, size.scale as _, exact)?;
-    if d as i32 + e > (size.precision - size.scale) as i32 {
+        read_decimal::<T>(buf, (size.precision() + 1) as u32, size.scale() as _, exact)?;
+    if d as i32 + e > (size.precision() - size.scale()) as i32 {
         return Err(decimal_overflow_error());
     }
-    let scale_diff = e + size.scale as i32;
+    let scale_diff = e + size.scale() as i32;
 
     let n = match scale_diff.cmp(&0) {
         Ordering::Less => {
@@ -316,7 +316,7 @@ pub fn read_decimal_from_json<T: Decimal>(
                     .with_size(size)
                     .ok_or_else(decimal_overflow_error)?)
             } else {
-                let f = n.as_f64().unwrap() * (10_f64).powi(size.scale as i32);
+                let f = n.as_f64().unwrap() * (10_f64).powi(size.scale() as i32);
                 let n = T::from_float(f);
                 Ok(n)
             }

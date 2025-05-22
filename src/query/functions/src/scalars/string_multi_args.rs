@@ -29,6 +29,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
@@ -37,7 +38,7 @@ use regex::Match;
 use string::StringColumnBuilder;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("concat", |_, args_type| {
+    let concat = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.is_empty() {
             return None;
         }
@@ -66,10 +67,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         } else {
             Some(Arc::new(f))
         }
-    });
+    }));
+    registry.register_function_factory("concat", concat);
 
     // nullable concat
-    registry.register_function_factory("concat", |_, args_type| {
+    let nullable_concat = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.is_empty() {
             return None;
         }
@@ -84,9 +86,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(passthrough_nullable(concat_fn)),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("concat", nullable_concat);
 
-    registry.register_function_factory("concat_ws", |_, args_type| {
+    let concat_ws = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() < 2 {
             return None;
         }
@@ -149,10 +152,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("concat_ws", concat_ws);
 
     // nullable concat ws
-    registry.register_function_factory("concat_ws", |_, args_type| {
+    let concat_ws = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() < 2 {
             return None;
         }
@@ -242,10 +246,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("concat_ws", concat_ws);
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
-    registry.register_function_factory("regexp_instr", |_, args_type| {
+    let regexp_instr = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
 
         let args_type = match args_type.len() {
@@ -295,10 +300,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         } else {
             Some(Arc::new(f))
         }
-    });
+    }));
+    registry.register_function_factory("regexp_instr", regexp_instr);
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
-    registry.register_function_factory("regexp_like", |_, args_type| {
+    let regexp_like = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let args_type = match args_type.len() {
             2 => vec![DataType::String; 2],
@@ -323,7 +329,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         } else {
             Some(Arc::new(f))
         }
-    });
+    }));
+    registry.register_function_factory("regexp_like", regexp_like);
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "regexp_extract",
@@ -427,7 +434,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
-    registry.register_function_factory("regexp_replace", |_, args_type| {
+    let regexp_replace = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
 
         let args_type = match args_type.len() {
@@ -473,10 +480,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         } else {
             Some(Arc::new(f))
         }
-    });
+    }));
+    registry.register_function_factory("regexp_replace", regexp_replace);
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
-    registry.register_function_factory("regexp_substr", |_, args_type| {
+    let regexp_substr = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let args_type = match args_type.len() {
             2 => vec![DataType::String; 2],
@@ -518,7 +526,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         } else {
             Some(Arc::new(f))
         }
-    });
+    }));
+    registry.register_function_factory("regexp_substr", regexp_substr);
 }
 
 fn regexp_extract_all(

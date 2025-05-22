@@ -19,9 +19,6 @@ use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::array::ArrayColumnBuilder;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
@@ -203,12 +200,8 @@ pub fn try_create_aggregate_quantile_disc_function(
                 }
             })
         }
-        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-            let decimal_size = DecimalSize {
-                precision: s.precision,
-                scale: s.scale,
-            };
-            let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+        DataType::Decimal(size) if size.can_carried_by_128() => {
+            let data_type = DataType::Decimal(size);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<
                     QuantileState<DecimalType<i128>>,
@@ -236,12 +229,8 @@ pub fn try_create_aggregate_quantile_disc_function(
                 Ok(Arc::new(func))
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-            let decimal_size = DecimalSize {
-                precision: s.precision,
-                scale: s.scale,
-            };
-            let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+        DataType::Decimal(size) => {
+            let data_type = DataType::Decimal(size);
             if params.len() > 1 {
                 let func = AggregateUnaryFunction::<
                     QuantileState<DecimalType<i256>>,

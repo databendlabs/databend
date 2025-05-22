@@ -32,3 +32,12 @@ pub use select_op::SelectOp;
 pub use selector::SelectStrategy;
 pub use selector::Selector;
 pub use volnitsky::VolnitskyBase;
+
+struct SelectionBuffers<'a> {
+    true_selection: &'a mut [u32],
+    false_selection: &'a mut [u32],
+    mutable_true_idx: &'a mut usize,
+    mutable_false_idx: &'a mut usize,
+    select_strategy: SelectStrategy,
+    count: usize,
+}

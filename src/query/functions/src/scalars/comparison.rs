@@ -47,13 +47,14 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::LikePattern;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
-use databend_functions_scalar_decimal::register_decimal_compare_op;
+use databend_functions_scalar_decimal::register_decimal_compare;
 use jsonb::RawJsonb;
 use regex::Regex;
 
@@ -317,7 +318,7 @@ fn register_number_cmp(registry: &mut FunctionRegistry) {
                 register_simple_domain_type_cmp!(registry, NumberType<NUM_TYPE>);
             }
             NumberClass::Decimal128 => {
-                register_decimal_compare_op(registry)
+                register_decimal_compare(registry)
             }
             NumberClass::Decimal256 => {
                 // already registered in Decimal128 branch
@@ -406,7 +407,7 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
         cmp_op: impl Fn(ScalarRef, ScalarRef) -> Option<bool> + 'static + Send + Sync + Copy,
     ) {
         let name_cloned = name.to_string();
-        registry.register_function_factory(name, move |_, args_type| {
+        let factory = FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
             let fields_generics = match args_type {
                 [DataType::Tuple(lhs_fields_ty), _] => (0..lhs_fields_ty.len())
                     .map(DataType::Generic)
@@ -477,7 +478,8 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                     }),
                 },
             }))
-        });
+        }));
+        registry.register_function_factory(name, factory);
     }
 
     register_tuple_cmp_op(registry, "eq", true, |lhs, rhs| {

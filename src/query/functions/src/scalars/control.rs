@@ -26,12 +26,13 @@ use databend_common_expression::Domain;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("if", |_, args_type| {
+    let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() < 3 || args_type.len() % 2 == 0 {
             return None;
         }
@@ -100,7 +101,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(|_, _| unreachable!("`if` should be handled by the `Evaluator`")),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("if", factory);
 
     registry.register_1_arg_core::<NullType, BooleanType, _, _>(
         "is_not_null",
