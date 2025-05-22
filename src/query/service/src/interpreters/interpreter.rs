@@ -56,6 +56,7 @@ use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
 use super::InterpreterMetrics;
 use super::InterpreterQueryLog;
+use crate::interpreters::interpreter_txn_commit::execute_commit_statement;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -251,6 +252,22 @@ pub async fn interpreter_plan_sql(
     result
 }
 
+async fn auto_commit_if_not_allowed_in_transaction(
+    ctx: Arc<QueryContext>,
+    stmt: &Statement,
+) -> Result<()> {
+    if !stmt.allowed_in_multi_statement() {
+        execute_commit_statement(ctx.clone()).await?;
+    }
+    if !stmt.is_transaction_command() && ctx.txn_mgr().lock().is_fail() {
+        let err = ErrorCode::CurrentTransactionIsAborted(
+            "Current transaction is aborted, commands ignored until end of transaction block",
+        );
+        return Err(err);
+    }
+    Ok(())
+}
+
 async fn plan_sql(
     ctx: Arc<QueryContext>,
     sql: &str,
@@ -265,6 +282,7 @@ async fn plan_sql(
 
     // Parse the SQL query, get extract additional information.
     let extras = planner.parse_sql(sql)?;
+    auto_commit_if_not_allowed_in_transaction(ctx.clone(), &extras.statement).await?;
     if !acquire_queue {
         // If queue guard is not required, plan the statement directly.
         let plan = planner.plan_stmt(&extras.statement).await?;

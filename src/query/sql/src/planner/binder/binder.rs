@@ -42,15 +42,7 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
-use databend_common_meta_app::principal::StageInfo;
-use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
-use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
-use databend_common_storage::init_stage_operator;
-use databend_storages_common_io::Files;
-use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::table::is_stream_name;
-use log::error;
-use log::info;
 use log::warn;
 
 use super::Finder;
@@ -151,15 +143,6 @@ impl<'a> Binder {
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
-        if !stmt.allowed_in_multi_statement() {
-            execute_commit_statement(self.ctx.clone()).await?;
-        }
-        if !stmt.is_transaction_command() && self.ctx.txn_mgr().lock().is_fail() {
-            let err = ErrorCode::CurrentTransactionIsAborted(
-                "[SQL-BINDER] Current transaction is aborted, commands ignored until end of transaction block",
-            );
-            return Err(err);
-        }
         let start = Instant::now();
         self.ctx
             .set_status_info("[SQL-BINDER] Binding SQL statement");
@@ -1132,118 +1115,5 @@ impl<'a> Binder {
             s_expr = s_expr.add_column_index_to_scans(*table_index, *column_index, &inverted_index);
         }
         Ok(s_expr)
-    }
-}
-
-struct ClearTxnManagerGuard(TxnManagerRef);
-
-impl Drop for ClearTxnManagerGuard {
-    fn drop(&mut self) {
-        self.0.lock().clear();
-    }
-}
-
-pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> {
-    // After commit statement, current session should be in auto commit mode, no matter update meta success or not.
-    // Use this guard to clear txn manager before return.
-    let _guard = ClearTxnManagerGuard(ctx.txn_mgr().clone());
-    let is_active = ctx.txn_mgr().lock().is_active();
-    if is_active {
-        let catalog = ctx.get_default_catalog()?;
-
-        let req = ctx.txn_mgr().lock().req();
-
-        let update_summary = {
-            let table_descriptions = req
-                .update_table_metas
-                .iter()
-                .map(|(req, _)| (req.table_id, req.seq, req.new_table_meta.engine.clone()))
-                .collect::<Vec<_>>();
-            let stream_descriptions = req
-                .update_stream_metas
-                .iter()
-                .map(|s| (s.stream_id, s.seq, "stream"))
-                .collect::<Vec<_>>();
-            (table_descriptions, stream_descriptions)
-        };
-
-        let mismatched_tids = {
-            ctx.txn_mgr().lock().set_auto_commit();
-            let ret = catalog.retryable_update_multi_table_meta(req).await;
-            if let Err(ref e) = ret {
-                // other errors may occur, especially the version mismatch of streams,
-                // let's log it here for the convenience of diagnostics
-                error!(
-                    "[SQL-BINDER] Non-recoverable fault occurred during table metadata update: {}",
-                    e
-                );
-            }
-            ret?
-        };
-
-        match &mismatched_tids {
-            Ok(_) => {
-                info!(
-                    "[SQL-BINDER] Transaction committed successfully, updated targets: {:?}",
-                    update_summary
-                );
-            }
-            Err(e) => {
-                let err_msg = format!(
-                    "Due to concurrent transactions, explicit transaction commit failed. Conflicting table IDs: {:?}",
-                    e.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
-                );
-                info!(
-                    "[SQL-BINDER] Transaction commit failed due to concurrent modifications. Conflicting table IDs: {:?}",
-                    e
-                );
-                return Err(ErrorCode::TableVersionMismatched(format!(
-                    "[SQL-BINDER] {}",
-                    err_msg
-                )));
-            }
-        }
-        let need_purge_files = ctx.txn_mgr().lock().need_purge_files();
-        for (stage_info, files) in need_purge_files {
-            try_purge_files(ctx.clone(), &stage_info, &files).await;
-        }
-    }
-    Ok(())
-}
-
-#[async_backtrace::framed]
-async fn try_purge_files(ctx: Arc<dyn TableContext>, stage_info: &StageInfo, files: &[String]) {
-    let start = Instant::now();
-    let op = init_stage_operator(stage_info);
-
-    match op {
-        Ok(op) => {
-            let file_op = Files::create(ctx, op);
-            if let Err(e) = file_op.remove_file_in_batch(files).await {
-                error!(
-                    "[SQL-BINDER] Failed to delete files: {:?}, error: {}",
-                    files, e
-                );
-            }
-        }
-        Err(e) => {
-            error!(
-                "[SQL-BINDER] Failed to initialize stage operator, error: {}",
-                e
-            );
-        }
-    }
-
-    let elapsed = start.elapsed();
-    info!(
-        "[SQL-BINDER] Purged {} files, operation took {:?}",
-        files.len(),
-        elapsed
-    );
-
-    // Perf.
-    {
-        metrics_inc_copy_purge_files_counter(files.len() as u32);
-        metrics_inc_copy_purge_files_cost_milliseconds(elapsed.as_millis() as u32);
     }
 }
