@@ -620,6 +620,50 @@ fn test_to_type(file: &mut impl Write) {
     run_ast(file, "to_string(parse_json('12.34'))", &[]);
     run_ast(file, "to_string(parse_json('\"abc\"'))", &[]);
 
+    // 128 to 256/128
+    run_ast(file, "to_decimal(3, 2)(to_variant(1.23))", &[]);
+    run_ast(file, "to_decimal(2, 1)(to_variant(1.23))", &[]);
+    run_ast(file, "to_decimal(1, 1)(to_variant(1.23))", &[]);
+    run_ast(file, "to_decimal(76, 1)(to_variant(1.23))", &[]);
+    run_ast(file, "to_decimal(4, 3)(to_variant(1.23))", &[]);
+    run_ast(file, "to_decimal(3, 3)(to_variant(1.23))", &[]);
+    run_ast(
+        file,
+        "to_decimal(38, 2)(to_variant(100000000000000000000000000000000000.01))",
+        &[],
+    );
+
+    // 256 to 256/128
+    run_ast(
+        file,
+        "to_decimal(39, 2)(to_variant(1000000000000000000000000000000000000.01))",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_decimal(38, 1)(to_variant(1000000000000000000000000000000000000.01))",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_decimal(39, 1)(to_variant(1000000000000000000000000000000000000.01))",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))",
+        &[],
+    );
+
+    run_ast(file, "to_decimal(3, 2)(parse_json('\"3.14\"'))", &[]);
+
+    run_ast(file, "to_decimal(2, 1)(parse_json('true'))", &[]);
+
     run_ast(file, "to_boolean(parse_json(s))", &[(
         "s",
         StringType::from_data_with_validity(vec!["true", "", "true"], vec![true, false, true]),
