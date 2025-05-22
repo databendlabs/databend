@@ -1599,7 +1599,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Err(e) => {
                         ctx.set_error(
                             output.len(),
-                            format!("unable to cast to type `INTERVAL` {}.", e),
+                            format!("unable to cast to type `BINARY` {}.", e),
                         );
                         output.push_null();
                     }
