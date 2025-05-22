@@ -11,7 +11,7 @@ error:
   --> SQL:1:2
   |
 1 | ['a', 1]
-  |  ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`, during run expr: `array(CAST('a' AS UInt64), CAST(1 AS UInt64))`
+  |  ^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(38, 5)('a')` in expr `CAST('a' AS Decimal(38, 5))`, during run expr: `array(CAST('a' AS Decimal(38, 5)), CAST(1 AS Decimal(38, 5)))`
 
 
 
@@ -51,7 +51,7 @@ error:
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `array(String, UInt8, Variant)`, you might need to add explicit type casts.
 
 candidate functions:
-  array(T0, T0, T0) :: Array(T0)  : unable to find a common super type for `UInt64` and `Variant`
+  array(T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Decimal(38, 5)` and `Variant`
 
 
 
@@ -593,7 +593,7 @@ error:
   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `array(UInt8, String, UInt8, UInt8, UInt8, Boolean)`, you might need to add explicit type casts.
 
 candidate functions:
-  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Int64` and `Boolean`
+  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Decimal(38, 5)` and `Boolean`
 
 
 
@@ -787,7 +787,7 @@ error:
   --> SQL:1:23
   |
 1 | array_concat([1,2,3], ['s', null])
-  |                       ^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Int64 NULL))`, during run expr: `array_concat(CAST(array(1, 2, 3) AS Array(Int64 NULL)), CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Int64 NULL)))`
+  |                       ^^^^^^^^^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(38, 5)('s')` in expr `CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Decimal(38, 5) NULL))`, during run expr: `array_concat(CAST(array(1, 2, 3) AS Array(Decimal(38, 5) NULL)), CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Decimal(38, 5) NULL)))`
 
 
 
@@ -1039,7 +1039,7 @@ error:
   --> SQL:1:22
   |
 1 | array_indexof([1,2,3,'s'], 's')
-  |                      ^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `CAST('s' AS Int64)`, during run expr: `array_indexof(array(CAST(1 AS Int64), CAST(2 AS Int64), CAST(3 AS Int64), CAST('s' AS Int64)), CAST('s' AS Int64))`
+  |                      ^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(38, 5)('s')` in expr `CAST('s' AS Decimal(38, 5))`, during run expr: `array_indexof(array(CAST(1 AS Decimal(38, 5)), CAST(2 AS Decimal(38, 5)), CAST(3 AS Decimal(38, 5)), CAST('s' AS Decimal(38, 5))), CAST('s' AS Decimal(38, 5)))`
 
 
 

@@ -46,6 +46,9 @@ fn test_eq(file: &mut impl Write) {
     run_ast(file, "true=false", &[]);
     run_ast(file, "false=false", &[]);
     run_ast(file, "true=true", &[]);
+    run_ast(file, "10='10'", &[]);
+    run_ast(file, "'3.1'=3", &[]);
+    run_ast(file, "'3.a'=5", &[]);
     run_ast(file, "[]=[]", &[]);
     run_ast(file, "[1, 2]=[1, 2]", &[]);
     run_ast(file, "[true]=[]", &[]);
@@ -117,6 +120,9 @@ fn test_noteq(file: &mut impl Write) {
     run_ast(file, "true != true", &[]);
     run_ast(file, "true != null", &[]);
     run_ast(file, "true != false", &[]);
+    run_ast(file, "10 != '10'", &[]);
+    run_ast(file, "'3.1' != 3", &[]);
+    run_ast(file, "'3.a' != 5", &[]);
     run_ast(file, "[] != []", &[]);
     run_ast(file, "['a'] != ['a']", &[]);
     run_ast(file, "['a'] != ['b']", &[]);
@@ -169,6 +175,9 @@ fn test_lt(file: &mut impl Write) {
     run_ast(file, "true < true", &[]);
     run_ast(file, "true < null", &[]);
     run_ast(file, "true < false", &[]);
+    run_ast(file, "10 < '10'", &[]);
+    run_ast(file, "'3.1' < 3", &[]);
+    run_ast(file, "'3.a' < 5", &[]);
     run_ast(file, "[] < []", &[]);
     run_ast(file, "[1, 2] < [2, 3]", &[]);
     run_ast(file, "(1, 'b') < (1, 'a')", &[]);
@@ -218,6 +227,9 @@ fn test_lte(file: &mut impl Write) {
     run_ast(file, "true <= true", &[]);
     run_ast(file, "true <= null", &[]);
     run_ast(file, "true <= false", &[]);
+    run_ast(file, "10 <= '10'", &[]);
+    run_ast(file, "'3.1' <= 3", &[]);
+    run_ast(file, "'3.a' <= 5", &[]);
     run_ast(file, "[] <= []", &[]);
     run_ast(file, "[1, 2] <= [2, 3]", &[]);
     run_ast(file, "(1, 'b') <= (1, 'a')", &[]);
@@ -261,9 +273,13 @@ fn test_gt(file: &mut impl Write) {
     run_ast(file, "'3'>'2'", &[]);
     run_ast(file, "1>2", &[]);
     run_ast(file, "1.2>1.1", &[]);
+    run_ast(file, "2.222>2.11", &[]);
     run_ast(file, "true > true", &[]);
     run_ast(file, "true > null", &[]);
     run_ast(file, "true > false", &[]);
+    run_ast(file, "10 > '10'", &[]);
+    run_ast(file, "'3.1' > 3", &[]);
+    run_ast(file, "'3.a' > 5", &[]);
     run_ast(file, "[] > []", &[]);
     run_ast(file, "[1, 2] > [2, 3]", &[]);
     run_ast(file, "(1, 'b') > (1, 'a')", &[]);
@@ -320,6 +336,9 @@ fn test_gte(file: &mut impl Write) {
     run_ast(file, "true >= true", &[]);
     run_ast(file, "true >= null", &[]);
     run_ast(file, "true >= false", &[]);
+    run_ast(file, "10 >= '10'", &[]);
+    run_ast(file, "'3.1' >= 3", &[]);
+    run_ast(file, "'3.a' >= 5", &[]);
     run_ast(file, "[] >= []", &[]);
     run_ast(file, "[1, 2] >= [2, 3]", &[]);
     run_ast(file, "(1, 'b') >= (1, 'a')", &[]);

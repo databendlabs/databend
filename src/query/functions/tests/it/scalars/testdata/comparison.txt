@@ -79,6 +79,32 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : 10='10'
+raw expr       : eq(10, '10')
+checked expr   : eq<UInt8, String>(10_u8, "10")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : '3.1'=3
+raw expr       : eq('3.1', 3)
+checked expr   : eq<String, UInt8>("3.1", 3_u8)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+error: 
+  --> SQL:1:6
+  |
+1 | '3.a'=5
+  |      ^ Could not convert string '3.a' to number while evaluating function `eq('3.a', 5)` in expr `'3.a' = 5`
+
+
+
 ast            : []=[]
 raw expr       : eq(array(), array())
 checked expr   : eq<Array(Nothing), Array(Nothing)>(array<>(), array<>())
@@ -116,7 +142,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 34 more
+... and 74 more
 
 
 
@@ -322,6 +348,32 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : 10 != '10'
+raw expr       : noteq(10, '10')
+checked expr   : noteq<UInt8, String>(10_u8, "10")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : '3.1' != 3
+raw expr       : noteq('3.1', 3)
+checked expr   : noteq<String, UInt8>("3.1", 3_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | '3.a' != 5
+  |       ^^ Could not convert string '3.a' to number while evaluating function `noteq('3.a', 5)` in expr `'3.a' <> 5`
+
+
+
 ast            : [] != []
 raw expr       : noteq(array(), array())
 checked expr   : noteq<Array(Nothing), Array(Nothing)>(array<>(), array<>())
@@ -359,7 +411,7 @@ candidate functions:
   noteq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 34 more
+... and 74 more
 
 
 
@@ -508,6 +560,32 @@ optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
 output         : false
+
+
+ast            : 10 < '10'
+raw expr       : lt(10, '10')
+checked expr   : lt<UInt8, String>(10_u8, "10")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : '3.1' < 3
+raw expr       : lt('3.1', 3)
+checked expr   : lt<String, UInt8>("3.1", 3_u8)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | '3.a' < 5
+  |       ^ Could not convert string '3.a' to number while evaluating function `lt('3.a', 5)` in expr `'3.a' < 5`
+
 
 
 ast            : [] < []
@@ -690,6 +768,32 @@ output domain  : {FALSE}
 output         : false
 
 
+ast            : 10 <= '10'
+raw expr       : lte(10, '10')
+checked expr   : lte<UInt8, String>(10_u8, "10")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : '3.1' <= 3
+raw expr       : lte('3.1', 3)
+checked expr   : lte<String, UInt8>("3.1", 3_u8)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | '3.a' <= 5
+  |       ^^ Could not convert string '3.a' to number while evaluating function `lte('3.a', 5)` in expr `'3.a' <= 5`
+
+
+
 ast            : [] <= []
 raw expr       : lte(array(), array())
 checked expr   : lte<Array(Nothing), Array(Nothing)>(array<>(), array<>())
@@ -844,6 +948,15 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : 2.222>2.11
+raw expr       : gt(2.222, 2.11)
+checked expr   : gt<Decimal(4, 3), Decimal(3, 2)>(2.222_d128(4,3), 2.11_d128(3,2))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
 ast            : true > true
 raw expr       : gt(true, true)
 checked expr   : gt<Boolean, Boolean>(true, true)
@@ -869,6 +982,32 @@ optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
 output         : true
+
+
+ast            : 10 > '10'
+raw expr       : gt(10, '10')
+checked expr   : gt<UInt8, String>(10_u8, "10")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : '3.1' > 3
+raw expr       : gt('3.1', 3)
+checked expr   : gt<String, UInt8>("3.1", 3_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | '3.a' > 5
+  |       ^ Could not convert string '3.a' to number while evaluating function `gt('3.a', 5)` in expr `'3.a' > 5`
+
 
 
 ast            : [] > []
@@ -1076,6 +1215,32 @@ optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
 output         : true
+
+
+ast            : 10 >= '10'
+raw expr       : gte(10, '10')
+checked expr   : gte<UInt8, String>(10_u8, "10")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : '3.1' >= 3
+raw expr       : gte('3.1', 3)
+checked expr   : gte<String, UInt8>("3.1", 3_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | '3.a' >= 5
+  |       ^^ Could not convert string '3.a' to number while evaluating function `gte('3.a', 5)` in expr `'3.a' >= 5`
+
 
 
 ast            : [] >= []
