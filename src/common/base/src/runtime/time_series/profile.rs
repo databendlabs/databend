@@ -16,6 +16,8 @@ use std::mem;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use concurrent_queue::ConcurrentQueue;
 use once_cell::sync::OnceCell;
@@ -141,7 +143,12 @@ impl TimeSeriesProfiles {
 
     pub fn record(&self, name: TimeSeriesProfileName, value: usize) -> bool {
         let profile = &self.profiles[name as usize];
-        let now = chrono::Local::now().timestamp_millis() as usize / DEFAULT_INTERVAL;
+        // safe unwrap, time cannot back to UNIX_EPOCH
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as usize
+            / DEFAULT_INTERVAL;
         profile.record_time_slot(now, value)
     }
 
