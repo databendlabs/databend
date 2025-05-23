@@ -336,7 +336,7 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
                         FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
                             SimpleDomain {
                                 min: -d.max,
-                                max: d.min.checked_neg().unwrap_or(i256::MAX), // Only -MIN could overflow
+                                max: d.min.checked_neg().unwrap_or(i256::DECIMAL_MAX), // Only -MIN could overflow
                             },
                             *size,
                         )))

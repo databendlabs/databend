@@ -141,12 +141,12 @@ where
     fn add_internal(&mut self, count: u64, value: T::ScalarRef<'_>) -> Result<()> {
         self.count += count;
         self.value += T::to_owned_scalar(value);
-        if OVERFLOW && (self.value > T::Scalar::MAX || self.value < T::Scalar::MIN) {
+        if OVERFLOW && (self.value > T::Scalar::DECIMAL_MAX || self.value < T::Scalar::DECIMAL_MIN) {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
                 self.value,
-                T::Scalar::MIN,
-                T::Scalar::MAX,
+                T::Scalar::DECIMAL_MIN,
+                T::Scalar::DECIMAL_MAX,
             )));
         }
         Ok(())

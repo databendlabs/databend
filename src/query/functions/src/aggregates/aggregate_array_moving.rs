@@ -212,12 +212,12 @@ where T: Decimal
 {
     #[inline]
     pub fn check_over_flow(&self, value: T) -> Result<()> {
-        if value > T::MAX || value < T::MIN {
+        if value > T::DECIMAL_MAX || value < T::DECIMAL_MIN {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {} not in [{}, {}]",
                 value,
-                T::MIN,
-                T::MAX,
+                T::DECIMAL_MIN,
+                T::DECIMAL_MAX,
             )));
         }
         Ok(())

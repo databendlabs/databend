@@ -364,8 +364,8 @@ pub trait Decimal:
     fn upcast_column(col: Buffer<Self>, size: DecimalSize) -> Column;
     fn upcast_domain(domain: SimpleDomain<Self>, size: DecimalSize) -> Domain;
     fn upcast_builder(builder: Vec<Self>, size: DecimalSize) -> DecimalColumnBuilder;
-    const MIN: Self;
-    const MAX: Self;
+    const DECIMAL_MIN: Self;
+    const DECIMAL_MAX: Self;
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn;
 
@@ -486,10 +486,46 @@ impl Decimal for i128 {
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
+        /// `MIN_DECIMAL_FOR_EACH_PRECISION[p]` holds the minimum `i128` value that can
+        /// be stored in a [arrow_schema::DataType::Decimal128] value of precision `p`
+        const MIN_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = {
+            const fn gen() -> [i128; 38] {
+                let mut arr = [0; 38];
+                let mut i = 0;
+                loop {
+                    if i == 38 {
+                        break;
+                    }
+                    arr[i] = -(10_i128.pow(1 + i as u32) - 1);
+                    i += 1;
+                }
+                arr
+            }
+            gen()
+        };
+
         MIN_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
     fn max_for_precision(to_precision: u8) -> Self {
+        /// Codes from arrow-rs: https://github.com/apache/arrow-rs/blob/9728c676b50b19c06643a23daba4aa4a1dc48055/arrow-data/src/decimal.rs
+        /// `MAX_DECIMAL_FOR_EACH_PRECISION[p]` holds the maximum `i128` value that can
+        /// be stored in [arrow_schema::DataType::Decimal128] value of precision `p`
+        const MAX_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = {
+            const fn gen() -> [i128; 38] {
+                let mut arr = [0; 38];
+                let mut i = 0;
+                loop {
+                    if i == 38 {
+                        break;
+                    }
+                    arr[i] = 10_i128.pow(1 + i as u32) - 1;
+                    i += 1;
+                }
+                arr
+            }
+            gen()
+        };
         MAX_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
@@ -644,9 +680,9 @@ impl Decimal for i128 {
         DecimalColumnBuilder::Decimal128(builder, size)
     }
 
-    const MIN: i128 = -99999999999999999999999999999999999999i128;
+    const DECIMAL_MIN: i128 = -99999999999999999999999999999999999999i128;
 
-    const MAX: i128 = 99999999999999999999999999999999999999i128;
+    const DECIMAL_MAX: i128 = 99999999999999999999999999999999999999i128;
 }
 
 impl Decimal for i256 {
@@ -813,7 +849,7 @@ impl Decimal for i256 {
                 let m: u256 = u256::ONE << 255;
                 match ret.cmp(&m) {
                     Ordering::Less => Some(-i256::try_from(ret).unwrap()),
-                    Ordering::Equal => Some(i256::MIN),
+                    Ordering::Equal => Some(i256::DECIMAL_MIN),
                     Ordering::Greater => None,
                 }
             }
@@ -907,10 +943,10 @@ impl Decimal for i256 {
         DecimalColumnBuilder::Decimal256(builder, size)
     }
 
-    const MIN: i256 = i256(ethnum::int!(
+    const DECIMAL_MIN: i256 = i256(ethnum::int!(
         "-9999999999999999999999999999999999999999999999999999999999999999999999999999"
     ));
-    const MAX: i256 = i256(ethnum::int!(
+    const DECIMAL_MAX: i256 = i256(ethnum::int!(
         "9999999999999999999999999999999999999999999999999999999999999999999999999999"
     ));
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
@@ -1400,7 +1436,7 @@ macro_rules! with_decimal_mapped_type {
 // MAX decimal256 value of little-endian format for each precision.
 // Each element is the max value of signed 256-bit integer for the specified precision which
 // is encoded to the 32-byte width format of little-endian.
-pub(crate) const MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
+const MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
     i256::from_le_bytes([
         9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0,
@@ -1710,7 +1746,7 @@ pub(crate) const MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
 // MIN decimal256 value of little-endian format for each precision.
 // Each element is the min value of signed 256-bit integer for the specified precision which
 // is encoded to the 76-byte width format of little-endian.
-pub(crate) const MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
+const MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
     i256::from_le_bytes([
         247, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
         255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
@@ -2015,93 +2051,6 @@ pub(crate) const MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
         1, 0, 0, 0, 0, 0, 0, 0, 0, 240, 106, 142, 14, 90, 138, 136, 134, 214, 154, 23, 84, 75, 155,
         248, 74, 234, 102, 238, 88, 51, 228, 233,
     ]),
-];
-
-/// Codes from arrow-rs: https://github.com/apache/arrow-rs/blob/9728c676b50b19c06643a23daba4aa4a1dc48055/arrow-data/src/decimal.rs
-/// `MAX_DECIMAL_FOR_EACH_PRECISION[p]` holds the maximum `i128` value that can
-/// be stored in [arrow_schema::DataType::Decimal128] value of precision `p`
-pub const MAX_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = [
-    9,
-    99,
-    999,
-    9999,
-    99999,
-    999999,
-    9999999,
-    99999999,
-    999999999,
-    9999999999,
-    99999999999,
-    999999999999,
-    9999999999999,
-    99999999999999,
-    999999999999999,
-    9999999999999999,
-    99999999999999999,
-    999999999999999999,
-    9999999999999999999,
-    99999999999999999999,
-    999999999999999999999,
-    9999999999999999999999,
-    99999999999999999999999,
-    999999999999999999999999,
-    9999999999999999999999999,
-    99999999999999999999999999,
-    999999999999999999999999999,
-    9999999999999999999999999999,
-    99999999999999999999999999999,
-    999999999999999999999999999999,
-    9999999999999999999999999999999,
-    99999999999999999999999999999999,
-    999999999999999999999999999999999,
-    9999999999999999999999999999999999,
-    99999999999999999999999999999999999,
-    999999999999999999999999999999999999,
-    9999999999999999999999999999999999999,
-    99999999999999999999999999999999999999,
-];
-
-/// `MIN_DECIMAL_FOR_EACH_PRECISION[p]` holds the minimum `i128` value that can
-/// be stored in a [arrow_schema::DataType::Decimal128] value of precision `p`
-pub const MIN_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = [
-    -9,
-    -99,
-    -999,
-    -9999,
-    -99999,
-    -999999,
-    -9999999,
-    -99999999,
-    -999999999,
-    -9999999999,
-    -99999999999,
-    -999999999999,
-    -9999999999999,
-    -99999999999999,
-    -999999999999999,
-    -9999999999999999,
-    -99999999999999999,
-    -999999999999999999,
-    -9999999999999999999,
-    -99999999999999999999,
-    -999999999999999999999,
-    -9999999999999999999999,
-    -99999999999999999999999,
-    -999999999999999999999999,
-    -9999999999999999999999999,
-    -99999999999999999999999999,
-    -999999999999999999999999999,
-    -9999999999999999999999999999,
-    -99999999999999999999999999999,
-    -999999999999999999999999999999,
-    -9999999999999999999999999999999,
-    -99999999999999999999999999999999,
-    -999999999999999999999999999999999,
-    -9999999999999999999999999999999999,
-    -99999999999999999999999999999999999,
-    -999999999999999999999999999999999999,
-    -9999999999999999999999999999999999999,
-    -99999999999999999999999999999999999999,
 ];
 
 /// The wrapper of `ethnum::I256`, used to implement the `BorshSerialize` and `BorshDeserialize` traits.
@@ -2578,5 +2527,16 @@ mod tests {
         for (got, want) in buffer.iter().zip(&test_values) {
             assert_eq!(got, want);
         }
+    }
+
+    #[test]
+    fn test_min_max_for_precision() {
+        assert_eq!(i128::max_for_precision(1), 9);
+        assert_eq!(i128::max_for_precision(2), 99);
+        assert_eq!(i128::max_for_precision(38), i128::DECIMAL_MAX);
+
+        assert_eq!(i128::min_for_precision(1), -9);
+        assert_eq!(i128::min_for_precision(2), -99);
+        assert_eq!(i128::min_for_precision(38), i128::DECIMAL_MIN);
     }
 }

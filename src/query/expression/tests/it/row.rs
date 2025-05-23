@@ -115,13 +115,13 @@ fn test_decimal256() {
     let col = Decimal256Type::from_opt_data_with_size(
         vec![
             None,
-            Some(i256::MIN),
+            Some(i256::DECIMAL_MIN),
             Some(i256::from_words(-1, 0)),
             Some(i256::from_words(-1, i128::MAX)),
             Some(i256::from_words(0, i128::MAX)),
             Some(i256::from_words(46_i128, 0)),
             Some(i256::from_words(46_i128, 5)),
-            Some(i256::MAX),
+            Some(i256::DECIMAL_MAX),
         ],
         Some(DecimalSize::new_unchecked(76, 7)),
     );
