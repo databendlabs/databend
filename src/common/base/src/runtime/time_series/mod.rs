@@ -12,20 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::mem_allocator::TrackingGlobalAllocator;
+mod profile;
+mod query_profile;
 
-mod ext;
-mod fixed_heap;
-mod metrics;
-mod pool;
-mod pool_retry;
-mod progress;
-mod range_merger;
-mod runtime;
-mod stoppable;
-mod string;
-mod time_series;
-
-// runtime tests depends on the memory stat collector.
-#[global_allocator]
-pub static GLOBAL_ALLOCATOR: TrackingGlobalAllocator = TrackingGlobalAllocator::create();
+pub use profile::compress_time_point;
+pub use profile::get_time_series_profile_desc;
+pub use profile::ProfilePoints;
+pub use profile::TimeSeriesProfileDesc;
+pub use profile::TimeSeriesProfileName;
+pub use profile::TimeSeriesProfiles;
+pub use query_profile::QueryTimeSeriesProfile;
+pub use query_profile::QueryTimeSeriesProfileBuilder;
