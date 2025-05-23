@@ -81,17 +81,6 @@ impl<K: AccessType, V: AccessType> AccessType for KvPair<K, V> {
         }
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Tuple(vec![
-            K::upcast_column(col.keys),
-            V::upcast_column(col.values),
-        ])
-    }
-
-    fn upcast_domain((k, v): Self::Domain) -> Domain {
-        Domain::Tuple(vec![K::upcast_domain(k), V::upcast_domain(v)])
-    }
-
     fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
@@ -137,6 +126,17 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
 
     fn upcast_scalar((k, v): Self::Scalar) -> Scalar {
         Scalar::Tuple(vec![K::upcast_scalar(k), V::upcast_scalar(v)])
+    }
+
+    fn upcast_domain((k, v): Self::Domain) -> Domain {
+        Domain::Tuple(vec![K::upcast_domain(k), V::upcast_domain(v)])
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Tuple(vec![
+            K::upcast_column(col.keys),
+            V::upcast_column(col.values),
+        ])
     }
 
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
@@ -378,16 +378,6 @@ impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
         }
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Map(Box::new(col.upcast()))
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Map(
-            domain.map(|domain| Box::new(<KvPair<K, V> as AccessType>::upcast_domain(domain))),
-        )
-    }
-
     fn column_len(col: &Self::Column) -> usize {
         MapInternal::<K, V>::column_len(col)
     }
@@ -428,6 +418,14 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Scalar::Map(KvPair::<K, V>::upcast_column(scalar))
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Map(domain.map(|domain| Box::new(KvPair::<K, V>::upcast_domain(domain))))
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Map(Box::new(col.upcast()))
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {

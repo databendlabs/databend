@@ -105,14 +105,6 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
         T::downcast_domain(domain)
     }
 
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
-        T::upcast_column(col)
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        T::upcast_domain(domain)
-    }
-
     fn column_len(buffer: &Buffer<Self::Scalar>) -> usize {
         buffer.len()
     }
@@ -186,6 +178,14 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         T::upcast_scalar(scalar)
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        T::upcast_domain(domain)
+    }
+
+    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
+        T::upcast_column(col)
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {

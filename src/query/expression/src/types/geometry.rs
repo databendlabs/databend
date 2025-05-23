@@ -69,14 +69,6 @@ impl AccessType for GeometryType {
         }
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Geometry(col)
-    }
-
-    fn upcast_domain(_domain: Self::Domain) -> Domain {
-        Domain::Undefined
-    }
-
     fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
@@ -117,6 +109,14 @@ impl ValueType for GeometryType {
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Scalar::Geometry(scalar)
+    }
+
+    fn upcast_domain(_domain: Self::Domain) -> Domain {
+        Domain::Undefined
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Geometry(col)
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {

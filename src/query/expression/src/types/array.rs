@@ -56,7 +56,7 @@ impl<T: AccessType> AccessType for ArrayType<T> {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Array(array) => <T as AccessType>::try_downcast_column(array),
+            ScalarRef::Array(array) => T::try_downcast_column(array),
             _ => None,
         }
     }
@@ -67,20 +67,10 @@ impl<T: AccessType> AccessType for ArrayType<T> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
-            Domain::Array(Some(domain)) => {
-                Some(Some(<T as AccessType>::try_downcast_domain(domain)?))
-            }
+            Domain::Array(Some(domain)) => Some(Some(T::try_downcast_domain(domain)?)),
             Domain::Array(None) => Some(None),
             _ => None,
         }
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Array(Box::new(col.upcast()))
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Array(domain.map(|domain| Box::new(<T as AccessType>::upcast_domain(domain))))
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -133,6 +123,14 @@ impl<T: ValueType> ValueType for ArrayType<T> {
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Scalar::Array(T::upcast_column(scalar))
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Array(domain.map(|domain| Box::new(T::upcast_domain(domain))))
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Array(Box::new(col.upcast()))
     }
 
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
@@ -274,13 +272,6 @@ impl<T: AccessType> ArrayColumn<T> {
         }
     }
 
-    pub fn upcast(self) -> ArrayColumn<AnyType> {
-        ArrayColumn {
-            values: T::upcast_column(self.values),
-            offsets: self.offsets,
-        }
-    }
-
     pub fn memory_size(&self) -> usize {
         T::column_memory_size(&self.underlying_column()) + self.offsets.len() * 8
     }
@@ -337,6 +328,15 @@ impl<T: AccessType> ArrayColumn<T> {
             }
         }
         Ok(())
+    }
+}
+
+impl<T: ValueType> ArrayColumn<T> {
+    pub fn upcast(self) -> ArrayColumn<AnyType> {
+        ArrayColumn {
+            values: T::upcast_column(self.values),
+            offsets: self.offsets,
+        }
     }
 }
 

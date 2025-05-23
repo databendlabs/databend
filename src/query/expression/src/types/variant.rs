@@ -83,14 +83,6 @@ impl AccessType for VariantType {
         }
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Variant(col)
-    }
-
-    fn upcast_domain(_domain: Self::Domain) -> Domain {
-        Domain::Undefined
-    }
-
     fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
@@ -133,6 +125,14 @@ impl ValueType for VariantType {
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         Scalar::Variant(scalar)
+    }
+
+    fn upcast_domain(_domain: Self::Domain) -> Domain {
+        Domain::Undefined
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Variant(col)
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {

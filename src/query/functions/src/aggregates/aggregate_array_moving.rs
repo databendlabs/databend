@@ -33,6 +33,7 @@ use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int8Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_number_mapped_type;

@@ -30,6 +30,7 @@ use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::visit_expr;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnId;

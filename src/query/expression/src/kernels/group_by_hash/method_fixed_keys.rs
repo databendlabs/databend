@@ -39,6 +39,7 @@ use crate::types::Decimal256As128Type;
 use crate::types::Decimal256Type;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
+use crate::types::ValueType;
 use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;

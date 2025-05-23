@@ -55,14 +55,6 @@ impl AccessType for AnyType {
         Some(domain.clone())
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
-        col
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        domain
-    }
-
     fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
@@ -103,6 +95,14 @@ impl ValueType for AnyType {
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
         scalar
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        domain
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        col
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {

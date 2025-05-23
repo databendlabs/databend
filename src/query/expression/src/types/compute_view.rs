@@ -67,16 +67,8 @@ where
         F::downcast_column(col)
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
-        F::upcast_column(col)
-    }
-
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         F::downcast_domain(domain).map(|domain| C::compute_domain(&domain))
-    }
-
-    fn upcast_domain(_: Self::Domain) -> Domain {
-        unimplemented!()
     }
 
     fn column_len(col: &Self::Column) -> usize {

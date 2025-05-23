@@ -373,10 +373,8 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>>;
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
-    fn upcast_domain(domain: Self::Domain) -> Domain;
 
     fn try_downcast_column(col: &Column) -> Option<Self::Column>;
-    fn upcast_column(col: Self::Column) -> Column;
 
     fn column_len(col: &Self::Column) -> usize;
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>>;
@@ -450,6 +448,12 @@ pub trait ValueType: AccessType {
 
     /// Convert a scalar value to the generic Scalar type
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
+
+    /// Convert a domain value to the generic Domain type
+    fn upcast_domain(domain: Self::Domain) -> Domain;
+
+    /// Convert a column value to the generic Column type
+    fn upcast_column(col: Self::Column) -> Column;
 
     /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.
     ///
