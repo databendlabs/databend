@@ -64,10 +64,6 @@ impl AccessType for StringType {
         domain.as_string().cloned()
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::String(scalar)
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::String(col)
     }
@@ -143,6 +139,10 @@ impl AccessType for StringType {
 
 impl ValueType for StringType {
     type ColumnBuilder = StringColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::String(scalar)
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {

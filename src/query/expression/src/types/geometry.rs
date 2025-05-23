@@ -69,10 +69,6 @@ impl AccessType for GeometryType {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Geometry(scalar)
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::Geometry(col)
     }
@@ -118,6 +114,10 @@ impl AccessType for GeometryType {
 
 impl ValueType for GeometryType {
     type ColumnBuilder = BinaryColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Geometry(scalar)
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {

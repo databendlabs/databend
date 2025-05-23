@@ -55,10 +55,6 @@ impl AccessType for AnyType {
         Some(domain.clone())
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        scalar
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         col
     }
@@ -104,6 +100,10 @@ impl AccessType for AnyType {
 
 impl ValueType for AnyType {
     type ColumnBuilder = ColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        scalar
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         Some(builder)

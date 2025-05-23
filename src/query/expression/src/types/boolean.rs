@@ -67,10 +67,6 @@ impl AccessType for BooleanType {
         domain.as_boolean().cloned()
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Boolean(scalar)
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::Boolean(col)
     }
@@ -140,6 +136,10 @@ impl AccessType for BooleanType {
 
 impl ValueType for BooleanType {
     type ColumnBuilder = MutableBitmap;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Boolean(scalar)
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {

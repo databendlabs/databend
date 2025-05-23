@@ -142,10 +142,6 @@ impl AccessType for GeographyType {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Geography(scalar)
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::Geography(col)
     }
@@ -191,6 +187,10 @@ impl AccessType for GeographyType {
 
 impl ValueType for GeographyType {
     type ColumnBuilder = BinaryColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Geography(scalar)
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {

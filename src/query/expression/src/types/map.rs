@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Range;
@@ -80,10 +81,6 @@ impl<K: AccessType, V: AccessType> AccessType for KvPair<K, V> {
         }
     }
 
-    fn upcast_scalar((k, v): Self::Scalar) -> Scalar {
-        Scalar::Tuple(vec![K::upcast_scalar(k), V::upcast_scalar(v)])
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::Tuple(vec![
             K::upcast_column(col.keys),
@@ -122,10 +119,25 @@ impl<K: AccessType, V: AccessType> AccessType for KvPair<K, V> {
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
     }
+
+    #[inline(always)]
+    fn compare(
+        (lhs_k, lhs_v): Self::ScalarRef<'_>,
+        (rhs_k, rhs_v): Self::ScalarRef<'_>,
+    ) -> Ordering {
+        match K::compare(lhs_k, rhs_k) {
+            Ordering::Equal => V::compare(lhs_v, rhs_v),
+            ord => ord,
+        }
+    }
 }
 
 impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
     type ColumnBuilder = KvColumnBuilder<K, V>;
+
+    fn upcast_scalar((k, v): Self::Scalar) -> Scalar {
+        Scalar::Tuple(vec![K::upcast_scalar(k), V::upcast_scalar(v)])
+    }
 
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         None
@@ -366,10 +378,6 @@ impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Map(KvPair::<K, V>::upcast_column(scalar))
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::Map(Box::new(col.upcast()))
     }
@@ -408,10 +416,19 @@ impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
     fn column_memory_size(col: &Self::Column) -> usize {
         MapInternal::<K, V>::column_memory_size(col)
     }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> std::cmp::Ordering {
+        MapInternal::<K, V>::compare(lhs, rhs)
+    }
 }
 
 impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     type ColumnBuilder = <MapInternal<K, V> as ValueType>::ColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Map(KvPair::<K, V>::upcast_column(scalar))
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         MapInternal::<K, V>::try_downcast_builder(builder)

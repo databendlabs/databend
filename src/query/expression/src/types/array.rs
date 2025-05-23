@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::iter::once;
 use std::iter::TrustedLen;
 use std::marker::PhantomData;
@@ -74,10 +75,6 @@ impl<T: AccessType> AccessType for ArrayType<T> {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Array(<T as AccessType>::upcast_column(scalar))
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::Array(Box::new(col.upcast()))
     }
@@ -114,10 +111,29 @@ impl<T: AccessType> AccessType for ArrayType<T> {
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
     }
+
+    fn compare(a: T::Column, b: T::Column) -> Ordering {
+        let ord = T::column_len(&a).cmp(&T::column_len(&b));
+        if ord != Ordering::Equal {
+            return ord;
+        }
+
+        for (l, r) in T::iter_column(&a).zip(T::iter_column(&b)) {
+            let ord = T::compare(l, r);
+            if ord != Ordering::Equal {
+                return ord;
+            }
+        }
+        Ordering::Equal
+    }
 }
 
 impl<T: ValueType> ValueType for ArrayType<T> {
     type ColumnBuilder = ArrayColumnBuilder<T>;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Array(T::upcast_column(scalar))
+    }
 
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         None

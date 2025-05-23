@@ -57,9 +57,6 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         T::downcast_scalar(scalar)
     }
-    fn upcast_scalar(_: ()) -> Scalar {
-        T::upcast_scalar()
-    }
 
     fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         T::downcast_column(col)
@@ -139,6 +136,10 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
 
 impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
     type ColumnBuilder = usize;
+
+    fn upcast_scalar(_: ()) -> Scalar {
+        T::upcast_scalar()
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut usize> {
         T::downcast_builder(builder)

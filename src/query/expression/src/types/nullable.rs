@@ -85,13 +85,6 @@ impl<T: AccessType> AccessType for NullableType<T> {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        match scalar {
-            Some(scalar) => T::upcast_scalar(scalar),
-            None => Scalar::Null,
-        }
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::Nullable(Box::new(col.upcast()))
     }
@@ -177,6 +170,13 @@ impl<T: AccessType> AccessType for NullableType<T> {
 
 impl<T: ValueType> ValueType for NullableType<T> {
     type ColumnBuilder = NullableColumnBuilder<T>;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        match scalar {
+            Some(scalar) => T::upcast_scalar(scalar),
+            None => Scalar::Null,
+        }
+    }
 
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         None

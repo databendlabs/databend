@@ -66,10 +66,6 @@ impl AccessType for BinaryType {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Binary(scalar)
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::Binary(col)
     }
@@ -114,6 +110,10 @@ impl AccessType for BinaryType {
 
 impl ValueType for BinaryType {
     type ColumnBuilder = BinaryColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Binary(scalar)
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {

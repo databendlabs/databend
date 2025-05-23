@@ -83,10 +83,6 @@ impl AccessType for VariantType {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Variant(scalar)
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::Variant(col)
     }
@@ -134,6 +130,10 @@ impl AccessType for VariantType {
 
 impl ValueType for VariantType {
     type ColumnBuilder = BinaryColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Variant(scalar)
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {

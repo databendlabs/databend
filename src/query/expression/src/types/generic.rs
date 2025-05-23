@@ -59,10 +59,6 @@ impl<const INDEX: usize> AccessType for GenericType<INDEX> {
         Some(domain.clone())
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        scalar
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         col
     }
@@ -108,6 +104,10 @@ impl<const INDEX: usize> AccessType for GenericType<INDEX> {
 
 impl<const INDEX: usize> ValueType for GenericType<INDEX> {
     type ColumnBuilder = ColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        scalar
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         Some(builder)

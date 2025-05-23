@@ -65,10 +65,6 @@ impl AccessType for BitmapType {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Bitmap(scalar)
-    }
-
     fn upcast_column(col: Self::Column) -> Column {
         Column::Bitmap(col)
     }
@@ -114,6 +110,10 @@ impl AccessType for BitmapType {
 
 impl ValueType for BitmapType {
     type ColumnBuilder = BinaryColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Bitmap(scalar)
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {

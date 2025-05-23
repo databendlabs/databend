@@ -372,13 +372,11 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_>;
 
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>>;
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
+    fn upcast_domain(domain: Self::Domain) -> Domain;
 
     fn try_downcast_column(col: &Column) -> Option<Self::Column>;
     fn upcast_column(col: Self::Column) -> Column;
-
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
-    fn upcast_domain(domain: Self::Domain) -> Domain;
 
     fn column_len(col: &Self::Column) -> usize;
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>>;
@@ -406,12 +404,8 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
     }
 
-    /// This is default implementation yet it's not efficient.
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        Self::upcast_scalar(Self::to_owned_scalar(lhs))
-            .cmp(&Self::upcast_scalar(Self::to_owned_scalar(rhs)))
-    }
+    /// Compare two scalar values.
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering;
 
     /// Equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
@@ -453,6 +447,9 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
 /// ValueType includes the builder method of a data type based on AccessType
 pub trait ValueType: AccessType {
     type ColumnBuilder: Debug + Clone;
+
+    /// Convert a scalar value to the generic Scalar type
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
 
     /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.
     ///

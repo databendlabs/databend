@@ -21,7 +21,6 @@ use databend_common_column::buffer::Buffer;
 
 use super::simple_type::SimpleType;
 use super::AccessType;
-use super::Scalar;
 use crate::Column;
 use crate::Domain;
 use crate::ScalarRef;
@@ -62,11 +61,6 @@ where
 
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         F::downcast_scalar(scalar).map(|v| C::compute(&v))
-    }
-
-    fn upcast_scalar(_: Self::Scalar) -> Scalar {
-        // Consider moving this method to ValueType
-        unimplemented!()
     }
 
     fn try_downcast_column(col: &Column) -> Option<Self::Column> {
