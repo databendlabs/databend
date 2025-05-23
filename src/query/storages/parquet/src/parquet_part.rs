@@ -57,7 +57,13 @@ pub struct ParquetFilePart {
     pub file: String,
     pub compressed_size: u64,
     pub estimated_uncompressed_size: u64,
+    // used to cache parquet metadata
     pub dedup_key: String,
+
+    // For large parquet files, we will split the file into multiple parts
+    // But we don't read metadata during plan stage, so we split them by 128MB into buckets
+    // (bucket_idx, bucket_num)
+    pub bucket_option: Option<(usize, usize)>,
 }
 
 impl ParquetFilePart {
@@ -156,6 +162,7 @@ pub(crate) fn collect_small_file_parts(
                     compressed_size: size,
                     estimated_uncompressed_size: (size as f64 / max_compression_ratio) as u64,
                     dedup_key,
+                    bucket_option: None,
                 })
                 .collect::<Vec<_>>();
 
@@ -185,20 +192,25 @@ pub(crate) fn collect_file_parts(
             (size as f64) * (num_columns_to_read as f64) / (total_columns_to_read as f64);
 
         let estimated_uncompressed_size = read_bytes * compress_ratio;
+        const BUCKET_SIZE: usize = 128 * 1024 * 1024;
+        let bucket_num = (size as usize).div_ceil(BUCKET_SIZE);
+        for bucket in 0..bucket_num {
+            partitions
+                .partitions
+                .push(Arc::new(Box::new(ParquetPart::File(ParquetFilePart {
+                    file: file.clone(),
+                    compressed_size: size,
+                    estimated_uncompressed_size: estimated_uncompressed_size as u64,
+                    dedup_key: dedup_key.clone(),
+                    bucket_option: Some((bucket, bucket_num)),
+                })) as Box<dyn PartInfo>));
 
-        partitions
-            .partitions
-            .push(Arc::new(Box::new(ParquetPart::File(ParquetFilePart {
-                file,
-                compressed_size: size,
-                estimated_uncompressed_size: estimated_uncompressed_size as u64,
-                dedup_key,
-            })) as Box<dyn PartInfo>));
+            stats.partitions_scanned += 1;
+            stats.partitions_total += 1;
+        }
 
         stats.read_bytes += read_bytes as usize;
         stats.read_rows += estimated_read_rows as usize;
         stats.is_exact = false;
-        stats.partitions_scanned += 1;
-        stats.partitions_total += 1;
     }
 }

@@ -33,6 +33,7 @@ pub(crate) fn convert_file_scan_task(task: iceberg::scan::FileScanTask) -> Box<d
                 compressed_size: task.length,
                 estimated_uncompressed_size: task.length * 5,
                 dedup_key: format!("{}_{}", task.data_file_path, task.length),
+                bucket_option: None,
             };
             Box::new(ParquetPart::File(file))
         }
