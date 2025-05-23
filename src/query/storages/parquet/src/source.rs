@@ -394,7 +394,7 @@ impl ParquetSource {
         for (rowgroup_idx, rg) in meta.row_groups().iter().enumerate() {
             start_row += rg.num_rows() as u64;
             // filter by bucket option
-            if !should_read(rowgroup_idx, part.bucket_option.clone()) {
+            if !should_read(rowgroup_idx, part.bucket_option) {
                 continue;
             }
 

@@ -68,10 +68,16 @@ pub struct ParquetFilePart {
 
 impl ParquetFilePart {
     pub fn compressed_size(&self) -> u64 {
-        self.compressed_size
+        match self.bucket_option {
+            Some((_, num)) => self.compressed_size / num as u64,
+            None => self.compressed_size,
+        }
     }
     pub fn uncompressed_size(&self) -> u64 {
-        self.estimated_uncompressed_size
+        match self.bucket_option {
+            Some((_, num)) => self.estimated_uncompressed_size / num as u64,
+            None => self.estimated_uncompressed_size,
+        }
     }
 }
 
