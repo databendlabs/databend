@@ -32,6 +32,10 @@ pub enum ParquetPart {
     File(ParquetFilePart),
     SmallFiles(Vec<ParquetFilePart>),
     RowGroup(ParquetRowGroupPart),
+    FileWithDeletes {
+        inner: ParquetFilePart,
+        deletes: Vec<String>,
+    },
 }
 
 impl ParquetPart {
@@ -40,6 +44,7 @@ impl ParquetPart {
             ParquetPart::File(p) => p.uncompressed_size(),
             ParquetPart::SmallFiles(p) => p.iter().map(|p| p.uncompressed_size()).sum(),
             ParquetPart::RowGroup(p) => p.uncompressed_size(),
+            ParquetPart::FileWithDeletes { inner, deletes: _ } => inner.uncompressed_size(),
         }
     }
 
@@ -48,6 +53,7 @@ impl ParquetPart {
             ParquetPart::File(p) => p.compressed_size(),
             ParquetPart::SmallFiles(p) => p.iter().map(|p| p.compressed_size()).sum(),
             ParquetPart::RowGroup(p) => p.compressed_size(),
+            ParquetPart::FileWithDeletes { inner, deletes: _ } => inner.compressed_size(),
         }
     }
 }
@@ -82,8 +88,8 @@ impl PartInfo for ParquetPart {
     }
 
     fn hash(&self) -> u64 {
-        let path = match self {
-            ParquetPart::File(p) => &p.file,
+        let paths = match self {
+            ParquetPart::File(p) => vec![&p.file],
             ParquetPart::SmallFiles(p) => {
                 let mut s = DefaultHasher::new();
                 for part in p.iter() {
@@ -91,10 +97,18 @@ impl PartInfo for ParquetPart {
                 }
                 return s.finish();
             }
-            ParquetPart::RowGroup(p) => &p.location,
+            ParquetPart::RowGroup(p) => vec![&p.location],
+            ParquetPart::FileWithDeletes { inner, deletes } => {
+                let mut paths = Vec::with_capacity(deletes.len() + 1);
+                paths.push(&inner.file);
+                for delete in deletes {
+                    paths.push(delete);
+                }
+                paths
+            }
         };
         let mut s = DefaultHasher::new();
-        path.hash(&mut s);
+        paths.hash(&mut s);
         s.finish()
     }
 }
