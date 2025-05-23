@@ -158,6 +158,11 @@ mod impls {
         fn name(&self) -> &str {
             &self.name
         }
+
+        fn clear(&self) {
+            let mut guard = self.inner.write();
+            guard.clear()
+        }
     }
 
     // Wrap an Option<CacheAccessor>, and impl CacheAccessor for it
@@ -242,6 +247,13 @@ mod impls {
             match self.as_ref() {
                 None => 0,
                 Some(cache) => cache.bytes_capacity(),
+            }
+        }
+
+        fn clear(&self) {
+            match self.as_ref() {
+                None => (),
+                Some(cache) => cache.clear(),
             }
         }
     }
