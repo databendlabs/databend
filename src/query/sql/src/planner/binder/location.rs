@@ -71,6 +71,7 @@ fn parse_azure_params(l: &mut UriLocation, root: String) -> Result<StorageParams
             .unwrap_or_default(),
         account_key: l.connection.get("account_key").cloned().unwrap_or_default(),
         root,
+        network_config: None,
     });
 
     l.connection
@@ -182,6 +183,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         enable_virtual_host_style,
         role_arn,
         external_id,
+        network_config: None,
     });
 
     l.connection
@@ -202,6 +204,7 @@ fn parse_gcs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         bucket: l.name.clone(),
         root: root.clone(),
         credential: l.connection.get("credential").cloned().unwrap_or_default(),
+        network_config: None,
     });
 
     l.connection
@@ -220,6 +223,7 @@ fn parse_ipfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams>
     let sp = StorageParams::Ipfs(StorageIpfsConfig {
         endpoint_url: secure_omission(endpoint),
         root: "/ipfs".to_string() + root.as_str(),
+        network_config: None,
     });
 
     l.connection
@@ -259,6 +263,7 @@ fn parse_oss_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         // TODO(xuanwo): Support SSE in stage later.
         server_side_encryption: "".to_string(),
         server_side_encryption_key_id: "".to_string(),
+        network_config: None,
     });
 
     l.connection
@@ -294,6 +299,7 @@ fn parse_obs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
             .cloned()
             .unwrap_or_default(),
         root,
+        network_config: None,
     });
 
     l.connection
@@ -321,6 +327,7 @@ fn parse_cos_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         secret_id: l.connection.get("secret_id").cloned().unwrap_or_default(),
         secret_key: l.connection.get("secret_key").cloned().unwrap_or_default(),
         root,
+        network_config: None,
     });
 
     l.connection
@@ -369,6 +376,7 @@ fn parse_hdfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams>
     let sp = StorageParams::Hdfs(databend_common_meta_app::storage::StorageHdfsConfig {
         name_node,
         root,
+        network_config: None,
     });
     l.connection
         .check()
@@ -419,6 +427,7 @@ fn parse_webhdfs_params(l: &mut UriLocation, root: String) -> Result<StoragePara
         delegation,
         disable_list_batch,
         user_name,
+        network_config: None,
     });
 
     l.connection
@@ -456,6 +465,7 @@ fn parse_huggingface_params(l: &mut UriLocation, root: String) -> Result<Storage
             .unwrap_or_else(|| "main".to_string()),
         root: root.to_string(),
         token: l.connection.get("token").cloned().unwrap_or_default(),
+        network_config: None,
     });
 
     l.connection
@@ -565,6 +575,7 @@ pub async fn parse_uri_location(
                     })?
                     .iter()
                     .collect(),
+                network_config: None,
             };
 
             // HTTP is special that we don't support dir, always return / instead.

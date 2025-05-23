@@ -17,7 +17,7 @@ use std::future;
 use std::mem;
 use std::str::FromStr;
 
-use databend_common_base::http_client::GLOBAL_HTTP_CLIENT;
+use databend_common_base::http_client::get_global_http_client;
 use databend_common_metrics::storage::metrics_inc_storage_http_requests_count;
 use futures::TryStreamExt;
 use http::Request;
@@ -33,11 +33,13 @@ pub struct StorageHttpClient {
     client: reqwest::Client,
 }
 
-impl Default for StorageHttpClient {
-    fn default() -> Self {
-        Self {
-            client: GLOBAL_HTTP_CLIENT.inner(),
-        }
+pub fn get_storage_http_client(
+    pool_max_idle_per_host: usize,
+    connect_timeout: u64,
+    keepalive: u64,
+) -> StorageHttpClient {
+    StorageHttpClient {
+        client: get_global_http_client(pool_max_idle_per_host, connect_timeout, keepalive).inner(),
     }
 }
 
@@ -142,9 +144,9 @@ fn to_opendal_unexpected_error(err: reqwest::Error, uri: &http::Uri, desc: &str)
 #[inline]
 fn is_temporary_error(err: &reqwest::Error) -> bool {
     // error sending request
-    err.is_request()||
-  // request or response body error
-  err.is_body() ||
-  // error decoding response body, for example, connection reset.
-  err.is_decode()
+    err.is_request() ||
+        // request or response body error
+        err.is_body() ||
+        // error decoding response body, for example, connection reset.
+        err.is_decode()
 }
