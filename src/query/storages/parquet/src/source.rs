@@ -16,7 +16,6 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::LazyLock;
 
 use bytes::Bytes;
 use databend_common_base::base::Progress;
@@ -25,7 +24,6 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::ParquetReadOptions;
-use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::query_kind::QueryKind;
@@ -39,9 +37,6 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
-use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TopKSorter;
 use databend_common_expression::Value;
@@ -52,9 +47,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use databend_common_storage::OperatorRegistry;
-use futures::future::try_join_all;
 use parquet::arrow::parquet_to_arrow_schema;
-use parquet::file::metadata::RowGroupMetaData;
 
 use crate::meta::check_parquet_schema;
 use crate::meta::read_metadata_async_cached;
@@ -63,41 +56,10 @@ use crate::parquet_reader::policy::ReadPolicyImpl;
 use crate::parquet_reader::ParquetWholeFileReader;
 use crate::parquet_reader::RowGroupReader;
 use crate::partition::ParquetRowGroupPart;
-use crate::partition::SerdeRowSelector;
 use crate::read_settings::ReadSettings;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
 use crate::ParquetReaderBuilder;
-
-static DELETES_FILE_SCHEMA: LazyLock<arrow_schema::Schema> = LazyLock::new(|| {
-    arrow_schema::Schema::new(vec![
-        arrow_schema::Field::new("file_path", arrow_schema::DataType::Utf8, false),
-        arrow_schema::Field::new("pos", arrow_schema::DataType::Int64, false),
-    ])
-});
-
-static DELETES_FILE_TABLE_SCHEMA: LazyLock<Arc<TableSchema>> = LazyLock::new(|| {
-    Arc::new(TableSchema::new(vec![
-        TableField::new("file_path", TableDataType::String),
-        TableField::new("pos", TableDataType::Number(NumberDataType::Int64)),
-    ]))
-});
-
-static DELETES_FILE_PUSHDOWN_INFO: LazyLock<PushDownInfo> = LazyLock::new(|| PushDownInfo {
-    projection: Some(Projection::Columns(vec![1])),
-    output_columns: None,
-    filters: None,
-    is_deterministic: false,
-    prewhere: None,
-    limit: None,
-    order_by: vec![],
-    virtual_column: None,
-    lazy_materialization: false,
-    agg_index: None,
-    change_type: None,
-    inverted_index: None,
-    sample: None,
-});
 
 enum State {
     Init,
@@ -327,6 +289,8 @@ impl Processor for ParquetSource {
                                     ),
                                     part,
                                     &mut self.topk_sorter,
+                                    None,
+                                    &mut None,
                                 )
                                 .await?
                             {
@@ -368,45 +332,8 @@ impl Processor for ParquetSource {
                             }
                         }
                         ParquetPart::FileWithDeletes { inner, deletes } => {
-                            let futures = deletes.iter().map(|delete| async {
-                                let (op, path) = self.op_registry.get_operator_path(delete)?;
-                                let meta = op.stat(path).await?;
-                                let info = &DELETES_FILE_PUSHDOWN_INFO;
-
-                                let mut builder = ParquetReaderBuilder::create(
-                                    self.ctx.clone(),
-                                    Arc::new(op),
-                                    DELETES_FILE_TABLE_SCHEMA.clone(),
-                                    DELETES_FILE_SCHEMA.clone(),
-                                )?
-                                .with_push_downs(Some(info));
-                                let reader =
-                                    builder.build_full_reader(ParquetSourceType::Iceberg, false)?;
-                                let mut stream = reader
-                                    .prepare_data_stream(path, meta.content_length(), None)
-                                    .await?;
-                                let mut positional_deletes = Vec::new();
-
-                                while let Some(block) =
-                                    reader.read_block_from_stream(&mut stream).await?
-                                {
-                                    let num_rows = block.num_rows();
-                                    let column = block.columns()[0].to_column(num_rows);
-                                    let column = column.as_number().unwrap().as_int64().unwrap();
-
-                                    positional_deletes.extend_from_slice(column.as_slice())
-                                }
-
-                                Result::Ok(positional_deletes)
-                            });
-                            let positional_deletes = try_join_all(futures)
-                                .await?
-                                .into_iter()
-                                .flatten()
-                                .collect::<Vec<_>>();
-                            let readers = self
-                                .get_rows_readers(inner, Some(positional_deletes))
-                                .await?;
+                            let readers =
+                                self.get_rows_readers(inner, Some(deletes.clone())).await?;
                             if !readers.is_empty() {
                                 self.state = State::ReadRowGroup {
                                     readers,
@@ -430,7 +357,7 @@ impl ParquetSource {
     async fn get_rows_readers(
         &mut self,
         part: &ParquetFilePart,
-        positional_deletes: Option<Vec<i64>>,
+        delete_files: Option<Vec<String>>,
     ) -> Result<VecDeque<(ReadPolicyImpl, u64)>> {
         // Let's read the small file directly
         let (op, path) = self.row_group_reader.operator(part.file.as_str())?;
@@ -438,9 +365,6 @@ impl ParquetSource {
         let meta =
             read_metadata_async_cached(path, &op, Some(part.compressed_size), &part.dedup_key)
                 .await?;
-        let selectors = positional_deletes
-            .map(|deletes| Self::build_deletes_row_selection(meta.row_groups(), deletes))
-            .transpose()?;
 
         let from_stage_table = matches!(self.source_type, ParquetSourceType::StageTable);
         if from_stage_table {
@@ -485,6 +409,12 @@ impl ParquetSource {
 
         let mut start_row = 0;
         let mut readers = VecDeque::with_capacity(meta.num_row_groups());
+        // Deleted files only belong to the same Parquet, so they only need to be loaded once
+        let mut buf_delete_selection = None;
+        let delete_info = delete_files
+            .as_ref()
+            .map(|files| (meta.as_ref(), files.as_slice()));
+
         for rg in meta.row_groups() {
             let part = ParquetRowGroupPart {
                 location: part.file.clone(),
@@ -496,7 +426,7 @@ impl ParquetSource {
                 sort_min_max: None,
                 omit_filter: false,
                 page_locations: None,
-                selectors: selectors.clone(),
+                selectors: None,
             };
             start_row += rg.num_rows() as u64;
 
@@ -505,6 +435,8 @@ impl ParquetSource {
                     &ReadSettings::from_ctx(&self.ctx)?.with_enable_cache(!from_stage_table),
                     &part,
                     &mut self.topk_sorter,
+                    delete_info,
+                    &mut buf_delete_selection,
                 )
                 .await?;
 
@@ -513,101 +445,6 @@ impl ParquetSource {
             }
         }
         Ok(readers)
-    }
-
-    fn build_deletes_row_selection(
-        row_group_metadata_list: &[RowGroupMetaData],
-        positional_deletes: Vec<i64>,
-    ) -> Result<Vec<SerdeRowSelector>> {
-        debug_assert!(positional_deletes.is_sorted());
-        let mut results: Vec<SerdeRowSelector> = Vec::new();
-        let mut current_row_group_base_idx: u64 = 0;
-        let mut delete_vector_iter = positional_deletes.into_iter().map(|i| i as u64);
-        let mut next_deleted_row_idx_opt = delete_vector_iter.next();
-
-        for row_group_metadata in row_group_metadata_list.iter() {
-            let row_group_num_rows = row_group_metadata.num_rows() as u64;
-            let next_row_group_base_idx = current_row_group_base_idx + row_group_num_rows;
-
-            let mut next_deleted_row_idx = match next_deleted_row_idx_opt {
-                Some(next_deleted_row_idx) => {
-                    // if the index of the next deleted row is beyond this row group, add a selection for
-                    // the remainder of this row group and skip to the next row group
-                    if next_deleted_row_idx >= next_row_group_base_idx {
-                        results.push(SerdeRowSelector {
-                            row_count: row_group_num_rows as usize,
-                            skip: false,
-                        });
-                        continue;
-                    }
-
-                    next_deleted_row_idx
-                }
-
-                // If there are no more pos deletes, add a selector for the entirety of this row group.
-                _ => {
-                    results.push(SerdeRowSelector {
-                        row_count: row_group_num_rows as usize,
-                        skip: false,
-                    });
-                    continue;
-                }
-            };
-
-            let mut current_idx = current_row_group_base_idx;
-            'chunks: while next_deleted_row_idx < next_row_group_base_idx {
-                // `select` all rows that precede the next delete index
-                if current_idx < next_deleted_row_idx {
-                    let run_length = next_deleted_row_idx - current_idx;
-                    results.push(SerdeRowSelector {
-                        row_count: run_length as usize,
-                        skip: false,
-                    });
-                    current_idx += run_length;
-                }
-
-                // `skip` all consecutive deleted rows in the current row group
-                let mut run_length = 0;
-                while next_deleted_row_idx == current_idx
-                    && next_deleted_row_idx < next_row_group_base_idx
-                {
-                    run_length += 1;
-                    current_idx += 1;
-
-                    next_deleted_row_idx_opt = delete_vector_iter.next();
-                    next_deleted_row_idx = match next_deleted_row_idx_opt {
-                        Some(next_deleted_row_idx) => next_deleted_row_idx,
-                        _ => {
-                            // We've processed the final positional delete.
-                            // Conclude the skip and then break so that we select the remaining
-                            // rows in the row group and move on to the next row group
-                            results.push(SerdeRowSelector {
-                                row_count: run_length,
-                                skip: true,
-                            });
-                            break 'chunks;
-                        }
-                    };
-                }
-                if run_length > 0 {
-                    results.push(SerdeRowSelector {
-                        row_count: run_length,
-                        skip: true,
-                    });
-                }
-            }
-
-            if current_idx < next_row_group_base_idx {
-                results.push(SerdeRowSelector {
-                    row_count: (next_row_group_base_idx - current_idx) as usize,
-                    skip: false,
-                });
-            }
-
-            current_row_group_base_idx += row_group_num_rows;
-        }
-
-        Ok(results)
     }
 }
 
