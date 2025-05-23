@@ -29,7 +29,7 @@ runs:
         fi
         tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
 
-        pip install pyspark
+        pip install pyspark==3.5.0
         python3 tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
         python3 tests/sqllogictests/scripts/prepare_iceberg_test_data.py
 

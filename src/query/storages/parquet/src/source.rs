@@ -52,6 +52,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use databend_common_storage::OperatorRegistry;
+use futures::future::try_join_all;
 use parquet::arrow::parquet_to_arrow_schema;
 use parquet::file::metadata::RowGroupMetaData;
 
@@ -367,9 +368,7 @@ impl Processor for ParquetSource {
                             }
                         }
                         ParquetPart::FileWithDeletes { inner, deletes } => {
-                            let mut positional_deletes = Vec::new();
-
-                            for delete in deletes {
+                            let futures = deletes.iter().map(|delete| async {
                                 let (op, path) = self.op_registry.get_operator_path(delete)?;
                                 let meta = op.stat(path).await?;
                                 let info = &DELETES_FILE_PUSHDOWN_INFO;
@@ -386,6 +385,7 @@ impl Processor for ParquetSource {
                                 let mut stream = reader
                                     .prepare_data_stream(path, meta.content_length(), None)
                                     .await?;
+                                let mut positional_deletes = Vec::new();
 
                                 while let Some(block) =
                                     reader.read_block_from_stream(&mut stream).await?
@@ -396,8 +396,14 @@ impl Processor for ParquetSource {
 
                                     positional_deletes.extend_from_slice(column.as_slice())
                                 }
-                            }
 
+                                Result::Ok(positional_deletes)
+                            });
+                            let positional_deletes = try_join_all(futures)
+                                .await?
+                                .into_iter()
+                                .flatten()
+                                .collect::<Vec<_>>();
                             let readers = self
                                 .get_rows_readers(inner, Some(positional_deletes))
                                 .await?;
@@ -513,6 +519,7 @@ impl ParquetSource {
         row_group_metadata_list: &[RowGroupMetaData],
         positional_deletes: Vec<i64>,
     ) -> Result<Vec<SerdeRowSelector>> {
+        debug_assert!(positional_deletes.is_sorted());
         let mut results: Vec<SerdeRowSelector> = Vec::new();
         let mut current_row_group_base_idx: u64 = 0;
         let mut delete_vector_iter = positional_deletes.into_iter().map(|i| i as u64);
