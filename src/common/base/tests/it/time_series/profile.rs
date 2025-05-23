@@ -101,7 +101,7 @@ fn test_compress_time_point_special_invalid() {
         (1744971865, 100),
         (1744971866, 200),
         (1744971867, 50),
-        // extreme case, we not merge it
+        // extreme case, we will not merge it
         (1744971865, 123),
         (1744971868, 150),
         (1744971870, 20),

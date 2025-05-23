@@ -200,6 +200,11 @@ impl Default for TimeSeriesProfiles {
 ///   the compressed result will be:
 ///   `[[1744971865, 100, 200, 50, 150], [1744971870, 20, 40]]`
 ///
+///   Because the data collection is highly competitive, the results may include entries
+///   like [[1744971865, 100, 200, 50], [1744971866, 123], [1744971868, 150]], which means
+///   the timestamp is not always strictly increasing
+///
+///
 /// Note:
 ///   Why convert to `[timestamp, value0, value1, value2]` instead of `[timestamp, (value0, value1, value2)]`:
 ///   Rust serde_json will convert a tuple to a list. [timestamp, (value0, value1, value2)] will be converted to
