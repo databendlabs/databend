@@ -216,9 +216,10 @@ impl Binder {
         };
         expr_replacer.replace_query(&mut as_query);
 
+        let catalog = self.ctx.get_current_catalog();
         let create_table_stmt = CreateTableStmt {
             create_option: CreateOption::Create,
-            catalog: Some(Identifier::from_name(Span::None, CATALOG_DEFAULT)),
+            catalog: Some(Identifier::from_name(Span::None, catalog.clone())),
             database: Some(Identifier::from_name(Span::None, database.clone())),
             table: table_identifier,
             source: None,
@@ -246,6 +247,6 @@ impl Binder {
         self.ctx.add_m_cte_temp_table(&database, &table_name);
 
         self.ctx
-            .evict_table_from_cache(CATALOG_DEFAULT, &database, &table_name)
+            .evict_table_from_cache(&catalog, &database, &table_name)
     }
 }
