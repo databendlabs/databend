@@ -19,6 +19,8 @@ use std::ops::Range;
 
 use super::AccessType;
 use super::DecimalSize;
+use super::GenericMap;
+use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
 use crate::Column;
@@ -185,5 +187,22 @@ impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
 
     fn build_scalar(builder: usize) {
         assert_eq!(builder, 1);
+    }
+}
+
+impl<T: ZeroSizeType> ReturnType for ZeroSizeValueType<T> {
+    fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
+        0
+    }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.count()
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        _: &GenericMap,
+    ) -> Self::Column {
+        iter.count()
     }
 }

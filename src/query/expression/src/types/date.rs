@@ -29,8 +29,6 @@ use super::number::SimpleDomain;
 use super::ArgType;
 use super::DataType;
 use super::DecimalSize;
-use super::GenericMap;
-use super::ReturnType;
 use super::SimpleType;
 use super::SimpleValueType;
 use crate::date_helper::DateConverter;
@@ -135,27 +133,6 @@ impl ArgType for DateType {
             min: DATE_MIN,
             max: DATE_MAX,
         }
-    }
-}
-
-impl ReturnType for DateType {
-    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        Vec::with_capacity(capacity)
-    }
-
-    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
-        vec.into()
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.collect()
-    }
-
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        _: &GenericMap,
-    ) -> Self::Column {
-        iter.collect()
     }
 }
 

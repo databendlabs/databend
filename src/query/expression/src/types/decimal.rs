@@ -53,10 +53,6 @@ use super::compute_view::Compute;
 use super::compute_view::ComputeView;
 use super::AccessType;
 use super::AnyType;
-use super::ArgType;
-use super::DataType;
-use super::GenericMap;
-use super::ReturnType;
 use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
@@ -150,37 +146,16 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     }
 }
 
-impl<Num: Decimal> ArgType for DecimalType<Num> {
-    fn data_type() -> DataType {
-        Num::data_type()
-    }
-
-    fn full_domain() -> Self::Domain {
+impl<Num: Decimal> DecimalType<Num> {
+    pub fn full_domain(size: &DecimalSize) -> SimpleDomain<Num> {
         SimpleDomain {
-            min: Num::MIN,
-            max: Num::MAX,
+            min: Num::min_for_precision(size.precision),
+            max: Num::max_for_precision(size.precision),
         }
     }
-}
 
-impl<Num: Decimal> ReturnType for DecimalType<Num> {
-    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        Vec::with_capacity(capacity)
-    }
-
-    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
-        vec.into()
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.collect()
-    }
-
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        _: &GenericMap,
-    ) -> Self::Column {
-        iter.collect()
+    pub fn default_size() -> DecimalSize {
+        Num::default_decimal_size()
     }
 }
 
@@ -389,7 +364,6 @@ pub trait Decimal:
     fn upcast_column(col: Buffer<Self>, size: DecimalSize) -> Column;
     fn upcast_domain(domain: SimpleDomain<Self>, size: DecimalSize) -> Domain;
     fn upcast_builder(builder: Vec<Self>, size: DecimalSize) -> DecimalColumnBuilder;
-    fn data_type() -> DataType;
     const MIN: Self;
     const MAX: Self;
 
@@ -670,13 +644,6 @@ impl Decimal for i128 {
         DecimalColumnBuilder::Decimal128(builder, size)
     }
 
-    fn data_type() -> DataType {
-        DataType::Decimal(DecimalSize {
-            precision: MAX_DECIMAL128_PRECISION,
-            scale: 0,
-        })
-    }
-
     const MIN: i128 = -99999999999999999999999999999999999999i128;
 
     const MAX: i128 = 99999999999999999999999999999999999999i128;
@@ -938,13 +905,6 @@ impl Decimal for i256 {
 
     fn upcast_builder(builder: Vec<Self>, size: DecimalSize) -> DecimalColumnBuilder {
         DecimalColumnBuilder::Decimal256(builder, size)
-    }
-
-    fn data_type() -> DataType {
-        DataType::Decimal(DecimalSize {
-            precision: MAX_DECIMAL256_PRECISION,
-            scale: 0,
-        })
     }
 
     const MIN: i256 = i256(ethnum::int!(
@@ -2595,7 +2555,7 @@ mod tests {
         ];
 
         let size = DecimalSize::new_unchecked(38, 10);
-        let col_128 = Decimal128Type::from_data_with_size(test_values.clone(), size);
+        let col_128 = Decimal128Type::from_data_with_size(test_values.clone(), Some(size));
 
         let downcast_col = Decimal128As256Type::try_downcast_column(&col_128).unwrap();
         let builder: Vec<i256> = Decimal128As256Type::iter_column(&downcast_col).collect();

@@ -205,7 +205,7 @@ impl<K: ArgType, V: ArgType> ArgType for KvPair<K, V> {
     }
 }
 
-impl<K: ArgType, V: ArgType> ReturnType for KvPair<K, V> {
+impl<K: ReturnType, V: ReturnType> ReturnType for KvPair<K, V> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         KvColumnBuilder::with_capacity(capacity, generics)
     }
@@ -308,7 +308,7 @@ impl<K: ValueType, V: ValueType> KvColumnBuilder<K, V> {
     }
 }
 
-impl<K: ArgType, V: ArgType> KvColumnBuilder<K, V> {
+impl<K: ReturnType, V: ReturnType> KvColumnBuilder<K, V> {
     pub fn with_capacity(capacity: usize, generics: &GenericMap) -> Self {
         Self {
             keys: K::create_builder(capacity, generics),
@@ -487,7 +487,7 @@ impl<K: ArgType, V: ArgType> ArgType for MapType<K, V> {
     }
 }
 
-impl<K: ArgType, V: ArgType> ReturnType for MapType<K, V> {
+impl<K: ReturnType, V: ReturnType> ReturnType for MapType<K, V> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         MapInternal::<K, V>::create_builder(capacity, generics)
     }

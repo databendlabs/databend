@@ -92,7 +92,7 @@ fn test_decimal128() {
             Some(5456_i128),
             Some(i128::MAX),
         ],
-        DecimalSize::new_unchecked(38, 7),
+        Some(DecimalSize::new_unchecked(38, 7)),
     );
 
     let num_rows = col.len();
@@ -123,7 +123,7 @@ fn test_decimal256() {
             Some(i256::from_words(46_i128, 5)),
             Some(i256::MAX),
         ],
-        DecimalSize::new_unchecked(76, 7),
+        Some(DecimalSize::new_unchecked(76, 7)),
     );
 
     let num_rows = col.len();

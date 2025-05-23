@@ -60,8 +60,6 @@ impl_from_data! { UInt32Type }
 impl_from_data! { UInt64Type }
 impl_from_data! { Float32Type }
 impl_from_data! { Float64Type }
-impl_from_data! { Decimal128Type }
-impl_from_data! { Decimal256Type }
 impl_from_data! { BooleanType }
 impl_from_data! { BinaryType }
 impl_from_data! { StringType }
@@ -118,14 +116,17 @@ impl FromData<f64> for Float64Type {
 }
 
 impl<Num: Decimal> DecimalType<Num> {
-    pub fn from_data_with_size<D: AsRef<[Num]>>(d: D, size: DecimalSize) -> Column {
+    pub fn from_data_with_size<D: AsRef<[Num]>>(d: D, size: Option<DecimalSize>) -> Column {
         Num::upcast_column(
             Self::column_from_iter(d.as_ref().iter().copied(), &[]),
-            size,
+            size.unwrap_or(Num::default_decimal_size()),
         )
     }
 
-    pub fn from_opt_data_with_size<D: AsRef<[Option<Num>]>>(d: D, size: DecimalSize) -> Column {
+    pub fn from_opt_data_with_size<D: AsRef<[Option<Num>]>>(
+        d: D,
+        size: Option<DecimalSize>,
+    ) -> Column {
         let mut validity = MutableBitmap::with_capacity(d.as_ref().len());
         let mut data = Vec::with_capacity(d.as_ref().len());
         for v in d.as_ref() {

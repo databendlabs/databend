@@ -13,13 +13,11 @@
 // limitations under the License.
 
 use super::nullable::NullableDomain;
-use super::ReturnType;
 use super::ZeroSizeType;
 use super::ZeroSizeValueType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
-use crate::types::GenericMap;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -95,21 +93,4 @@ impl ArgType for NullType {
     }
 
     fn full_domain() -> Self::Domain {}
-}
-
-impl ReturnType for NullType {
-    fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        0
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.count()
-    }
-
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        _: &GenericMap,
-    ) -> Self::Column {
-        iter.count()
-    }
 }

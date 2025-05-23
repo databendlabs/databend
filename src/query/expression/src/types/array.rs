@@ -215,7 +215,7 @@ impl<T: ArgType> ArgType for ArrayType<T> {
     }
 }
 
-impl<T: ArgType> ReturnType for ArrayType<T> {
+impl<T: ReturnType> ReturnType for ArrayType<T> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         ArrayColumnBuilder::with_capacity(capacity, 0, generics)
     }
@@ -477,7 +477,7 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
     }
 }
 
-impl<T: ArgType> ArrayColumnBuilder<T> {
+impl<T: ReturnType> ArrayColumnBuilder<T> {
     pub fn with_capacity(len: usize, values_capacity: usize, generics: &GenericMap) -> Self {
         let mut offsets = Vec::with_capacity(len + 1);
         offsets.push(0);

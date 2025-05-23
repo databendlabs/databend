@@ -442,7 +442,7 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     }
 }
 
-/// ValueType includes the builder method of a data type based on AccessType
+/// ValueType includes the builder method of a data type based on AccessType.
 pub trait ValueType: AccessType {
     type ColumnBuilder: Debug + Clone;
 
@@ -493,7 +493,7 @@ pub trait ValueType: AccessType {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
 }
 
-/// ReturnType and ValueType are very similar, and it should be considered to merge them into ValueType in subsequent refactoring
+/// Almost all ValueType implement ReturnType, except AnyType.
 pub trait ReturnType: ValueType {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
@@ -524,6 +524,7 @@ pub trait ReturnType: ValueType {
     }
 }
 
+/// Almost all ReturnType implement ArgType, except Decimal.
 pub trait ArgType: ReturnType {
     fn data_type() -> DataType;
     fn full_domain() -> Self::Domain;

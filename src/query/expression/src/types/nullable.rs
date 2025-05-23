@@ -278,7 +278,7 @@ impl<T: ArgType> ArgType for NullableType<T> {
     }
 }
 
-impl<T: ArgType> ReturnType for NullableType<T> {
+impl<T: ReturnType> ReturnType for NullableType<T> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         NullableColumnBuilder::with_capacity(capacity, generics)
     }
@@ -494,7 +494,7 @@ impl<T: ValueType> NullableColumnBuilder<T> {
     }
 }
 
-impl<T: ArgType> NullableColumnBuilder<T> {
+impl<T: ReturnType> NullableColumnBuilder<T> {
     pub fn with_capacity(capacity: usize, generics: &GenericMap) -> Self {
         NullableColumnBuilder {
             builder: T::create_builder(capacity, generics),

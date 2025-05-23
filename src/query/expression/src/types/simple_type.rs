@@ -21,6 +21,8 @@ use databend_common_column::buffer::Buffer;
 
 use super::AccessType;
 use super::DecimalSize;
+use super::GenericMap;
+use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
 use crate::arrow::buffer_into_mut;
@@ -238,5 +240,11 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
     fn build_scalar(builder: Vec<Self::Scalar>) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
         builder[0]
+    }
+}
+
+impl<T: SimpleType> ReturnType for SimpleValueType<T> {
+    fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
+        Vec::with_capacity(capacity)
     }
 }

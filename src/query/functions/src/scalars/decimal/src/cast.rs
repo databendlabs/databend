@@ -462,7 +462,7 @@ pub fn convert_to_decimal_domain(
                 DecimalDomain::DECIMAL(d, size) => {
                     let min = d.min;
                     let max = d.max;
-                    DecimalType::from_data_with_size(vec![min, max], size)
+                    DecimalType::from_data_with_size(vec![min, max], Some(size))
                 }
             })
         }

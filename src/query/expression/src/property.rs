@@ -198,12 +198,12 @@ impl Domain {
             DataType::Decimal(size) => {
                 if size.can_carried_by_128() {
                     Domain::Decimal(DecimalDomain::Decimal128(
-                        Decimal128Type::full_domain(),
+                        Decimal128Type::full_domain(size),
                         *size,
                     ))
                 } else {
                     Domain::Decimal(DecimalDomain::Decimal256(
-                        Decimal256Type::full_domain(),
+                        Decimal256Type::full_domain(size),
                         *size,
                     ))
                 }

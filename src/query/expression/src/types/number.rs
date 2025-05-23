@@ -33,11 +33,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::decimal::DecimalSize;
-use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
-use crate::types::GenericMap;
 use crate::types::SimpleType;
 use crate::types::SimpleValueType;
 use crate::utils::arrow::buffer_into_mut;
@@ -189,27 +187,6 @@ impl<Num: Number> ArgType for NumberType<Num> {
             min: Num::MIN,
             max: Num::MAX,
         }
-    }
-}
-
-impl<Num: Number> ReturnType for NumberType<Num> {
-    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        Vec::with_capacity(capacity)
-    }
-
-    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
-        vec.into()
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.collect()
-    }
-
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        _: &GenericMap,
-    ) -> Self::Column {
-        iter.collect()
     }
 }
 
