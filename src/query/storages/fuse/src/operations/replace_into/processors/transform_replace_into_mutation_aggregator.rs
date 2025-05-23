@@ -21,18 +21,18 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 
-use crate::operations::replace_into::meta::MergeIntoOperation;
-use crate::operations::replace_into::mutator::MergeIntoOperationAggregator;
+use crate::operations::replace_into::meta::ReplaceIntoOperation;
+use crate::operations::replace_into::mutator::ReplaceIntoOperationAggregator;
 
 #[async_trait::async_trait]
-impl AsyncAccumulatingTransform for MergeIntoOperationAggregator {
-    const NAME: &'static str = "MergeIntoMutationAggregator";
+impl AsyncAccumulatingTransform for ReplaceIntoOperationAggregator {
+    const NAME: &'static str = "ReplaceIntoMutationAggregator";
 
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         // accumulate mutations
-        let merge_into_operation = MergeIntoOperation::try_from(data)?;
-        self.accumulate(merge_into_operation).await?;
+        let replace_into_operation = ReplaceIntoOperation::try_from(data)?;
+        self.accumulate(replace_into_operation).await?;
         // no partial output
         Ok(None)
     }
@@ -45,7 +45,7 @@ impl AsyncAccumulatingTransform for MergeIntoOperationAggregator {
     }
 }
 
-impl MergeIntoOperationAggregator {
+impl ReplaceIntoOperationAggregator {
     pub fn into_pipe_item(self) -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();

@@ -10,13 +10,13 @@ echo "insert into t1 (id,name,age) values(1,'2',3), (4, '5', 6);" | $BENDSQL_CLI
 echo '--- named internal stage'
 echo "drop stage if exists s1;" | $BENDSQL_CLIENT_CONNECT
 echo "create stage s1 FILE_FORMAT = (type = PARQUET);" | $BENDSQL_CLIENT_CONNECT
-echo "copy into @s1 from t1;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into @s1 from t1;" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
 echo "select * from @s1;" | $BENDSQL_CLIENT_CONNECT
 
 DATADIR_PATH="/tmp/08_00_00"
 rm -rf ${DATADIR_PATH}
 DATADIR="fs://$DATADIR_PATH/"
-echo "copy into '${DATADIR}' from t1 FILE_FORMAT = (type = PARQUET);" | $BENDSQL_CLIENT_CONNECT
+echo "copy into '${DATADIR}' from t1 FILE_FORMAT = (type = PARQUET);" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
 
 #echo '--- uri'
 #echo "select * from '${DATADIR}';" | $BENDSQL_CLIENT_CONNECT
@@ -38,7 +38,7 @@ echo "insert into t2 (id,data) values(1,'[1,2,3]'),(2,'{\"k\":\"v\"}');" | $BEND
 echo '--- variant named internal stage'
 echo "drop stage if exists s4;" | $BENDSQL_CLIENT_CONNECT
 echo "create stage s4 FILE_FORMAT = (type = PARQUET);" | $BENDSQL_CLIENT_CONNECT
-echo "copy into @s4 from t2;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into @s4 from t2;" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
 echo "select * from @s4;" | $BENDSQL_CLIENT_CONNECT
 
 rm -rf ${DATADIR_PATH}

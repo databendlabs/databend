@@ -23,10 +23,15 @@ insert into string values (''), ('null'),('128')
 statement ok
 remove @data/unload/parquet/null_if/
 
-query
+statement ok
 copy into @data/unload/parquet/null_if from string
+
+query
+select a from  @data/unload/parquet/null_if order by a
 ----
-3 40 384
+(empty)
+128
+null
 
 statement ok
 drop file format if exists parquet_null_if

@@ -37,6 +37,6 @@ echo "drop database set_var;" | $BENDSQL_CLIENT_CONNECT
 
 echo "drop stage if exists s2" | $BENDSQL_CLIENT_CONNECT
 echo "create stage s2" | $BENDSQL_CLIENT_CONNECT
-echo "copy  /*+SET_VAR(timezone='Asia/Shanghai') */ into @s2 from (select timezone()); " | $BENDSQL_CLIENT_CONNECT
+echo "copy  /*+SET_VAR(timezone='Asia/Shanghai') */ into @s2 from (select timezone()); " | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
 echo "select * from @s2 " | $BENDSQL_CLIENT_CONNECT
 echo "drop stage s2" | $BENDSQL_CLIENT_CONNECT

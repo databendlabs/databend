@@ -7,10 +7,13 @@ create table t_uuid(id string default uuid(), a int)
 statement ok
 remove @data/parquet/unload/uuid
 
-query
+statement ok
 copy into @data/parquet/unload/uuid/ from (select 1 as a)  file_format = (type = parquet)
+
+query
+select a from @data/parquet/unload/uuid/
 ----
-1 1 377
+1
 
 query error column id doesn't exist
 copy into t_uuid from @data/parquet/unload/uuid file_format = (type = parquet) RETURN_FAILED_ONLY=TRUE
@@ -19,10 +22,9 @@ query
 select * from t_uuid
 ----
 
-query
+# prepare data for copying into t_uuid
+statement ok
 copy into @data/parquet/unload/uuid/ from (select 1 as a)  file_format = (type = parquet)
-----
-1 1 377
 
 statement ok
 truncate table t_uuid

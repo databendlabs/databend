@@ -43,10 +43,10 @@ pub struct UnbranchedReplaceIntoProcessor {
 
     // stage data blocks
     input_port: Arc<InputPort>,
-    output_port_merge_into_action: Arc<OutputPort>,
+    output_port_replace_into_action: Arc<OutputPort>,
 
     input_data: Option<DataBlock>,
-    output_data_merge_into_action: Option<DataBlock>,
+    output_data_replace_into_action: Option<DataBlock>,
 
     target_table_empty: bool,
     delete_column: Option<usize>,
@@ -74,14 +74,14 @@ impl UnbranchedReplaceIntoProcessor {
             table_range_idx,
         )?;
         let input_port = InputPort::create();
-        let output_port_merge_into_action = OutputPort::create();
+        let output_port_replace_into_action = OutputPort::create();
 
         Ok(Self {
             replace_into_mutator,
             input_port,
-            output_port_merge_into_action,
+            output_port_replace_into_action,
             input_data: None,
-            output_data_merge_into_action: None,
+            output_data_replace_into_action: None,
             target_table_empty,
             delete_column,
         })
@@ -96,10 +96,10 @@ impl UnbranchedReplaceIntoProcessor {
     #[allow(dead_code)]
     pub fn into_pipe_item(self) -> PipeItem {
         let input = self.input_port.clone();
-        let output_port_merge_into_action = self.output_port_merge_into_action.clone();
+        let output_port_replace_into_action = self.output_port_replace_into_action.clone();
         let processor_ptr = ProcessorPtr::create(Box::new(self));
         PipeItem::create(processor_ptr, vec![input], vec![
-            output_port_merge_into_action,
+            output_port_replace_into_action,
         ])
     }
 }
@@ -115,17 +115,17 @@ impl Processor for UnbranchedReplaceIntoProcessor {
     }
     fn event(&mut self) -> Result<Event> {
         let finished =
-            self.input_port.is_finished() && self.output_data_merge_into_action.is_none();
+            self.input_port.is_finished() && self.output_data_replace_into_action.is_none();
 
         if finished {
-            self.output_port_merge_into_action.finish();
+            self.output_port_replace_into_action.finish();
             return Ok(Event::Finished);
         }
 
         let mut pushed_something = false;
-        if self.output_port_merge_into_action.can_push() {
-            if let Some(data) = self.output_data_merge_into_action.take() {
-                self.output_port_merge_into_action.push_data(Ok(data));
+        if self.output_port_replace_into_action.can_push() {
+            if let Some(data) = self.output_data_replace_into_action.take() {
+                self.output_port_replace_into_action.push_data(Ok(data));
                 pushed_something = true;
             }
         }
@@ -138,7 +138,7 @@ impl Processor for UnbranchedReplaceIntoProcessor {
             }
 
             if self.input_port.has_data() {
-                if self.output_data_merge_into_action.is_none() {
+                if self.output_data_replace_into_action.is_none() {
                     // no pending data (being sent to down streams)
                     self.input_data = Some(self.input_port.pull_data().unwrap()?);
                     Ok(Event::Sync)
@@ -163,11 +163,11 @@ impl Processor for UnbranchedReplaceIntoProcessor {
                     .collect::<HashSet<_>>();
                 data_block = data_block.project(&projections);
             }
-            let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
+            let replace_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
             metrics_inc_replace_process_input_block_time_ms(start.elapsed().as_millis() as u64);
             if !self.target_table_empty {
-                self.output_data_merge_into_action =
-                    Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
+                self.output_data_replace_into_action =
+                    Some(DataBlock::empty_with_meta(Box::new(replace_into_action)));
             }
             return Ok(());
         }

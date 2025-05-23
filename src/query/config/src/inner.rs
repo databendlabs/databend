@@ -536,6 +536,10 @@ pub struct CacheConfig {
     /// Max number of cached table block meta
     pub block_meta_count: u64,
 
+    /// Max number of **segment** which all of its block meta will be cached.
+    /// Note that a segment may contain multiple block metadata entries.
+    pub segment_block_metas_count: u64,
+
     /// Max number of cached table segment
     pub table_meta_statistic_count: u64,
 
@@ -683,6 +687,7 @@ impl Default for CacheConfig {
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
             block_meta_count: 0,
+            segment_block_metas_count: 0,
             table_meta_statistic_count: 256,
             enable_table_index_bloom: true,
             table_bloom_index_meta_count: 3000,

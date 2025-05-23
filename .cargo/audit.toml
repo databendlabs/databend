@@ -31,6 +31,8 @@ ignore = [
     # borsh
     # Parsing borsh messages with ZST which are not-copy/clone is unsound
     "RUSTSEC-2023-0033",
+    # atomic-polyfill: unmaintained
+    "RUSTSEC-2023-0089",
     # yaml-rust is unmaintained.
     "RUSTSEC-2024-0320",
     # Degradation of service in h2 servers with CONTINUATION Flood(Wait for tonic to fix)
@@ -47,12 +49,40 @@ ignore = [
     "RUSTSEC-2024-0351",
     # gix-path: improperly resolves configuration path reported by Git
     "RUSTSEC-2024-0371",
+    # `atty` is unmaintained
+    "RUSTSEC-2024-0375",
     # Remotely exploitable Denial of Service in Tonic, ignored temporarily 
     "RUSTSEC-2024-0376",
+    # `instant` is unmaintained
+    "RUSTSEC-2024-0384",
+    # `derivative` is unmaintained; consider using an alternative
+    "RUSTSEC-2024-0388",
     #rustls network-reachable panic in `Acceptor::accept`
     "RUSTSEC-2024-0399",
     # `idna` accepts Punycode labels that do not produce any non-ASCII when decoded
     "RUSTSEC-2024-0421",
+    # protobuf: Crash due to uncontrolled recursion in protobuf crate
+    "RUSTSEC-2024-0437",
+    # wasmtime: Wasmtime doesn't fully sandbox all the Windows device filenames
+    "RUSTSEC-2024-0438",
+    # wasmtime: Race condition could lead to WebAssembly control-flow integrity and type safety violations
+    "RUSTSEC-2024-0439",
     # gix-worktree-state nonexclusive checkout sets executable files world-writable
     "RUSTSEC-2025-0001",
+    # `fast-float`: Segmentation fault due to lack of bound check
+    "RUSTSEC-2025-0003",
+    # ssl::select_next_proto use after free
+    "RUSTSEC-2025-0004",
+    # hickory-proto: Hickory DNS failure to verify self-signed RRSIG for DNSKEYs
+    "RUSTSEC-2025-0006",
+    # ring: Some AES functions may panic when overflow checking is enabled
+    "RUSTSEC-2025-0009",
+    # `backoff` is unmainted.
+    "RUSTSEC-2025-0012",
+    # pyo3: Risk of buffer overflow in `PyString::from_object`
+    "RUSTSEC-2025-0020",
+    # gix-features: SHA-1 collision attacks are not detected
+    "RUSTSEC-2025-0021",
+    # openssl: Use-After-Free in `Md::fetch` and `Cipher::fetch`
+    "RUSTSEC-2025-0022",
 ]

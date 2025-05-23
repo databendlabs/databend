@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod merge_into_operation_meta;
+mod replace_into_operation_meta;
 
-pub use merge_into_operation_meta::*;
+pub use replace_into_operation_meta::*;
