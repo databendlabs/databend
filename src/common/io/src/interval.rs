@@ -136,6 +136,14 @@ impl IntervalToStringCast {
 }
 
 impl Interval {
+    pub fn new(months: i32, days: i32, micros: i64) -> Self {
+        Self {
+            months,
+            days,
+            micros,
+        }
+    }
+
     pub fn from_string(str: &str) -> Result<Self> {
         Self::from_cstring(str.as_bytes())
     }

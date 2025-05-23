@@ -209,6 +209,7 @@ Functions overloads:
 1 as_boolean(Variant NULL) :: Boolean NULL
 0 as_date(Variant) :: Date NULL
 1 as_date(Variant NULL) :: Date NULL
+0 as_decimal FACTORY
 0 as_float(Variant) :: Float64 NULL
 1 as_float(Variant NULL) :: Float64 NULL
 0 as_integer(Variant) :: Int64 NULL
