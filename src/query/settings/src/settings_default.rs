@@ -633,6 +633,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
                 }),
+                ("enable_range_shuffle_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable range shuffle sort.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
