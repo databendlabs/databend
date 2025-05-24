@@ -389,7 +389,6 @@ impl HashJoinProbeState {
         let build_block = if build_state.is_build_projected {
             let null_build_block = DataBlock::new(
                 self.hash_join_state
-                    .row_space
                     .build_schema
                     .fields()
                     .iter()
@@ -446,7 +445,7 @@ impl HashJoinProbeState {
             None
         };
         let build_block = if build_state.is_build_projected {
-            let build_block = self.hash_join_state.row_space.gather(
+            let build_block = self.hash_join_state.gather(
                 &build_indexes[0..matched_idx],
                 &build_state.build_columns,
                 &build_state.build_columns_data_type,

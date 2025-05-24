@@ -15,13 +15,13 @@
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Barrier;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
@@ -29,16 +29,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDomain;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ColumnRef;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Domain;
 use databend_common_expression::Evaluator;
-use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
@@ -46,7 +41,6 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::KeysState;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::BinaryHashJoinHashMap;
@@ -63,17 +57,13 @@ use itertools::Itertools;
 use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use xorf::BinaryFuse16;
 
+use super::concat_buffer::ConcatBuffer;
 use super::desc::RuntimeFilterDesc;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
-use crate::pipelines::processors::transforms::hash_join::util::dedup_build_key_column;
-use crate::pipelines::processors::transforms::hash_join::util::hash_by_method;
-use crate::pipelines::processors::transforms::hash_join::util::inlist_filter;
-use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SerializerHashJoinHashTable;
@@ -97,11 +87,6 @@ pub struct HashJoinBuildState {
     pub(crate) next_round_counter: AtomicUsize,
     /// The barrier is used to synchronize build side processors.
     pub(crate) barrier: Barrier,
-    // When build side input data is coming, will put it into chunks.
-    // To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
-    // Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
-    // After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
-    pub(crate) chunk_size_limit: usize,
     /// Hash method for hash join keys.
     pub(crate) method: HashMethodKind,
     /// The size of each entry in HashTable.
@@ -115,8 +100,10 @@ pub struct HashJoinBuildState {
     pub(crate) build_hash_table_tasks: RwLock<VecDeque<usize>>,
     pub(crate) mutex: Mutex<()>,
 
-    /// Spill related states.
     pub(crate) memory_settings: MemorySettings,
+    pub(crate) concat_buffer: Mutex<ConcatBuffer>,
+    pub(crate) broadcast_id: Option<u32>,
+    pub(crate) is_runtime_filter_added: AtomicBool,
 }
 
 impl HashJoinBuildState {
@@ -128,6 +115,7 @@ impl HashJoinBuildState {
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
         num_threads: usize,
+        broadcast_id: Option<u32>,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -144,7 +132,7 @@ impl HashJoinBuildState {
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
 
         let settings = ctx.get_settings();
-        let chunk_size_limit = settings.get_max_block_size()? as usize * 16;
+        let concat_threshold = settings.get_max_block_size()? as usize * 16;
         let memory_settings = MemorySettings::from_join_settings(&ctx)?;
 
         Ok(Arc::new(Self {
@@ -155,7 +143,6 @@ impl HashJoinBuildState {
             finalize_counter: AtomicUsize::new(0),
             next_round_counter: AtomicUsize::new(0),
             barrier: Barrier::new(num_threads),
-            chunk_size_limit,
             method,
             entry_size: Default::default(),
             raw_entry_spaces: Default::default(),
@@ -164,40 +151,19 @@ impl HashJoinBuildState {
             build_hash_table_tasks: Default::default(),
             mutex: Default::default(),
             memory_settings,
+            concat_buffer: Mutex::new(ConcatBuffer::new(concat_threshold)),
+            broadcast_id,
+            is_runtime_filter_added: AtomicBool::new(false),
         }))
     }
 
-    /// Add input `DataBlock` to `hash_join_state.row_space`.
     pub fn build(&self, input: DataBlock) -> Result<()> {
-        let mut buffer = self.hash_join_state.row_space.buffer.write();
-
-        let input_rows = input.num_rows();
-        // We have acquired the lock, so we can use Ordering::Relaxed here.
-        let old_size = self
-            .hash_join_state
-            .row_space
-            .buffer_row_size
-            .fetch_add(input_rows, Ordering::Relaxed);
-        buffer.push(input);
-
-        if old_size + input_rows < self.chunk_size_limit {
-            return Ok(());
+        if let Some(data_block) = self.concat_buffer.lock().add_block(input)? {
+            self.add_build_block(data_block)?;
         }
-
-        let data_block = DataBlock::concat(buffer.as_slice())?;
-        buffer.clear();
-        drop(buffer);
-
-        // We have acquired the lock, so we can use Ordering::Relaxed here.
-        self.hash_join_state
-            .row_space
-            .buffer_row_size
-            .store(0, Ordering::Relaxed);
-
-        self.add_build_block(data_block)
+        Ok(())
     }
 
-    // Add `data_block` for build table to `row_space`
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
         let block_outer_scan_map = if self.hash_join_state.need_outer_scan()
             || matches!(
@@ -252,13 +218,8 @@ impl HashJoinBuildState {
     pub(crate) fn collect_done(&self) -> Result<()> {
         let old_count = self.collect_counter.fetch_sub(1, Ordering::AcqRel);
         if old_count == 1 {
-            {
-                let mut buffer = self.hash_join_state.row_space.buffer.write();
-                if !buffer.is_empty() {
-                    let data_block = DataBlock::concat(&buffer)?;
-                    self.add_build_block(data_block)?;
-                    buffer.clear();
-                }
+            if let Some(data_block) = self.concat_buffer.lock().take_remaining()? {
+                self.add_build_block(data_block)?;
             }
 
             // Get the number of rows of the build side.
@@ -286,26 +247,11 @@ impl HashJoinBuildState {
                     .build_watcher
                     .send(HashTableType::Empty)
                     .map_err(|_| ErrorCode::TokioError("build_watcher channel is closed"))?;
-                self.set_bloom_filter_ready(false)?;
                 return Ok(());
             }
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
-            }
-
-            let build_chunks = unsafe {
-                (*self.hash_join_state.build_state.get())
-                    .generation_state
-                    .chunks
-                    .clone()
-            };
-
-            // If spilling happened, skip adding runtime filter, because probe data is ready and spilled.
-            if self.hash_join_state.spilled_partitions.read().is_empty() {
-                self.add_runtime_filter(&build_chunks, build_num_rows)?;
-            } else {
-                self.set_bloom_filter_ready(false)?;
             }
 
             // Divide the finalize phase into multiple tasks.
@@ -824,219 +770,13 @@ impl HashJoinBuildState {
         }
     }
 
-    pub fn set_bloom_filter_ready(&self, ready: bool) -> Result<()> {
+    pub fn set_bloom_filter_ready(&self) -> Result<()> {
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         for runtime_filter_ready in build_state.runtime_filter_ready.iter() {
             runtime_filter_ready
                 .runtime_filter_watcher
-                .send(Some(ready))
+                .send(Some(()))
                 .map_err(|_| ErrorCode::TokioError("watcher channel is closed"))?;
-        }
-        Ok(())
-    }
-
-    fn add_runtime_filter(&self, build_chunks: &[DataBlock], build_num_rows: usize) -> Result<()> {
-        let mut bloom_filter_ready = false;
-        for rf in self.runtime_filter_desc() {
-            let mut runtime_filter = RuntimeFilterInfo::default();
-            if rf.enable_inlist_runtime_filter && build_num_rows < INLIST_RUNTIME_FILTER_THRESHOLD {
-                self.inlist_runtime_filter(
-                    &mut runtime_filter,
-                    build_chunks,
-                    &rf.build_key,
-                    &rf.probe_key,
-                )?;
-            }
-            if rf.enable_bloom_runtime_filter {
-                self.bloom_runtime_filter(
-                    build_chunks,
-                    &mut runtime_filter,
-                    &rf.build_key,
-                    &rf.probe_key,
-                )?;
-            }
-            if rf.enable_min_max_runtime_filter {
-                self.min_max_runtime_filter(
-                    build_chunks,
-                    &mut runtime_filter,
-                    &rf.build_key,
-                    &rf.probe_key,
-                )?;
-            }
-            if !runtime_filter.is_empty() {
-                bloom_filter_ready |= !runtime_filter.is_blooms_empty();
-                self.ctx.set_runtime_filter((rf.scan_id, runtime_filter));
-            }
-        }
-        self.set_bloom_filter_ready(bloom_filter_ready)?;
-        Ok(())
-    }
-
-    fn bloom_runtime_filter(
-        &self,
-        data_blocks: &[DataBlock],
-        runtime_filter: &mut RuntimeFilterInfo,
-        build_key: &Expr,
-        probe_key: &Expr<String>,
-    ) -> Result<()> {
-        if !build_key.data_type().remove_nullable().is_number()
-            && !build_key.data_type().remove_nullable().is_string()
-        {
-            return Ok(());
-        }
-        let Expr::ColumnRef(ColumnRef { id, .. }) = probe_key else {
-            return Ok(());
-        };
-
-        let mut columns = Vec::with_capacity(data_blocks.len());
-        for block in data_blocks.iter() {
-            if block.num_columns() == 0 {
-                continue;
-            }
-            let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-            let column = evaluator
-                .run(build_key)?
-                .convert_to_full_column(build_key.data_type(), block.num_rows());
-            columns.push(column);
-        }
-        if columns.is_empty() {
-            return Ok(());
-        }
-        let build_key_column = Column::concat_columns(columns.into_iter())?;
-        // Generate bloom filter using build column
-        let data_type = build_key.data_type();
-        let num_rows = build_key_column.len();
-        let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
-        let mut hashes = HashSet::with_capacity(num_rows);
-        let key_columns = &[build_key_column];
-        hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;
-        let mut hashes_vec = Vec::with_capacity(num_rows);
-        hashes.into_iter().for_each(|hash| {
-            hashes_vec.push(hash);
-        });
-        let filter = BinaryFuse16::try_from(&hashes_vec)?;
-        runtime_filter.add_bloom((id.to_string(), filter));
-        Ok(())
-    }
-
-    fn inlist_runtime_filter(
-        &self,
-        runtime_filter: &mut RuntimeFilterInfo,
-        data_blocks: &[DataBlock],
-        build_key: &Expr,
-        probe_key: &Expr<String>,
-    ) -> Result<()> {
-        if let Some(distinct_build_column) =
-            dedup_build_key_column(&self.func_ctx, data_blocks, build_key)?
-        {
-            if let Some(filter) = inlist_filter(probe_key, distinct_build_column.clone())? {
-                info!("inlist_filter: {:?}", filter.sql_display());
-                runtime_filter.add_inlist(filter);
-            }
-        }
-        Ok(())
-    }
-
-    fn min_max_runtime_filter(
-        &self,
-        data_blocks: &[DataBlock],
-        runtime_filter: &mut RuntimeFilterInfo,
-        build_key: &Expr,
-        probe_key: &Expr<String>,
-    ) -> Result<()> {
-        if !build_key.runtime_filter_supported_types() {
-            return Ok(());
-        }
-        if let Expr::ColumnRef(_) = probe_key {
-            let mut columns = Vec::with_capacity(data_blocks.len());
-            for block in data_blocks.iter() {
-                if block.num_columns() == 0 {
-                    continue;
-                }
-                let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let column = evaluator
-                    .run(build_key)?
-                    .convert_to_full_column(build_key.data_type(), block.num_rows());
-                columns.push(column);
-            }
-            if columns.is_empty() {
-                return Ok(());
-            }
-            let build_key_column = Column::concat_columns(columns.into_iter())?;
-            if build_key_column.len() == 0 {
-                return Ok(());
-            }
-            // Generate min max filter using build column
-            let min_max = build_key_column.remove_nullable().domain();
-            let min_max_filter = match min_max {
-                Domain::Number(domain) => match domain {
-                    NumberDomain::UInt8(simple_domain) => {
-                        let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                        let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
-                    }
-                    NumberDomain::UInt16(simple_domain) => {
-                        let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                        let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
-                    }
-                    NumberDomain::UInt32(simple_domain) => {
-                        let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                        let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
-                    }
-                    NumberDomain::UInt64(simple_domain) => {
-                        let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                        let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
-                    }
-                    NumberDomain::Int8(simple_domain) => {
-                        let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                        let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
-                    }
-                    NumberDomain::Int16(simple_domain) => {
-                        let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                        let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
-                    }
-                    NumberDomain::Int32(simple_domain) => {
-                        let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                        let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
-                    }
-                    NumberDomain::Int64(simple_domain) => {
-                        let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                        let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
-                    }
-                    NumberDomain::Float32(simple_domain) => {
-                        let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                        let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
-                    }
-                    NumberDomain::Float64(simple_domain) => {
-                        let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                        let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                        min_max_filter(min, max, probe_key)?
-                    }
-                },
-                Domain::String(domain) => {
-                    let min = Scalar::String(domain.min);
-                    let max = Scalar::String(domain.max.unwrap());
-                    min_max_filter(min, max, probe_key)?
-                }
-                Domain::Date(date_domain) => {
-                    let min = Scalar::Date(date_domain.min);
-                    let max = Scalar::Date(date_domain.max);
-                    min_max_filter(min, max, probe_key)?
-                }
-                _ => unreachable!(),
-            };
-            if let Some(min_max_filter) = min_max_filter {
-                info!("min_max_filter: {:?}", min_max_filter.sql_display());
-                runtime_filter.add_min_max(min_max_filter);
-            }
         }
         Ok(())
     }
@@ -1045,7 +785,7 @@ impl HashJoinBuildState {
         self.hash_join_state.hash_join_desc.join_type.clone()
     }
 
-    fn runtime_filter_desc(&self) -> &[RuntimeFilterDesc] {
+    pub fn runtime_filter_desc(&self) -> &[RuntimeFilterDesc] {
         &self.hash_join_state.hash_join_desc.runtime_filter.filters
     }
 

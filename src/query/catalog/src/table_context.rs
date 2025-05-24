@@ -324,7 +324,9 @@ pub trait TableContext: Send + Sync {
 
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
-    fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
+    fn set_runtime_filter(&self, _filters: HashMap<usize, RuntimeFilterInfo>) {
+        unimplemented!()
+    }
 
     fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>);
 
