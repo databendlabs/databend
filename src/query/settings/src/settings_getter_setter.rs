@@ -518,6 +518,10 @@ impl Settings {
         self.try_get_u64("parquet_fast_read_bytes")
     }
 
+    pub fn get_parquet_rowgroup_hint_bytes(&self) -> Result<u64> {
+        self.try_get_u64("parquet_rowgroup_hint_bytes")
+    }
+
     pub fn get_enable_table_lock(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_table_lock")? != 0)
     }

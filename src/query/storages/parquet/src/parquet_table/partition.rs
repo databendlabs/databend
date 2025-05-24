@@ -83,6 +83,8 @@ impl ParquetTable {
         let mut stats = PartStatistics::default();
 
         let fast_read_bytes = ctx.get_settings().get_parquet_fast_read_bytes()?;
+        let rowgroup_hint_bytes = ctx.get_settings().get_parquet_rowgroup_hint_bytes()?;
+
         let mut large_files = vec![];
         let mut small_files = vec![];
         for (location, size, dedup_key) in file_locations.into_iter() {
@@ -100,6 +102,7 @@ impl ParquetTable {
             &mut stats,
             num_columns_to_read,
             self.schema().num_fields(),
+            rowgroup_hint_bytes,
         );
 
         if !small_files.is_empty() {

@@ -126,6 +126,7 @@ impl Table for ResultScan {
             compressed_size: self.file_size,
             estimated_uncompressed_size: self.file_size,
             dedup_key: format!("{}_{}", self.location, self.file_size),
+            bucket_option: None,
         });
 
         let part_info: Box<dyn PartInfo> = Box::new(part);

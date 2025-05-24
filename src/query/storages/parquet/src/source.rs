@@ -407,6 +407,13 @@ impl ParquetSource {
             Cow::Borrowed(&self.row_group_reader)
         };
 
+        let should_read = |rowgroup_idx: usize, bucket_option: Option<(usize, usize)>| -> bool {
+            if let Some((bucket, bucket_num)) = bucket_option {
+                return rowgroup_idx % bucket_num == bucket;
+            }
+            true
+        };
+
         let mut start_row = 0;
         let mut readers = VecDeque::with_capacity(meta.num_row_groups());
         // Deleted files only belong to the same Parquet, so they only need to be loaded once
@@ -415,7 +422,13 @@ impl ParquetSource {
             .as_ref()
             .map(|files| (meta.as_ref(), files.as_slice()));
 
-        for rg in meta.row_groups() {
+        for (rowgroup_idx, rg) in meta.row_groups().iter().enumerate() {
+            start_row += rg.num_rows() as u64;
+            // filter by bucket option
+            if !should_read(rowgroup_idx, part.bucket_option) {
+                continue;
+            }
+
             let part = ParquetRowGroupPart {
                 location: part.file.clone(),
                 start_row,
@@ -428,7 +441,6 @@ impl ParquetSource {
                 page_locations: None,
                 selectors: None,
             };
-            start_row += rg.num_rows() as u64;
 
             let reader = reader
                 .create_read_policy(
