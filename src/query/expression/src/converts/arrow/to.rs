@@ -38,6 +38,7 @@ use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
 use crate::infer_table_schema;
 use crate::types::DataType;
+use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
 use crate::types::GeographyColumn;
 use crate::types::NumberDataType;
@@ -110,10 +111,10 @@ impl From<&TableField> for Field {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
             TableDataType::Decimal(DecimalDataType::Decimal128(size)) => {
-                ArrowDataType::Decimal128(size.precision, size.scale as i8)
+                ArrowDataType::Decimal128(size.precision(), size.scale() as i8)
             }
             TableDataType::Decimal(DecimalDataType::Decimal256(size)) => {
-                ArrowDataType::Decimal256(size.precision, size.scale as i8)
+                ArrowDataType::Decimal256(size.precision(), size.scale() as i8)
             }
             TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             TableDataType::Date => ArrowDataType::Date32,
@@ -297,7 +298,18 @@ impl From<&Column> for ArrayData {
             Column::EmptyMap { len } => Bitmap::new_constant(true, *len).into(),
             Column::Boolean(col) => col.into(),
             Column::Number(c) => c.arrow_data(arrow_type),
-            Column::Decimal(c) => c.arrow_data(arrow_type),
+            Column::Decimal(c) => {
+                let c = c.clone().strict_decimal_data_type();
+                let arrow_type = match c {
+                    DecimalColumn::Decimal128(_, size) => {
+                        ArrowDataType::Decimal128(size.precision(), size.scale() as _)
+                    }
+                    DecimalColumn::Decimal256(_, size) => {
+                        ArrowDataType::Decimal256(size.precision(), size.scale() as _)
+                    }
+                };
+                c.arrow_data(arrow_type)
+            }
             Column::String(col) => col.clone().into(),
             Column::Timestamp(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Date(col) => buffer_to_array_data((col.clone(), arrow_type)),

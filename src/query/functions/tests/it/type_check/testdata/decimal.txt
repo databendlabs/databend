@@ -2974,23 +2974,9 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:6
-  |
-1 | d128 > '1'
-  |      ^ no function matches signature `gt(Decimal(38, 0), String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `Decimal(38, 0)` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(38, 0)` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0)` with `String`
-... and 33 more
-
-
-
-ast            : d128 = '1'
-raw expr       : eq(d128::Decimal(38, 0), '1')
-checked expr   : eq<Float64, Float64>(CAST<Decimal(38, 0)>(d128 AS Float64), CAST<String>("1" AS Float64))
+ast            : d128 > '1'
+raw expr       : gt(d128::Decimal(38, 0), '1')
+checked expr   : gt<Float64, String>(CAST<Decimal(38, 0)>(d128 AS Float64), "1")
 optimized expr : false
 evaluation:
 +--------+----------------+---------+
@@ -3009,23 +2995,51 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > d128
-  |     ^ no function matches signature `gt(String, Decimal(38, 0))`, you might need to add explicit type casts.
+ast            : d128 = '1'
+raw expr       : eq(d128::Decimal(38, 0), '1')
+checked expr   : eq<Float64, String>(CAST<Decimal(38, 0)>(d128 AS Float64), "1")
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0)` with `String`
-... and 33 more
 
+ast            : '1' > d128
+raw expr       : gt('1', d128::Decimal(38, 0))
+checked expr   : gt<String, Float64>("1", CAST<Decimal(38, 0)>(d128 AS Float64))
+optimized expr : true
+evaluation:
++--------+----------------+---------+
+|        | d128           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(38, 0) | Boolean |
+| Domain | {0..=0}        | {TRUE}  |
+| Row 0  | 0              | true    |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d128   | Decimal128([0])       |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
 
 
 ast            : '1' = d128
 raw expr       : eq('1', d128::Decimal(38, 0))
-checked expr   : eq<Float64, Float64>(CAST<String>("1" AS Float64), CAST<Decimal(38, 0)>(d128 AS Float64))
+checked expr   : eq<String, Float64>("1", CAST<Decimal(38, 0)>(d128 AS Float64))
 optimized expr : false
 evaluation:
 +--------+----------------+---------+
@@ -3126,6 +3140,20 @@ evaluation (internal):
 | d128   | Decimal128([0])       |
 | Output | Boolean([0b_______0]) |
 +--------+-----------------------+
+
+
+error: 
+  --> SQL:1:6
+  |
+1 | d128 = true
+  |      ^ no function matches signature `eq(Decimal(38, 0), Boolean)`, you might need to add explicit type casts.
+
+candidate functions:
+  eq(Variant, Variant) :: Boolean                               : unable to unify `Decimal(38, 0)` with `Variant`
+  eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(38, 0)` with `Variant`
+  eq(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0)` with `String`
+... and 73 more
+
 
 
 ast            : n_d128 > 1
@@ -3296,23 +3324,9 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:8
-  |
-1 | n_d128 > '1'
-  |        ^ no function matches signature `gt(Decimal(38, 0) NULL, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `Decimal(38, 0) NULL` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(38, 0)` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0) NULL` with `String`
-... and 33 more
-
-
-
-ast            : n_d128 = '1'
-raw expr       : eq(n_d128::Decimal(38, 0) NULL, '1')
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<Decimal(38, 0) NULL>(n_d128 AS Float64 NULL), CAST<String>("1" AS Float64 NULL))
+ast            : n_d128 > '1'
+raw expr       : gt(n_d128::Decimal(38, 0) NULL, '1')
+checked expr   : gt<Float64 NULL, String NULL>(CAST<Decimal(38, 0) NULL>(n_d128 AS Float64 NULL), CAST<String>("1" AS String NULL))
 optimized expr : false
 evaluation:
 +--------+---------------------+--------------+
@@ -3331,23 +3345,51 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > n_d128
-  |     ^ no function matches signature `gt(String, Decimal(38, 0) NULL)`, you might need to add explicit type casts.
+ast            : n_d128 = '1'
+raw expr       : eq(n_d128::Decimal(38, 0) NULL, '1')
+checked expr   : eq<Float64 NULL, String NULL>(CAST<Decimal(38, 0) NULL>(n_d128 AS Float64 NULL), CAST<String>("1" AS String NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0) NULL` with `String`
-... and 33 more
 
+ast            : '1' > n_d128
+raw expr       : gt('1', n_d128::Decimal(38, 0) NULL)
+checked expr   : gt<String NULL, Float64 NULL>(CAST<String>("1" AS String NULL), CAST<Decimal(38, 0) NULL>(n_d128 AS Float64 NULL))
+optimized expr : true
+evaluation:
++--------+---------------------+--------------+
+|        | n_d128              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(38, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {TRUE}       |
+| Row 0  | 0                   | true         |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
 
 
 ast            : '1' = n_d128
 raw expr       : eq('1', n_d128::Decimal(38, 0) NULL)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<String>("1" AS Float64 NULL), CAST<Decimal(38, 0) NULL>(n_d128 AS Float64 NULL))
+checked expr   : eq<String NULL, Float64 NULL>(CAST<String>("1" AS String NULL), CAST<Decimal(38, 0) NULL>(n_d128 AS Float64 NULL))
 optimized expr : false
 evaluation:
 +--------+---------------------+--------------+
@@ -3448,6 +3490,20 @@ evaluation (internal):
 | n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:8
+  |
+1 | n_d128 = true
+  |        ^ no function matches signature `eq(Decimal(38, 0) NULL, Boolean)`, you might need to add explicit type casts.
+
+candidate functions:
+  eq(Variant, Variant) :: Boolean                               : unable to unify `Decimal(38, 0) NULL` with `Variant`
+  eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(38, 0)` with `Variant`
+  eq(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0) NULL` with `String`
+... and 73 more
+
 
 
 ast            : d256 > 1
@@ -3618,23 +3674,9 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:6
-  |
-1 | d256 > '1'
-  |      ^ no function matches signature `gt(Decimal(76, 0), String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `Decimal(76, 0)` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(76, 0)` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0)` with `String`
-... and 33 more
-
-
-
-ast            : d256 = '1'
-raw expr       : eq(d256::Decimal(76, 0), '1')
-checked expr   : eq<Float64, Float64>(CAST<Decimal(76, 0)>(d256 AS Float64), CAST<String>("1" AS Float64))
+ast            : d256 > '1'
+raw expr       : gt(d256::Decimal(76, 0), '1')
+checked expr   : gt<Float64, String>(CAST<Decimal(76, 0)>(d256 AS Float64), "1")
 optimized expr : false
 evaluation:
 +--------+----------------+---------+
@@ -3653,23 +3695,51 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > d256
-  |     ^ no function matches signature `gt(String, Decimal(76, 0))`, you might need to add explicit type casts.
+ast            : d256 = '1'
+raw expr       : eq(d256::Decimal(76, 0), '1')
+checked expr   : eq<Float64, String>(CAST<Decimal(76, 0)>(d256 AS Float64), "1")
+optimized expr : false
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {FALSE} |
+| Row 0  | 0              | false   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0)` with `String`
-... and 33 more
 
+ast            : '1' > d256
+raw expr       : gt('1', d256::Decimal(76, 0))
+checked expr   : gt<String, Float64>("1", CAST<Decimal(76, 0)>(d256 AS Float64))
+optimized expr : true
+evaluation:
++--------+----------------+---------+
+|        | d256           | Output  |
++--------+----------------+---------+
+| Type   | Decimal(76, 0) | Boolean |
+| Domain | {0..=0}        | {TRUE}  |
+| Row 0  | 0              | true    |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| d256   | Decimal256([0])       |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
 
 
 ast            : '1' = d256
 raw expr       : eq('1', d256::Decimal(76, 0))
-checked expr   : eq<Float64, Float64>(CAST<String>("1" AS Float64), CAST<Decimal(76, 0)>(d256 AS Float64))
+checked expr   : eq<String, Float64>("1", CAST<Decimal(76, 0)>(d256 AS Float64))
 optimized expr : false
 evaluation:
 +--------+----------------+---------+
@@ -3770,6 +3840,20 @@ evaluation (internal):
 | d256   | Decimal256([0])       |
 | Output | Boolean([0b_______0]) |
 +--------+-----------------------+
+
+
+error: 
+  --> SQL:1:6
+  |
+1 | d256 = true
+  |      ^ no function matches signature `eq(Decimal(76, 0), Boolean)`, you might need to add explicit type casts.
+
+candidate functions:
+  eq(Variant, Variant) :: Boolean                               : unable to unify `Decimal(76, 0)` with `Variant`
+  eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(76, 0)` with `Variant`
+  eq(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0)` with `String`
+... and 73 more
+
 
 
 ast            : n_d256 > 1
@@ -3940,23 +4024,9 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:8
-  |
-1 | n_d256 > '1'
-  |        ^ no function matches signature `gt(Decimal(76, 0) NULL, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `Decimal(76, 0) NULL` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(76, 0)` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0) NULL` with `String`
-... and 33 more
-
-
-
-ast            : n_d256 = '1'
-raw expr       : eq(n_d256::Decimal(76, 0) NULL, '1')
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<Decimal(76, 0) NULL>(n_d256 AS Float64 NULL), CAST<String>("1" AS Float64 NULL))
+ast            : n_d256 > '1'
+raw expr       : gt(n_d256::Decimal(76, 0) NULL, '1')
+checked expr   : gt<Float64 NULL, String NULL>(CAST<Decimal(76, 0) NULL>(n_d256 AS Float64 NULL), CAST<String>("1" AS String NULL))
 optimized expr : false
 evaluation:
 +--------+---------------------+--------------+
@@ -3975,23 +4045,51 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > n_d256
-  |     ^ no function matches signature `gt(String, Decimal(76, 0) NULL)`, you might need to add explicit type casts.
+ast            : n_d256 = '1'
+raw expr       : eq(n_d256::Decimal(76, 0) NULL, '1')
+checked expr   : eq<Float64 NULL, String NULL>(CAST<Decimal(76, 0) NULL>(n_d256 AS Float64 NULL), CAST<String>("1" AS String NULL))
+optimized expr : false
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {FALSE}      |
+| Row 0  | 0                   | false        |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0) NULL` with `String`
-... and 33 more
 
+ast            : '1' > n_d256
+raw expr       : gt('1', n_d256::Decimal(76, 0) NULL)
+checked expr   : gt<String NULL, Float64 NULL>(CAST<String>("1" AS String NULL), CAST<Decimal(76, 0) NULL>(n_d256 AS Float64 NULL))
+optimized expr : true
+evaluation:
++--------+---------------------+--------------+
+|        | n_d256              | Output       |
++--------+---------------------+--------------+
+| Type   | Decimal(76, 0) NULL | Boolean NULL |
+| Domain | {0..=0}             | {TRUE}       |
+| Row 0  | 0                   | true         |
++--------+---------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
 
 
 ast            : '1' = n_d256
 raw expr       : eq('1', n_d256::Decimal(76, 0) NULL)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<String>("1" AS Float64 NULL), CAST<Decimal(76, 0) NULL>(n_d256 AS Float64 NULL))
+checked expr   : eq<String NULL, Float64 NULL>(CAST<String>("1" AS String NULL), CAST<Decimal(76, 0) NULL>(n_d256 AS Float64 NULL))
 optimized expr : false
 evaluation:
 +--------+---------------------+--------------+
@@ -4092,5 +4190,19 @@ evaluation (internal):
 | n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:8
+  |
+1 | n_d256 = true
+  |        ^ no function matches signature `eq(Decimal(76, 0) NULL, Boolean)`, you might need to add explicit type casts.
+
+candidate functions:
+  eq(Variant, Variant) :: Boolean                               : unable to unify `Decimal(76, 0) NULL` with `Variant`
+  eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(76, 0)` with `Variant`
+  eq(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0) NULL` with `String`
+... and 73 more
+
 
 

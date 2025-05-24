@@ -33,6 +33,7 @@ use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
@@ -59,7 +60,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default().kind(FunctionKind::SRF),
     );
 
-    registry.register_function_factory("json_path_query", |_, args_type| {
+    let json_path_query = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 2 {
             return None;
         }
@@ -143,13 +144,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_path_query", json_path_query);
 
     registry.properties.insert(
         "json_array_elements".to_string(),
         FunctionProperty::default().kind(FunctionKind::SRF),
     );
-    registry.register_function_factory("json_array_elements", |_, args_type| {
+    let json_array_elements = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 1 {
             return None;
         }
@@ -179,13 +181,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_array_elements", json_array_elements);
 
     registry.properties.insert(
         "json_each".to_string(),
         FunctionProperty::default().kind(FunctionKind::SRF),
     );
-    registry.register_function_factory("json_each", |_, args_type| {
+    let json_each = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 1 {
             return None;
         }
@@ -219,13 +222,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("json_each", json_each);
 
     registry.properties.insert(
         "flatten".to_string(),
         FunctionProperty::default().kind(FunctionKind::SRF),
     );
-    registry.register_function_factory("flatten", |params, args_type| {
+    let flatten = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
         if args_type.is_empty() || args_type.len() > 5 {
             return None;
         }
@@ -438,13 +442,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("flatten", flatten);
 
     registry.properties.insert(
         "jq".to_string(),
         FunctionProperty::default().kind(FunctionKind::SRF),
     );
-    registry.register_function_factory("jq", |_, args_type| {
+    let jq = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 2 {
             return None;
         }
@@ -562,7 +567,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("jq", jq);
 }
 
 // Convert a Jaq val to a jsonb value.

@@ -258,6 +258,7 @@ pub enum Statement {
         show_options: Option<ShowOptions>,
     },
     ShowObjectPrivileges(ShowObjectPrivilegesStmt),
+    ShowGrantsOfRole(ShowGranteesOfRoleStmt),
     Revoke(RevokeStmt),
 
     // UDF
@@ -487,6 +488,7 @@ impl Statement {
             | Statement::ShowRoles { .. }
             | Statement::ShowGrants { .. }
             | Statement::ShowObjectPrivileges(..)
+            | Statement::ShowGrantsOfRole(..)
             | Statement::ShowStages { .. }
             | Statement::DescribeStage { .. }
             | Statement::RemoveStage { .. }
@@ -894,6 +896,7 @@ impl Display for Statement {
                 }
             }
             Statement::ShowObjectPrivileges(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowGrantsOfRole(stmt) => write!(f, "{stmt}")?,
             Statement::Revoke(stmt) => write!(f, "{stmt}")?,
             Statement::CreateUDF(stmt) => write!(f, "{stmt}")?,
             Statement::DropUDF {

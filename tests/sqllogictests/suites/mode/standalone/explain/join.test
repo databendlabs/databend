@@ -1023,10 +1023,16 @@ statement ok
 CREATE OR REPLACE TABLE t2(a INT);
 
 statement ok
+CREATE OR REPLACE TABLE t3(a STRING, b INT);
+
+statement ok
 INSERT INTO t1 VALUES(1), (2), (3), (4);
 
 statement ok
 INSERT INTO t2 VALUES(1);
+
+statement ok
+INSERT INTO t3 VALUES('1', true), ('1.2', false), ('2.0', true);
 
 query T
 EXPLAIN SELECT * FROM t1 WHERE a >= (SELECT MAX(a) FROM t2);
@@ -1093,8 +1099,80 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 4.00
 
+query T
+EXPLAIN SELECT * FROM t1 JOIN t3 ON t1.a = t3.a;
+----
+HashJoin
+├── output columns: [t1.a (#0), t3.a (#1), t3.b (#2)]
+├── join type: INNER
+├── build keys: [CAST(t3.a (#1) AS Decimal(38, 5) NULL)]
+├── probe keys: [CAST(t1.a (#0) AS Decimal(38, 5) NULL)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+├── estimated rows: 12.00
+├── TableScan(Build)
+│   ├── table: default.default.t3
+│   ├── output columns: [a (#1), b (#2)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 4.00
+
+query T
+EXPLAIN SELECT * FROM t1 JOIN t3 ON t1.a = t3.b;
+----
+HashJoin
+├── output columns: [t1.a (#0), t3.a (#1), t3.b (#2)]
+├── join type: INNER
+├── build keys: [t3.b (#2)]
+├── probe keys: [t1.a (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:t3.b (#2), probe key:t1.a (#0), filter type:inlist,min_max
+├── estimated rows: 3.00
+├── TableScan(Build)
+│   ├── table: default.default.t3
+│   ├── output columns: [a (#1), b (#2)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 4.00
+
 statement ok
 DROP TABLE t1;
 
 statement ok
 DROP TABLE t2;
+
+statement ok
+DROP TABLE t3;
+

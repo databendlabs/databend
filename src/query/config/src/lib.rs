@@ -40,6 +40,7 @@ pub use config::Commands;
 pub use config::Config;
 pub use config::QueryConfig;
 pub use config::StorageConfig;
+pub use config::StorageNetworkConfig;
 pub use global::GlobalConfig;
 pub use inner::CacheConfig;
 pub use inner::CacheStorageTypeConfig as CacheStorageTypeInnerConfig;

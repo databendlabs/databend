@@ -57,6 +57,7 @@ pub struct ParquetReaderBuilder<'a> {
     arrow_schema: Option<arrow_schema::Schema>,
 
     push_downs: Option<&'a PushDownInfo>,
+    delete_files: Option<Vec<String>>,
     options: ParquetReadOptions,
     // only for full file reader
     pruner: Option<ParquetPruner>,
@@ -111,6 +112,7 @@ impl<'a> ParquetReaderBuilder<'a> {
             arrow_schema,
             schema_desc_from,
             push_downs: None,
+            delete_files: None,
             options: Default::default(),
             pruner: None,
             topk: None,
@@ -123,6 +125,11 @@ impl<'a> ParquetReaderBuilder<'a> {
 
     pub fn with_push_downs(mut self, push_downs: Option<&'a PushDownInfo>) -> Self {
         self.push_downs = push_downs;
+        self
+    }
+
+    pub fn with_delete_files(mut self, delete_files: Option<Vec<String>>) -> Self {
+        self.delete_files = delete_files;
         self
     }
 
@@ -305,6 +312,7 @@ impl<'a> ParquetReaderBuilder<'a> {
         };
 
         Ok(RowGroupReader {
+            ctx: self.ctx.clone(),
             op_registry: self.op_registry.clone(),
             batch_size,
             schema_desc: self.schema_desc.clone(),

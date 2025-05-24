@@ -41,15 +41,19 @@ use crate::types::nullable::NullableDomain;
 use crate::types::string::StringColumnBuilder;
 use crate::types::BooleanType;
 use crate::types::DataType;
+use crate::types::DecimalColumn;
+use crate::types::DecimalDataType;
 use crate::types::NullableType;
 use crate::types::NumberScalar;
 use crate::types::ReturnType;
 use crate::types::StringType;
+use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
+use crate::visitor::ValueVisitor;
 use crate::BlockEntry;
 use crate::ColumnIndex;
 use crate::FunctionContext;
@@ -59,27 +63,40 @@ use crate::FunctionRegistry;
 use crate::RemoteExpr;
 use crate::ScalarRef;
 
-#[derive(Default)]
 pub struct EvaluateOptions<'a> {
     pub selection: Option<&'a [u32]>,
     pub suppress_error: bool,
     pub errors: Option<(MutableBitmap, String)>,
+    pub strict_eval: bool,
+}
+
+impl Default for EvaluateOptions<'_> {
+    fn default() -> Self {
+        Self {
+            selection: None,
+            suppress_error: false,
+            errors: None,
+            strict_eval: true,
+        }
+    }
 }
 
 impl<'a> EvaluateOptions<'a> {
     pub fn new(selection: Option<&'a [u32]>) -> EvaluateOptions<'a> {
         Self {
-            suppress_error: false,
             selection,
+            suppress_error: false,
             errors: None,
+            strict_eval: true,
         }
     }
 
     pub fn with_suppress_error(&mut self, suppress_error: bool) -> Self {
         Self {
             suppress_error,
-            selection: self.selection,
             errors: None,
+            selection: self.selection,
+            strict_eval: self.strict_eval,
         }
     }
 }
@@ -137,8 +154,11 @@ impl<'a> Evaluator<'a> {
                 if err.message().contains(expr_str.as_str()) {
                     err
                 } else {
-                    let err_msg = format!("{}, during run expr: {}", err.message(), expr_str);
-                    ErrorCode::BadArguments(err_msg).set_span(err.span())
+                    ErrorCode::BadArguments(format!(
+                        "{}, during run expr: {expr_str}",
+                        err.message()
+                    ))
+                    .set_span(err.span())
                 }
             })
     }
@@ -236,7 +256,15 @@ impl<'a> Evaluator<'a> {
                     expr.data_type()
                 )
             }
-            Value::Column(result) => assert_eq!(&result.data_type(), expr.data_type()),
+            Value::Column(col) => assert_eq!(&col.data_type(), expr.data_type()),
+        }
+
+        if !expr.is_column_ref() && options.strict_eval {
+            let mut check = CheckStrictValue;
+            assert!(
+                check.visit_value(result.clone()).is_ok(),
+                "result {result:?}",
+            )
         }
 
         Ok(result)
@@ -285,6 +313,7 @@ impl<'a> Evaluator<'a> {
             errors,
             func_ctx: self.func_ctx,
             suppress_error: options.suppress_error,
+            strict_eval: options.strict_eval,
         };
 
         let (_, eval) = function.eval.as_scalar().unwrap();
@@ -336,7 +365,7 @@ impl<'a> Evaluator<'a> {
             }
         }
 
-        match (src_type, dest_type) {
+        let result = match (src_type, dest_type) {
             (DataType::Null, DataType::Nullable(_)) => match value {
                 Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
                 Value::Column(Column::Null { len }) => {
@@ -878,10 +907,17 @@ impl<'a> Evaluator<'a> {
                 "unable to cast type `{src_type}` to type `{dest_type}`"
             ))
             .set_span(span)),
+        }?;
+
+        if options.strict_eval {
+            let mut check = CheckStrictValue;
+            assert!(check.visit_value(result.clone()).is_ok())
         }
+
+        Ok(result)
     }
 
-    pub fn run_try_cast(
+    pub(crate) fn run_try_cast(
         &self,
         span: Span,
         src_type: &DataType,
@@ -1307,6 +1343,7 @@ impl<'a> Evaluator<'a> {
             errors: None,
             func_ctx: self.func_ctx,
             suppress_error: false,
+            strict_eval: true,
         };
         let result = (eval)(&args, &mut ctx, max_nums_per_row);
         if !ctx.suppress_error {
@@ -1802,6 +1839,7 @@ impl<'a> Evaluator<'a> {
                     errors,
                     func_ctx: self.func_ctx,
                     suppress_error: options.suppress_error,
+                    strict_eval: options.strict_eval,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(&args, &mut ctx);
@@ -2207,6 +2245,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                     errors: None,
                                     func_ctx: self.func_ctx,
                                     suppress_error: false,
+                                    strict_eval: true,
                                 };
                                 let mut builder =
                                     ColumnBuilder::with_capacity(args[0].data_type(), 2);
@@ -2545,5 +2584,53 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         );
 
         Some(output_domain)
+    }
+}
+
+struct CheckStrictValue;
+
+impl ValueVisitor for CheckStrictValue {
+    type Error = ();
+
+    fn visit_scalar(&mut self, scalar: Scalar) -> std::result::Result<(), ()> {
+        match scalar {
+            Scalar::Decimal(scalar) => {
+                let value = Value::Scalar(Scalar::Decimal(scalar));
+                if Self::is_strict_decimal(&value) {
+                    Ok(())
+                } else {
+                    Err(())
+                }
+            }
+            Scalar::Array(column) => self.visit_column(column),
+            Scalar::Map(column) => self.visit_column(column),
+            _ => Ok(()),
+        }
+    }
+
+    fn visit_any_decimal(&mut self, column: DecimalColumn) -> std::result::Result<(), ()> {
+        let value = Value::Column(Column::Decimal(column));
+        if Self::is_strict_decimal(&value) {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    fn visit_nullable(
+        &mut self,
+        column: Box<NullableColumn<AnyType>>,
+    ) -> std::result::Result<(), ()> {
+        self.visit_column(column.column)
+    }
+
+    fn visit_typed_column<T: ValueType>(&mut self, _: T::Column) -> std::result::Result<(), ()> {
+        Ok(())
+    }
+}
+
+impl CheckStrictValue {
+    fn is_strict_decimal(value: &Value<AnyType>) -> bool {
+        DecimalDataType::from_value(value).unwrap().0.is_strict()
     }
 }

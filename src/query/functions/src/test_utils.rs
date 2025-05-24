@@ -27,7 +27,6 @@ use databend_common_ast::parser::Dialect;
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
-use databend_common_expression::types::decimal::DecimalDataType;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
@@ -627,7 +626,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         databend_common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
         databend_common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
         databend_common_ast::ast::TypeName::Decimal { precision, scale } => {
-            DataType::Decimal(DecimalDataType::from_size(DecimalSize { precision, scale }).unwrap())
+            DataType::Decimal(DecimalSize::new_unchecked(precision, scale))
         }
         databend_common_ast::ast::TypeName::Binary => DataType::Binary,
         databend_common_ast::ast::TypeName::String => DataType::String,
@@ -663,10 +662,10 @@ fn transform_literal(lit: ASTLiteral) -> Scalar {
             value,
             precision,
             scale,
-        } => Scalar::Decimal(DecimalScalar::Decimal256(i256(value), DecimalSize {
-            precision,
-            scale,
-        })),
+        } => Scalar::Decimal(DecimalScalar::Decimal256(
+            i256(value),
+            DecimalSize::new_unchecked(precision, scale),
+        )),
         ASTLiteral::String(s) => Scalar::String(s),
         ASTLiteral::Boolean(b) => Scalar::Boolean(b),
         ASTLiteral::Null => Scalar::Null,

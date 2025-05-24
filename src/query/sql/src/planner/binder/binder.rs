@@ -537,6 +537,9 @@ impl<'a> Binder {
             Statement::ShowObjectPrivileges(stmt) => {
                 self.bind_show_object_privileges(bind_context, stmt).await?
             }
+            Statement::ShowGrantsOfRole(stmt) => {
+                self.bind_show_role_grantees(bind_context, stmt).await?
+            }
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats

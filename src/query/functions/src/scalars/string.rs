@@ -15,8 +15,6 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
-use databend_common_base::base::uuid::Uuid;
-use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -32,6 +30,7 @@ use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_functions_scalar_decimal::register_decimal_to_uuid;
 use stringslice::StringSlice;
 
 pub const ALL_STRING_FUNC_NAMES: &[&str] = &[
@@ -281,16 +280,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<Decimal128Type, StringType, _, _>(
-        "to_uuid",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<Decimal128Type, StringType>(|arg, output, _| {
-            let uuid = Uuid::from_u128(arg as u128);
-            let str = uuid.as_simple().to_string();
-            output.put_str(str.as_str());
-            output.commit_row();
-        }),
-    );
+    register_decimal_to_uuid(registry);
 
     registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
         "strcmp",
