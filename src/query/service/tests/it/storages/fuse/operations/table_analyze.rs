@@ -224,16 +224,17 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
     let mut snapshot_2 =
         TableSnapshot::try_from_previous(Arc::new(snapshot_1.clone()), None, Default::default())?;
     snapshot_2.table_statistics_location = Some(table_statistics_location);
-    FuseTable::commit_to_meta_server(
-        fixture.new_query_ctx().await?.as_ref(),
-        fuse_table.get_table_info(),
-        location_gen,
-        snapshot_2,
-        Some(table_statistics),
-        &None,
-        &operator,
-    )
-    .await?;
+    fuse_table
+        .commit_to_meta_server(
+            fixture.new_query_ctx().await?.as_ref(),
+            fuse_table.get_table_info(),
+            location_gen,
+            snapshot_2,
+            Some(table_statistics),
+            &None,
+            &operator,
+        )
+        .await?;
 
     // check statistics.
     let table = table.refresh(ctx.as_ref()).await?;

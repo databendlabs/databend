@@ -61,7 +61,9 @@ use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
@@ -256,6 +258,16 @@ impl FuseTable {
         }))
     }
 
+    pub fn from_table_meta(id: u64, seq: u64, table_meta: TableMeta) -> Result<Box<FuseTable>> {
+        let table_info = TableInfo {
+            ident: TableIdent { table_id: id, seq },
+            meta: table_meta,
+            ..Default::default()
+        };
+        let table = Self::do_create_table_ext(table_info, false)?;
+        Ok(table)
+    }
+
     pub fn description() -> StorageDescription {
         StorageDescription {
             engine_name: "FUSE".to_string(),
@@ -330,6 +342,17 @@ impl FuseTable {
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         let loc = self.snapshot_loc();
+        let ver = self.snapshot_format_version(loc.clone())?;
+        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+    }
+
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_table_snapshot_with_location(
+        &self,
+        loc: Option<String>,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         let ver = self.snapshot_format_version(loc.clone())?;
         Self::read_table_snapshot_with_reader(reader, loc, ver).await
     }

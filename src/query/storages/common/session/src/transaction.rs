@@ -59,6 +59,7 @@ pub enum TxnState {
 pub struct TxnBuffer {
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
+    base_snapshot_location: HashMap<u64, Option<String>>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
     deduplicated_labels: HashSet<String>,
@@ -93,6 +94,10 @@ impl TxnBuffer {
                 meta: req.new_table_meta.clone(),
                 ..table_info.clone()
             });
+
+            self.base_snapshot_location
+                .entry(table_id)
+                .or_insert(req.base_snapshot_location);
         }
 
         for (table_id, file) in std::mem::take(&mut req.copied_files) {
@@ -287,6 +292,7 @@ impl TxnManager {
                             table_id: *id,
                             seq: MatchSeq::Exact(info.ident.seq),
                             new_table_meta: info.meta.clone(),
+                            base_snapshot_location: None,
                         },
                         info.clone(),
                     )
@@ -374,5 +380,13 @@ impl TxnManager {
                 timestamps
             }
         }
+    }
+
+    pub fn get_base_snapshot_location(&self, table_id: u64) -> Option<String> {
+        self.txn_buffer
+            .base_snapshot_location
+            .get(&table_id)
+            .unwrap()
+            .clone()
     }
 }

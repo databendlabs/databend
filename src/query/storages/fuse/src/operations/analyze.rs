@@ -270,16 +270,17 @@ impl SinkAnalyzeState {
         new_snapshot.summary.col_stats = col_stats;
         new_snapshot.summary.cluster_stats = cluster_stats;
         new_snapshot.table_statistics_location = Some(table_statistics_location);
-        FuseTable::commit_to_meta_server(
-            self.ctx.as_ref(),
-            &table.table_info,
-            &table.meta_location_generator,
-            new_snapshot,
-            Some(table_statistics),
-            &None,
-            &table.operator,
-        )
-        .await
+        table
+            .commit_to_meta_server(
+                self.ctx.as_ref(),
+                &table.table_info,
+                &table.meta_location_generator,
+                new_snapshot,
+                Some(table_statistics),
+                &None,
+                &table.operator,
+            )
+            .await
     }
 }
 

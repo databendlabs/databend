@@ -59,6 +59,7 @@ impl FuseTable {
             table_id,
             seq: MatchSeq::Exact(base_version),
             new_table_meta: table_meta_to_be_committed.clone(),
+            base_snapshot_location: self.snapshot_loc(),
         };
 
         // 4. let's roll
