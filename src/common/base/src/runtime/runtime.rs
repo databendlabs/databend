@@ -27,7 +27,6 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use futures::future;
 use futures::FutureExt;
-use log::info;
 use log::warn;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
