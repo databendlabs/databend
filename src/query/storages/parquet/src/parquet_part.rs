@@ -190,6 +190,7 @@ pub(crate) fn collect_file_parts(
     stats: &mut PartStatistics,
     num_columns_to_read: usize,
     total_columns_to_read: usize,
+    rowgroup_hint_bytes: u64,
 ) {
     for (file, size, dedup_key) in files.into_iter() {
         stats.read_bytes += size as usize;
@@ -198,8 +199,7 @@ pub(crate) fn collect_file_parts(
             (size as f64) * (num_columns_to_read as f64) / (total_columns_to_read as f64);
 
         let estimated_uncompressed_size = read_bytes * compress_ratio;
-        const BUCKET_SIZE: usize = 128 * 1024 * 1024;
-        let bucket_num = (size as usize).div_ceil(BUCKET_SIZE);
+        let bucket_num = size.div_ceil(rowgroup_hint_bytes) as usize;
         for bucket in 0..bucket_num {
             partitions
                 .partitions
