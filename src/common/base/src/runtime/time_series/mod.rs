@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod segment;
-mod snapshot;
+mod profile;
+mod query_profile;
 
-pub use segment::CompactSegmentInfo;
-pub use segment::RawBlockMeta;
-pub use segment::SegmentInfo;
-pub use snapshot::TableSnapshot;
-pub use snapshot::TableSnapshotLite;
+pub use profile::compress_time_point;
+pub use profile::get_time_series_profile_desc;
+pub use profile::ProfilePoints;
+pub use profile::TimeSeriesProfileDesc;
+pub use profile::TimeSeriesProfileName;
+pub use profile::TimeSeriesProfiles;
+pub use query_profile::QueryTimeSeriesProfile;
+pub use query_profile::QueryTimeSeriesProfileBuilder;

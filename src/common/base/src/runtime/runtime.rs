@@ -27,7 +27,6 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use futures::future;
 use futures::FutureExt;
-use log::info;
 use log::warn;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
@@ -150,10 +149,6 @@ impl Runtime {
         let join_handler =
             Thread::named_spawn(n.as_ref().map(|n| format!("wait-to-drop-{n}")), move || {
                 let _ = runtime.block_on(recv_stop);
-                info!(
-                    "Runtime({:?}) received shutdown signal, start to shut down",
-                    n
-                );
 
                 match !cfg!(debug_assertions) {
                     true => false,
@@ -378,7 +373,6 @@ impl Drop for Dropper {
             // Send a signal to say i am dropping.
             if let Some(close_sender) = self.close.take() {
                 if close_sender.send(()).is_ok() {
-                    info!("close_sender to shutdown Runtime is sent");
                     match self.join_handler.take().unwrap().join() {
                         Err(e) => warn!("Runtime dropper panic, {:?}", e),
                         Ok(true) => {

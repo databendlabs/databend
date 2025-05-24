@@ -418,6 +418,7 @@ impl IcebergTable {
         }
 
         let tasks: Vec<_> = scan
+            .with_delete_file_processing_enabled(true)
             .build()
             .map_err(|err| ErrorCode::Internal(format!("iceberg table scan build: {err:?}")))?
             .plan_files()
