@@ -34,6 +34,7 @@ use crate::config::OTLPProtocol;
 use crate::filter::filter_by_thread_tracker;
 use crate::loggers::get_layout;
 use crate::loggers::new_rolling_file_appender;
+use crate::predefined_tables::table_to_target;
 use crate::remote_log::RemoteLog;
 use crate::structlog::StructLogReporter;
 use crate::Config;
@@ -386,31 +387,26 @@ pub fn init_logging(
             .append(structlog_log_file);
         logger = logger.dispatch(dispatch);
     }
-
-    if cfg.persistentlog.on {
+    if cfg.history.on {
         let (remote_log, flush_guard) =
             RemoteLog::new(&labels, cfg).expect("initialize remote logger");
 
         let mut filter_builder =
             EnvFilterBuilder::new().filter(Some("databend::log::structlog"), LevelFilter::Off);
 
-        if cfg.profile.on {
-            filter_builder =
-                filter_builder.filter(Some("databend::log::profile"), LevelFilter::Trace);
-        } else {
-            filter_builder =
-                filter_builder.filter(Some("databend::log::profile"), LevelFilter::Off);
+        let mut table_to_target = table_to_target();
+
+        for table_cfg in cfg.history.tables.iter() {
+            if let Some(target) = table_to_target.remove(&table_cfg.table_name) {
+                filter_builder = filter_builder.filter(Some(&target), LevelFilter::Trace);
+            }
         }
-        if cfg.query.on {
-            filter_builder =
-                filter_builder.filter(Some("databend::log::query"), LevelFilter::Trace);
-        } else {
-            filter_builder = filter_builder.filter(Some("databend::log::query"), LevelFilter::Off);
+        for (_, target) in table_to_target {
+            filter_builder = filter_builder.filter(Some(&target), LevelFilter::Off);
         }
+
         let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                filter_builder.parse(&cfg.persistentlog.level),
-            ))
+            .filter(EnvFilter::new(filter_builder.parse(&cfg.history.level)))
             .filter(filter_by_thread_tracker())
             .append(remote_log);
 

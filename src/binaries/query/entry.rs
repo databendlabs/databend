@@ -291,9 +291,9 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     if conf.log.structlog.on {
         println!("    structlog: {}", conf.log.structlog);
     }
-    if conf.log.persistentlog.on {
+    if conf.log.history.on {
         GlobalPersistentLog::instance().initialized();
-        println!("    persistentlog: {}", conf.log.persistentlog);
+        println!("    system history tables: {}", conf.log.history);
     }
 
     println!();

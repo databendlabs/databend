@@ -141,6 +141,10 @@ jobs:
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_logs
         timeout-minutes: 20
 
