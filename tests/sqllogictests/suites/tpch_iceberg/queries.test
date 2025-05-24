@@ -12,6 +12,9 @@ CONNECTION=(
     "s3.endpoint"='http://127.0.0.1:9000'
 );
 
+statement ok
+use catalog default;
+
 # Q1
 query I
 select
