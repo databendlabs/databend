@@ -16,16 +16,24 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::mask_connection_info;
+use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::workload_group::QuotaValue;
+use databend_common_base::runtime::workload_group::CPU_QUOTA_KEY;
+use databend_common_base::runtime::workload_group::QUERY_TIMEOUT_QUOTA_KEY;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
+use databend_common_management::WorkloadGroupResource;
+use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_version::DATABEND_SEMVER;
 use fastrace::func_path;
@@ -38,6 +46,7 @@ use log::error;
 use log::info;
 use log::warn;
 use poem::error::Error as PoemError;
+use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
 use poem::get;
 use poem::middleware::CookieJarManager;
@@ -88,6 +97,7 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::QueryAffect;
+use crate::sessions::Session;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -415,6 +425,18 @@ async fn query_page_handler(
     query_page_handle.await
 }
 
+async fn get_workload_group(
+    session: &Session,
+) -> Result<Option<Arc<WorkloadGroupResource>>, ErrorCode> {
+    match session.get_current_workload_group() {
+        None => Ok(None),
+        Some(id) => {
+            let mgr = GlobalInstance::get::<Arc<WorkloadGroupResourceManager>>();
+            Ok(Some(mgr.get_workload(&id).await?))
+        }
+    }
+}
+
 #[poem::handler]
 #[async_backtrace::framed]
 pub(crate) async fn query_handler(
@@ -496,7 +518,41 @@ pub(crate) async fn query_handler(
     };
 
     let query_handle = {
-        let query_mem_stat = MemStat::create(ctx.query_id.clone());
+        let workload_group = match get_workload_group(&ctx.session).await {
+            Ok(workload_group) => workload_group,
+            Err(error) => {
+                let err = HttpErrorCode::error_code(error);
+                return Ok(err.as_response());
+            }
+        };
+
+        let mut workload_group_mem_stat = ParentMemStat::StaticRef(&GLOBAL_MEM_STAT);
+
+        if let Some(workload_group) = workload_group {
+            workload_group_mem_stat = ParentMemStat::Normal(workload_group.mem_stat.clone());
+
+            let settings = ctx.session.get_settings();
+            if let Some(QuotaValue::Percentage(v)) = workload_group.get_quota(CPU_QUOTA_KEY) {
+                if let Ok(max_threads) = settings.get_max_threads() {
+                    let new_max_threads = max_threads * v as u64 / 100;
+                    let _ = settings.set_max_threads(std::cmp::max(2, new_max_threads));
+                }
+            }
+
+            if let Some(QuotaValue::Duration(v)) = workload_group.get_quota(QUERY_TIMEOUT_QUOTA_KEY)
+            {
+                if let Ok(max_execute_time) = settings.get_max_execute_time_in_seconds() {
+                    let new_max_execute_time = v.as_secs();
+                    let _ = settings.set_max_execute_time_in_seconds(std::cmp::min(
+                        max_execute_time,
+                        new_max_execute_time,
+                    ));
+                }
+            }
+        }
+
+        let name = Some(ctx.query_id.clone());
+        let query_mem_stat = MemStat::create_child(name, 0, workload_group_mem_stat);
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(ctx.query_id.clone());
         tracking_payload.mem_stat = Some(query_mem_stat.clone());

@@ -25,6 +25,7 @@ mod runtime;
 mod runtime_tracker;
 mod thread;
 mod time_series;
+pub mod workload_group;
 
 pub use backtrace::dump_backtrace;
 pub use backtrace::get_all_tasks;

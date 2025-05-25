@@ -17,14 +17,14 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::QuotaValueStmt;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::workload_group::QuotaValue;
+use databend_common_base::runtime::workload_group::WorkloadGroup;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_management::QuotaValue;
 use databend_common_management::WorkloadApi;
-use databend_common_management::WorkloadGroup;
 use databend_common_management::WorkloadMgr;
 use databend_common_sql::plans::CreateWorkloadGroupPlan;
 

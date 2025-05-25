@@ -445,7 +445,7 @@ mod tests {
         parent_memory_stat: ParentMemStat,
         manager: &'static QueriesMemoryManager,
     ) -> Arc<MemStat> {
-        let mut mem_stat = MemStat::create_child(name, priority, parent_memory_stat);
+        let mut mem_stat = MemStat::create_child(Some(name), priority, parent_memory_stat);
         let mut_mem_stat = Arc::get_mut(&mut mem_stat).unwrap();
         mut_mem_stat.queries_memory_manager = manager;
         mem_stat

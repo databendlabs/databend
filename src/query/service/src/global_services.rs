@@ -27,6 +27,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::StackTrace;
+use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_management::WorkloadMgr;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_store::MetaStoreProvider;
@@ -195,7 +196,9 @@ impl GlobalServices {
         }?;
 
         let tenant = config.query.tenant_id.tenant_name().to_string();
-        GlobalInstance::set(Arc::new(WorkloadMgr::create(meta_store, &tenant)?));
+        let workload_mgr = Arc::new(WorkloadMgr::create(meta_store, &tenant)?);
+        GlobalInstance::set(workload_mgr.clone());
+        GlobalInstance::set(WorkloadGroupResourceManager::new(workload_mgr.clone()));
         Ok(())
     }
 }
