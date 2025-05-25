@@ -16,7 +16,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
-use databend_common_base::runtime::workload_group::{QuotaValue, WorkloadGroup};
+use databend_common_base::runtime::workload_group::QuotaValue;
+use databend_common_base::runtime::workload_group::WorkloadGroup;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::WorkloadApi;

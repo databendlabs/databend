@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,6 +24,7 @@ use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_base::runtime::workload_group::QuotaValue;
+use databend_common_base::runtime::workload_group::WorkloadGroup;
 use databend_common_base::runtime::workload_group::CPU_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QUERY_TIMEOUT_QUOTA_KEY;
 use databend_common_base::runtime::MemStat;
@@ -437,12 +439,62 @@ async fn get_workload_group(
     }
 }
 
+// To ensure the priority of the workload group settings, we have moved them into the session config.
+fn workload_group_settings(
+    session: &Session,
+    workload_group: &WorkloadGroup,
+    req: &mut HttpQueryRequest,
+) {
+    let mut settings = BTreeMap::new();
+    let session_settings = session.get_settings();
+
+    if let Some(QuotaValue::Percentage(v)) = workload_group.get_quota(CPU_QUOTA_KEY) {
+        if let Ok(max_threads) = session_settings.get_max_threads() {
+            let new_max_threads = max_threads * v as u64 / 100;
+            settings.insert(
+                "max_threads".to_string(),
+                std::cmp::max(2, new_max_threads).to_string(),
+            );
+        }
+    }
+
+    if let Some(QuotaValue::Duration(v)) = workload_group.get_quota(QUERY_TIMEOUT_QUOTA_KEY) {
+        if let Ok(max_execute_time) = session_settings.get_max_execute_time_in_seconds() {
+            let new_max_execute_time = match max_execute_time {
+                0 => v.as_secs(),
+                old_value => std::cmp::min(old_value, v.as_secs()),
+            };
+
+            settings.insert(
+                "max_execute_time_in_seconds".to_string(),
+                new_max_execute_time.to_string(),
+            );
+        }
+    }
+
+    if !settings.is_empty() {
+        req.set_settings(settings);
+    }
+}
+
 #[poem::handler]
 #[async_backtrace::framed]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
-    Json(req): Json<HttpQueryRequest>,
+    Json(mut req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
+    let workload_group = match get_workload_group(&ctx.session).await {
+        Ok(workload_group) => workload_group,
+        Err(error) => {
+            let err = HttpErrorCode::error_code(error);
+            return Ok(err.as_response());
+        }
+    };
+
+    if let Some(workload_group) = workload_group.as_ref() {
+        workload_group_settings(&ctx.session, &workload_group, &mut req);
+    }
+
     let query_handle = async {
         let agent_info = ctx
             .user_agent
@@ -518,38 +570,10 @@ pub(crate) async fn query_handler(
     };
 
     let query_handle = {
-        let workload_group = match get_workload_group(&ctx.session).await {
-            Ok(workload_group) => workload_group,
-            Err(error) => {
-                let err = HttpErrorCode::error_code(error);
-                return Ok(err.as_response());
-            }
+        let workload_group_mem_stat = match workload_group {
+            None => ParentMemStat::StaticRef(&GLOBAL_MEM_STAT),
+            Some(workload_group) => ParentMemStat::Normal(workload_group.mem_stat.clone()),
         };
-
-        let mut workload_group_mem_stat = ParentMemStat::StaticRef(&GLOBAL_MEM_STAT);
-
-        if let Some(workload_group) = workload_group {
-            workload_group_mem_stat = ParentMemStat::Normal(workload_group.mem_stat.clone());
-
-            let settings = ctx.session.get_settings();
-            if let Some(QuotaValue::Percentage(v)) = workload_group.get_quota(CPU_QUOTA_KEY) {
-                if let Ok(max_threads) = settings.get_max_threads() {
-                    let new_max_threads = max_threads * v as u64 / 100;
-                    let _ = settings.set_max_threads(std::cmp::max(2, new_max_threads));
-                }
-            }
-
-            if let Some(QuotaValue::Duration(v)) = workload_group.get_quota(QUERY_TIMEOUT_QUOTA_KEY)
-            {
-                if let Ok(max_execute_time) = settings.get_max_execute_time_in_seconds() {
-                    let new_max_execute_time = v.as_secs();
-                    let _ = settings.set_max_execute_time_in_seconds(std::cmp::min(
-                        max_execute_time,
-                        new_max_execute_time,
-                    ));
-                }
-            }
-        }
 
         let name = Some(ctx.query_id.clone());
         let query_mem_stat = MemStat::create_child(name, 0, workload_group_mem_stat);
