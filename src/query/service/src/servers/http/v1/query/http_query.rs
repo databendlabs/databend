@@ -321,7 +321,7 @@ impl HttpSessionConf {
             return;
         };
 
-        settings.extend(values.into_iter())
+        settings.extend(values)
     }
 }
 

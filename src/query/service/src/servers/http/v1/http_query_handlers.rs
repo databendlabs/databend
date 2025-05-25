@@ -492,7 +492,7 @@ pub(crate) async fn query_handler(
     };
 
     if let Some(workload_group) = workload_group.as_ref() {
-        workload_group_settings(&ctx.session, &workload_group, &mut req);
+        workload_group_settings(&ctx.session, workload_group, &mut req);
     }
 
     let query_handle = async {
