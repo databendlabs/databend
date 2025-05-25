@@ -125,7 +125,7 @@ impl FuseTable {
         let snapshot = self.read_table_snapshot().await?;
 
         info!(
-            "fuse table {} do read partitions, push downs:{:?}, snapshot id: {:?}",
+            "[FUSE-PARTITIONS] Reading partitions for table {}, push downs: {:?}, snapshot: {:?}",
             self.name(),
             push_downs,
             snapshot.as_ref().map(|sn| sn.snapshot_id)
@@ -240,7 +240,7 @@ impl FuseTable {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
                 ctx.set_pruned_partitions_stats(stat);
                 let sender = part_info_tx.clone();
-                info!("prune pipeline: get prune result from cache");
+                info!("[FUSE-PARTITIONS] Retrieved pruning result from cache");
                 source_pipeline.set_on_init(move || {
                     // We cannot use the runtime associated with the query to avoid increasing its lifetime.
                     GlobalIORuntime::instance().spawn(async move {
@@ -258,7 +258,10 @@ impl FuseTable {
                         });
 
                         if let Err(cause) = join_handler.await {
-                            log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
+                            log::warn!(
+                                "[FUSE-PARTITIONS] Join error in prune pipeline: {:?}",
+                                cause
+                            );
                         }
 
                         Result::Ok(())
@@ -317,7 +320,10 @@ impl FuseTable {
                 });
 
                 if let Err(cause) = join_handler.await {
-                    log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
+                    log::warn!(
+                        "[FUSE-PARTITIONS] Join error in prune pipeline: {:?}",
+                        cause
+                    );
                 }
                 Ok::<_, ErrorCode>(())
             });
@@ -359,7 +365,7 @@ impl FuseTable {
                 });
 
         if let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key) {
-            info!("prune snapshot block: get prune result from cache");
+            info!("[FUSE-PARTITIONS] Retrieved snapshot block pruning result from cache");
             return Ok(cached_result);
         }
 
@@ -513,7 +519,7 @@ impl FuseTable {
                 let pruned_part_stats = send_part_state.get_pruned_stats();
                 ctx.set_pruned_partitions_stats(pruned_part_stats);
                 if enable_prune_cache {
-                    info!("prune pipeline: enable prune cache");
+                    info!("[FUSE-PARTITIONS] Prune cache enabled");
                     send_part_state.populating_cache();
                 }
             }

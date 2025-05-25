@@ -236,7 +236,7 @@ impl FuseTable {
         let meta_location_generator = TableMetaLocationGenerator::new(storage_prefix);
         if !table_info.meta.part_prefix.is_empty() {
             return Err(ErrorCode::StorageOther(
-                "Location_prefix no longer supported. The last version that supports it is: https://github.com/databendlabs/databend/releases/tag/v1.2.653-nightly",
+                "[FUSE-TABLE] Location_prefix no longer supported. Last supported version: https://github.com/databendlabs/databend/releases/tag/v1.2.653-nightly",
             ));
         }
 
@@ -395,7 +395,7 @@ impl FuseTable {
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
         tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Internal(format!(
-                "expects table of engine FUSE, but got {}",
+                "[FUSE-TABLE] Expected FUSE engine table, but got {}",
                 tbl.engine()
             ))
         })
@@ -569,12 +569,16 @@ impl FuseTable {
                     let ver = TableMetaLocationGenerator::snapshot_version(loc.as_str());
                     let snapshot =
                         Self::read_table_snapshot_with_reader(reader, Some(loc), ver).await?;
-                    info!("table snapshot refreshed, time used {:?}", begin.elapsed());
+                    info!(
+                        "[FUSE-TABLE] Table snapshot refreshed, elapsed: {:?}",
+                        begin.elapsed()
+                    );
 
                     let schema = snapshot
                         .ok_or_else(|| {
                             ErrorCode::ShareStorageError(
-                                "Failed to load snapshot of read_only attach table".to_string(),
+                                "[FUSE-TABLE] Failed to load snapshot of read-only attached table"
+                                    .to_string(),
                             )
                         })?
                         .schema

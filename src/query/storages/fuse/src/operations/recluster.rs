@@ -57,7 +57,7 @@ impl FuseTable {
 
         // Status.
         {
-            let status = "recluster: begin to run recluster";
+            let status = "[FUSE-RECLUSTER] Starting recluster operation";
             ctx.set_status_info(status);
         }
 
@@ -110,7 +110,7 @@ impl FuseTable {
             {
                 segment_idx += chunk.len();
                 let status = format!(
-                    "recluster: read segment files:{}/{}, cost:{:?}",
+                    "[FUSE-RECLUSTER] Read segment files: {}/{}, elapsed: {:?}",
                     segment_idx,
                     number_segments,
                     start.elapsed()
@@ -154,10 +154,8 @@ impl FuseTable {
         {
             let elapsed_time = start.elapsed();
             ctx.set_status_info(&format!(
-                "recluster: end to build recluster tasks, recluster segments count: {}, blocks count: {}, cost:{:?}",
-                recluster_seg_num,
-                recluster_blocks_count,
-                elapsed_time,
+                "[FUSE-RECLUSTER] Built recluster tasks - segments: {}, blocks: {}, elapsed: {:?}",
+                recluster_seg_num, recluster_blocks_count, elapsed_time,
             ));
             metrics_inc_recluster_build_task_milliseconds(elapsed_time.as_millis() as u64);
             metrics_inc_recluster_segment_nums_scheduled(recluster_seg_num);
@@ -231,7 +229,7 @@ impl FuseTable {
             let v = std::cmp::max(max_threads, 10);
             if v > max_threads {
                 warn!(
-                    "max_threads setting is too low {}, increased to {}",
+                    "[FUSE-RECLUSTER] max_threads setting too low {}, increased to {}",
                     max_threads, v
                 )
             }

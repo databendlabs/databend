@@ -98,7 +98,10 @@ pub async fn do_vacuum2(
 
     let snapshots_before_lvt = match retention_policy {
         RetentionPolicy::ByTimePeriod(delta_duration) => {
-            info!("using by ByTimePeriod policy {:?}", delta_duration);
+            info!(
+                "[FUSE-VACUUM2] Using ByTimePeriod policy {:?}",
+                delta_duration
+            );
             let retention_period = if fuse_table.is_transient() {
                 // For transient table, keep no history data
                 TimeDelta::zero()
@@ -118,7 +121,7 @@ pub async fn do_vacuum2(
             }
 
             ctx.set_status_info(&format!(
-                "set lvt for table {} takes {:?}, lvt: {:?}",
+                "[FUSE-VACUUM2] Set LVT for table {}, elapsed: {:?}, LVT: {:?}",
                 fuse_table.get_table_info().desc,
                 start.elapsed(),
                 lvt
@@ -130,7 +133,7 @@ pub async fn do_vacuum2(
         }
         RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots_to_keep) => {
             info!(
-                "using by ByNumOfSnapshotsToKeep policy {:?}",
+                "[FUSE-VACUUM2] Using ByNumOfSnapshotsToKeep policy {:?}",
                 num_snapshots_to_keep
             );
             // List the snapshot order by timestamp asc, till the current snapshot(inclusively).
@@ -171,7 +174,7 @@ pub async fn do_vacuum2(
 
     let elapsed = start.elapsed();
     ctx.set_status_info(&format!(
-        "list snapshots for table {} takes {:?}, snapshots_dir: {:?}, snapshots: {:?}",
+        "[FUSE-VACUUM2] Listed snapshots for table {}, elapsed: {:?}, snapshots_dir: {:?}, snapshots: {:?}",
         fuse_table.get_table_info().desc,
         elapsed,
         fuse_table
@@ -193,7 +196,7 @@ pub async fn do_vacuum2(
         return Ok(vec![]);
     };
     ctx.set_status_info(&format!(
-        "select gc_root for table {} takes {:?}, gc_root: {:?}, snapshots_to_gc: {:?}",
+        "[FUSE-VACUUM2] Selected gc_root for table {}, elapsed: {:?}, gc_root: {:?}, snapshots_to_gc: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
         gc_root,
@@ -222,7 +225,7 @@ pub async fn do_vacuum2(
     .collect::<Vec<_>>();
 
     ctx.set_status_info(&format!(
-        "list segments before gc_root for table {} takes {:?}, segment_dir: {:?}, gc_root_timestamp: {:?}, segments: {:?}",
+        "[FUSE-VACUUM2] Listed segments before gc_root for table {}, elapsed: {:?}, segment_dir: {:?}, gc_root_timestamp: {:?}, segments: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
         fuse_table.meta_location_generator().segment_location_prefix(),
@@ -236,7 +239,7 @@ pub async fn do_vacuum2(
         .filter(|s| !gc_root_segments.contains(s))
         .collect();
     ctx.set_status_info(&format!(
-        "Filter segments to gc for table {} takes {:?}, segments_to_gc: {:?}",
+        "[FUSE-VACUUM2] Filtered segments_to_gc for table {}, elapsed: {:?}, segments_to_gc: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
         slice_summary(&segments_to_gc)
@@ -253,7 +256,7 @@ pub async fn do_vacuum2(
         gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
     }
     ctx.set_status_info(&format!(
-        "read segments for table {} takes {:?}",
+        "[FUSE-VACUUM2] Read segments for table {}, elapsed: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
     ));
@@ -272,7 +275,7 @@ pub async fn do_vacuum2(
     .collect::<Vec<_>>();
 
     ctx.set_status_info(&format!(
-        "list blocks before gc_root for table {} takes {:?}, block_dir: {:?}, least_visible_timestamp: {:?}, blocks: {:?}",
+        "[FUSE-VACUUM2] Listed blocks before gc_root for table {}, elapsed: {:?}, block_dir: {:?}, gc_root_timestamp: {:?}, blocks: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
         fuse_table.meta_location_generator().block_location_prefix(),
@@ -286,7 +289,7 @@ pub async fn do_vacuum2(
         .filter(|b| !gc_root_blocks.contains(b))
         .collect();
     ctx.set_status_info(&format!(
-        "Filter blocks to gc for table {} takes {:?}, blocks_to_gc: {:?}",
+        "[FUSE-VACUUM2] Filtered blocks_to_gc for table {}, elapsed: {:?}, blocks_to_gc: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
         slice_summary(&blocks_to_gc)
@@ -326,7 +329,7 @@ pub async fn do_vacuum2(
     }
 
     ctx.set_status_info(&format!(
-        "collect indexes to gc for table {} takes {:?}, indexes_to_gc: {:?}",
+        "[FUSE-VACUUM2] Collected indexes_to_gc for table {}, elapsed: {:?}, indexes_to_gc: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
         slice_summary(&indexes_to_gc)
@@ -369,7 +372,7 @@ pub async fn do_vacuum2(
         .chain(indexes_to_gc.into_iter())
         .collect();
     ctx.set_status_info(&format!(
-        "remove files for table {} takes {:?}, files_to_gc: {:?}",
+        "[FUSE-VACUUM2] Removed files for table {}, elapsed: {:?}, files_to_gc: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
         slice_summary(&files_to_gc)
@@ -419,15 +422,15 @@ async fn set_lvt(
 ) -> Result<Option<DateTime<Utc>>> {
     let Some(latest_snapshot) = fuse_table.read_table_snapshot().await? else {
         info!(
-            "Table {} has no snapshot, stop vacuuming",
+            "[FUSE-VACUUM2] Table {} has no snapshot, stopping vacuum",
             fuse_table.get_table_info().desc
         );
         return Ok(None);
     };
     if !is_uuid_v7(&latest_snapshot.snapshot_id) {
         info!(
-            "latest snapshot {:?} is not v7, stop vacuuming",
-            latest_snapshot
+            "[FUSE-VACUUM2] Latest snapshot is not v7, stopping vacuum: {:?}",
+            latest_snapshot.snapshot_id
         );
         return Ok(None);
     }
@@ -458,7 +461,7 @@ async fn list_until_prefix(
     need_one_more: bool,
     gc_root_meta_ts: Option<DateTime<Utc>>,
 ) -> Result<Vec<Entry>> {
-    info!("list until prefix: {}", until);
+    info!("[FUSE-VACUUM2] Listing files until prefix: {}", until);
     let dal = fuse_table.get_operator_ref();
 
     match dal.info().scheme() {
