@@ -661,7 +661,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-
+                ("parquet_rowgroup_hint_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(128 * 1024 * 1024),
+                    desc: "Parquet file is very large, we will divide it into multiple rowgroups to read, the config is the hint bytes of each rowgroup, Default value: 128MB",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1024 * 1024..=u64::MAX)),
+                }),
                 // enterprise license related settings
                 ("enterprise_license", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
