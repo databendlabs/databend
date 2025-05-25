@@ -137,6 +137,7 @@ pub struct QueryEnv {
     pub query_kind: QueryKind,
     pub dataflow_diagram: Arc<DataflowDiagram>,
     pub request_server_id: String,
+    pub workload_group: Option<String>,
     pub create_rpc_clint_with_current_rt: bool,
 }
 
@@ -164,6 +165,10 @@ impl QueryEnv {
         let session = session_manager.register_session(
             session_manager.create_with_settings(SessionType::FlightRPC, self.settings.clone())?,
         )?;
+
+        if let Some(workload_group) = &self.workload_group {
+            session.set_current_workload_group(workload_group.clone());
+        }
 
         let query_ctx = session.create_query_context_with_cluster(
             Arc::new(Cluster {

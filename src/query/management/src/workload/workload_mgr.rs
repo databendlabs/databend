@@ -16,6 +16,8 @@ use std::collections::HashMap;
 
 use databend_common_base::base::escape_for_key;
 use databend_common_base::base::GlobalUniqName;
+use databend_common_base::runtime::workload_group::QuotaValue;
+use databend_common_base::runtime::workload_group::WorkloadGroup;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -26,9 +28,7 @@ use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 
-use crate::workload::workload_api::QuotaValue;
 use crate::workload::workload_api::WorkloadApi;
-use crate::workload::workload_api::WorkloadGroup;
 pub static WORKLOAD_META_KEY_PREFIX: &str = "__fd_workloads";
 
 pub struct WorkloadMgr {

@@ -246,7 +246,7 @@ mod tests {
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
         let mem_stat = MemStat::create_child(
-            String::from("test"),
+            Some(String::from("test")),
             0,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
@@ -275,12 +275,12 @@ mod tests {
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
         let mem_stat_1 = MemStat::create_child(
-            String::from("test"),
+            Some(String::from("test")),
             0,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
         let mem_stat_2 = MemStat::create_child(
-            String::from("test"),
+            Some(String::from("test")),
             0,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
@@ -308,7 +308,7 @@ mod tests {
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
         let mem_stat = MemStat::create_child(
-            String::from("test"),
+            Some(String::from("test")),
             0,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
@@ -339,12 +339,12 @@ mod tests {
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
 
         let mem_stat_1 = MemStat::create_child(
-            String::from("test"),
+            Some(String::from("test")),
             0,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
         let mem_stat_2 = MemStat::create_child(
-            String::from("test"),
+            Some(String::from("test")),
             0,
             ParentMemStat::StaticRef(&TEST_GLOBAL),
         );
