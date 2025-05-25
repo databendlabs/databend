@@ -155,7 +155,7 @@ where
                 JsonbValue::String(s) => {
                     read_decimal_with_size::<T>(s.as_bytes(), dest_size, true, rounding_mode)
                         .map_err(|e| {
-                            format!("Falied to cast to variant value `{s}` to decimal, {e}")
+                            format!("Failed to cast to variant value `{s}` to decimal, {e}")
                         })
                         .map(|(v, _)| Some(v))
                 }
