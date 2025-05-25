@@ -97,11 +97,14 @@ impl BlockCompactMutator {
             .num_block_limit
             .unwrap_or(compact_max_block_selection);
 
-        info!("block compaction limits: seg {num_segment_limit},  block {num_block_limit}");
+        info!(
+            "[BLOCK-COMPACT] Compaction limits configured - segments: {}, blocks: {}",
+            num_segment_limit, num_block_limit
+        );
 
         // Status.
         self.ctx
-            .set_status_info("compact: begin to build compact tasks");
+            .set_status_info("[BLOCK-COMPACT] Building compact tasks");
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -157,7 +160,7 @@ impl BlockCompactMutator {
             // Status.
             {
                 let status = format!(
-                    "compact: read segment files:{}/{}, cost:{:?}",
+                    "[BLOCK-COMPACT] Processed segment files: {}/{}, elapsed: {:?}",
                     segment_idx,
                     number_segments,
                     start.elapsed()
@@ -176,7 +179,7 @@ impl BlockCompactMutator {
         // Status.
         let elapsed_time = start.elapsed();
         self.ctx.set_status_info(&format!(
-            "compact: end to build lazy compact parts:{}, segments to be compacted:{}, cost:{:?}",
+            "[BLOCK-COMPACT] Built lazy compact parts: {}, segments to compact: {}, elapsed: {:?}",
             parts.len(),
             checker.compacted_segment_cnt,
             elapsed_time
@@ -267,7 +270,7 @@ impl BlockCompactMutator {
 
         match futures::future::try_join_all(works).await {
             Err(e) => Err(ErrorCode::StorageOther(format!(
-                "build compact tasks failure, {}",
+                "[BLOCK-COMPACT] Failed to build compact tasks: {}",
                 e
             ))),
             Ok(res) => {
@@ -276,7 +279,7 @@ impl BlockCompactMutator {
                 {
                     let elapsed_time = start.elapsed();
                     ctx.set_status_info(&format!(
-                        "compact: end to build compact parts:{}, cost:{:?}",
+                        "[BLOCK-COMPACT] Built compact parts: {}, elapsed: {:?}",
                         parts.len(),
                         elapsed_time,
                     ));
@@ -559,9 +562,12 @@ impl CompactTaskBuilder {
             handlers.push(handler);
         }
 
-        let joint = futures::future::try_join_all(handlers)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("deserialize failure, {}", e)))?;
+        let joint = futures::future::try_join_all(handlers).await.map_err(|e| {
+            ErrorCode::StorageOther(format!(
+                "[BLOCK-COMPACT] Failed to deserialize segment blocks: {}",
+                e
+            ))
+        })?;
 
         let mut blocks = joint
             .into_iter()

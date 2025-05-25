@@ -100,13 +100,13 @@ impl Planner {
                 let options = prqlc::Options::default();
                 match prqlc::compile(sql, &options) {
                     Ok(res) => {
-                        info!("Try convert prql to sql succeed, generated sql: {}", &res);
+                        info!("[SQL-PLANNER] PRQL to SQL conversion successful: {}", &res);
                         prql_converted = true;
                         res
                     }
                     Err(e) => {
                         warn!(
-                            "Try convert prql to sql failed, still use raw sql to parse. error: {e}"
+                            "[SQL-PLANNER] PRQL to SQL conversion failed, fallback to raw SQL parsing: {e}"
                         );
                         sql.to_string()
                     }
@@ -164,7 +164,9 @@ impl Planner {
                     && sql_dialect == Dialect::PRQL
                     && !prql_converted
                 {
-                    return Err(ErrorCode::SyntaxException("convert prql to sql failed."));
+                    return Err(ErrorCode::SyntaxException(
+                        "[SQL-PLANNER] PRQL to SQL conversion failed",
+                    ));
                 }
 
                 self.replace_stmt(&mut stmt)?;
@@ -240,7 +242,10 @@ impl Planner {
                 stmt,
             );
             if let Some(plan) = plan {
-                info!("logical plan from cache, time used: {:?}", start.elapsed());
+                info!(
+                    "[SQL-PLANNER] Logical plan retrieved from cache, elapsed: {:?}",
+                    start.elapsed()
+                );
                 // update for clickhouse handler
                 self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
                 return Ok(plan.plan);
@@ -279,7 +284,10 @@ impl Planner {
             self.set_cache(planner_cache_key.clone().unwrap(), optimized_plan.clone());
         }
 
-        info!("logical plan built, time used: {:?}", start.elapsed());
+        info!(
+            "[SQL-PLANNER] Logical plan construction completed, elapsed: {:?}",
+            start.elapsed()
+        );
         Ok(optimized_plan)
     }
 
@@ -316,7 +324,7 @@ impl Planner {
         let max_set_ops = self.ctx.get_settings().get_max_set_operator_count()?;
         if max_set_ops < set_ops_counter.count as u64 {
             return Err(ErrorCode::SyntaxException(format!(
-                "The number of set operations: {} exceeds the limit: {}",
+                "[SQL-PLANNER] Set operations count {} exceeds maximum limit {}",
                 set_ops_counter.count, max_set_ops
             )));
         }

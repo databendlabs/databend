@@ -256,14 +256,17 @@ impl FusePruner {
             let v = std::cmp::max(max_io_requests, 10);
             if v > max_io_requests {
                 warn!(
-                    "max_storage_io_requests setting is too low {}, increased to {}",
+                    "[FUSE-PRUNER] max_io_requests setting too low ({}), automatically increased to {} for optimal performance",
                     max_io_requests, v
                 )
             }
             v
         };
 
-        info!("max concurrency of pruning is set to {}", max_concurrency);
+        info!(
+            "[FUSE-PRUNER] Pruning max concurrency configured to {} threads",
+            max_concurrency
+        );
 
         let pruning_ctx = PruningContext::try_create(
             ctx,
@@ -586,7 +589,7 @@ pub fn table_sample(push_down_info: &Option<PushDownInfo>) -> Result<Option<f64>
         if let Some(block_sample_value) = sample.block_level {
             if block_sample_value > 100.0 {
                 return Err(ErrorCode::SyntaxException(format!(
-                    "Sample value should be less than or equal to 100, but got {}",
+                    "[FUSE-PRUNER] Invalid sample value: {} exceeds maximum allowed value of 100",
                     block_sample_value
                 )));
             }

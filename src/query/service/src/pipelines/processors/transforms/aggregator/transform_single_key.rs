@@ -61,7 +61,7 @@ impl PartialSingleStateAggregator {
         let state_layout = params
             .states_layout
             .as_ref()
-            .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?
+            .ok_or_else(|| ErrorCode::LayoutError("[TRANSFORM-AGGREGATOR] Layout cannot be None"))?
             .clone();
 
         let addr: StateAddr = arena.alloc_layout(state_layout.layout).into();
@@ -180,7 +180,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
         }
 
         log::info!(
-            "Aggregated {} to 1 rows in {} sec (real: {}). ({} rows/sec, {}/sec, {})",
+            "[TRANSFORM-AGGREGATOR] Single key aggregation completed: {} → 1 rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}",
             self.rows,
             self.start.elapsed().as_secs_f64(),
             if let Some(t) = &self.first_block_start {
@@ -215,7 +215,7 @@ impl FinalSingleStateAggregator {
         let states_layout = params
             .states_layout
             .as_ref()
-            .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?
+            .ok_or_else(|| ErrorCode::LayoutError("[TRANSFORM-AGGREGATOR] Layout cannot be None"))?
             .clone();
 
         assert!(!states_layout.states_loc.is_empty());

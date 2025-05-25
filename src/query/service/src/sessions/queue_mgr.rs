@@ -101,11 +101,17 @@ impl<Data: QueueData> QueueManager<Data> {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
             provider.create_meta_store().await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                ErrorCode::MetaServiceError(format!(
+                    "[QUERY-QUEUE] Failed to create meta store: {}",
+                    e
+                ))
             })?
         };
 
-        info!("queue manager permits: {:?}", permits);
+        info!(
+            "[QUERY-QUEUE] Queue manager initialized with permits: {:?}",
+            permits
+        );
         GlobalInstance::set(Self::create(
             permits,
             metastore,
@@ -166,7 +172,7 @@ impl<Data: QueueData> QueueManager<Data> {
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
         if data.need_acquire_to_queue() {
             info!(
-                "preparing to acquire from query queue, length: {}",
+                "[QUERY-QUEUE] Preparing to acquire from query queue, current length: {}",
                 self.length()
             );
 
@@ -201,7 +207,10 @@ impl<Data: QueueData> QueueManager<Data> {
 
             return match acquire_res {
                 Ok(v) => {
-                    info!("finished acquiring from queue, length: {}", self.length());
+                    info!(
+                        "[QUERY-QUEUE] Successfully acquired from queue, current length: {}",
+                        self.length()
+                    );
 
                     inc_session_running_acquired_queries();
                     record_session_queue_acquire_duration_ms(
@@ -342,8 +351,12 @@ macro_rules! impl_acquire_queue_future {
 
                         Poll::Ready(match res {
                             Ok(Ok(v)) => Ok(AcquireQueueGuard::$fn_name(Some(v))),
-                            Ok(Err(_)) => Err(ErrorCode::TokioError("acquire queue failure.")),
-                            Err(_elapsed) => Err(ErrorCode::Timeout("query queuing timeout")),
+                            Ok(Err(_)) => Err(ErrorCode::TokioError(
+                                "[QUERY-QUEUE] Queue acquisition failed",
+                            )),
+                            Err(_elapsed) => Err(ErrorCode::Timeout(
+                                "[QUERY-QUEUE] Query queuing timeout exceeded",
+                            )),
                         })
                     }
                     Poll::Pending => {
@@ -521,9 +534,9 @@ impl QueueData for QueryEntry {
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
         match key {
-            None => ErrorCode::AbortedQuery("The query has be kill while in queries queue"),
+            None => ErrorCode::AbortedQuery("[QUERY-QUEUE] Query was killed while in queue"),
             Some(key) => ErrorCode::AbortedQuery(format!(
-                "The query {} has be kill while in queries queue",
+                "[QUERY-QUEUE] Query {} was killed while in queue",
                 key
             )),
         }
@@ -542,12 +555,18 @@ impl QueueData for QueryEntry {
     }
 
     fn enter_wait_pending(&self) {
-        self.ctx.set_status_info("resources scheduling");
+        self.ctx
+            .set_status_info("[QUERY-QUEUE] Waiting for resource scheduling");
     }
 
     fn exit_wait_pending(&self, wait_time: Duration) {
-        self.ctx
-            .set_status_info(format!("resource scheduled(elapsed: {:?})", wait_time).as_str());
+        self.ctx.set_status_info(
+            format!(
+                "[QUERY-QUEUE] Resource scheduling completed, elapsed: {:?}",
+                wait_time
+            )
+            .as_str(),
+        );
         self.ctx.set_query_queued_duration(wait_time)
     }
 }
