@@ -112,7 +112,8 @@ impl SelectInterpreter {
     #[async_backtrace::framed]
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
         let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
-        self.ctx.set_status_info("building physical plan");
+        self.ctx
+            .set_status_info("[SELECT-INTERP] Building physical plan");
         builder
             .build(&self.s_expr, self.bind_context.column_set())
             .await
@@ -151,7 +152,7 @@ impl SelectInterpreter {
                                 update_table_metas: streams.update_table_metas,
                                 ..Default::default()
                             };
-                            info!("Updating the stream meta to consume data");
+                            info!("[SELECT-INTERP] Updating stream metadata to consume data");
                             catalog.update_multi_table_meta(r).await.map(|_| ())
                         }
                         None => Ok(()),
@@ -239,7 +240,7 @@ impl SelectInterpreter {
             if t.name().eq_ignore_ascii_case("result_scan") {
                 return if tables.len() > 1 {
                     Err(ErrorCode::Unimplemented(
-                        "The current `RESULT_SCAN` only supports single table queries",
+                        "[SELECT-INTERP] RESULT_SCAN currently supports only single table queries",
                     ))
                 } else {
                     Ok(Some(t.table()))
@@ -279,7 +280,8 @@ impl Interpreter for SelectInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         self.attach_tables_to_ctx();
 
-        self.ctx.set_status_info("preparing plan");
+        self.ctx
+            .set_status_info("[SELECT-INTERP] Preparing execution plan");
 
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;
@@ -287,7 +289,7 @@ impl Interpreter for SelectInterpreter {
             .format(self.metadata.clone(), Default::default())?
             .format_pretty()?;
 
-        info!("Query physical plan: \n{}", query_plan);
+        info!("[SELECT-INTERP] Query physical plan:\n{}", query_plan);
 
         if self.ctx.get_settings().get_enable_query_result_cache()?
             && self.ctx.get_cacheable()
@@ -344,7 +346,7 @@ impl Interpreter for SelectInterpreter {
                 }
                 Err(e) => {
                     // 2.3 If an error occurs, turn back to the normal pipeline.
-                    error!("Failed to read query result cache. {}", e);
+                    error!("[SELECT-INTERP] Failed to read query result cache: {}", e);
                 }
             }
         }

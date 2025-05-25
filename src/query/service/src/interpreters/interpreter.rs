@@ -101,7 +101,7 @@ pub trait Interpreter: Sync + Send {
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         let make_error = || "failed to execute interpreter";
 
-        ctx.set_status_info("building pipeline");
+        ctx.set_status_info("[INTERPRETER] Building execution pipeline");
         ctx.check_aborting().with_context(make_error)?;
 
         let enable_disk_cache = match LicenseManagerSwitch::instance()
@@ -110,7 +110,7 @@ pub trait Interpreter: Sync + Send {
             Ok(_) => true,
             Err(e) => {
                 log::error!(
-                        "[Interpreter] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
+                        "[INTERPRETER] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
                         e
                     );
                 false
@@ -138,7 +138,7 @@ pub trait Interpreter: Sync + Send {
                 on_execution_finished(info, query_ctx)
             }));
 
-        ctx.set_status_info("executing pipeline");
+        ctx.set_status_info("[INTERPRETER] Executing pipeline");
 
         let settings = ctx.get_settings();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
@@ -191,7 +191,7 @@ fn log_query_start(ctx: &QueryContext) {
     }
 
     if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
-        error!("[Interpreter] Query start logging failed: {:?}", error)
+        error!("[INTERPRETER] Failed to log query start: {:?}", error)
     }
 }
 
@@ -218,7 +218,7 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
-        error!("[Interpreter] Query finish logging failed: {:?}", error)
+        error!("[INTERPRETER] Failed to log query finish: {:?}", error)
     }
 }
 
@@ -261,7 +261,7 @@ async fn auto_commit_if_not_allowed_in_transaction(
     }
     if !stmt.is_transaction_command() && ctx.txn_mgr().lock().is_fail() {
         let err = ErrorCode::CurrentTransactionIsAborted(
-            "Current transaction is aborted, commands ignored until end of transaction block",
+            "[INTERPRETER] Current transaction is aborted, commands ignored until end of transaction block",
         );
         return Err(err);
     }

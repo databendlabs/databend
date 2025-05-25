@@ -89,7 +89,7 @@ impl ToReadDataSourcePlan for dyn Table {
         {
             Ok((PartStatistics::default(), Partitions::default()))
         } else {
-            ctx.set_status_info("build physical plan - reading partitions");
+            ctx.set_status_info("[TABLE-SCAN] Reading table partitions");
             self.read_partitions(ctx.clone(), push_downs.clone(), dry_run)
                 .await
         }?;
@@ -104,7 +104,7 @@ impl ToReadDataSourcePlan for dyn Table {
         }
 
         ctx.set_status_info(&format!(
-            "build physical plan - got data source partitions, time used {:?}",
+            "[TABLE-SCAN] Partitions loaded, elapsed: {:?}",
             start.elapsed()
         ));
 
@@ -189,9 +189,9 @@ impl ToReadDataSourcePlan for dyn Table {
                     for (i, field) in output_schema.fields().iter().enumerate() {
                         if let Some(mask_policy) = column_mask_policy.get(field.name()) {
                             ctx.set_status_info(&format!(
-                                "build physical plan - checking data mask policies - getting data masks, time used {:?}",
-                                start.elapsed())
-                            );
+                                "[TABLE-SCAN] Loading data mask policies, elapsed: {:?}",
+                                start.elapsed()
+                            ));
                             if let Ok(policy) = handler
                                 .get_data_mask(meta_api.clone(), &tenant, mask_policy.clone())
                                 .await
@@ -234,16 +234,16 @@ impl ToReadDataSourcePlan for dyn Table {
                                     false,
                                 )?;
 
-                                ctx.set_status_info(
-                                    &format!("build physical plan - checking data mask policies - resolving mask expression, time used {:?}",
-                                    start.elapsed())
-                                );
+                                ctx.set_status_info(&format!(
+                                    "[TABLE-SCAN] Resolving mask expressions, elapsed: {:?}",
+                                    start.elapsed()
+                                ));
                                 let scalar = type_checker.resolve(&ast_expr)?;
                                 let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
                                 mask_policy_map.insert(i, expr.as_remote_expr());
                             } else {
                                 info!(
-                                    "cannot find mask policy {}/{}",
+                                    "[TABLE-SCAN] Mask policy not found: {}/{}",
                                     tenant.display(),
                                     mask_policy
                                 );
@@ -260,7 +260,7 @@ impl ToReadDataSourcePlan for dyn Table {
         };
 
         ctx.set_status_info(&format!(
-            "build physical plan - built data source plan, time used {:?}",
+            "[TABLE-SCAN] Scan plan ready, elapsed: {:?}",
             start.elapsed()
         ));
 

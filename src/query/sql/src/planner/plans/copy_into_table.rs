@@ -161,7 +161,7 @@ impl CopyIntoTablePlan {
             return Ok(());
         }
         self.files_collected = true;
-        ctx.set_status_info("begin to list files");
+        ctx.set_status_info("[COPY-PLANNER] Listing source files");
         let start = Instant::now();
 
         let stage_table_info = &self.stage_table_info;
@@ -202,23 +202,26 @@ impl CopyIntoTablePlan {
         metrics_inc_copy_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
 
         ctx.set_status_info(&format!(
-            "end list files: got {} files, time used {:?}",
+            "[COPY-PLANNER] Listed {} source files, elapsed: {:?}",
             num_all_files,
             start.elapsed()
         ));
 
         let (need_copy_file_infos, duplicated) = if options.force {
             if !options.purge && all_source_file_infos.len() > COPY_MAX_FILES_PER_COMMIT {
-                return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
+                return Err(ErrorCode::Internal(format!(
+                    "[COPY-PLANNER] {}",
+                    COPY_MAX_FILES_COMMIT_MSG
+                )));
             }
             info!(
-                "force mode, ignore file filtering. ({}.{})",
+                "[COPY-PLANNER] Force mode enabled, skipping file filtering for table {}.{}",
                 &self.database_name, &self.table_name
             );
             (all_source_file_infos, vec![])
         } else {
             // Status.
-            ctx.set_status_info("begin filtering out copied files");
+            ctx.set_status_info("[COPY-PLANNER] Filtering out already copied files");
 
             let filter_start = Instant::now();
             if self.dedup_full_path {
@@ -239,7 +242,7 @@ impl CopyIntoTablePlan {
                 )
                 .await?;
             ctx.set_status_info(&format!(
-                "end filtering out copied files: {}, time used {:?}",
+                "[COPY-PLANNER] Filtered {} files, elapsed: {:?}",
                 num_all_files,
                 filter_start.elapsed()
             ));
@@ -257,7 +260,7 @@ impl CopyIntoTablePlan {
         let copied_bytes: u64 = need_copy_file_infos.iter().map(|i| i.size).sum();
 
         info!(
-            "collect files with max_files={:?} finished, need to copy {} files, {} bytes; skip {} duplicated files, time used:{:?}",
+            "[COPY-PLANNER] File collection completed - max_files: {:?}, files to copy: {}, bytes: {}, duplicates skipped: {}, elapsed: {:?}",
             max_files,
             need_copy_file_infos.len(),
             copied_bytes,

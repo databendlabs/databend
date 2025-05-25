@@ -76,7 +76,7 @@ impl QueryPipelineExecutor {
 
         if threads_num.is_zero() {
             return Err(ErrorCode::Internal(
-                "Pipeline max threads cannot equals zero.",
+                "[PIPELINE-EXECUTOR] Pipeline max threads cannot be zero",
             ));
         }
 
@@ -108,7 +108,9 @@ impl QueryPipelineExecutor {
         settings: ExecutorSettings,
     ) -> Result<Arc<QueryPipelineExecutor>> {
         if pipelines.is_empty() {
-            return Err(ErrorCode::Internal("Executor Pipelines is empty."));
+            return Err(ErrorCode::Internal(
+                "[PIPELINE-EXECUTOR] Executor pipelines cannot be empty",
+            ));
         }
 
         let threads_num = pipelines
@@ -119,7 +121,7 @@ impl QueryPipelineExecutor {
 
         if threads_num.is_zero() {
             return Err(ErrorCode::Internal(
-                "Pipeline max threads cannot equals zero.",
+                "[PIPELINE-EXECUTOR] Pipeline max threads cannot be zero",
             ));
         }
 
@@ -200,7 +202,8 @@ impl QueryPipelineExecutor {
     }
 
     pub fn finish<C>(&self, cause: Option<ErrorCode<C>>) {
-        let cause = cause.map(|err| err.with_context("pipeline executor finished"));
+        let cause =
+            cause.map(|err| err.with_context("[PIPELINE-EXECUTOR] Pipeline executor finished"));
 
         let mut finished_error = self.finished_error.lock();
         if let Some(cause) = cause {
@@ -284,7 +287,7 @@ impl QueryPipelineExecutor {
                 }
 
                 info!(
-                    "Init pipeline successfully, query_id: {:?}, elapsed: {:?}",
+                    "[PIPELINE-EXECUTOR] Pipeline initialized successfully for query {}, elapsed: {:?}",
                     self.settings.query_id,
                     instant.elapsed()
                 );
@@ -327,7 +330,7 @@ impl QueryPipelineExecutor {
                 if let Either::Left(_) = select(max_execute_future, finished_future).await {
                     if let Some(executor) = this.upgrade() {
                         executor.finish(Some(ErrorCode::AbortedQuery(
-                            "Aborted query, because the execution time exceeds the maximum execution time limit",
+                            "[PIPELINE-EXECUTOR] Query aborted due to execution time exceeding maximum limit",
                         )));
                     }
                 }
@@ -452,7 +455,9 @@ impl Drop for QueryPipelineExecutor {
 
         let cause = match self.finished_error.lock().as_ref() {
             Some(cause) => cause.clone(),
-            None => ErrorCode::Internal("Pipeline illegal state: not successfully shutdown."),
+            None => ErrorCode::Internal(
+                "[PIPELINE-EXECUTOR] Pipeline illegal state: not successfully shutdown",
+            ),
         };
 
         let mut on_finished_chain = self.on_finished_chain.lock();
@@ -463,7 +468,7 @@ impl Drop for QueryPipelineExecutor {
         let profiling = self.fetch_plans_profile(true);
         let info = ExecutionInfo::create(Err(cause), profiling);
         if let Err(cause) = on_finished_chain.apply(info) {
-            warn!("Pipeline executor shutdown failure, {:?}", cause);
+            warn!("[PIPELINE-EXECUTOR] Shutdown failure: {:?}", cause);
         }
     }
 }
