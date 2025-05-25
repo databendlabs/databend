@@ -98,11 +98,15 @@ impl MemStat {
     }
 
     pub fn create(name: String) -> Arc<MemStat> {
-        MemStat::create_child(name, 0, ParentMemStat::StaticRef(&GLOBAL_MEM_STAT))
+        MemStat::create_child(Some(name), 0, ParentMemStat::StaticRef(&GLOBAL_MEM_STAT))
+    }
+
+    pub fn create_workload_group() -> Arc<MemStat> {
+        MemStat::create_child(None, 0, ParentMemStat::StaticRef(&GLOBAL_MEM_STAT))
     }
 
     pub fn create_child(
-        name: String,
+        name: Option<String>,
         priority: usize,
         parent_memory_stat: ParentMemStat,
     ) -> Arc<MemStat> {
@@ -120,7 +124,7 @@ impl MemStat {
             exceeded_mutex: Mutex::new(false),
             memory_limit: MemoryLimit::default(),
             exceeded_memory: AtomicBool::new(false),
-            memory_requester: Some(name),
+            memory_requester: name,
             queries_memory_manager: &GLOBAL_QUERIES_MANAGER,
         })
     }
@@ -138,8 +142,25 @@ impl MemStat {
                 .store(water_height, Ordering::Relaxed);
         }
 
+        let used = self.used.load(Ordering::Relaxed);
         self.memory_limit.limit.store(size, Ordering::Relaxed);
         self.memory_limit.set_limit.store(size, Ordering::Relaxed);
+
+        #[allow(clippy::collapsible_if)]
+        if used < size && self.memory_requester.is_some() {
+            if self.exceeded_memory.fetch_and(false, Ordering::SeqCst) {
+                let _guard = LimitMemGuard::enter_unlimited();
+
+                let mutex = self.exceeded_mutex.lock();
+                let mut mutex = mutex.unwrap_or_else(PoisonError::into_inner);
+
+                if *mutex {
+                    *mutex = false;
+                    self.queries_memory_manager
+                        .release_memory(self.memory_requester.as_ref());
+                }
+            }
+        }
     }
 
     /// Feed memory usage stat to MemStat and return if it exceeds the limit.
@@ -471,7 +492,7 @@ mod tests {
     fn test_multiple_level_mem_stat() -> Result<()> {
         let mem_stat = MemStat::create("TEST".to_string());
         let child_mem_stat = MemStat::create_child(
-            "TEST_CHILD".to_string(),
+            Some("TEST_CHILD".to_string()),
             0,
             ParentMemStat::Normal(mem_stat.clone()),
         );
@@ -498,7 +519,7 @@ mod tests {
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2, false);
         let child_mem_stat = MemStat::create_child(
-            "TEST_CHILD".to_string(),
+            Some("TEST_CHILD".to_string()),
             0,
             ParentMemStat::Normal(mem_stat.clone()),
         );
@@ -531,7 +552,7 @@ mod tests {
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT, false);
         let child_mem_stat = MemStat::create_child(
-            "TEST_CHILD".to_string(),
+            Some("TEST_CHILD".to_string()),
             0,
             ParentMemStat::Normal(mem_stat.clone()),
         );
@@ -547,7 +568,7 @@ mod tests {
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2, false);
         let child_mem_stat = MemStat::create_child(
-            "TEST_CHILD".to_string(),
+            Some("TEST_CHILD".to_string()),
             0,
             ParentMemStat::Normal(mem_stat.clone()),
         );
