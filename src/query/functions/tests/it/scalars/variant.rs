@@ -504,6 +504,8 @@ fn test_as_type(file: &mut impl Write) {
     run_ast(file, "as_integer(parse_json('123'))", &[]);
     run_ast(file, "as_float(parse_json('\"ab\"'))", &[]);
     run_ast(file, "as_float(parse_json('12.34'))", &[]);
+    run_ast(file, "as_decimal(parse_json('12.34'))", &[]);
+    run_ast(file, "as_decimal(10, 2)(parse_json('12.34'))", &[]);
     run_ast(file, "as_string(parse_json('\"ab\"'))", &[]);
     run_ast(file, "as_string(parse_json('12.34'))", &[]);
     run_ast(file, "as_array(parse_json('[1,2,3]'))", &[]);
@@ -660,8 +662,8 @@ fn test_to_type(file: &mut impl Write) {
         &[],
     );
 
+    run_ast(file, "to_decimal(3, 2)(parse_json('null'))", &[]);
     run_ast(file, "to_decimal(3, 2)(parse_json('\"3.14\"'))", &[]);
-
     run_ast(file, "to_decimal(2, 1)(parse_json('true'))", &[]);
 
     run_ast(file, "to_boolean(parse_json(s))", &[(

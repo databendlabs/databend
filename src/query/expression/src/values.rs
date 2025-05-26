@@ -319,6 +319,20 @@ impl<T: Decimal> Value<DecimalType<T>> {
     }
 }
 
+impl<T: Decimal> Value<NullableType<DecimalType<T>>> {
+    pub fn upcast_decimal(self, size: DecimalSize) -> Value<AnyType> {
+        match self {
+            Value::Scalar(Some(scalar)) => Value::Scalar(T::upcast_scalar(scalar, size)),
+            Value::Scalar(None) => Value::Scalar(Scalar::Null),
+            Value::Column(col) => {
+                let nullable_column =
+                    NullableColumn::new(T::upcast_column(col.column, size), col.validity);
+                Value::Column(Column::Nullable(Box::new(nullable_column)))
+            }
+        }
+    }
+}
+
 impl Value<AnyType> {
     pub fn convert_to_full_column(&self, ty: &DataType, num_rows: usize) -> Column {
         match self {
