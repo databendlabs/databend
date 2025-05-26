@@ -115,6 +115,10 @@ impl<'a> SelectivityEstimator<'a> {
                 if func.func_name.eq("is_not_null") {
                     return self.compute_is_not_null_selectivity(&func.arguments[0]);
                 }
+                if func.func_name.eq("is_true") {
+                    return self.compute_selectivity(&func.arguments[0], update);
+                }
+
                 if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
                     return self.compute_selectivity_comparison_expr(
                         op,
