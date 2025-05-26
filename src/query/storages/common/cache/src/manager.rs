@@ -938,6 +938,21 @@ mod tests {
             ColumnData::from_bytes(Bytes::new()),
         );
 
+        {
+            // Make sure at least the first key is written to disk cache
+
+            column_data_cache.insert(
+                "extra_key".to_string(),
+                ColumnData::from_bytes(Bytes::new()),
+            );
+
+            let disk_cache = column_data_cache.on_disk_cache().unwrap();
+            // Since the on-disk cache is populated asynchronously, we need to
+            // wait until the populate-queue is empty. At that time, at least
+            // the first key `test_key` should be written into the on-disk cache.
+            disk_cache.till_no_pending_items_in_queue();
+        }
+
         // 4. Populate block meta cache
         let block_meta_cache = cache_manager.get_block_meta_cache().unwrap();
         block_meta_cache.insert("not matter".to_string(), BlockMeta {
