@@ -20,6 +20,7 @@ use bumpalo::Bump;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_catalog::plan::AggIndexMeta;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -28,6 +29,7 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::InputColumns;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
+use databend_common_functions::scalars::strict_decimal_data_type;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -128,7 +130,9 @@ impl TransformPartialAggregate {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = block.consume_convert_to_full();
+        let block = strict_decimal_data_type(block)
+            .map_err(ErrorCode::Internal)?
+            .consume_convert_to_full();
         let group_columns = InputColumns::new_block_proxy(&self.params.group_columns, &block);
         let rows_num = block.num_rows();
 
@@ -140,7 +144,9 @@ impl TransformPartialAggregate {
 
         {
             match &mut self.hash_table {
-                HashTable::MovedOut => unreachable!(),
+                HashTable::MovedOut => {
+                    unreachable!("[TRANSFORM-AGGREGATOR] Hash table already moved out")
+                }
                 HashTable::AggregateHashTable(hashtable) => {
                     let (params_columns, states_index) = if is_agg_index_block {
                         let num_columns = block.num_columns();
@@ -221,7 +227,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
                 return Ok(blocks);
             }
 
-            unreachable!()
+            unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state during spill check")
         }
 
         Ok(vec![])
@@ -231,14 +237,16 @@ impl AccumulatingTransform for TransformPartialAggregate {
         Ok(match std::mem::take(&mut self.hash_table) {
             HashTable::MovedOut => match !output && std::thread::panicking() {
                 true => vec![],
-                false => unreachable!(),
+                false => {
+                    unreachable!("[TRANSFORM-AGGREGATOR] Hash table already moved out in finish")
+                }
             },
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
 
                 log::info!(
-                    "Aggregated {} to {} rows in {} sec(real: {}). ({} rows/sec, {}/sec, {})",
+                    "[TRANSFORM-AGGREGATOR] Aggregation completed: {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}",
                     self.processed_rows,
                     hashtable.payload.len(),
                     self.start.elapsed().as_secs_f64(),

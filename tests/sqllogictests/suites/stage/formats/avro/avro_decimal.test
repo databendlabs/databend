@@ -1,0 +1,112 @@
+query 
+select $1  from @data/avro/decimal.avro(file_format=>'avro');
+----
+{"c_39_2":1e36,"c_4_2":10.12,"c_76_2":1e73}
+{"c_39_2":0.15,"c_4_2":0.15,"c_76_2":0.15}
+{"c_39_2":1e36,"c_4_2":9.99,"c_76_2":1e73}
+
+query 
+select json_typeof($1:c_4_2)  from @data/avro/decimal.avro(file_format=>'avro');
+----
+decimal
+decimal
+decimal
+
+# same size
+query 
+select $1:c_4_2::decimal(4, 2) from @data/avro/decimal.avro(file_format=>'avro');
+----
+10.12
+0.15
+9.99
+
+# same scale
+query 
+select $1:c_4_2::decimal(4, 2), $1:c_4_2::decimal(10, 2), $1:c_4_2::decimal(76, 2)  from @data/avro/decimal.avro(file_format=>'avro');
+----
+10.12 10.12 10.12
+0.15 0.15 0.15
+9.99 9.99 9.99
+
+# smaller scale, round
+query 
+select $1:c_4_2::decimal(3, 1),  $1:c_4_2::decimal(2, 0)  from @data/avro/decimal.avro(file_format=>'avro');
+----
+10.1 10
+0.2 0
+10.0 10
+
+# smaller scale
+query 
+select $1:c_4_2::decimal(3, 1),  $1:c_4_2::decimal(2, 0)  from @data/avro/decimal.avro(file_format=>'avro');
+----
+10.1 10
+0.2 0
+10.0 10
+
+# larger scale
+query 
+select $1:c_4_2::decimal(5, 3),  $1:c_4_2::decimal(76, 70)  from @data/avro/decimal.avro(file_format=>'avro');
+----
+10.120 10.1200000000000000000000000000000000000000000000000000000000000000000000
+0.150 0.1500000000000000000000000000000000000000000000000000000000000000000000
+9.990 9.9900000000000000000000000000000000000000000000000000000000000000000000
+
+query error overflow
+select $1:c_4_2::decimal(2, 2) from @data/avro/decimal.avro(file_format=>'avro');
+
+statement ok
+create or replace table t(c_4_2 decimal(5, 3))
+
+query 
+copy into t from @data/avro/decimal.avro file_format=(type='avro');
+----
+avro/decimal.avro 3 0 NULL NULL
+
+query 
+select * from t
+----
+10.120
+0.150
+9.990
+
+query 
+select $1:c_76_2::decimal(76, 2)  from @data/avro/decimal.avro(file_format=>'avro');
+----
+10000000000000000000000000000000000000000000000000000000000000000000000000.12
+0.15
+9999999999999999999999999999999999999999999999999999999999999999999999999.99
+
+# 256 to 128
+query 
+select $1:c_76_2::decimal(4, 2), $1:c_76_2::decimal(5, 3), $1:c_76_2::decimal(3, 1)   from @data/avro/decimal.avro(file_format=>'avro') where metadata$file_row_number = 1;
+----
+0.15 0.150 0.2
+
+# 256 to 256 smaller scale
+query 
+select $1:c_76_2::decimal(76, 1)  from @data/avro/decimal.avro(file_format=>'avro');
+----
+10000000000000000000000000000000000000000000000000000000000000000000000000.1
+0.2
+10000000000000000000000000000000000000000000000000000000000000000000000000.0
+
+# 256 to 256 smaller p
+query 
+select $1:c_76_2::decimal(39, 2) from @data/avro/decimal.avro(file_format=>'avro') where metadata$file_row_number = 1;
+----
+0.15
+
+# 256 to 256 smaller p
+query error overflow
+select $1:c_76_2::decimal(39, 2)   from @data/avro/decimal.avro(file_format=>'avro') where metadata$file_row_number = 0;
+
+# 256 to 256 larger s
+query 
+select $1:c_76_2::decimal(39, 10)   from @data/avro/decimal.avro(file_format=>'avro') where metadata$file_row_number = 1;
+----
+0.1500000000
+
+# 256 to 256 larger s
+query error overflow
+select $1:c_76_2::decimal(76, 3)   from @data/avro/decimal.avro(file_format=>'avro') where metadata$file_row_number = 0;

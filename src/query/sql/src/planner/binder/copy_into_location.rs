@@ -125,6 +125,7 @@ impl Binder {
                     "when use_raw_path is set to true, url path can not end with '/'",
                 ));
             }
+
             let op = init_stage_operator(&stage_info)?;
             if !stmt.options.overwrite {
                 match op.stat(&path).await {

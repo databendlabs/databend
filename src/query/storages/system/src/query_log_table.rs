@@ -71,7 +71,7 @@ fn date_str<S>(dt: &i32, s: S) -> std::result::Result<S::Ok, S::Error>
 where S: Serializer {
     let t = DateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0)
         .unwrap()
-        .naive_utc();
+        .with_timezone(&chrono::Local);
     s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
 }
 
@@ -80,11 +80,10 @@ where S: Serializer {
     let t = DateTime::from_timestamp(
         dt / 1_000_000,
         TryFrom::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
-        // u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
     )
     .unwrap()
-    .naive_utc();
-    s.serialize_str(t.format("%Y-%m-%d %H:%M:%S%.6f").to_string().as_str())
+    .with_timezone(&chrono::Local);
+    s.serialize_str(t.to_rfc3339().to_string().as_str())
 }
 
 #[derive(Clone, Serialize)]

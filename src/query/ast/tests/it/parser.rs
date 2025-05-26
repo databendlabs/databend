@@ -348,6 +348,7 @@ SELECT * from s;"#,
         r#"SHOW GRANTS FOR USER 'test-grant';"#,
         r#"SHOW GRANTS FOR ROLE role1;"#,
         r#"SHOW GRANTS FOR ROLE 'role1';"#,
+        r#"SHOW GRANTS OF ROLE 'role1' like 'r';"#,
         r#"SHOW GRANTS ON TABLE t;"#,
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE role1;"#,
@@ -920,6 +921,10 @@ SELECT * from s;"#,
                 RETURN sum;
             END;
             $$;"#,
+        r#"DROP SEQUENCE IF EXISTS seq"#,
+        r#"CREATE SEQUENCE seq comment='test'"#,
+        r#"DESCRIBE SEQUENCE seq"#,
+        r#"SHOW SEQUENCES LIKE '%seq%'"#,
     ];
 
     for case in cases {

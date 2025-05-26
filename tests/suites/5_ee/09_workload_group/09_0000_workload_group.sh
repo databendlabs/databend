@@ -15,8 +15,11 @@ export TEST_USER_CONNECT="bendsql --user=test_user_workload_group2 --password=12
 echo "select * from workloadgroup.t" | $TEST_USER_CONNECT
 echo "drop workload group valid_mem;" | $BENDSQL_CLIENT_OUTPUT_NULL
 
-echo "select 200" | $TEST_USER_CONNECT
-echo "select * from workloadgroup.t" | $TEST_USER_CONNECT
+output=$(echo "select * from workloadgroup.t" | $TEST_USER_CONNECT 2>&1)
+
+if [[ "$output" != *"[3142]Unknown workload id"* ]]; then
+    exit 1
+fi
 
 echo "DROP DATABASE IF EXISTS workloadgroup" | $BENDSQL_CLIENT_CONNECT
 echo "DROP USER IF EXISTS test_user_workload_group2" | $BENDSQL_CLIENT_CONNECT

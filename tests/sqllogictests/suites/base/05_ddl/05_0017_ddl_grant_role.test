@@ -270,3 +270,55 @@ drop role if exists role2;
 
 statement error 1061
 GRANT ownership on warehouse w1 to role 'role1';
+
+statement ok
+drop user if exists u1;
+
+statement ok
+drop role if exists u1_a;
+
+statement ok
+drop role if exists u1_b;
+
+statement ok
+create user u1 identified by '123';
+
+statement ok
+create role u1_a;
+
+statement ok
+create role u1_b;
+
+statement ok
+grant role u1_b to role u1_a;
+
+query T
+show grants of role u1_b;
+----
+u1_b ROLE u1_a
+
+statement ok
+grant role u1_a to user u1;
+
+query T
+show grants of role u1_b;
+----
+u1_b ROLE u1_a
+
+statement ok
+grant role u1_b to user u1;
+
+query T
+show grants of role u1_b;
+----
+u1_b USER u1
+u1_b ROLE u1_a
+
+statement ok
+drop user if exists u1;
+
+statement ok
+drop role if exists u1_a;
+
+statement ok
+drop role if exists u1_b;

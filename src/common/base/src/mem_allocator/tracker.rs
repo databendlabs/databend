@@ -553,7 +553,7 @@ mod tests {
     ) -> R {
         {
             let mem_stat = MemStat::create_child(
-                GlobalUniqName::unique(),
+                Some(GlobalUniqName::unique()),
                 0,
                 ParentMemStat::Normal(global.clone()),
             );

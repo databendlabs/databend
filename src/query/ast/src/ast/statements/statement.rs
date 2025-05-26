@@ -258,6 +258,7 @@ pub enum Statement {
         show_options: Option<ShowOptions>,
     },
     ShowObjectPrivileges(ShowObjectPrivilegesStmt),
+    ShowGrantsOfRole(ShowGranteesOfRoleStmt),
     Revoke(RevokeStmt),
 
     // UDF
@@ -368,6 +369,12 @@ pub enum Statement {
     // Sequence
     CreateSequence(CreateSequenceStmt),
     DropSequence(DropSequenceStmt),
+    ShowSequences {
+        show_options: Option<ShowOptions>,
+    },
+    DescSequence {
+        name: Identifier,
+    },
 
     // Set priority for query
     SetPriority {
@@ -481,6 +488,7 @@ impl Statement {
             | Statement::ShowRoles { .. }
             | Statement::ShowGrants { .. }
             | Statement::ShowObjectPrivileges(..)
+            | Statement::ShowGrantsOfRole(..)
             | Statement::ShowStages { .. }
             | Statement::DescribeStage { .. }
             | Statement::RemoveStage { .. }
@@ -504,6 +512,8 @@ impl Statement {
             | Statement::DescribeNotification(..)
             | Statement::ExecuteImmediate(..)
             | Statement::ShowProcedures { .. }
+            | Statement::ShowSequences { .. }
+            | Statement::DescSequence { .. }
             | Statement::DescProcedure(..)
             | Statement::CallProcedure(..)
             | Statement::ShowWarehouses(..)
@@ -886,6 +896,7 @@ impl Display for Statement {
                 }
             }
             Statement::ShowObjectPrivileges(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowGrantsOfRole(stmt) => write!(f, "{stmt}")?,
             Statement::Revoke(stmt) => write!(f, "{stmt}")?,
             Statement::CreateUDF(stmt) => write!(f, "{stmt}")?,
             Statement::DropUDF {
@@ -1006,6 +1017,15 @@ impl Display for Statement {
             }
             Statement::CreateSequence(stmt) => write!(f, "{stmt}")?,
             Statement::DropSequence(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowSequences { show_options } => {
+                write!(f, "SHOW SEQUENCES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::DescSequence { name } => {
+                write!(f, "DESC SEQUENCE {name}")?;
+            }
             Statement::CreateDynamicTable(stmt) => write!(f, "{stmt}")?,
             Statement::SetPriority {
                 priority,

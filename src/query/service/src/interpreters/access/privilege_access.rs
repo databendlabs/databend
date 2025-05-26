@@ -813,6 +813,10 @@ impl AccessChecker for PrivilegeAccess {
                             )))
                         };
                     }
+                    Some(RewriteKind::ShowSequences) => {
+                        self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                            .await?;
+                    }
                     _ => {}
                 };
                 if enable_experimental_rbac_check {
@@ -1278,6 +1282,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropTask(_)     // TODO: need to build ownership info for task
             | Plan::AlterTask(_)
             | Plan::CreateSequence(_)
+            | Plan::DescSequence(_)
             | Plan::DropSequence(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;

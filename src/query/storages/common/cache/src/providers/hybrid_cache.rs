@@ -219,6 +219,11 @@ where
     fn name(&self) -> &str {
         self.name.as_str()
     }
+
+    fn clear(&self) {
+        // Only clear the in-memory cache
+        self.memory_cache.clear()
+    }
 }
 
 #[cfg(test)]

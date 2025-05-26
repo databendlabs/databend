@@ -28,8 +28,6 @@ use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::ast::WindowRef;
 use databend_common_ast::ast::WindowSpec;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType::Decimal128;
-use databend_common_expression::types::DecimalDataType::Decimal256;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
@@ -132,21 +130,9 @@ impl<R: Rng> SqlGenerator<'_, R> {
                     }
                 } else if idx == 5 {
                     if self.rng.gen_bool(0.5) {
-                        vec![
-                            DataType::Decimal(Decimal128(DecimalSize {
-                                precision: 20,
-                                scale: 0
-                            }));
-                            1
-                        ]
+                        vec![DataType::Decimal(DecimalSize::new_unchecked(20, 0)); 1]
                     } else {
-                        vec![
-                            DataType::Decimal(Decimal256(DecimalSize {
-                                precision: 39,
-                                scale: 0
-                            }));
-                            1
-                        ]
+                        vec![DataType::Decimal(DecimalSize::new_unchecked(39, 0)); 1]
                     }
                 } else {
                     let len = self.rng.gen_range(2..=6);
@@ -315,15 +301,9 @@ impl<R: Rng> SqlGenerator<'_, R> {
                     (name, params, args_type)
                 } else {
                     let ty = if self.rng.gen_bool(0.5) {
-                        DataType::Decimal(Decimal128(DecimalSize {
-                            precision: 28,
-                            scale: 0,
-                        }))
+                        DataType::Decimal(DecimalSize::new_unchecked(28, 0))
                     } else {
-                        DataType::Decimal(Decimal256(DecimalSize {
-                            precision: 39,
-                            scale: 0,
-                        }))
+                        DataType::Decimal(DecimalSize::new_unchecked(39, 0))
                     };
                     let args_type = vec![ty; 1];
                     let params = vec![];

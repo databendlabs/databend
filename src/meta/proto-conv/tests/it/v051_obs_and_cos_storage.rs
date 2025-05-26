@@ -54,6 +54,7 @@ fn test_decode_v51_obs_stage() -> anyhow::Result<()> {
                 access_key_id: "access_key_id".to_string(),
                 secret_access_key: "secret_access_key".to_string(),
                 bucket: "bucket".to_string(),
+                network_config: None,
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(
@@ -104,6 +105,7 @@ fn test_decode_v51_cos_stage() -> anyhow::Result<()> {
                 secret_id: "secret_id".to_string(),
                 secret_key: "secret_key".to_string(),
                 bucket: "bucket".to_string(),
+                network_config: None,
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(

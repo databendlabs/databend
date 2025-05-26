@@ -17,6 +17,7 @@ pub mod array;
 pub mod binary;
 pub mod bitmap;
 pub mod boolean;
+pub mod compute_view;
 pub mod date;
 pub mod decimal;
 pub mod empty_array;
@@ -105,7 +106,7 @@ pub enum DataType {
     Binary,
     String,
     Number(NumberDataType),
-    Decimal(DecimalDataType),
+    Decimal(DecimalSize),
     Timestamp,
     Date,
     Nullable(Box<DataType>),
@@ -275,24 +276,20 @@ impl DataType {
     }
 
     pub fn numeric_byte_size(&self) -> Result<usize, String> {
+        use NumberDataType::*;
         match self {
-            DataType::Number(NumberDataType::UInt8) | DataType::Number(NumberDataType::Int8) => {
-                Ok(1)
+            DataType::Number(number) => match number {
+                UInt8 | Int8 => Ok(1),
+                UInt16 | Int16 => Ok(2),
+                UInt32 | Int32 | Float32 => Ok(4),
+                UInt64 | Int64 | Float64 => Ok(8),
+            },
+            DataType::Date => Ok(4),
+            DataType::Timestamp => Ok(8),
+            DataType::Decimal(size) => {
+                let s = if size.can_carried_by_128() { 16 } else { 32 };
+                Ok(s)
             }
-            DataType::Number(NumberDataType::UInt16) | DataType::Number(NumberDataType::Int16) => {
-                Ok(2)
-            }
-            DataType::Date
-            | DataType::Number(NumberDataType::UInt32)
-            | DataType::Number(NumberDataType::Float32)
-            | DataType::Number(NumberDataType::Int32) => Ok(4),
-            DataType::Timestamp
-            | DataType::Number(NumberDataType::UInt64)
-            | DataType::Number(NumberDataType::Float64)
-            | DataType::Number(NumberDataType::Int64) => Ok(8),
-
-            DataType::Decimal(DecimalDataType::Decimal128(_)) => Ok(16),
-            DataType::Decimal(DecimalDataType::Decimal256(_)) => Ok(32),
             _ => Result::Err(format!(
                 "Function number_byte_size argument must be numeric types, but got {:?}",
                 self
@@ -311,17 +308,18 @@ impl DataType {
     pub fn sql_name(&self) -> String {
         match self {
             DataType::Number(num_ty) => match num_ty {
-                NumberDataType::UInt8 => "TINYINT UNSIGNED".to_string(),
-                NumberDataType::UInt16 => "SMALLINT UNSIGNED".to_string(),
-                NumberDataType::UInt32 => "INT UNSIGNED".to_string(),
-                NumberDataType::UInt64 => "BIGINT UNSIGNED".to_string(),
-                NumberDataType::Int8 => "TINYINT".to_string(),
-                NumberDataType::Int16 => "SMALLINT".to_string(),
-                NumberDataType::Int32 => "INT".to_string(),
-                NumberDataType::Int64 => "BIGINT".to_string(),
-                NumberDataType::Float32 => "FLOAT".to_string(),
-                NumberDataType::Float64 => "DOUBLE".to_string(),
-            },
+                NumberDataType::UInt8 => "TINYINT UNSIGNED",
+                NumberDataType::UInt16 => "SMALLINT UNSIGNED",
+                NumberDataType::UInt32 => "INT UNSIGNED",
+                NumberDataType::UInt64 => "BIGINT UNSIGNED",
+                NumberDataType::Int8 => "TINYINT",
+                NumberDataType::Int16 => "SMALLINT",
+                NumberDataType::Int32 => "INT",
+                NumberDataType::Int64 => "BIGINT",
+                NumberDataType::Float32 => "FLOAT",
+                NumberDataType::Float64 => "DOUBLE",
+            }
+            .to_string(),
             DataType::String => "VARCHAR".to_string(),
             DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             _ => self.to_string().to_uppercase(),
@@ -344,7 +342,7 @@ impl DataType {
 
     pub fn get_decimal_properties(&self) -> Option<DecimalSize> {
         match self {
-            DataType::Decimal(decimal_type) => Some(decimal_type.size()),
+            DataType::Decimal(size) => Some(*size),
             DataType::Number(num_ty) => num_ty.get_decimal_properties(),
             _ => None,
         }

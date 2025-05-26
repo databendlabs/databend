@@ -47,6 +47,7 @@ fn test_decode_v57_hdfs_storage() -> anyhow::Result<()> {
             storage: StorageParams::Hdfs(StorageHdfsConfig {
                 root: "/path/to/stage/files".to_string(),
                 name_node: "hdfs://localhost:8020".to_string(),
+                network_config: None,
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(

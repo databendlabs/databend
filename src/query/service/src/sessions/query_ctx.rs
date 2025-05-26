@@ -182,7 +182,7 @@ impl QueryContext {
     }
 
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
-        debug!("Create QueryContext");
+        debug!("[QUERY-CTX] Creating new QueryContext instance");
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let query_settings = Settings::create(tenant);
@@ -223,7 +223,7 @@ impl QueryContext {
                 Ok(table_function.as_table())
             }
             (Some(_), false) => Err(ErrorCode::InvalidArgument(
-                "request table args inside non-default catalog is invalid",
+                "[QUERY-CTX] Table args not supported in non-default catalog",
             )),
             // Load table first, if not found, try to load table function.
             (None, true) => {
@@ -280,7 +280,7 @@ impl QueryContext {
             }
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
-                    "Cannot use database '{}': It does not exist.",
+                    "[QUERY-CTX] Cannot use database '{}': database does not exist",
                     new_database_name
                 )));
             }
@@ -568,7 +568,7 @@ impl QueryContext {
             let _ = op.write(&meta_path, joined_contents).await?;
             Ok(())
         }) {
-            log::error!("create spill meta file error: {}", e);
+            log::error!("[QUERY-CTX] Failed to create spill meta file: {}", e);
         }
     }
 
@@ -687,7 +687,7 @@ impl TableContext for QueryContext {
     fn set_status_info(&self, info: &str) {
         // set_status_info is not called frequently, so we can use info! here.
         // make it easier to match the status to the log.
-        info!("{}", info);
+        info!("[QUERY-CTX] Status update: {}", info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }
@@ -798,7 +798,7 @@ impl TableContext for QueryContext {
             .lock()
             .insert(table_name.to_string(), hint);
         info!(
-            "set_compaction_num_block_hint: table_name {} old hint {:?}, new hint {}",
+            "[QUERY-CTX] Set compaction hint for table '{}': old={:?}, new={}",
             table_name, old, hint
         );
     }
@@ -922,10 +922,14 @@ impl TableContext for QueryContext {
     fn get_format_settings(&self) -> Result<FormatSettings> {
         let tz = self.get_settings().get_timezone()?;
         let timezone = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+            ErrorCode::InvalidTimezone(
+                "[QUERY-CTX] Invalid timezone format - timezone validation failed",
+            )
         })?;
         let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+            ErrorCode::InvalidTimezone(
+                "[QUERY-CTX] Invalid timezone format - jiff timezone parsing failed",
+            )
         })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
         let format_null_as_str = self.get_settings().get_format_null_as_str()?;
@@ -953,10 +957,7 @@ impl TableContext for QueryContext {
 
         let tz_string = settings.get_timezone()?;
         let tz = TimeZone::get(&tz_string).map_err(|e| {
-            ErrorCode::InvalidTimezone(format!(
-                "Timezone has been checked and should be valid but got error: {}",
-                e
-            ))
+            ErrorCode::InvalidTimezone(format!("[QUERY-CTX] Timezone validation failed: {}", e))
         })?;
         let now = Zoned::now().with_time_zone(TimeZone::UTC);
         let numeric_cast_option = settings.get_numeric_cast_option()?;
@@ -1200,7 +1201,10 @@ impl TableContext for QueryContext {
                 }
                 None => {
                     if let Some(v) = self.get_settings().get_stream_consume_batch_size_hint()? {
-                        info!("overriding max_batch_size of stream consumption using value specified in setting: {}", v);
+                        info!(
+                            "[QUERY-CTX] Overriding stream max_batch_size with setting value: {}",
+                            v
+                        );
                         Some(v)
                     } else {
                         None
@@ -1218,14 +1222,14 @@ impl TableContext for QueryContext {
             if actual_batch_limit != max_batch_size {
                 return Err(ErrorCode::StorageUnsupported(
                     format!(
-                        "Within the same transaction, the batch size for a stream must remain consistent {:?} {:?}",
+                        "[QUERY-CTX] Stream batch size must be consistent within transaction: actual={:?}, requested={:?}",
                         actual_batch_limit, max_batch_size
                     )
                 ));
             }
         } else if max_batch_size.is_some() {
             return Err(ErrorCode::StorageUnsupported(
-                "MAX_BATCH_SIZE only support in STREAM",
+                "[QUERY-CTX] MAX_BATCH_SIZE parameter only supported for STREAM tables",
             ));
         }
         Ok(table)
@@ -1242,7 +1246,7 @@ impl TableContext for QueryContext {
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles> {
         if files.is_empty() {
-            info!("no files to filter");
+            info!("[QUERY-CTX] No files to filter for copy operation");
             return Ok(FilteredCopyFiles::default());
         }
 
@@ -1300,7 +1304,10 @@ impl TableContext for QueryContext {
                         });
                     }
                     if result_size > COPY_MAX_FILES_PER_COMMIT {
-                        return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
+                        return Err(ErrorCode::Internal(format!(
+                            "[QUERY-CTX] {}",
+                            COPY_MAX_FILES_COMMIT_MSG
+                        )));
                     }
                 } else if collect_duplicated_files && duplicated_files.len() < max_files {
                     duplicated_files.push(file.path.clone());
@@ -1548,7 +1555,7 @@ impl TableContext for QueryContext {
 
                     chrono::Duration::from_std(duration).map_err(|e| {
                         ErrorCode::Internal(format!(
-                            "Unable to construct delta duration of table meta timestamp, {e}",
+                            "[QUERY-CTX] Unable to construct delta duration of table meta timestamp: {e}",
                         ))
                     })?
                 };
@@ -1612,7 +1619,9 @@ impl TableContext for QueryContext {
                 DeltaTable::get_meta(&table).await
             }
             // TODO: iceberg doesn't support load from storage directly.
-            _ => Err(ErrorCode::Internal("unsupported datalake type {}")),
+            _ => Err(ErrorCode::Internal(
+                "[QUERY-CTX] Unsupported datalake type for schema loading",
+            )),
         }
     }
 
@@ -1705,7 +1714,7 @@ impl TableContext for QueryContext {
                     };
 
                     return Err(ErrorCode::SemanticError(format!(
-                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
+                        "[QUERY-CTX] Query from {} file lacks column positions. Specify as $1, $2, etc.",
                         file_type
                     )));
                 }
@@ -1736,7 +1745,7 @@ impl TableContext for QueryContext {
             }
             _ => {
                 return Err(ErrorCode::Unimplemented(format!(
-                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, AVRO, CSV, and TSV. Provided format: '{}'.",
+                    "[QUERY-CTX] Unsupported file format in query stage. Supported formats: Parquet, NDJson, AVRO, CSV, TSV. Provided: '{}'",
                     stage_info.file_format_params
                 )));
             }
@@ -1854,9 +1863,9 @@ impl TableContext for QueryContext {
             if query && !consume {
                 continue;
             }
-            let stream = tables
-                .get(stream_key)
-                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+            let stream = tables.get(stream_key).ok_or_else(|| {
+                ErrorCode::Internal("[QUERY-CTX] Stream reference not found in tables cache")
+            })?;
             streams_meta.push(stream.clone());
         }
         Ok(streams_meta)

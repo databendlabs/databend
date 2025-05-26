@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::ops::BitAnd;
 use std::ops::BitOr;
 use std::ops::Not;
@@ -50,8 +51,68 @@ pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 /// A function to build function depending on the const parameters and the type of arguments (before coercion).
 ///
 /// The first argument is the const parameters and the second argument is the types of arguments.
-pub trait FunctionFactory =
+pub trait FunctionFactoryClosure =
     Fn(&[Scalar], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
+
+pub struct FunctionFactoryHelper {
+    fixed_arg_count: Option<usize>,
+    passthrough_nullable: bool,
+    create: Box<dyn FunctionFactoryClosure>,
+}
+
+impl Debug for FunctionFactoryHelper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FunctionFactoryHelper")
+            .field("fixed_arg_count", &self.fixed_arg_count)
+            .field("passthrough_nullable", &self.passthrough_nullable)
+            .finish()
+    }
+}
+
+impl FunctionFactoryHelper {
+    pub fn create_1_arg_core(
+        create: fn(&[Scalar], &DataType) -> Option<Function>,
+    ) -> FunctionFactory {
+        FunctionFactory::Helper(Self {
+            fixed_arg_count: Some(1),
+            passthrough_nullable: false,
+            create: Box::new(move |params, args: &[DataType]| match args {
+                [arg0] => create(params, arg0).map(Arc::new),
+                _ => None,
+            }),
+        })
+    }
+
+    pub fn create_1_arg_passthrough_nullable(
+        create: fn(&[Scalar], &DataType) -> Option<Function>,
+    ) -> FunctionFactory {
+        FunctionFactory::Helper(Self {
+            fixed_arg_count: Some(1),
+            passthrough_nullable: true,
+            create: Box::new(move |params, args: &[DataType]| match args {
+                [DataType::Nullable(box arg0)] => {
+                    create(params, arg0).map(|func| Arc::new(func.passthrough_nullable()))
+                }
+                [arg0] => create(params, arg0).map(Arc::new),
+                _ => None,
+            }),
+        })
+    }
+}
+
+pub enum FunctionFactory {
+    Closure(Box<dyn FunctionFactoryClosure>),
+    Helper(FunctionFactoryHelper),
+}
+
+impl FunctionFactory {
+    fn create(&self, params: &[Scalar], args: &[DataType]) -> Option<Arc<Function>> {
+        match self {
+            FunctionFactory::Closure(closure) => closure(params, args),
+            FunctionFactory::Helper(factory) => (factory.create)(params, args),
+        }
+    }
+}
 
 pub struct Function {
     pub signature: FunctionSignature,
@@ -147,6 +208,9 @@ pub struct EvalContext<'a> {
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
     pub suppress_error: bool,
+    /// At the top level expressions require eval to have stricter behavior
+    /// to ensure that some internal complexity is not leaking out
+    pub strict_eval: bool,
 }
 
 /// `FunctionID` is a unique identifier for a function in the registry. It's used to
@@ -169,7 +233,7 @@ pub enum FunctionID {
 pub struct FunctionRegistry {
     pub funcs: HashMap<String, Vec<(Arc<Function>, usize)>>,
     #[allow(clippy::type_complexity)]
-    pub factories: HashMap<String, Vec<(Box<dyn FunctionFactory>, usize)>>,
+    pub factories: HashMap<String, Vec<(FunctionFactory, usize)>>,
 
     /// Aliases map from alias function name to original function name.
     pub aliases: HashMap<String, String>,
@@ -186,11 +250,11 @@ pub struct FunctionRegistry {
 
 impl Function {
     pub fn passthrough_nullable(self) -> Self {
-        debug_assert!(!self
+        debug_assert!(self
             .signature
             .args_type
             .iter()
-            .any(|ty| ty.is_nullable_or_null()));
+            .all(|ty| !ty.is_nullable_or_null()));
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
 
@@ -341,7 +405,7 @@ impl FunctionRegistry {
                     .iter()
                     .find(|(_, func_id)| func_id == id)
                     .map(|(func, _)| func)?;
-                factory(params, args_type)
+                factory.create(params, args_type)
             }
         }
     }
@@ -379,7 +443,7 @@ impl FunctionRegistry {
                 .cloned()
                 .collect::<Vec<_>>();
             candidates.extend(factories.iter().filter_map(|(factory, id)| {
-                factory(params, &args_type).map(|func| {
+                factory.create(params, &args_type).map(|func| {
                     (
                         FunctionID::Factory {
                             name: name.to_string(),
@@ -429,12 +493,12 @@ impl FunctionRegistry {
             .push((Arc::new(func), id));
     }
 
-    pub fn register_function_factory(&mut self, name: &str, factory: impl FunctionFactory) {
+    pub fn register_function_factory(&mut self, name: &str, factory: FunctionFactory) {
         let id = self.next_function_id(name);
         self.factories
             .entry(name.to_string())
             .or_default()
-            .push((Box::new(factory), id));
+            .push((factory, id));
     }
 
     pub fn register_aliases(&mut self, fn_name: &str, aliases: &[&str]) {
@@ -500,7 +564,9 @@ impl FunctionRegistry {
                             .unwrap_or(&[])
                             .iter()
                             .filter(|(_, id)| id > former_id)
-                            .filter_map(|(factory, _)| factory(&[], &former.signature.args_type)),
+                            .filter_map(|(factory, _)| {
+                                factory.create(&[], &former.signature.args_type)
+                            }),
                     )
                 {
                     if former.signature.args_type.len() == latter.signature.args_type.len() {

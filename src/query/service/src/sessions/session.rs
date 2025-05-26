@@ -442,6 +442,14 @@ impl Session {
         };
         Ok(format!("{}/{session_id}", self.get_current_user()?.name))
     }
+
+    pub fn get_current_workload_group(&self) -> Option<String> {
+        self.session_ctx.get_current_workload_group()
+    }
+
+    pub fn set_current_workload_group(&self, workload_group: String) {
+        self.session_ctx.set_current_workload_group(workload_group)
+    }
 }
 
 impl Drop for Session {

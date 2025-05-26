@@ -194,7 +194,10 @@ pub fn build_fuse_parquet_source_pipeline(
             })?;
         }
         false => {
-            info!("read block data adjust max io requests:{}", max_io_requests);
+            info!(
+                "[FUSE-SOURCE] Block data reader adjusted max_io_requests to {}",
+                max_io_requests
+            );
 
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
             let partitions = StealablePartitions::new(partitions, ctx.clone());
@@ -232,7 +235,7 @@ pub fn build_fuse_parquet_source_pipeline(
             pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
 
             info!(
-                "read block pipeline resize from:{} to:{}",
+                "[FUSE-SOURCE] Block read pipeline resized from {} to {} threads",
                 max_io_requests,
                 pipeline.output_len()
             );

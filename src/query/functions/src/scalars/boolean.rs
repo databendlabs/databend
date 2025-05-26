@@ -40,12 +40,13 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("and_filters", |_, args_type| {
+    let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() < 2 {
             return None;
         }
@@ -71,7 +72,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("and_filters", factory);
 
     registry.register_passthrough_nullable_1_arg::<BooleanType, BooleanType, _, _>(
         "not",

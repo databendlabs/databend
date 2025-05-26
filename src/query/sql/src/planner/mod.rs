@@ -26,7 +26,6 @@ pub mod optimizer;
 mod planner_cache;
 pub mod plans;
 
-pub use binder::execute_commit_statement;
 pub use binder::parse_result_scan_args;
 pub use binder::BindContext;
 pub use binder::Binder;

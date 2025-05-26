@@ -46,6 +46,7 @@ fn test_decode_v61_oss_sse_options() -> anyhow::Result<()> {
         presign_endpoint_url: "".to_string(),
         access_key_secret: "access_key_secret".to_string(),
         server_side_encryption_key_id: "123".to_string(),
+        network_config: None,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), bytes.as_slice(), 61, want())?;

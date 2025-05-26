@@ -24,12 +24,15 @@ use crate::parser::common::map_res;
 use crate::parser::common::IResult;
 use crate::parser::common::*;
 use crate::parser::input::Input;
+use crate::parser::statement::show_options;
 use crate::parser::token::*;
 
 pub fn sequence(i: Input) -> IResult<Statement> {
     rule!(
-         #create_sequence: "`CREATE [OR REPLACE] SEQUENCE [IF NOT EXISTS] <sequence> [COMMENT = '<string_literal>']`"
-         | #drop_sequence: "`DROP [IF EXISTS] <sequence>`"
+         #create_sequence: "`CREATE [OR REPLACE] SEQUENCE [IF NOT EXISTS] <sequence_name> [COMMENT = '<string_literal>']`"
+         | #drop_sequence: "`DROP [IF EXISTS] <sequence_name>`"
+         | #show_sequences: "`SHOW SEQUENCES [<show_limit>]`"
+         | #desc_sequence: "`DESCRIBE SEQUENCE <sequence_name>`"
     )(i)
 }
 
@@ -63,5 +66,23 @@ fn drop_sequence(i: Input) -> IResult<Statement> {
                 if_exists: opt_if_exists.is_some(),
             }))
         },
+    )(i)
+}
+
+fn show_sequences(i: Input) -> IResult<Statement> {
+    map_res(
+        rule! {
+            SHOW ~ SEQUENCES ~ #show_options?
+        },
+        |(_, _, show_options)| Ok(Statement::ShowSequences { show_options }),
+    )(i)
+}
+
+fn desc_sequence(i: Input) -> IResult<Statement> {
+    map_res(
+        rule! {
+            ( DESC | DESCRIBE ) ~ SEQUENCE ~ #ident
+        },
+        |(_, _, name)| Ok(Statement::DescSequence { name }),
     )(i)
 }

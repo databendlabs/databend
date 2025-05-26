@@ -20,6 +20,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
+permissions:
+  id-token: write
+  pull-requests: write
+  contents: read
+  packages: write
+
 jobs:
   linux:
     runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c16g, aws]
@@ -36,6 +42,7 @@ jobs:
         with:
           target: ${{ matrix.arch }}-unknown-linux-gnu
           version: ${{ inputs.tag }}
+          tag: ${{ inputs.tag }}
       - name: upload
         if: inputs.tag
         uses: actions/upload-artifact@v4
@@ -43,33 +50,38 @@ jobs:
           name: python-linux-${{ matrix.arch }}
           path: src/bendpy/dist/*.whl
 
-  macos:
-    if: inputs.tag
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        arch:
-          - aarch64
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: ./.github/actions/build_bindings_python
-        with:
-          target: ${{ matrix.arch }}-apple-darwin
-          version: ${{ inputs.tag }}
-      - name: upload
-        if: inputs.tag
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-macos-${{ matrix.arch }}
-          path: src/bendpy/dist/*.whl
+  # macos:
+  #   if: inputs.tag
+  #   runs-on: macos-latest
+  #   strategy:
+  #     matrix:
+  #       arch:
+  #         - aarch64
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  #     - uses: ./.github/actions/build_bindings_python
+  #       with:
+  #         target: ${{ matrix.arch }}-apple-darwin
+  #         version: ${{ inputs.tag }}
+  #     - name: upload
+  #       if: inputs.tag
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: python-macos-${{ matrix.arch }}
+  #         path: src/bendpy/dist/*.whl
 
   publish:
     if: inputs.tag
     name: Publish
-    needs: [linux, macos]
+    needs: [linux]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      pull-requests: write
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -77,9 +89,23 @@ jobs:
           pattern: python-*
           merge-multiple: true
           path: src/bendpy/dist
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        if: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref, '-') }}
+        continue-on-error: true
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+          packages-dir: src/bendpy/dist
+
       - name: Publish to PyPI
         timeout-minutes: 10
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
           skip-existing: true
+          verify-metadata: false
+          attestations: false
+          verbose: true
           packages-dir: src/bendpy/dist

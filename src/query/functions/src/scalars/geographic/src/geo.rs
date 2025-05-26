@@ -38,6 +38,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
@@ -192,8 +193,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             ),
         );
 
-    // point in ellipses
-    registry.register_function_factory("point_in_ellipses", |_, args_type| {
+    let point_in_ellipses = FunctionFactory::Closure(Box::new(|_, args_type| {
         // The input parameters must be 2+4*n, where n is the number of ellipses.
         if args_type.len() < 6 || (args_type.len() - 2) % 4 != 0 {
             return None;
@@ -209,11 +209,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(point_in_ellipses_fn),
             },
         }))
-    });
+    }));
 
-    // simple polygon
+    registry.register_function_factory("point_in_ellipses", point_in_ellipses);
+
     // point_in_polygon((x, y), [(x1, y1), (x2, y2), ...])
-    registry.register_function_factory("point_in_polygon", |_, args_type| {
+    let simple_polygon = FunctionFactory::Closure(Box::new(|_, args_type| {
         if args_type.len() != 2 {
             return None;
         }
@@ -256,11 +257,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(point_in_polygon_fn),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("point_in_polygon", simple_polygon);
 
     // polygon with a number of holes, all as multidimensional array.
     // point_in_polygon((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
-    registry.register_function_factory("point_in_polygon", |_, args_type| {
+    let polygon_with_holes = FunctionFactory::Closure(Box::new(|_, args_type| {
         if args_type.len() != 2 {
             return None;
         }
@@ -303,11 +305,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(point_in_polygon_fn),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("point_in_polygon", polygon_with_holes);
 
     // polygon with a number of holes, each hole as a subsequent argument.
     // point_in_polygon((x, y), [(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...)
-    registry.register_function_factory("point_in_polygon", |_, args_type| {
+    let point_in_polygon = FunctionFactory::Closure(Box::new(|_, args_type| {
         if args_type.len() < 3 {
             return None;
         }
@@ -352,7 +355,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(point_in_polygon_fn),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("point_in_polygon", point_in_polygon);
 }
 
 fn get_coord(fields: &[ScalarRef]) -> Coord {

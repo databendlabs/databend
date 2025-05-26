@@ -41,4 +41,22 @@ echo "create stage s4 FILE_FORMAT = (type = PARQUET);" | $BENDSQL_CLIENT_CONNECT
 echo "copy into @s4 from t2;" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
 echo "select * from @s4;" | $BENDSQL_CLIENT_CONNECT
 
+## generate large parquet files will cause timeout, we comment it now
+echo '--- large parquet file should be worked on parallel by rowgroups'
+echo 'remove @s4;' | $BENDSQL_CLIENT_CONNECT
+echo 'remove @s1;' | $BENDSQL_CLIENT_CONNECT
+echo "copy into @s4 from (select number a, number::string b, number::decimal(15,2) c from numbers(5000000)) file_format=(type=parquet) single=true;" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
+
+## 5MB divide by 2MB = 2.5, so we will read 3 partitions
+echo """
+set parquet_rowgroup_hint_bytes = 2 * 1024 * 1024;
+explain select * from @s4;
+""" | $BENDSQL_CLIENT_CONNECT | grep 'partitions ' | sed  's/^[[:space:]]*//g'
+
+echo "copy into @s1 from (select * from @s4) file_format=(type=parquet)" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
+echo "select * from @s1 order by a except (select * from @s4 order by a)" | $BENDSQL_CLIENT_CONNECT
+
+echo 'remove @s4;' | $BENDSQL_CLIENT_CONNECT
+echo 'remove @s1;' | $BENDSQL_CLIENT_CONNECT
+
 rm -rf ${DATADIR_PATH}

@@ -96,7 +96,7 @@ stateless-cluster-test-tls: build
 
 metactl-test:
 	bash ./tests/metactl/test-metactl.sh
-	bash ./tests/metactl/test-metactl-restore-new-cluster.sh
+	python ./tests/metactl/test-metactl-restore-new-cluster.py
 
 meta-kvapi-test:
 	bash ./tests/meta-kvapi/test-meta-kvapi.sh

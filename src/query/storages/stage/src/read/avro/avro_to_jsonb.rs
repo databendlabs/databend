@@ -56,16 +56,18 @@ pub(super) fn to_jsonb<'a>(value: &'a Value, schema: &Schema) -> Result<jsonb::V
         (Value::TimestampMillis(v), Schema::TimestampMillis)
         | (Value::LocalTimestampMillis(v), Schema::LocalTimestampMillis) => {
             jsonb::Value::Timestamp(jsonb::Timestamp {
-                value: (*v) * 1_000_000,
-            })
-        }
-        (Value::LocalTimestampMicros(v), Schema::LocalTimestampMicros) => {
-            jsonb::Value::Timestamp(jsonb::Timestamp {
                 value: (*v) * 1_000,
             })
         }
-        (Value::LocalTimestampNanos(v), Schema::LocalTimestampNanos) => {
-            jsonb::Value::Timestamp(jsonb::Timestamp { value: (*v) })
+        (Value::TimestampMicros(v), Schema::TimestampMicros)
+        | (Value::LocalTimestampMicros(v), Schema::LocalTimestampMicros) => {
+            jsonb::Value::Timestamp(jsonb::Timestamp { value: *v })
+        }
+        (Value::TimestampNanos(v), Schema::TimestampNanos)
+        | (Value::LocalTimestampNanos(v), Schema::LocalTimestampNanos) => {
+            jsonb::Value::Timestamp(jsonb::Timestamp {
+                value: (*v) / 1_000,
+            })
         }
         (Value::Duration(d), Schema::Duration) => {
             let months: u32 = d.months().into();

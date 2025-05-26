@@ -124,6 +124,20 @@ impl HttpQueryRequest {
             result_timeout_secs: None,
         })
     }
+
+    pub fn set_settings(&mut self, settings: BTreeMap<String, String>) {
+        match self.session.as_mut() {
+            None => {
+                self.session = Some(HttpSessionConf {
+                    settings: Some(settings),
+                    ..Default::default()
+                });
+            }
+            Some(session) => {
+                session.set_settings(settings);
+            }
+        }
+    }
 }
 
 impl Debug for HttpQueryRequest {
@@ -300,7 +314,16 @@ pub struct HttpSessionConf {
     pub internal: Option<HttpSessionStateInternal>,
 }
 
-impl HttpSessionConf {}
+impl HttpSessionConf {
+    pub fn set_settings(&mut self, values: BTreeMap<String, String>) {
+        let Some(settings) = self.settings.as_mut() else {
+            self.settings = Some(values);
+            return;
+        };
+
+        settings.extend(values)
+    }
+}
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct StageAttachmentConf {

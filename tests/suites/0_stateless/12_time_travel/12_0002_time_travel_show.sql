@@ -12,3 +12,12 @@ DROP TABLE t;
 show tables history like 't';
 
 DROP database db12_0002;
+
+DROP SEQUENCE if exists seq;
+DROP SEQUENCE if exists seq1;
+CREATE SEQUENCE seq;
+CREATE SEQUENCE seq1;
+show sequences;
+desc sequence seq;
+DROP SEQUENCE if exists seq;
+DROP SEQUENCE if exists seq1;

@@ -84,6 +84,7 @@ pub struct SessionContext {
     /// for mysql handler: simple use set id of `Session`
     client_session_id: RwLock<Option<String>>,
     current_warehouse: RwLock<Option<String>>,
+    current_workload_group: RwLock<Option<String>>,
 }
 
 impl SessionContext {
@@ -108,6 +109,7 @@ impl SessionContext {
             client_session_id: Default::default(),
             temp_tbl_mgr: Mutex::new(TempTblMgr::init()),
             current_warehouse: Default::default(),
+            current_workload_group: Default::default(),
         })
     }
 
@@ -212,8 +214,16 @@ impl SessionContext {
 
     // Set the current user after authentication
     pub fn set_current_user(&self, user: UserInfo) {
-        let mut lock = self.current_user.write();
-        *lock = Some(user);
+        let workload_group = user.option.workload_group().cloned();
+        {
+            let mut lock = self.current_user.write();
+            *lock = Some(user);
+        }
+
+        {
+            let mut lock = self.current_workload_group.write();
+            *lock = workload_group;
+        }
     }
 
     // Get restricted role. Restricted role is the role granted by authenticator, or set
@@ -368,5 +378,14 @@ impl SessionContext {
 
     pub fn set_client_session_id(&mut self, id: String) {
         *self.client_session_id.write() = Some(id.to_string());
+    }
+
+    pub fn get_current_workload_group(&self) -> Option<String> {
+        let lock = self.current_workload_group.read();
+        lock.clone()
+    }
+
+    pub fn set_current_workload_group(&self, workload_group: String) {
+        *self.current_workload_group.write() = Some(workload_group)
     }
 }

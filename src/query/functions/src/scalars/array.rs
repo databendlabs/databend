@@ -55,6 +55,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
@@ -110,7 +111,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| Value::Scalar(()),
     );
 
-    registry.register_function_factory("array", |_, args_type| {
+    let array_factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.is_empty() {
             return None;
         }
@@ -158,10 +159,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("array", array_factory);
 
     // Returns a merged array of tuples in which the nth tuple contains all nth values of input arrays.
-    registry.register_function_factory("arrays_zip", |_, args_type| {
+    let array_zip_factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.is_empty() {
             return None;
         }
@@ -281,7 +283,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("arrays_zip", array_zip_factory);
 
     registry.register_1_arg::<EmptyArrayType, NumberType<u8>, _, _>(
         "length",
@@ -995,7 +998,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
     }
 
     for (fn_name, name) in ARRAY_AGGREGATE_FUNCTIONS {
-        registry.register_function_factory(fn_name, |_, args_type| {
+        let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
             let return_type = eval_aggr_return_type(name, args_type)?;
             Some(Arc::new(Function {
                 signature: FunctionSignature {
@@ -1008,7 +1011,8 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     eval: Box::new(|args, ctx| eval_array_aggr(name, args, ctx)),
                 },
             }))
-        });
+        }));
+        registry.register_function_factory(fn_name, factory);
     }
 
     for (fn_name, sort_desc) in ARRAY_SORT_FUNCTIONS {

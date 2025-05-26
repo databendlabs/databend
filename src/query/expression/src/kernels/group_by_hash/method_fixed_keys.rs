@@ -16,6 +16,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Not;
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,10 +34,12 @@ use crate::types::number::Number;
 use crate::types::number::NumberColumn;
 use crate::types::AccessType;
 use crate::types::DataType;
-use crate::types::DecimalDataType;
+use crate::types::Decimal128As256Type;
+use crate::types::Decimal128Type;
+use crate::types::Decimal256As128Type;
+use crate::types::Decimal256Type;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
-use crate::with_decimal_mapped_type;
 use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
@@ -120,14 +123,15 @@ where T: Clone
                     _ => {}
                 })
             }
-            [(_, DataType::Decimal(decimal))] => {
-                with_decimal_mapped_type!(|DECIMAL_TYPE| match decimal {
-                    DecimalDataType::DECIMAL_TYPE(size) => {
-                        let buffer: Buffer<T> = keys.into();
-                        let col: Buffer<DECIMAL_TYPE> = unsafe { std::mem::transmute(buffer) };
-                        return Ok(vec![DECIMAL_TYPE::upcast_column(col, *size)]);
-                    }
-                })
+            [(_, DataType::Decimal(size))] => {
+                let buffer: Buffer<T> = keys.into();
+                if size.can_carried_by_128() {
+                    let col: Buffer<i128> = unsafe { std::mem::transmute(buffer) };
+                    return Ok(vec![i128::upcast_column(col, *size)]);
+                } else {
+                    let col: Buffer<i256> = unsafe { std::mem::transmute(buffer) };
+                    return Ok(vec![i256::upcast_column(col, *size)]);
+                }
             }
             _ => (),
         }
@@ -303,18 +307,22 @@ macro_rules! impl_hash_method_fixed_large_keys {
             ) -> Result<KeysState> {
                 // faster path for single fixed decimal keys
                 if group_columns.len() == 1 {
-                    if group_columns[0].data_type().is_decimal() {
-                        with_decimal_mapped_type!(|DECIMAL_TYPE| match &group_columns[0] {
-                            Column::Decimal(DecimalColumn::DECIMAL_TYPE(c, _)) => {
-                                let buffer = unsafe {
-                                    std::mem::transmute::<Buffer<DECIMAL_TYPE>, Buffer<$ty>>(
-                                        c.clone(),
-                                    )
-                                };
+                    if let Column::Decimal(decimal_column) = &group_columns[0] {
+                        match decimal_column {
+                            DecimalColumn::Decimal128(c, _)
+                                if std::mem::size_of::<Self::HashKey>() == 16 =>
+                            {
+                                let buffer: Buffer<$ty> = unsafe { std::mem::transmute(c.clone()) };
                                 return Ok(KeysState::$name(buffer));
                             }
-                            _ => {}
-                        })
+                            DecimalColumn::Decimal256(c, _)
+                                if std::mem::size_of::<Self::HashKey>() == 32 =>
+                            {
+                                let buffer: Buffer<$ty> = unsafe { std::mem::transmute(c.clone()) };
+                                return Ok(KeysState::$name(buffer));
+                            }
+                            _ => (),
+                        }
                     }
                 }
 
@@ -551,29 +559,19 @@ fn fixed_hash(keys_vec: &mut KeysVec, col_index: usize, column: &Column) -> Resu
                 }
             }
         },
-        Column::Decimal(c) => {
-            with_decimal_mapped_type!(|DECIMAL_TYPE| match c {
-                DecimalColumn::DECIMAL_TYPE(c, _) => {
-                    match bitmap {
-                        Some(bitmap) => {
-                            for (row, (value, valid)) in c.iter().zip(bitmap.iter()).enumerate() {
-                                if valid {
-                                    let slice = keys_vec.value(row, col_index);
-                                    value.marshal(slice);
-                                } else {
-                                    keys_vec.set_null(row, col_index);
-                                }
-                            }
-                        }
-                        None => {
-                            for (row, value) in c.iter().enumerate() {
-                                let slice = keys_vec.value(row, col_index);
-                                value.marshal(slice);
-                            }
-                        }
-                    }
-                }
-            })
+        Column::Decimal(DecimalColumn::Decimal128(buffer, size)) => {
+            if size.can_carried_by_128() {
+                fixed_hash_decimal::<Decimal128Type>(keys_vec, col_index, bitmap, buffer);
+            } else {
+                fixed_hash_decimal::<Decimal128As256Type>(keys_vec, col_index, bitmap, buffer);
+            }
+        }
+        Column::Decimal(DecimalColumn::Decimal256(buffer, size)) => {
+            if size.can_carried_by_128() {
+                fixed_hash_decimal::<Decimal256As128Type>(keys_vec, col_index, bitmap, buffer);
+            } else {
+                fixed_hash_decimal::<Decimal256Type>(keys_vec, col_index, bitmap, buffer);
+            }
         }
         _ => {
             return Err(ErrorCode::BadDataValueType(format!(
@@ -584,6 +582,35 @@ fn fixed_hash(keys_vec: &mut KeysVec, col_index: usize, column: &Column) -> Resu
     }
 
     Ok(())
+}
+
+fn fixed_hash_decimal<T>(
+    keys_vec: &mut KeysVec,
+    col_index: usize,
+    bitmap: Option<&Bitmap>,
+    buffer: &T::Column,
+) where
+    T: AccessType,
+    for<'a> T::ScalarRef<'a>: Marshal,
+{
+    match bitmap {
+        Some(bitmap) => {
+            for (row, (value, valid)) in T::iter_column(buffer).zip(bitmap.iter()).enumerate() {
+                if valid {
+                    let slice = keys_vec.value(row, col_index);
+                    value.marshal(slice);
+                } else {
+                    keys_vec.set_null(row, col_index);
+                }
+            }
+        }
+        None => {
+            for (row, value) in T::iter_column(buffer).enumerate() {
+                let slice = keys_vec.value(row, col_index);
+                value.marshal(slice);
+            }
+        }
+    }
 }
 
 pub struct PrimitiveKeyAccessor<T> {

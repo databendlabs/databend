@@ -15267,6 +15267,28 @@ ShowGrants {
 
 
 ---------- Input ----------
+SHOW GRANTS OF ROLE 'role1' like 'r';
+---------- Output ---------
+SHOW GRANTS OF ROLE role1 LIKE 'r'
+---------- AST ------------
+ShowGrantsOfRole(
+    ShowGranteesOfRoleStmt {
+        name: "role1",
+        show_option: Some(
+            ShowOptions {
+                show_limit: Some(
+                    Like {
+                        pattern: "r",
+                    },
+                ),
+                limit: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 SHOW GRANTS ON TABLE t;
 ---------- Output ---------
 SHOW GRANTS ON TABLE t 
@@ -26238,5 +26260,84 @@ CreateProcedure(
         script: "BEGIN\n    LET sum := 0;\n    FOR x IN SELECT * FROM numbers(100) DO\n        sum := sum + x.number;\n    END FOR;\n    RETURN sum;\nEND;",
     },
 )
+
+
+---------- Input ----------
+DROP SEQUENCE IF EXISTS seq
+---------- Output ---------
+DROP SEQUENCE IF EXISTS seq
+---------- AST ------------
+DropSequence(
+    DropSequenceStmt {
+        if_exists: true,
+        sequence: Identifier {
+            span: Some(
+                24..27,
+            ),
+            name: "seq",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE SEQUENCE seq comment='test'
+---------- Output ---------
+CREATE SEQUENCE seq COMMENT = 'test'
+---------- AST ------------
+CreateSequence(
+    CreateSequenceStmt {
+        create_option: Create,
+        sequence: Identifier {
+            span: Some(
+                16..19,
+            ),
+            name: "seq",
+            quote: None,
+            ident_type: None,
+        },
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+DESCRIBE SEQUENCE seq
+---------- Output ---------
+DESC SEQUENCE seq
+---------- AST ------------
+DescSequence {
+    name: Identifier {
+        span: Some(
+            18..21,
+        ),
+        name: "seq",
+        quote: None,
+        ident_type: None,
+    },
+}
+
+
+---------- Input ----------
+SHOW SEQUENCES LIKE '%seq%'
+---------- Output ---------
+SHOW SEQUENCES LIKE '%seq%'
+---------- AST ------------
+ShowSequences {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "%seq%",
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
 
 

@@ -70,6 +70,7 @@ use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterprete
 use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
 use crate::interpreters::interpreter_rename_workload_group::RenameWorkloadGroupInterpreter;
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
+use crate::interpreters::interpreter_sequence_desc::DescSequenceInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_set_workload_group_quotas::SetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_show_online_nodes::ShowOnlineNodesInterpreter;
@@ -682,6 +683,10 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::DropSequence(p) => Ok(Arc::new(DropSequenceInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescSequence(p) => Ok(Arc::new(DescSequenceInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),

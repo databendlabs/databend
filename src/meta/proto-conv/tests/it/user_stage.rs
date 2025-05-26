@@ -96,6 +96,7 @@ fn test_user_stage_webhdfs_v30() -> anyhow::Result<()> {
                 delegation: "<delegation_token>".to_string(),
                 disable_list_batch: false,
                 user_name: String::new(),
+                network_config: None,
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(
@@ -384,6 +385,7 @@ fn test_user_stage_gcs_v16() -> anyhow::Result<()> {
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
                 credential: "my_credential".to_string(),
+                network_config: None,
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(
@@ -440,6 +442,7 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
                 access_key_id: "access_key_id".to_string(),
                 access_key_secret: "access_key_secret".to_string(),
                 server_side_encryption_key_id: "".to_string(),
+                network_config: None,
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(
@@ -757,6 +760,7 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
                 credential: "my_credential".to_string(),
+                network_config: None,
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(
@@ -906,6 +910,7 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
                 credential: "my_credential".to_string(),
+                network_config: None,
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(

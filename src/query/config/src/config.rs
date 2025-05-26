@@ -35,6 +35,7 @@ use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
 use databend_common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
 use databend_common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
+use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
@@ -269,6 +270,51 @@ impl Config {
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct StorageNetworkConfig {
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_retry_timeout: u64,
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_retry_io_timeout: u64,
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_pool_max_idle_per_host: usize,
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_connect_timeout: u64,
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_tcp_keepalive: u64,
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_max_concurrent_io_requests: usize,
+}
+
+impl From<StorageNetworkParams> for StorageNetworkConfig {
+    fn from(value: StorageNetworkParams) -> Self {
+        StorageNetworkConfig {
+            storage_retry_timeout: value.retry_timeout,
+            storage_retry_io_timeout: value.retry_io_timeout,
+            storage_pool_max_idle_per_host: value.pool_max_idle_per_host,
+            storage_connect_timeout: value.connect_timeout,
+            storage_tcp_keepalive: value.tcp_keepalive,
+            storage_max_concurrent_io_requests: value.max_concurrent_io_requests,
+        }
+    }
+}
+
+impl TryInto<StorageNetworkParams> for StorageNetworkConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> std::result::Result<StorageNetworkParams, Self::Error> {
+        Ok(StorageNetworkParams {
+            retry_timeout: self.storage_retry_timeout,
+            retry_io_timeout: self.storage_retry_io_timeout,
+            tcp_keepalive: self.storage_tcp_keepalive,
+            connect_timeout: self.storage_connect_timeout,
+            pool_max_idle_per_host: self.storage_pool_max_idle_per_host,
+            max_concurrent_io_requests: self.storage_max_concurrent_io_requests,
+        })
+    }
+}
+
 /// Storage config group.
 ///
 /// # TODO(xuanwo)
@@ -306,6 +352,24 @@ pub struct StorageConfig {
 
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_retry_timeout: u64,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_retry_io_timeout: u64,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_pool_max_idle_per_host: usize,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_connect_timeout: u64,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_tcp_keepalive: u64,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_max_concurrent_io_requests: usize,
 
     // Fs storage backend config.
     #[clap(flatten)]
@@ -370,6 +434,13 @@ impl From<InnerStorageConfig> for StorageConfig {
             webhdfs: Default::default(),
             cos: Default::default(),
 
+            storage_retry_timeout: 0,
+            storage_retry_io_timeout: 0,
+            storage_pool_max_idle_per_host: 0,
+            storage_connect_timeout: 0,
+            storage_tcp_keepalive: 0,
+            storage_max_concurrent_io_requests: 0,
+
             // Deprecated fields
             storage_type: None,
             deprecated_storage_num_cpus: None,
@@ -378,6 +449,11 @@ impl From<InnerStorageConfig> for StorageConfig {
         match inner.params {
             StorageParams::Azblob(v) => {
                 cfg.typ = "azblob".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.azblob = v.into();
             }
             StorageParams::Fs(v) => {
@@ -387,6 +463,11 @@ impl From<InnerStorageConfig> for StorageConfig {
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(v) => {
                 cfg.typ = "hdfs".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.hdfs = v.into();
             }
             StorageParams::Memory => {
@@ -394,32 +475,84 @@ impl From<InnerStorageConfig> for StorageConfig {
             }
             StorageParams::S3(v) => {
                 cfg.typ = "s3".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.s3 = v.into()
             }
             StorageParams::Gcs(v) => {
                 cfg.typ = "gcs".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.gcs = v.into()
             }
             StorageParams::Obs(v) => {
                 cfg.typ = "obs".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.obs = v.into()
             }
             StorageParams::Oss(v) => {
                 cfg.typ = "oss".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.oss = v.into()
             }
             StorageParams::Webhdfs(v) => {
                 cfg.typ = "webhdfs".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.webhdfs = v.into()
             }
             StorageParams::Cos(v) => {
                 cfg.typ = "cos".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.cos = v.into()
             }
             v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
         cfg
+    }
+}
+
+impl StorageConfig {
+    fn update_storage_network_param(&mut self, v: &StorageNetworkParams) {
+        self.storage_retry_timeout = v.retry_timeout;
+        self.storage_tcp_keepalive = v.tcp_keepalive;
+        self.storage_connect_timeout = v.connect_timeout;
+        self.storage_retry_io_timeout = v.retry_io_timeout;
+        self.storage_pool_max_idle_per_host = v.pool_max_idle_per_host;
+        self.storage_max_concurrent_io_requests = v.max_concurrent_io_requests;
+    }
+
+    fn create_storage_network_params(&self) -> StorageNetworkParams {
+        StorageNetworkParams {
+            retry_timeout: self.storage_retry_timeout,
+            retry_io_timeout: self.storage_retry_io_timeout,
+            tcp_keepalive: self.storage_tcp_keepalive,
+            connect_timeout: self.storage_connect_timeout,
+            pool_max_idle_per_host: self.storage_pool_max_idle_per_host,
+            max_concurrent_io_requests: self.storage_max_concurrent_io_requests,
+        }
     }
 }
 
@@ -438,22 +571,56 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
             ));
         }
 
+        let storage_network_params = self.create_storage_network_params();
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
             params: {
                 match self.typ.as_str() {
-                    "azblob" => StorageParams::Azblob(self.azblob.try_into()?),
+                    "azblob" => {
+                        let mut azblob_config: InnerStorageAzblobConfig = self.azblob.try_into()?;
+                        azblob_config.network_config = Some(storage_network_params);
+                        StorageParams::Azblob(azblob_config)
+                    }
                     "fs" => StorageParams::Fs(self.fs.try_into()?),
-                    "gcs" => StorageParams::Gcs(self.gcs.try_into()?),
+                    "gcs" => {
+                        let mut gcs_config: InnerStorageGcsConfig = self.gcs.try_into()?;
+                        gcs_config.network_config = Some(storage_network_params);
+                        StorageParams::Gcs(gcs_config)
+                    }
                     #[cfg(feature = "storage-hdfs")]
-                    "hdfs" => StorageParams::Hdfs(self.hdfs.try_into()?),
+                    "hdfs" => {
+                        let mut hdfs_config: InnerStorageHdfsConfig = self.hdfs.try_into()?;
+                        hdfs_config.network_config = Some(storage_network_params);
+                        StorageParams::Hdfs(hdfs_config)
+                    }
                     "memory" => StorageParams::Memory,
-                    "s3" => StorageParams::S3(self.s3.try_into()?),
-                    "obs" => StorageParams::Obs(self.obs.try_into()?),
-                    "oss" => StorageParams::Oss(self.oss.try_into()?),
-                    "webhdfs" => StorageParams::Webhdfs(self.webhdfs.try_into()?),
-                    "cos" => StorageParams::Cos(self.cos.try_into()?),
+                    "s3" => {
+                        let mut s3config: InnerStorageS3Config = self.s3.try_into()?;
+                        s3config.network_config = Some(storage_network_params);
+                        StorageParams::S3(s3config)
+                    }
+                    "obs" => {
+                        let mut obs_config: InnerStorageObsConfig = self.obs.try_into()?;
+                        obs_config.network_config = Some(storage_network_params);
+                        StorageParams::Obs(obs_config)
+                    }
+                    "oss" => {
+                        let mut oss_config: InnerStorageOssConfig = self.oss.try_into()?;
+                        oss_config.network_config = Some(storage_network_params);
+                        StorageParams::Oss(oss_config)
+                    }
+                    "webhdfs" => {
+                        let mut webhdfs_config: InnerStorageWebhdfsConfig =
+                            self.webhdfs.try_into()?;
+                        webhdfs_config.network_config = Some(storage_network_params);
+                        StorageParams::Webhdfs(webhdfs_config)
+                    }
+                    "cos" => {
+                        let mut cos_config: InnerStorageCosConfig = self.cos.try_into()?;
+                        cos_config.network_config = Some(storage_network_params);
+                        StorageParams::Cos(cos_config)
+                    }
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
@@ -689,6 +856,7 @@ impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
             bucket: self.gcs_bucket,
             root: self.gcs_root,
             credential: self.credential,
+            network_config: None,
         })
     }
 }
@@ -819,6 +987,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.s3_role_arn,
             external_id: self.s3_external_id,
+            network_config: None,
         })
     }
 }
@@ -911,6 +1080,7 @@ impl TryInto<InnerStorageAzblobConfig> for AzblobStorageConfig {
             account_name: self.account_name,
             account_key: self.account_key,
             root: self.azblob_root,
+            network_config: None,
         })
     }
 }
@@ -950,6 +1120,7 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
         Ok(InnerStorageHdfsConfig {
             name_node: self.name_node,
             root: self.hdfs_root,
+            network_config: None,
         })
     }
 }
@@ -1044,6 +1215,7 @@ impl TryInto<InnerStorageObsConfig> for ObsStorageConfig {
             access_key_id: self.obs_access_key_id,
             secret_access_key: self.obs_secret_access_key,
             root: self.obs_root,
+            network_config: None,
         })
     }
 }
@@ -1160,6 +1332,7 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
             root: self.oss_root,
             server_side_encryption: self.oss_server_side_encryption,
             server_side_encryption_key_id: self.oss_server_side_encryption_key_id,
+            network_config: None,
         })
     }
 }
@@ -1279,6 +1452,7 @@ impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
             root: value.webhdfs_root,
             disable_list_batch: value.webhdfs_disable_list_batch,
             user_name: value.webhdfs_user_name,
+            network_config: None,
         })
     }
 }
@@ -1360,6 +1534,7 @@ impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
             bucket: value.cos_bucket,
             endpoint_url: value.cos_endpoint_url,
             root: value.cos_root,
+            network_config: None,
         })
     }
 }

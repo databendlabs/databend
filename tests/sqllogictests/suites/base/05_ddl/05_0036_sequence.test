@@ -112,6 +112,12 @@ select count(*) from tmp;
 1000000
 
 statement ok
+DESC SEQUENCE SEQ
+
+statement ok
+SHOW SEQUENCES
+
+statement ok
 DROP SEQUENCE seq
 
 statement error 1126

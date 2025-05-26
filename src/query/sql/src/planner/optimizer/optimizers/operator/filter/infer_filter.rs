@@ -269,11 +269,8 @@ impl<'a> InferFilterOptimizer<'a> {
         let left_data_type = ScalarExpr::ConstantExpr(left.constant.clone()).data_type()?;
         let right_data_type = ScalarExpr::ConstantExpr(right.constant.clone()).data_type()?;
         if left_data_type != right_data_type {
-            let common_data_type = common_super_type(
-                left_data_type,
-                right_data_type,
-                &BUILTIN_FUNCTIONS.default_cast_rules,
-            );
+            let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
+            let common_data_type = common_super_type(left_data_type, right_data_type, cast_rules);
             if let Some(data_type) = common_data_type {
                 let (left_is_adjusted, left_constant) =
                     adjust_scalar(left.constant.value.clone(), data_type.clone());

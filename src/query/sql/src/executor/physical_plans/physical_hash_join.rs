@@ -233,13 +233,14 @@ impl PhysicalPlanBuilder {
             }),
         ) = (probe_side.as_mut(), build_side.as_mut())
         {
+            let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
             for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
                 let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
                 let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
                 let common_ty = common_super_type(
                     probe_expr.data_type().clone(),
                     build_expr.data_type().clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                    cast_rules,
                 )
                 .ok_or_else(|| {
                     ErrorCode::IllegalDataType(format!(
@@ -392,6 +393,7 @@ impl PhysicalPlanBuilder {
         let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
 
+        let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
         for condition in join.equi_conditions.iter() {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
@@ -423,17 +425,13 @@ impl PhysicalPlanBuilder {
             // Unify the data types of the left and right expressions
             let left_type = left_expr.data_type();
             let right_type = right_expr.data_type();
-            let common_ty = common_super_type(
-                left_type.clone(),
-                right_type.clone(),
-                &BUILTIN_FUNCTIONS.default_cast_rules,
-            )
-            .ok_or_else(|| {
-                ErrorCode::IllegalDataType(format!(
-                    "Cannot find common type for {:?} and {:?}",
-                    left_type, right_type
-                ))
-            })?;
+            let common_ty = common_super_type(left_type.clone(), right_type.clone(), cast_rules)
+                .ok_or_else(|| {
+                    ErrorCode::IllegalDataType(format!(
+                        "Cannot find common type for {:?} and {:?}",
+                        left_type, right_type
+                    ))
+                })?;
 
             let left_expr = check_cast(
                 left_expr.span(),

@@ -20,6 +20,7 @@ use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 
@@ -36,6 +37,11 @@ pub trait SequenceApi: Send + Sync {
         &self,
         req: &SequenceIdent,
     ) -> Result<Option<SeqV<SequenceMeta>>, MetaError>;
+
+    async fn list_sequences(
+        &self,
+        tenant: &Tenant,
+    ) -> Result<Vec<(String, SequenceMeta)>, MetaError>;
 
     async fn get_sequence_next_value(
         &self,

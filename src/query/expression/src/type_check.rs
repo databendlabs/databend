@@ -643,8 +643,8 @@ pub fn can_auto_cast_to(
         }
         (DataType::Number(n), DataType::Decimal(d)) if !n.is_float() => {
             let properties = n.get_decimal_properties().unwrap();
-            properties.scale <= d.scale()
-                && properties.precision - properties.scale <= d.leading_digits()
+            properties.scale() <= d.scale()
+                && properties.precision() - properties.scale() <= d.leading_digits()
         }
         // Only available for decimal --> f64, otherwise `sqrt(1234.56789)` will have signature: `sqrt(1234.56789::Float32)`
         (DataType::Decimal(_), DataType::Number(n)) if n.is_float64() => true,
@@ -686,9 +686,37 @@ pub fn common_super_type(
                 .collect::<Option<Vec<_>>>()?;
             Some(DataType::Tuple(tys))
         }
+        (DataType::String, DataType::Number(num_ty))
+        | (DataType::Number(num_ty), DataType::String) => {
+            if num_ty.is_float() {
+                Some(DataType::Number(num_ty))
+            } else {
+                let precision = MAX_DECIMAL128_PRECISION;
+                let scale = 5;
+                Some(DataType::Decimal(DecimalSize::new(precision, scale).ok()?))
+            }
+        }
         (DataType::String, decimal_ty @ DataType::Decimal(_))
         | (decimal_ty @ DataType::Decimal(_), DataType::String) => Some(decimal_ty),
         (DataType::Decimal(a), DataType::Decimal(b)) => {
+            let scale = a.scale().max(b.scale());
+            let precision = scale + a.leading_digits().max(b.leading_digits());
+            let precision = if a.precision() <= MAX_DECIMAL128_PRECISION
+                && b.precision() <= MAX_DECIMAL128_PRECISION
+            {
+                precision.min(MAX_DECIMAL128_PRECISION)
+            } else {
+                precision.min(MAX_DECIMAL256_PRECISION)
+            };
+
+            Some(DataType::Decimal(DecimalSize::new(precision, scale).ok()?))
+        }
+        (DataType::Number(num_ty), DataType::Decimal(a))
+        | (DataType::Decimal(a), DataType::Number(num_ty))
+            if !num_ty.is_float() =>
+        {
+            let b = DecimalDataType::from_size(num_ty.get_decimal_properties().unwrap()).unwrap();
+
             let scale = a.scale().max(b.scale());
             let mut precision = a.leading_digits().max(b.leading_digits()) + scale;
 
@@ -700,31 +728,7 @@ pub fn common_super_type(
                 precision = precision.min(MAX_DECIMAL256_PRECISION);
             }
 
-            Some(DataType::Decimal(
-                DecimalDataType::from_size(DecimalSize { precision, scale }).ok()?,
-            ))
-        }
-        (DataType::Number(num_ty), DataType::Decimal(decimal_ty))
-        | (DataType::Decimal(decimal_ty), DataType::Number(num_ty))
-            if !num_ty.is_float() =>
-        {
-            let a = DecimalDataType::from_size(decimal_ty.size()).unwrap();
-            let b = DecimalDataType::from_size(num_ty.get_decimal_properties().unwrap()).unwrap();
-
-            let scale: u8 = a.scale().max(b.scale());
-            let mut precision = a.leading_digits().max(b.leading_digits()) + scale;
-
-            if a.precision() <= MAX_DECIMAL128_PRECISION
-                && b.precision() <= MAX_DECIMAL128_PRECISION
-            {
-                precision = precision.min(MAX_DECIMAL128_PRECISION);
-            } else {
-                precision = precision.min(MAX_DECIMAL256_PRECISION);
-            }
-
-            Some(DataType::Decimal(
-                DecimalDataType::from_size(DecimalSize { precision, scale }).ok()?,
-            ))
+            Some(DataType::Decimal(DecimalSize::new(precision, scale).ok()?))
         }
         (DataType::Number(num_ty), DataType::Decimal(_))
         | (DataType::Decimal(_), DataType::Number(num_ty))

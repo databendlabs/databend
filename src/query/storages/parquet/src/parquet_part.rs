@@ -32,6 +32,10 @@ pub enum ParquetPart {
     File(ParquetFilePart),
     SmallFiles(Vec<ParquetFilePart>),
     RowGroup(ParquetRowGroupPart),
+    FileWithDeletes {
+        inner: ParquetFilePart,
+        deletes: Vec<String>,
+    },
 }
 
 impl ParquetPart {
@@ -40,6 +44,7 @@ impl ParquetPart {
             ParquetPart::File(p) => p.uncompressed_size(),
             ParquetPart::SmallFiles(p) => p.iter().map(|p| p.uncompressed_size()).sum(),
             ParquetPart::RowGroup(p) => p.uncompressed_size(),
+            ParquetPart::FileWithDeletes { inner, deletes: _ } => inner.uncompressed_size(),
         }
     }
 
@@ -48,6 +53,7 @@ impl ParquetPart {
             ParquetPart::File(p) => p.compressed_size(),
             ParquetPart::SmallFiles(p) => p.iter().map(|p| p.compressed_size()).sum(),
             ParquetPart::RowGroup(p) => p.compressed_size(),
+            ParquetPart::FileWithDeletes { inner, deletes: _ } => inner.compressed_size(),
         }
     }
 }
@@ -57,15 +63,27 @@ pub struct ParquetFilePart {
     pub file: String,
     pub compressed_size: u64,
     pub estimated_uncompressed_size: u64,
+    // used to cache parquet metadata
     pub dedup_key: String,
+
+    // For large parquet files, we will split the file into multiple parts
+    // But we don't read metadata during plan stage, so we split them by 128MB into buckets
+    // (bucket_idx, bucket_num)
+    pub bucket_option: Option<(usize, usize)>,
 }
 
 impl ParquetFilePart {
     pub fn compressed_size(&self) -> u64 {
-        self.compressed_size
+        match self.bucket_option {
+            Some((_, num)) => self.compressed_size / num as u64,
+            None => self.compressed_size,
+        }
     }
     pub fn uncompressed_size(&self) -> u64 {
-        self.estimated_uncompressed_size
+        match self.bucket_option {
+            Some((_, num)) => self.estimated_uncompressed_size / num as u64,
+            None => self.estimated_uncompressed_size,
+        }
     }
 }
 
@@ -82,8 +100,8 @@ impl PartInfo for ParquetPart {
     }
 
     fn hash(&self) -> u64 {
-        let path = match self {
-            ParquetPart::File(p) => &p.file,
+        let paths = match self {
+            ParquetPart::File(p) => vec![&p.file],
             ParquetPart::SmallFiles(p) => {
                 let mut s = DefaultHasher::new();
                 for part in p.iter() {
@@ -91,10 +109,18 @@ impl PartInfo for ParquetPart {
                 }
                 return s.finish();
             }
-            ParquetPart::RowGroup(p) => &p.location,
+            ParquetPart::RowGroup(p) => vec![&p.location],
+            ParquetPart::FileWithDeletes { inner, deletes } => {
+                let mut paths = Vec::with_capacity(deletes.len() + 1);
+                paths.push(&inner.file);
+                for delete in deletes {
+                    paths.push(delete);
+                }
+                paths
+            }
         };
         let mut s = DefaultHasher::new();
-        path.hash(&mut s);
+        paths.hash(&mut s);
         s.finish()
     }
 }
@@ -156,6 +182,7 @@ pub(crate) fn collect_small_file_parts(
                     compressed_size: size,
                     estimated_uncompressed_size: (size as f64 / max_compression_ratio) as u64,
                     dedup_key,
+                    bucket_option: None,
                 })
                 .collect::<Vec<_>>();
 
@@ -177,6 +204,7 @@ pub(crate) fn collect_file_parts(
     stats: &mut PartStatistics,
     num_columns_to_read: usize,
     total_columns_to_read: usize,
+    rowgroup_hint_bytes: u64,
 ) {
     for (file, size, dedup_key) in files.into_iter() {
         stats.read_bytes += size as usize;
@@ -185,20 +213,24 @@ pub(crate) fn collect_file_parts(
             (size as f64) * (num_columns_to_read as f64) / (total_columns_to_read as f64);
 
         let estimated_uncompressed_size = read_bytes * compress_ratio;
+        let bucket_num = size.div_ceil(rowgroup_hint_bytes) as usize;
+        for bucket in 0..bucket_num {
+            partitions
+                .partitions
+                .push(Arc::new(Box::new(ParquetPart::File(ParquetFilePart {
+                    file: file.clone(),
+                    compressed_size: size,
+                    estimated_uncompressed_size: estimated_uncompressed_size as u64,
+                    dedup_key: dedup_key.clone(),
+                    bucket_option: Some((bucket, bucket_num)),
+                })) as Box<dyn PartInfo>));
 
-        partitions
-            .partitions
-            .push(Arc::new(Box::new(ParquetPart::File(ParquetFilePart {
-                file,
-                compressed_size: size,
-                estimated_uncompressed_size: estimated_uncompressed_size as u64,
-                dedup_key,
-            })) as Box<dyn PartInfo>));
+            stats.partitions_scanned += 1;
+            stats.partitions_total += 1;
+        }
 
         stats.read_bytes += read_bytes as usize;
         stats.read_rows += estimated_read_rows as usize;
         stats.is_exact = false;
-        stats.partitions_scanned += 1;
-        stats.partitions_total += 1;
     }
 }

@@ -31,6 +31,7 @@ use databend_common_expression::InputColumns;
 use databend_common_expression::StatesLayout;
 use databend_common_functions::aggregates::AggregateFunctionRef;
 use databend_common_functions::aggregates::StateAddr;
+use databend_common_functions::scalars::strict_decimal_data_type;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -60,7 +61,7 @@ impl PartialSingleStateAggregator {
         let state_layout = params
             .states_layout
             .as_ref()
-            .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?
+            .ok_or_else(|| ErrorCode::LayoutError("[TRANSFORM-AGGREGATOR] Layout cannot be None"))?
             .clone();
 
         let addr: StateAddr = arena.alloc_layout(state_layout.layout).into();
@@ -100,8 +101,9 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = block.consume_convert_to_full();
-
+        let block = strict_decimal_data_type(block)
+            .map_err(ErrorCode::Internal)?
+            .consume_convert_to_full();
         if is_agg_index_block {
             // Aggregation states are in the back of the block.
             let states_indices = (block.num_columns() - self.states_layout.states_loc.len()
@@ -178,7 +180,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
         }
 
         log::info!(
-            "Aggregated {} to 1 rows in {} sec (real: {}). ({} rows/sec, {}/sec, {})",
+            "[TRANSFORM-AGGREGATOR] Single key aggregation completed: {} → 1 rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}",
             self.rows,
             self.start.elapsed().as_secs_f64(),
             if let Some(t) = &self.first_block_start {
@@ -213,7 +215,7 @@ impl FinalSingleStateAggregator {
         let states_layout = params
             .states_layout
             .as_ref()
-            .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?
+            .ok_or_else(|| ErrorCode::LayoutError("[TRANSFORM-AGGREGATOR] Layout cannot be None"))?
             .clone();
 
         assert!(!states_layout.states_loc.is_empty());

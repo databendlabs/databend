@@ -666,7 +666,7 @@ error:
   --> SQL:1:1
   |
 1 | map_delete(map([a_col, b_col], [d_col, e_col]), 'a_k2', 'b_k3')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `map_delete(Map(Int64, Int64), String, String)`, you might need to add explicit type casts.
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `map_delete(Map(Decimal(38, 5), Decimal(38, 5)), String, String)`, you might need to add explicit type casts.
 
 
 
