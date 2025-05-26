@@ -2867,7 +2867,7 @@ impl<'a> TypeChecker<'a> {
         args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
-        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let mut arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
 
         // inject the params
         if ["round", "truncate"].contains(&func_name)
@@ -2890,6 +2890,61 @@ impl<'a> TypeChecker<'a> {
                 0
             };
             params.push(Scalar::Number(NumberScalar::Int64(scale)));
+        } else if func_name.eq_ignore_ascii_case("as_decimal") {
+            // Convert the precision and scale argument of `as_decimal` to params
+            if !params.is_empty() {
+                if params.len() > 2 || arguments.len() != 1 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Invalid arguments for `{func_name}`, get {} params and {} arguments",
+                        params.len(),
+                        arguments.len()
+                    )));
+                }
+            } else {
+                if arguments.is_empty() || arguments.len() > 3 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Invalid arguments for `{func_name}` require 1, 2 or 3 arguments, but got {} arguments",
+                        arguments.len()
+                    )));
+                }
+                let param_args = arguments.split_off(1);
+                for arg in param_args.into_iter() {
+                    let expr = type_check::check(&arg, &BUILTIN_FUNCTIONS)?;
+                    let param: u8 = check_number(
+                        expr.span(),
+                        &FunctionContext::default(),
+                        &expr,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+                    params.push(Scalar::Number(NumberScalar::UInt8(param)));
+                }
+            }
+            if !params.is_empty() {
+                let Some(precision) = params[0].get_i64() else {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Invalid value `{}` for `{func_name}` precision parameter",
+                        params[0]
+                    )));
+                };
+                if precision < 0 || precision > MAX_DECIMAL256_PRECISION as i64 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Invalid value `{precision}` for `{func_name}` precision parameter"
+                    )));
+                }
+                if params.len() == 2 {
+                    let Some(scale) = params[1].get_i64() else {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "Invalid value `{}` for `{func_name}` scale parameter",
+                            params[1]
+                        )));
+                    };
+                    if scale < 0 || scale > precision {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "Invalid value `{scale}` for `{func_name}` scale parameter"
+                        )));
+                    }
+                }
+            }
         }
 
         let raw_expr = RawExpr::FunctionCall {

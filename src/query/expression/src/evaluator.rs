@@ -381,13 +381,20 @@ impl<'a> Evaluator<'a> {
                 DataType::Nullable(box DataType::Variant) | DataType::Variant,
                 DataType::Nullable(box DataType::Boolean)
                 | DataType::Nullable(box DataType::Number(_))
+                | DataType::Nullable(box DataType::Decimal(_))
                 | DataType::Nullable(box DataType::String)
+                | DataType::Nullable(box DataType::Binary)
                 | DataType::Nullable(box DataType::Date)
-                | DataType::Nullable(box DataType::Timestamp),
+                | DataType::Nullable(box DataType::Timestamp)
+                | DataType::Nullable(box DataType::Interval),
             ) => {
                 // allow cast variant to nullable types.
                 let inner_dest_ty = dest_type.remove_nullable();
-                let cast_fn = format!("to_{}", inner_dest_ty.to_string().to_lowercase());
+                let cast_fn = if inner_dest_ty.is_decimal() {
+                    "to_decimal".to_owned()
+                } else {
+                    format!("to_{}", inner_dest_ty.to_string().to_lowercase())
+                };
                 if let Some(new_value) = self.run_simple_cast(
                     span,
                     src_type,
@@ -410,12 +417,19 @@ impl<'a> Evaluator<'a> {
                 DataType::Nullable(box DataType::Variant) | DataType::Variant,
                 DataType::Boolean
                 | DataType::Number(_)
+                | DataType::Decimal(_)
                 | DataType::String
+                | DataType::Binary
                 | DataType::Date
-                | DataType::Timestamp,
+                | DataType::Timestamp
+                | DataType::Interval,
             ) => {
                 // allow cast variant to not null types.
-                let cast_fn = format!("to_{}", dest_type.to_string().to_lowercase());
+                let cast_fn = if dest_type.is_decimal() {
+                    "to_decimal".to_owned()
+                } else {
+                    format!("to_{}", dest_type.to_string().to_lowercase())
+                };
                 if let Some(new_value) = self.run_simple_cast(
                     span,
                     src_type,

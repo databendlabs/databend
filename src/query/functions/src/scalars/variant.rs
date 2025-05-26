@@ -21,12 +21,15 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 use databend_common_column::types::months_days_micros;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::string_to_date;
+use databend_common_expression::types::interval::string_to_interval;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::variant::cast_scalars_to_variants;
@@ -65,13 +68,16 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_io::Interval;
 use jiff::civil::date;
+use jiff::tz::TimeZone;
 use jiff::Unit;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::keypath::parse_key_paths;
 use jsonb::parse_value;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
+use jsonb::Value as JsonbValue;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("json_object_keys", &["object_keys"]);
@@ -1268,32 +1274,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            let raw_jsonb = RawJsonb::new(val);
-            if raw_jsonb.is_null().unwrap_or_default() {
-                output.push_null();
-                return;
-            }
-            if let Ok(Some(date)) = raw_jsonb.as_date() {
-                output.push(date.value);
-                return;
-            }
-            match raw_jsonb
-                .as_str()
-                .map_err(|e| format!("{e}"))
-                .and_then(|r| r.ok_or(format!("invalid json type")))
-                .and_then(|s| {
-                    string_to_date(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
-                })
-                .and_then(|d| {
-                    d.since((Unit::Day, date(1970, 1, 1)))
-                        .map_err(|e| format!("{}", e))
-                }) {
-                Ok(s) => output.push(s.get_days()),
-                Err(e) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("unable to cast to type `DATE` {}.", e),
-                    );
+            match cast_to_date(val, &ctx.func_ctx.tz) {
+                Ok(Some(date)) => output.push(date),
+                Ok(None) => output.push_null(),
+                Err(err) => {
+                    ctx.set_error(output.len(), format!("{}", err));
                     output.push_null();
                 }
             }
@@ -1310,26 +1295,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            let raw_jsonb = RawJsonb::new(val);
-            if let Ok(Some(date)) = raw_jsonb.as_date() {
-                output.push(date.value);
-                return;
-            }
-            match raw_jsonb
-                .as_str()
-                .map_err(|e| format!("{e}"))
-                .and_then(|r| r.ok_or(format!("invalid json type")))
-                .and_then(|s| {
-                    string_to_date(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
-                })
-                .and_then(|d| {
-                    d.since((Unit::Day, date(1970, 1, 1)))
-                        .map_err(|e| format!("{}", e))
-                }) {
-                Ok(s) => output.push(s.get_days()),
-                Err(_) => {
-                    output.push_null();
-                }
+            match cast_to_date(val, &ctx.func_ctx.tz) {
+                Ok(Some(date)) => output.push(date),
+                _ => output.push_null(),
             }
         }),
     );
@@ -1345,28 +1313,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                let raw_jsonb = RawJsonb::new(val);
-                if raw_jsonb.is_null().unwrap_or_default() {
-                    output.push_null();
-                    return;
-                }
-                if let Ok(Some(ts)) = raw_jsonb.as_timestamp() {
-                    output.push(ts.value);
-                    return;
-                }
-                match raw_jsonb
-                    .as_str()
-                    .map_err(|e| format!("{e}"))
-                    .and_then(|r| r.ok_or(format!("invalid json type")))
-                    .and_then(|s| {
-                        string_to_timestamp(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
-                    }) {
-                    Ok(ts) => output.push(ts.timestamp().as_microsecond()),
-                    Err(e) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("unable to cast to type `TIMESTAMP` {}.", e),
-                        );
+                match cast_to_timestamp(val, &ctx.func_ctx.tz) {
+                    Ok(Some(ts)) => output.push(ts),
+                    Ok(None) => output.push_null(),
+                    Err(err) => {
+                        ctx.set_error(output.len(), format!("{}", err));
                         output.push_null();
                     }
                 }
@@ -1385,23 +1336,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-
-                let raw_jsonb = RawJsonb::new(val);
-                if let Ok(Some(ts)) = raw_jsonb.as_timestamp() {
-                    output.push(ts.value);
-                    return;
-                }
-                match raw_jsonb
-                    .as_str()
-                    .map_err(|e| format!("{e}"))
-                    .and_then(|r| r.ok_or(format!("invalid json type")))
-                    .and_then(|s| {
-                        string_to_timestamp(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
-                    }) {
-                    Ok(ts) => output.push(ts.timestamp().as_microsecond()),
-                    Err(_) => {
-                        output.push_null();
-                    }
+                match cast_to_timestamp(val, &ctx.func_ctx.tz) {
+                    Ok(Some(ts)) => output.push(ts),
+                    _ => output.push_null(),
                 }
             },
         ),
@@ -1513,26 +1450,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                let raw_jsonb = RawJsonb::new(val);
-                if raw_jsonb.is_null().unwrap_or_default() {
-                    output.push_null();
-                    return;
-                }
-                match raw_jsonb
-                    .as_interval()
-                    .map_err(|e| format!("{e}"))
-                    .and_then(|r| r.ok_or(format!("invalid json type")))
-                {
-                    Ok(interval) => output.push(months_days_micros::new(
+                match cast_to_interval(val) {
+                    Ok(Some(interval)) => output.push(months_days_micros::new(
                         interval.months,
                         interval.days,
                         interval.micros,
                     )),
-                    Err(e) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("unable to cast to type `INTERVAL` {}.", e),
-                        );
+                    Ok(None) => output.push_null(),
+                    Err(err) => {
+                        ctx.set_error(output.len(), format!("{}", err));
                         output.push_null();
                     }
                 }
@@ -1551,24 +1477,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                let raw_jsonb = RawJsonb::new(val);
-                if raw_jsonb.is_null().unwrap_or_default() {
-                    output.push_null();
-                    return;
-                }
-                match raw_jsonb
-                    .as_interval()
-                    .map_err(|e| format!("{e}"))
-                    .and_then(|r| r.ok_or(format!("invalid json type")))
-                {
-                    Ok(interval) => output.push(months_days_micros::new(
+                match cast_to_interval(val) {
+                    Ok(Some(interval)) => output.push(months_days_micros::new(
                         interval.months,
                         interval.days,
                         interval.micros,
                     )),
-                    Err(_) => {
-                        output.push_null();
-                    }
+                    _ => output.push_null(),
                 }
             },
         ),
@@ -1585,23 +1500,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                let raw_jsonb = RawJsonb::new(val);
-                if raw_jsonb.is_null().unwrap_or_default() {
-                    output.push_null();
-                    return;
-                }
-                match raw_jsonb
-                    .as_binary()
-                    .map_err(|e| format!("{e}"))
-                    .and_then(|r| r.ok_or(format!("invalid json type")))
-                {
-                    Ok(buf) => output.push(&buf),
-                    Err(e) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("unable to cast to type `BINARY` {}.", e),
-                        );
-                        output.push_null();
+                match cast_to_binary(val) {
+                    Ok(Some(bin)) => output.push(&bin),
+                    Ok(None) => output.push_null(),
+                    Err(err) => {
+                        ctx.set_error(output.len(), format!("{}", err));
+                        output.push(&[]);
                     }
                 }
             },
@@ -1619,20 +1523,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                let raw_jsonb = RawJsonb::new(val);
-                if raw_jsonb.is_null().unwrap_or_default() {
-                    output.push_null();
-                    return;
-                }
-                match raw_jsonb
-                    .as_binary()
-                    .map_err(|e| format!("{e}"))
-                    .and_then(|r| r.ok_or(format!("invalid json type")))
-                {
-                    Ok(buf) => output.push(&buf),
-                    Err(_) => {
-                        output.push_null();
-                    }
+                match cast_to_binary(val) {
+                    Ok(Some(bin)) => output.push(&bin),
+                    _ => output.push_null(),
                 }
             },
         ),
@@ -2884,6 +2777,77 @@ fn cast_to_f64(v: &[u8]) -> Result<f64, jsonb::Error> {
             }
             Err(err)
         }
+    }
+}
+
+fn cast_to_date(val: &[u8], tz: &TimeZone) -> Result<Option<i32>, jsonb::Error> {
+    let value = jsonb::from_slice(val)?;
+    match value {
+        JsonbValue::Null => Ok(None),
+        JsonbValue::Date(date) => Ok(Some(clamp_date(date.value as i64))),
+        JsonbValue::String(s) => string_to_date(s.as_bytes(), tz)
+            .map_err(|e| {
+                jsonb::Error::Message(format!("unable to cast to type `DATE` {}.", e.message()))
+            })
+            .and_then(|d| {
+                d.since((Unit::Day, date(1970, 1, 1)))
+                    .map_err(|e| jsonb::Error::Message(format!("{}", e)))
+                    .map(|d| d.get_days())
+            })
+            .map(Some),
+        _ => Err(jsonb::Error::InvalidJsonType),
+    }
+}
+
+fn cast_to_timestamp(val: &[u8], tz: &TimeZone) -> Result<Option<i64>, jsonb::Error> {
+    let value = jsonb::from_slice(val)?;
+    match value {
+        JsonbValue::Null => Ok(None),
+        JsonbValue::Timestamp(ts) => {
+            let mut val = ts.value;
+            clamp_timestamp(&mut val);
+            Ok(Some(val))
+        }
+        JsonbValue::String(s) => string_to_timestamp(s.as_bytes(), tz)
+            .map_err(|e| {
+                jsonb::Error::Message(format!(
+                    "unable to cast to type `TIMESTAMP` {}.",
+                    e.message()
+                ))
+            })
+            .map(|ts| Some(ts.timestamp().as_microsecond())),
+        _ => Err(jsonb::Error::InvalidJsonType),
+    }
+}
+
+fn cast_to_interval(val: &[u8]) -> Result<Option<Interval>, jsonb::Error> {
+    let value = jsonb::from_slice(val)?;
+    match value {
+        JsonbValue::Null => Ok(None),
+        JsonbValue::Interval(interval) => Ok(Some(Interval::new(
+            interval.months,
+            interval.days,
+            interval.micros,
+        ))),
+        JsonbValue::String(s) => string_to_interval(&s)
+            .map_err(|e| {
+                jsonb::Error::Message(format!(
+                    "unable to cast to type `INTERVAL` {}.",
+                    e.message()
+                ))
+            })
+            .map(Some),
+        _ => Err(jsonb::Error::InvalidJsonType),
+    }
+}
+
+fn cast_to_binary(val: &[u8]) -> Result<Option<Vec<u8>>, jsonb::Error> {
+    let value = jsonb::from_slice(val)?;
+    match value {
+        JsonbValue::Null => Ok(None),
+        JsonbValue::Binary(b) => Ok(Some(b.to_vec())),
+        JsonbValue::String(s) => Ok(Some(s.to_string().as_bytes().to_vec())),
+        _ => Err(jsonb::Error::InvalidJsonType),
     }
 }
 
