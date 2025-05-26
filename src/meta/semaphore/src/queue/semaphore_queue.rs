@@ -159,15 +159,22 @@ impl SemaphoreQueue {
             };
 
             // Consistency guarantee: see the method doc
-            if self.is_capacity_enough(entry) || Some(*seq) < self.last_acquired_seq() {
+
+            // The less-equal `<=` should be used here instead of `<` to ensure that:
+            //
+            // Databend-meta has a bug that emit duplicated None->Some events.
+            // Thus, a permit might be added to this queue multiple times.
+            // This is a workaround that skips the entry if it is already acquired.
+            if self.is_capacity_enough(entry) || Some(*seq) <= self.last_acquired_seq() {
                 // go on moving waiting to acquired.
             } else {
                 break;
             }
 
             let (seq, entry) = self.waiting.pop_first().unwrap();
-            moved.push((seq, entry.clone()));
-            self.try_acquire(seq, entry);
+            if self.try_acquire(seq, entry.clone()) {
+                moved.push((seq, entry));
+            }
         }
         moved
     }
@@ -357,6 +364,110 @@ mod tests {
         assert!(queue.is_acquired(&1));
         assert!(queue.is_acquired(&2));
         assert_eq!(queue.waiting, BTreeMap::from([(3, ent("t3", 1))]));
+    }
+
+    /// When a equal seq permit is inserted, it should be skipped automatically.
+    ///
+    /// See [`SemaphoreQueue::move_waiting_to_acquired`] for more details.
+    #[test]
+    fn test_insert_equal_seq() {
+        // case-1: equal the last in `acquired`
+        {
+            let mut queue = SemaphoreQueue {
+                size: 0,
+                capacity: 1,
+                acquired: BTreeMap::new(),
+                waiting: BTreeMap::new(),
+            };
+
+            let entry2 = || ent("t2", 1);
+            let entry3 = || ent("t3", 1);
+
+            // 2 is acquired, 3 is waiting.
+
+            let events = queue.insert(2, entry2());
+            assert_eq!(events, vec![acquired(2, entry2())]);
+
+            let events = queue.insert(3, entry3());
+            assert_eq!(events, vec![]);
+
+            assert!(queue.is_acquired(&2));
+            assert!(!queue.is_acquired(&3));
+            assert_eq!(queue.waiting, BTreeMap::from([(3, ent("t3", 1))]));
+
+            // 1 is acquired because it smaller than 2.
+
+            let events = queue.insert(2, entry2());
+
+            assert_eq!(events, vec![]);
+            assert_eq!(queue.size, 1);
+            assert!(queue.is_acquired(&2));
+            assert!(!queue.is_acquired(&3));
+            assert_eq!(queue.waiting, BTreeMap::from([(3, ent("t3", 1))]));
+        }
+
+        // case-2: equal the second last in `acquired`
+        {
+            let mut queue = SemaphoreQueue {
+                size: 0,
+                capacity: 2,
+                acquired: BTreeMap::new(),
+                waiting: BTreeMap::new(),
+            };
+
+            let entry1 = || ent("t1", 1);
+            let entry2 = || ent("t2", 1);
+            let entry3 = || ent("t3", 1);
+
+            let events = queue.insert(2, entry2());
+            assert_eq!(events, vec![acquired(2, entry2())]);
+
+            let events = queue.insert(1, entry1());
+            assert_eq!(events, vec![acquired(1, entry1())]);
+
+            let events = queue.insert(3, entry3());
+            assert_eq!(events, vec![]);
+
+            assert!(queue.is_acquired(&1));
+            assert!(queue.is_acquired(&2));
+            assert!(!queue.is_acquired(&3));
+            assert_eq!(queue.waiting, BTreeMap::from([(3, ent("t3", 1))]));
+
+            let events = queue.insert(1, entry1());
+
+            assert_eq!(events, vec![]);
+            assert_eq!(queue.size, 2);
+            assert!(queue.is_acquired(&1));
+            assert!(queue.is_acquired(&2));
+            assert!(!queue.is_acquired(&3));
+            assert_eq!(queue.waiting, BTreeMap::from([(3, ent("t3", 1))]));
+        }
+    }
+
+    /// Before this commit, with capacity=1:
+    /// `insert 1, insert 1, remove 1` emit the events `acquired 1, removed 1, acquired 1`,
+    /// which is a bug of duplicated acquired.
+    ///
+    /// The second `insert 1` should be skipped, and the expected events should be `acquired 1, removed 1`.
+    #[test]
+    fn test_no_waiting_dup_become_acquired() {
+        let mut queue = SemaphoreQueue {
+            size: 0,
+            capacity: 1,
+            acquired: BTreeMap::new(),
+            waiting: BTreeMap::new(),
+        };
+
+        let entry1 = || ent("t1", 1);
+
+        let events = queue.insert(1, entry1());
+        assert_eq!(events, vec![acquired(1, entry1())]);
+
+        let events = queue.insert(1, entry1());
+        assert_eq!(events, vec![]);
+
+        let events = queue.remove(1);
+        assert_eq!(events, vec![removed(1, entry1())]);
     }
 
     #[test]
