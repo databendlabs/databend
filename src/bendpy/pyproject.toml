@@ -17,7 +17,7 @@ classifiers = [
 [project.optional-dependencies]
 benchmark = []
 docs = ["pdoc"]
-test = ["pytest", "pandas", "polars"]
+test = ["pytest", "pandas", "polars", "pyarrow"]
 
 [project.urls]
 Documentation = "https://pypi.org/project/databend/"
@@ -33,6 +33,6 @@ test = [
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-module-name = "databend._databend"
+module-name = "databend.databend"
 strip = true
 
