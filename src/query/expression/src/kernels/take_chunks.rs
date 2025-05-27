@@ -34,9 +34,11 @@ use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnVec;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
+use crate::types::vector::VectorColumnBuilder;
 use crate::types::*;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
+use crate::with_vector_number_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -378,6 +380,26 @@ impl Column {
                 let builder = GeographyType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<GeographyType>(columns, builder, indices)
             }
+            Column::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
+                VectorColumn::NUM_TYPE((_, dimension)) => {
+                    let vector_ty = VectorDataType::NUM_TYPE(*dimension as u64);
+                    let mut builder = VectorColumnBuilder::with_capacity(&vector_ty, result_size);
+
+                    let columns = columns
+                        .iter()
+                        .map(|col| col.as_vector().unwrap())
+                        .collect_vec();
+
+                    for &(block_index, row, times) in indices {
+                        let val =
+                            unsafe { columns[block_index as usize].index_unchecked(row as usize) };
+                        for _ in 0..times {
+                            builder.push(&val);
+                        }
+                    }
+                    Column::Vector(builder.build())
+                }
+            }),
         }
     }
 
@@ -587,6 +609,18 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Geography(columns)
             }
+            Column::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
+                VectorColumn::NUM_TYPE((_, dimension)) => {
+                    let columns = columns
+                        .iter()
+                        .map(|col| match col {
+                            Column::Vector(VectorColumn::NUM_TYPE((col, _))) => col.clone(),
+                            _ => unreachable!(),
+                        })
+                        .collect_vec();
+                    ColumnVec::Vector(VectorColumnVec::NUM_TYPE((columns, *dimension)))
+                }
+            }),
         }
     }
 
@@ -736,6 +770,24 @@ impl Column {
                     &columns, indices,
                 )))
             }
+            ColumnVec::Vector(columns) => with_vector_number_type!(|NUM_TYPE| match columns {
+                VectorColumnVec::NUM_TYPE((values, dimension)) => {
+                    let vector_ty = VectorDataType::NUM_TYPE(*dimension as u64);
+                    let mut builder = VectorColumnBuilder::with_capacity(&vector_ty, indices.len());
+                    let columns = values
+                        .into_iter()
+                        .map(|vals| VectorColumn::NUM_TYPE((vals.clone(), *dimension)))
+                        .collect_vec();
+                    for row_ptr in indices {
+                        let val = unsafe {
+                            columns[row_ptr.chunk_index as usize]
+                                .index_unchecked(row_ptr.row_index as usize)
+                        };
+                        builder.push(&val);
+                    }
+                    Column::Vector(builder.build())
+                }
+            }),
         }
     }
 

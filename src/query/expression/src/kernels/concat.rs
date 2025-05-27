@@ -29,6 +29,7 @@ use crate::types::i256;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::vector::VectorColumnBuilder;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::ArrayType;
@@ -41,8 +42,11 @@ use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
+use crate::types::VectorColumn;
+use crate::types::VectorDataType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
+use crate::with_vector_number_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -222,6 +226,24 @@ impl Column {
                     .collect::<Result<_>>()?;
                 Column::Tuple(fields)
             }
+            Column::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
+                VectorColumn::NUM_TYPE((_, dimension)) => {
+                    let vector_ty = VectorDataType::NUM_TYPE(dimension as u64);
+                    let mut builder = VectorColumnBuilder::with_capacity(&vector_ty, capacity);
+                    for column in columns {
+                        let vector_column = column.as_vector().unwrap();
+                        if vector_column.dimension() as usize != dimension {
+                            return Err(ErrorCode::Internal(format!(
+                                "Can't concat vector columns with different dimensions, {} and {}",
+                                dimension,
+                                vector_column.dimension()
+                            )));
+                        }
+                        builder.append_column(&vector_column);
+                    }
+                    Column::Vector(builder.build())
+                }
+            }),
             Column::Variant(_)
             | Column::Geometry(_)
             | Column::Geography(_)

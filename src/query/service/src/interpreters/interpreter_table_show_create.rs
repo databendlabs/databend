@@ -246,6 +246,7 @@ impl ShowCreateTableInterpreter {
                 let index_type = match index_field.index_type {
                     TableIndexType::Inverted => "INVERTED",
                     TableIndexType::Ngram => "NGRAM",
+                    TableIndexType::Vector => "VECTOR",
                 };
                 let mut index_str = format!(
                     "  {} {} INDEX {} ({})",

@@ -95,6 +95,7 @@ impl Interpreter for DropTableIndexInterpreter {
                 let handler = get_ngram_index_handler();
                 let _ = handler.do_drop_table_index(catalog, drop_index_req).await?;
             }
+            TableIndexType::Vector => todo!(),
         }
 
         Ok(PipelineBuildResult::create())

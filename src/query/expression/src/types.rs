@@ -35,6 +35,7 @@ pub mod simple_type;
 pub mod string;
 pub mod timestamp;
 pub mod variant;
+pub mod vector;
 pub mod zero_size_type;
 use std::cmp::Ordering;
 use std::fmt::Debug;
@@ -77,6 +78,13 @@ pub use self::string::StringColumn;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
+pub use self::vector::VectorColumn;
+pub use self::vector::VectorColumnBuilder;
+pub use self::vector::VectorColumnVec;
+pub use self::vector::VectorDataType;
+pub use self::vector::VectorScalar;
+pub use self::vector::VectorScalarRef;
+pub use self::vector::VectorType;
 use self::zero_size_type::*;
 use crate::property::Domain;
 use crate::values::Column;
@@ -118,6 +126,7 @@ pub enum DataType {
     Geometry,
     Interval,
     Geography,
+    Vector(VectorDataType),
 
     // Used internally for generic types
     Generic(usize),
@@ -194,7 +203,8 @@ impl DataType {
             | DataType::Bitmap
             | DataType::Variant
             | DataType::Geometry
-            | DataType::Geography => false,
+            | DataType::Geography
+            | DataType::Vector(_) => false,
             DataType::Nullable(ty) => ty.has_generic(),
             DataType::Array(ty) => ty.has_generic(),
             DataType::Map(ty) => ty.has_generic(),
@@ -220,6 +230,7 @@ impl DataType {
             | DataType::Variant
             | DataType::Geometry
             | DataType::Geography
+            | DataType::Vector(_)
             | DataType::Generic(_) => false,
             DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
             DataType::Nullable(ty) => ty.has_nested_nullable(),

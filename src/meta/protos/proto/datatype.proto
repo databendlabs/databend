@@ -66,7 +66,8 @@ message DataType {
     Empty    bitmap_t      = 45;
     Empty    geometry_t    = 47;
     Empty    geography_t   = 48;
-    Empty    interval_t        = 49;
+    Empty    interval_t    = 49;
+    Vector   vector_t      = 50;
   }
 }
 
@@ -205,6 +206,13 @@ message DecimalSize {
   int32 scale = 2;
 }
 
+message Vector {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  Number num       = 1;
+  uint64 dimension = 2;
+}
 
 // Place holder type for primitive types
 message Empty {}

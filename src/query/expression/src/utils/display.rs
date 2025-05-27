@@ -60,17 +60,20 @@ use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
+use crate::types::vector::VectorDataType;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
 use crate::types::NumberClass;
 use crate::types::ValueType;
+use crate::types::VectorScalarRef;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::values::Value;
 use crate::visit_expr;
 use crate::with_integer_mapped_type;
+use crate::with_vector_number_type;
 use crate::Column;
 use crate::ColumnIndex;
 use crate::ExprVisitor;
@@ -191,6 +194,11 @@ impl Debug for ScalarRef<'_> {
                     .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
                 write!(f, "{geog:?}")
             }
+            ScalarRef::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
+                VectorScalarRef::NUM_TYPE(vals) => {
+                    write!(f, "[{}]", vals.iter().join(", "))
+                }
+            }),
         }
     }
 }
@@ -228,6 +236,7 @@ impl Debug for Column {
             Column::Variant(col) => fmt_binary(f, "Variant", col),
             Column::Geometry(col) => fmt_binary(f, "Geometry", col),
             Column::Geography(col) => write!(f, "{col:?}"),
+            Column::Vector(col) => write!(f, "{col:?}"),
         }
     }
 }
@@ -299,6 +308,11 @@ impl Display for ScalarRef<'_> {
                     .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
                 write!(f, "{}", QuotedString(geog, '\''))
             }
+            ScalarRef::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
+                VectorScalarRef::NUM_TYPE(vals) => {
+                    write!(f, "[{}]", vals.iter().join(", "))
+                }
+            }),
         }
     }
 }
@@ -542,6 +556,7 @@ impl Display for DataType {
             DataType::Variant => write!(f, "Variant"),
             DataType::Geometry => write!(f, "Geometry"),
             DataType::Geography => write!(f, "Geography"),
+            DataType::Vector(vector) => write!(f, "{vector}"),
             DataType::Generic(index) => write!(f, "T{index}"),
         }
     }
@@ -592,6 +607,7 @@ impl Display for TableDataType {
             TableDataType::Interval => write!(f, "Interval"),
             TableDataType::Geometry => write!(f, "Geometry"),
             TableDataType::Geography => write!(f, "Geography"),
+            TableDataType::Vector(vector) => write!(f, "{vector}"),
         }
     }
 }
@@ -635,6 +651,15 @@ impl Display for VariantDataType {
             VariantDataType::Float64 => write!(f, "Float64"),
             VariantDataType::String => write!(f, "String"),
             VariantDataType::Array(inner) => write!(f, "Array({inner})"),
+        }
+    }
+}
+
+impl Display for VectorDataType {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match &self {
+            VectorDataType::Int8(dim) => write!(f, "Vector({dim})"),
+            VectorDataType::Float32(dim) => write!(f, "Vector({dim})"),
         }
     }
 }
