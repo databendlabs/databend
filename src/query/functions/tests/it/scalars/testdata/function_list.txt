@@ -3851,6 +3851,8 @@ Functions overloads:
 3 to_char(Float32 NULL, String NULL) :: String NULL
 4 to_char(Float64, String) :: String
 5 to_char(Float64 NULL, String NULL) :: String NULL
+6 to_char(Timestamp, String) :: String
+7 to_char(Timestamp NULL, String NULL) :: String NULL
 0 to_date(Variant) :: Date NULL
 1 to_date(Variant NULL) :: Date NULL
 2 to_date(String, String) :: Date NULL
