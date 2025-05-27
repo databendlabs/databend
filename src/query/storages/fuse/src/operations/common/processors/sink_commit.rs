@@ -105,10 +105,10 @@ pub struct CommitSink<F: SnapshotGenerator> {
     update_stream_meta: Vec<UpdateStreamMetaReq>,
     deduplicated_label: Option<String>,
     table_meta_timestamps: TableMetaTimestamps,
-    prefer_vacuum2: bool,
     vacuum_handler: Option<Arc<VacuumHandlerWrapper>>,
 }
 
+#[derive(Debug)]
 enum PurgeMode {
     PurgeAllHistory,
     PurgeAccordingToRetention,
@@ -131,9 +131,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<ProcessorPtr> {
         let purge_mode = Self::purge_mode(ctx.as_ref(), table, &snapshot_gen)?;
-        let prefer_vacuum2 = ctx
-            .get_settings()
-            .get_enable_use_vacuum2_to_purge_transient_table_data()?;
 
         let vacuum_handler = if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Vacuum)
@@ -166,7 +163,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
             update_stream_meta,
             deduplicated_label,
             table_meta_timestamps,
-            prefer_vacuum2,
             vacuum_handler,
         })))
     }
@@ -278,62 +274,15 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .is_some()
     }
 
-    async fn exec_auto_purge(&self, tbl: &FuseTable, purge_mode: &PurgeMode) -> Result<()> {
-        let keep_last_snapshot = true;
-        match purge_mode {
-            PurgeMode::PurgeAllHistory => {
-                // Purge all history, using current table snapshot as gc root.
-
-                let snapshot_files = tbl.list_snapshot_files().await?;
-                if let Err(e) = tbl
-                    .do_purge(&self.ctx, snapshot_files, None, keep_last_snapshot, false)
-                    .await
-                {
-                    // Errors of GC, if any, are ignored, since GC task can be picked up
-                    warn!(
-                        "GC of table not success (this is not a permanent error). the error : {}",
-                        e
-                    );
-                } else {
-                    info!("GC of table done");
-                }
-            }
-            PurgeMode::PurgeAccordingToRetention => {
-                // Navigate to the retention point, and purge history before that point
-
-                let is_dry_run = false;
-                // Using setting or table option, no customized navigation point
-                let navigation_point = None;
-                // Do not limit the number of snapshots that could be removed
-                let num_snapshot_removal_limit = None;
-
-                let purged_files = tbl
-                    .purge(
-                        self.ctx.clone(),
-                        navigation_point,
-                        num_snapshot_removal_limit,
-                        keep_last_snapshot,
-                        is_dry_run,
-                    )
-                    .await?;
-                // `Files::delete_files` should have logged detail information of delete actions.
-                info!(
-                    "auto vacuum, {} files cleared",
-                    purged_files.map(|purged| purged.len()).unwrap_or(0)
-                );
-            }
-        }
-        Ok(())
-    }
-
     async fn exec_auto_vacuum2(&self, tbl: &FuseTable, vacuum_handler: &VacuumHandlerWrapper) {
         warn!(
             "Vacuuming table: {}, ident: {}",
             tbl.table_info.name, tbl.table_info.ident
         );
 
+        let respect_flash_back = true;
         if let Err(e) = vacuum_handler
-            .do_vacuum2(tbl, self.ctx.clone(), false)
+            .do_vacuum2(tbl, self.ctx.clone(), respect_flash_back)
             .await
         {
             // Vacuum in a best-effort manner, errors are ignored
@@ -347,22 +296,19 @@ where F: SnapshotGenerator + Send + Sync + 'static
         {
             let table_info = self.table.get_table_info();
             info!(
-                "cleaning historical data. table: {}, ident: {}",
-                table_info.desc, table_info.ident
+                "cleaning historical data. table: {}, ident: {}, purge_mode {:?}",
+                table_info.desc, table_info.ident, purge_mode
             );
         }
 
         let latest = self.table.refresh(self.ctx.as_ref()).await?;
         let tbl = FuseTable::try_from_table(latest.as_ref())?;
 
-        if self.prefer_vacuum2 {
-            if let Some(vacuum_handler) = &self.vacuum_handler {
-                self.exec_auto_vacuum2(tbl, vacuum_handler.as_ref()).await;
-                return Ok(());
-            }
+        if let Some(vacuum_handler) = &self.vacuum_handler {
+            self.exec_auto_vacuum2(tbl, vacuum_handler.as_ref()).await;
+        } else {
+            info!("no vacuum handler found for auto vacuuming, please re-check your license");
         }
-
-        self.exec_auto_purge(tbl, purge_mode).await?;
 
         Ok(())
     }
