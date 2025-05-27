@@ -391,39 +391,40 @@ impl Acquirer {
         let mut c = std::pin::pin!(cancel);
 
         loop {
-            // Sleep for a while before the next extend.
-            tokio::time::sleep(sleep_time).await;
+            tokio::select! {
+                // Sleep for a while before the next extend.
+                _ = tokio::time::sleep(sleep_time) => {
+                    // Extend the lease only if the entry still exists. If the entry has been removed,
+                    // it means the semaphore has been released. Re-inserting it would cause confusion
+                    // in the semaphore state and potentially lead to inconsistent behavior.
+                    info!(
+                        "{}: About to extend semaphore permit lease: {} ttl: {:?}",
+                        ctx, key_str, ttl
+                    );
 
-            // Check if the cancel signal is received.
-            if futures::poll!(c.as_mut()).is_ready() {
-                info!(
-                    "leaser task canceled by user: {}, about to remove the semaphore permit entry",
-                    sem_key
-                );
+                    let upsert = UpsertKV::update(&key_str, &val_bytes)
+                        .with(MatchSeq::GE(1))
+                        .with_ttl(ttl);
 
-                let upsert = UpsertKV::delete(&key_str);
+                    let res = meta_client.upsert_kv(upsert).await;
+                    res.map_err(|e| conn_io_error(e, "extend semaphore permit lease"))?;
+                }
+                // Wait if the cancel signal is received.
+                _ = &mut c => {
+                    // The permit is dropped by the user, we should remove the semaphore permit entry.
+                    info!(
+                        "leaser task canceled by user: {}, about to remove the semaphore permit entry",
+                        sem_key
+                    );
 
-                let res = meta_client.upsert_kv(upsert).await;
-                res.map_err(|e| conn_io_error(e, "remove semaphore permit entry"))?;
+                    let upsert = UpsertKV::delete(&key_str);
 
-                return Ok(());
+                    let res = meta_client.upsert_kv(upsert).await;
+                    res.map_err(|e| conn_io_error(e, "remove semaphore permit entry"))?;
+
+                    return Ok(());
+                }
             }
-
-            // Extend the lease only if the entry still exists. If the entry has been removed,
-            // it means the semaphore has been released. Re-inserting it would cause confusion
-            // in the semaphore state and potentially lead to inconsistent behavior.
-
-            info!(
-                "{}: About to extend semaphore permit lease: {} ttl: {:?}",
-                ctx, key_str, ttl
-            );
-
-            let upsert = UpsertKV::update(&key_str, &val_bytes)
-                .with(MatchSeq::GE(1))
-                .with_ttl(ttl);
-
-            let res = meta_client.upsert_kv(upsert).await;
-            res.map_err(|e| conn_io_error(e, "extend semaphore permit lease"))?;
         }
     }
 }
