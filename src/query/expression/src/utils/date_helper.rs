@@ -1314,3 +1314,44 @@ pub fn previous_or_next_day(dt: &Zoned, target: Weekday, is_previous: bool) -> i
 
     datetime_to_date_inner_number(dt) + dir * days_diff
 }
+
+pub struct PGDateTimeFormatter;
+
+impl PGDateTimeFormatter {
+    pub fn format(dt: Zoned, format_string: &str) -> String {
+        let mut result = format_string.to_string();
+        let mut format_map: Vec<(&str, fn(&Zoned) -> String)> = Vec::new();
+
+        format_map.push(("YYYY", |dt| dt.strftime("%Y").to_string()));
+        format_map.push(("YY", |dt| dt.strftime("%y").to_string()));
+        format_map.push(("MM", |dt| dt.strftime("%m").to_string()));
+        format_map.push(("MON", |dt| dt.strftime("%b").to_string()));
+        format_map.push(("MMMM", |dt| dt.strftime("%B").to_string()));
+        format_map.push(("DD", |dt| dt.strftime("%d").to_string()));
+        format_map.push(("DY", |dt| dt.strftime("%a").to_string()));
+        format_map.push(("HH24", |dt| dt.strftime("%H").to_string()));
+        format_map.push(("HH12", |dt| dt.strftime("%I").to_string()));
+        format_map.push(("AM", |dt| dt.strftime("%p").to_string()));
+        format_map.push(("PM", |dt| dt.strftime("%p").to_string()));
+        format_map.push(("MI", |dt| dt.strftime("%M").to_string()));
+        format_map.push(("SS", |dt| dt.strftime("%S").to_string()));
+        format_map.push(("FF", |dt| dt.strftime("%f").to_string()));
+        format_map.push(("TZH", |dt| {
+            dt.strftime("%z").to_string().chars().take(3).collect()
+        }));
+        format_map.push(("TZM", |dt| {
+            dt.strftime("%z")
+                .to_string()
+                .chars()
+                .skip(3)
+                .take(2)
+                .collect()
+        }));
+        format_map.push(("UUUU", |dt| dt.strftime("%G").to_string()));
+        for (key, func) in &format_map {
+            let reg = regex::Regex::new(&format!(r"(?i){}", key)).unwrap();
+            result = reg.replace_all(&result, func(&dt)).to_string();
+        }
+        result
+    }
+}
