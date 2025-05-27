@@ -35,6 +35,7 @@ databend-common-storages-stream = { workspace = true }
 databend-common-storages-view = { workspace = true }
 databend-common-users = { workspace = true }
 databend-storages-common-cache = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 jiff = { workspace = true }
