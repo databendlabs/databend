@@ -19,9 +19,6 @@ statement ok
 use vaccum_transient;
 
 statement ok
-set use_vacuum2_to_purge_transient_table_data = 1;
-
-statement ok
 create or replace transient table t (c int) 'fs:///tmp/vaccum_transient/';
 
 # prepare data

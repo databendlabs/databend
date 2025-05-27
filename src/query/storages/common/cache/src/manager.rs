@@ -299,12 +299,11 @@ impl CacheManager {
 
             let segment_block_metas_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_SEGMENT_BLOCK_METAS,
-                config.block_meta_count as usize,
+                config.segment_block_metas_count as usize,
             );
 
             let block_meta_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_BLOCK_META,
-                // TODO replace this config
                 config.block_meta_count as usize,
             );
 
@@ -910,6 +909,7 @@ mod tests {
         // Configure cache with sufficient capacity for testing
         cache_config.table_data_deserialized_data_bytes = 1024 * 1024;
         cache_config.block_meta_count = 10;
+        cache_config.segment_block_metas_count = 20;
         cache_config.data_cache_in_memory_bytes = 1024 * 1024;
 
         let ee_mode = true;
@@ -937,6 +937,21 @@ mod tests {
             "not matter".to_string(),
             ColumnData::from_bytes(Bytes::new()),
         );
+
+        {
+            // Make sure at least the first key is written to disk cache
+
+            column_data_cache.insert(
+                "extra_key".to_string(),
+                ColumnData::from_bytes(Bytes::new()),
+            );
+
+            let disk_cache = column_data_cache.on_disk_cache().unwrap();
+            // Since the on-disk cache is populated asynchronously, we need to
+            // wait until the populate-queue is empty. At that time, at least
+            // the first key `test_key` should be written into the on-disk cache.
+            disk_cache.till_no_pending_items_in_queue();
+        }
 
         // 4. Populate block meta cache
         let block_meta_cache = cache_manager.get_block_meta_cache().unwrap();
@@ -1049,6 +1064,43 @@ mod tests {
             .in_memory_cache()
             .unwrap()
             .is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_manager_block_meta_config() -> Result<()> {
+        let max_server_memory_usage = 1024 * 1024;
+
+        let cache_config = CacheConfig {
+            enable_table_meta_cache: true,
+            segment_block_metas_count: 10,
+            block_meta_count: 20,
+            ..Default::default()
+        };
+
+        let ee_mode = false;
+        let cache_manager = CacheManager::try_new(
+            &cache_config,
+            &max_server_memory_usage,
+            "test_tenant_id",
+            ee_mode,
+        )?;
+
+        assert_eq!(
+            cache_manager
+                .get_segment_block_metas_cache()
+                .unwrap()
+                .items_capacity(),
+            10
+        );
+        assert_eq!(
+            cache_manager
+                .get_block_meta_cache()
+                .unwrap()
+                .items_capacity(),
+            20
+        );
 
         Ok(())
     }
