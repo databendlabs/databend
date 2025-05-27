@@ -311,6 +311,7 @@ impl Processor for TransformHashJoinBuild {
                     )
                     .await?;
                 }
+                self.build_state.barrier.wait().await;
             }
             Step::Async(AsyncStep::Spill) => {
                 self.spiller.spill(&self.data_blocks, None).await?;
