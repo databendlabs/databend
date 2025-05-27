@@ -27,6 +27,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -54,6 +55,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_null::NullTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::is_internal_opt_key;
 use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -252,6 +254,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 ),
                 TableField::new("comment", TableDataType::String),
                 TableField::new("table_type", TableDataType::String),
+                TableField::new("table_option", TableDataType::String),
+                TableField::new("is_external", TableDataType::Boolean),
+                TableField::new("storage_param", TableDataType::String),
             ])
         } else {
             TableSchemaRefExt::create(vec![
@@ -281,7 +286,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     /// dump all the tables from all the catalogs with pushdown, this is used for `SHOW TABLES` command.
     /// please note that this function is intended to not wrapped with Result<>, because we do not want to
     /// break ALL the output on reading ANY of the catalog, database or table failed.
-    #[async_backtrace::framed]
+    //#[async_backtrace::framed]
     async fn get_full_data_from_catalogs(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -889,6 +894,34 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .map(|v| v.get_table_info().meta.comment.clone())
             .collect();
 
+        let options: Vec<String> = database_tables
+            .iter()
+            .map(|v| {
+                if v.get_table_info().engine().to_uppercase() == "VIEW" {
+                    "".to_string()
+                } else {
+                    let mut opts = v.get_table_info().options().iter().collect::<Vec<_>>();
+                    opts.sort_by_key(|(k, _)| *k);
+                    opts.iter()
+                        .filter(|(k, _)| !is_internal_opt_key(k))
+                        .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
+                        .collect::<Vec<_>>()
+                        .join("")
+                }
+            })
+            .collect();
+
+        let (is_external, storage_param): (Vec<bool>, Vec<String>) = database_tables
+            .iter()
+            .map(|v| {
+                let storage_params = &v.get_table_info().meta.storage_params;
+                storage_params
+                    .as_ref()
+                    .map(|sp| (true, sp.to_string()))
+                    .unwrap_or_else(|| (false, "".to_string()))
+            })
+            .unzip();
+
         let view_query: Vec<String> = database_tables
             .iter()
             .map(|v| -> String {
@@ -931,6 +964,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 owner,
                 comment,
                 tables_type,
+                options,
+                is_external,
+                storage_param,
             )
         } else {
             Ok(DataBlock::new_from_columns(vec![
@@ -976,6 +1012,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         owner: Vec<Option<String>>,
         comment: Vec<String>,
         tables_type: Vec<String>,
+        options: Vec<String>,
+        is_external: Vec<bool>,
+        storage_param: Vec<String>,
     ) -> Result<DataBlock> {
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
@@ -1001,6 +1040,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             StringType::from_opt_data(owner),
             StringType::from_data(comment),
             StringType::from_data(tables_type),
+            StringType::from_data(options),
+            BooleanType::from_data(is_external),
+            StringType::from_data(storage_param),
         ]))
     }
 
@@ -1103,6 +1145,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             vec![Some("".to_string()); rows],
             vec!["".to_string(); rows],
             vec!["BASE TABLE".to_string(); rows],
+            vec!["".to_string(); rows],
+            vec![false; rows],
+            vec!["".to_string(); rows],
         )
     }
 

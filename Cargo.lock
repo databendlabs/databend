@@ -4659,6 +4659,7 @@ dependencies = [
  "databend-common-storages-view",
  "databend-common-users",
  "databend-storages-common-cache",
+ "databend-storages-common-table-meta",
  "futures",
  "itertools 0.13.0",
  "jiff 0.2.13",
