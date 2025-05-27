@@ -21,6 +21,8 @@ use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_base::base::OrderedFloat;
+use databend_common_expression::date_helper::DateConverter;
+use databend_common_expression::date_helper::PGDateTimeFormatter;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -480,6 +482,19 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                         builder.commit_row()
                     }
                 }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, StringType, StringType, _, _>(
+        "to_char",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<TimestampType, StringType, StringType>(
+            |micros, format, output, ctx| {
+                let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
+                let res = PGDateTimeFormatter::format(ts, format);
+                output.put_str(&res);
+                output.commit_row();
             },
         ),
     );

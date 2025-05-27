@@ -3478,6 +3478,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("is_error"),
             Ascii::new("error_or"),
             Ascii::new("coalesce"),
+            Ascii::new("decode"),
             Ascii::new("last_query_id"),
             Ascii::new("array_sort"),
             Ascii::new("array_aggregate"),
@@ -3708,6 +3709,79 @@ impl<'a> TypeChecker<'a> {
                         span,
                         value: Literal::Null,
                     });
+                    new_args.push(Expr::Literal {
+                        span,
+                        value: Literal::Null,
+                    });
+                }
+
+                let args_ref: Vec<&Expr> = new_args.iter().collect();
+                Some(self.resolve_function(span, "if", vec![], &args_ref))
+            }
+            ("decode", args) => {
+                // DECODE( <expr> , <search1> , <result1> [ , <search2> , <result2> ... ] [ , <default> ] )
+                // Note that, contrary to CASE, a NULL value in the select expression matches a NULL value in the search expressions.
+                if args.len() < 3 {
+                    return Some(Err(ErrorCode::BadArguments(
+                        "DECODE requires at least 3 arguments",
+                    )
+                    .set_span(span)));
+                }
+
+                let mut new_args = Vec::with_capacity(args.len() * 2 + 1);
+                let search_expr = args[0].clone();
+                let mut i = 1;
+
+                while i < args.len() {
+                    let search = args[i].clone();
+                    let result = if i + 1 < args.len() {
+                        args[i + 1].clone()
+                    } else {
+                        // If we're at the last argument and it's odd, it's the default value
+                        break;
+                    };
+
+                    // (a = b) or (a is null and b is null)
+                    let is_null_a = Expr::IsNull {
+                        span,
+                        expr: Box::new(search_expr.clone()),
+                        not: false,
+                    };
+                    let is_null_b = Expr::IsNull {
+                        span,
+                        expr: Box::new(search.clone()),
+                        not: false,
+                    };
+                    let and_expr = Expr::BinaryOp {
+                        span,
+                        op: BinaryOperator::And,
+                        left: Box::new(is_null_a),
+                        right: Box::new(is_null_b),
+                    };
+
+                    let eq_expr = Expr::BinaryOp {
+                        span,
+                        op: BinaryOperator::Eq,
+                        left: Box::new(search_expr.clone()),
+                        right: Box::new(search),
+                    };
+
+                    let or_expr = Expr::BinaryOp {
+                        span,
+                        op: BinaryOperator::Or,
+                        left: Box::new(eq_expr),
+                        right: Box::new(and_expr),
+                    };
+
+                    new_args.push(or_expr);
+                    new_args.push(result);
+                    i += 2;
+                }
+
+                // Add default value if it exists
+                if i + 1 == args.len() {
+                    new_args.push(args[i].clone());
+                } else {
                     new_args.push(Expr::Literal {
                         span,
                         value: Literal::Null,
