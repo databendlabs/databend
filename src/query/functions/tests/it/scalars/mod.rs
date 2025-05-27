@@ -23,6 +23,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Domain;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionFactory;
@@ -61,12 +62,47 @@ mod vector;
 
 pub use databend_common_functions::test_utils as parser;
 
+#[derive(Clone, Default)]
+pub struct TestContext<'a> {
+    pub columns: &'a [(&'a str, Column)],
+    pub input_domains: Option<&'a [(&'a str, Domain)]>,
+    pub func_ctx: FunctionContext,
+}
+
+impl<'a> TestContext<'a> {
+    pub fn input_domains(&mut self) -> HashMap<usize, Domain> {
+        self.columns
+            .iter()
+            .map(|(name, col)| {
+                self.input_domains
+                    .and_then(|domains| {
+                        domains
+                            .iter()
+                            .find(|(n, _)| n == name)
+                            .map(|(_, domain)| domain.clone())
+                    })
+                    .unwrap_or_else(|| col.domain())
+            })
+            .enumerate()
+            .collect()
+    }
+}
+
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
+    run_ast_with_context(file, text, TestContext {
+        columns,
+        func_ctx: FunctionContext::default(),
+        input_domains: None,
+    })
+}
+
+pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ctx: TestContext) {
     let text = text.as_ref();
+
     let result: Result<_> = try {
         let raw_expr = parser::parse_raw_expr(
             text,
-            &columns
+            &ctx.columns
                 .iter()
                 .map(|(name, c)| (*name, c.data_type()))
                 .collect::<Vec<_>>(),
@@ -75,37 +111,32 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
         let expr = type_check::rewrite_function_to_cast(expr);
 
-        let input_domains = columns
-            .iter()
-            .map(|(_, col)| col.domain())
-            .enumerate()
-            .collect::<HashMap<_, _>>();
+        let input_domains = ctx.input_domains();
 
         let (optimized_expr, output_domain) = ConstantFolder::fold_with_domain(
             &expr,
             &input_domains,
-            &FunctionContext::default(),
+            &ctx.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
 
         let remote_expr = optimized_expr.as_remote_expr();
         let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
 
-        let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(1);
+        let num_rows = ctx.columns.iter().map(|col| col.1.len()).max().unwrap_or(1);
         let block = DataBlock::new(
-            columns
+            ctx.columns
                 .iter()
                 .map(|(_, col)| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
                 .collect::<Vec<_>>(),
             num_rows,
         );
 
-        columns.iter().for_each(|(_, col)| {
+        ctx.columns.iter().for_each(|(_, col)| {
             test_arrow_conversion_input(col);
         });
 
-        let func_ctx = FunctionContext::default();
-        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&block, &ctx.func_ctx, &BUILTIN_FUNCTIONS);
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {
@@ -145,6 +176,9 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
             if optimized_expr != expr {
                 writeln!(file, "optimized expr : {optimized_expr}").unwrap();
             }
+            if ctx.func_ctx != FunctionContext::default() {
+                writeln!(file, "func ctx       : (modified)").unwrap();
+            }
 
             match result {
                 Value::Scalar(output_scalar) => {
@@ -169,7 +203,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
                         .collect::<Vec<_>>();
                     let columns = used_columns
                         .into_iter()
-                        .map(|i| columns[i].clone())
+                        .map(|i| ctx.columns[i].clone())
                         .collect::<Vec<_>>();
 
                     let mut table = Table::new();

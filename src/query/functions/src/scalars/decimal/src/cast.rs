@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Div;
 use std::ops::Mul;
 use std::sync::Arc;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::serialize::read_decimal_with_size;
+use databend_common_expression::types::compute_view::Compute;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::*;
@@ -676,79 +678,119 @@ where
 
 #[inline]
 pub(super) fn get_round_val<T: Decimal>(x: T, scale: u32, rounding_mode: bool) -> Option<T> {
-    let mut round_val = None;
-    if rounding_mode && scale > 0 {
-        // Checking whether numbers need to be added or subtracted to calculate rounding
-        if let Some(r) = x.checked_rem(T::e(scale)) {
-            if let Some(m) = r.checked_div(T::e(scale - 1)) {
-                if m >= T::from_i128(5i64) {
-                    round_val = Some(T::one());
-                } else if m <= T::from_i128(-5i64) {
-                    round_val = Some(T::minus_one());
-                }
-            }
-        }
+    if !rounding_mode || scale == 0 {
+        return None;
     }
-    round_val
+    // Checking whether numbers need to be added or subtracted to calculate rounding
+    let q = x.checked_div(T::e(scale - 1))?;
+    let m = q.checked_rem(T::from_i128(10))?;
+    if m >= T::from_i128(5) {
+        return Some(T::one());
+    }
+    if m <= T::from_i128(-5) {
+        return Some(T::minus_one());
+    }
+    None
 }
 
-fn decimal_256_to_128(
+fn decimal_shrink_cast<F, T, C>(
     from_size: DecimalSize,
     dest_size: DecimalSize,
-    buffer: Value<DecimalType<i256>>,
+    buffer: Value<DecimalType<F>>,
     ctx: &mut EvalContext,
-) -> Value<DecimalType<i128>> {
-    let max = i128::max_for_precision(dest_size.precision());
-    let min = i128::min_for_precision(dest_size.precision());
+) -> Value<DecimalType<T>>
+where
+    F: Decimal + Copy,
+    T: Decimal + Copy,
+    C: Compute<CoreDecimal<F>, CoreDecimal<T>>,
+{
+    let max = F::max_for_precision(dest_size.precision());
+    let min = F::min_for_precision(dest_size.precision());
 
-    if dest_size.scale() >= from_size.scale() {
-        let factor = i256::e((dest_size.scale() - from_size.scale()) as u32);
-
-        vectorize_with_builder_1_arg::<DecimalType<i256>, DecimalType<i128>>(
-            |x: i256, builder: &mut Vec<i128>, ctx: &mut EvalContext| match x.checked_mul(factor) {
-                Some(x) if x <= max && x >= min => builder.push(*x.low()),
-                _ => {
+    match dest_size.scale().cmp(&from_size.scale()) {
+        Ordering::Equal => vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
+            |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| {
+                if x <= max && x >= min {
                     ctx.set_error(
                         builder.len(),
                         concat!("Decimal overflow at line : ", line!()),
                     );
-                    builder.push(i128::one());
+                    builder.push(T::one());
+                } else {
+                    builder.push(C::compute(&x));
                 }
             },
-        )(buffer, ctx)
-    } else {
-        let scale_diff = (from_size.scale() - dest_size.scale()) as u32;
-        let factor = i256::e(scale_diff);
-        let source_factor = i256::e(from_size.scale() as u32);
+        )(buffer, ctx),
+        Ordering::Greater => {
+            let factor = F::e((dest_size.scale() - from_size.scale()) as u32);
 
-        vectorize_with_builder_1_arg::<DecimalType<i256>, DecimalType<i128>>(
-            |x: i256, builder: &mut Vec<i128>, ctx: &mut EvalContext| {
-                let round_val = get_round_val::<i256>(x, scale_diff, ctx.func_ctx.rounding_mode);
-                let y = match (x.checked_div(factor), round_val) {
-                    (Some(x), Some(round_val)) => x.checked_add(round_val),
-                    (Some(x), None) => Some(x),
-                    (None, _) => None,
-                };
-
-                match y {
-                    Some(y) if (y <= max && y >= min) && (y != 0 || x / source_factor == 0) => {
-                        builder.push(*y.low());
+            vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
+                |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| match x.checked_mul(factor) {
+                    Some(x) if x <= max && x >= min => {
+                        builder.push(C::compute(&x));
                     }
                     _ => {
                         ctx.set_error(
                             builder.len(),
                             concat!("Decimal overflow at line : ", line!()),
                         );
-
-                        builder.push(i128::one());
+                        builder.push(T::one());
                     }
-                }
-            },
-        )(buffer, ctx)
+                },
+            )(buffer, ctx)
+        }
+        Ordering::Less => {
+            let scale_diff = (from_size.scale() - dest_size.scale()) as u32;
+            let factor = F::e(scale_diff);
+            let scale = from_size.scale();
+
+            vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
+                |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| match decimal_scale_reduction(
+                    x,
+                    min,
+                    max,
+                    factor,
+                    scale,
+                    scale_diff,
+                    ctx.func_ctx.rounding_mode,
+                ) {
+                    Some(y) => builder.push(C::compute(&y)),
+                    None => {
+                        ctx.set_error(
+                            builder.len(),
+                            format!("Decimal overflow at line : {}", line!()),
+                        );
+                        builder.push(T::one());
+                    }
+                },
+            )(buffer, ctx)
+        }
     }
 }
 
-fn decimal_to_decimal_typed<F, T>(
+pub(super) fn decimal_scale_reduction<T: Decimal>(
+    x: T,
+    min: T,
+    max: T,
+    factor: T,
+    scale: u8,
+    scale_diff: u32,
+    rounding_mode: bool,
+) -> Option<T> {
+    let q = x.checked_div(factor)?;
+    let y = if let Some(round_val) = get_round_val(x, scale_diff, rounding_mode) {
+        q.checked_add(round_val)?
+    } else {
+        q
+    };
+    if y > max || y < min || y == T::zero() && !x.int_part_is_zero(scale) {
+        None
+    } else {
+        Some(y)
+    }
+}
+
+fn decimal_expand_cast<F, T>(
     from_size: DecimalSize,
     dest_size: DecimalSize,
     buffer: Value<DecimalType<F>>,
@@ -756,7 +798,7 @@ fn decimal_to_decimal_typed<F, T>(
 ) -> Value<DecimalType<T>>
 where
     F: Decimal,
-    T: Decimal + From<F> + Div<Output = T>,
+    T: Decimal + From<F>,
 {
     // faster path
     if from_size.scale() == dest_size.scale() && from_size.precision() <= dest_size.precision() {
@@ -777,30 +819,25 @@ where
         let max = T::max_for_precision(dest_size.precision());
         let min = T::min_for_precision(dest_size.precision());
 
-        let source_factor = T::e(from_size.scale() as u32);
-
         vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
-            |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| {
-                let x = T::from(x);
-                let round_val = get_round_val::<T>(x, scale_diff, ctx.func_ctx.rounding_mode);
-                let y = match (x.checked_div(factor), round_val) {
-                    (Some(x), Some(round_val)) => x.checked_add(round_val),
-                    (Some(x), None) => Some(x),
-                    (None, _) => None,
-                };
-
-                let z = T::zero();
-                match y {
-                    Some(y) if y <= max && y >= min && (y != z || x / source_factor == z) => {
-                        builder.push(y as T);
-                    }
-                    _ => {
-                        ctx.set_error(
-                            builder.len(),
-                            concat!("Decimal overflow at line : ", line!()),
-                        );
-                        builder.push(T::one());
-                    }
+            |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| match decimal_scale_reduction(
+                T::from(x),
+                min,
+                max,
+                factor,
+                from_size.scale(),
+                scale_diff,
+                ctx.func_ctx.rounding_mode,
+            ) {
+                Some(y) => {
+                    builder.push(y as T);
+                }
+                _ => {
+                    ctx.set_error(
+                        builder.len(),
+                        concat!("Decimal overflow at line : ", line!()),
+                    );
+                    builder.push(T::one());
                 }
             },
         )(buffer, ctx)
@@ -838,26 +875,53 @@ pub fn decimal_to_decimal(
     let from_size = from_type.size();
     let dest_size = dest_type.size();
     match (from_type, dest_type) {
+        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal64(_)) => {
+            let value = arg.try_downcast().unwrap();
+            decimal_expand_cast::<i64, i64>(from_size, dest_size, value, ctx)
+                .upcast_decimal(dest_size)
+        }
         (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(_)) => {
             let value = arg.try_downcast().unwrap();
-            decimal_to_decimal_typed::<i128, i128>(from_size, dest_size, value, ctx)
+            decimal_expand_cast::<i128, i128>(from_size, dest_size, value, ctx)
+                .upcast_decimal(dest_size)
+        }
+        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(_)) => {
+            let value = arg.try_downcast().unwrap();
+            decimal_expand_cast::<i256, i256>(from_size, dest_size, value, ctx)
+                .upcast_decimal(dest_size)
+        }
+
+        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal128(_)) => {
+            let value = arg.try_downcast().unwrap();
+            decimal_expand_cast::<i64, i128>(from_size, dest_size, value, ctx)
+                .upcast_decimal(dest_size)
+        }
+        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal256(_)) => {
+            let value = arg.try_downcast().unwrap();
+            decimal_expand_cast::<i64, i256>(from_size, dest_size, value, ctx)
                 .upcast_decimal(dest_size)
         }
         (DecimalDataType::Decimal128(_), DecimalDataType::Decimal256(_)) => {
             let value = arg.try_downcast().unwrap();
-            decimal_to_decimal_typed::<i128, i256>(from_size, dest_size, value, ctx)
+            decimal_expand_cast::<i128, i256>(from_size, dest_size, value, ctx)
+                .upcast_decimal(dest_size)
+        }
+
+        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal64(_)) => {
+            let value = arg.try_downcast().unwrap();
+            decimal_shrink_cast::<i128, i64, I128ToI64>(from_size, dest_size, value, ctx)
+                .upcast_decimal(dest_size)
+        }
+        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal64(_)) => {
+            let value = arg.try_downcast().unwrap();
+            decimal_shrink_cast::<i256, i64, I256ToI64>(from_size, dest_size, value, ctx)
                 .upcast_decimal(dest_size)
         }
         (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(_)) => {
             let value = arg.try_downcast().unwrap();
-            decimal_256_to_128(from_size, dest_size, value, ctx).upcast_decimal(dest_size)
-        }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(_)) => {
-            let value = arg.try_downcast().unwrap();
-            decimal_to_decimal_typed::<i256, i256>(from_size, dest_size, value, ctx)
+            decimal_shrink_cast::<i256, i128, I256ToI128>(from_size, dest_size, value, ctx)
                 .upcast_decimal(dest_size)
         }
-        _ => todo!(),
     }
 }
 

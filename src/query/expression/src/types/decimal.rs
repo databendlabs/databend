@@ -357,6 +357,14 @@ pub trait Decimal:
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
 
+    fn int_part_is_zero(self, scale: u8) -> bool {
+        if self >= Self::zero() {
+            self <= Self::max_for_precision(scale)
+        } else {
+            self >= Self::min_for_precision(scale)
+        }
+    }
+
     fn default_decimal_size() -> DecimalSize;
 
     fn from_float(value: f64) -> Self;
@@ -433,7 +441,25 @@ impl Decimal for i64 {
     }
 
     fn e(n: u32) -> Self {
-        10_i64.pow(n)
+        const L: usize = MAX_DECIMAL64_PRECISION as usize + 1;
+        const TAB: [i64; L] = {
+            const fn gen() -> [i64; L] {
+                let mut arr = [0; L];
+                let mut i = 0;
+                loop {
+                    if i == L {
+                        break;
+                    }
+                    arr[i] = 10_i64.pow(i as u32);
+                    i += 1;
+                }
+                arr
+            }
+            gen()
+        };
+        TAB.get(n as usize)
+            .copied()
+            .unwrap_or_else(|| 10_i64.pow(n))
     }
 
     fn mem_size() -> usize {
@@ -505,11 +531,11 @@ impl Decimal for i64 {
     }
 
     fn min_for_precision(precision: u8) -> Self {
-        -(10_i64.pow(precision as u32) - 1)
+        -(Self::e(precision as u32) - 1)
     }
 
     fn max_for_precision(precision: u8) -> Self {
-        10_i64.pow(precision as u32) - 1
+        Self::e(precision as u32) - 1
     }
 
     fn default_decimal_size() -> DecimalSize {
@@ -662,7 +688,25 @@ impl Decimal for i128 {
     }
 
     fn e(n: u32) -> Self {
-        10_i128.pow(n)
+        const L: usize = MAX_DECIMAL128_PRECISION as usize + 1;
+        const TAB: [i128; L] = {
+            const fn gen() -> [i128; L] {
+                let mut arr = [0; L];
+                let mut i = 0;
+                loop {
+                    if i == L {
+                        break;
+                    }
+                    arr[i] = 10_i128.pow(i as u32);
+                    i += 1;
+                }
+                arr
+            }
+            gen()
+        };
+        TAB.get(n as usize)
+            .copied()
+            .unwrap_or_else(|| 10_i128.pow(n))
     }
 
     fn mem_size() -> usize {
@@ -757,7 +801,6 @@ impl Decimal for i128 {
     }
 
     fn max_for_precision(to_precision: u8) -> Self {
-        /// Codes from arrow-rs: https://github.com/apache/arrow-rs/blob/9728c676b50b19c06643a23daba4aa4a1dc48055/arrow-data/src/decimal.rs
         /// `MAX_DECIMAL_FOR_EACH_PRECISION[p]` holds the maximum `i128` value that can
         /// be stored in [arrow_schema::DataType::Decimal128] value of precision `p`
         const MAX_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = {
@@ -958,7 +1001,12 @@ impl Decimal for i256 {
     }
 
     fn e(n: u32) -> Self {
-        (i256::ONE * i256::from(10)).pow(n)
+        const MAX: u32 = MAX_DECIMAL256_PRECISION as u32;
+        match n {
+            0 => i256::ONE,
+            1..=MAX => MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION[n as usize - 1] + i256::ONE,
+            _ => i256::from(10).pow(n),
+        }
     }
 
     fn mem_size() -> usize {

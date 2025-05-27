@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Div;
-use std::ops::Mul;
-
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
@@ -33,7 +30,7 @@ use jsonb::Number as JsonbNumber;
 use jsonb::Value as JsonbValue;
 use num_traits::AsPrimitive;
 
-use crate::cast::get_round_val;
+use crate::decimal_scale_reduction;
 
 pub(super) fn variant_to_decimal<T>(
     from: Value<VariantType>,
@@ -42,7 +39,7 @@ pub(super) fn variant_to_decimal<T>(
     only_cast_number: bool,
 ) -> Value<NullableType<DecimalType<T>>>
 where
-    T: Decimal + Mul<Output = T> + Div<Output = T>,
+    T: Decimal,
 {
     let size = dest_type.size();
     let multiplier = T::e(size.scale() as u32);
@@ -103,7 +100,7 @@ fn cast_to_decimal<T>(
     only_cast_number: bool,
 ) -> Result<Option<T>, String>
 where
-    T: Decimal + Mul<Output = T> + Div<Output = T>,
+    T: Decimal,
 {
     let value = jsonb::from_slice(val).map_err(|e| format!("Invalid jsonb value, {e}"))?;
     match value {
@@ -116,26 +113,34 @@ where
             }
             JsonbNumber::Decimal128(d) => {
                 let from_size = DecimalSize::new_unchecked(d.precision, d.scale);
-                let x = T::from_i128(d.value);
-                decimal_to_decimal::<T>(x, min, max, from_size, dest_size, rounding_mode)
-                    .map(|v| Some(v))
+                match dest_type {
+                    DecimalDataType::Decimal64(_) => {
+                        let x = d.value;
+                        let min = i128::min_for_precision(dest_size.precision());
+                        let max = i128::max_for_precision(dest_size.precision());
+                        decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
+                            .map(|v| Some(T::from_i128(v)))
+                    }
+                    DecimalDataType::Decimal128(_) | DecimalDataType::Decimal256(_) => {
+                        let x = T::from_i128(d.value);
+                        decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
+                            .map(|v| Some(v))
+                    }
+                }
             }
             JsonbNumber::Decimal256(d) => {
                 let from_size = DecimalSize::new_unchecked(d.precision, d.scale);
                 match dest_type {
-                    DecimalDataType::Decimal64(_) => {
-                        todo!()
-                    }
-                    DecimalDataType::Decimal128(_) => {
+                    DecimalDataType::Decimal64(_) | DecimalDataType::Decimal128(_) => {
                         let x = i256(d.value);
                         let min = i256::min_for_precision(dest_size.precision());
                         let max = i256::max_for_precision(dest_size.precision());
-                        decimal_to_decimal::<i256>(x, min, max, from_size, dest_size, rounding_mode)
+                        decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
                             .map(|v| Some(T::from_i256(v)))
                     }
                     DecimalDataType::Decimal256(_) => {
                         let x = T::from_i256(i256(d.value));
-                        decimal_to_decimal::<T>(x, min, max, from_size, dest_size, rounding_mode)
+                        decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
                             .map(|v| Some(v))
                     }
                 }
@@ -170,7 +175,7 @@ where
 
 fn integer_to_decimal<T, N>(x: N, min: T, max: T, multiplier: T) -> Result<T, String>
 where
-    T: Decimal + Mul<Output = T>,
+    T: Decimal,
     N: Number + AsPrimitive<i128> + std::fmt::Display,
 {
     if let Some(y) = T::from_i128(x.as_()).checked_mul(multiplier) {
@@ -203,37 +208,28 @@ where
     Err(format!("Decimal overflow, value `{x}`"))
 }
 
-fn decimal_to_decimal<T>(
+fn decimal_to_decimal<T: Decimal>(
     x: T,
     min: T,
     max: T,
     from_size: DecimalSize,
     dest_size: DecimalSize,
     rounding_mode: bool,
-) -> Result<T, String>
-where
-    T: Decimal + Div<Output = T>,
-{
+) -> Result<T, String> {
     if from_size.scale() == dest_size.scale() && from_size.precision() <= dest_size.precision() {
         Ok(x)
     } else if from_size.scale() > dest_size.scale() {
         let scale_diff = (from_size.scale() - dest_size.scale()) as u32;
-        let factor = T::e(scale_diff);
-        let source_factor = T::e(from_size.scale() as u32);
-
-        let round_val = get_round_val::<T>(x, scale_diff, rounding_mode);
-        let y = match (x.checked_div(factor), round_val) {
-            (Some(x), Some(round_val)) => x.checked_add(round_val),
-            (Some(x), None) => Some(x),
-            (None, _) => None,
-        };
-
-        match y {
-            Some(y)
-                if y <= max && y >= min && (y != T::zero() || x / source_factor == T::zero()) =>
-            {
-                Ok(y)
-            }
+        match decimal_scale_reduction(
+            x,
+            min,
+            max,
+            T::e(scale_diff),
+            from_size.scale(),
+            scale_diff,
+            rounding_mode,
+        ) {
+            Some(y) => Ok(y),
             _ => Err("Decimal overflow".to_string()),
         }
     } else {
