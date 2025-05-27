@@ -492,7 +492,7 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<TimestampType, StringType, StringType>(
             |micros, format, output, ctx| {
                 let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
-                let res = PGDateTimeFormatter::format(ts, format.as_ref());
+                let res = PGDateTimeFormatter::format(ts, format);
                 output.put_str(&res);
                 output.commit_row();
             },
