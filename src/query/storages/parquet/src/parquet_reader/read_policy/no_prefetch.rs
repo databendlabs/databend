@@ -45,7 +45,7 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
     async fn build(
         &self,
         mut row_group: InMemoryRowGroup<'_>,
-        _row_selection: Option<RowSelection>,
+        row_selection: Option<RowSelection>,
         _sorter: &mut Option<TopKSorter>,
         transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
@@ -55,7 +55,7 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
             &self.field_levels,
             &row_group,
             batch_size,
-            None,
+            row_selection,
         )?;
         Ok(Some(Box::new(NoPrefetchPolicy {
             field_paths: self.field_paths.clone(),

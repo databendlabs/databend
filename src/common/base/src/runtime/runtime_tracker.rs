@@ -55,8 +55,10 @@ use crate::runtime::memory::GlobalStatBuffer;
 use crate::runtime::memory::MemStat;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::Profile;
+use crate::runtime::time_series::QueryTimeSeriesProfile;
 use crate::runtime::MemStatBuffer;
 use crate::runtime::OutOfLimit;
+use crate::runtime::TimeSeriesProfiles;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
@@ -109,6 +111,8 @@ pub struct TrackingPayload {
     pub mem_stat: Option<Arc<MemStat>>,
     pub metrics: Option<Arc<ScopedRegistry>>,
     pub should_log: bool,
+    pub time_series_profile: Option<Arc<QueryTimeSeriesProfile>>,
+    pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
 }
 
 pub struct TrackingGuard {
@@ -181,6 +185,8 @@ impl ThreadTracker {
                 mem_stat: None,
                 query_id: None,
                 should_log: true,
+                time_series_profile: None,
+                local_time_series_profile: None,
             },
         }
     }

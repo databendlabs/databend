@@ -265,6 +265,10 @@ impl Settings {
         self.try_get_u64("max_execute_time_in_seconds")
     }
 
+    pub fn set_max_execute_time_in_seconds(&self, v: u64) -> Result<()> {
+        self.try_set_u64("max_execute_time_in_seconds", v)
+    }
+
     // Get flight client timeout.
     pub fn get_flight_client_timeout(&self) -> Result<u64> {
         self.try_get_u64("flight_client_timeout")
@@ -516,6 +520,10 @@ impl Settings {
 
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
         self.try_get_u64("parquet_fast_read_bytes")
+    }
+
+    pub fn get_parquet_rowgroup_hint_bytes(&self) -> Result<u64> {
+        self.try_get_u64("parquet_rowgroup_hint_bytes")
     }
 
     pub fn get_enable_table_lock(&self) -> Result<bool> {

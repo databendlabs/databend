@@ -26,9 +26,14 @@ def run_command(cmd, check=True, shell=False):
         cmd = cmd.split()
 
     print(f"Running: {cmd}")
-    result = subprocess.run(cmd,
-                            check=check, shell=shell,
-                            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.run(
+        cmd,
+        check=check,
+        shell=shell,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     return result.stdout
 
 
@@ -77,8 +82,11 @@ def start_meta_node(node_id, is_new: bool):
 
     config_file = f"./tests/metactl/config/{config_fn}"
 
-    subprocess.Popen([meta_bin, "--config-file", config_file],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(
+        [meta_bin, "--config-file", config_file],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
     wait_for_port(port)
     time.sleep(1)
@@ -94,25 +102,32 @@ def metactl_export(meta_dir: str, output_path: str) -> str:
         cmd.append("--db")
         cmd.append(output_path)
 
-    result = subprocess.Popen(cmd,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result.wait()
 
     print_step(f"Done: Exported meta data to {output_path}")
     return result.stdout.read().decode()
 
 
-def metactl_import(meta_dir: str, id: int, db_path: str, initial_cluster: Dict[int, str]):
-    cmd = [metactl_bin, "import", "--raft-dir", meta_dir,
-           "--id", str(id),
-           "--db", db_path, ]
+def metactl_import(
+    meta_dir: str, id: int, db_path: str, initial_cluster: Dict[int, str]
+):
+    cmd = [
+        metactl_bin,
+        "import",
+        "--raft-dir",
+        meta_dir,
+        "--id",
+        str(id),
+        "--db",
+        db_path,
+    ]
 
     for id, addr in initial_cluster.items():
         cmd.append("--initial-cluster")
         cmd.append(f"{id}={addr}")
 
-    result = subprocess.Popen(cmd,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result.wait()
     print(result.stdout.read().decode())
     print(result.stderr.read().decode())
@@ -180,7 +195,9 @@ def main():
     metactl_import("./.databend/new_meta2", 5, "meta.db", cluster)
     metactl_import("./.databend/new_meta3", 6, "meta.db", cluster)
 
-    print_step("3.1 Check if state machine is complete by checking key 'LastMembership'")
+    print_step(
+        "3.1 Check if state machine is complete by checking key 'LastMembership'"
+    )
 
     meta1_data = metactl_export("./.databend/new_meta1", None)
     print(meta1_data)
@@ -220,7 +237,6 @@ def main():
     kill_databend_meta()
     shutil.rmtree(".databend")
 
-
     print_title("4. Import with --initial-cluster of one node")
 
     cluster = {
@@ -230,7 +246,9 @@ def main():
 
     metactl_import("./.databend/new_meta1", 4, "meta.db", cluster)
 
-    print_step("4.1 Check if state machine is complete by checking key 'LastMembership'")
+    print_step(
+        "4.1 Check if state machine is complete by checking key 'LastMembership'"
+    )
     meta1_data = metactl_export("./.databend/new_meta1", None)
     print(meta1_data)
     assert "LastMembership" in meta1_data
@@ -256,6 +274,7 @@ def main():
 
     kill_databend_meta()
     shutil.rmtree(".databend")
+
 
 if __name__ == "__main__":
     main()

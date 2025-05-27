@@ -28,13 +28,26 @@ pub(crate) fn convert_file_scan_task(task: iceberg::scan::FileScanTask) -> Box<d
             Box::new(part)
         }
         DataFileFormat::Parquet => {
-            let file = ParquetFilePart {
+            let fn_part = || ParquetFilePart {
                 file: task.data_file_path.clone(),
                 compressed_size: task.length,
                 estimated_uncompressed_size: task.length * 5,
                 dedup_key: format!("{}_{}", task.data_file_path, task.length),
+                bucket_option: None,
             };
-            Box::new(ParquetPart::File(file))
+
+            if !task.deletes.is_empty() {
+                Box::new(ParquetPart::FileWithDeletes {
+                    inner: fn_part(),
+                    deletes: task
+                        .deletes
+                        .iter()
+                        .map(|file| file.file_path.clone())
+                        .collect(),
+                })
+            } else {
+                Box::new(ParquetPart::File(fn_part()))
+            }
         }
         _ => unimplemented!(),
     }
