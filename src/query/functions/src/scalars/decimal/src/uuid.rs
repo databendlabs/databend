@@ -55,6 +55,9 @@ pub fn register_decimal_to_uuid(registry: &mut FunctionRegistry) {
                     let arg = args[0].clone();
                     let (decimal_type, _) = DecimalDataType::from_value(&arg).unwrap();
                     match decimal_type {
+                        DecimalDataType::Decimal64(_) => {
+                            todo!()
+                        }
                         DecimalDataType::Decimal128(_) => {
                             let arg = arg.try_downcast::<Decimal128Type>().unwrap();
                             vectorize_with_builder_1_arg::<Decimal128Type, StringType>(to_uuid)(

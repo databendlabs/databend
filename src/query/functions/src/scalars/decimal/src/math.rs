@@ -49,12 +49,13 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             params[0].get_i64()?
         };
 
-        let decimal_size = DecimalSize::new_unchecked(
+        let decimal_size = DecimalSize::new(
             from_size.precision(),
             scale.clamp(0, from_size.scale() as _) as _,
-        );
+        )
+        .ok()?;
 
-        let dest_decimal_type = DecimalDataType::from_size(decimal_size).ok()?;
+        let dest_decimal_type = DecimalDataType::from(decimal_size);
         let name = format!("{:?}", round_mode).to_lowercase();
 
         let mut sig_args_type = args_type.to_owned();

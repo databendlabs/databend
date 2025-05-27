@@ -21,12 +21,14 @@ use databend_common_exception::Result;
 
 use crate::types::i256;
 use crate::types::number::Number;
+use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::BinaryColumn;
 use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DateType;
+use crate::types::Decimal64As128Type;
 use crate::types::DecimalColumn;
 use crate::types::DecimalScalar;
 use crate::types::DecimalType;
@@ -100,6 +102,9 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
 
     fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
         match column {
+            DecimalColumn::Decimal64(buffer, _) => {
+                self.combine_group_hash_type_column::<Decimal64As128Type>(&buffer);
+            }
             DecimalColumn::Decimal128(buffer, _) => {
                 self.combine_group_hash_type_column::<DecimalType<i128>>(&buffer);
             }
@@ -198,7 +203,7 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
 impl<const IS_FIRST: bool> HashVisitor<'_, IS_FIRST> {
     fn combine_group_hash_type_column<T>(&mut self, col: &T::Column)
     where
-        T: ValueType,
+        T: AccessType,
         for<'a> T::ScalarRef<'a>: AggHash,
     {
         if IS_FIRST {
@@ -270,6 +275,7 @@ where I: Index
                 NumberScalar::NUM_TYPE(v) => v.agg_hash(),
             }),
             Scalar::Decimal(v) => match v {
+                DecimalScalar::Decimal64(v, _) => (v as i128).agg_hash(),
                 DecimalScalar::Decimal128(v, _) => v.agg_hash(),
                 DecimalScalar::Decimal256(v, _) => v.agg_hash(),
             },

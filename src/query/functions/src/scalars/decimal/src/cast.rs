@@ -24,6 +24,7 @@ use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::DataBlock;
@@ -67,9 +68,8 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
         }
 
         let decimal_size =
-            DecimalSize::new_unchecked(params[0].get_i64()? as _, params[1].get_i64()? as _);
-
-        let decimal_type = DecimalDataType::from_size(decimal_size).ok()?;
+            DecimalSize::new(params[0].get_i64()? as _, params[1].get_i64()? as _).ok()?;
+        let decimal_type = DecimalDataType::from(decimal_size);
 
         Some(Function {
             signature: FunctionSignature {
@@ -258,6 +258,7 @@ pub fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|ctx, d| {
                     let res_fn = move || match d[0].as_decimal().unwrap() {
+                        DecimalDomain::Decimal64(_, _) => todo!(),
                         DecimalDomain::Decimal128(d, size) => Some(SimpleDomain::<T> {
                             min: d.min.to_int(size.scale(), ctx.rounding_mode)?,
                             max: d.max.to_int(size.scale(), ctx.rounding_mode)?,
@@ -356,7 +357,7 @@ fn decimal_to_string<T: Decimal>(
     ctx: &mut EvalContext,
 ) -> Value<StringType> {
     let scale = from_type.scale();
-    vectorize_1_arg::<DecimalType<T>, StringType>(|v, _| v.display(scale))(arg, ctx)
+    vectorize_1_arg::<DecimalType<T>, StringType>(|v, _| v.to_decimal_string(scale))(arg, ctx)
 }
 
 pub fn convert_to_decimal(
@@ -496,18 +497,14 @@ pub fn convert_to_decimal_domain(
     let decimal_col = res.as_column()?.as_decimal()?;
     assert_eq!(decimal_col.len(), 2);
 
-    Some(match decimal_col {
-        DecimalColumn::Decimal128(buf, size) => {
+    let domain = with_decimal_type!(|DECIMAL| match decimal_col {
+        DecimalColumn::DECIMAL(buf, size) => {
             assert_eq!(&dest_size, size);
             let (min, max) = unsafe { (*buf.get_unchecked(0), *buf.get_unchecked(1)) };
-            DecimalDomain::Decimal128(SimpleDomain { min, max }, *size)
+            DecimalDomain::DECIMAL(SimpleDomain { min, max }, *size)
         }
-        DecimalColumn::Decimal256(buf, size) => {
-            assert_eq!(&dest_size, size);
-            let (min, max) = unsafe { (*buf.get_unchecked(0), *buf.get_unchecked(1)) };
-            DecimalDomain::Decimal256(SimpleDomain { min, max }, *size)
-        }
-    })
+    });
+    Some(domain)
 }
 
 fn string_to_decimal<T>(
@@ -809,6 +806,7 @@ pub fn decimal_to_decimal(
             decimal_to_decimal_typed::<i256, i256>(from_size, dest_size, value, ctx)
                 .upcast_decimal(dest_size)
         }
+        _ => todo!(),
     }
 }
 
@@ -931,6 +929,9 @@ pub fn strict_decimal_data_type(mut data: DataBlock) -> Result<DataBlock, String
         };
 
         match from_type {
+            Decimal64(_size) => {
+                todo!()
+            }
             Decimal128(size) => {
                 if size.can_carried_by_128() {
                     continue;

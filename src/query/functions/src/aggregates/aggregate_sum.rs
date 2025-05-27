@@ -202,7 +202,9 @@ where
         let mut value = T::Scalar::from_u64_array(self.value);
         value += T::to_owned_scalar(other);
 
-        if SHOULD_CHECK_OVERFLOW && (value > T::Scalar::DECIMAL_MAX || value < T::Scalar::DECIMAL_MIN) {
+        if SHOULD_CHECK_OVERFLOW
+            && (value > T::Scalar::DECIMAL_MAX || value < T::Scalar::DECIMAL_MIN)
+        {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
                 value,

@@ -207,6 +207,7 @@ where
                 let arg = arg.try_downcast::<Decimal256As128Type>().unwrap();
                 decimal_hash_typed::<H, R, _, _>(arg, ctx, size.scale(), cast)
             }
+            _ => todo!(),
         }
     } else {
         match decimal_type {
@@ -218,6 +219,7 @@ where
                 let arg = arg.try_downcast::<Decimal256Type>().unwrap();
                 decimal_hash_typed::<H, R, _, _>(arg, ctx, size.scale(), cast)
             }
+            _ => todo!(),
         }
     }
 }
@@ -259,6 +261,9 @@ where
     let scale = size.scale();
     if size.can_carried_by_128() {
         match decimal_type {
+            DecimalDataType::Decimal64(_) => {
+                todo!()
+            }
             DecimalDataType::Decimal128(_) => {
                 let arg: Value<Decimal128Type> = arg.try_downcast().unwrap();
                 let seed: Value<S> = seed.try_downcast().unwrap();
@@ -272,6 +277,9 @@ where
         }
     } else {
         match decimal_type {
+            DecimalDataType::Decimal64(_) => {
+                todo!()
+            }
             DecimalDataType::Decimal128(_) => {
                 let arg = arg.try_downcast::<Decimal128As256Type>().unwrap();
                 let seed: Value<S> = seed.try_downcast().unwrap();

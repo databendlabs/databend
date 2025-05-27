@@ -100,9 +100,7 @@ impl ArithmeticOp {
         // if the args both are Decimal128, we need to clamp the precision to 38
         if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
             precision = precision.min(MAX_DECIMAL128_PRECISION);
-        } else if precision <= MAX_DECIMAL128_PRECISION
-            && DecimalDataType::belong_diff_precision(a.precision(), b.precision())
-        {
+        } else if precision <= MAX_DECIMAL128_PRECISION && a.data_kind() != b.data_kind() {
             // lift up to decimal256
             precision = MAX_DECIMAL128_PRECISION + 1;
         }
@@ -142,6 +140,9 @@ fn op_decimal(
     op: ArithmeticOp,
 ) -> Value<AnyType> {
     match left {
+        DecimalDataType::Decimal64(_) => {
+            binary_decimal::<i64>(a, b, ctx, left, right, result_type.size(), op)
+        }
         DecimalDataType::Decimal128(_) => {
             binary_decimal::<i128>(a, b, ctx, left, right, result_type.size(), op)
         }
@@ -361,16 +362,16 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
             return None;
         }
 
-        let decimal_a = DecimalDataType::from_size(args_type[0].get_decimal_properties()?).unwrap();
-        let decimal_b = DecimalDataType::from_size(args_type[1].get_decimal_properties()?).unwrap();
+        let decimal_a = args_type[0].get_decimal_properties()?;
+        let decimal_b = args_type[1].get_decimal_properties()?;
 
         // left, right will unify to same width decimal, both 256 or both 128
         let (left, right, return_decimal_type) =
-            arithmetic_op.result_size(&decimal_a.size(), &decimal_b.size())?;
+            arithmetic_op.result_size(&decimal_a, &decimal_b)?;
         let (left, right, return_decimal_type) = (
-            DecimalDataType::from_size(left).unwrap(),
-            DecimalDataType::from_size(right).unwrap(),
-            DecimalDataType::from_size(return_decimal_type).unwrap(),
+            DecimalDataType::from(left),
+            DecimalDataType::from(right),
+            DecimalDataType::from(return_decimal_type),
         );
 
         let function = Function {

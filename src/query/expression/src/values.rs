@@ -612,6 +612,7 @@ impl ScalarRef<'_> {
             ScalarRef::Number(NumberScalar::Int16(_)) => 2,
             ScalarRef::Number(NumberScalar::Int32(_)) => 4,
             ScalarRef::Number(NumberScalar::Int64(_)) => 8,
+            ScalarRef::Decimal(DecimalScalar::Decimal64(_, _)) => 8,
             ScalarRef::Decimal(DecimalScalar::Decimal128(_, _)) => 16,
             ScalarRef::Decimal(DecimalScalar::Decimal256(_, _)) => 32,
             ScalarRef::Boolean(_) => 1,
@@ -1578,6 +1579,7 @@ impl Column {
             Column::Number(NumberColumn::Int16(col)) => col.len() * 2,
             Column::Number(NumberColumn::Int32(col)) => col.len() * 4,
             Column::Number(NumberColumn::Int64(col)) => col.len() * 8,
+            Column::Decimal(DecimalColumn::Decimal64(col, _)) => col.len() * 8,
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Boolean(c) => c.as_slice().0.len(),
@@ -1610,6 +1612,7 @@ impl Column {
             Column::Number(NumberColumn::Int16(col)) => col.len() * 2,
             Column::Number(NumberColumn::Int32(col)) | Column::Date(col) => col.len() * 4,
             Column::Number(NumberColumn::Int64(col)) | Column::Timestamp(col) => col.len() * 8,
+            Column::Decimal(DecimalColumn::Decimal64(col, _)) => col.len() * 8,
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Interval(col) => col.len() * 16,
@@ -1836,6 +1839,9 @@ impl ColumnBuilder {
             ColumnBuilder::Number(NumberColumnBuilder::Int16(builder)) => builder.len() * 2,
             ColumnBuilder::Number(NumberColumnBuilder::Int32(builder)) => builder.len() * 4,
             ColumnBuilder::Number(NumberColumnBuilder::Int64(builder)) => builder.len() * 8,
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal64(builder, _)) => {
+                builder.len() * 8
+            }
             ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal128(builder, _)) => {
                 builder.len() * 16
             }

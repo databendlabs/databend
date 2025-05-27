@@ -359,6 +359,9 @@ fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<
     let arg = &args[0];
     let (decimal, _) = DecimalDataType::from_value(arg).unwrap();
     match decimal {
+        DecimalDataType::Decimal64(_size) => {
+            todo!()
+        }
         DecimalDataType::Decimal128(size) => {
             let arg = arg.try_downcast().unwrap();
             type T = DecimalType<i128>;

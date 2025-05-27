@@ -233,6 +233,14 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
             NumberScalar::Float64(n) => n.0.into(),
         },
         ScalarRef::Decimal(x) => match x {
+            DecimalScalar::Decimal64(value, size) => {
+                let dec = jsonb::Decimal128 {
+                    precision: size.precision(),
+                    scale: size.scale(),
+                    value: value as i128,
+                };
+                jsonb::Value::Number(jsonb::Number::Decimal128(dec))
+            }
             DecimalScalar::Decimal128(value, size) => {
                 let dec = jsonb::Decimal128 {
                     precision: size.precision(),

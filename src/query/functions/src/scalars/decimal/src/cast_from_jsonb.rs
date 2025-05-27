@@ -73,6 +73,9 @@ where
         jsonb::Number::Decimal256(d) => {
             let from_size = DecimalSize::new_unchecked(d.precision, d.scale);
             match dest_type {
+                DecimalDataType::Decimal64(_) => {
+                    todo!()
+                }
                 DecimalDataType::Decimal128(_) => {
                     let x = i256(d.value);
                     let min = i256::min_for_precision(dest_size.precision());

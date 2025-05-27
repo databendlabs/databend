@@ -252,6 +252,7 @@ fn op_decimal<Op: CmpOp>(
             let (f_a, f_b) = (i256::from(10).pow(m_a), i256::from(10).pow(m_b));
             compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
         }
+        _ => todo!(),
     }
 }
 
