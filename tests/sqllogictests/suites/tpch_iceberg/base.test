@@ -59,7 +59,6 @@ select * from test_positional_merge_on_read_deletes;
 ----
 2023-03-01 1 a
 2023-03-02 2 b
-2023-03-03 3 c
 2023-03-04 4 d
 2023-03-05 5 e
 2023-03-06 6 f

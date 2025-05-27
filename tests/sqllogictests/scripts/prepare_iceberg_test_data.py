@@ -97,4 +97,8 @@ spark.sql(
     f"DELETE FROM iceberg.test.test_positional_merge_on_read_deletes WHERE number > 9"
 )
 
+spark.sql(
+    f"DELETE FROM iceberg.test.test_positional_merge_on_read_deletes WHERE number = 3"
+)
+
 spark.stop()

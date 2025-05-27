@@ -27,6 +27,20 @@ use databend_common_exception::Result;
 
 use crate::partition::ParquetRowGroupPart;
 
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
+pub enum DeleteType {
+    Position,
+    Equality,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
+pub struct DeleteTask {
+    pub path: String,
+    pub ty: DeleteType,
+    /// equality ids for equality deletes (empty for positional deletes)
+    pub equality_ids: Vec<i32>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub enum ParquetPart {
     File(ParquetFilePart),
@@ -34,7 +48,7 @@ pub enum ParquetPart {
     RowGroup(ParquetRowGroupPart),
     FileWithDeletes {
         inner: ParquetFilePart,
-        deletes: Vec<String>,
+        deletes: Vec<DeleteTask>,
     },
 }
 
@@ -114,7 +128,7 @@ impl PartInfo for ParquetPart {
                 let mut paths = Vec::with_capacity(deletes.len() + 1);
                 paths.push(&inner.file);
                 for delete in deletes {
-                    paths.push(delete);
+                    paths.push(&delete.path);
                 }
                 paths
             }
