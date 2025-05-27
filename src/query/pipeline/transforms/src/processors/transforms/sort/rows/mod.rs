@@ -17,6 +17,7 @@ mod simple;
 mod utils;
 
 use std::fmt::Debug;
+use std::ops::Range;
 
 pub use common::*;
 use databend_common_exception::ErrorCode;
@@ -25,7 +26,9 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 pub use simple::*;
 pub use utils::*;
@@ -39,6 +42,18 @@ where Self: Sized + Debug
         output_schema: DataSchemaRef,
     ) -> Result<Self>;
     fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<T>;
+
+    fn convert_data_block(
+        &self,
+        sort_desc: &[SortColumnDescription],
+        data_block: &DataBlock,
+    ) -> Result<T> {
+        let order_by_cols = sort_desc
+            .iter()
+            .map(|desc| data_block.get_by_offset(desc.offset).clone())
+            .collect::<Vec<_>>();
+        self.convert(&order_by_cols, data_block.num_rows())
+    }
 }
 
 /// Rows can be compared.
@@ -82,5 +97,9 @@ where Self: Sized + Clone + Debug + Send
         self.row(self.len() - 1)
     }
 
-    fn slice(&self, range: std::ops::Range<usize>) -> Self;
+    fn slice(&self, range: Range<usize>) -> Self;
+
+    fn scalar_as_item<'a>(s: &'a Scalar) -> Self::Item<'a>;
+
+    fn owned_item(item: Self::Item<'_>) -> Scalar;
 }
