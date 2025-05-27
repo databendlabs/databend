@@ -1446,6 +1446,11 @@ select to_char('2024-04-05'::DATE, 'mon dd, yyyy');
 Apr 05, 2024
 
 query TTT
+settings (timezone = 'Asia/Shanghai') select to_char('2024-04-05'::DATE, 'mon dd, yyyy TZH');
+----
+Apr 05, 2024 +08
+
+query TTT
 select to_char('2024-04-05T00:00:00'::TIMESTAMP, 'mon dd HH12AM:MI:SS, yy');
 ----
 Apr 05 12AM:00:00, 24
