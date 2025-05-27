@@ -27,7 +27,7 @@ use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::state_machine_api::StateMachineApi;
+use databend_common_meta_raft_store::state_machine_api::SMEventSender;
 use databend_common_meta_raft_store::state_machine_api_ext::StateMachineApiExt;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
@@ -432,33 +432,36 @@ impl MetaService for MetaServiceImpl {
 
         let mn = self.try_get_meta_node()?;
 
-        // TODO: send add-watcher and flush in one request
-        let weak_sender = mn.add_watcher(watch, tx.clone()).await?;
-        let sender_str = weak_sender.upgrade().map(|s| s.to_string());
-
-        let weak_handle = Arc::downgrade(&mn.dispatcher_handle);
-        let on_drop = move || {
-            try_remove_sender(weak_sender, weak_handle, "on-drop-WatchStream");
-        };
-
-        let stream = WatchStream::new(rx, Box::new(on_drop));
-
-        if flush {
-            // Atomically reads and forwards a range of key-value pairs to the provided `tx`.
-            //
-            // This ensures consistency by:
-            // 1. Queuing all data publishing through the singleton sender to maintain event ordering
-            // 2. Reading the key-value range atomically within the state machine
-            // 3. Forwarding the data to the event sender in a single transaction
-            //
-            // This approach prevents race conditions and guarantees that no events will be
-            // delivered out of order to the watcher.
+        // Atomically:
+        // - add watcher tx to dispatcher;
+        // - reads and forwards a range of key-value pairs to the provided `tx`.
+        //
+        // This ensures consistency by:
+        // 1. Queuing all data publishing through the singleton sender to maintain event ordering
+        // 2. Reading the key-value range atomically within the state machine
+        // 3. Forwarding the data to the event sender in a single transaction
+        //
+        // This approach prevents race conditions and guarantees that no events will be
+        // delivered out of order to the watcher.
+        let stream = {
             let sm = &mn.raft_store.state_machine;
             let sm = sm.write().await;
 
-            let ctx = "watch-Dispatcher";
+            let weak_sender = mn.add_watcher(watch, tx.clone()).await?;
+            let sender_str = weak_sender.upgrade().map(|s| s.to_string());
 
-            if let Some(sender) = sm.event_sender() {
+            // Build a closure to remove the stream tx from Dispatcher when the stream is dropped.
+            let on_drop = {
+                let weak_handle = Arc::downgrade(&mn.dispatcher_handle);
+                move || {
+                    try_remove_sender(weak_sender, weak_handle, "on-drop-WatchStream");
+                }
+            };
+
+            let stream = WatchStream::new(rx, Box::new(on_drop));
+
+            if flush {
+                let ctx = "watch-Dispatcher";
                 let snk = new_initialization_sink::<WatchTypes>(tx.clone(), ctx);
                 let strm = sm.range_kv(key_range).await?;
 
@@ -481,9 +484,11 @@ impl MetaService for MetaServiceImpl {
                     sender_str.display()
                 );
 
-                sender.send_future(fu);
-            };
-        }
+                mn.dispatcher_handle.send_future(fu);
+            }
+
+            stream
+        };
 
         Ok(Response::new(Box::pin(stream) as Self::WatchStream))
     }
