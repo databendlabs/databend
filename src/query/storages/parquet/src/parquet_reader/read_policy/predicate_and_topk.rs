@@ -161,6 +161,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
         sorter: &mut Option<TopKSorter>,
         transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
+        _filter: Option<Arc<ParquetPredicate>>,
     ) -> Result<Option<ReadPolicyImpl>> {
         let mut num_rows = selection
             .as_ref()
@@ -205,7 +206,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 self.predicate.field_paths(),
                 num_rows,
             )?;
-            let filter = self.predicate.evaluate_block(&block)?;
+            let filter = self.predicate.evaluate_block(&block)?.unwrap();
             if filter.null_count() == num_rows {
                 // All rows in current row group are filtered out.
                 return Ok(None);

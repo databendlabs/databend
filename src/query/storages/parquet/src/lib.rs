@@ -44,6 +44,8 @@ mod meta;
 mod schema;
 
 pub use copy_into_table::ParquetTableForCopy;
+pub use parquet_part::DeleteTask;
+pub use parquet_part::DeleteType;
 pub use parquet_part::ParquetFilePart;
 pub use parquet_part::ParquetPart;
 pub use parquet_reader::InmMemoryFile;

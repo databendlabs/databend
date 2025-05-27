@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TopKSorter;
 use parquet::arrow::arrow_reader::RowSelection;
 
+use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
 use crate::transformer::RecordBatchTransformer;
 
@@ -66,6 +69,7 @@ pub trait ReadPolicyBuilder: Send + Sync {
         _sorter: &mut Option<TopKSorter>,
         _transformer: Option<RecordBatchTransformer>,
         _batch_size: usize,
+        _filter: Option<Arc<ParquetPredicate>>,
     ) -> Result<Option<ReadPolicyImpl>> {
         unreachable!()
     }
