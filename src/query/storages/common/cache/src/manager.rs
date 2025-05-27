@@ -206,12 +206,11 @@ impl CacheManager {
 
             let segment_block_metas_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_SEGMENT_BLOCK_METAS,
-                config.block_meta_count as usize,
+                config.segment_block_metas_count as usize,
             );
 
             let block_meta_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_BLOCK_META,
-                // TODO replace this config
                 config.block_meta_count as usize,
             );
 
