@@ -35,6 +35,18 @@ where
     fn compute_domain(domain: &F::Domain) -> T::Domain;
 }
 
+impl<T> Compute<T, T> for T
+where T: SimpleType
+{
+    fn compute(value: &T::Scalar) -> T::Scalar {
+        *value
+    }
+
+    fn compute_domain(domain: &T::Domain) -> T::Domain {
+        *domain
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComputeView<F, T, C>(PhantomData<(F, T, C)>);
 

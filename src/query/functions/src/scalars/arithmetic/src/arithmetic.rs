@@ -33,6 +33,8 @@ use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Decimal;
+use databend_common_expression::types::Decimal128Type;
+use databend_common_expression::types::Decimal64As128Type;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberClass;
@@ -323,11 +325,20 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, d| match &d[0] {
+                    Domain::Decimal(DecimalDomain::Decimal64(d, size)) => {
+                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal64(
+                            SimpleDomain {
+                                min: -d.max,
+                                max: d.min.checked_neg().unwrap_or(i64::DECIMAL_MAX), // Only -MIN could overflow
+                            },
+                            *size,
+                        )))
+                    }
                     Domain::Decimal(DecimalDomain::Decimal128(d, size)) => {
                         FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
                             SimpleDomain {
                                 min: -d.max,
-                                max: d.min.checked_neg().unwrap_or(i128::MAX), // Only -MIN could overflow
+                                max: d.min.checked_neg().unwrap_or(i128::DECIMAL_MAX), // Only -MIN could overflow
                             },
                             *size,
                         )))
@@ -359,8 +370,16 @@ fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<
     let arg = &args[0];
     let (decimal, _) = DecimalDataType::from_value(arg).unwrap();
     match decimal {
-        DecimalDataType::Decimal64(_size) => {
-            todo!()
+        DecimalDataType::Decimal64(size) => {
+            if ctx.strict_eval {
+                let arg = arg.try_downcast().unwrap();
+                vectorize_1_arg::<Decimal64As128Type, Decimal128Type>(|t, _| -t)(arg, ctx)
+                    .upcast_decimal(size)
+            } else {
+                let arg = arg.try_downcast().unwrap();
+                type T = DecimalType<i64>;
+                vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
+            }
         }
         DecimalDataType::Decimal128(size) => {
             let arg = arg.try_downcast().unwrap();

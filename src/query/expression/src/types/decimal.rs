@@ -2797,7 +2797,7 @@ impl_decimal_compute!(
 );
 
 impl_decimal_compute!(
-    I128AsI256,
+    I128ToI256,
     i128,
     i256,
     |x: i128| i256::from(x),

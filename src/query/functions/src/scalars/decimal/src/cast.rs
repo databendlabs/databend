@@ -410,17 +410,37 @@ pub fn convert_to_decimal(
 ) -> Value<AnyType> {
     if from_type.is_decimal() {
         let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
-        return decimal_to_decimal(arg, ctx, from_type, dest_type);
+        decimal_to_decimal(arg, ctx, from_type, dest_type)
+    } else {
+        other_to_decimal(arg, ctx, from_type, dest_type)
+    }
+}
+
+pub fn other_to_decimal(
+    arg: &Value<AnyType>,
+    ctx: &mut EvalContext,
+    from_type: &DataType,
+    dest_type: DecimalDataType,
+) -> Value<AnyType> {
+    if let Some(v) = try {
+        let size = dest_type.as_decimal64()?;
+        if size.scale() != 0 || size.precision() < 19 {
+            None?
+        }
+        let buffer = arg.as_column()?.as_number()?.as_int64()?;
+        Value::<Decimal64Type>::Column(buffer.clone()).upcast_decimal(*size)
+    } {
+        return v;
     }
 
     with_decimal_mapped_type!(|DECIMAL_TYPE| match dest_type {
         DecimalDataType::DECIMAL_TYPE(_) => {
-            other_to_decimal::<DECIMAL_TYPE>(arg, ctx, from_type, dest_type)
+            other_to_decimal_type::<DECIMAL_TYPE>(arg, ctx, from_type, dest_type)
         }
     })
 }
 
-pub fn other_to_decimal<T>(
+fn other_to_decimal_type<T>(
     arg: &Value<AnyType>,
     ctx: &mut EvalContext,
     from_type: &DataType,
@@ -430,7 +450,7 @@ where
     T: Decimal + Mul<Output = T> + Div<Output = T>,
 {
     let size = dest_type.size();
-    let result = match from_type {
+    match from_type {
         DataType::Boolean => {
             let arg = arg.try_downcast().unwrap();
             vectorize_1_arg::<BooleanType, DecimalType<T>>(|a: bool, _| {
@@ -475,8 +495,8 @@ where
             return result.upcast_decimal(size);
         }
         _ => unreachable!("to_decimal not support this DataType"),
-    };
-    result.upcast_decimal(size)
+    }
+    .upcast_decimal(size)
 }
 
 fn convert_as_decimal(
@@ -604,26 +624,25 @@ where
 
     let min_for_precision = T::min_for_precision(size.precision());
     let max_for_precision = T::max_for_precision(size.precision());
-    let mut never_overflow = true;
 
-    for x in [
-        <S::ScalarRef<'_> as Number>::MIN,
-        <S::ScalarRef<'_> as Number>::MAX,
-    ] {
-        if let Some(x) = T::from_i128(x.as_()).checked_mul(multiplier) {
-            if x > max_for_precision || x < min_for_precision {
-                never_overflow = false;
-                break;
-            }
-        } else {
-            never_overflow = false;
-            break;
-        }
-    }
+    let never_overflow = if size.scale() == 0 {
+        true
+    } else {
+        [
+            <S::ScalarRef<'_> as Number>::MIN,
+            <S::ScalarRef<'_> as Number>::MAX,
+        ]
+        .into_iter()
+        .all(|x| {
+            let Some(x) = T::from_i128(x.as_()).checked_mul(multiplier) else {
+                return false;
+            };
+            x >= min_for_precision && x <= max_for_precision
+        })
+    };
 
     if never_overflow {
-        let f = |x: S::ScalarRef<'_>, _ctx: &mut EvalContext| T::from_i128(x.as_()) * multiplier;
-        vectorize_1_arg(f)(from, ctx)
+        vectorize_1_arg(|x: S::ScalarRef<'_>, _| T::from_i128(x.as_()) * multiplier)(from, ctx)
     } else {
         let f = |x: S::ScalarRef<'_>, builder: &mut Vec<T>, ctx: &mut EvalContext| {
             if let Some(x) = T::from_i128(x.as_()).checked_mul(multiplier) {

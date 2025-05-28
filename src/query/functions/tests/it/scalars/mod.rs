@@ -24,6 +24,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
+use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionFactory;
@@ -62,11 +63,23 @@ mod vector;
 
 pub use databend_common_functions::test_utils as parser;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct TestContext<'a> {
     pub columns: &'a [(&'a str, Column)],
     pub input_domains: Option<&'a [(&'a str, Domain)]>,
     pub func_ctx: FunctionContext,
+    pub strict_eval: bool,
+}
+
+impl Default for TestContext<'_> {
+    fn default() -> Self {
+        Self {
+            columns: &[],
+            input_domains: None,
+            func_ctx: FunctionContext::default(),
+            strict_eval: true,
+        }
+    }
 }
 
 impl<'a> TestContext<'a> {
@@ -93,6 +106,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         columns,
         func_ctx: FunctionContext::default(),
         input_domains: None,
+        strict_eval: true,
     })
 }
 
@@ -133,12 +147,26 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         );
 
         ctx.columns.iter().for_each(|(_, col)| {
-            test_arrow_conversion_input(col);
+            test_arrow_conversion(col, false);
         });
 
         let evaluator = Evaluator::new(&block, &ctx.func_ctx, &BUILTIN_FUNCTIONS);
-        let result = evaluator.run(&expr);
-        let optimized_result = evaluator.run(&optimized_expr);
+        let result = if ctx.strict_eval {
+            evaluator.run(&expr)
+        } else {
+            evaluator.partial_run(&expr, None, &mut EvaluateOptions {
+                strict_eval: false,
+                ..Default::default()
+            })
+        };
+        let optimized_result = if ctx.strict_eval {
+            evaluator.run(&optimized_expr)
+        } else {
+            evaluator.partial_run(&optimized_expr, None, &mut EvaluateOptions {
+                strict_eval: false,
+                ..Default::default()
+            })
+        };
         match &result {
             Ok(result) => assert!(
                 result.semantically_eq(&optimized_result.clone().unwrap()),
@@ -187,7 +215,7 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
                     writeln!(file, "output         : {}", output_scalar.as_ref()).unwrap();
                 }
                 Value::Column(output_col) => {
-                    test_arrow_conversion_output(&output_col);
+                    test_arrow_conversion(&output_col, ctx.strict_eval);
 
                     // Only display the used input columns
                     let used_columns = raw_expr
@@ -258,29 +286,27 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
     }
 }
 
-fn test_arrow_conversion_input(col: &Column) {
+fn test_arrow_conversion(col: &Column, strict: bool) {
     let data_type = col.data_type();
-    let col = match col {
-        Column::Decimal(decimal) => Column::Decimal(decimal.clone().strict_decimal_data_type()),
-        col @ Column::Nullable(nullable) => match &nullable.column {
-            Column::Decimal(decimal) => Column::Nullable(Box::new(NullableColumn {
-                column: Column::Decimal(decimal.clone().strict_decimal_data_type()),
-                validity: nullable.validity.clone(),
-            })),
-            _ => col.clone(),
-        },
-        col => col.clone(),
+    let col = if !strict {
+        match col {
+            Column::Decimal(decimal) => Column::Decimal(decimal.clone().strict_decimal_data_type()),
+            col @ Column::Nullable(nullable) => match &nullable.column {
+                Column::Decimal(decimal) => Column::Nullable(Box::new(NullableColumn {
+                    column: Column::Decimal(decimal.clone().strict_decimal_data_type()),
+                    validity: nullable.validity.clone(),
+                })),
+                _ => col.clone(),
+            },
+            col => col.clone(),
+        }
+    } else {
+        col.clone()
     };
 
     let arrow_col = col.clone().into_arrow_rs();
     let new_col = Column::from_arrow_rs(arrow_col, &data_type).unwrap();
     assert_eq!(col, new_col, "arrow conversion went wrong");
-}
-
-fn test_arrow_conversion_output(col: &Column) {
-    let arrow_col = col.clone().into_arrow_rs();
-    let new_col = Column::from_arrow_rs(arrow_col, &col.data_type()).unwrap();
-    assert_eq!(col, &new_col, "arrow conversion went wrong");
 }
 
 #[test]

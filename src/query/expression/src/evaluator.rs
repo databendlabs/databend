@@ -259,7 +259,7 @@ impl<'a> Evaluator<'a> {
             Value::Column(col) => assert_eq!(&col.data_type(), expr.data_type()),
         }
 
-        if !expr.is_column_ref() && options.strict_eval {
+        if !expr.is_column_ref() && !expr.is_constant() && options.strict_eval {
             let mut check = CheckStrictValue;
             assert!(
                 check.visit_value(result.clone()).is_ok(),
@@ -287,6 +287,7 @@ impl<'a> Evaluator<'a> {
         } = call;
         let child_suppress_error = function.signature.name == "is_not_error";
         let mut child_option = options.with_suppress_error(child_suppress_error);
+        child_option.strict_eval = false;
 
         let args = args
             .iter()
