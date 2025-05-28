@@ -2297,6 +2297,22 @@ impl TryInto<InnerLogConfig> for LogConfig {
             history.level = file.level.clone();
         }
 
+        history.on = true;
+        history.tables = vec![
+            InnerHistoryTableConfig {
+                table_name: "query_history".to_string(),
+                ..Default::default()
+            },
+            InnerHistoryTableConfig {
+                table_name: "profile_history".to_string(),
+                ..Default::default()
+            },
+            InnerHistoryTableConfig {
+                table_name: "login_history".to_string(),
+                ..Default::default()
+            },
+        ];
+
         Ok(InnerLogConfig {
             file,
             stderr: self.stderr.try_into()?,
