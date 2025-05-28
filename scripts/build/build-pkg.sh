@@ -8,7 +8,7 @@ TARGET=${ARCH}-linux-glib$glibc
 MUSL_RUST_TARGET=${ARCH}-unknown-linux-musl
 BENSQL_VERSION=0.26.1
 
-RUSTFLAGS="-C target-feature=+sse4.2 -C link-arg=-Wl,--compress-debug-sections=zlib"
+RUSTFLAGS="-C target-feature=+sse4.2 -C link-arg=-Wl"
 
 echo "==> https_proxy=${https_proxy}"
 
