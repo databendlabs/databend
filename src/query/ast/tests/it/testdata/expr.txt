@@ -1916,6 +1916,92 @@ DateDiff {
 
 
 ---------- Input ----------
+last_day(to_date('2024-10-22'), week)
+---------- Output ---------
+LAST_DAY(to_date('2024-10-22'), WEEK)
+---------- AST ------------
+LastDay {
+    span: Some(
+        0..37,
+    ),
+    unit: Week,
+    date: FunctionCall {
+        span: Some(
+            9..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    9..16,
+                ),
+                name: "to_date",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        17..29,
+                    ),
+                    value: String(
+                        "2024-10-22",
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+last_day(to_date('2024-10-22'))
+---------- Output ---------
+LAST_DAY(to_date('2024-10-22'), MONTH)
+---------- AST ------------
+LastDay {
+    span: Some(
+        0..31,
+    ),
+    unit: Month,
+    date: FunctionCall {
+        span: Some(
+            9..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    9..16,
+                ),
+                name: "to_date",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        17..29,
+                    ),
+                    value: String(
+                        "2024-10-22",
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
 date_sub(QUARTER, 1, to_date('2018-01-02'))
 ---------- Output ---------
 DATE_SUB(QUARTER, 1, to_date('2018-01-02'))
