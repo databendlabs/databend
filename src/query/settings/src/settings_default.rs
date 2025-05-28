@@ -1116,7 +1116,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("format_null_as_str", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Format NULL as str in query api response",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
