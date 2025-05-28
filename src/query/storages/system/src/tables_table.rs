@@ -254,8 +254,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 ),
                 TableField::new("comment", TableDataType::String),
                 TableField::new("table_type", TableDataType::String),
-                TableField::new("table_option", TableDataType::String),
                 TableField::new("is_external", TableDataType::Boolean),
+                TableField::new("table_option", TableDataType::String),
                 TableField::new("storage_param", TableDataType::String),
             ])
         } else {
@@ -964,8 +964,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 owner,
                 comment,
                 tables_type,
-                options,
                 is_external,
+                options,
                 storage_param,
             )
         } else {
@@ -1012,8 +1012,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         owner: Vec<Option<String>>,
         comment: Vec<String>,
         tables_type: Vec<String>,
-        options: Vec<String>,
         is_external: Vec<bool>,
+        options: Vec<String>,
         storage_param: Vec<String>,
     ) -> Result<DataBlock> {
         Ok(DataBlock::new_from_columns(vec![
@@ -1040,8 +1040,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             StringType::from_opt_data(owner),
             StringType::from_data(comment),
             StringType::from_data(tables_type),
-            StringType::from_data(options),
             BooleanType::from_data(is_external),
+            StringType::from_data(options),
             StringType::from_data(storage_param),
         ]))
     }
@@ -1145,8 +1145,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             vec![Some("".to_string()); rows],
             vec!["".to_string(); rows],
             vec!["BASE TABLE".to_string(); rows],
-            vec!["".to_string(); rows],
             vec![false; rows],
+            vec!["".to_string(); rows],
             vec!["".to_string(); rows],
         )
     }
