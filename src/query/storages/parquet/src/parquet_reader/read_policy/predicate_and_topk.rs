@@ -154,7 +154,7 @@ impl PredicateAndTopkPolicyBuilder {
 
 #[async_trait::async_trait]
 impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
-    async fn build(
+    async fn fetch_and_build(
         &self,
         mut row_group: InMemoryRowGroup<'_>,
         mut selection: Option<RowSelection>,

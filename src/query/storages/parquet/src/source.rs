@@ -78,6 +78,16 @@ pub enum ParquetSourceType {
     Iceberg,
     DeltaLake,
     Hive,
+    StreamingLoad,
+}
+
+impl ParquetSourceType {
+    pub fn need_transformer(&self) -> bool {
+        !matches!(
+            self,
+            ParquetSourceType::StageTable | ParquetSourceType::StreamingLoad
+        )
+    }
 }
 
 pub struct ParquetSource {
@@ -238,11 +248,13 @@ impl Processor for ParquetSource {
             State::ReadFiles(buffers) => {
                 let mut blocks = Vec::with_capacity(buffers.len());
                 for (buffer, path) in buffers {
-                    let mut bs = self
+                    let bs: Result<Vec<DataBlock>> = self
                         .whole_file_reader
                         .as_ref()
                         .unwrap()
-                        .read_blocks_from_binary(buffer, &path)?;
+                        .read_blocks_from_binary(buffer, &path)?
+                        .collect();
+                    let mut bs = bs?;
 
                     if self.is_copy {
                         let num_rows = bs.iter().map(|b| b.num_rows()).sum();

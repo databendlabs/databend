@@ -15,65 +15,59 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use bytes::Bytes;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::expr::*;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_storages_common_stage::project_columnar;
+use opendal::services::Memory;
 use opendal::Operator;
-use parquet::file::metadata::FileMetaData;
+use parquet::file::metadata::ParquetMetaDataReader;
 
-use crate::parquet_reader::policy::ReadPolicyBuilder;
-use crate::parquet_reader::policy::ReadPolicyImpl;
-use crate::parquet_reader::InMemoryRowGroup;
+use crate::copy_into_table::CopyProjectionEvaluator;
+use crate::parquet_reader::DataBlockIterator;
 use crate::parquet_reader::ParquetReaderBuilder;
-use crate::partition::ParquetRowGroupPart;
-use crate::read_settings::ReadSettings;
 use crate::schema::arrow_to_table_schema;
+use crate::ParquetSourceType;
 
-pub struct RowGroupReaderForCopy {
-    row_group_reader_builder: Box<dyn ReadPolicyBuilder>,
-    output_projection: Vec<Expr>,
+pub struct InmMemoryFile {
+    file_data: Bytes,
+    location: String,
 }
 
-impl RowGroupReaderForCopy {
-    pub async fn build_reader(
+impl InmMemoryFile {
+    pub fn new(location: String, file_data: Bytes) -> Self {
+        Self {
+            location,
+            file_data,
+        }
+    }
+}
+
+impl InmMemoryFile {
+    pub fn read(
         &self,
-        part: &ParquetRowGroupPart,
-        op: Operator,
-        read_settings: &ReadSettings,
-        batch_size: usize,
-    ) -> Result<Option<ReadPolicyImpl>> {
-        let row_group =
-            InMemoryRowGroup::new(&part.location, op.clone(), &part.meta, None, *read_settings);
-        let mut _sorter = None;
-        self.row_group_reader_builder
-            .fetch_and_build(row_group, None, &mut _sorter, None, batch_size)
-            .await
-    }
-
-    pub fn output_projection(&self) -> &[Expr] {
-        &self.output_projection
-    }
-
-    pub fn try_create(
-        location: &str,
         ctx: Arc<dyn TableContext>,
-        op: Operator,
-        file_metadata: &FileMetaData,
         output_schema: TableSchemaRef,
         default_exprs: Option<Vec<RemoteDefaultExpr>>,
         missing_as: &NullAs,
         case_sensitive: bool,
-    ) -> Result<RowGroupReaderForCopy> {
-        let arrow_schema = infer_schema_with_extension(file_metadata)?;
-        let schema_descr = file_metadata.schema_descr_ptr();
+        func_ctx: Arc<FunctionContext>,
+        data_schema: DataSchemaRef,
+    ) -> Result<DataBlockIterator> {
+        let parquet_meta_data = ParquetMetaDataReader::new().parse_and_finish(&self.file_data)?;
+        parquet_meta_data.file_metadata();
+        let arrow_schema = infer_schema_with_extension(parquet_meta_data.file_metadata())?;
+        let schema_descr = parquet_meta_data.file_metadata().schema_descr_ptr();
         let parquet_table_schema = Arc::new(arrow_to_table_schema(&arrow_schema, case_sensitive)?);
 
         let (mut output_projection, mut pushdown_columns) = project_columnar(
@@ -81,7 +75,7 @@ impl RowGroupReaderForCopy {
             &output_schema,
             missing_as,
             &default_exprs,
-            location,
+            &self.location,
             case_sensitive,
             StageFileFormatType::Parquet,
         )?;
@@ -106,6 +100,8 @@ impl RowGroupReaderForCopy {
             projection: Some(Projection::Columns(pushdown_columns)),
             ..Default::default()
         };
+
+        let op: Operator = Operator::new(Memory::default())?.finish();
         let mut reader_builder = ParquetReaderBuilder::create_with_parquet_schema(
             ctx,
             Arc::new(op),
@@ -116,12 +112,14 @@ impl RowGroupReaderForCopy {
         )
         .with_push_downs(Some(&pushdowns));
         reader_builder.build_output()?;
+        let project_eval = CopyProjectionEvaluator::new(data_schema, func_ctx);
 
-        let row_group_reader_builder = reader_builder.create_no_prefetch_policy_builder()?;
-        let reader = RowGroupReaderForCopy {
-            row_group_reader_builder,
-            output_projection,
-        };
-        Ok(reader)
+        let whole_file_reader =
+            reader_builder.build_full_reader(ParquetSourceType::StreamingLoad, false)?;
+        let it =
+            whole_file_reader.read_blocks_from_binary(self.file_data.clone(), &self.location)?;
+        Ok(Box::new(it.into_iter().map(move |result_block| {
+            result_block.map(|block| project_eval.project(&block, &output_projection).unwrap())
+        })))
     }
 }
