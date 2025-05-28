@@ -1216,9 +1216,18 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let last_day = map(
         rule! {
-            LAST_DAY ~ "(" ~ #subexpr(0) ~ "," ~ #interval_kind ~ ")"
+            LAST_DAY ~ "(" ~ #subexpr(0) ~ ("," ~ #interval_kind)? ~ ")"
         },
-        |(_, _, date, _, unit, _)| ExprElement::LastDay { unit, date },
+        |(_, _, date, opt_unit, _)| {
+            if let Some((_, unit)) = opt_unit {
+                ExprElement::LastDay { unit, date }
+            } else {
+                ExprElement::LastDay {
+                    unit: IntervalKind::Month,
+                    date,
+                }
+            }
+        },
     );
 
     let previous_day = map(
