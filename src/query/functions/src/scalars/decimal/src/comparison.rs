@@ -228,31 +228,66 @@ fn op_decimal<Op: CmpOp>(
     let (b_type, _) = DecimalDataType::from_value(b).unwrap();
 
     match (a_type, b_type) {
+        (Decimal64(_), Decimal64(_)) => {
+            type T = i64;
+            let a = a.try_downcast::<DecimalType<T>>().unwrap();
+            let b = b.try_downcast::<DecimalType<T>>().unwrap();
+            let (f_a, f_b) = (T::e(m_a), T::e(m_b));
+            compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
+        }
         (Decimal128(_), Decimal128(_)) => {
-            let a = a.try_downcast::<Decimal128Type>().unwrap();
-            let b = b.try_downcast::<Decimal128Type>().unwrap();
-            let (f_a, f_b) = (10_i128.pow(m_a), 10_i128.pow(m_b));
+            type T = i128;
+            let a = a.try_downcast::<DecimalType<T>>().unwrap();
+            let b = b.try_downcast::<DecimalType<T>>().unwrap();
+            let (f_a, f_b) = (T::e(m_a), T::e(m_b));
             compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
         }
         (Decimal256(_), Decimal256(_)) => {
-            let a = a.try_downcast::<Decimal256Type>().unwrap();
-            let b = b.try_downcast::<Decimal256Type>().unwrap();
-            let (f_a, f_b) = (i256::from(10).pow(m_a), i256::from(10).pow(m_b));
+            type T = i256;
+            let a = a.try_downcast::<DecimalType<T>>().unwrap();
+            let b = b.try_downcast::<DecimalType<T>>().unwrap();
+            let (f_a, f_b) = (T::e(m_a), T::e(m_b));
             compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
         }
+
+        (Decimal64(_), Decimal128(_)) => {
+            let a = a.try_downcast::<Decimal64As128Type>().unwrap();
+            let b = b.try_downcast::<Decimal128Type>().unwrap();
+            let (f_a, f_b) = (i128::e(m_a), i128::e(m_b));
+            compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
+        }
+        (Decimal128(_), Decimal64(_)) => {
+            let a = a.try_downcast::<Decimal128Type>().unwrap();
+            let b = b.try_downcast::<Decimal64As128Type>().unwrap();
+            let (f_a, f_b) = (i128::e(m_a), i128::e(m_b));
+            compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
+        }
+
+        (Decimal64(_), Decimal256(_)) => {
+            let a = a.try_downcast::<Decimal64As256Type>().unwrap();
+            let b = b.try_downcast::<Decimal256Type>().unwrap();
+            let (f_a, f_b) = (i256::e(m_a), i256::e(m_b));
+            compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
+        }
+        (Decimal256(_), Decimal64(_)) => {
+            let a = a.try_downcast::<Decimal256Type>().unwrap();
+            let b = b.try_downcast::<Decimal64As256Type>().unwrap();
+            let (f_a, f_b) = (i256::e(m_a), i256::e(m_b));
+            compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
+        }
+
         (Decimal128(_), Decimal256(_)) => {
             let a = a.try_downcast::<Decimal128As256Type>().unwrap();
             let b = b.try_downcast::<Decimal256Type>().unwrap();
-            let (f_a, f_b) = (i256::from(10).pow(m_a), i256::from(10).pow(m_b));
+            let (f_a, f_b) = (i256::e(m_a), i256::e(m_b));
             compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
         }
         (Decimal256(_), Decimal128(_)) => {
             let a = a.try_downcast::<Decimal256Type>().unwrap();
             let b = b.try_downcast::<Decimal128As256Type>().unwrap();
-            let (f_a, f_b) = (i256::from(10).pow(m_a), i256::from(10).pow(m_b));
+            let (f_a, f_b) = (i256::e(m_a), i256::e(m_b));
             compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
         }
-        _ => todo!(),
     }
 }
 

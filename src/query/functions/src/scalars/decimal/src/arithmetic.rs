@@ -20,6 +20,7 @@ use databend_common_expression::types::i256;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
@@ -139,20 +140,23 @@ fn op_decimal(
     result_type: DecimalDataType,
     op: ArithmeticOp,
 ) -> Value<AnyType> {
-    match left {
-        DecimalDataType::Decimal64(_) => {
-            binary_decimal::<i64>(a, b, ctx, left, right, result_type.size(), op)
+    with_decimal_mapped_type!(|DECIMAL| match left {
+        DecimalDataType::DECIMAL(_) => {
+            type T = DECIMAL;
+            binary_decimal::<T, DecimalType<T>, DecimalType<T>>(
+                a,
+                b,
+                ctx,
+                left,
+                right,
+                result_type.size(),
+                op,
+            )
         }
-        DecimalDataType::Decimal128(_) => {
-            binary_decimal::<i128>(a, b, ctx, left, right, result_type.size(), op)
-        }
-        DecimalDataType::Decimal256(_) => {
-            binary_decimal::<i256>(a, b, ctx, left, right, result_type.size(), op)
-        }
-    }
+    })
 }
 
-fn binary_decimal<T>(
+fn binary_decimal<T, L, R>(
     a: &Value<AnyType>,
     b: &Value<AnyType>,
     ctx: &mut EvalContext,
@@ -163,6 +167,8 @@ fn binary_decimal<T>(
 ) -> Value<AnyType>
 where
     T: Decimal + Add<Output = T> + Sub<Output = T> + Mul<Output = T>,
+    L: for<'a> AccessType<ScalarRef<'a> = T>,
+    R: for<'a> AccessType<ScalarRef<'a> = T>,
 {
     let overflow = size.precision() == T::default_decimal_size().precision();
 
@@ -172,7 +178,7 @@ where
     let zero = T::zero();
     let one = T::one();
 
-    let result = match op {
+    match op {
         ArithmeticOp::Divide => {
             let scale_a = left.scale();
             let scale_b = right.scale();
@@ -203,9 +209,7 @@ where
                 }
             };
 
-            vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
-                a, b, ctx,
-            )
+            vectorize_with_builder_2_arg::<L, R, DecimalType<T>>(func)(a, b, ctx)
         }
 
         ArithmeticOp::Multiply => {
@@ -215,8 +219,7 @@ where
             let scale_mul = scale_a + scale_b - size.scale();
 
             if scale_mul == 0 {
-                let func = |a: T, b: T, _ctx: &mut EvalContext| op.calc(a, b);
-                vectorize_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(a, b, ctx)
+                vectorize_2_arg::<L, R, DecimalType<T>>(|a, b, _| op.calc(a, b))(a, b, ctx)
             } else {
                 let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| match a
                     .do_round_mul(b, scale_mul as u32, overflow)
@@ -231,9 +234,7 @@ where
                     }
                 };
 
-                vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
-                    a, b, ctx,
-                )
+                vectorize_with_builder_2_arg::<L, R, DecimalType<T>>(func)(a, b, ctx)
             }
         }
 
@@ -256,18 +257,13 @@ where
                     }
                 };
 
-                vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
-                    a, b, ctx,
-                )
+                vectorize_with_builder_2_arg::<L, R, DecimalType<T>>(func)(a, b, ctx)
             } else {
-                let func = |l: T, r: T, _ctx: &mut EvalContext| op.calc(l, r);
-
-                vectorize_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(a, b, ctx)
+                vectorize_2_arg::<L, R, DecimalType<T>>(|l, r, _| op.calc(l, r))(a, b, ctx)
             }
         }
-    };
-
-    result.upcast_decimal(size)
+    }
+    .upcast_decimal(size)
 }
 
 #[inline(always)]
