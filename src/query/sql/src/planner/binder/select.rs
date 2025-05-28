@@ -358,14 +358,6 @@ impl Binder {
         right_expr: SExpr,
         join_type: JoinType,
     ) -> Result<(SExpr, BindContext)> {
-        let columns = left_context.all_column_bindings().to_vec();
-        let left_expr = self.bind_distinct(
-            left_span,
-            &mut left_context,
-            &columns,
-            &mut HashMap::new(),
-            left_expr,
-        )?;
         let mut left_conditions = Vec::with_capacity(left_context.columns.len());
         let mut right_conditions = Vec::with_capacity(right_context.columns.len());
         assert_eq!(left_context.columns.len(), right_context.columns.len());
@@ -407,6 +399,16 @@ impl Binder {
         left_context
             .cte_context
             .set_cte_context(right_context.cte_context);
+
+        // then apply distinct
+        let columns = left_context.all_column_bindings().to_vec();
+        let s_expr = self.bind_distinct(
+            left_span,
+            &mut left_context,
+            &columns,
+            &mut HashMap::new(),
+            s_expr,
+        )?;
         Ok((s_expr, left_context))
     }
 
