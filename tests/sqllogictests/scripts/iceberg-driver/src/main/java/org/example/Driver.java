@@ -56,7 +56,7 @@ public class Driver {
 
                 .getOrCreate();
 
-        spark.sql("CREATE OR REPLACE TABLE iceberg.test.test_equality_merge_on_read_deletes (\n" +
+        spark.sql("CREATE OR REPLACE TABLE iceberg.test.test_merge_on_read_deletes (\n" +
                 "    dt     date,\n" +
                 "    number integer,\n" +
                 "    letter string\n" +
@@ -68,7 +68,7 @@ public class Driver {
                 "    'write.merge.mode'='merge-on-read',\n" +
                 "    'format-version'='2'\n" +
                 ");");
-        spark.sql("INSERT INTO iceberg.test.test_equality_merge_on_read_deletes\n" +
+        spark.sql("INSERT INTO iceberg.test.test_merge_on_read_deletes\n" +
                 "VALUES\n" +
                 "    (CAST('2023-03-01' AS date), 1, 'a'),\n" +
                 "    (CAST('2023-03-02' AS date), 2, 'b'),\n" +
@@ -82,6 +82,7 @@ public class Driver {
                 "    (CAST('2023-03-10' AS date), 10, 'j'),\n" +
                 "    (CAST('2023-03-11' AS date), 11, 'k'),\n" +
                 "    (CAST('2023-03-12' AS date), 12, 'l');");
+        spark.sql("DELETE FROM iceberg.test.test_merge_on_read_deletes WHERE number > 4 AND number < 7");
         Map<String, String> properties = new HashMap<>();
         properties.put(CatalogProperties.URI, "http://127.0.0.1:8181");
         properties.put(CatalogProperties.WAREHOUSE_LOCATION, "s3://iceberg-tpch/");
@@ -95,7 +96,7 @@ public class Driver {
         RESTCatalog restCatalog = new RESTCatalog();
         restCatalog.initialize("rest", properties);
 
-        TableIdentifier tableId = TableIdentifier.of("test", "test_equality_merge_on_read_deletes");
+        TableIdentifier tableId = TableIdentifier.of("test", "test_merge_on_read_deletes");
         Table table = restCatalog.loadTable(tableId);
         System.out.println("Loaded table: " + table.name());
 
@@ -115,7 +116,7 @@ public class Driver {
         deleteRecords.add(new DeleteRecord(letter, deleteRecord1, "letter"));
 
         for (int i = 0; i < deleteRecords.size(); i++) {
-            String deleteFilePath = "s3://iceberg-tpch/test/test_equality_merge_on_read_deletes/data/equality-delete-file-" + i + ".parquet";
+            String deleteFilePath = "s3://iceberg-tpch/test/test_merge_on_read_deletes/data/equality-delete-file-" + i + ".parquet";
             OutputFile outputFile = table.io().newOutputFile(deleteFilePath);
 
             FileAppender<Record> appender = Parquet.write(outputFile)
@@ -142,5 +143,7 @@ public class Driver {
             rowDelta.addDeletes(deleteFile);
         }
         rowDelta.commit();
+
+        spark.sql("INSERT INTO iceberg.test.test_merge_on_read_deletes VALUES (CAST('2023-03-30' AS date), 6, 'z');");
     }
 }
