@@ -351,11 +351,17 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "to_date",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, ctx| {
+            |date_string, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match NaiveDate::parse_from_str(date, format) {
+                    let format = if ctx.func_ctx.date_format_style == *"mysql" {
+                        format.to_string()
+                    } else {
+                        pg_format_to_strftime(format)
+                    };
+                    println!("format is {}", format.clone());
+                    match NaiveDate::parse_from_str(date_string, &format) {
                         Ok(res) => {
                             output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
@@ -372,11 +378,16 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "try_to_date",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, _| {
+            |date, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match NaiveDate::parse_from_str(date, format) {
+                    let format = if ctx.func_ctx.date_format_style == *"mysql" {
+                        format.to_string()
+                    } else {
+                        pg_format_to_strftime(format)
+                    };
+                    match NaiveDate::parse_from_str(date, &format) {
                         Ok(res) => {
                             output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
@@ -400,7 +411,13 @@ fn string_to_format_datetime(
         return Ok((0, true));
     }
 
-    let (mut tm, offset) = BrokenDownTime::parse_prefix(format, timestamp)
+    let format = if ctx.func_ctx.date_format_style == *"mysql" {
+        format.to_string()
+    } else {
+        pg_format_to_strftime(format)
+    };
+
+    let (mut tm, offset) = BrokenDownTime::parse_prefix(&format, timestamp)
         .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))?;
 
     if !ctx.func_ctx.parse_datetime_ignore_remainder && offset != timestamp.len() {
@@ -705,7 +722,12 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<TimestampType, StringType, NullableType<StringType>>(
             |micros, format, output, ctx| {
                 let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
-                let format = replace_time_format(format);
+                let format = if ctx.func_ctx.date_format_style == *"mysql" {
+                    format.to_string()
+                } else {
+                    pg_format_to_strftime(format)
+                };
+                let format = replace_time_format(&format);
                 let mut buf = String::new();
                 let mut formatter = fmt::Formatter::new(&mut buf, FormattingOptions::new());
                 if Display::fmt(&ts.strftime(format.as_ref()), &mut formatter).is_err() {
@@ -2386,4 +2408,44 @@ where T: ToNumber<i32> {
             DateRounder::eval_timestamp::<T>(val, ctx.func_ctx.tz.clone())
         }),
     );
+}
+
+#[inline]
+pub fn pg_format_to_strftime(pg_format_string: &str) -> String {
+    let mut result = pg_format_string.to_string();
+
+    let mut mappings = vec![
+        ("YYYY", "%Y"),
+        ("YY", "%y"),
+        ("MMMM", "%B"),
+        ("MON", "%b"),
+        ("MM", "%m"),
+        ("DD", "%d"),
+        ("DY", "%a"),
+        ("HH24", "%H"),
+        ("HH12", "%I"),
+        ("AM", "%p"),
+        ("PM", "%p"), // AM/PM both map to %p
+        ("MI", "%M"),
+        ("SS", "%S"),
+        ("FF", "%f"),
+        ("UUUU", "%G"),
+        ("TZH", "%z"),
+        ("TZM", "%z"),
+    ];
+    mappings.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+
+    for (pg_key, strftime_code) in mappings {
+        let pattern = if pg_key == "MON" {
+            // should keep "month". Only "MON" as a single string escape it.
+            format!(r"(?i)\b{}\b", regex::escape(pg_key))
+        } else {
+            format!(r"(?i){}", regex::escape(pg_key))
+        };
+        let reg = regex::Regex::new(&pattern).expect("Failed to compile regex for format key");
+
+        // Use replace_all to substitute all occurrences of the PG key with the strftime code.
+        result = reg.replace_all(&result, strftime_code).to_string();
+    }
+    result
 }

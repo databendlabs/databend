@@ -1324,9 +1324,9 @@ impl PGDateTimeFormatter {
 
         format_map.push(("YYYY", |dt| dt.strftime("%Y").to_string()));
         format_map.push(("YY", |dt| dt.strftime("%y").to_string()));
-        format_map.push(("MM", |dt| dt.strftime("%m").to_string()));
-        format_map.push(("MON", |dt| dt.strftime("%b").to_string()));
         format_map.push(("MMMM", |dt| dt.strftime("%B").to_string()));
+        format_map.push(("MON", |dt| dt.strftime("%b").to_string()));
+        format_map.push(("MM", |dt| dt.strftime("%m").to_string()));
         format_map.push(("DD", |dt| dt.strftime("%d").to_string()));
         format_map.push(("DY", |dt| dt.strftime("%a").to_string()));
         format_map.push(("HH24", |dt| dt.strftime("%H").to_string()));
