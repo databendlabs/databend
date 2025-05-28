@@ -34,11 +34,8 @@ remove @unload
 statement ok
 copy into @unload from a file_format = (type = 'parquet')
 
-query
+query error 1065
 select *, $1 from @unload (file_format => 'parquet')
-----
-1	1
-2	2
 
 query
 select * from @unload (file_format => 'parquet')

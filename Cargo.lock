@@ -4508,6 +4508,7 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures",
+ "jsonb",
  "log",
  "opendal",
  "parquet",

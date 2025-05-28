@@ -25,7 +25,6 @@ use databend_common_expression::FieldIndex;
 
 use super::table::ParquetTable;
 use crate::parquet_part::collect_parts;
-use crate::ParquetPart;
 
 impl ParquetTable {
     fn columns_to_read(&self, push_down: Option<PushDownInfo>) -> Vec<FieldIndex> {
