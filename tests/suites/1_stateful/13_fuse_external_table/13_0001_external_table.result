@@ -1,0 +1,10 @@
+>>>> create or replace connection external_table_conn storage_type='s3' access_key_id = 'minioadmin'  endpoint_url = 'http://127.0.0.1:9900' secret_access_key = 'minioadmin';
+>>>> CREATE OR REPLACE TABLE external_table_test (
+    id INTEGER,
+    name VARCHAR,
+    age INT
+) 's3://testbucket/13_fuse_external_table/' connection=(connection_name = 'external_table_conn');
+>>>> create or replace connection external_table_conn_wrong storage_type='s3' access_key_id = 'minioadmin'  endpoint_url = 'http://127.0.0.1:9900' secret_access_key = 'minio';
+>>>> ALTER TABLE external_table_test connection=(connection_name = 'external_table_conn_wrong');
+<<<< expected failure happened
+>>>> ALTER TABLE external_table_test connection=(connection_name = 'external_table_conn');

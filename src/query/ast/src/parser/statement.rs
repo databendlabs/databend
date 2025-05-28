@@ -3988,9 +3988,9 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let modify_table_connection = map(
         rule! {
-            CONNECTION ~ ^"=" ~ "(" ~ #connection_options ~ ")"
+            CONNECTION ~ ^"=" ~ #connection_options
         },
-        |(_, _, _, connection_options, _)| AlterTableAction::ModifyConnection {
+        |(_, _, connection_options)| AlterTableAction::ModifyConnection {
             new_connection: connection_options,
         },
     );
