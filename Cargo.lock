@@ -2973,6 +2973,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-storage",
  "databend-common-users",
+ "databend-common-version",
  "databend-enterprise-query",
  "databend-meta",
  "databend-query",
