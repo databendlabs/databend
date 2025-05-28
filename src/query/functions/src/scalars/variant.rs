@@ -1129,7 +1129,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                             _ => None,
                         };
-                        let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz);
+                        let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz, None);
                         if let Some(validity) = validity {
                             Value::Column(NullableColumn::new_column(
                                 Column::Variant(new_col),
@@ -1172,7 +1172,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Column::Nullable(box ref nullable_column) => nullable_column.validity.clone(),
                     _ => Bitmap::new_constant(true, col.len()),
                 };
-                let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz);
+                let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz, None);
                 Value::Column(NullableColumn::new(new_col, validity))
             }
         },

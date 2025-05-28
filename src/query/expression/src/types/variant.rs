@@ -270,7 +270,12 @@ pub fn cast_scalar_to_variant(
             jsonb::Value::Interval(interval)
         }
         ScalarRef::Array(col) => {
-            let items = cast_scalars_to_variants(col.iter(), tz);
+            let typ = if let Some(TableDataType::Array(typ)) = table_data_type {
+                Some(typ.remove_nullable())
+            } else {
+                None
+            };
+            let items = cast_scalars_to_variants(col.iter(), tz, typ.as_ref());
             let owned_jsonb = OwnedJsonb::build_array(items.iter().map(RawJsonb::new))
                 .expect("failed to build jsonb array");
             buf.extend_from_slice(owned_jsonb.as_ref());
@@ -278,7 +283,7 @@ pub fn cast_scalar_to_variant(
         }
         ScalarRef::Map(col) => {
             let typ = if let Some(TableDataType::Map(typ)) = table_data_type {
-                Some(*typ.clone())
+                Some(typ.remove_nullable())
             } else {
                 None
             };
@@ -322,10 +327,11 @@ pub fn cast_scalar_to_variant(
                     fields_name,
                     fields_type,
                 }) => {
+                    assert_eq!(fields.len(), fields_type.len());
                     let iter = fields.into_iter();
                     let mut builder = BinaryColumnBuilder::with_capacity(iter.size_hint().0, 0);
                     for (scalar, typ) in iter.zip(fields_type) {
-                        cast_scalar_to_variant(scalar, tz, &mut builder.data, Some(typ));
+                        cast_scalar_to_variant(scalar, tz, &mut builder.data, Some(&typ.remove_nullable()));
                         builder.commit_row();
                     }
                     let values = builder.build();
@@ -338,7 +344,7 @@ pub fn cast_scalar_to_variant(
                     .expect("failed to build jsonb object from tuple")
                 }
                 _ => {
-                    let values = cast_scalars_to_variants(fields, tz);
+                    let values = cast_scalars_to_variants(fields, tz, None);
                     OwnedJsonb::build_object(
                         values
                             .iter()
@@ -377,11 +383,12 @@ pub fn cast_scalar_to_variant(
 pub fn cast_scalars_to_variants(
     scalars: impl IntoIterator<Item = ScalarRef>,
     tz: &TimeZone,
+    table_data_type: Option<&TableDataType>,
 ) -> BinaryColumn {
     let iter = scalars.into_iter();
     let mut builder = BinaryColumnBuilder::with_capacity(iter.size_hint().0, 0);
     for scalar in iter {
-        cast_scalar_to_variant(scalar, tz, &mut builder.data, None);
+        cast_scalar_to_variant(scalar, tz, &mut builder.data, table_data_type);
         builder.commit_row();
     }
     builder.build()

@@ -39,6 +39,7 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_orc::OrcTableForCopy;
 use databend_common_storages_parquet::ParquetTableForCopy;
+use databend_common_storages_parquet::ParquetVariantTable;
 use databend_storages_common_stage::SingleFilePartition;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
@@ -158,7 +159,12 @@ impl Table for StageTable {
         let stage_table_info = &self.table_info;
         match stage_table_info.stage_info.file_format_params {
             FileFormatParams::Parquet(_) => {
-                ParquetTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
+                if stage_table_info.is_variant {
+                    ParquetVariantTable::do_read_partitions(stage_table_info, ctx).await
+                } else {
+                    ParquetTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs)
+                        .await
+                }
             }
 
             FileFormatParams::Orc(_) => {
@@ -199,7 +205,11 @@ impl Table for StageTable {
             };
         match stage_table_info.stage_info.file_format_params {
             FileFormatParams::Parquet(_) => {
-                ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
+                if stage_table_info.is_variant {
+                    ParquetVariantTable::do_read_data(ctx, plan, pipeline, _put_cache)
+                } else {
+                    ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
+                }
             }
             FileFormatParams::Orc(_) => {
                 OrcTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
