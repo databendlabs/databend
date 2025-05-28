@@ -615,8 +615,11 @@ impl ExplainInterpreter {
                 self.ctx.clone(),
                 source,
                 &mut dummy_pipeline,
-                true,
             )?;
+            // For `explain` it doesn't need to receive pruned result,
+            // if we drop the receiver, the sender will receive an error instead of
+            // block to wait for capacity.
+            let _ = fuse_table.pruned_result_receiver.lock().take();
             if let Some(mut pipeline) = prune_pipeline {
                 pipeline.set_max_threads(max_threads as usize);
                 let settings = ExecutorSettings::try_create(self.ctx.clone())?;
