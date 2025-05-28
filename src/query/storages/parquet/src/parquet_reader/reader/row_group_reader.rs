@@ -410,9 +410,6 @@ impl RowGroupReader {
                     });
                     let eq_expr = Self::build_eq_expr(data_type.clone(), column_expr, scalar_expr);
                     let not_expr = Self::build_not_expr(eq_expr);
-                    // TIPS: 合并所需的column
-                    // 其它的policy忽略filter
-                    // position delete多一点测试
                     combined_predicate = Self::build_and_expr(combined_predicate, not_expr);
                 }
             }
