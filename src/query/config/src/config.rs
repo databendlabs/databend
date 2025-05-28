@@ -2726,7 +2726,7 @@ pub struct HistoryLogConfig {
 
     /// Specifies the interval in seconds for how often the history log is flushed
     #[clap(
-        long = "log-persistentlog-interval",
+        long = "log-history-interval",
         value_name = "VALUE",
         default_value = "2"
     )]
