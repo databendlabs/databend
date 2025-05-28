@@ -206,7 +206,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 self.predicate.field_paths(),
                 num_rows,
             )?;
-            let filter = self.predicate.evaluate_block(&block)?.unwrap();
+            let filter = self.predicate.evaluate_block(&block)?;
             if filter.null_count() == num_rows {
                 // All rows in current row group are filtered out.
                 return Ok(None);

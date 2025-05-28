@@ -72,20 +72,19 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
                 predicate.field_paths(),
                 num_rows,
             )?;
-            if let Some(filter) = predicate.evaluate_block(&block)? {
-                if filter.null_count() == num_rows {
-                    // All rows in current row group are filtered out.
-                    return Ok(None);
+            let filter = predicate.evaluate_block(&block)?;
+            if filter.null_count() == num_rows {
+                // All rows in current row group are filtered out.
+                return Ok(None);
+            }
+            let filter = bitmap_to_boolean_array(filter);
+            let sel = RowSelection::from_filters(&[filter]);
+            match row_selection.as_mut() {
+                Some(selection) => {
+                    *selection = selection.and_then(&sel);
                 }
-                let filter = bitmap_to_boolean_array(filter);
-                let sel = RowSelection::from_filters(&[filter]);
-                match row_selection.as_mut() {
-                    Some(selection) => {
-                        *selection = selection.and_then(&sel);
-                    }
-                    None => {
-                        row_selection = Some(sel);
-                    }
+                None => {
+                    row_selection = Some(sel);
                 }
             }
         }

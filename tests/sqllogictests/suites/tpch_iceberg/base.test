@@ -55,6 +55,7 @@ select c1, c3 from t1_orc;
 4 NULL
 
 # test_merge_on_read_deletes: DELETE FROM test_merge_on_read_deletes WHERE letter = 'k' OR number = 3 OR (number > 4 AND number < 7)
+# Tips: `2023-03-30 6 z` is new row
 query TTI rowsort
 select * from test_merge_on_read_deletes;
 ----

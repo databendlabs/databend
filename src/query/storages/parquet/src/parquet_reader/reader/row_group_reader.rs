@@ -23,13 +23,13 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
-use databend_common_expression::FunctionCall;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -199,7 +199,7 @@ impl RowGroupReader {
             let mut equality_expr = Expr::Constant(Constant {
                 span: None,
                 scalar: Scalar::Boolean(true),
-                data_type: DataType::Nullable(Box::new(DataType::Boolean)),
+                data_type: DataType::Boolean,
             });
 
             let mut prewhere_columns = Vec::new();
@@ -212,7 +212,13 @@ impl RowGroupReader {
                         predicate,
                         related_columns,
                     } => {
-                        equality_expr = Self::build_and_expr(equality_expr, predicate);
+                        equality_expr = check_function(
+                            None,
+                            "and",
+                            &[],
+                            &[equality_expr, predicate],
+                            &BUILTIN_FUNCTIONS,
+                        )?;
                         prewhere_columns.extend_from_slice(&related_columns);
                     }
                 }
@@ -340,11 +346,7 @@ impl RowGroupReader {
                 .with_batch_size(batch_size)
                 .build()?;
 
-        let mut combined_predicate = Expr::Constant(Constant {
-            span: None,
-            scalar: Scalar::Boolean(true),
-            data_type: DataType::Nullable(Box::new(DataType::Boolean)),
-        });
+        let mut predicates = Vec::new();
         let fn_field_id = |field: &FieldRef| {
             field
                 .metadata()
@@ -361,7 +363,7 @@ impl RowGroupReader {
                     Expr::Constant(Constant {
                         span: None,
                         scalar: Scalar::Boolean(true),
-                        data_type: DataType::Nullable(Box::new(DataType::Boolean)),
+                        data_type: DataType::Boolean,
                     }),
                     Vec::new(),
                 ));
@@ -408,75 +410,42 @@ impl RowGroupReader {
                         scalar: scala.to_owned(),
                         data_type: scalar_ty.clone(),
                     });
-                    let eq_expr = Self::build_eq_expr(data_type.clone(), column_expr, scalar_expr);
-                    let not_expr = Self::build_not_expr(eq_expr);
-                    combined_predicate = Self::build_and_expr(combined_predicate, not_expr);
+                    let eq_expr = check_function(
+                        None,
+                        "eq",
+                        &[],
+                        &[column_expr, scalar_expr],
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+                    predicates.push(check_function(
+                        None,
+                        "not",
+                        &[],
+                        &[eq_expr],
+                        &BUILTIN_FUNCTIONS,
+                    )?);
                 }
             }
         }
+        let combined_predicate = predicates.into_iter().try_fold(
+            Expr::Constant(Constant {
+                span: None,
+                scalar: Scalar::Boolean(true),
+                data_type: DataType::Boolean,
+            }),
+            |acc, expr| check_function(None, "and", &[], &[acc, expr], &BUILTIN_FUNCTIONS),
+        )?;
 
-        Ok((combined_predicate, related_columns))
-    }
-
-    fn build_and_expr(expr_0: Expr<String>, expr_1: Expr<String>) -> Expr<String> {
-        let and_generics = vec![
-            DataType::Nullable(Box::new(DataType::Boolean)),
-            DataType::Nullable(Box::new(DataType::Boolean)),
-        ];
-        let and_args = vec![expr_0.clone(), expr_1];
-        let (function_id, function) = BUILTIN_FUNCTIONS
-            .search_candidates("and", &[], and_args.as_slice())
-            .into_iter()
-            .find(|(_, function)| function.signature.args_type == and_generics)
-            .unwrap();
-        Expr::FunctionCall(FunctionCall {
-            span: None,
-            id: Box::new(function_id),
-            function,
-            generics: and_generics,
-            args: and_args,
-            return_type: DataType::Nullable(Box::new(DataType::Boolean)),
-        })
-    }
-
-    fn build_not_expr(eq_expr: Expr<String>) -> Expr<String> {
-        let not_generics = vec![DataType::Nullable(Box::new(DataType::Boolean))];
-        let not_args = vec![eq_expr];
-        let (function_id, function) = BUILTIN_FUNCTIONS
-            .search_candidates("not", &[], not_args.as_slice())
-            .into_iter()
-            .find(|(_, function)| function.signature.args_type == not_generics)
-            .unwrap();
-        Expr::FunctionCall(FunctionCall {
-            span: None,
-            id: Box::new(function_id),
-            function,
-            generics: not_generics,
-            args: not_args,
-            return_type: DataType::Nullable(Box::new(DataType::Boolean)),
-        })
-    }
-
-    fn build_eq_expr(
-        data_type: DataType,
-        column_expr: Expr<String>,
-        scalar_expr: Expr<String>,
-    ) -> Expr<String> {
-        let eq_args = vec![column_expr, scalar_expr];
-        let eq_generics = vec![data_type.clone(), data_type];
-        let (function_id, function) = BUILTIN_FUNCTIONS
-            .search_candidates("eq", &[], eq_args.as_slice())
-            .into_iter()
-            .find(|(_, function)| function.signature.args_type == eq_generics)
-            .unwrap();
-        Expr::FunctionCall(FunctionCall {
-            span: None,
-            id: Box::new(function_id),
-            function,
-            generics: eq_generics,
-            args: eq_args,
-            return_type: DataType::Nullable(Box::new(DataType::Boolean)),
-        })
+        Ok((
+            check_function(
+                None,
+                "is_true",
+                &[],
+                &[combined_predicate],
+                &BUILTIN_FUNCTIONS,
+            )?,
+            related_columns,
+        ))
     }
 
     fn build_deletes_row_selection(

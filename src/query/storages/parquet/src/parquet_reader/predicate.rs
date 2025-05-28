@@ -67,30 +67,15 @@ impl ParquetPredicate {
         &self.field_paths
     }
 
-    pub fn evaluate_block(&self, block: &DataBlock) -> Result<Option<Bitmap>> {
+    pub fn evaluate_block(&self, block: &DataBlock) -> Result<Bitmap> {
         let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let bitmap =
-            if self.filter.data_type().is_nullable() {
-                evaluator
-                    .run(&self.filter)?
-                    .convert_to_full_column(
-                        &DataType::Nullable(Box::new(DataType::Boolean)),
-                        block.num_rows(),
-                    )
-                    .as_nullable()
-                    .map(|column| {
-                        Bitmap::from_iter(column.iter().map(|value| {
-                            value.and_then(|s| s.as_boolean().cloned()).unwrap_or(true)
-                        }))
-                    })
-            } else {
-                evaluator
-                    .run(&self.filter)?
-                    .convert_to_full_column(&DataType::Boolean, block.num_rows())
-                    .as_boolean()
-                    .cloned()
-            };
-        Ok(bitmap)
+        let res = evaluator
+            .run(&self.filter)?
+            .convert_to_full_column(&DataType::Boolean, block.num_rows())
+            .as_boolean()
+            .cloned()
+            .unwrap();
+        Ok(res)
     }
 
     pub fn evaluate(
@@ -108,7 +93,7 @@ impl ParquetPredicate {
             block
         };
         let res = self.evaluate_block(&block)?;
-        Ok(bitmap_to_boolean_array(res.unwrap()))
+        Ok(bitmap_to_boolean_array(res))
     }
 
     pub fn schema(&self) -> &TableSchema {
