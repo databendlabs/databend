@@ -966,6 +966,8 @@ impl TableContext for QueryContext {
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
+        let week_start = settings.get_week_start()? as u8;
+        let date_formate_style = settings.get_date_format_style()?;
         let query_config = &GlobalConfig::instance().query;
         let random_function_seed = settings.get_random_function_seed()?;
 
@@ -986,6 +988,8 @@ impl TableContext for QueryContext {
             parse_datetime_ignore_remainder,
             enable_strict_datetime_parser,
             random_function_seed,
+            week_start,
+            date_formate_style,
         })
     }
 

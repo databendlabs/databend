@@ -4213,14 +4213,14 @@ Functions overloads:
 1 to_start_of_second(Timestamp NULL) :: Timestamp NULL
 0 to_start_of_ten_minutes(Timestamp) :: Timestamp
 1 to_start_of_ten_minutes(Timestamp NULL) :: Timestamp NULL
-0 to_start_of_week(Date) :: Date
-1 to_start_of_week(Date NULL) :: Date NULL
-2 to_start_of_week(Timestamp) :: Date
-3 to_start_of_week(Timestamp NULL) :: Date NULL
-4 to_start_of_week(Date, Int64) :: Date
-5 to_start_of_week(Date NULL, Int64 NULL) :: Date NULL
-6 to_start_of_week(Timestamp, Int64) :: Date
-7 to_start_of_week(Timestamp NULL, Int64 NULL) :: Date NULL
+0 to_start_of_week(Date, Int64) :: Date
+1 to_start_of_week(Date NULL, Int64 NULL) :: Date NULL
+2 to_start_of_week(Timestamp, Int64) :: Date
+3 to_start_of_week(Timestamp NULL, Int64 NULL) :: Date NULL
+4 to_start_of_week(Date) :: Date
+5 to_start_of_week(Date NULL) :: Date NULL
+6 to_start_of_week(Timestamp) :: Date
+7 to_start_of_week(Timestamp NULL) :: Date NULL
 0 to_start_of_year(Date) :: Date
 1 to_start_of_year(Date NULL) :: Date NULL
 2 to_start_of_year(Timestamp) :: Date

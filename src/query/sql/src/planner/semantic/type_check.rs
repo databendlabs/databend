@@ -3267,16 +3267,6 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                 )
             }
-            ASTIntervalKind::Week => {
-                self.resolve_function(
-                    span,
-                    "to_start_of_week", vec![],
-                    &[date, &Expr::Literal {
-                        span: None,
-                        value: Literal::UInt64(1)
-                    }],
-                )
-            }
             ASTIntervalKind::Day => {
                 self.resolve_function(
                     span,
@@ -3305,7 +3295,14 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                 )
             }
-            _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second]".to_string()).set_span(span)),
+            ASTIntervalKind::Week => {
+                self.resolve_function(
+                    span,
+                    "to_start_of_week", vec![],
+                    &[date],
+                )
+            }
+            _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
         }
     }
 

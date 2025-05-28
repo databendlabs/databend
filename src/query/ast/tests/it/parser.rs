@@ -1264,6 +1264,8 @@ fn test_expr() {
         r#"extract(year from d)"#,
         r#"date_part(year, d)"#,
         r#"datepart(year, d)"#,
+        r#"date_trunc(week, to_timestamp(1630812366))"#,
+        r#"trunc(to_timestamp(1630812366), week)"#,
         r#"DATEDIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))"#,
         r#"last_day(to_date('2024-10-22'), week)"#,
         r#"last_day(to_date('2024-10-22'))"#,
