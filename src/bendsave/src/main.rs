@@ -17,6 +17,7 @@ use clap::Parser;
 use clap::Subcommand;
 use databend_bendsave::backup;
 use databend_bendsave::restore;
+use databend_common_version::DATABEND_COMMIT_VERSION;
 use logforth::append;
 use logforth::filter::EnvFilter;
 use logforth::Dispatch;
@@ -25,6 +26,7 @@ use logforth::Logger;
 #[derive(Parser)]
 #[command(name = "bendsave")]
 #[command(about = "Databend backup and restore tool", long_about = None)]
+#[command(version = & ** DATABEND_COMMIT_VERSION)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
