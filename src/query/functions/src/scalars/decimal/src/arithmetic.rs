@@ -132,82 +132,70 @@ impl ArithmeticOp {
 }
 
 fn op_decimal(
-    a: &Value<AnyType>,
-    b: &Value<AnyType>,
+    a: (&Value<AnyType>, DecimalDataType),
+    b: (&Value<AnyType>, DecimalDataType),
     ctx: &mut EvalContext,
-    left: DecimalDataType,
-    right: DecimalDataType,
     result_type: DecimalDataType,
     op: ArithmeticOp,
 ) -> Value<AnyType> {
-    match (left, result_type) {
+    let decimal_type = a.1;
+    let a = (a.0, a.1.size());
+    let b = (b.0, b.1.size());
+
+    match (decimal_type, result_type) {
         (DecimalDataType::Decimal64(_), DecimalDataType::Decimal64(size)) => {
             type T = i64;
             binary_decimal::<CoreDecimal<T>, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, left, right, size, op,
+                a, b, ctx, size, op,
             )
         }
         (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(size)) => {
             type T = i128;
             binary_decimal::<CoreDecimal<T>, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, left, right, size, op,
+                a, b, ctx, size, op,
             )
         }
         (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(size)) => {
             type T = i256;
             binary_decimal::<CoreDecimal<T>, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, left, right, size, op,
+                a, b, ctx, size, op,
             )
         }
 
         (DecimalDataType::Decimal64(_), DecimalDataType::Decimal128(size)) => {
             type T = i64;
-            binary_decimal::<I64ToI128, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, left, right, size, op,
-            )
+            binary_decimal::<I64ToI128, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
         }
         (DecimalDataType::Decimal64(_), DecimalDataType::Decimal256(size)) => {
             type T = i64;
-            binary_decimal::<I64ToI256, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, left, right, size, op,
-            )
+            binary_decimal::<I64ToI256, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
         }
 
         (DecimalDataType::Decimal128(_), DecimalDataType::Decimal64(size)) => {
             type T = i128;
-            binary_decimal::<I128ToI64, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, left, right, size, op,
-            )
+            binary_decimal::<I128ToI64, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
         }
         (DecimalDataType::Decimal128(_), DecimalDataType::Decimal256(size)) => {
             type T = i128;
-            binary_decimal::<I128ToI256, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, left, right, size, op,
-            )
+            binary_decimal::<I128ToI256, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
         }
 
         (DecimalDataType::Decimal256(_), DecimalDataType::Decimal64(size)) => {
             type T = i256;
-            binary_decimal::<I256ToI64, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, left, right, size, op,
-            )
+            binary_decimal::<I256ToI64, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
         }
         (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(size)) => {
             type T = i256;
-            binary_decimal::<I256ToI128, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, left, right, size, op,
-            )
+            binary_decimal::<I256ToI128, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
         }
     }
 }
 
 fn binary_decimal<C, L, R, T, U>(
-    a: &Value<AnyType>,
-    b: &Value<AnyType>,
+    (a, a_size): (&Value<AnyType>, DecimalSize),
+    (b, b_size): (&Value<AnyType>, DecimalSize),
     ctx: &mut EvalContext,
-    left: DecimalDataType,
-    right: DecimalDataType,
-    size: DecimalSize,
+    return_size: DecimalSize,
     op: ArithmeticOp,
 ) -> Value<AnyType>
 where
@@ -217,7 +205,7 @@ where
     L: for<'a> AccessType<ScalarRef<'a> = T>,
     R: for<'a> AccessType<ScalarRef<'a> = T>,
 {
-    let overflow = size.precision() == T::default_decimal_size().precision();
+    let overflow = return_size.precision() == T::default_decimal_size().precision();
 
     let a = a.try_downcast().unwrap();
     let b = b.try_downcast().unwrap();
@@ -227,11 +215,11 @@ where
 
     match op {
         ArithmeticOp::Divide => {
-            let scale_a = left.scale();
-            let scale_b = right.scale();
+            let scale_a = a_size.scale();
+            let scale_b = b_size.scale();
 
             // Note: the result scale is always larger than the left scale
-            let scale_mul = (scale_b + size.scale() - scale_a) as u32;
+            let scale_mul = (scale_b + return_size.scale() - scale_a) as u32;
             let func = |a: T, b: T, result: &mut Vec<U>, ctx: &mut EvalContext| {
                 // We are using round div here which follow snowflake's behavior: https://docs.snowflake.com/sql-reference/operators-arithmetic
                 // For example:
@@ -260,10 +248,10 @@ where
         }
 
         ArithmeticOp::Multiply => {
-            let scale_a = left.scale();
-            let scale_b = right.scale();
+            let scale_a = a_size.scale();
+            let scale_b = b_size.scale();
 
-            let scale_mul = scale_a + scale_b - size.scale();
+            let scale_mul = scale_a + scale_b - return_size.scale();
 
             if scale_mul == 0 {
                 vectorize_2_arg::<L, R, DecimalType<U>>(|a, b, _| C::compute(&op.calc(a, b)))(
@@ -289,8 +277,8 @@ where
 
         ArithmeticOp::Plus | ArithmeticOp::Minus => {
             if overflow {
-                let min_for_precision = T::min_for_precision(size.precision());
-                let max_for_precision = T::max_for_precision(size.precision());
+                let min_for_precision = T::min_for_precision(return_size.precision());
+                let max_for_precision = T::max_for_precision(return_size.precision());
 
                 let func = |a: T, b: T, result: &mut Vec<U>, ctx: &mut EvalContext| {
                     let t = op.calc(a, b);
@@ -314,7 +302,7 @@ where
             }
         }
     }
-    .upcast_decimal(size)
+    .upcast_decimal(return_size)
 }
 
 #[inline(always)]
@@ -476,7 +464,13 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
                         DecimalDataType::from(return_size)
                     };
 
-                    op_decimal(&a, &b, ctx, left, right, return_decimal_type, arithmetic_op)
+                    op_decimal(
+                        (&a, left),
+                        (&b, right),
+                        ctx,
+                        return_decimal_type,
+                        arithmetic_op,
+                    )
                 }),
             },
         };

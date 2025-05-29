@@ -189,6 +189,39 @@ impl DecimalScalar {
             DecimalScalar::DECIMAL(v, _) => v.is_positive(),
         })
     }
+
+    pub fn to_decimal64(&self) -> DecimalScalar {
+        let (v, size) = match *self {
+            DecimalScalar::Decimal64(v, size) => (v, size),
+            DecimalScalar::Decimal128(v, size) => (v as _, size),
+            DecimalScalar::Decimal256(v, size) => (v.as_i64(), size),
+        };
+        DecimalScalar::Decimal64(v, size)
+    }
+
+    pub fn to_decimal128(&self) -> DecimalScalar {
+        let (v, size) = match *self {
+            DecimalScalar::Decimal64(v, size) => (v as _, size),
+            DecimalScalar::Decimal128(v, size) => (v, size),
+            DecimalScalar::Decimal256(v, size) => (v.as_i128(), size),
+        };
+        DecimalScalar::Decimal128(v, size)
+    }
+
+    pub fn to_decimal256(&self) -> DecimalScalar {
+        let (v, size) = match *self {
+            DecimalScalar::Decimal64(v, size) => (i256::from(v), size),
+            DecimalScalar::Decimal128(v, size) => (i256::from(v), size),
+            DecimalScalar::Decimal256(v, size) => (v, size),
+        };
+        DecimalScalar::Decimal256(v, size)
+    }
+
+    pub fn size(&self) -> DecimalSize {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(_, size) => *size,
+        })
+    }
 }
 
 #[derive(Clone, PartialEq, EnumAsInner)]
@@ -1605,20 +1638,35 @@ impl DecimalColumnBuilder {
     }
 
     pub fn push_repeat(&mut self, item: DecimalScalar, n: usize) {
-        with_decimal_type!(|DECIMAL_TYPE| match (self, item) {
-            (
-                DecimalColumnBuilder::DECIMAL_TYPE(builder, builder_size),
-                DecimalScalar::DECIMAL_TYPE(value, value_size),
-            ) => {
-                debug_assert_eq!(*builder_size, value_size);
+        match self {
+            DecimalColumnBuilder::Decimal64(builder, builder_size) => {
+                let (value, size) = item.to_decimal64().into_decimal64().unwrap();
+                debug_assert_eq!(*builder_size, size);
                 if n == 1 {
                     builder.push(value)
                 } else {
                     builder.resize(builder.len() + n, value)
                 }
             }
-            (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
-        })
+            DecimalColumnBuilder::Decimal128(builder, builder_size) => {
+                let (value, size) = item.to_decimal128().into_decimal128().unwrap();
+                debug_assert_eq!(*builder_size, size);
+                if n == 1 {
+                    builder.push(value)
+                } else {
+                    builder.resize(builder.len() + n, value)
+                }
+            }
+            DecimalColumnBuilder::Decimal256(builder, builder_size) => {
+                let (value, size) = item.to_decimal256().into_decimal256().unwrap();
+                debug_assert_eq!(*builder_size, size);
+                if n == 1 {
+                    builder.push(value)
+                } else {
+                    builder.resize(builder.len() + n, value)
+                }
+            }
+        }
     }
 
     pub fn push_default(&mut self) {

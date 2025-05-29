@@ -735,13 +735,13 @@ where
         Ordering::Equal => vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
             |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| {
                 if x <= max && x >= min {
+                    builder.push(C::compute(&x));
+                } else {
                     ctx.set_error(
                         builder.len(),
                         concat!("Decimal overflow at line : ", line!()),
                     );
                     builder.push(T::one());
-                } else {
-                    builder.push(C::compute(&x));
                 }
             },
         )(buffer, ctx),
