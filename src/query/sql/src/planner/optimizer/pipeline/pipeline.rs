@@ -118,20 +118,26 @@ impl OptimizerPipeline {
         // Update trace status from context
         self.trace_collector
             .set_enable_trace(self.opt_ctx.get_enable_trace());
+
         for (idx, optimizer) in self.optimizers.iter_mut().enumerate() {
+            // Save the expression before optimization
             let before_expr = current_expr.clone();
 
-            // Measure optimizer execution time
+            // Measure execution time
             let start_time = Instant::now();
+
+            // Apply the optimizer
             current_expr = optimizer.optimize(&current_expr).await?;
+
+            // Calculate duration
             let duration = start_time.elapsed();
 
             if let Some(memo) = optimizer.memo() {
                 self.memo = Some(memo.clone());
             }
 
-            // Create execution info and trace optimizer
-            {
+            // Only trace if tracing is enabled
+            if self.opt_ctx.get_enable_trace() {
                 let metadata_ref = self.opt_ctx.get_metadata();
                 let execution = OptimizerExecution {
                     name: optimizer.name(),
@@ -147,8 +153,10 @@ impl OptimizerPipeline {
             }
         }
 
-        // Generate and log the report
-        self.trace_collector.log_report();
+        // Generate and log the report only if tracing is enabled
+        if self.opt_ctx.get_enable_trace() {
+            self.trace_collector.log_report();
+        }
 
         Ok(current_expr)
     }

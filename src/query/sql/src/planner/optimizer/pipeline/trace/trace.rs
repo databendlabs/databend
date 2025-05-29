@@ -160,8 +160,6 @@ pub struct OptimizerExecution<'a> {
 
 /// Represents a trace collector for optimizer and rule executions
 pub struct OptimizerTraceCollector {
-    /// Whether to enable trace collection
-    enable_trace: Mutex<bool>,
     /// The collection of optimizer traces
     traces: Mutex<Vec<OptimizerTrace>>,
     /// The collection of rule executions, organized by optimizer
@@ -172,15 +170,14 @@ impl OptimizerTraceCollector {
     /// Create a new trace collector
     pub fn new() -> Self {
         Self {
-            enable_trace: Mutex::new(false),
             traces: Mutex::new(Vec::new()),
             rule_executions: Mutex::new(HashMap::new()),
         }
     }
 
-    /// Set whether tracing is enabled
-    pub fn set_enable_trace(&self, enable: bool) {
-        *self.enable_trace.lock() = enable;
+    /// Set whether tracing is enabled (this is now a no-op as tracing is controlled externally)
+    pub fn set_enable_trace(&self, _enable: bool) {
+        // No-op - tracing is now controlled externally
     }
 
     /// Create a trace, add it to the collection, and log it
@@ -189,10 +186,6 @@ impl OptimizerTraceCollector {
         execution: OptimizerExecution,
         metadata: &Metadata,
     ) -> Result<()> {
-        if !*self.enable_trace.lock() {
-            return Ok(());
-        }
-
         // More robust check for expression changes
         let diff = execution.before.diff(execution.after, metadata)?;
         let had_effect = !diff.is_empty() && diff != "No differences found.";
@@ -224,10 +217,6 @@ impl OptimizerTraceCollector {
         after: &SExpr,
         metadata: &Metadata,
     ) -> Result<()> {
-        if !*self.enable_trace.lock() {
-            return Ok(());
-        }
-
         // Check if the rule had an effect on the expression
         let diff = before.diff(after, metadata)?;
         let had_effect = !diff.is_empty() && diff != "No differences found.";
@@ -250,103 +239,101 @@ impl OptimizerTraceCollector {
 
     /// Generate and log the report
     pub fn log_report(&self) {
-        if *self.enable_trace.lock() {
-            let mut report = String::new();
-            report.push_str("================ Optimizer Trace Report ================\n");
+        let mut report = String::new();
+        report.push_str("================ Optimizer Trace Report ================\n");
 
-            // Log optimizer traces
-            let traces = self.traces.lock();
-            if !traces.is_empty() {
-                report.push_str("--- Optimizers ---\n");
-                for trace in &*traces {
-                    let effect_status = if trace.had_effect {
+        // Log optimizer traces
+        let traces = self.traces.lock();
+        if !traces.is_empty() {
+            report.push_str("--- Optimizers ---\n");
+            for trace in &*traces {
+                let effect_status = if trace.had_effect {
+                    "Applied"
+                } else {
+                    "No Effect"
+                };
+                report.push_str(&format!(
+                    "{} Optimizer [{}/{}]: {} (execution time: {:.2?})\n",
+                    effect_status,
+                    trace.optimizer_index,
+                    trace.total_optimizers,
+                    trace.optimizer_name,
+                    trace.execution_time
+                ));
+            }
+        }
+
+        // Log rule traces
+        let rule_executions = self.rule_executions.lock();
+        if !rule_executions.is_empty() {
+            report.push_str("\n--- Rules by Optimizer ---\n");
+
+            // Output each optimizer and its rules
+            for (optimizer_name, rules) in &*rule_executions {
+                report.push_str(&format!("Optimizer: {}\n", optimizer_name));
+
+                // Count the number of effective rules for this optimizer
+                let applied_rules = rules.iter().filter(|r| r.had_effect).count();
+
+                // Calculate the total execution time of all rules for this optimizer
+                let total_time: Duration = rules.iter().map(|r| r.time).sum();
+
+                // Output each rule's execution status
+                for rule in rules {
+                    let effect_status = if rule.had_effect {
                         "Applied"
                     } else {
                         "No Effect"
                     };
                     report.push_str(&format!(
-                        "{} Optimizer [{}/{}]: {} (execution time: {:.2?})\n",
-                        effect_status,
-                        trace.optimizer_index,
-                        trace.total_optimizers,
-                        trace.optimizer_name,
-                        trace.execution_time
+                        "  {} Rule: {} (execution time: {:.2?})\n",
+                        effect_status, rule.name, rule.time
                     ));
                 }
+
+                // Output a summary of rule executions for this optimizer
+                report.push_str(&format!(
+                    "  Summary: {}/{} rules had effect (total execution time: {:.2?})\n\n",
+                    applied_rules,
+                    rules.len(),
+                    total_time
+                ));
             }
+        }
 
-            // Log rule traces
-            let rule_executions = self.rule_executions.lock();
-            if !rule_executions.is_empty() {
-                report.push_str("\n--- Rules by Optimizer ---\n");
+        // Output overall summary
+        let traces = self.traces.lock();
+        let rule_executions = self.rule_executions.lock();
 
-                // Output each optimizer and its rules
-                for (optimizer_name, rules) in &*rule_executions {
-                    report.push_str(&format!("Optimizer: {}\n", optimizer_name));
+        let total_optimizers = traces.len();
+        let applied_optimizers = traces.iter().filter(|t| t.had_effect).count();
+        let total_optimizer_time: Duration = traces.iter().map(|t| t.execution_time).sum();
 
-                    // Count the number of effective rules for this optimizer
-                    let applied_rules = rules.iter().filter(|r| r.had_effect).count();
+        let total_rules: usize = rule_executions.values().map(|rules| rules.len()).sum();
+        let applied_rules: usize = rule_executions
+            .values()
+            .flat_map(|rules| rules.iter())
+            .filter(|r| r.had_effect)
+            .count();
+        let total_rule_time: Duration = rule_executions
+            .values()
+            .flat_map(|rules| rules.iter())
+            .map(|r| r.time)
+            .sum();
 
-                    // Calculate the total execution time of all rules for this optimizer
-                    let total_time: Duration = rules.iter().map(|r| r.time).sum();
-
-                    // Output each rule's execution status
-                    for rule in rules {
-                        let effect_status = if rule.had_effect {
-                            "Applied"
-                        } else {
-                            "No Effect"
-                        };
-                        report.push_str(&format!(
-                            "  {} Rule: {} (execution time: {:.2?})\n",
-                            effect_status, rule.name, rule.time
-                        ));
-                    }
-
-                    // Output a summary of rule executions for this optimizer
-                    report.push_str(&format!(
-                        "  Summary: {}/{} rules had effect (total execution time: {:.2?})\n\n",
-                        applied_rules,
-                        rules.len(),
-                        total_time
-                    ));
-                }
-            }
-
-            // Output overall summary
-            let traces = self.traces.lock();
-            let rule_executions = self.rule_executions.lock();
-
-            let total_optimizers = traces.len();
-            let applied_optimizers = traces.iter().filter(|t| t.had_effect).count();
-            let total_optimizer_time: Duration = traces.iter().map(|t| t.execution_time).sum();
-
-            let total_rules: usize = rule_executions.values().map(|rules| rules.len()).sum();
-            let applied_rules: usize = rule_executions
-                .values()
-                .flat_map(|rules| rules.iter())
-                .filter(|r| r.had_effect)
-                .count();
-            let total_rule_time: Duration = rule_executions
-                .values()
-                .flat_map(|rules| rules.iter())
-                .map(|r| r.time)
-                .sum();
-
-            report.push_str(&format!(
+        report.push_str(&format!(
                 "\nSummary:\n  Optimizers: {}/{} had effect (total time: {:.2?})\n  Rules: {}/{} had effect (total time: {:.2?})\n",
                 applied_optimizers, total_optimizers, total_optimizer_time,
                 applied_rules, total_rules, total_rule_time
             ));
 
-            info!("{}", report);
-        }
+        info!("{}", report);
     }
 
     /// Generate a summary report of applied optimizers and rules
     pub fn generate_report(&self) -> String {
         if self.traces.lock().is_empty() && self.rule_executions.lock().is_empty() {
-            return "No optimizers or rules were applied.".to_string();
+            return "No optimizers or rules were applied.\nEnable tracing with 'SET enable_optimizer_trace = 1;'".to_string();
         }
 
         let mut report = String::new();

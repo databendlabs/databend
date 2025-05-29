@@ -94,33 +94,37 @@ impl RecursiveRuleOptimizer {
             {
                 s_expr.set_applied_rule(&rule.id());
 
-                // Record the expression before rule application and start time
+                // Save the expression before rule application
                 let before_expr = s_expr.clone();
+
+                // Measure execution time
                 let start_time = Instant::now();
 
                 // Apply the rule
                 rule.apply(&s_expr, &mut state)?;
 
-                // Calculate execution time
+                // Calculate duration
                 let duration = start_time.elapsed();
 
                 if !state.results().is_empty() {
                     let result = &state.results()[0];
 
-                    // If tracing is enabled, record the rule application
+                    // Only trace if collector exists and tracing is enabled
                     if let Some(collector) = &self.trace_collector {
-                        let metadata_ref = self.ctx.get_metadata();
-                        let metadata = &metadata_ref.read();
+                        if self.ctx.get_enable_trace() {
+                            let metadata_ref = self.ctx.get_metadata();
+                            let metadata = &metadata_ref.read();
 
-                        // Record detailed information about the rule application
-                        collector.trace_rule(
-                            rule_name,
-                            self.name(),
-                            duration,
-                            &before_expr,
-                            result,
-                            metadata,
-                        )?;
+                            // Record detailed information about the rule application
+                            collector.trace_rule(
+                                rule_name,
+                                self.name(),
+                                duration,
+                                &before_expr,
+                                result,
+                                metadata,
+                            )?;
+                        }
                     }
 
                     // Recursively optimize the result
