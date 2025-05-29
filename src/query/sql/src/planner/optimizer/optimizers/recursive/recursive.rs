@@ -110,8 +110,8 @@ impl RecursiveRuleOptimizer {
                     let result = &state.results()[0];
 
                     // Only trace if collector exists and tracing is enabled
-                    if let Some(collector) = &self.trace_collector {
-                        if self.ctx.get_enable_trace() {
+                    if self.ctx.get_enable_trace() {
+                        if let Some(collector) = &self.trace_collector {
                             let metadata_ref = self.ctx.get_metadata();
                             let metadata = &metadata_ref.read();
 

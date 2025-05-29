@@ -22,8 +22,7 @@ use super::common::contains_local_table_scan;
 use super::common::contains_warehouse_table_scan;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::pipeline::trace::OptimizerExecution;
-use crate::optimizer::pipeline::trace::OptimizerTraceCollector;
+use crate::optimizer::pipeline::OptimizerTraceCollector;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 
@@ -115,10 +114,6 @@ impl OptimizerPipeline {
         let mut current_expr = self.s_expr.clone();
         let total_optimizers = self.optimizers.len();
 
-        // Update trace status from context
-        self.trace_collector
-            .set_enable_trace(self.opt_ctx.get_enable_trace());
-
         for (idx, optimizer) in self.optimizers.iter_mut().enumerate() {
             // Save the expression before optimization
             let before_expr = current_expr.clone();
@@ -139,17 +134,15 @@ impl OptimizerPipeline {
             // Only trace if tracing is enabled
             if self.opt_ctx.get_enable_trace() {
                 let metadata_ref = self.opt_ctx.get_metadata();
-                let execution = OptimizerExecution {
-                    name: optimizer.name(),
-                    index: idx,
-                    total: total_optimizers,
-                    time: duration,
-                    before: &before_expr,
-                    after: &current_expr,
-                };
-
-                self.trace_collector
-                    .trace_optimizer(execution, &metadata_ref.read())?;
+                self.trace_collector.trace_optimizer(
+                    optimizer.name(),
+                    idx,
+                    total_optimizers,
+                    duration,
+                    &before_expr,
+                    &current_expr,
+                    &metadata_ref.read(),
+                )?;
             }
         }
 
