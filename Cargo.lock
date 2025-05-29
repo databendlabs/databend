@@ -5008,7 +5008,6 @@ dependencies = [
  "dtparse",
  "jiff 0.2.13",
  "num-traits",
- "regex",
 ]
 
 [[package]]

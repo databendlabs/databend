@@ -72,6 +72,7 @@ substr_utf8 -> substr
 substring -> substr
 substring_utf8 -> substr
 subtract -> minus
+to_char -> to_string
 to_datetime -> to_timestamp
 to_text -> to_string
 to_varchar -> to_string
@@ -3845,14 +3846,6 @@ Functions overloads:
 23 to_boolean(Float64 NULL) :: Boolean NULL
 0 to_centuries(Int64) :: Interval
 1 to_centuries(Int64 NULL) :: Interval NULL
-0 to_char(Int64, String) :: String
-1 to_char(Int64 NULL, String NULL) :: String NULL
-2 to_char(Float32, String) :: String
-3 to_char(Float32 NULL, String NULL) :: String NULL
-4 to_char(Float64, String) :: String
-5 to_char(Float64 NULL, String NULL) :: String NULL
-6 to_char(Timestamp, String) :: String
-7 to_char(Timestamp NULL, String NULL) :: String NULL
 0 to_date(Variant) :: Date NULL
 1 to_date(Variant NULL) :: Date NULL
 2 to_date(String, String) :: Date NULL
@@ -4258,12 +4251,18 @@ Functions overloads:
 30 to_string(Timestamp NULL) :: String NULL
 31 to_string(Binary) :: String
 32 to_string(Binary NULL) :: String NULL
-33 to_string(Bitmap) :: String
-34 to_string(Bitmap NULL) :: String NULL
-35 to_string(Geometry) :: String
-36 to_string(Geometry NULL) :: String NULL
-37 to_string(Interval) :: String
-38 to_string(Interval NULL) :: String NULL
+33 to_string(Int64, String) :: String
+34 to_string(Int64 NULL, String NULL) :: String NULL
+35 to_string(Float32, String) :: String
+36 to_string(Float32 NULL, String NULL) :: String NULL
+37 to_string(Float64, String) :: String
+38 to_string(Float64 NULL, String NULL) :: String NULL
+39 to_string(Bitmap) :: String
+40 to_string(Bitmap NULL) :: String NULL
+41 to_string(Geometry) :: String
+42 to_string(Geometry NULL) :: String NULL
+43 to_string(Interval) :: String
+44 to_string(Interval NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp NULL
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp

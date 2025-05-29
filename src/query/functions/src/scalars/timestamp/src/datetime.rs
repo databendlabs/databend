@@ -360,7 +360,6 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                     } else {
                         pg_format_to_strftime(format)
                     };
-                    println!("format is {}", format.clone());
                     match NaiveDate::parse_from_str(date_string, &format) {
                         Ok(res) => {
                             output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
@@ -715,7 +714,7 @@ fn register_number_to_date(registry: &mut FunctionRegistry) {
 }
 
 fn register_to_string(registry: &mut FunctionRegistry) {
-    registry.register_aliases("to_string", &["date_format", "strftime"]);
+    registry.register_aliases("to_string", &["date_format", "strftime", "to_char"]);
     registry.register_combine_nullable_2_arg::<TimestampType, StringType, StringType, _, _>(
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
@@ -2408,44 +2407,4 @@ where T: ToNumber<i32> {
             DateRounder::eval_timestamp::<T>(val, ctx.func_ctx.tz.clone())
         }),
     );
-}
-
-#[inline]
-pub fn pg_format_to_strftime(pg_format_string: &str) -> String {
-    let mut result = pg_format_string.to_string();
-
-    let mut mappings = vec![
-        ("YYYY", "%Y"),
-        ("YY", "%y"),
-        ("MMMM", "%B"),
-        ("MON", "%b"),
-        ("MM", "%m"),
-        ("DD", "%d"),
-        ("DY", "%a"),
-        ("HH24", "%H"),
-        ("HH12", "%I"),
-        ("AM", "%p"),
-        ("PM", "%p"), // AM/PM both map to %p
-        ("MI", "%M"),
-        ("SS", "%S"),
-        ("FF", "%f"),
-        ("UUUU", "%G"),
-        ("TZH", "%z"),
-        ("TZM", "%z"),
-    ];
-    mappings.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
-
-    for (pg_key, strftime_code) in mappings {
-        let pattern = if pg_key == "MON" {
-            // should keep "month". Only "MON" as a single string escape it.
-            format!(r"(?i)\b{}\b", regex::escape(pg_key))
-        } else {
-            format!(r"(?i){}", regex::escape(pg_key))
-        };
-        let reg = regex::Regex::new(&pattern).expect("Failed to compile regex for format key");
-
-        // Use replace_all to substitute all occurrences of the PG key with the strftime code.
-        result = reg.replace_all(&result, strftime_code).to_string();
-    }
-    result
 }
