@@ -38,6 +38,7 @@ use crate::ast::statements::workload::ShowWorkloadGroupsStmt;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
+use crate::ast::Literal;
 use crate::ast::Query;
 use crate::Span;
 
@@ -61,6 +62,7 @@ pub enum Statement {
         graphical: bool,
         query: Box<Statement>,
     },
+    ReportIssue(String),
 
     CopyIntoTable(CopyIntoTableStmt),
     CopyIntoLocation(CopyIntoLocationStmt),
@@ -427,6 +429,7 @@ impl Statement {
         match self {
             Statement::Query(..)
             | Statement::Explain { .. }
+            | Statement::ReportIssue { .. }
             | Statement::ExplainAnalyze { .. }
             | Statement::CopyIntoTable(..)
             | Statement::CopyIntoLocation(..)
@@ -658,6 +661,9 @@ impl Display for Statement {
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
                 }
                 write!(f, " {query}")?;
+            }
+            Statement::ReportIssue(sql) => {
+                write!(f, "REPORT ISSUE {}", Literal::String(sql.clone()))?;
             }
             Statement::StatementWithSettings { settings, stmt } => {
                 if let Some(setting) = settings {

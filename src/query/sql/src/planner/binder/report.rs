@@ -12,7 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod table_statistics;
-pub use table_statistics::get_fuse_table_snapshot;
-pub use table_statistics::get_fuse_table_statistics;
-pub use table_statistics::TableStatisticsFunc;
+use databend_common_exception::Result;
+
+use crate::plans::Plan;
+use crate::Binder;
+
+impl Binder {
+    pub async fn bind_report_issue(&mut self, sql: &str) -> Result<Plan> {
+        Ok(Plan::ReportIssue(sql.to_string()))
+    }
+}

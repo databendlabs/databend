@@ -37,6 +37,8 @@ pub use numbers::NumbersTable;
 pub use openai::GPT2SQLTable;
 pub use others::LicenseInfoTable;
 pub use others::TenantQuotaTable;
+pub use system::get_fuse_table_snapshot;
+pub use system::get_fuse_table_statistics;
 pub use system::TableStatisticsFunc;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableFunctionFactory;

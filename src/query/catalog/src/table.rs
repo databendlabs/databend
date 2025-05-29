@@ -564,7 +564,7 @@ pub enum NavigationPoint {
     StreamInfo(TableInfo),
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct TableStatistics {
     pub num_rows: Option<u64>,
     pub data_size: Option<u64>,
