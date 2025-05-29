@@ -82,3 +82,39 @@ select /*+set_var(parquet_fast_read_bytes=1 )*/ $1 from @data/parquet/tuple.parq
 {"id":1,"t":{"A":1,"B":"a"}}
 {"id":2,"t":{"A":3,"B":"b"}}
 {"id":3,"t":{"A":3,"B":"c"}}
+
+query 
+select $1:address.0.city::string , $1:birthDate::date as dt from @data/parquet/complex.parquet order by dt;
+----
+Belmont 1961-10-27
+Greenfield 1963-10-26
+Verona 1964-02-05
+Eastham 1965-10-21
+Attleboro 1976-12-16
+Lowell 1982-12-05
+Springfield 1988-04-26
+Danvers 1994-09-30
+Lowell 2006-01-01
+Fairhaven 2014-01-22
+
+statement ok
+create or replace table t3(a string, b date);
+
+query 
+copy into t3 from (select $1:address.0.city, $1:birthDate from @data/parquet/complex.parquet)
+----
+parquet/complex.parquet 10 0 NULL NULL
+
+query 
+select * from t3 order by b
+----
+Belmont 1961-10-27
+Greenfield 1963-10-26
+Verona 1964-02-05
+Eastham 1965-10-21
+Attleboro 1976-12-16
+Lowell 1982-12-05
+Springfield 1988-04-26
+Danvers 1994-09-30
+Lowell 2006-01-01
+Fairhaven 2014-01-22
