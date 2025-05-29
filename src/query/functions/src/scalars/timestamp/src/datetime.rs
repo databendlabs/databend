@@ -351,11 +351,16 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "to_date",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, ctx| {
+            |date_string, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match NaiveDate::parse_from_str(date, format) {
+                    let format = if ctx.func_ctx.date_format_style == *"mysql" {
+                        format.to_string()
+                    } else {
+                        pg_format_to_strftime(format)
+                    };
+                    match NaiveDate::parse_from_str(date_string, &format) {
                         Ok(res) => {
                             output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
@@ -372,11 +377,16 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "try_to_date",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, _| {
+            |date, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match NaiveDate::parse_from_str(date, format) {
+                    let format = if ctx.func_ctx.date_format_style == *"mysql" {
+                        format.to_string()
+                    } else {
+                        pg_format_to_strftime(format)
+                    };
+                    match NaiveDate::parse_from_str(date, &format) {
                         Ok(res) => {
                             output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
@@ -400,7 +410,13 @@ fn string_to_format_datetime(
         return Ok((0, true));
     }
 
-    let (mut tm, offset) = BrokenDownTime::parse_prefix(format, timestamp)
+    let format = if ctx.func_ctx.date_format_style == *"mysql" {
+        format.to_string()
+    } else {
+        pg_format_to_strftime(format)
+    };
+
+    let (mut tm, offset) = BrokenDownTime::parse_prefix(&format, timestamp)
         .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))?;
 
     if !ctx.func_ctx.parse_datetime_ignore_remainder && offset != timestamp.len() {
@@ -698,14 +714,19 @@ fn register_number_to_date(registry: &mut FunctionRegistry) {
 }
 
 fn register_to_string(registry: &mut FunctionRegistry) {
-    registry.register_aliases("to_string", &["date_format", "strftime"]);
+    registry.register_aliases("to_string", &["date_format", "strftime", "to_char"]);
     registry.register_combine_nullable_2_arg::<TimestampType, StringType, StringType, _, _>(
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<TimestampType, StringType, NullableType<StringType>>(
             |micros, format, output, ctx| {
                 let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
-                let format = replace_time_format(format);
+                let format = if ctx.func_ctx.date_format_style == *"mysql" {
+                    format.to_string()
+                } else {
+                    pg_format_to_strftime(format)
+                };
+                let format = replace_time_format(&format);
                 let mut buf = String::new();
                 let mut formatter = fmt::Formatter::new(&mut buf, FormattingOptions::new());
                 if Display::fmt(&ts.strftime(format.as_ref()), &mut formatter).is_err() {

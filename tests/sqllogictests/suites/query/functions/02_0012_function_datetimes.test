@@ -282,6 +282,11 @@ select date_trunc('week', '2025-02-05 00:01:00');
 ----
 2025-02-03
 
+query T
+select trunc('2025-02-05 00:01:00', week);
+----
+2025-02-03
+
 query FF
 SELECT
     MONTHS_BETWEEN('2019-03-15'::DATE,
@@ -1421,6 +1426,31 @@ statement ok
 drop table t
 
 query T
+settings (date_format_style='Oracle') select to_string('2022-02-02', '精彩的YYYY年，美丽的MMmonth,激动のDDd');
+----
+精彩的2022年，美丽的02month,激动の02d
+
+query T
+settings (date_format_style='Oracle') select to_string('2024-04-05T00:00:00'::TIMESTAMP, 'mon dd HH12AM:MI:SS, yy');
+----
+Apr 05 12AM:00:00, 24
+
+query T
+settings (date_format_style='Oracle') select str_to_date('精彩的2022年，美丽的02month,激动の02d', '精彩的YYYY年，美丽的MM month,激动のDDd');
+----
+2022-02-02
+
+query T
+settings (date_format_style='Oracle') select to_date('精彩的2022年，美丽的02month,激动の02d', '精彩的YYYY年，美丽的MM month,激动のDDd');
+----
+2022-02-02
+
+query T
+settings (date_format_style='Oracle') select str_to_timestamp('2022年02月04日，03时58分59秒', 'YYYY年MM月DD日，HH24时MI分SS秒');
+----
+2022-02-04 03:58:59.000000
+
+query T
 select to_string('2022-02-02', '精彩的%Y年，美丽的%mmonth,激动の%dd');
 ----
 精彩的2022年，美丽的02month,激动の02d
@@ -1439,6 +1469,22 @@ query TTT
 select date_format('2022-02-04T03:58:59', '%x'), strftime('2022-02-04T03:58:59', '%X'), strftime('2022-02-04T03:58:59', '%c')
 ----
 2022-02-04 03:58:59 2022-02-04 03:58:59
+
+query TTT
+settings (date_format_style='Oracle') select to_char('2024-04-05'::DATE, 'mon dd, yyyy');
+----
+Apr 05, 2024
+
+query TTT
+settings (timezone = 'Asia/Shanghai', date_format_style='Oracle') select to_char('2024-04-05'::DATE, 'mon dd, yyyy TZH');
+----
+Apr 05, 2024 +08
+
+query TTT
+settings (date_format_style='Oracle') select to_char('2024-04-05T00:00:00'::TIMESTAMP, 'mon dd HH12AM:MI:SS, yy');
+----
+Apr 05 12AM:00:00, 24
+
 
 statement error (?s)1006.*%i
 select date_format('2022-2-04T03:58:59', '%i');

@@ -34,15 +34,14 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::ProcessorPtr;
-
 pub struct TransformNullIf {
-    func_ctx: FunctionContext,
+    func_ctx: Arc<FunctionContext>,
     schema: DataSchemaRef,
     exprs: Vec<Expr>,
 }
@@ -53,7 +52,7 @@ where Self: Transform
     pub fn try_new(
         select_schema: DataSchemaRef,
         insert_schema: DataSchemaRef,
-        func_ctx: FunctionContext,
+        func_ctx: Arc<FunctionContext>,
         null_str_list: &[String],
     ) -> Result<Self> {
         let exprs = select_schema
@@ -88,7 +87,7 @@ where Self: Transform
         output_port: Arc<OutputPort>,
         select_schema: DataSchemaRef,
         insert_schema: DataSchemaRef,
-        func_ctx: FunctionContext,
+        func_ctx: Arc<FunctionContext>,
         null_str_list: &[String],
     ) -> Result<ProcessorPtr> {
         let exprs = select_schema

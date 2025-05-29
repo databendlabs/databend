@@ -33,6 +33,8 @@ async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
     Ok(())
 }
 
+// TODO this integration test can only be tested with valid EE license, to be re-enabled till CI supports it
+#[ignore]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> Result<()> {
     let fixture = TestFixture::setup().await?;

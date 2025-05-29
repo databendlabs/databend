@@ -235,8 +235,31 @@ impl observe::MetricsIntercept for MetricsRecorder {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// observe::MetricLabels contains root but we don't want it.
+#[derive(Clone, Debug)]
 struct OperationLabels(observe::MetricLabels);
+
+impl PartialEq for OperationLabels {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.scheme == other.0.scheme
+            && self.0.namespace == other.0.namespace
+            && self.0.operation == other.0.operation
+            && self.0.error == other.0.error
+            && self.0.status_code == other.0.status_code
+    }
+}
+
+impl Eq for OperationLabels {}
+
+impl std::hash::Hash for OperationLabels {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.scheme.hash(state);
+        self.0.namespace.hash(state);
+        self.0.operation.hash(state);
+        self.0.error.hash(state);
+        self.0.status_code.hash(state);
+    }
+}
 
 impl EncodeLabelSet for OperationLabels {
     fn encode(&self, mut encoder: LabelSetEncoder) -> Result<(), fmt::Error> {

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::LazyLock;
+
 use databend_common_exception::Result;
 use jiff::civil::date;
 use jiff::civil::datetime;
@@ -1313,4 +1315,49 @@ pub fn previous_or_next_day(dt: &Zoned, target: Weekday, is_previous: bool) -> i
     days_diff = if days_diff == 0 { 7 } else { days_diff };
 
     datetime_to_date_inner_number(dt) + dir * days_diff
+}
+
+static PG_STRFTIME_MAPPINGS: LazyLock<Vec<(&'static str, &'static str)>> = LazyLock::new(|| {
+    let mut mappings = vec![
+        ("YYYY", "%Y"),
+        ("YY", "%y"),
+        ("MMMM", "%B"),
+        ("MON", "%b"),
+        ("MM", "%m"),
+        ("DD", "%d"),
+        ("DY", "%a"),
+        ("HH24", "%H"),
+        ("HH12", "%I"),
+        ("AM", "%p"),
+        ("PM", "%p"),
+        ("MI", "%M"),
+        ("SS", "%S"),
+        ("FF", "%f"),
+        ("UUUU", "%G"),
+        ("TZHTZM", "%z"),
+        ("TZH:TZM", "%z"),
+        ("TZH", "%:::z"),
+    ];
+    // Sort by key length in descending order to ensure
+    // longer patterns are matched first and to avoid short patterns replacing part of long patterns prematurely.
+    mappings.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    mappings
+});
+
+#[inline]
+pub fn pg_format_to_strftime(pg_format_string: &str) -> String {
+    let mut result = pg_format_string.to_string();
+    for (pg_key, strftime_code) in PG_STRFTIME_MAPPINGS.iter() {
+        let pattern = if *pg_key == "MON" {
+            // should keep "month". Only "MON" as a single string escape it.
+            format!(r"(?i)\b{}\b", regex::escape(pg_key))
+        } else {
+            format!(r"(?i){}", regex::escape(pg_key))
+        };
+        let reg = regex::Regex::new(&pattern).expect("Failed to compile regex for format key");
+
+        // Use replace_all to substitute all occurrences of the PG key with the strftime code.
+        result = reg.replace_all(&result, *strftime_code).to_string();
+    }
+    result
 }

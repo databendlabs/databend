@@ -395,8 +395,9 @@ fn register_grouping(registry: &mut FunctionRegistry) {
 }
 
 fn register_num_to_char(registry: &mut FunctionRegistry) {
+    registry.register_aliases("to_string", &["to_char"]);
     registry.register_passthrough_nullable_2_arg::<Int64Type, StringType, StringType, _, _>(
-        "to_char",
+        "to_string",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<Int64Type, StringType, StringType>(
             |value, fmt, builder, ctx| {
@@ -425,7 +426,7 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_2_arg::<Float32Type, StringType, StringType, _, _>(
-        "to_char",
+        "to_string",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<Float32Type, StringType, StringType>(
             |value, fmt, builder, ctx| {
@@ -455,7 +456,7 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_2_arg::<Float64Type, StringType, StringType, _, _>(
-        "to_char",
+        "to_string",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<Float64Type, StringType, StringType>(
             |value, fmt, builder, ctx| {

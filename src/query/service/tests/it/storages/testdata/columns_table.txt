@@ -223,6 +223,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'is_attach'                       | 'system'             | 'tables'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_attach'                       | 'system'             | 'tables_with_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_configured'                   | 'system'             | 'users'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'is_external'                     | 'system'             | 'tables'                 | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
+| 'is_external'                     | 'system'             | 'tables_with_history'    | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_insertable_into'              | 'information_schema' | 'views'                  | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_nullable'                     | 'information_schema' | 'columns'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_nullable'                     | 'system'             | 'columns'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -406,6 +408,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'status'                          | 'system'             | 'locks'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'status'                          | 'system'             | 'notification_history'   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'status'                          | 'system'             | 'processes'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'storage_param'                   | 'system'             | 'tables'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'storage_param'                   | 'system'             | 'tables_with_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'stream_id'                       | 'system'             | 'streams'                | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'sub_part'                        | 'information_schema' | 'statistics'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'suspend_task_after_num_failures' | 'system'             | 'tasks'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
@@ -434,6 +438,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'table_name'                      | 'information_schema' | 'views'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_name'                      | 'system'             | 'streams'                | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'table_name'                      | 'system'             | 'streams_terse'          | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
+| 'table_option'                    | 'system'             | 'tables'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'table_option'                    | 'system'             | 'tables_with_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_rows'                      | 'information_schema' | 'tables'                 | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'table_schema'                    | 'information_schema' | 'columns'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_schema'                    | 'information_schema' | 'key_column_usage'       | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |

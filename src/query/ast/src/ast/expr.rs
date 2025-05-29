@@ -998,6 +998,20 @@ pub struct FunctionCall {
     pub lambda: Option<Lambda>,
 }
 
+impl Default for FunctionCall {
+    fn default() -> Self {
+        Self {
+            distinct: false,
+            name: Identifier::from_name(None, ""),
+            args: vec![],
+            params: vec![],
+            order_by: vec![],
+            window: None,
+            lambda: None,
+        }
+    }
+}
+
 impl Display for FunctionCall {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let FunctionCall {

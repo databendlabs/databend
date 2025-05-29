@@ -25,7 +25,10 @@ run "typ=csv " "csv/it.csv"
 run "format_name='not_exist'" "csv/it.csv"
 # file parse error
 run "type=csv" "parquet/tuple.parquet"
+run "type=parquet" "ontime_200.csv"
+
 # file decode error
 run "type=csv" "csv/header_only.csv"
+
 
 stmt "drop table t1;"

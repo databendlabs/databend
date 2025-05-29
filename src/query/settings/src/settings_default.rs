@@ -150,6 +150,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
+                ("week_start", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Specifies the first day of the week.(Used by week-related date functions)",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("parquet_max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8192),
                     desc: "Max block size for parquet reader",
@@ -323,6 +330,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
+                }),
+                ("date_format_style", DefaultSettingValue {
+                    value: UserSettingValue::String("MySQL".to_owned()),
+                    desc: "Sets the date format style(Used by datetime functions). Available values include \"MySQL\",  \"Oracle\".",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["Oracle".into(), "MySQL".into()])),
                 }),
                 ("query_tag", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
@@ -1116,7 +1130,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("format_null_as_str", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Format NULL as str in query api response",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1272,13 +1286,6 @@ impl DefaultSettings {
                 ("enable_auto_vacuum", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Whether to automatically trigger VACUUM operations on tables (using vacuum2)",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("use_vacuum2_to_purge_transient_table_data", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Experimental flag which indicates if use vacuum2 to purge transient table data",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
