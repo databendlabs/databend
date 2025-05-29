@@ -35,6 +35,7 @@ use super::policy::ReadPolicyBuilder;
 use super::policy::ReadPolicyImpl;
 use super::utils::evaluate_topk;
 use super::utils::read_all;
+use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_reader::topk::BuiltTopK;
 use crate::parquet_reader::topk::ParquetTopK;
@@ -136,6 +137,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
         sorter: &mut Option<TopKSorter>,
         transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
+        _filter: Option<Arc<ParquetPredicate>>,
     ) -> Result<Option<ReadPolicyImpl>> {
         debug_assert!(sorter.is_some());
         let sorter = sorter.as_mut().unwrap();

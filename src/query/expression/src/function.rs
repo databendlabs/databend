@@ -154,7 +154,7 @@ pub enum FunctionEval {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FunctionContext {
     pub tz: TimeZone,
     pub now: Zoned,
