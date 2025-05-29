@@ -263,7 +263,7 @@ impl<'a> Evaluator<'a> {
             let mut check = CheckStrictValue;
             assert!(
                 check.visit_value(result.clone()).is_ok(),
-                "result {result:?}",
+                "strict check fail on expr: {expr}",
             )
         }
 
@@ -287,7 +287,9 @@ impl<'a> Evaluator<'a> {
         } = call;
         let child_suppress_error = function.signature.name == "is_not_error";
         let mut child_option = options.with_suppress_error(child_suppress_error);
-        child_option.strict_eval = false;
+        if child_option.strict_eval && function.signature.name != "assume_not_null" {
+            child_option.strict_eval = false;
+        }
 
         let args = args
             .iter()

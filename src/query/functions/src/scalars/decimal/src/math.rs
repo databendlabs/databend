@@ -16,9 +16,11 @@ use std::ops::*;
 use std::sync::Arc;
 
 use databend_common_expression::types::compute_view::Compute;
+use databend_common_expression::types::compute_view::ComputeView;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
@@ -317,67 +319,27 @@ fn decimal_rounds(
     target_scale: i64,
     mode: RoundMode,
 ) -> Value<AnyType> {
-    let (from_decimal_type, _) = DecimalDataType::from_value(arg).unwrap();
-    match (from_decimal_type, dest_type) {
-        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal64(_)) => {
-            if source_scale < target_scale {
-                return arg.to_owned();
-            }
-            let arg = arg.try_downcast().unwrap();
-            type C = CoreDecimal<i64>;
-            decimal_rounds_type::<C, _, _>(arg, ctx, source_scale, target_scale, mode)
-                .upcast_decimal(dest_type.size())
-        }
-        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(_)) => {
-            if source_scale < target_scale {
-                return arg.to_owned();
-            }
-            let arg = arg.try_downcast().unwrap();
-            type C = CoreDecimal<i128>;
-            decimal_rounds_type::<C, _, _>(arg, ctx, source_scale, target_scale, mode)
-                .upcast_decimal(dest_type.size())
-        }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(_)) => {
-            if source_scale < target_scale {
-                return arg.to_owned();
-            }
-            let arg = arg.try_downcast().unwrap();
-            type C = CoreDecimal<i256>;
-            decimal_rounds_type::<C, _, _>(arg, ctx, source_scale, target_scale, mode)
-                .upcast_decimal(dest_type.size())
-        }
+    let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
 
-        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal128(_)) => {
-            let arg = arg.try_downcast().unwrap();
-            decimal_rounds_type::<I64ToI128, _, _>(arg, ctx, source_scale, target_scale, mode)
-                .upcast_decimal(dest_type.size())
-        }
-        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal256(_)) => {
-            let arg = arg.try_downcast().unwrap();
-            decimal_rounds_type::<I64ToI256, _, _>(arg, ctx, source_scale, target_scale, mode)
-                .upcast_decimal(dest_type.size())
-        }
-        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal64(_)) => {
-            let arg = arg.try_downcast().unwrap();
-            decimal_rounds_type::<I128ToI64, _, _>(arg, ctx, source_scale, target_scale, mode)
-                .upcast_decimal(dest_type.size())
-        }
-        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal256(_)) => {
-            let arg = arg.try_downcast().unwrap();
-            decimal_rounds_type::<I128ToI256, _, _>(arg, ctx, source_scale, target_scale, mode)
-                .upcast_decimal(dest_type.size())
-        }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal64(_)) => {
-            let arg = arg.try_downcast().unwrap();
-            decimal_rounds_type::<I256ToI64, _, _>(arg, ctx, source_scale, target_scale, mode)
-                .upcast_decimal(dest_type.size())
-        }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(_)) => {
-            let arg = arg.try_downcast().unwrap();
-            decimal_rounds_type::<I256ToI128, _, _>(arg, ctx, source_scale, target_scale, mode)
-                .upcast_decimal(dest_type.size())
-        }
+    if from_type.data_kind() == dest_type.data_kind() && source_scale < target_scale {
+        return arg.to_owned();
     }
+
+    with_decimal_mapped_type!(|IN| match from_type {
+        DecimalDataType::IN(_) => {
+            let arg = arg.try_downcast().unwrap();
+            with_decimal_mapped_type!(|OUT| match dest_type {
+                DecimalDataType::OUT(size) => decimal_rounds_type::<DecimalConvert<IN, OUT>, _, _>(
+                    arg,
+                    ctx,
+                    source_scale,
+                    target_scale,
+                    mode
+                )
+                .upcast_decimal(size),
+            })
+        }
+    })
 }
 
 fn decimal_rounds_type<C, T, U>(
@@ -428,52 +390,17 @@ fn decimal_abs(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Value<AnyType> {
         DecimalDataType::from(from_type.size())
     };
 
-    match (from_type, dest_type) {
-        (DecimalDataType::Decimal64(size), DecimalDataType::Decimal64(_)) => {
-            type T = DecimalType<i64>;
-            let value = arg.try_downcast().unwrap();
-            vectorize_1_arg::<T, T>(|a, _| a.abs())(value, ctx).upcast_decimal(size)
+    with_decimal_mapped_type!(|IN| match from_type {
+        DecimalDataType::IN(size) => {
+            with_decimal_mapped_type!(|OUT| match dest_type {
+                DecimalDataType::OUT(_) => {
+                    let value = arg.try_downcast().unwrap();
+                    vectorize_1_arg::<ComputeView<DecimalConvert<IN, OUT>, _, _>, DecimalType<OUT>>(
+                        |a, _| a.abs(),
+                    )(value, ctx)
+                    .upcast_decimal(size)
+                }
+            })
         }
-        (DecimalDataType::Decimal128(size), DecimalDataType::Decimal128(_)) => {
-            type T = DecimalType<i128>;
-            let value = arg.try_downcast().unwrap();
-            vectorize_1_arg::<T, T>(|a, _| a.abs())(value, ctx).upcast_decimal(size)
-        }
-        (DecimalDataType::Decimal256(size), DecimalDataType::Decimal256(_)) => {
-            type T = DecimalType<i256>;
-            let value = arg.try_downcast().unwrap();
-            vectorize_1_arg::<T, T>(|a, _| a.abs())(value, ctx).upcast_decimal(size)
-        }
-
-        (DecimalDataType::Decimal64(size), DecimalDataType::Decimal128(_)) => {
-            let value = arg.try_downcast().unwrap();
-            vectorize_1_arg::<Decimal64As128Type, Decimal128Type>(|a, _| a.abs())(value, ctx)
-                .upcast_decimal(size)
-        }
-        (DecimalDataType::Decimal64(size), DecimalDataType::Decimal256(_)) => {
-            let value = arg.try_downcast().unwrap();
-            vectorize_1_arg::<Decimal64As256Type, Decimal256Type>(|a, _| a.abs())(value, ctx)
-                .upcast_decimal(size)
-        }
-        (DecimalDataType::Decimal128(size), DecimalDataType::Decimal64(_)) => {
-            let value = arg.try_downcast().unwrap();
-            vectorize_1_arg::<Decimal128As64Type, Decimal64Type>(|a, _| a.abs())(value, ctx)
-                .upcast_decimal(size)
-        }
-        (DecimalDataType::Decimal128(size), DecimalDataType::Decimal256(_)) => {
-            let value = arg.try_downcast().unwrap();
-            vectorize_1_arg::<Decimal128As256Type, Decimal256Type>(|a, _| a.abs())(value, ctx)
-                .upcast_decimal(size)
-        }
-        (DecimalDataType::Decimal256(size), DecimalDataType::Decimal64(_)) => {
-            let value = arg.try_downcast().unwrap();
-            vectorize_1_arg::<Decimal256As64Type, Decimal64Type>(|a, _| a.abs())(value, ctx)
-                .upcast_decimal(size)
-        }
-        (DecimalDataType::Decimal256(size), DecimalDataType::Decimal128(_)) => {
-            let value = arg.try_downcast().unwrap();
-            vectorize_1_arg::<Decimal256As128Type, Decimal128Type>(|a, _| a.abs())(value, ctx)
-                .upcast_decimal(size)
-        }
-    }
+    })
 }

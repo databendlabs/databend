@@ -17,10 +17,12 @@ use std::sync::Arc;
 
 use databend_common_expression::types::compute_view::Compute;
 use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
+use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::*;
+use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
@@ -142,53 +144,17 @@ fn op_decimal(
     let a = (a.0, a.1.size());
     let b = (b.0, b.1.size());
 
-    match (decimal_type, result_type) {
-        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal64(size)) => {
-            type T = i64;
-            binary_decimal::<CoreDecimal<T>, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, size, op,
-            )
-        }
-        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(size)) => {
-            type T = i128;
-            binary_decimal::<CoreDecimal<T>, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, size, op,
-            )
-        }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(size)) => {
-            type T = i256;
-            binary_decimal::<CoreDecimal<T>, DecimalType<T>, DecimalType<T>, _, _>(
-                a, b, ctx, size, op,
-            )
-        }
-
-        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal128(size)) => {
-            type T = i64;
-            binary_decimal::<I64ToI128, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
-        }
-        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal256(size)) => {
-            type T = i64;
-            binary_decimal::<I64ToI256, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
-        }
-
-        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal64(size)) => {
-            type T = i128;
-            binary_decimal::<I128ToI64, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
-        }
-        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal256(size)) => {
-            type T = i128;
-            binary_decimal::<I128ToI256, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
-        }
-
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal64(size)) => {
-            type T = i256;
-            binary_decimal::<I256ToI64, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
-        }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(size)) => {
-            type T = i256;
-            binary_decimal::<I256ToI128, DecimalType<T>, DecimalType<T>, _, _>(a, b, ctx, size, op)
-        }
-    }
+    with_decimal_mapped_type!(|INPUT| match decimal_type {
+        DecimalDataType::INPUT(_) => with_decimal_mapped_type!(|OUTPUT| match result_type {
+            DecimalDataType::OUTPUT(size) => binary_decimal::<
+                DecimalConvert<INPUT, OUTPUT>,
+                DecimalType<INPUT>,
+                DecimalType<INPUT>,
+                _,
+                _,
+            >(a, b, ctx, size, op),
+        }),
+    })
 }
 
 fn binary_decimal<C, L, R, T, U>(
@@ -482,6 +448,95 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
     }));
 
     registry.register_function_factory(&name, factory);
+}
+
+pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
+    registry.register_function_factory("minus", FunctionFactory::Closure(Box::new(|_params, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+
+        let is_nullable = args_type[0].is_nullable();
+        let arg_type = args_type[0].remove_nullable();
+        if !arg_type.is_decimal() {
+            return None;
+        }
+
+        let function = Function {
+            signature: FunctionSignature {
+                name: "minus".to_string(),
+                args_type: vec![arg_type.clone()],
+                return_type: arg_type.clone(),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, d| match &d[0] {
+                    Domain::Decimal(DecimalDomain::Decimal64(d, size)) => {
+                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal64(
+                            SimpleDomain {
+                                min: -d.max,
+                                max: d.min.checked_neg().unwrap_or(i64::DECIMAL_MAX), // Only -MIN could overflow
+                            },
+                            *size,
+                        )))
+                    }
+                    Domain::Decimal(DecimalDomain::Decimal128(d, size)) => {
+                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
+                            SimpleDomain {
+                                min: -d.max,
+                                max: d.min.checked_neg().unwrap_or(i128::DECIMAL_MAX), // Only -MIN could overflow
+                            },
+                            *size,
+                        )))
+                    }
+                    Domain::Decimal(DecimalDomain::Decimal256(d, size)) => {
+                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
+                            SimpleDomain {
+                                min: -d.max,
+                                max: d.min.checked_neg().unwrap_or(i256::DECIMAL_MAX), // Only -MIN could overflow
+                            },
+                            *size,
+                        )))
+                    }
+                    _ => unreachable!(),
+                }),
+                eval: Box::new(unary_minus_decimal),
+            },
+        };
+
+        if is_nullable {
+            Some(Arc::new(function.passthrough_nullable()))
+        } else {
+            Some(Arc::new(function))
+        }
+    })));
+}
+
+fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let arg = &args[0];
+    let (decimal, _) = DecimalDataType::from_value(arg).unwrap();
+    match decimal {
+        DecimalDataType::Decimal64(size) => {
+            if ctx.strict_eval {
+                let arg = arg.try_downcast().unwrap();
+                vectorize_1_arg::<Decimal64As128Type, Decimal128Type>(|t, _| -t)(arg, ctx)
+                    .upcast_decimal(size)
+            } else {
+                let arg = arg.try_downcast().unwrap();
+                type T = DecimalType<i64>;
+                vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
+            }
+        }
+        DecimalDataType::Decimal128(size) => {
+            let arg = arg.try_downcast().unwrap();
+            type T = DecimalType<i128>;
+            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
+        }
+        DecimalDataType::Decimal256(size) => {
+            let arg = arg.try_downcast().unwrap();
+            type T = DecimalType<i256>;
+            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
+        }
+    }
 }
 
 pub fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {

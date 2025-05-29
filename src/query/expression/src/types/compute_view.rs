@@ -48,9 +48,9 @@ where T: SimpleType
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComputeView<F, T, C>(PhantomData<(F, T, C)>);
+pub struct ComputeView<C, F, T>(PhantomData<(C, F, T)>);
 
-impl<F, T, C> AccessType for ComputeView<F, T, C>
+impl<C, F, T> AccessType for ComputeView<C, F, T>
 where
     F: SimpleType,
     T: SimpleType,

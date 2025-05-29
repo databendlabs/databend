@@ -58,6 +58,7 @@ use super::SimpleType;
 use super::SimpleValueType;
 use super::ValueType;
 use crate::utils::arrow::buffer_into_mut;
+use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -220,6 +221,12 @@ impl DecimalScalar {
     pub fn size(&self) -> DecimalSize {
         with_decimal_type!(|DECIMAL| match self {
             DecimalScalar::DECIMAL(_, size) => *size,
+        })
+    }
+
+    pub fn as_decimal<D: Decimal>(&self) -> D {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(value, _) => value.as_decimal(),
         })
     }
 }
@@ -401,6 +408,8 @@ pub trait Decimal:
     fn default_decimal_size() -> DecimalSize;
 
     fn from_float(value: f64) -> Self;
+
+    fn from_i64(value: i64) -> Self;
     fn from_i128<U: Into<i128>>(value: U) -> Self;
     fn from_i256(value: i256) -> Self;
     fn from_bigint(value: BigInt) -> Option<Self>;
@@ -435,6 +444,8 @@ pub trait Decimal:
     }
 
     fn to_scalar(self, size: DecimalSize) -> DecimalScalar;
+
+    fn as_decimal<D: Decimal>(self) -> D;
 
     fn with_size(&self, size: DecimalSize) -> Option<Self> {
         let multiplier = Self::e(size.scale() as u32);
@@ -582,6 +593,10 @@ impl Decimal for i64 {
         value as i64
     }
 
+    fn from_i64(value: i64) -> Self {
+        value
+    }
+
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         value.into() as i64
     }
@@ -694,6 +709,10 @@ impl Decimal for i64 {
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
         DecimalColumn::Decimal64(value, size)
+    }
+
+    fn as_decimal<D: Decimal>(self) -> D {
+        D::from_i64(self)
     }
 }
 
@@ -865,6 +884,10 @@ impl Decimal for i128 {
         DecimalColumn::Decimal128(value, size)
     }
 
+    fn as_decimal<D: Decimal>(self) -> D {
+        D::from_i128(self)
+    }
+
     fn from_float(value: f64) -> Self {
         // still needs to be optimized.
         // An implementation similar to float64_as_i256 obtained from the ethnum library
@@ -894,6 +917,10 @@ impl Decimal for i128 {
         } else {
             Self::zero()
         }
+    }
+
+    fn from_i64(value: i64) -> Self {
+        value as _
     }
 
     fn from_i128<U: Into<i128>>(value: U) -> Self {
@@ -1152,6 +1179,10 @@ impl Decimal for i256 {
         i256(value.as_i256())
     }
 
+    fn from_i64(value: i64) -> Self {
+        i256::from(value)
+    }
+
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         i256::from(value.into())
     }
@@ -1281,6 +1312,10 @@ impl Decimal for i256 {
     ));
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
         DecimalColumn::Decimal256(value, size)
+    }
+
+    fn as_decimal<D: Decimal>(self) -> D {
+        D::from_i256(self)
     }
 }
 
@@ -1638,40 +1673,22 @@ impl DecimalColumnBuilder {
     }
 
     pub fn push_repeat(&mut self, item: DecimalScalar, n: usize) {
-        match self {
-            DecimalColumnBuilder::Decimal64(builder, builder_size) => {
-                let (value, size) = item.to_decimal64().into_decimal64().unwrap();
-                debug_assert_eq!(*builder_size, size);
+        with_decimal_mapped_type!(|DECIMAL| match self {
+            DecimalColumnBuilder::DECIMAL(builder, builder_size) => {
+                let value = item.as_decimal::<DECIMAL>();
+                debug_assert_eq!(*builder_size, item.size());
                 if n == 1 {
                     builder.push(value)
                 } else {
                     builder.resize(builder.len() + n, value)
                 }
             }
-            DecimalColumnBuilder::Decimal128(builder, builder_size) => {
-                let (value, size) = item.to_decimal128().into_decimal128().unwrap();
-                debug_assert_eq!(*builder_size, size);
-                if n == 1 {
-                    builder.push(value)
-                } else {
-                    builder.resize(builder.len() + n, value)
-                }
-            }
-            DecimalColumnBuilder::Decimal256(builder, builder_size) => {
-                let (value, size) = item.to_decimal256().into_decimal256().unwrap();
-                debug_assert_eq!(*builder_size, size);
-                if n == 1 {
-                    builder.push(value)
-                } else {
-                    builder.resize(builder.len() + n, value)
-                }
-            }
-        }
+        })
     }
 
     pub fn push_default(&mut self) {
-        with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalColumnBuilder::DECIMAL_TYPE(builder, _) => builder.push(0.into()),
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalColumnBuilder::DECIMAL(builder, _) => builder.push(0.into()),
         })
     }
 
@@ -2795,70 +2812,41 @@ impl Ord for i256 {
     }
 }
 
-macro_rules! impl_decimal_compute {
-    (
-        $struct_name:ident,
-        $from_type:ty,
-        $to_type:ty,
-        $convert_expr:expr,
-        $type_alias:ident
-    ) => {
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $struct_name;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DecimalConvert<F, T>(std::marker::PhantomData<(F, T)>);
 
-        impl Compute<CoreDecimal<$from_type>, CoreDecimal<$to_type>> for $struct_name {
-            fn compute(value: &$from_type) -> $to_type {
-                $convert_expr(*value)
-            }
-
-            fn compute_domain(domain: &SimpleDomain<$from_type>) -> SimpleDomain<$to_type> {
-                SimpleDomain {
-                    min: $convert_expr(domain.min),
-                    max: $convert_expr(domain.max),
-                }
-            }
+impl<F, T> Compute<CoreDecimal<F>, CoreDecimal<T>> for DecimalConvert<F, T>
+where
+    F: Decimal,
+    T: Decimal,
+{
+    #[inline]
+    fn compute(value: &F) -> T {
+        value.as_decimal::<T>()
+    }
+    #[inline]
+    fn compute_domain(domain: &SimpleDomain<F>) -> SimpleDomain<T> {
+        SimpleDomain {
+            min: domain.min.as_decimal::<T>(),
+            max: domain.max.as_decimal::<T>(),
         }
+    }
+}
 
-        pub type $type_alias =
-            ComputeView<CoreDecimal<$from_type>, CoreDecimal<$to_type>, $struct_name>;
+macro_rules! decimal_convert_type {
+    ($from:ty, $to:ty, $alias:ident, $compat:ident) => {
+        pub type $alias =
+            ComputeView<DecimalConvert<$from, $to>, CoreDecimal<$from>, CoreDecimal<$to>>;
+        pub type $compat = DecimalConvert<$from, $to>;
     };
 }
 
-impl_decimal_compute!(I64ToI128, i64, i128, |x: i64| x as i128, Decimal64As128Type);
-
-impl_decimal_compute!(I128ToI64, i128, i64, |x: i128| x as i64, Decimal128As64Type);
-
-impl_decimal_compute!(
-    I64ToI256,
-    i64,
-    i256,
-    |x: i64| i256::from(x as i128),
-    Decimal64As256Type
-);
-
-impl_decimal_compute!(
-    I256ToI64,
-    i256,
-    i64,
-    |x: i256| x.as_i64(),
-    Decimal256As64Type
-);
-
-impl_decimal_compute!(
-    I128ToI256,
-    i128,
-    i256,
-    |x: i128| i256::from(x),
-    Decimal128As256Type
-);
-
-impl_decimal_compute!(
-    I256ToI128,
-    i256,
-    i128,
-    |x: i256| x.as_i128(),
-    Decimal256As128Type
-);
+decimal_convert_type!(i64, i128, Decimal64As128Type, I64ToI128);
+decimal_convert_type!(i128, i64, Decimal128As64Type, I128ToI64);
+decimal_convert_type!(i64, i256, Decimal64As256Type, I64ToI256);
+decimal_convert_type!(i128, i256, Decimal128As256Type, I128ToI256);
+decimal_convert_type!(i256, i128, Decimal256As128Type, I256ToI128);
+decimal_convert_type!(i256, i64, Decimal256As64Type, I256ToI64);
 
 #[cfg(test)]
 mod tests {

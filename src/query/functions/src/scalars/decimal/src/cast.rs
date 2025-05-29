@@ -210,14 +210,12 @@ pub fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegistry) {
         };
 
         let eval = if is_f32 {
-            let arg_type = arg_type.clone();
             Box::new(move |args: &[Value<AnyType>], tx: &mut EvalContext| {
-                decimal_to_float::<F32>(&args[0], arg_type.clone(), tx)
+                decimal_to_float::<F32>(&args[0], tx)
             }) as _
         } else {
-            let arg_type = arg_type.clone();
             Box::new(move |args: &[Value<AnyType>], tx: &mut EvalContext| {
-                decimal_to_float::<F64>(&args[0], arg_type.clone(), tx)
+                decimal_to_float::<F64>(&args[0], tx)
             }) as _
         };
 
@@ -898,53 +896,49 @@ pub fn decimal_to_decimal(
 ) -> Value<AnyType> {
     let from_size = from_type.size();
     let dest_size = dest_type.size();
-    match (from_type, dest_type) {
-        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal64(_)) => {
+    match from_type {
+        DecimalDataType::Decimal64(_) => {
             let value = arg.try_downcast().unwrap();
-            decimal_expand_cast::<i64, i64>(from_size, dest_size, value, ctx)
-                .upcast_decimal(dest_size)
+            with_decimal_mapped_type!(|OUT| match dest_type {
+                DecimalDataType::OUT(_) => {
+                    decimal_expand_cast::<i64, OUT>(from_size, dest_size, value, ctx)
+                        .upcast_decimal(dest_size)
+                }
+            })
         }
-        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(_)) => {
+        DecimalDataType::Decimal128(_) => {
             let value = arg.try_downcast().unwrap();
-            decimal_expand_cast::<i128, i128>(from_size, dest_size, value, ctx)
-                .upcast_decimal(dest_size)
+            match dest_type {
+                DecimalDataType::Decimal64(_) => {
+                    decimal_shrink_cast::<i128, i64, I128ToI64>(from_size, dest_size, value, ctx)
+                        .upcast_decimal(dest_size)
+                }
+                DecimalDataType::Decimal128(_) => {
+                    decimal_expand_cast::<i128, i128>(from_size, dest_size, value, ctx)
+                        .upcast_decimal(dest_size)
+                }
+                DecimalDataType::Decimal256(_) => {
+                    decimal_expand_cast::<i128, i256>(from_size, dest_size, value, ctx)
+                        .upcast_decimal(dest_size)
+                }
+            }
         }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(_)) => {
+        DecimalDataType::Decimal256(_) => {
             let value = arg.try_downcast().unwrap();
-            decimal_expand_cast::<i256, i256>(from_size, dest_size, value, ctx)
-                .upcast_decimal(dest_size)
-        }
-
-        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal128(_)) => {
-            let value = arg.try_downcast().unwrap();
-            decimal_expand_cast::<i64, i128>(from_size, dest_size, value, ctx)
-                .upcast_decimal(dest_size)
-        }
-        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal256(_)) => {
-            let value = arg.try_downcast().unwrap();
-            decimal_expand_cast::<i64, i256>(from_size, dest_size, value, ctx)
-                .upcast_decimal(dest_size)
-        }
-        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal256(_)) => {
-            let value = arg.try_downcast().unwrap();
-            decimal_expand_cast::<i128, i256>(from_size, dest_size, value, ctx)
-                .upcast_decimal(dest_size)
-        }
-
-        (DecimalDataType::Decimal128(_), DecimalDataType::Decimal64(_)) => {
-            let value = arg.try_downcast().unwrap();
-            decimal_shrink_cast::<i128, i64, I128ToI64>(from_size, dest_size, value, ctx)
-                .upcast_decimal(dest_size)
-        }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal64(_)) => {
-            let value = arg.try_downcast().unwrap();
-            decimal_shrink_cast::<i256, i64, I256ToI64>(from_size, dest_size, value, ctx)
-                .upcast_decimal(dest_size)
-        }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(_)) => {
-            let value = arg.try_downcast().unwrap();
-            decimal_shrink_cast::<i256, i128, I256ToI128>(from_size, dest_size, value, ctx)
-                .upcast_decimal(dest_size)
+            match dest_type {
+                DecimalDataType::Decimal64(_) => {
+                    decimal_shrink_cast::<i256, i64, I256ToI64>(from_size, dest_size, value, ctx)
+                        .upcast_decimal(dest_size)
+                }
+                DecimalDataType::Decimal128(_) => {
+                    decimal_shrink_cast::<i256, i128, I256ToI128>(from_size, dest_size, value, ctx)
+                        .upcast_decimal(dest_size)
+                }
+                DecimalDataType::Decimal256(_) => {
+                    decimal_expand_cast::<i256, i256>(from_size, dest_size, value, ctx)
+                        .upcast_decimal(dest_size)
+                }
+            }
         }
     }
 }
@@ -981,33 +975,37 @@ impl DecimalConvert<i256, F64> for F64 {
     }
 }
 
-fn decimal_to_float<T>(
-    arg: &Value<AnyType>,
-    from_type: DataType,
-    ctx: &mut EvalContext,
-) -> Value<AnyType>
+fn decimal_to_float<T>(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Value<AnyType>
 where
     T: Number,
     T: DecimalConvert<i128, T>,
     T: DecimalConvert<i256, T>,
 {
-    let from_type = from_type.as_decimal().unwrap();
-
-    let result = if from_type.can_carried_by_128() {
-        let value = arg.try_downcast().unwrap();
-        let scale = from_type.scale() as i32;
-        vectorize_1_arg::<DecimalType<i128>, NumberType<T>>(|x, _ctx: &mut EvalContext| {
-            T::convert(x, scale)
-        })(value, ctx)
-    } else {
-        let value = arg.try_downcast().unwrap();
-        let scale = from_type.scale() as i32;
-        vectorize_1_arg::<DecimalType<i256>, NumberType<T>>(|x, _ctx: &mut EvalContext| {
-            T::convert(x, scale)
-        })(value, ctx)
-    };
-
-    result.upcast()
+    let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
+    match from_type {
+        DecimalDataType::Decimal64(size) => {
+            let value = arg.try_downcast().unwrap();
+            let scale = size.scale() as i32;
+            vectorize_1_arg::<Decimal64As128Type, NumberType<T>>(|x, _| T::convert(x, scale))(
+                value, ctx,
+            )
+        }
+        DecimalDataType::Decimal128(size) => {
+            let value = arg.try_downcast().unwrap();
+            let scale = size.scale() as i32;
+            vectorize_1_arg::<DecimalType<i128>, NumberType<T>>(|x, _| T::convert(x, scale))(
+                value, ctx,
+            )
+        }
+        DecimalDataType::Decimal256(size) => {
+            let value = arg.try_downcast().unwrap();
+            let scale = size.scale() as i32;
+            vectorize_1_arg::<DecimalType<i256>, NumberType<T>>(|x, _| T::convert(x, scale))(
+                value, ctx,
+            )
+        }
+    }
+    .upcast()
 }
 
 fn decimal_to_int<T: Number>(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Value<AnyType> {
