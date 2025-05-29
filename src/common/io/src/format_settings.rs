@@ -34,7 +34,7 @@ impl Default for FormatSettings {
             jiff_timezone: TimeZone::UTC,
             geometry_format: GeometryDataType::default(),
             enable_dst_hour_fix: false,
-            format_null_as_str: true,
+            format_null_as_str: false,
         }
     }
 }
