@@ -20,7 +20,7 @@
         <scala.binary.version>2.13</scala.binary.version>
         <spark.binary.version>3.3</spark.binary.version>
 
-        <spark.version>3.3.2</spark.version>
+        <spark.version>3.3.3</spark.version>
 
         <hadoop.version>3.3.0</hadoop.version>
 
