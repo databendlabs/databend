@@ -1346,7 +1346,7 @@ checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 
 [[package]]
 name = "bendpy"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "arrow",
  "arrow-schema",
