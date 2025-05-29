@@ -175,13 +175,11 @@ impl OptimizerTraceCollector {
             return;
         }
 
-        // First, generate and log the summary report
-        self.log_summary_report(&optimizers, &rules);
-
-        // Then, generate and log detailed reports for each optimizer
         for optimizer in optimizers.values() {
             self.log_optimizer_detail_report(optimizer, rules.get(&optimizer.name));
         }
+
+        self.log_summary_report(&optimizers, &rules);
     }
 
     /// Generate and log the summary report
@@ -218,10 +216,27 @@ impl OptimizerTraceCollector {
             if optimizer.had_effect {
                 has_applied = true;
 
+                // Get rules for this optimizer
+                let optimizer_rules = rules.get(&optimizer.name);
+                let applied_rule_count = optimizer_rules
+                    .map(|rules| rules.iter().filter(|r| r.had_effect).count())
+                    .unwrap_or(0);
+                let total_rule_count = optimizer_rules.map(|rules| rules.len()).unwrap_or(0);
+
+                // Format the optimizer name with rule count if applicable
+                let optimizer_display = if total_rule_count > 0 {
+                    format!(
+                        "{} (applied rules: {}/{})",
+                        optimizer.name, applied_rule_count, total_rule_count
+                    )
+                } else {
+                    optimizer.name.clone()
+                };
+
                 // Output optimizer information
                 report.push_str(&format!(
                     "  - [{}] {} (execution time: {:.2?})\n",
-                    optimizer.index, optimizer.name, optimizer.time
+                    optimizer.index, optimizer_display, optimizer.time
                 ));
 
                 // Find rules for this optimizer
@@ -243,11 +258,8 @@ impl OptimizerTraceCollector {
                                 "    │   ├── "
                             };
                             report.push_str(&format!(
-                                "{prefix}[{}.{}] {} (execution time: {:.2?})\n",
-                                optimizer.index,
-                                i + 1,
-                                rule.name,
-                                rule.time
+                                "{prefix}{} (execution time: {:.2?})\n",
+                                rule.name, rule.time
                             ));
                         }
                     }
@@ -262,11 +274,8 @@ impl OptimizerTraceCollector {
                                 "        ├── "
                             };
                             report.push_str(&format!(
-                                "{prefix}[{}.{}] {} (execution time: {:.2?})\n",
-                                optimizer.index,
-                                applied_rules.len() + i + 1,
-                                rule.name,
-                                rule.time
+                                "{prefix}{} (execution time: {:.2?})\n",
+                                rule.name, rule.time
                             ));
                         }
                     }
@@ -287,10 +296,27 @@ impl OptimizerTraceCollector {
             if !optimizer.had_effect {
                 has_non_applied = true;
 
+                // Get rules for this optimizer
+                let optimizer_rules = rules.get(&optimizer.name);
+                let applied_rule_count = optimizer_rules
+                    .map(|rules| rules.iter().filter(|r| r.had_effect).count())
+                    .unwrap_or(0);
+                let total_rule_count = optimizer_rules.map(|rules| rules.len()).unwrap_or(0);
+
+                // Format the optimizer name with rule count if applicable
+                let optimizer_display = if total_rule_count > 0 {
+                    format!(
+                        "{} (applied rules: {}/{})",
+                        optimizer.name, applied_rule_count, total_rule_count
+                    )
+                } else {
+                    optimizer.name.clone()
+                };
+
                 // Output optimizer information
                 report.push_str(&format!(
                     "  - [{}] {} (execution time: {:.2?})\n",
-                    optimizer.index, optimizer.name, optimizer.time
+                    optimizer.index, optimizer_display, optimizer.time
                 ));
 
                 // Find rules for this optimizer
@@ -368,10 +394,19 @@ impl OptimizerTraceCollector {
 
         // Add rule details if available
         if let Some(rules) = optimizer_rules {
-            for (i, rule) in rules.iter().enumerate() {
-                if rule.had_effect {
+            // Show total rule count
+            report.push_str(&format!(
+                "Total rules for this optimizer: {}\n",
+                rules.len()
+            ));
+
+            // Show applied rules
+            let applied_rules: Vec<_> = rules.iter().filter(|r| r.had_effect).collect();
+            if !applied_rules.is_empty() {
+                report.push_str(&format!("Applied rules: {}\n", applied_rules.len()));
+                for (i, rule) in applied_rules.iter().enumerate() {
                     report.push_str(&format!(
-                        "---- Rule [{}.{}]: {} (execution time: {:.2?}) ----\n",
+                        "---- Applied Rule [{}.{}]: {} (execution time: {:.2?}) ----\n",
                         optimizer.index,
                         i + 1,
                         rule.name,
@@ -382,7 +417,26 @@ impl OptimizerTraceCollector {
                     report.push_str(&rule.diff);
                     report.push('\n');
                 }
+            } else {
+                report.push_str("No rules had effect for this optimizer.\n");
             }
+
+            // Show non-applied rules
+            let non_applied_rules: Vec<_> = rules.iter().filter(|r| !r.had_effect).collect();
+            if !non_applied_rules.is_empty() {
+                report.push_str(&format!("Non-applied rules: {}\n", non_applied_rules.len()));
+                for (i, rule) in non_applied_rules.iter().enumerate() {
+                    report.push_str(&format!(
+                        "---- Non-Applied Rule [{}.{}]: {} (execution time: {:.2?}) ----\n",
+                        optimizer.index,
+                        applied_rules.len() + i + 1,
+                        rule.name,
+                        rule.time
+                    ));
+                }
+            }
+        } else {
+            report.push_str("No rules found for this optimizer.\n");
         }
 
         // Log the entire report in a single call
