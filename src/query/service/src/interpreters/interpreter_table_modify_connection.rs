@@ -97,7 +97,7 @@ impl Interpreter for ModifyTableConnectionInterpreter {
         //
         // We don't really this this location to replace the old one, we just parse it out and change the storage parameters on needs.
         let mut location = UriLocation::new(
-            // The storage type is not changable, we just use the old one.
+            // The storage type is not changeable, we just use the old one.
             old_sp.storage_type(),
             // name is not changeable, we just use a dummy value here.
             "test".to_string(),
