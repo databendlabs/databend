@@ -241,11 +241,14 @@ impl TxnManager {
             ));
         }
 
-        self.txn_buffer
-            .table_desc_to_id
-            .get(&desc)
-            .and_then(|id| self.txn_buffer.mutated_tables.get(id))
-            .cloned()
+        self.txn_buffer.table_desc_to_id.get(&desc).and_then(|id| {
+            self.txn_buffer.mutated_tables.get(id).cloned().or_else(|| {
+                self.txn_buffer
+                    .stream_tables
+                    .get(id)
+                    .map(|snapshot| snapshot.stream.clone())
+            })
+        })
     }
 
     pub fn get_table_from_buffer_by_id(&self, table_id: u64) -> Option<TableInfo> {
