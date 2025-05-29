@@ -22,3 +22,12 @@ stmt_fail "ALTER TABLE external_table_test connection=(connection_name = 'extern
 
 # Alter the connection back to the correct one
 stmt "ALTER TABLE external_table_test connection=(connection_name = 'external_table_conn');"
+
+stmt "CREATE OR REPLACE TABLE internal_table_test (
+    id INTEGER,
+    name VARCHAR,
+    age INT
+);"
+
+# Alter internal table should fail.
+stmt_fail "ALTER TABLE internal_table_test connection=(connection_name = 'external_table_conn');"
