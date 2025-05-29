@@ -172,6 +172,8 @@ pub struct FunctionContext {
     pub parse_datetime_ignore_remainder: bool,
     pub enable_strict_datetime_parser: bool,
     pub random_function_seed: bool,
+    pub week_start: u8,
+    pub date_format_style: String,
 }
 
 impl Default for FunctionContext {
@@ -192,6 +194,8 @@ impl Default for FunctionContext {
             parse_datetime_ignore_remainder: false,
             enable_strict_datetime_parser: true,
             random_function_seed: false,
+            week_start: 0,
+            date_format_style: "mysql".to_string(),
         }
     }
 }

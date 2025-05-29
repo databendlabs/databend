@@ -1214,6 +1214,13 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, _, unit, _, date, _)| ExprElement::DateTrunc { unit, date },
     );
 
+    let trunc = map(
+        rule! {
+            TRUNC ~ "(" ~  #subexpr(0) ~ "," ~  #interval_kind ~ ")"
+        },
+        |(_, _, date, _, unit, _)| ExprElement::DateTrunc { unit, date },
+    );
+
     let last_day = map(
         rule! {
             LAST_DAY ~ "(" ~ #subexpr(0) ~ ("," ~ #interval_kind)? ~ ")"
@@ -1326,7 +1333,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #date_diff : "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_sub : "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_between : "`DATE_BETWEEN((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW), ..., ...,)`"
-                | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
+                | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
+                | #trunc : "`TRUNC(..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK))`"
                 | #last_day : "`LAST_DAY(..., (YEAR | QUARTER | MONTH | WEEK)))`"
                 | #previous_day : "`PREVIOUS_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
                 | #next_day : "`NEXT_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
