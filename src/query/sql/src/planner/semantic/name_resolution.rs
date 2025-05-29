@@ -87,7 +87,13 @@ pub fn normalize_identifier(ident: &Identifier, context: &NameResolutionContext)
     {
         ident.clone()
     } else {
-        Identifier::from_name(ident.span, ident.name.to_lowercase())
+        // Preserve the quote information when creating a new identifier
+        Identifier {
+            span: ident.span,
+            name: ident.name.to_lowercase(),
+            quote: ident.quote,
+            ident_type: ident.ident_type,
+        }
     }
 }
 
