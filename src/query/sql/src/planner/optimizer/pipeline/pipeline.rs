@@ -37,7 +37,7 @@ pub struct OptimizerPipeline {
     memo: Option<Memo>,
 
     /// The trace collector for generating reports
-    trace_collector: OptimizerTraceCollector,
+    trace_collector: Arc<OptimizerTraceCollector>,
 
     s_expr: SExpr,
 }
@@ -49,7 +49,7 @@ impl OptimizerPipeline {
             opt_ctx,
             optimizers: Vec::new(),
             memo: None,
-            trace_collector: OptimizerTraceCollector::new(),
+            trace_collector: Arc::new(OptimizerTraceCollector::new()),
             s_expr,
         };
 
@@ -69,6 +69,13 @@ impl OptimizerPipeline {
         if self.opt_ctx.is_optimizer_disabled(&optimizer_name) {
             return self;
         }
+
+        // Get trace collector
+        let trace_collector = self.get_trace_collector();
+
+        // Call set_trace_collector method
+        let mut optimizer = optimizer;
+        optimizer.set_trace_collector(trace_collector);
 
         self.optimizers.push(Box::new(optimizer));
         self
@@ -158,5 +165,10 @@ impl OptimizerPipeline {
                 Memo::create()
             }
         }
+    }
+
+    /// Get the trace collector
+    pub fn get_trace_collector(&self) -> Arc<OptimizerTraceCollector> {
+        self.trace_collector.clone()
     }
 }
