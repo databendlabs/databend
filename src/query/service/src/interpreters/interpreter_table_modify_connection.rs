@@ -132,7 +132,7 @@ impl Interpreter for ModifyTableConnectionInterpreter {
         commit_table_meta(
             &self.ctx,
             table.as_ref(),
-            &table_info,
+            table_info,
             new_table_meta,
             catalog,
         )
