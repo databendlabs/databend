@@ -67,6 +67,13 @@ impl RecursiveRuleOptimizer {
         let mut s_expr = s_expr.clone();
         for rule_id in rules {
             let rule = RuleFactory::create_rule(*rule_id, self.ctx.clone())?;
+
+            // Check if this rule should be skipped based on optimizer_skip_list
+            let rule_name = rule.name();
+            if self.ctx.is_optimizer_disabled(&rule_name) {
+                continue;
+            }
+
             let mut state = TransformResult::new();
             if rule
                 .matchers()

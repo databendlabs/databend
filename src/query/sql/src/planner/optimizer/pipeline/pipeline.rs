@@ -17,7 +17,6 @@ use std::time::Instant;
 
 use databend_common_exception::Result;
 use log::info;
-use log::warn;
 
 use super::common::contains_local_table_scan;
 use super::common::contains_warehouse_table_scan;
@@ -63,7 +62,11 @@ impl OptimizerPipeline {
     /// Add an optimizer to the pipeline
     #[allow(clippy::should_implement_trait)]
     pub fn add<T: Optimizer + 'static>(mut self, optimizer: T) -> Self {
-        if self.should_skip(&optimizer) {
+        // Get the optimizer name directly from the optimizer instance
+        let optimizer_name = optimizer.name();
+
+        // Check if this optimizer should be skipped using is_optimizer_disabled
+        if self.opt_ctx.is_optimizer_disabled(&optimizer_name) {
             return self;
         }
 
@@ -78,30 +81,6 @@ impl OptimizerPipeline {
         } else {
             self
         }
-    }
-
-    fn should_skip<T: Optimizer + 'static>(&self, optimizer: &T) -> bool {
-        // Get the optimizer name directly from the optimizer instance
-        let optimizer_name = optimizer.name();
-        let settings = self.opt_ctx.get_table_ctx().get_settings();
-
-        // Check if this optimizer should be skipped
-        match settings.get_optimizer_skip_list() {
-            Ok(skip_list) if !skip_list.is_empty() => {
-                let skip_items: Vec<&str> = skip_list.split(',').map(str::trim).collect();
-
-                if skip_items.contains(&optimizer_name.as_str()) {
-                    warn!(
-                        "Skipping optimizer: {} (found in optimizer_skip_list: {})",
-                        optimizer_name, skip_list
-                    );
-                    return true;
-                }
-            }
-            _ => {}
-        }
-
-        false
     }
 
     /// Configure distributed optimization based on table types
