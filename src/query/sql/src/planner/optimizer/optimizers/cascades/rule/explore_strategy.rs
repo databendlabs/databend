@@ -31,10 +31,7 @@ impl ExploreStrategy for DPhypStrategy {
     fn create_rule_set(&self) -> RuleSet {
         // The join order has been optimized by dphyp, therefore we will not change the join order
         // and only attempt to exchange the order of build and probe.
-        RuleSet::create_with_ids(vec![
-        // TODO(fixme): Disabled eager aggregation for now, we need to test it fully
-        // RuleID::EagerAggregation
-        ])
+        RuleSet::create_with_ids(vec![RuleID::EagerAggregation])
     }
 }
 
@@ -49,8 +46,7 @@ impl ExploreStrategy for RSL1Strategy {
         RuleSet::create_with_ids(vec![
             RuleID::CommuteJoinBaseTable,
             RuleID::LeftExchangeJoin,
-            // TODO(fixme): Disabled eager aggregation for now, we need to test it fully
-            // RuleID::EagerAggregation
+            RuleID::EagerAggregation,
             RuleID::CommuteJoin,
         ])
     }

@@ -1224,23 +1224,18 @@ fn get_eager_aggregation_functions(
 
 // Final aggregate functions's data type = eager aggregate functions's return_type
 // For COUNT, func_name: count => sum, return_type: Nullable(UInt64)
-fn modify_final_aggregate_function(
-    agg: &mut AggregateFunction,
-    index: usize,
-    display_name: String,
-) {
+fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usize) {
     if agg.func_name.as_str() == "count" {
         agg.func_name = "sum".to_string();
         agg.return_type = Box::new(DataType::Nullable(Box::new(DataType::Number(
             NumberDataType::UInt64,
         ))));
-        agg.display_name = display_name.clone();
     }
     let agg_func = ScalarExpr::BoundColumnRef(BoundColumnRef {
         span: None,
         column: ColumnBindingBuilder::new(
-            display_name,
-            index,
+            "_eager".to_string(),
+            args_index,
             agg.return_type.clone(),
             Visibility::Visible,
         )
@@ -1433,10 +1428,8 @@ fn update_aggregate_and_eval(
     let final_aggregate_function = &mut final_agg.aggregate_functions[index];
 
     let old_index = final_aggregate_function.index;
-
-    let new_name = format!("_eager_final_{}", &func_name);
     let new_index = metadata.write().add_derived_column(
-        new_name.clone(),
+        format!("_eager_final_{}", &func_name),
         final_aggregate_function.scalar.data_type()?,
         None,
     );
@@ -1444,7 +1437,7 @@ fn update_aggregate_and_eval(
     // Modify final aggregate functions.
     if let ScalarExpr::AggregateFunction(agg) = &mut final_aggregate_function.scalar {
         // final_aggregate_functions is currently a clone of eager aggregation.
-        modify_final_aggregate_function(agg, old_index, new_name.clone());
+        modify_final_aggregate_function(agg, old_index);
         // final_aggregate_functions is a final aggregation now.
         final_aggregate_function.index = new_index;
     }
@@ -1460,7 +1453,6 @@ fn update_aggregate_and_eval(
                 if let ScalarExpr::BoundColumnRef(column) = &mut eval_scalar_item.scalar {
                     let column_binding = &mut column.column;
                     column_binding.index = new_index;
-                    column_binding.column_name = new_name.clone();
                     if func_name == "count" {
                         column_binding.data_type = Box::new(DataType::Nullable(Box::new(
                             DataType::Number(NumberDataType::UInt64),
@@ -1484,9 +1476,8 @@ fn create_eager_count_multiply_scalar_item(
     extra_eval_scalar: &EvalScalar,
     metadata: MetadataRef,
 ) -> databend_common_exception::Result<ScalarItem> {
-    let new_name = format!("{} * _eager_count", aggregate_function.display_name);
     let new_index = metadata.write().add_derived_column(
-        new_name.clone(),
+        format!("{} * _eager_count", aggregate_function.display_name),
         aggregate_function.args[0].data_type()?,
         None,
     );
@@ -1535,7 +1526,6 @@ fn create_eager_count_multiply_scalar_item(
     };
     if let ScalarExpr::BoundColumnRef(column) = &mut aggregate_function.args[0] {
         column.column.index = new_index;
-        column.column.column_name = new_name.clone();
         column.column.data_type = Box::new(new_scalar_item.scalar.data_type()?);
     }
     Ok(new_scalar_item)
