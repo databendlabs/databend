@@ -67,6 +67,8 @@ pub struct HttpSessionConf {
     pub last_server_info: Option<ServerInfo>,
     #[serde(default)]
     pub last_query_ids: Vec<String>,
+    #[serde(default)]
+    pub last_query_result_cache_keys: Vec<String>,
     pub internal: Option<String>,
 }
 
