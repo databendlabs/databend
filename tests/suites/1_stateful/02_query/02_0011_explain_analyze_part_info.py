@@ -38,10 +38,12 @@ with NativeClient(name="client1>") as client1:
         res = mycursor.fetchall()
 
     def explain_output(res):
+        cnt = 0
         pruning_fields = ["partitions total", "partitions scanned", "pruning stats"]
         for row in res:
             if any(field in row[0] for field in pruning_fields):
-                print(row[0])
+                cnt += 1
+        print(cnt)
 
     mycursor.execute("""EXPLAIN ANALYZE SELECT * FROM test_explain_analyze_0011_1 a WHERE a.id > 5""")
     explain_analyze_res = mycursor.fetchall()
