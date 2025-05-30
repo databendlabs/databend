@@ -331,7 +331,12 @@ pub fn cast_scalar_to_variant(
                     let iter = fields.into_iter();
                     let mut builder = BinaryColumnBuilder::with_capacity(iter.size_hint().0, 0);
                     for (scalar, typ) in iter.zip(fields_type) {
-                        cast_scalar_to_variant(scalar, tz, &mut builder.data, Some(&typ.remove_nullable()));
+                        cast_scalar_to_variant(
+                            scalar,
+                            tz,
+                            &mut builder.data,
+                            Some(&typ.remove_nullable()),
+                        );
                         builder.commit_row();
                     }
                     let values = builder.build();
