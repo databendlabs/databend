@@ -25,6 +25,7 @@ use crate::filter::SelectExpr;
 use crate::filter::SelectOp;
 use crate::types::AnyType;
 use crate::types::DataType;
+use crate::Column;
 use crate::EvalContext;
 use crate::EvaluateOptions;
 use crate::Evaluator;
@@ -361,28 +362,39 @@ impl<'a> Selector<'a> {
         debug_assert!(
             matches!(data_type, DataType::String | DataType::Nullable(box DataType::String))
         );
-        match value {
-            Value::Scalar(Scalar::Null) => Ok(0),
-            _ => match value.into_column() {
-                Ok(column) => self.select_like(
-                    column,
-                    like_pattern,
-                    not,
-                    SelectionBuffers {
-                        true_selection,
-                        false_selection: false_selection.0,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
-                    },
-                    false_selection.1,
-                ),
-                Err(e) => Err(ErrorCode::Internal(format!(
-                    "Can not convert to column with error: {e}",
-                ))),
-            },
+
+        if value.is_scalar_null() {
+            return Ok(0);
         }
+        let column = value
+            .into_column()
+            .map_err(|v| ErrorCode::Internal(format!("Can not convert to column: {v}")))?;
+
+        // Extract StringColumn and validity from Column
+        let (column, validity) = match column.into_nullable() {
+            Ok(nullable) => (
+                nullable.column.into_string().unwrap(),
+                Some(nullable.validity),
+            ),
+            Err(Column::String(column)) => (column, None),
+            _ => unreachable!(),
+        };
+
+        self.select_like(
+            column,
+            like_pattern,
+            not,
+            validity,
+            SelectionBuffers {
+                true_selection,
+                false_selection: false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            },
+            false_selection.1,
+        )
     }
 
     // Process SelectExpr::Others.

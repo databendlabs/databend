@@ -42,8 +42,6 @@ use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
-use crate::Column;
-use crate::LikePattern;
 use crate::Selector;
 use crate::Value;
 
@@ -279,25 +277,5 @@ impl Selector<'_> {
             }
         };
         Ok(count)
-    }
-
-    pub(super) fn select_like(
-        &self,
-        column: Column,
-        like_pattern: &LikePattern,
-        not: bool,
-        buffers: SelectionBuffers,
-        has_false: bool,
-    ) -> Result<usize> {
-        let (column, validity) = match column.into_nullable() {
-            Ok(nullable) => (
-                nullable.column.into_string().unwrap(),
-                Some(nullable.validity),
-            ),
-            Err(Column::String(column)) => (column, None),
-            _ => unreachable!(),
-        };
-
-        self.select_like_adapt(column, like_pattern, not, validity, buffers, has_false)
     }
 }
