@@ -45,6 +45,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::ColumnBuilder;
+use crate::TableDataType;
 
 /// JSONB bytes representation of `null`.
 pub const JSONB_NULL: &[u8] = &[0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
@@ -215,7 +216,12 @@ impl VariantType {
     }
 }
 
-pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8>) {
+pub fn cast_scalar_to_variant(
+    scalar: ScalarRef,
+    tz: &TimeZone,
+    buf: &mut Vec<u8>,
+    table_data_type: Option<&TableDataType>,
+) {
     let value = match scalar {
         ScalarRef::Null => jsonb::Value::Null,
         ScalarRef::EmptyArray => jsonb::Value::Array(vec![]),
@@ -271,6 +277,12 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
             return;
         }
         ScalarRef::Map(col) => {
+            let typ = if let Some(TableDataType::Map(typ)) = table_data_type {
+                Some(*typ.clone())
+            } else {
+                None
+            };
+
             let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(&col).unwrap();
             let mut kvs = BTreeMap::new();
             for (k, v) in kv_col.iter() {
@@ -284,7 +296,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
                     _ => unreachable!(),
                 };
                 let mut val = vec![];
-                cast_scalar_to_variant(v, tz, &mut val);
+                cast_scalar_to_variant(v, tz, &mut val, typ.as_ref());
                 kvs.insert(key, val);
             }
             let owned_jsonb =
@@ -305,14 +317,37 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
             return;
         }
         ScalarRef::Tuple(fields) => {
-            let values = cast_scalars_to_variants(fields, tz);
-            let owned_jsonb = OwnedJsonb::build_object(
-                values
-                    .iter()
-                    .enumerate()
-                    .map(|(i, bytes)| (format!("{}", i + 1), RawJsonb::new(bytes))),
-            )
-            .expect("failed to build jsonb object from tuple");
+            let owned_jsonb = match table_data_type {
+                Some(TableDataType::Tuple {
+                    fields_name,
+                    fields_type,
+                }) => {
+                    let iter = fields.into_iter();
+                    let mut builder = BinaryColumnBuilder::with_capacity(iter.size_hint().0, 0);
+                    for (scalar, typ) in iter.zip(fields_type) {
+                        cast_scalar_to_variant(scalar, tz, &mut builder.data, Some(typ));
+                        builder.commit_row();
+                    }
+                    let values = builder.build();
+                    OwnedJsonb::build_object(
+                        values
+                            .iter()
+                            .enumerate()
+                            .map(|(i, bytes)| (fields_name[i].clone(), RawJsonb::new(bytes))),
+                    )
+                    .expect("failed to build jsonb object from tuple")
+                }
+                _ => {
+                    let values = cast_scalars_to_variants(fields, tz);
+                    OwnedJsonb::build_object(
+                        values
+                            .iter()
+                            .enumerate()
+                            .map(|(i, bytes)| (format!("{}", i + 1), RawJsonb::new(bytes))),
+                    )
+                    .expect("failed to build jsonb object from tuple")
+                }
+            };
             buf.extend_from_slice(owned_jsonb.as_ref());
             return;
         }
@@ -346,7 +381,7 @@ pub fn cast_scalars_to_variants(
     let iter = scalars.into_iter();
     let mut builder = BinaryColumnBuilder::with_capacity(iter.size_hint().0, 0);
     for scalar in iter {
-        cast_scalar_to_variant(scalar, tz, &mut builder.data);
+        cast_scalar_to_variant(scalar, tz, &mut builder.data, None);
         builder.commit_row();
     }
     builder.build()

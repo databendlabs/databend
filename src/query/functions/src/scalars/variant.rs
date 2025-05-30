@@ -1112,7 +1112,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                         Scalar::Null => Value::Scalar(Scalar::Null),
                         _ => {
                             let mut buf = Vec::new();
-                            cast_scalar_to_variant(scalar.as_ref(), &ctx.func_ctx.tz, &mut buf);
+                            cast_scalar_to_variant(
+                                scalar.as_ref(),
+                                &ctx.func_ctx.tz,
+                                &mut buf,
+                                None,
+                            );
                             Value::Scalar(Scalar::Variant(buf))
                         }
                     },
@@ -1157,7 +1162,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Scalar::Null => Value::Scalar(None),
                 _ => {
                     let mut buf = Vec::new();
-                    cast_scalar_to_variant(scalar.as_ref(), &ctx.func_ctx.tz, &mut buf);
+                    cast_scalar_to_variant(scalar.as_ref(), &ctx.func_ctx.tz, &mut buf, None);
                     Value::Scalar(Some(buf))
                 }
             },
@@ -2132,7 +2137,7 @@ fn json_array_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyTyp
         for column in &columns {
             let v = unsafe { column.index_unchecked(idx) };
             let mut val = vec![];
-            cast_scalar_to_variant(v, &ctx.func_ctx.tz, &mut val);
+            cast_scalar_to_variant(v, &ctx.func_ctx.tz, &mut val, None);
             items.push(val);
         }
         match OwnedJsonb::build_array(items.iter().map(|v| RawJsonb::new(v))) {
@@ -2203,7 +2208,7 @@ fn json_object_impl_fn(
                 }
                 set.insert(key);
                 let mut val = vec![];
-                cast_scalar_to_variant(v, &ctx.func_ctx.tz, &mut val);
+                cast_scalar_to_variant(v, &ctx.func_ctx.tz, &mut val, None);
                 kvs.push((key, val));
             }
             if !has_err {
@@ -2598,7 +2603,7 @@ fn json_object_insert_fn(
             _ => {
                 // if the new value is not a json value, cast it to json.
                 let mut new_val_buf = vec![];
-                cast_scalar_to_variant(new_val.clone(), &ctx.func_ctx.tz, &mut new_val_buf);
+                cast_scalar_to_variant(new_val.clone(), &ctx.func_ctx.tz, &mut new_val_buf, None);
                 let new_val = RawJsonb::new(new_val_buf.as_bytes());
                 value.object_insert(new_key, &new_val, update_flag)
             }
