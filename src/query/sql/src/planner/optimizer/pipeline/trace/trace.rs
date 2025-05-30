@@ -94,17 +94,22 @@ impl OptimizerTrace {
     }
 }
 
-/// Represents a trace collector for optimizer and rule executions
+/// Collects and organizes traces from optimizer and rule executions.
+///
+/// This collector maintains two primary data structures:
+/// - A map of optimizer traces indexed by their position in the pipeline
+/// - A nested map of rule traces organized by optimizer name and rule name
 pub struct OptimizerTraceCollector {
-    /// The collection of optimizer traces, ordered by index
-    optimizers: Mutex<BTreeMap<usize, OptimizerTrace>>,
-    /// The collection of rule traces, organized by optimizer name
-    /// Using BTreeMap<rule_name, RuleTrace> for faster lookup instead of Vec<RuleTrace>
+    /// Optimizer traces ordered by their index in the pipeline and optimizer name
+    optimizers: Mutex<BTreeMap<usize, BTreeMap<String, OptimizerTrace>>>,
+
+    /// Rule traces organized by optimizer name and rule name
+    /// Uses BTreeMap for O(log n) lookup performance
     rules: Mutex<BTreeMap<String, BTreeMap<String, RuleTrace>>>,
 }
 
 impl OptimizerTraceCollector {
-    /// Create a new trace collector
+    /// Creates a new empty trace collector.
     pub fn new() -> Self {
         Self {
             optimizers: Mutex::new(BTreeMap::new()),
@@ -112,7 +117,16 @@ impl OptimizerTraceCollector {
         }
     }
 
-    /// Create a trace for an optimizer, add it to the collection
+    /// Records a trace for an optimizer execution.
+    ///
+    /// # Arguments
+    /// * `name` - Name of the optimizer
+    /// * `index` - Position of the optimizer in the pipeline
+    /// * `total` - Total number of optimizers in the pipeline
+    /// * `time` - Duration of the optimizer execution
+    /// * `before` - Expression state before optimization
+    /// * `after` - Expression state after optimization
+    /// * `metadata` - Metadata for expression comparison
     pub fn trace_optimizer(
         &self,
         name: String,
@@ -123,16 +137,30 @@ impl OptimizerTraceCollector {
         after: &SExpr,
         metadata: &Metadata,
     ) -> Result<()> {
+        // Calculate diff and determine if optimizer had an effect
         let diff = before.diff(after, metadata)?;
         let had_effect = !diff.is_empty() && diff != "No differences found.";
 
-        let trace = OptimizerTrace::new(name, index, total, time, had_effect, diff);
-        self.optimizers.lock().insert(index, trace);
+        // Create and store the optimizer trace
+        let trace = OptimizerTrace::new(name.clone(), index, total, time, had_effect, diff);
+        let mut optimizers = self.optimizers.lock();
+
+        // Get or create the BTreeMap for this index
+        let index_map = optimizers.entry(index).or_default();
+        index_map.insert(name, trace);
 
         Ok(())
     }
 
-    /// Create a trace for a rule, add it to the collection
+    /// Records a trace for a rule execution within an optimizer.
+    ///
+    /// # Arguments
+    /// * `rule_name` - Name of the rule
+    /// * `optimizer_name` - Name of the parent optimizer
+    /// * `time` - Duration of the rule execution
+    /// * `before` - Expression state before rule application
+    /// * `after` - Expression state after rule application
+    /// * `metadata` - Metadata for expression comparison
     pub fn trace_rule(
         &self,
         rule_name: String,
@@ -142,30 +170,59 @@ impl OptimizerTraceCollector {
         after: &SExpr,
         metadata: &Metadata,
     ) -> Result<()> {
+        // Calculate diff and determine if rule had an effect
         let diff = before.diff(after, metadata)?;
         let had_effect = !diff.is_empty() && diff != "No differences found.";
 
-        // Update optimizer effect status if rule had effect
+        // If rule had an effect, update the parent optimizer's status
         if had_effect {
-            if let Some(optimizer) = self
-                .optimizers
-                .lock()
-                .values_mut()
-                .find(|o| o.name == optimizer_name)
-            {
-                optimizer.had_effect = true;
-            }
+            self.mark_optimizer_as_effective(&optimizer_name);
         }
 
-        // Add or update rule trace using BTreeMap for O(log n) lookup
-        let mut rules = self.rules.lock();
-        let optimizer_rules = rules.entry(optimizer_name.clone()).or_default();
+        // Add or update the rule trace
+        self.record_rule_trace(rule_name, optimizer_name, time, had_effect, diff);
 
-        // Get the next sequence number for this rule if it's new
-        // Sequence starts from 0 for each optimizer
+        Ok(())
+    }
+
+    /// Explicitly marks an optimizer as having an effect.
+    pub fn update_optimizer_effect(&self, optimizer_name: String) -> Result<()> {
+        self.mark_optimizer_as_effective(&optimizer_name);
+        Ok(())
+    }
+
+    /// Helper method to mark an optimizer as having an effect.
+    fn mark_optimizer_as_effective(&self, optimizer_name: &str) {
+        let mut optimizers = self.optimizers.lock();
+
+        // Iterate through all indices and find the optimizer by name
+        for index_map in optimizers.values_mut() {
+            if let Some(optimizer) = index_map.get_mut(optimizer_name) {
+                optimizer.had_effect = true;
+                break;
+            }
+        }
+    }
+
+    /// Helper method to record or update a rule trace.
+    fn record_rule_trace(
+        &self,
+        rule_name: String,
+        optimizer_name: String,
+        time: Duration,
+        had_effect: bool,
+        diff: String,
+    ) {
+        // Acquire lock on rules collection
+        let mut rules = self.rules.lock();
+
+        // Get or create the rules map for this optimizer
+        let optimizer_rules = rules.entry(optimizer_name).or_default();
+
+        // Determine sequence number for new rules
         let sequence = optimizer_rules.len();
 
-        // Using BTreeMap's entry API for cleaner and more efficient update
+        // Add or update the rule trace
         match optimizer_rules.entry(rule_name.clone()) {
             std::collections::btree_map::Entry::Occupied(mut entry) => {
                 // Update existing rule
@@ -175,31 +232,19 @@ impl OptimizerTraceCollector {
                 if had_effect {
                     existing.diff = diff;
                 }
-                // Sequence number remains unchanged
             }
             std::collections::btree_map::Entry::Vacant(entry) => {
                 // Insert new rule with sequence number
                 entry.insert(RuleTrace::new(rule_name, time, had_effect, diff, sequence));
             }
         }
-
-        Ok(())
     }
 
-    /// Update the had_effect flag for an optimizer
-    pub fn update_optimizer_effect(&self, optimizer_name: String) -> Result<()> {
-        if let Some(optimizer) = self
-            .optimizers
-            .lock()
-            .values_mut()
-            .find(|o| o.name == optimizer_name)
-        {
-            optimizer.had_effect = true;
-        }
-        Ok(())
-    }
-
-    /// Generate and log the optimizer trace report
+    /// Generates and logs a comprehensive report of optimizer and rule executions.
+    ///
+    /// This method produces two separate log entries:
+    /// 1. A summary of all optimizers and their effects
+    /// 2. Detailed execution information for each optimizer
     pub fn log_report(&self) {
         let optimizers = self.optimizers.lock();
         let rules = self.rules.lock();
@@ -208,136 +253,132 @@ impl OptimizerTraceCollector {
             return;
         }
 
-        // Log optimizer summary as a single log entry
-        self.log_optimizers_summary(&optimizers, &rules);
-
+        // Log optimizer summary and details
         self.log_optimizers_details(&optimizers, &rules);
+        self.log_optimizers_summary(&optimizers, &rules);
     }
 
-    /// Log optimizers summary
     fn log_optimizers_summary(
         &self,
-        optimizers: &BTreeMap<usize, OptimizerTrace>,
+        optimizers: &BTreeMap<usize, BTreeMap<String, OptimizerTrace>>,
         rules: &BTreeMap<String, BTreeMap<String, RuleTrace>>,
     ) {
-        // Create a single summary log for all optimizers
         let mut summary = String::new();
         summary.push_str("========== OPTIMIZERS SUMMARY TRACE ==========\n\n");
 
-        for optimizer in optimizers.values() {
-            let status_symbol = if optimizer.had_effect { "✓" } else { "✗" };
+        for optimizer_map in optimizers.values() {
+            for optimizer in optimizer_map.values() {
+                let status_symbol = if optimizer.had_effect { "✓" } else { "✗" };
 
-            // Count applied rules for this optimizer
-            let optimizer_rules = rules.get(&optimizer.name);
-            let (applied_rules, total_rules) = if let Some(optimizer_rules) = optimizer_rules {
-                let applied = optimizer_rules.values().filter(|r| r.had_effect).count();
-                let total = optimizer_rules.len();
-                (applied, total)
-            } else {
-                (0, 0)
-            };
-
-            summary.push_str(&format!(
-                "[{}] {}: {} ({:.2?})\n",
-                status_symbol, optimizer.index, optimizer.name, optimizer.time
-            ));
-
-            // Only show rules information if the optimizer has rules
-            if total_rules > 0 {
-                let applied_percentage = if total_rules > 0 {
-                    (applied_rules * 100) / total_rules
-                } else {
-                    0
-                };
+                // Calculate rule statistics
+                let (applied_rules, total_rules) =
+                    if let Some(optimizer_rules) = rules.get(&optimizer.name) {
+                        let applied = optimizer_rules.values().filter(|r| r.had_effect).count();
+                        let total = optimizer_rules.len();
+                        (applied, total)
+                    } else {
+                        (0, 0)
+                    };
 
                 summary.push_str(&format!(
-                    "  └── Rules: {}/{} Applied ({}%)\n",
-                    applied_rules, total_rules, applied_percentage
+                    "[{}] {}: {} ({:.2?})\n",
+                    status_symbol, optimizer.index, optimizer.name, optimizer.time
                 ));
 
-                // Show rules summary for this optimizer
-                if let Some(optimizer_rules) = optimizer_rules {
-                    if !optimizer_rules.is_empty() {
-                        let mut rules_summary = String::new();
-                        self.build_rules_summary(&mut rules_summary, optimizer, optimizer_rules);
+                if total_rules > 0 {
+                    let applied_percentage = if total_rules > 0 {
+                        (applied_rules * 100) / total_rules
+                    } else {
+                        0
+                    };
 
-                        // Add extra indentation to the rules summary
-                        for line in rules_summary.lines() {
-                            if !line.trim().is_empty() {
-                                summary.push_str(&format!("  {}\n", line));
+                    summary.push_str(&format!(
+                        "  └── Rules: {}/{} Applied ({}%)\n",
+                        applied_rules, total_rules, applied_percentage
+                    ));
+
+                    // Add detailed rules summary if available
+                    if let Some(optimizer_rules) = rules.get(&optimizer.name) {
+                        if !optimizer_rules.is_empty() {
+                            let mut rules_summary = String::new();
+                            self.build_rules_summary(
+                                &mut rules_summary,
+                                optimizer,
+                                optimizer_rules,
+                            );
+
+                            // Add indentation to rules summary
+                            for line in rules_summary.lines() {
+                                if !line.trim().is_empty() {
+                                    summary.push_str(&format!("  {}\n", line));
+                                }
                             }
                         }
                     }
+                    summary.push('\n');
+                } else {
+                    summary.push('\n');
                 }
-
-                summary.push('\n');
-            } else {
-                summary.push('\n');
             }
         }
 
-        // Log the entire summary as one log entry
         info!("{}", summary);
     }
 
-    /// Log detailed optimizer executions
     fn log_optimizers_details(
         &self,
-        optimizers: &BTreeMap<usize, OptimizerTrace>,
+        optimizers: &BTreeMap<usize, BTreeMap<String, OptimizerTrace>>,
         rules: &BTreeMap<String, BTreeMap<String, RuleTrace>>,
     ) {
-        info!("========== OPTIMIZERS EXECUTIONS TRACE==========\n");
-        for optimizer in optimizers.values() {
-            let status_symbol = if optimizer.had_effect { "✓" } else { "✗" };
+        for optimizer_map in optimizers.values() {
+            for optimizer in optimizer_map.values() {
+                let status_symbol = if optimizer.had_effect { "✓" } else { "✗" };
+                let mut detail = String::new();
 
-            // Build the optimizer detail report
-            let mut detail = String::new();
-            detail.push_str(&format!(
-                "[{}] {}: {} ({:.2?})\n\n",
-                status_symbol, optimizer.index, optimizer.name, optimizer.time
-            ));
+                // Add basic optimizer information
+                detail.push_str(&format!(
+                    "[{}] {}: {} ({:.2?})\n\n",
+                    status_symbol, optimizer.index, optimizer.name, optimizer.time
+                ));
 
-            // Add changes if any
-            if optimizer.had_effect && !optimizer.diff.is_empty() {
-                detail.push_str("  Changes:\n");
-                for line in optimizer.diff.lines() {
-                    detail.push_str(&format!("    {}\n", line));
+                // Add expression changes if any
+                if optimizer.had_effect && !optimizer.diff.is_empty() {
+                    detail.push_str("  Changes:\n");
+                    for line in optimizer.diff.lines() {
+                        detail.push_str(&format!("    {}\n", line));
+                    }
+                    detail.push('\n');
                 }
-                detail.push('\n');
-            }
 
-            // Add rules for this optimizer
-            let optimizer_rules = rules.get(&optimizer.name);
-            if let Some(optimizer_rules) = optimizer_rules {
-                if !optimizer_rules.is_empty() {
-                    // Add rules summary
-                    let mut rules_summary = String::new();
-                    self.build_rules_summary(&mut rules_summary, optimizer, optimizer_rules);
-                    detail.push_str(&rules_summary);
+                // Add rule information if available
+                if let Some(optimizer_rules) = rules.get(&optimizer.name) {
+                    if !optimizer_rules.is_empty() {
+                        let mut rules_summary = String::new();
+                        self.build_rules_summary(&mut rules_summary, optimizer, optimizer_rules);
+                        detail.push_str(&rules_summary);
 
-                    // Add applied rules details
-                    let mut applied_rules_details = String::new();
-                    self.build_applied_rules_details(
-                        &mut applied_rules_details,
-                        optimizer,
-                        optimizer_rules,
-                    );
-                    detail.push_str(&applied_rules_details);
+                        let mut applied_rules_details = String::new();
+                        self.build_applied_rules_details(
+                            &mut applied_rules_details,
+                            optimizer,
+                            optimizer_rules,
+                        );
+                        detail.push_str(&applied_rules_details);
+                    }
                 }
-            }
 
-            // Log the entire optimizer detail as one log entry
-            info!("{}", detail);
+                info!("{}", detail);
+            }
         }
     }
 
-    /// Build rules summary for an optimizer
     fn build_rules_summary(
         &self,
         report: &mut String,
         optimizer: &OptimizerTrace,
         optimizer_rules: &BTreeMap<String, RuleTrace>,
     ) {
+        // Sort rules by sequence number
         let mut all_rules: Vec<_> = optimizer_rules.values().collect();
         all_rules.sort_by_key(|r| r.sequence);
 
@@ -347,7 +388,7 @@ impl OptimizerTraceCollector {
 
         report.push_str(&format!("[{}]  Rules Summary:\n", optimizer.name));
 
-        // Add each rule
+        // List all rules with their status
         for rule in &all_rules {
             let status_symbol = if rule.had_effect { "✓" } else { "✗" };
             report.push_str(&format!(
@@ -355,18 +396,25 @@ impl OptimizerTraceCollector {
                 status_symbol, optimizer.index, rule.sequence, rule.name, rule.time
             ));
         }
-
         report.push('\n');
 
-        // Add rules statistics
-        let applied_rules = all_rules.iter().filter(|r| r.had_effect).count();
+        // Calculate statistics
         let total_rules = optimizer_rules.len();
+        let applied_rules = optimizer_rules.values().filter(|r| r.had_effect).count();
+
         let applied_percentage = if total_rules > 0 {
             (applied_rules * 100) / total_rules
         } else {
             0
         };
 
+        let non_applied_percentage = if total_rules > 0 {
+            100 - applied_percentage
+        } else {
+            0
+        };
+
+        // Add statistics to report
         report.push_str(&format!(
             "  Total Applied Rules: {}/{} ({}%)\n",
             applied_rules, total_rules, applied_percentage
@@ -376,24 +424,19 @@ impl OptimizerTraceCollector {
             "  Total Non-Applied Rules: {}/{} ({}%)\n\n",
             total_rules - applied_rules,
             total_rules,
-            if total_rules > 0 {
-                100 - applied_percentage
-            } else {
-                0
-            }
+            non_applied_percentage
         ));
     }
 
-    /// Build applied rules details for an optimizer
     fn build_applied_rules_details(
         &self,
         report: &mut String,
         optimizer: &OptimizerTrace,
         optimizer_rules: &BTreeMap<String, RuleTrace>,
     ) {
+        // Get rules and filter for those that had an effect
         let mut all_rules: Vec<_> = optimizer_rules.values().collect();
         all_rules.sort_by_key(|r| r.sequence);
-
         let applied_rules: Vec<_> = all_rules.iter().filter(|r| r.had_effect).collect();
 
         if applied_rules.is_empty() {
@@ -403,12 +446,14 @@ impl OptimizerTraceCollector {
         report.push_str("  Applied Rules Details:\n");
 
         for rule in applied_rules {
+            // Always use checkmark since we only show rules that had an effect
             let status_symbol = "✓";
             report.push_str(&format!(
-                "    [{}] {}.{}: {} ({:.2?})\n",
-                status_symbol, optimizer.index, rule.sequence, rule.name, rule.time
+                "    [{}] {}.{}: {}.{} ({:.2?})\n",
+                status_symbol, optimizer.index, rule.sequence, optimizer.name, rule.name, rule.time
             ));
 
+            // Add expression changes if available
             if !rule.diff.is_empty() {
                 report.push_str("      Changes:\n");
                 for line in rule.diff.lines() {

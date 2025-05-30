@@ -154,18 +154,20 @@ impl OptimizerContext {
         let settings = self.get_table_ctx().get_settings();
         match settings.get_optimizer_skip_list() {
             Ok(skip_list) if !skip_list.is_empty() => {
-                let skip_items: Vec<&str> = skip_list.split(',').map(str::trim).collect();
+                let name_lower = name.to_lowercase();
+                let is_disabled = skip_list
+                    .split(',')
+                    .map(str::trim)
+                    .any(|item| item.to_lowercase() == name_lower);
 
-                if skip_items.contains(&name) {
+                if is_disabled {
                     log::warn!(
                         "Skipping optimizer component: {} (found in optimizer_skip_list: {})",
                         name,
                         skip_list
                     );
-                    true
-                } else {
-                    false
                 }
+                is_disabled
             }
             _ => false,
         }
