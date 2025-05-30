@@ -943,6 +943,21 @@ pub fn decimal_to_decimal(
     }
 }
 
+pub fn decimal_to_decimal_fast(
+    arg: &Value<AnyType>,
+    ctx: &mut EvalContext,
+    size: DecimalSize,
+) -> (Value<AnyType>, DecimalDataType) {
+    let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
+    let dest_type = if from_type.scale() != size.scale() {
+        size.best_type()
+    } else {
+        from_type.data_kind().with_size(size)
+    };
+    let value = decimal_to_decimal(arg, ctx, from_type, dest_type);
+    (value, dest_type)
+}
+
 trait DecimalConvert<T, U> {
     fn convert(t: T, _scale: i32) -> U;
 }

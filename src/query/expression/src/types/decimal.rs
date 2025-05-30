@@ -309,6 +309,16 @@ impl DecimalSize {
     pub fn data_kind(&self) -> DecimalDataKind {
         (*self).into()
     }
+
+    pub fn best_type(&self) -> DecimalDataType {
+        if self.can_carried_by_64() {
+            DecimalDataType::Decimal64(*self)
+        } else if self.can_carried_by_128() {
+            DecimalDataType::Decimal128(*self)
+        } else {
+            DecimalDataType::Decimal256(*self)
+        }
+    }
 }
 
 impl From<DecimalSize> for DecimalDataType {
@@ -1417,6 +1427,16 @@ impl From<DecimalSize> for DecimalDataKind {
             DecimalDataKind::Decimal128
         } else {
             DecimalDataKind::Decimal256
+        }
+    }
+}
+
+impl DecimalDataKind {
+    pub fn with_size(&self, size: DecimalSize) -> DecimalDataType {
+        match self {
+            DecimalDataKind::Decimal64 => DecimalDataType::Decimal64(size),
+            DecimalDataKind::Decimal128 => DecimalDataType::Decimal128(size),
+            DecimalDataKind::Decimal256 => DecimalDataType::Decimal256(size),
         }
     }
 }
