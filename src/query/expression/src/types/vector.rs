@@ -29,12 +29,15 @@ use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
+use crate::types::NumberColumn;
+use crate::types::NumberDataType;
 use crate::types::ValueType;
 use crate::types::F32;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::TableDataType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorType;
@@ -244,6 +247,13 @@ impl VectorDataType {
             VectorDataType::Float32(d) => VectorScalar::Float32(vec![F32::from(0.0); *d as usize]),
         }
     }
+
+    pub fn inner_data_type(&self) -> TableDataType {
+        match self {
+            VectorDataType::Int8(_) => TableDataType::Number(NumberDataType::Int8),
+            VectorDataType::Float32(_) => TableDataType::Number(NumberDataType::Float32),
+        }
+    }
 }
 
 #[derive(
@@ -411,6 +421,14 @@ impl VectorColumn {
                 let mut range_values = values.clone();
                 unsafe { range_values.slice_unchecked(offset, length) };
                 VectorColumn::NUM_TYPE((range_values, *dimension))
+            }
+        })
+    }
+
+    pub fn underlying_column(&self) -> Column {
+        crate::with_vector_number_type!(|NUM_TYPE| match self {
+            VectorColumn::NUM_TYPE((values, _)) => {
+                Column::Number(NumberColumn::NUM_TYPE(values.clone()))
             }
         })
     }
