@@ -216,6 +216,7 @@ pub(crate) async fn commit_table_meta(
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta: new_table_meta.clone(),
+            base_snapshot_location: fuse_tbl.snapshot_loc(),
         };
 
         catalog.update_single_table_meta(req, table_info).await?;

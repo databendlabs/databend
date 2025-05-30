@@ -30,6 +30,12 @@ set enable_auto_vacuum = 1;
 statement ok
 create or replace table t (c int) 'fs:///tmp/auto_vacuum/';
 
+statement ok
+create or replace stage stage_av url = 'fs:///tmp/auto_vacuum/';
+
+statement ok
+remove @stage_av/ pattern = '.*';
+
 # prepare data
 statement ok
 insert into t values(1);
@@ -40,8 +46,6 @@ insert into t values(2);
 statement ok
 insert into t values(3);
 
-statement ok
-create or replace stage stage_av url = 'fs:///tmp/auto_vacuum/';
 
 # expect there are 3 segments/blocks/snapshots
 onlyif http
@@ -113,10 +117,14 @@ statement ok
 create or replace table t (c int) 'fs:///tmp/auto_vacuum_case2/';
 
 statement ok
-alter table t set options(data_retention_period_in_hours = 0);
+create or replace stage stage_av url = 'fs:///tmp/auto_vacuum_case2/';
 
 statement ok
-create or replace stage stage_av url = 'fs:///tmp/auto_vacuum_case2/';
+remove @stage_av/ pattern = '.*';
+
+statement ok
+alter table t set options(data_retention_period_in_hours = 0);
+
 
 statement ok
 insert into t values(1);
@@ -150,12 +158,22 @@ select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
 # Test autovacuum policy `ByNumSnapshotsToKeep` #
 #################################################
 
+# Setting retention period to zero enables aggressive but safe vacuuming:
+# All historical data not referenced by the latest snapshot will be removed.
+# Note: With zero retention, concurrent transaction conflicts cannot be resolved.
+# Only the first committed transaction succeeds; all others will be aborted.
+statement ok
+set data_retention_time_in_days = 0;
+
 # CASE 1: Create table with data_retention_num_snapshots_to_keep table option
 statement ok
 create or replace table t (c int) 'fs:///tmp/auto_vacuum_case3/' data_retention_num_snapshots_to_keep = 3;
 
 statement ok
 create or replace stage stage_av url = 'fs:///tmp/auto_vacuum_case3/';
+
+statement ok
+remove @stage_av/ pattern = '.*';
 
 statement ok
 set enable_auto_vacuum = 1;
@@ -174,7 +192,7 @@ insert into t values(4);
 
 
 # Insert 4 time, but only 3 snapshots will be kept
-onlyif mysql
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
 ----
@@ -190,19 +208,19 @@ insert into t values(5);
 statement ok
 optimize table t compact;
 
-onlyif mysql
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_sg%';
 ----
 1
 
-onlyif mysql
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%\/_b\/%';
 ----
 1
 
-onlyif mysql
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
 ----
@@ -229,4 +247,3 @@ remove @stage_av;
 
 statement ok
 drop stage stage_av;
-
