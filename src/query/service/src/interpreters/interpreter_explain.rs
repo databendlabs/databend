@@ -467,11 +467,16 @@ impl ExplainInterpreter {
         if let Some(build_info) = mutation_build_info {
             builder.set_mutation_build_info(build_info);
         }
-        let plan = builder.build(s_expr, required).await?;
+        let mut plan = builder.build(s_expr, required).await?;
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
         let query_profiles = self.execute_and_get_profiles(build_res)?;
+
+        let mut pruned_partitions_stats = self.ctx.get_pruned_partitions_stats();
+        if !pruned_partitions_stats.is_empty() {
+            plan.set_pruning_stats(&mut pruned_partitions_stats);
+        }
 
         let result = if self.partial {
             format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
