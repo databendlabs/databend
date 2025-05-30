@@ -411,7 +411,7 @@ impl AvroDecoder {
                     let scale_diff = (size.scale() as i64) - v_scale;
                     if scale_diff > 0 {
                         d1 = d1
-                            .checked_mul(D::e(scale_diff as u32))
+                            .checked_mul(D::e(scale_diff as u8))
                             .expect("rescale should not overflow");
                     }
                     column.push(d1);

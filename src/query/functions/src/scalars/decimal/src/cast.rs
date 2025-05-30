@@ -453,7 +453,7 @@ where
             let arg = arg.try_downcast().unwrap();
             vectorize_1_arg::<BooleanType, DecimalType<T>>(|a: bool, _| {
                 if a {
-                    T::e(size.scale() as u32)
+                    T::e(size.scale())
                 } else {
                     T::zero()
                 }
@@ -618,7 +618,7 @@ where
     S: AccessType,
     for<'a> S::ScalarRef<'a>: Number + AsPrimitive<i128>,
 {
-    let multiplier = T::e(size.scale() as u32);
+    let multiplier = T::e(size.scale());
 
     let min_for_precision = T::min_for_precision(size.precision());
     let max_for_precision = T::max_for_precision(size.precision());
@@ -699,7 +699,7 @@ where
 }
 
 #[inline]
-pub(super) fn get_round_val<T: Decimal>(x: T, scale: u32, rounding_mode: bool) -> Option<T> {
+pub(super) fn get_round_val<T: Decimal>(x: T, scale: u8, rounding_mode: bool) -> Option<T> {
     if !rounding_mode || scale == 0 {
         return None;
     }
@@ -744,7 +744,7 @@ where
             },
         )(buffer, ctx),
         Ordering::Greater => {
-            let factor = F::e((dest_size.scale() - from_size.scale()) as u32);
+            let factor = F::e(dest_size.scale() - from_size.scale());
 
             vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
                 |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| match x.checked_mul(factor) {
@@ -762,7 +762,7 @@ where
             )(buffer, ctx)
         }
         Ordering::Less => {
-            let scale_diff = (from_size.scale() - dest_size.scale()) as u32;
+            let scale_diff = from_size.scale() - dest_size.scale();
             let factor = F::e(scale_diff);
             let scale = from_size.scale();
 
@@ -796,7 +796,7 @@ pub(super) fn decimal_scale_reduction<T: Decimal>(
     max: T,
     factor: T,
     scale: u8,
-    scale_diff: u32,
+    scale_diff: u8,
     rounding_mode: bool,
 ) -> Option<T> {
     let q = x.checked_div(factor)?;
@@ -836,7 +836,7 @@ where
     }
 
     if from_size.scale() > dest_size.scale() {
-        let scale_diff = (from_size.scale() - dest_size.scale()) as u32;
+        let scale_diff = from_size.scale() - dest_size.scale();
         let factor = T::e(scale_diff);
         let max = T::max_for_precision(dest_size.precision());
         let min = T::min_for_precision(dest_size.precision());
@@ -864,7 +864,7 @@ where
             },
         )(buffer, ctx)
     } else {
-        let factor = T::e((dest_size.scale() - from_size.scale()) as u32);
+        let factor = T::e(dest_size.scale() - from_size.scale());
         let min = T::min_for_precision(dest_size.precision());
         let max = T::max_for_precision(dest_size.precision());
 

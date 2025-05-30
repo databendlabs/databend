@@ -34,10 +34,10 @@ use databend_common_expression::Value;
 use super::convert_to_decimal_domain;
 
 #[inline]
-fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u32, u32) {
+fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u8, u8) {
     (
-        (scale_b - std::cmp::min(scale_a, scale_b)) as u32,
-        (scale_a - std::cmp::min(scale_a, scale_b)) as u32,
+        (scale_b - std::cmp::min(scale_a, scale_b)),
+        (scale_a - std::cmp::min(scale_a, scale_b)),
     )
 }
 
@@ -80,12 +80,12 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
                             Domain::Decimal(DecimalDomain::Decimal128(d2, _)),
                         ) => {
                             let d1 = SimpleDomain {
-                                min: d1.min.checked_mul(10_i128.pow(m1)).unwrap_or(i128::MIN),
-                                max: d1.max.checked_mul(10_i128.pow(m1)).unwrap_or(i128::MAX),
+                                min: d1.min.checked_mul(i128::e(m1)).unwrap_or(i128::MIN),
+                                max: d1.max.checked_mul(i128::e(m1)).unwrap_or(i128::MAX),
                             };
                             let d2 = SimpleDomain {
-                                min: d2.min.checked_mul(10_i128.pow(m2)).unwrap_or(i128::MIN),
-                                max: d2.max.checked_mul(10_i128.pow(m2)).unwrap_or(i128::MAX),
+                                min: d2.min.checked_mul(i128::e(m2)).unwrap_or(i128::MIN),
+                                max: d2.max.checked_mul(i128::e(m2)).unwrap_or(i128::MAX),
                             };
                             Op::domain_op(&d1, &d2)
                         }
@@ -94,25 +94,13 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
                             Domain::Decimal(DecimalDomain::Decimal256(d2, _)),
                         ) => {
                             let d1 = SimpleDomain {
-                                min: d1
-                                    .min
-                                    .checked_mul(i256::from(10).pow(m1))
-                                    .unwrap_or(i256::DECIMAL_MIN),
-                                max: d1
-                                    .max
-                                    .checked_mul(i256::from(10).pow(m1))
-                                    .unwrap_or(i256::DECIMAL_MAX),
+                                min: d1.min.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MIN),
+                                max: d1.max.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MAX),
                             };
 
                             let d2 = SimpleDomain {
-                                min: d2
-                                    .min
-                                    .checked_mul(i256::from(10).pow(m2))
-                                    .unwrap_or(i256::DECIMAL_MIN),
-                                max: d2
-                                    .max
-                                    .checked_mul(i256::from(10).pow(m2))
-                                    .unwrap_or(i256::DECIMAL_MAX),
+                                min: d2.min.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MIN),
+                                max: d2.max.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MAX),
                             };
                             Op::domain_op(&d1, &d2)
                         }
@@ -132,25 +120,13 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
 
                             let d1 = d1.as_decimal256().unwrap().0;
                             let d1 = SimpleDomain {
-                                min: d1
-                                    .min
-                                    .checked_mul(i256::from(10).pow(m1))
-                                    .unwrap_or(i256::DECIMAL_MIN),
-                                max: d1
-                                    .max
-                                    .checked_mul(i256::from(10).pow(m1))
-                                    .unwrap_or(i256::DECIMAL_MAX),
+                                min: d1.min.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MIN),
+                                max: d1.max.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MAX),
                             };
 
                             let d2 = SimpleDomain {
-                                min: d2
-                                    .min
-                                    .checked_mul(i256::from(10).pow(m2))
-                                    .unwrap_or(i256::DECIMAL_MIN),
-                                max: d2
-                                    .max
-                                    .checked_mul(i256::from(10).pow(m2))
-                                    .unwrap_or(i256::DECIMAL_MAX),
+                                min: d2.min.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MIN),
+                                max: d2.max.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MAX),
                             };
                             Op::domain_op(&d1, &d2)
                         }
@@ -170,25 +146,13 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
                             let d2 = d2.as_decimal256().unwrap().0;
 
                             let d1 = SimpleDomain {
-                                min: d1
-                                    .min
-                                    .checked_mul(i256::from(10).pow(m1))
-                                    .unwrap_or(i256::DECIMAL_MIN),
-                                max: d1
-                                    .max
-                                    .checked_mul(i256::from(10).pow(m1))
-                                    .unwrap_or(i256::DECIMAL_MAX),
+                                min: d1.min.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MIN),
+                                max: d1.max.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MAX),
                             };
 
                             let d2 = SimpleDomain {
-                                min: d2
-                                    .min
-                                    .checked_mul(i256::from(10).pow(m2))
-                                    .unwrap_or(i256::DECIMAL_MIN),
-                                max: d2
-                                    .max
-                                    .checked_mul(i256::from(10).pow(m2))
-                                    .unwrap_or(i256::DECIMAL_MAX),
+                                min: d2.min.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MIN),
+                                max: d2.max.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MAX),
                             };
                             Op::domain_op(&d1, &d2)
                         }

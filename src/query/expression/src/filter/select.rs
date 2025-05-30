@@ -283,22 +283,21 @@ impl Selector<'_> {
 
     pub(super) fn select_like(
         &self,
-        mut column: Column,
-        data_type: &DataType,
+        column: Column,
         like_pattern: &LikePattern,
         not: bool,
         buffers: SelectionBuffers,
         has_false: bool,
     ) -> Result<usize> {
-        // Remove `NullableColumn` and get the inner column and validity.
-        let mut validity = None;
-        if let DataType::Nullable(_) = data_type {
-            let nullable_column = column.clone().into_nullable().unwrap();
-            column = nullable_column.column;
-            validity = Some(nullable_column.validity);
-        }
-        // It's safe to unwrap because the column's data type is `DataType::String`.
-        let column = column.into_string().unwrap();
+        let (column, validity) = match column.into_nullable() {
+            Ok(nullable) => (
+                nullable.column.into_string().unwrap(),
+                Some(nullable.validity),
+            ),
+            Err(Column::String(column)) => (column, None),
+            _ => unreachable!(),
+        };
+
         self.select_like_adapt(column, like_pattern, not, validity, buffers, has_false)
     }
 }

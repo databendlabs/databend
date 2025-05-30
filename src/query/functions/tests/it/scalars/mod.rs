@@ -24,7 +24,6 @@ use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
-use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionFactory;
@@ -154,18 +153,12 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         let result = if ctx.strict_eval {
             evaluator.run(&expr)
         } else {
-            evaluator.partial_run(&expr, None, &mut EvaluateOptions {
-                strict_eval: false,
-                ..Default::default()
-            })
+            evaluator.run_fast(&expr)
         };
         let optimized_result = if ctx.strict_eval {
             evaluator.run(&optimized_expr)
         } else {
-            evaluator.partial_run(&optimized_expr, None, &mut EvaluateOptions {
-                strict_eval: false,
-                ..Default::default()
-            })
+            evaluator.run_fast(&expr)
         };
         match &result {
             Ok(result) => assert!(

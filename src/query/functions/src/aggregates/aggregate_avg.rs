@@ -186,7 +186,7 @@ where
         };
         match self
             .value
-            .checked_mul(T::Scalar::e(decimal_avg_data.scale_add as u32))
+            .checked_mul(T::Scalar::e(decimal_avg_data.scale_add))
             .and_then(|v| v.checked_div(T::Scalar::from_i128(self.count)))
         {
             Some(value) => {
@@ -196,7 +196,7 @@ where
             None => Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {} mul {}",
                 self.value,
-                T::Scalar::e(decimal_avg_data.scale_add as u32)
+                T::Scalar::e(decimal_avg_data.scale_add)
             ))),
         }
     }

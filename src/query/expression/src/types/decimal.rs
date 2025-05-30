@@ -155,10 +155,6 @@ impl<Num: Decimal> DecimalType<Num> {
             max: Num::max_for_precision(size.precision),
         }
     }
-
-    pub fn default_size() -> DecimalSize {
-        Num::default_decimal_size()
-    }
 }
 
 #[derive(
@@ -189,33 +185,6 @@ impl DecimalScalar {
         with_decimal_type!(|DECIMAL| match self {
             DecimalScalar::DECIMAL(v, _) => v.is_positive(),
         })
-    }
-
-    pub fn to_decimal64(&self) -> DecimalScalar {
-        let (v, size) = match *self {
-            DecimalScalar::Decimal64(v, size) => (v, size),
-            DecimalScalar::Decimal128(v, size) => (v as _, size),
-            DecimalScalar::Decimal256(v, size) => (v.as_i64(), size),
-        };
-        DecimalScalar::Decimal64(v, size)
-    }
-
-    pub fn to_decimal128(&self) -> DecimalScalar {
-        let (v, size) = match *self {
-            DecimalScalar::Decimal64(v, size) => (v as _, size),
-            DecimalScalar::Decimal128(v, size) => (v, size),
-            DecimalScalar::Decimal256(v, size) => (v.as_i128(), size),
-        };
-        DecimalScalar::Decimal128(v, size)
-    }
-
-    pub fn to_decimal256(&self) -> DecimalScalar {
-        let (v, size) = match *self {
-            DecimalScalar::Decimal64(v, size) => (i256::from(v), size),
-            DecimalScalar::Decimal128(v, size) => (i256::from(v), size),
-            DecimalScalar::Decimal256(v, size) => (v, size),
-        };
-        DecimalScalar::Decimal256(v, size)
     }
 
     pub fn size(&self) -> DecimalSize {
@@ -375,7 +344,7 @@ pub trait Decimal:
     fn minus_one() -> Self;
 
     // 10**scale
-    fn e(n: u32) -> Self;
+    fn e(n: u8) -> Self;
     fn mem_size() -> usize;
 
     fn to_u64_array(self) -> Self::U64Array;
@@ -448,7 +417,7 @@ pub trait Decimal:
     fn as_decimal<D: Decimal>(self) -> D;
 
     fn with_size(&self, size: DecimalSize) -> Option<Self> {
-        let multiplier = Self::e(size.scale() as u32);
+        let multiplier = Self::e(size.scale());
         let min_for_precision = Self::min_for_precision(size.precision());
         let max_for_precision = Self::max_for_precision(size.precision());
         self.checked_mul(multiplier).and_then(|v| {
@@ -484,7 +453,7 @@ impl Decimal for i64 {
         -1
     }
 
-    fn e(n: u32) -> Self {
+    fn e(n: u8) -> Self {
         const L: usize = MAX_DECIMAL64_PRECISION as usize + 1;
         const TAB: [i64; L] = {
             const fn gen() -> [i64; L] {
@@ -503,7 +472,7 @@ impl Decimal for i64 {
         };
         TAB.get(n as usize)
             .copied()
-            .unwrap_or_else(|| 10_i64.pow(n))
+            .unwrap_or_else(|| 10_i64.pow(n as u32))
     }
 
     fn mem_size() -> usize {
@@ -540,7 +509,7 @@ impl Decimal for i64 {
         }
 
         if !overflow {
-            let div = i64::e(shift_scale);
+            let div = i64::e(shift_scale as u8);
             let res = if self.is_negative() == rhs.is_negative() {
                 (self * rhs + div / 2) / div
             } else {
@@ -549,7 +518,7 @@ impl Decimal for i64 {
             return Some(res);
         }
 
-        let div = i128::e(shift_scale);
+        let div = i128::e(shift_scale as u8);
         let res = if self.is_negative() == rhs.is_negative() {
             (self as i128 * rhs as i128 + div / 2) / div
         } else {
@@ -564,7 +533,7 @@ impl Decimal for i64 {
     }
 
     fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self> {
-        let mul = i128::e(mul_scale);
+        let mul = i128::e(mul_scale as u8);
         let rhs = rhs as i128;
         let res = if self.is_negative() == rhs.is_negative() {
             ((self as i128) * mul + rhs / 2) / rhs
@@ -575,11 +544,11 @@ impl Decimal for i64 {
     }
 
     fn min_for_precision(precision: u8) -> Self {
-        -(Self::e(precision as u32) - 1)
+        -(Self::e(precision) - 1)
     }
 
     fn max_for_precision(precision: u8) -> Self {
-        Self::e(precision as u32) - 1
+        Self::e(precision) - 1
     }
 
     fn default_decimal_size() -> DecimalSize {
@@ -636,7 +605,7 @@ impl Decimal for i64 {
         let mut val = self / div;
         if rounding_mode && scale > 0 {
             if let Some(r) = self.checked_rem(div) {
-                if let Some(m) = r.checked_div(i64::e(scale as u32 - 1)) {
+                if let Some(m) = r.checked_div(i64::e((scale as u32 - 1) as u8)) {
                     if m >= 5i64 {
                         val = val.checked_add(1i64)?;
                     } else if m <= -5i64 {
@@ -739,7 +708,7 @@ impl Decimal for i128 {
         -1_i128
     }
 
-    fn e(n: u32) -> Self {
+    fn e(n: u8) -> Self {
         const L: usize = MAX_DECIMAL128_PRECISION as usize + 1;
         const TAB: [i128; L] = {
             const fn gen() -> [i128; L] {
@@ -758,7 +727,7 @@ impl Decimal for i128 {
         };
         TAB.get(n as usize)
             .copied()
-            .unwrap_or_else(|| 10_i128.pow(n))
+            .unwrap_or_else(|| 10_i128.pow(n as u32))
     }
 
     fn mem_size() -> usize {
@@ -795,7 +764,7 @@ impl Decimal for i128 {
         }
 
         if !overflow {
-            let div = i128::e(shift_scale);
+            let div = i128::e(shift_scale as u8);
             let res = if self.is_negative() == rhs.is_negative() {
                 (self * rhs + div / 2) / div
             } else {
@@ -805,7 +774,7 @@ impl Decimal for i128 {
             return Some(res);
         }
 
-        let div = i256::e(shift_scale);
+        let div = i256::e(shift_scale as u8);
         let res = if self.is_negative() == rhs.is_negative() {
             (i256::from(self) * i256::from(rhs) + div / i256::from(2)) / div
         } else {
@@ -820,7 +789,7 @@ impl Decimal for i128 {
     }
 
     fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self> {
-        let mul = i256::e(mul_scale);
+        let mul = i256::e(mul_scale as u8);
         let rhs = i256::from(rhs);
         let res = if self.is_negative() == rhs.is_negative() {
             (i256::from(self) * mul + rhs / i256::from(2)) / rhs
@@ -963,7 +932,7 @@ impl Decimal for i128 {
         if rounding_mode && scale > 0 {
             // Checking whether numbers need to be added or subtracted to calculate rounding
             if let Some(r) = self.checked_rem(div) {
-                if let Some(m) = r.checked_div(i128::e(scale as u32 - 1)) {
+                if let Some(m) = r.checked_div(i128::e(scale - 1)) {
                     if m >= 5i128 {
                         val = val.checked_add(1i128)?;
                     } else if m <= -5i128 {
@@ -1060,12 +1029,13 @@ impl Decimal for i256 {
         i256::MINUS_ONE
     }
 
-    fn e(n: u32) -> Self {
-        const MAX: u32 = MAX_DECIMAL256_PRECISION as u32;
+    fn e(n: u8) -> Self {
         match n {
             0 => i256::ONE,
-            1..=MAX => MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION[n as usize - 1] + i256::ONE,
-            _ => i256::from(10).pow(n),
+            1..=MAX_DECIMAL256_PRECISION => {
+                MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION[n as usize - 1] + i256::ONE
+            }
+            _ => i256::from(10).pow(n as u32),
         }
     }
 
@@ -1102,7 +1072,7 @@ impl Decimal for i256 {
             return Some(self);
         }
 
-        let div = i256::e(shift_scale);
+        let div = i256::e(shift_scale as u8);
         if !overflow {
             let ret = if self.is_negative() == rhs.is_negative() {
                 (self * rhs + div / i256::from(2)) / div
@@ -1148,7 +1118,7 @@ impl Decimal for i256 {
             return fallback();
         }
 
-        let mul = i256::e(mul_scale);
+        let mul = i256::e(mul_scale as u8);
         let ret: Option<i256> = if self.is_negative() == rhs.is_negative() {
             self.checked_mul(mul)
                 .map(|x| (x + rhs / i256::from(2)) / rhs)

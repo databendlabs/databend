@@ -356,7 +356,7 @@ where T: Decimal
                 sum -= self.values[i - window_size];
             }
             let avg_val = match sum
-                .checked_mul(T::e(scale_add as u32))
+                .checked_mul(T::e(scale_add))
                 .and_then(|v| v.checked_div(T::from_i128(window_size as u64)))
             {
                 Some(value) => value,
@@ -364,7 +364,7 @@ where T: Decimal
                     return Err(ErrorCode::Overflow(format!(
                         "Decimal overflow: {} mul {}",
                         sum,
-                        T::e(scale_add as u32)
+                        T::e(scale_add)
                     )));
                 }
             };

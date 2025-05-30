@@ -165,7 +165,7 @@ where
     U: Decimal,
     C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let power_of_ten = T::e((source_scale - target_scale) as u32);
+    let power_of_ten = T::e((source_scale - target_scale) as u8);
     let addition = power_of_ten / T::from(2);
     vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
         let res = if a < T::zero() {
@@ -194,9 +194,9 @@ where
     U: Decimal,
     C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let divide_power_of_ten = T::e((source_scale - target_scale) as u32);
+    let divide_power_of_ten = T::e((source_scale - target_scale) as u8);
     let addition = divide_power_of_ten / T::from(2);
-    let multiply_power_of_ten = T::e((-target_scale) as u32);
+    let multiply_power_of_ten = T::e((-target_scale) as u8);
 
     vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
         let a = if a < T::zero() {
@@ -221,7 +221,7 @@ where
     U: Decimal,
     C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let power_of_ten = T::e((source_scale - target_scale) as u32);
+    let power_of_ten = T::e((source_scale - target_scale) as u8);
     vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
         let res = a / power_of_ten;
         C::compute(&res)
@@ -245,8 +245,8 @@ where
     U: Decimal,
     C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let divide_power_of_ten = T::e((source_scale - target_scale) as u32);
-    let multiply_power_of_ten = T::e((-target_scale) as u32);
+    let divide_power_of_ten = T::e((source_scale - target_scale) as u8);
+    let multiply_power_of_ten = T::e((-target_scale) as u8);
 
     vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
         let res = a / divide_power_of_ten * multiply_power_of_ten;
@@ -270,7 +270,7 @@ where
     U: Decimal,
     C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let power_of_ten = T::e(source_scale as u32);
+    let power_of_ten = T::e(source_scale as u8);
 
     vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
         let res = if a < T::zero() {
@@ -299,7 +299,7 @@ where
     U: Decimal,
     C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let power_of_ten = T::e(source_scale as u32);
+    let power_of_ten = T::e(source_scale as u8);
 
     vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
         let res = if a <= T::zero() {

@@ -42,7 +42,7 @@ where
     T: Decimal,
 {
     let size = dest_type.size();
-    let multiplier = T::e(size.scale() as u32);
+    let multiplier = T::e(size.scale());
     let multiplier_f64: f64 = (10_f64).powi(size.scale() as i32).as_();
     let min = T::min_for_precision(size.precision());
     let max = T::max_for_precision(size.precision());
@@ -154,7 +154,7 @@ where
                 JsonbValue::Null => Ok(None),
                 JsonbValue::Bool(b) => {
                     let v = if b {
-                        T::e(dest_size.scale() as u32)
+                        T::e(dest_size.scale())
                     } else {
                         T::zero()
                     };
@@ -219,7 +219,7 @@ fn decimal_to_decimal<T: Decimal>(
     if from_size.scale() == dest_size.scale() && from_size.precision() <= dest_size.precision() {
         Ok(x)
     } else if from_size.scale() > dest_size.scale() {
-        let scale_diff = (from_size.scale() - dest_size.scale()) as u32;
+        let scale_diff = from_size.scale() - dest_size.scale();
         match decimal_scale_reduction(
             x,
             min,
@@ -233,7 +233,7 @@ fn decimal_to_decimal<T: Decimal>(
             _ => Err("Decimal overflow".to_string()),
         }
     } else {
-        let factor = T::e((dest_size.scale() - from_size.scale()) as u32);
+        let factor = T::e(dest_size.scale() - from_size.scale());
         match x.checked_mul(factor) {
             Some(y) if y <= max && y >= min => Ok(y),
             _ => Err("Decimal overflow".to_string()),

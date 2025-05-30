@@ -305,7 +305,7 @@ impl<'a> Selector<'a> {
             *mutable_false_idx + count,
             &select_strategy,
         );
-        let mut eval_options = EvaluateOptions::new(selection);
+        let mut eval_options = EvaluateOptions::new_for_select(selection);
         let children = self.evaluator.get_children(exprs, &mut eval_options)?;
         let (left_value, left_data_type) = children[0].clone();
         let (right_value, right_data_type) = children[1].clone();
@@ -354,7 +354,7 @@ impl<'a> Selector<'a> {
             *mutable_false_idx + count,
             &select_strategy,
         );
-        let mut eval_options = EvaluateOptions::new(selection);
+        let mut eval_options = EvaluateOptions::new_for_select(selection);
         let (value, data_type) = self
             .evaluator
             .get_select_child(column_ref, &mut eval_options)?;
@@ -366,7 +366,6 @@ impl<'a> Selector<'a> {
             _ => match value.into_column() {
                 Ok(column) => self.select_like(
                     column,
-                    &data_type,
                     like_pattern,
                     not,
                     SelectionBuffers {
@@ -380,8 +379,7 @@ impl<'a> Selector<'a> {
                     false_selection.1,
                 ),
                 Err(e) => Err(ErrorCode::Internal(format!(
-                    "Can not convert to column with error: {}",
-                    e
+                    "Can not convert to column with error: {e}",
                 ))),
             },
         }
@@ -458,7 +456,7 @@ impl<'a> Selector<'a> {
                 generics,
                 ..
             }) if function.signature.name == "if" => {
-                let mut eval_options = EvaluateOptions::new(selection);
+                let mut eval_options = EvaluateOptions::new_for_select(selection);
 
                 let result = self
                     .evaluator
@@ -483,7 +481,7 @@ impl<'a> Selector<'a> {
                     expr.sql_display(),
                     return_type
                 );
-                let mut eval_options = EvaluateOptions::new(selection)
+                let mut eval_options = EvaluateOptions::new_for_select(selection)
                     .with_suppress_error(function.signature.name == "is_not_error");
 
                 let args = args
@@ -537,7 +535,7 @@ impl<'a> Selector<'a> {
                     *mutable_false_idx + count,
                     &select_strategy,
                 );
-                let mut eval_options = EvaluateOptions::new(selection);
+                let mut eval_options = EvaluateOptions::new_for_select(selection);
                 let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
                 let src_type = expr.data_type();
                 let result = if *is_try {
@@ -570,7 +568,7 @@ impl<'a> Selector<'a> {
                     *mutable_false_idx + count,
                     &select_strategy,
                 );
-                let mut eval_options = EvaluateOptions::new(selection);
+                let mut eval_options = EvaluateOptions::new_for_select(selection);
 
                 let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
