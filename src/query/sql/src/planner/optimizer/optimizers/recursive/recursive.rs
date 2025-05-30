@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_exception::Result;
@@ -42,11 +43,6 @@ impl RecursiveRuleOptimizer {
         }
     }
 
-    /// Set the trace collector for this optimizer
-    pub fn set_trace_collector(&mut self, collector: Arc<OptimizerTraceCollector>) {
-        self.trace_collector = Some(collector);
-    }
-
     /// Run the optimizer on the given expression.
     #[recursive::recursive]
     pub fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
@@ -74,17 +70,56 @@ impl RecursiveRuleOptimizer {
         Ok(result)
     }
 
+    /// Trace rule execution, regardless of whether the rule had an effect
+    fn trace_rule_execution(
+        &self,
+        rule_name: String,
+        duration: Duration,
+        before_expr: &SExpr,
+        state: &TransformResult,
+    ) -> Result<()> {
+        if self.ctx.get_enable_trace() && self.trace_collector.is_some() {
+            let collector = self.trace_collector.as_ref().unwrap();
+            let metadata_ref = self.ctx.get_metadata();
+            let metadata = &metadata_ref.read();
+
+            // Determine result expression and check for actual differences
+            let result_expr = if !state.results().is_empty() {
+                &state.results()[0]
+            } else {
+                before_expr
+            };
+
+            // Record the rule execution
+            collector.trace_rule(
+                rule_name,
+                self.name(),
+                duration,
+                before_expr,
+                result_expr,
+                metadata,
+            )?;
+        }
+
+        Ok(())
+    }
+
     fn apply_transform_rules(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
         for rule_id in rules {
             let rule = RuleFactory::create_rule(*rule_id, self.ctx.clone())?;
 
-            // Check if this rule should be skipped based on optimizer_skip_list
-            let rule_name = rule.name();
-            if self.ctx.is_optimizer_disabled(&rule_name) {
+            // Skip disabled rules
+            if self.ctx.is_optimizer_disabled(&rule.name()) {
                 continue;
             }
 
+            // For tracing only
+            let trace_enabled = self.ctx.get_enable_trace() && self.trace_collector.is_some();
+            let start_time = Instant::now();
+            let before_expr = s_expr.clone();
+
+            // Core optimization logic - exactly as original
             let mut state = TransformResult::new();
             if rule
                 .matchers()
@@ -93,48 +128,29 @@ impl RecursiveRuleOptimizer {
                 && !s_expr.applied_rule(&rule.id())
             {
                 s_expr.set_applied_rule(&rule.id());
-
-                // Save the expression before rule application
-                let before_expr = s_expr.clone();
-
-                // Measure execution time
-                let start_time = Instant::now();
-
-                // Apply the rule
                 rule.apply(&s_expr, &mut state)?;
-
-                // Calculate duration
-                let duration = start_time.elapsed();
-
                 if !state.results().is_empty() {
                     let result = &state.results()[0];
 
-                    // Only trace if collector exists and tracing is enabled
-                    if self.ctx.get_enable_trace() {
-                        if let Some(collector) = &self.trace_collector {
-                            let metadata_ref = self.ctx.get_metadata();
-                            let metadata = &metadata_ref.read();
-
-                            // Record detailed information about the rule application
-                            collector.trace_rule(
-                                rule_name,
-                                self.name(),
-                                duration,
-                                &before_expr,
-                                result,
-                                metadata,
-                            )?;
-                        }
+                    // For tracing only
+                    if trace_enabled {
+                        let duration = start_time.elapsed();
+                        self.trace_rule_execution(rule.name(), duration, &before_expr, &state)?;
                     }
 
-                    // Recursively optimize the result
                     let optimized_result = self.optimize_expression(result)?;
                     return Ok(optimized_result);
                 }
             }
+
+            // For tracing only
+            if trace_enabled {
+                let duration = start_time.elapsed();
+                self.trace_rule_execution(rule.name(), duration, &before_expr, &state)?;
+            }
         }
 
-        Ok(s_expr.clone())
+        Ok(s_expr)
     }
 }
 
@@ -156,5 +172,10 @@ impl Optimizer for RecursiveRuleOptimizer {
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr)
+    }
+
+    /// Set the trace collector for this optimizer
+    fn set_trace_collector(&mut self, collector: Arc<OptimizerTraceCollector>) {
+        self.trace_collector = Some(collector);
     }
 }

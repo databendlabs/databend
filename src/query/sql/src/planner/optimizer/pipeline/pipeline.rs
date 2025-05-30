@@ -69,13 +69,6 @@ impl OptimizerPipeline {
             return self;
         }
 
-        // Get trace collector
-        let trace_collector = self.get_trace_collector();
-
-        // Call set_trace_collector method
-        let mut optimizer = optimizer;
-        optimizer.set_trace_collector(trace_collector);
-
         self.optimizers.push(Box::new(optimizer));
         self
     }
@@ -113,8 +106,14 @@ impl OptimizerPipeline {
         // Then apply all optimizers in sequence
         let mut current_expr = self.s_expr.clone();
         let total_optimizers = self.optimizers.len();
+        let trace_collector = self.get_trace_collector();
 
         for (idx, optimizer) in self.optimizers.iter_mut().enumerate() {
+            // Set trace collector
+            if self.opt_ctx.get_enable_trace() {
+                optimizer.set_trace_collector(trace_collector.clone());
+            }
+
             // Save the expression before optimization
             let before_expr = current_expr.clone();
 

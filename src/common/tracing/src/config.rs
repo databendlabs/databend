@@ -48,7 +48,7 @@ impl Config {
             },
             stderr: StderrConfig {
                 on: true,
-                level: "WARN".to_string(),
+                level: "INFO".to_string(),
                 format: "text".to_string(),
             },
             ..Default::default()

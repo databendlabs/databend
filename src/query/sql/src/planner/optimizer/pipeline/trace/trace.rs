@@ -25,24 +25,33 @@ use crate::Metadata;
 /// Represents a trace entry for a rule execution
 #[derive(Clone)]
 pub struct RuleTrace {
-    /// The name of the rule
+    /// Name of the rule
     pub name: String,
-    /// The execution time of the rule
+    /// Time spent executing the rule
     pub time: Duration,
-    /// Whether the rule had an effect (changed the expression)
+    /// Whether the rule had an effect
     pub had_effect: bool,
-    /// The diff between before and after expressions
+    /// Diff of the expression before and after the rule
     pub diff: String,
+    /// Sequence number of the rule in the optimizer
+    pub sequence: usize,
 }
 
 impl RuleTrace {
     /// Create a new rule trace
-    pub fn new(name: String, time: Duration, had_effect: bool, diff: String) -> Self {
+    pub fn new(
+        name: String,
+        time: Duration,
+        had_effect: bool,
+        diff: String,
+        sequence: usize,
+    ) -> Self {
         Self {
             name,
             time,
             had_effect,
             diff,
+            sequence,
         }
     }
 }
@@ -90,7 +99,8 @@ pub struct OptimizerTraceCollector {
     /// The collection of optimizer traces, ordered by index
     optimizers: Mutex<BTreeMap<usize, OptimizerTrace>>,
     /// The collection of rule traces, organized by optimizer name
-    rules: Mutex<BTreeMap<String, Vec<RuleTrace>>>,
+    /// Using BTreeMap<rule_name, RuleTrace> for faster lookup instead of Vec<RuleTrace>
+    rules: Mutex<BTreeMap<String, BTreeMap<String, RuleTrace>>>,
 }
 
 impl OptimizerTraceCollector {
@@ -102,7 +112,7 @@ impl OptimizerTraceCollector {
         }
     }
 
-    /// Create a trace, add it to the collection
+    /// Create a trace for an optimizer, add it to the collection
     pub fn trace_optimizer(
         &self,
         name: String,
@@ -113,16 +123,11 @@ impl OptimizerTraceCollector {
         after: &SExpr,
         metadata: &Metadata,
     ) -> Result<()> {
-        // Check for expression changes
         let diff = before.diff(after, metadata)?;
         let had_effect = !diff.is_empty() && diff != "No differences found.";
 
-        // Create optimizer trace
-        let trace = OptimizerTrace::new(name.clone(), index, total, time, had_effect, diff);
-
-        // Store optimizer trace
-        let mut optimizers = self.optimizers.lock();
-        optimizers.insert(index, trace);
+        let trace = OptimizerTrace::new(name, index, total, time, had_effect, diff);
+        self.optimizers.lock().insert(index, trace);
 
         Ok(())
     }
@@ -137,310 +142,282 @@ impl OptimizerTraceCollector {
         after: &SExpr,
         metadata: &Metadata,
     ) -> Result<()> {
-        // Check if the rule had an effect
         let diff = before.diff(after, metadata)?;
         let had_effect = !diff.is_empty() && diff != "No differences found.";
 
-        // Create the rule trace
-        let rule_trace = RuleTrace::new(rule_name, time, had_effect, diff);
-
-        // IMPORTANT: Always acquire locks in the same order as log_report to prevent deadlocks
-        // First acquire optimizers lock
+        // Update optimizer effect status if rule had effect
         if had_effect {
-            let mut optimizers = self.optimizers.lock();
-            for optimizer in optimizers.values_mut() {
-                if optimizer.name == optimizer_name {
-                    optimizer.had_effect = true;
-                    break;
-                }
+            if let Some(optimizer) = self
+                .optimizers
+                .lock()
+                .values_mut()
+                .find(|o| o.name == optimizer_name)
+            {
+                optimizer.had_effect = true;
             }
         }
 
-        // Then acquire rules lock
+        // Add or update rule trace using BTreeMap for O(log n) lookup
         let mut rules = self.rules.lock();
-        rules.entry(optimizer_name).or_default().push(rule_trace);
+        let optimizer_rules = rules.entry(optimizer_name.clone()).or_default();
 
+        // Get the next sequence number for this rule if it's new
+        // Sequence starts from 0 for each optimizer
+        let sequence = optimizer_rules.len();
+
+        // Using BTreeMap's entry API for cleaner and more efficient update
+        match optimizer_rules.entry(rule_name.clone()) {
+            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                // Update existing rule
+                let existing = entry.get_mut();
+                existing.time += time;
+                existing.had_effect |= had_effect;
+                if had_effect {
+                    existing.diff = diff;
+                }
+                // Sequence number remains unchanged
+            }
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                // Insert new rule with sequence number
+                entry.insert(RuleTrace::new(rule_name, time, had_effect, diff, sequence));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Update the had_effect flag for an optimizer
+    pub fn update_optimizer_effect(&self, optimizer_name: String) -> Result<()> {
+        if let Some(optimizer) = self
+            .optimizers
+            .lock()
+            .values_mut()
+            .find(|o| o.name == optimizer_name)
+        {
+            optimizer.had_effect = true;
+        }
         Ok(())
     }
 
     /// Generate and log the optimizer trace report
     pub fn log_report(&self) {
-        // Get copies of the data
-        let optimizers = self.optimizers.lock().clone();
-        let rules = self.rules.lock().clone();
+        let optimizers = self.optimizers.lock();
+        let rules = self.rules.lock();
 
-        // Check if there's any data to report
-        if optimizers.is_empty() && rules.is_empty() {
-            info!("No optimizers or rules were applied. Enable tracing with 'SET enable_optimizer_trace = 1;'");
+        if optimizers.is_empty() {
             return;
         }
 
-        for optimizer in optimizers.values() {
-            self.log_optimizer_detail_report(optimizer, rules.get(&optimizer.name));
-        }
+        // Log optimizer summary as a single log entry
+        self.log_optimizers_summary(&optimizers, &rules);
 
-        self.log_summary_report(&optimizers, &rules);
+        self.log_optimizers_details(&optimizers, &rules);
     }
 
-    /// Generate and log the summary report
-    fn log_summary_report(
+    /// Log optimizers summary
+    fn log_optimizers_summary(
         &self,
         optimizers: &BTreeMap<usize, OptimizerTrace>,
-        rules: &BTreeMap<String, Vec<RuleTrace>>,
+        rules: &BTreeMap<String, BTreeMap<String, RuleTrace>>,
     ) {
-        let mut report = String::new();
-        report.push_str("================ Optimizer Execution Summary ================\n\n");
-
-        // Calculate statistics
-        let total_optimizers = optimizers.len();
-        let applied_optimizers = optimizers.values().filter(|t| t.had_effect).count();
-        let total_optimizer_time: Duration = optimizers.values().map(|t| t.time).sum();
-
-        let total_rules: usize = rules.values().map(|rules| rules.len()).sum();
-        let applied_rules: usize = rules
-            .values()
-            .flat_map(|rules| rules.iter())
-            .filter(|r| r.had_effect)
-            .count();
-        let total_rule_time: Duration = rules
-            .values()
-            .flat_map(|rules| rules.iter())
-            .map(|r| r.time)
-            .sum();
-
-        // Report applied optimizers
-        report.push_str("Applied Optimizers:\n");
-        let mut has_applied = false;
+        // Create a single summary log for all optimizers
+        let mut summary = String::new();
+        summary.push_str("========== OPTIMIZERS SUMMARY TRACE ==========\n\n");
 
         for optimizer in optimizers.values() {
-            if optimizer.had_effect {
-                has_applied = true;
+            let status_symbol = if optimizer.had_effect { "✓" } else { "✗" };
 
-                // Get rules for this optimizer
-                let optimizer_rules = rules.get(&optimizer.name);
-                let applied_rule_count = optimizer_rules
-                    .map(|rules| rules.iter().filter(|r| r.had_effect).count())
-                    .unwrap_or(0);
-                let total_rule_count = optimizer_rules.map(|rules| rules.len()).unwrap_or(0);
+            // Count applied rules for this optimizer
+            let optimizer_rules = rules.get(&optimizer.name);
+            let (applied_rules, total_rules) = if let Some(optimizer_rules) = optimizer_rules {
+                let applied = optimizer_rules.values().filter(|r| r.had_effect).count();
+                let total = optimizer_rules.len();
+                (applied, total)
+            } else {
+                (0, 0)
+            };
 
-                // Format the optimizer name with rule count if applicable
-                let optimizer_display = if total_rule_count > 0 {
-                    format!(
-                        "{} (applied rules: {}/{})",
-                        optimizer.name, applied_rule_count, total_rule_count
-                    )
-                } else {
-                    optimizer.name.clone()
-                };
-
-                // Output optimizer information
-                report.push_str(&format!(
-                    "  - [{}] {} (execution time: {:.2?})\n",
-                    optimizer.index, optimizer_display, optimizer.time
-                ));
-
-                // Find rules for this optimizer
-                if let Some(optimizer_rules) = rules.get(&optimizer.name) {
-                    // Process rules
-                    let applied_rules: Vec<_> =
-                        optimizer_rules.iter().filter(|r| r.had_effect).collect();
-                    let non_applied_rules: Vec<_> =
-                        optimizer_rules.iter().filter(|r| !r.had_effect).collect();
-
-                    if !applied_rules.is_empty() {
-                        report.push_str("    ├── Applied Rules:\n");
-                        for (i, rule) in applied_rules.iter().enumerate() {
-                            let is_last =
-                                i == applied_rules.len() - 1 && non_applied_rules.is_empty();
-                            let prefix = if is_last {
-                                "    │   └── "
-                            } else {
-                                "    │   ├── "
-                            };
-                            report.push_str(&format!(
-                                "{prefix}{} (execution time: {:.2?})\n",
-                                rule.name, rule.time
-                            ));
-                        }
-                    }
-
-                    if !non_applied_rules.is_empty() {
-                        report.push_str("    └── Non-Applied Rules:\n");
-                        for (i, rule) in non_applied_rules.iter().enumerate() {
-                            let is_last = i == non_applied_rules.len() - 1;
-                            let prefix = if is_last {
-                                "        └── "
-                            } else {
-                                "        ├── "
-                            };
-                            report.push_str(&format!(
-                                "{prefix}{} (execution time: {:.2?})\n",
-                                rule.name, rule.time
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-
-        // If no optimizers had an effect
-        if !has_applied {
-            report.push_str("  None\n");
-        }
-
-        // Report non-applied optimizers
-        report.push_str("\nNon-Applied Optimizers:\n");
-        let mut has_non_applied = false;
-
-        for optimizer in optimizers.values() {
-            if !optimizer.had_effect {
-                has_non_applied = true;
-
-                // Get rules for this optimizer
-                let optimizer_rules = rules.get(&optimizer.name);
-                let applied_rule_count = optimizer_rules
-                    .map(|rules| rules.iter().filter(|r| r.had_effect).count())
-                    .unwrap_or(0);
-                let total_rule_count = optimizer_rules.map(|rules| rules.len()).unwrap_or(0);
-
-                // Format the optimizer name with rule count if applicable
-                let optimizer_display = if total_rule_count > 0 {
-                    format!(
-                        "{} (applied rules: {}/{})",
-                        optimizer.name, applied_rule_count, total_rule_count
-                    )
-                } else {
-                    optimizer.name.clone()
-                };
-
-                // Output optimizer information
-                report.push_str(&format!(
-                    "  - [{}] {} (execution time: {:.2?})\n",
-                    optimizer.index, optimizer_display, optimizer.time
-                ));
-
-                // Find rules for this optimizer
-                if let Some(optimizer_rules) = rules.get(&optimizer.name) {
-                    // Process non-applied rules
-                    let non_applied_rules: Vec<_> =
-                        optimizer_rules.iter().filter(|r| !r.had_effect).collect();
-
-                    if !non_applied_rules.is_empty() {
-                        report.push_str("    └── Non-Applied Rules:\n");
-                        for (i, rule) in non_applied_rules.iter().enumerate() {
-                            let is_last = i == non_applied_rules.len() - 1;
-                            let prefix = if is_last {
-                                "        └── "
-                            } else {
-                                "        ├── "
-                            };
-                            report.push_str(&format!(
-                                "{prefix}[{}.{}] {} (execution time: {:.2?})\n",
-                                optimizer.index,
-                                i + 1,
-                                rule.name,
-                                rule.time
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-
-        // If all optimizers had an effect
-        if !has_non_applied {
-            report.push_str("  None\n");
-        }
-
-        // Output summary
-        report.push_str(&format!(
-            "\nSummary: {}/{} optimizers had effect (total execution time: {:.2?})\n",
-            applied_optimizers, total_optimizers, total_optimizer_time
-        ));
-
-        if total_rules > 0 {
-            report.push_str(&format!(
-                "Rules: {}/{} rules had effect (total execution time: {:.2?})\n",
-                applied_rules, total_rules, total_rule_time
+            summary.push_str(&format!(
+                "[{}] {}: {} ({:.2?})\n",
+                status_symbol, optimizer.index, optimizer.name, optimizer.time
             ));
+
+            // Only show rules information if the optimizer has rules
+            if total_rules > 0 {
+                let applied_percentage = if total_rules > 0 {
+                    (applied_rules * 100) / total_rules
+                } else {
+                    0
+                };
+
+                summary.push_str(&format!(
+                    "  └── Rules: {}/{} Applied ({}%)\n",
+                    applied_rules, total_rules, applied_percentage
+                ));
+
+                // Show rules summary for this optimizer
+                if let Some(optimizer_rules) = optimizer_rules {
+                    if !optimizer_rules.is_empty() {
+                        let mut rules_summary = String::new();
+                        self.build_rules_summary(&mut rules_summary, optimizer, optimizer_rules);
+
+                        // Add extra indentation to the rules summary
+                        for line in rules_summary.lines() {
+                            if !line.trim().is_empty() {
+                                summary.push_str(&format!("  {}\n", line));
+                            }
+                        }
+                    }
+                }
+
+                summary.push('\n');
+            } else {
+                summary.push('\n');
+            }
         }
 
-        info!("{}", report);
+        // Log the entire summary as one log entry
+        info!("{}", summary);
     }
 
-    /// Generate and log detailed report for a specific optimizer
-    fn log_optimizer_detail_report(
+    /// Log detailed optimizer executions
+    fn log_optimizers_details(
         &self,
-        optimizer: &OptimizerTrace,
-        optimizer_rules: Option<&Vec<RuleTrace>>,
+        optimizers: &BTreeMap<usize, OptimizerTrace>,
+        rules: &BTreeMap<String, BTreeMap<String, RuleTrace>>,
     ) {
-        let effect_status = if optimizer.had_effect {
-            "Applied"
-        } else {
-            "No Effect"
-        };
+        info!("========== OPTIMIZERS EXECUTIONS TRACE==========\n");
+        for optimizer in optimizers.values() {
+            let status_symbol = if optimizer.had_effect { "✓" } else { "✗" };
 
-        // Build the complete report in a single string
-        let mut report = format!(
-            "================ {} Optimizer [{}/{}]: {} (execution time: {:.2?}) ================\n",
-            effect_status, optimizer.index, optimizer.total, optimizer.name, optimizer.time
-        );
-
-        // Add optimizer diff if it had an effect
-        if optimizer.had_effect {
-            report.push_str(&optimizer.diff);
-            report.push('\n');
-        }
-
-        // Add rule details if available
-        if let Some(rules) = optimizer_rules {
-            // Show total rule count
-            report.push_str(&format!(
-                "Total rules for this optimizer: {}\n",
-                rules.len()
+            // Build the optimizer detail report
+            let mut detail = String::new();
+            detail.push_str(&format!(
+                "[{}] {}: {} ({:.2?})\n\n",
+                status_symbol, optimizer.index, optimizer.name, optimizer.time
             ));
 
-            // Show applied rules
-            let applied_rules: Vec<_> = rules.iter().filter(|r| r.had_effect).collect();
-            if !applied_rules.is_empty() {
-                report.push_str(&format!("Applied rules: {}\n", applied_rules.len()));
-                for (i, rule) in applied_rules.iter().enumerate() {
-                    report.push_str(&format!(
-                        "---- Applied Rule [{}.{}]: {} (execution time: {:.2?}) ----\n",
-                        optimizer.index,
-                        i + 1,
-                        rule.name,
-                        rule.time
-                    ));
-
-                    // Add rule diff
-                    report.push_str(&rule.diff);
-                    report.push('\n');
+            // Add changes if any
+            if optimizer.had_effect && !optimizer.diff.is_empty() {
+                detail.push_str("  Changes:\n");
+                for line in optimizer.diff.lines() {
+                    detail.push_str(&format!("    {}\n", line));
                 }
-            } else {
-                report.push_str("No rules had effect for this optimizer.\n");
+                detail.push('\n');
             }
 
-            // Show non-applied rules
-            let non_applied_rules: Vec<_> = rules.iter().filter(|r| !r.had_effect).collect();
-            if !non_applied_rules.is_empty() {
-                report.push_str(&format!("Non-applied rules: {}\n", non_applied_rules.len()));
-                for (i, rule) in non_applied_rules.iter().enumerate() {
-                    report.push_str(&format!(
-                        "---- Non-Applied Rule [{}.{}]: {} (execution time: {:.2?}) ----\n",
-                        optimizer.index,
-                        applied_rules.len() + i + 1,
-                        rule.name,
-                        rule.time
-                    ));
+            // Add rules for this optimizer
+            let optimizer_rules = rules.get(&optimizer.name);
+            if let Some(optimizer_rules) = optimizer_rules {
+                if !optimizer_rules.is_empty() {
+                    // Add rules summary
+                    let mut rules_summary = String::new();
+                    self.build_rules_summary(&mut rules_summary, optimizer, optimizer_rules);
+                    detail.push_str(&rules_summary);
+
+                    // Add applied rules details
+                    let mut applied_rules_details = String::new();
+                    self.build_applied_rules_details(
+                        &mut applied_rules_details,
+                        optimizer,
+                        optimizer_rules,
+                    );
+                    detail.push_str(&applied_rules_details);
                 }
             }
-        } else {
-            report.push_str("No rules found for this optimizer.\n");
+
+            // Log the entire optimizer detail as one log entry
+            info!("{}", detail);
+        }
+    }
+
+    /// Build rules summary for an optimizer
+    fn build_rules_summary(
+        &self,
+        report: &mut String,
+        optimizer: &OptimizerTrace,
+        optimizer_rules: &BTreeMap<String, RuleTrace>,
+    ) {
+        let mut all_rules: Vec<_> = optimizer_rules.values().collect();
+        all_rules.sort_by_key(|r| r.sequence);
+
+        if all_rules.is_empty() {
+            return;
         }
 
-        // Log the entire report in a single call
-        info!("{}", report);
+        report.push_str(&format!("[{}]  Rules Summary:\n", optimizer.name));
+
+        // Add each rule
+        for rule in &all_rules {
+            let status_symbol = if rule.had_effect { "✓" } else { "✗" };
+            report.push_str(&format!(
+                "    [{}] {}.{}: {} ({:.2?})\n",
+                status_symbol, optimizer.index, rule.sequence, rule.name, rule.time
+            ));
+        }
+
+        report.push('\n');
+
+        // Add rules statistics
+        let applied_rules = all_rules.iter().filter(|r| r.had_effect).count();
+        let total_rules = optimizer_rules.len();
+        let applied_percentage = if total_rules > 0 {
+            (applied_rules * 100) / total_rules
+        } else {
+            0
+        };
+
+        report.push_str(&format!(
+            "  Total Applied Rules: {}/{} ({}%)\n",
+            applied_rules, total_rules, applied_percentage
+        ));
+
+        report.push_str(&format!(
+            "  Total Non-Applied Rules: {}/{} ({}%)\n\n",
+            total_rules - applied_rules,
+            total_rules,
+            if total_rules > 0 {
+                100 - applied_percentage
+            } else {
+                0
+            }
+        ));
+    }
+
+    /// Build applied rules details for an optimizer
+    fn build_applied_rules_details(
+        &self,
+        report: &mut String,
+        optimizer: &OptimizerTrace,
+        optimizer_rules: &BTreeMap<String, RuleTrace>,
+    ) {
+        let mut all_rules: Vec<_> = optimizer_rules.values().collect();
+        all_rules.sort_by_key(|r| r.sequence);
+
+        let applied_rules: Vec<_> = all_rules.iter().filter(|r| r.had_effect).collect();
+
+        if applied_rules.is_empty() {
+            return;
+        }
+
+        report.push_str("  Applied Rules Details:\n");
+
+        for rule in applied_rules {
+            let status_symbol = "✓";
+            report.push_str(&format!(
+                "    [{}] {}.{}: {} ({:.2?})\n",
+                status_symbol, optimizer.index, rule.sequence, rule.name, rule.time
+            ));
+
+            if !rule.diff.is_empty() {
+                report.push_str("      Changes:\n");
+                for line in rule.diff.lines() {
+                    report.push_str(&format!("        {}\n", line));
+                }
+            }
+
+            report.push('\n');
+        }
     }
 }
 
