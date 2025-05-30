@@ -1,4 +1,4 @@
-    query I
+query I
 SELECT sum(number) from numbers_mt(10000)
 ----
 49995000
