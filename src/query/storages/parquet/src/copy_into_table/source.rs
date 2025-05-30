@@ -185,6 +185,7 @@ impl Processor for ParquetCopySource {
             }
             _ => unreachable!(),
         }
+
         Ok(())
     }
 }
