@@ -4509,7 +4509,6 @@ dependencies = [
  "databend-storages-common-table-meta",
  "futures",
  "jiff 0.2.13",
- "jsonb",
  "log",
  "opendal",
  "parquet",
