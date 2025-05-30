@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use super::Exchange;
@@ -52,8 +53,10 @@ pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
     Ok(broadcast_sink)
 }
 
-pub fn build_broadcast_plans(next_broadcast_id: u32) -> Result<Vec<PhysicalPlan>> {
+pub fn build_broadcast_plans(ctx: &dyn TableContext) -> Result<Vec<PhysicalPlan>> {
     let mut plans = vec![];
+    let next_broadcast_id = ctx.get_next_broadcast_id();
+    ctx.reset_broadcast_id();
     for broadcast_id in 0..next_broadcast_id {
         plans.push(build_broadcast_plan(broadcast_id)?);
     }

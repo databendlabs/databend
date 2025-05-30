@@ -1861,7 +1861,13 @@ impl TableContext for QueryContext {
     }
 
     fn get_next_broadcast_id(&self) -> u32 {
-        self.shared.get_next_broadcast_id()
+        self.shared
+            .next_broadcast_id
+            .fetch_add(1, Ordering::Acquire)
+    }
+
+    fn reset_broadcast_id(&self) {
+        self.shared.next_broadcast_id.store(0, Ordering::Release);
     }
 }
 

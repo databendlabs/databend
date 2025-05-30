@@ -420,6 +420,10 @@ pub trait TableContext: Send + Sync {
     }
 
     fn get_next_broadcast_id(&self) -> u32;
+
+    fn reset_broadcast_id(&self) {
+        unimplemented!()
+    }
 }
 
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;

@@ -256,10 +256,6 @@ impl QueryContextShared {
         }))
     }
 
-    pub fn get_next_broadcast_id(&self) -> u32 {
-        self.next_broadcast_id.fetch_add(1, Ordering::AcqRel)
-    }
-
     pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
         let mut broadcast_channels = self.broadcast_channels.lock();
         let entry = broadcast_channels.entry(broadcast_id).or_default();

@@ -101,7 +101,7 @@ pub async fn build_distributed_pipeline(
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
-    for plan in build_broadcast_plans(ctx.get_next_broadcast_id())?
+    for plan in build_broadcast_plans(ctx.as_ref())?
         .iter()
         .chain(std::iter::once(plan))
     {
