@@ -240,11 +240,11 @@ impl AggregateFunctionFactory {
         if arguments.iter().all(|f| !f.is_nullable_or_null()) {
             let mut agg =
                 self.get_impl(name, params, arguments, sort_descs.clone(), &mut features)?;
-            if or_null {
-                agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
-            }
             if !sort_descs.is_empty() {
                 agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
+            }
+            if or_null {
+                agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
             }
             return Ok(agg);
         }
@@ -276,11 +276,11 @@ impl AggregateFunctionFactory {
             nested,
             features.clone(),
         )?;
-        if or_null {
-            agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
-        }
         if !sort_descs.is_empty() {
             agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
+        }
+        if or_null {
+            agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
         }
         Ok(agg)
     }
