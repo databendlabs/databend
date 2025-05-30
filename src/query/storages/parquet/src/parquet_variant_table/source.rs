@@ -183,7 +183,7 @@ impl Processor for ParquetVariantSource {
             } => {
                 if let Some((reader, mut start_row, typ)) = vs.front_mut() {
                     if let Some(batch) = reader.next() {
-                        let mut block = record_batch_to_block(batch?, &self.tz, &typ)?;
+                        let mut block = record_batch_to_block(batch?, &self.tz, typ)?;
                         add_internal_columns(
                             &self.internal_columns,
                             location.clone(),
