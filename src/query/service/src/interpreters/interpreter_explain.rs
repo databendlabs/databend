@@ -22,7 +22,6 @@ use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -588,26 +587,37 @@ impl ExplainInterpreter {
     ) -> Result<()> {
         let mut sources = vec![];
         plan.get_all_data_source(&mut sources);
+        let mut pipelines = vec![];
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         for (id, source) in sources {
-            if let Some(stat) = self.prune_lazy_parts(metadata, &source)? {
-                plan.set_pruning_stats(id, stat);
+            if let Some(mut pipeline) = self.build_prune_pipeline(metadata, &source, id)? {
+                pipeline.set_max_threads(max_threads);
+                pipelines.push(pipeline);
             }
         }
+        if pipelines.is_empty() {
+            return Ok(());
+        }
+        let settings = ExecutorSettings::try_create(self.ctx.clone())?;
+        let executor = QueryPipelineExecutor::from_pipelines(pipelines, settings)?;
+        executor.execute()?;
+        let mut stat = self.ctx.get_pruned_partitions_stats();
+        plan.set_pruning_stats(&mut stat);
         Ok(())
     }
 
-    fn prune_lazy_parts(
+    fn build_prune_pipeline(
         &self,
         metadata: &MetadataRef,
         source: &DataSourcePlan,
-    ) -> Result<Option<PartStatistics>> {
+        plan_id: u32,
+    ) -> Result<Option<Pipeline>> {
         let partitions = source.parts.partitions.first();
         if partitions.is_none_or(|part| part.as_any().downcast_ref::<FuseLazyPartInfo>().is_none())
         {
             return Ok(None);
         }
         let meta = metadata.read();
-        let max_threads = self.ctx.get_settings().get_max_threads()?;
         let table_entry = meta.table(source.scan_id);
         if let Some(fuse_table) = table_entry.table().as_any().downcast_ref::<FuseTable>() {
             let mut dummy_pipeline = Pipeline::create();
@@ -615,21 +625,13 @@ impl ExplainInterpreter {
                 self.ctx.clone(),
                 source,
                 &mut dummy_pipeline,
+                plan_id,
             )?;
             // For `explain` it doesn't need to receive pruned result,
             // if we drop the receiver, the sender will receive an error instead of
             // block to wait for capacity.
             let _ = fuse_table.pruned_result_receiver.lock().take();
-            if let Some(mut pipeline) = prune_pipeline {
-                pipeline.set_max_threads(max_threads as usize);
-                let settings = ExecutorSettings::try_create(self.ctx.clone())?;
-                let executor = QueryPipelineExecutor::create(pipeline, settings)?;
-                executor.execute()?;
-            }
-            let stats = self.ctx.get_pruned_partitions_stats();
-            if stats.is_some() {
-                return Ok(stats);
-            }
+            return Ok(prune_pipeline);
         }
         Ok(None)
     }

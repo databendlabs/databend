@@ -825,8 +825,9 @@ impl Table for FuseTable {
         table_ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
+        plan_id: u32,
     ) -> Result<Option<Pipeline>> {
-        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline)
+        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, plan_id)
     }
 
     fn commit_insertion(
