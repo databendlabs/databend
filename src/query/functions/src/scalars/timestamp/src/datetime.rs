@@ -355,10 +355,10 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    let format = if ctx.func_ctx.date_format_style == *"mysql" {
-                        format.to_string()
-                    } else {
+                    let format = if ctx.func_ctx.date_format_style == *"oracle" {
                         pg_format_to_strftime(format)
+                    } else {
+                        format.to_string()
                     };
                     match NaiveDate::parse_from_str(date_string, &format) {
                         Ok(res) => {
@@ -381,10 +381,10 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    let format = if ctx.func_ctx.date_format_style == *"mysql" {
-                        format.to_string()
-                    } else {
+                    let format = if ctx.func_ctx.date_format_style == *"oracle" {
                         pg_format_to_strftime(format)
+                    } else {
+                        format.to_string()
                     };
                     match NaiveDate::parse_from_str(date, &format) {
                         Ok(res) => {
@@ -410,10 +410,10 @@ fn string_to_format_datetime(
         return Ok((0, true));
     }
 
-    let format = if ctx.func_ctx.date_format_style == *"mysql" {
-        format.to_string()
-    } else {
+    let format = if ctx.func_ctx.date_format_style == *"oracle" {
         pg_format_to_strftime(format)
+    } else {
+        format.to_string()
     };
 
     let (mut tm, offset) = BrokenDownTime::parse_prefix(&format, timestamp)
@@ -721,10 +721,10 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<TimestampType, StringType, NullableType<StringType>>(
             |micros, format, output, ctx| {
                 let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
-                let format = if ctx.func_ctx.date_format_style == *"mysql" {
-                    format.to_string()
-                } else {
+                let format = if ctx.func_ctx.date_format_style == *"oracle" {
                     pg_format_to_strftime(format)
+                } else {
+                    format.to_string()
                 };
                 let format = replace_time_format(&format);
                 let mut buf = String::new();

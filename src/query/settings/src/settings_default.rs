@@ -332,7 +332,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
                 }),
                 ("date_format_style", DefaultSettingValue {
-                    value: UserSettingValue::String("MySQL".to_owned()),
+                    value: UserSettingValue::String("Oracle".to_owned()),
                     desc: "Sets the date format style(Used by datetime functions). Available values include \"MySQL\",  \"Oracle\".",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
