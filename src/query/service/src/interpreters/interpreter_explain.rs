@@ -600,13 +600,16 @@ impl ExplainInterpreter {
                 pipelines.push(pipeline);
             }
         }
-        if pipelines.is_empty() {
+        // if get partitions from the cache, we don't need to build pruning pipelines
+        if !pipelines.is_empty() {
+            let settings = ExecutorSettings::try_create(self.ctx.clone())?;
+            let executor = QueryPipelineExecutor::from_pipelines(pipelines, settings)?;
+            executor.execute()?;
+        }
+        let mut stat = self.ctx.get_pruned_partitions_stats();
+        if stat.is_empty() {
             return Ok(());
         }
-        let settings = ExecutorSettings::try_create(self.ctx.clone())?;
-        let executor = QueryPipelineExecutor::from_pipelines(pipelines, settings)?;
-        executor.execute()?;
-        let mut stat = self.ctx.get_pruned_partitions_stats();
         plan.set_pruning_stats(&mut stat);
         Ok(())
     }

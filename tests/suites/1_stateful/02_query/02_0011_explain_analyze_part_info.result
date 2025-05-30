@@ -1,0 +1,9 @@
+    ├── partitions total: 10
+    ├── partitions scanned: 4
+    ├── pruning stats: [segments: <range pruning: 10 to 4>, blocks: <range pruning: 4 to 4>]
+    ├── partitions total: 10
+    ├── partitions scanned: 4
+    ├── pruning stats: [segments: <range pruning: 10 to 4>, blocks: <range pruning: 4 to 4>]
+    ├── partitions total: 10
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 10 to 2>, blocks: <range pruning: 2 to 2>]
