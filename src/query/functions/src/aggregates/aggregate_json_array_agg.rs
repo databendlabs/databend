@@ -120,7 +120,7 @@ where
                 continue;
             }
             let mut val = vec![];
-            cast_scalar_to_variant(v.as_ref(), &tz, &mut val);
+            cast_scalar_to_variant(v.as_ref(), &tz, &mut val, None);
             items.push(val);
         }
         let owned_jsonb = OwnedJsonb::build_array(items.iter().map(|v| RawJsonb::new(v)))

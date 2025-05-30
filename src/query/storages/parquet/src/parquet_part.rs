@@ -22,10 +22,25 @@ use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::partition::ParquetRowGroupPart;
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
+pub enum DeleteType {
+    Position,
+    Equality,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
+pub struct DeleteTask {
+    pub path: String,
+    pub ty: DeleteType,
+    /// equality ids for equality deletes (empty for positional deletes)
+    pub equality_ids: Vec<i32>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub enum ParquetPart {
@@ -34,7 +49,7 @@ pub enum ParquetPart {
     RowGroup(ParquetRowGroupPart),
     FileWithDeletes {
         inner: ParquetFilePart,
-        deletes: Vec<String>,
+        deletes: Vec<DeleteTask>,
     },
 }
 
@@ -114,7 +129,7 @@ impl PartInfo for ParquetPart {
                 let mut paths = Vec::with_capacity(deletes.len() + 1);
                 paths.push(&inner.file);
                 for delete in deletes {
-                    paths.push(delete);
+                    paths.push(&delete.path);
                 }
                 paths
             }
@@ -139,7 +154,7 @@ impl ParquetPart {
 /// 1. to fully utilize the IO, multiple small files are loaded in one part.
 /// 2. to avoid OOM, the total size of small files in one part is limited,
 ///    and we need compression_ratio to estimate the uncompressed size.
-pub(crate) fn collect_small_file_parts(
+fn collect_small_file_parts(
     small_files: Vec<(String, u64, String)>,
     mut max_compression_ratio: f64,
     mut max_compressed_size: u64,
@@ -197,7 +212,7 @@ pub(crate) fn collect_small_file_parts(
     }
 }
 
-pub(crate) fn collect_file_parts(
+fn collect_file_parts(
     files: Vec<(String, u64, String)>,
     compress_ratio: f64,
     partitions: &mut Partitions,
@@ -233,4 +248,59 @@ pub(crate) fn collect_file_parts(
         stats.read_rows += estimated_read_rows as usize;
         stats.is_exact = false;
     }
+}
+
+pub(crate) fn collect_parts(
+    ctx: Arc<dyn TableContext>,
+    files: Vec<(String, u64, String)>,
+    compression_ratio: f64,
+    num_columns_to_read: usize,
+    total_columns_to_read: usize,
+) -> Result<(PartStatistics, Partitions)> {
+    let mut partitions = Partitions::default();
+    let mut stats = PartStatistics::default();
+
+    let fast_read_bytes = ctx.get_settings().get_parquet_fast_read_bytes()?;
+    let rowgroup_hint_bytes = ctx.get_settings().get_parquet_rowgroup_hint_bytes()?;
+
+    let mut large_files = vec![];
+    let mut small_files = vec![];
+    for (location, size, dedup_key) in files.into_iter() {
+        if size > fast_read_bytes {
+            large_files.push((location, size, dedup_key));
+        } else if size > 0 {
+            small_files.push((location, size, dedup_key));
+        }
+    }
+
+    collect_file_parts(
+        large_files,
+        compression_ratio,
+        &mut partitions,
+        &mut stats,
+        num_columns_to_read,
+        total_columns_to_read,
+        rowgroup_hint_bytes,
+    );
+
+    if !small_files.is_empty() {
+        let mut max_compression_ratio = compression_ratio;
+        let mut max_compressed_size = 0u64;
+        for part in partitions.partitions.iter() {
+            let p = part.as_any().downcast_ref::<ParquetPart>().unwrap();
+            max_compression_ratio = max_compression_ratio
+                .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);
+            max_compressed_size = max_compressed_size.max(p.compressed_size());
+        }
+
+        collect_small_file_parts(
+            small_files,
+            max_compression_ratio,
+            max_compressed_size,
+            &mut partitions,
+            &mut stats,
+        );
+    }
+
+    Ok((stats, partitions))
 }

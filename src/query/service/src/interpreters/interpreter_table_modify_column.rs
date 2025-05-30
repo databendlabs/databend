@@ -502,6 +502,7 @@ impl ModifyTableColumnInterpreter {
 
         let table_info = table.get_table_info();
         let schema = table.schema();
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let new_schema = if let Some((i, field)) = schema.column_with_name(&column) {
             match field.computed_expr {
                 Some(ComputedExpr::Stored(_)) => {}
@@ -534,6 +535,7 @@ impl ModifyTableColumnInterpreter {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
+            base_snapshot_location: fuse_table.snapshot_loc(),
         };
 
         let _resp = catalog.update_single_table_meta(req, table_info).await?;

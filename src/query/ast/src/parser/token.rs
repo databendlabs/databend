@@ -517,6 +517,8 @@ pub enum TokenKind {
     DATESUB,
     #[token("DATE_TRUNC", ignore(ascii_case))]
     DATE_TRUNC,
+    #[token("TRUNC", ignore(ascii_case))]
+    TRUNC,
     #[token("DATETIME", ignore(ascii_case))]
     DATETIME,
     #[token("DAY", ignore(ascii_case))]
@@ -1672,6 +1674,7 @@ impl TokenKind {
             | TokenKind::DATE_SUB
             | TokenKind::DATE_BETWEEN
             | TokenKind::DATE_TRUNC
+            | TokenKind::TRUNC
             | TokenKind::LAST_DAY
             | TokenKind::PREVIOUS_DAY
             | TokenKind::NEXT_DAY

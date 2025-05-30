@@ -290,16 +290,17 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 error_injection: self.update_meta_error.clone(),
             };
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
-            let r = FuseTable::commit_to_meta_server(
-                ctx.as_ref(),
-                fuse_table.get_table_info(),
-                fuse_table.meta_location_generator(),
-                new_snapshot,
-                None,
-                &None,
-                fuse_table.get_operator_ref(),
-            )
-            .await;
+            let r = fuse_table
+                .commit_to_meta_server(
+                    ctx.as_ref(),
+                    fuse_table.get_table_info(),
+                    fuse_table.meta_location_generator(),
+                    new_snapshot,
+                    None,
+                    &None,
+                    fuse_table.get_operator_ref(),
+                )
+                .await;
 
             if self.update_meta_error.is_some() {
                 assert_eq!(

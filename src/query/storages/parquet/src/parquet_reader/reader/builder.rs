@@ -318,9 +318,12 @@ impl<'a> ParquetReaderBuilder<'a> {
             op_registry: self.op_registry.clone(),
             batch_size,
             schema_desc: self.schema_desc.clone(),
+            arrow_schema: self.arrow_schema.clone(),
             policy_builders,
             default_policy,
             transformer,
+            table_schema: self.table_schema.clone(),
+            partition_columns: self.partition_columns.clone(),
         })
     }
 

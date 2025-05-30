@@ -161,6 +161,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
         sorter: &mut Option<TopKSorter>,
         transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
+        _filter: Option<Arc<ParquetPredicate>>,
     ) -> Result<Option<ReadPolicyImpl>> {
         let mut num_rows = selection
             .as_ref()

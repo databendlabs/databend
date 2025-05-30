@@ -28,7 +28,10 @@ use parquet::schema::types::SchemaDescriptor;
 use super::policy::ReadPolicy;
 use super::policy::ReadPolicyBuilder;
 use super::policy::ReadPolicyImpl;
+use crate::parquet_reader::predicate::ParquetPredicate;
+use crate::parquet_reader::read_policy::utils::read_all;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
+use crate::parquet_reader::utils::bitmap_to_boolean_array;
 use crate::parquet_reader::utils::transform_record_batch;
 use crate::parquet_reader::utils::FieldPaths;
 use crate::transformer::RecordBatchTransformer;
@@ -45,11 +48,47 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
     async fn fetch_and_build(
         &self,
         mut row_group: InMemoryRowGroup<'_>,
-        row_selection: Option<RowSelection>,
+        mut row_selection: Option<RowSelection>,
         _sorter: &mut Option<TopKSorter>,
         transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
+        filter: Option<Arc<ParquetPredicate>>,
     ) -> Result<Option<ReadPolicyImpl>> {
+        if let Some(predicate) = filter {
+            row_group
+                .fetch(predicate.projection(), row_selection.as_ref())
+                .await?;
+
+            let num_rows = row_selection
+                .as_ref()
+                .map(|x| x.row_count())
+                .unwrap_or(row_group.row_count());
+
+            let block = read_all(
+                &DataSchema::from(predicate.schema()),
+                &row_group,
+                predicate.field_levels(),
+                row_selection.clone(),
+                predicate.field_paths(),
+                num_rows,
+            )?;
+            let filter = predicate.evaluate_block(&block)?;
+            if filter.null_count() == num_rows {
+                // All rows in current row group are filtered out.
+                return Ok(None);
+            }
+            let filter = bitmap_to_boolean_array(filter);
+            let sel = RowSelection::from_filters(&[filter]);
+            match row_selection.as_mut() {
+                Some(selection) => {
+                    *selection = selection.and_then(&sel);
+                }
+                None => {
+                    row_selection = Some(sel);
+                }
+            }
+        }
+
         row_group.fetch(&self.projection, None).await?;
         let reader = ParquetRecordBatchReader::try_new_with_row_groups(
             &self.field_levels,
