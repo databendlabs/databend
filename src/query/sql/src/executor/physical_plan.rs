@@ -1122,16 +1122,16 @@ impl PhysicalPlan {
         }
     }
 
-    pub fn set_pruning_stats(&mut self, plan_id: u32, stat: PartStatistics) {
+    pub fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
         match self {
             PhysicalPlan::TableScan(table_scan) => {
-                if table_scan.plan_id == plan_id {
+                if let Some(stat) = stats.remove(&table_scan.plan_id) {
                     table_scan.source.statistics = stat;
                 }
             }
             _ => {
                 for child in self.children_mut() {
-                    child.set_pruning_stats(plan_id, stat.clone())
+                    child.set_pruning_stats(stats)
                 }
             }
         }
