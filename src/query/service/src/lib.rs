@@ -64,3 +64,5 @@ mod global_services;
 pub use databend_common_sql as sql;
 pub use databend_common_storages_factory as storages;
 pub use global_services::GlobalServices;
+pub use table_functions::get_fuse_table_snapshot;
+pub use table_functions::get_fuse_table_statistics;

@@ -123,6 +123,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let report = map_res(rule! { REPORT ~ ISSUE ~ #literal_string }, |(_, _, sql)| {
+        Ok(Statement::ReportIssue(sql))
+    });
+
     let create_task = map_res(
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -2524,11 +2528,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
 
     alt((
-        // query, explain,show
+        // query, explain, report, show
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
+            | #report: "`REPORT ISSUE <statement>`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_variables : "`SHOW VARIABLES [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"

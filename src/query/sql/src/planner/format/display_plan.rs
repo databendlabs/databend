@@ -54,6 +54,8 @@ impl Plan {
             Plan::ExplainSyntax { .. } => Ok("ExplainSyntax".to_string()),
             Plan::ExplainAnalyze { .. } => Ok("ExplainAnalyze".to_string()),
 
+            Plan::ReportIssue { .. } => Ok("ReportOptimize".to_string()),
+
             Plan::CopyIntoTable(_) => Ok("CopyIntoTable".to_string()),
             Plan::CopyIntoLocation(_) => Ok("CopyIntoLocation".to_string()),
 

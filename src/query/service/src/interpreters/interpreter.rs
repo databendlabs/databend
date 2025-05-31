@@ -252,7 +252,7 @@ pub async fn interpreter_plan_sql(
     result
 }
 
-async fn auto_commit_if_not_allowed_in_transaction(
+pub async fn auto_commit_if_not_allowed_in_transaction(
     ctx: Arc<QueryContext>,
     stmt: &Statement,
 ) -> Result<()> {
@@ -268,6 +268,7 @@ async fn auto_commit_if_not_allowed_in_transaction(
     Ok(())
 }
 
+// Note: Please synchronize the changes made in the plan_sql function to src/query/service/src/interpreters/interpreter_report_issue.rs
 async fn plan_sql(
     ctx: Arc<QueryContext>,
     sql: &str,

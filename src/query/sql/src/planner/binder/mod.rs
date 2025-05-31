@@ -41,6 +41,7 @@ mod project;
 mod project_set;
 mod qualify;
 mod replace;
+mod report;
 mod scalar;
 mod scalar_common;
 mod select;

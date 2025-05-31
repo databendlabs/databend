@@ -197,6 +197,8 @@ impl<'a> Binder {
                     .await?
             }
 
+            Statement::ReportIssue(sql) => self.bind_report_issue(sql).await?,
+
             Statement::ExplainAnalyze {
                 partial,
                 graphical,

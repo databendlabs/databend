@@ -33,6 +33,7 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::table_functions::string_literal;
 use databend_common_storages_fuse::table_functions::SimpleTableFunc;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures::stream::StreamExt;
 use log::warn;
 
@@ -201,11 +202,9 @@ impl SimpleTableFunc for TableStatisticsFunc {
     }
 }
 
-// Get Fuse table statistics, returns JSON string
-async fn get_fuse_table_statistics(
+pub async fn get_fuse_table_snapshot(
     table: Arc<dyn databend_common_catalog::table::Table>,
-) -> Result<Option<String>> {
-    // Try to convert to FuseTable
+) -> Result<Option<Arc<TableSnapshot>>> {
     if let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) {
         let meta_location_generator = fuse_table.meta_location_generator().clone();
         let snapshot_location = fuse_table.snapshot_loc();
@@ -223,18 +222,30 @@ async fn get_fuse_table_statistics(
             );
 
             if let Some(Ok((snapshot, _v))) = lite_snapshot_stream.take(1).next().await {
-                // Convert snapshot to JSON, but filter out segments field
-                let mut snapshot_json = serde_json::to_value(&snapshot)?;
-
-                // If it's an object and contains segments field, remove it
-                if let serde_json::Value::Object(ref mut obj) = snapshot_json {
-                    obj.remove("segments");
-                }
-
-                // Convert JSON to variant
-                return Ok(Some(serde_json::to_string(&snapshot_json)?));
+                return Ok(Some(snapshot));
             }
         }
+    }
+
+    Ok(None)
+}
+
+// Get Fuse table statistics, returns JSON string
+pub async fn get_fuse_table_statistics(
+    table: Arc<dyn databend_common_catalog::table::Table>,
+) -> Result<Option<String>> {
+    // Try to convert to FuseTable
+    if let Some(table_snapshot) = get_fuse_table_snapshot(table).await? {
+        // Convert snapshot to JSON, but filter out segments field
+        let mut snapshot_json = serde_json::to_value(&table_snapshot)?;
+
+        // If it's an object and contains segments field, remove it
+        if let serde_json::Value::Object(ref mut obj) = snapshot_json {
+            obj.remove("segments");
+        }
+
+        // Convert JSON to variant
+        return Ok(Some(serde_json::to_string(&snapshot_json)?));
     }
 
     Ok(None)
