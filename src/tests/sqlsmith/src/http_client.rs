@@ -87,6 +87,8 @@ pub(crate) struct HttpSessionConf {
     pub(crate) last_server_info: Option<ServerInfo>,
     #[serde(default)]
     pub(crate) last_query_ids: Vec<String>,
+    #[serde(default)]
+    pub(crate) last_query_result_cache_keys: Vec<String>,
     pub(crate) internal: Option<String>,
 }
 

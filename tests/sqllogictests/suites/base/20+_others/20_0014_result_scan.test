@@ -1,26 +1,23 @@
 # The HTTP interface does not support session state function (last_query_id).
 
-onlyif mysql
 statement ok
 DROP DATABASE IF EXISTS db20_14;
 
-onlyif mysql
 statement ok
 CREATE DATABASE db20_14;
 
-onlyif mysql
 statement ok
 USE db20_14;
 
-onlyif mysql
+
 statement ok
 CREATE TABLE IF NOT EXISTS t1 (a INT);
 
-onlyif mysql
+
 statement ok
 INSERT INTO t1 VALUES (1), (2), (3);
 
-onlyif mysql
+
 query I
 SELECT * FROM t1 ORDER BY a;
 ----
@@ -28,19 +25,23 @@ SELECT * FROM t1 ORDER BY a;
 2
 3
 
-onlyif mysql
+
 statement ok
 SET enable_query_result_cache = 1;
 
-onlyif mysql
+
 statement ok
 SET query_result_cache_min_execute_secs = 0;
+
 
 onlyif mysql
 statement error `RESULT_SCAN` failed: No cache key found in current session for query ID '.*'\.
 SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
 
-onlyif mysql
+onlyif http
+statement error The `RESULT_SCAN` function requires a 'query_id' parameter. Please specify a valid query ID
+SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
+
 query I
 SELECT * FROM t1 ORDER BY a;
 ----
@@ -48,7 +49,7 @@ SELECT * FROM t1 ORDER BY a;
 2
 3
 
-onlyif mysql
+
 query I
 SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
 ----
@@ -57,7 +58,7 @@ SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
 3
 
 # multiple executions should return the same result
-onlyif mysql
+
 query I
 SELECT * FROM RESULT_SCAN(last_query_id());
 ----
@@ -65,11 +66,11 @@ SELECT * FROM RESULT_SCAN(last_query_id());
 2
 3
 
-onlyif mysql
+
 statement ok
 INSERT INTO t1 VALUES (4);
 
-onlyif mysql
+
 query I
 SELECT * FROM t1 ORDER BY a;
 ----
@@ -78,7 +79,7 @@ SELECT * FROM t1 ORDER BY a;
 3
 4
 
-onlyif mysql
+
 query I
 SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
 ----
@@ -87,7 +88,7 @@ SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
 3
 4
 
-onlyif mysql
+
 query I
 SELECT * FROM RESULT_SCAN(last_query_id(-1)) ORDER BY a;
 ----
@@ -96,14 +97,14 @@ SELECT * FROM RESULT_SCAN(last_query_id(-1)) ORDER BY a;
 3
 4
 
-onlyif mysql
+
 statement ok
 SET enable_query_result_cache = 0;
 
-onlyif mysql
+
 statement ok
 DROP TABLE t1;
 
-onlyif mysql
+
 statement ok
 DROP DATABASE db20_14;

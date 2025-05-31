@@ -302,6 +302,8 @@ pub struct HttpSessionConf {
     /// last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
     #[serde(default)]
     pub last_query_ids: Vec<String>,
+    #[serde(default)]
+    pub last_query_result_cache_keys: Vec<String>,
     /// hide state not useful to clients
     /// so client only need to know there is a String field `internal`,
     /// which need to carry with session/conn
@@ -428,8 +430,8 @@ fn try_set_txn(
 }
 
 impl HttpQuery {
-    #[async_backtrace::framed]
-    #[fastrace::trace]
+    //#[async_backtrace::framed]
+    //#[fastrace::trace]
     pub async fn try_create(ctx: &HttpQueryContext, req: HttpQueryRequest) -> Result<HttpQuery> {
         let http_query_manager = HttpQueryManager::instance();
         let session = ctx.upgrade_session(SessionType::HTTPQuery).map_err(|err| {
@@ -442,6 +444,7 @@ impl HttpQuery {
         // - the current database
         // - the current role
         // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
+        // - the session-level query cache.
         if let Some(session_conf) = &req.session {
             if let Some(catalog) = &session_conf.catalog {
                 session.set_current_catalog(catalog.clone());
@@ -479,6 +482,22 @@ impl HttpQuery {
                 }
             }
             try_set_txn(&ctx.query_id, &session, session_conf, &http_query_manager)?;
+            if (session_conf.last_query_ids.len()
+                != session_conf.last_query_result_cache_keys.len())
+                && !session_conf.last_query_ids.is_empty()
+            {
+                return Err(ErrorCode::InvalidSessionState(
+                    format!("[HTTP-QUERY] Invalid transaction state: last_query_ids length is {} is not equal with last_query_result_cache_keys length {}",
+                            session_conf.last_query_ids.len(), session_conf.last_query_result_cache_keys.len())
+                ));
+            }
+            session_conf
+                .last_query_ids
+                .iter()
+                .zip(&session_conf.last_query_result_cache_keys)
+                .filter(|(q, m)| !q.is_empty() && !m.is_empty())
+                .for_each(|(q, m)| session.update_query_ids_results(q.to_string(), m.to_string()));
+
             if session_conf.need_sticky
                 && matches!(session_conf.txn_state, None | Some(TxnState::AutoCommit))
             {
@@ -622,6 +641,7 @@ impl HttpQuery {
         // - role: updated by SET ROLE;
         // - secondary_roles: updated by SET SECONDARY ROLES ALL|NONE;
         // - settings: updated by SET XXX = YYY;
+        // - query cache: last_query_id and result_scan
 
         let (session_state, is_stopped) = {
             let executor = self.state.lock();
@@ -722,7 +742,16 @@ impl HttpQuery {
             need_sticky,
             need_keep_alive,
             last_server_info: Some(HttpQueryManager::instance().server_info.clone()),
-            last_query_ids: vec![self.id.clone()],
+            last_query_ids: if session_state.last_query_ids.is_empty() {
+                vec![self.id.clone()]
+            } else {
+                session_state.last_query_ids
+            },
+            last_query_result_cache_keys: if session_state.last_query_result_cache_keys.is_empty() {
+                vec!["".to_string()]
+            } else {
+                session_state.last_query_result_cache_keys
+            },
             internal,
         })
     }
