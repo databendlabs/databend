@@ -17,9 +17,14 @@ runs:
       run: |
         VERSION=`echo ${{ inputs.version }} | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+'`
         echo "building tag and version: git tag: $GIT_TAG version: $VERSION"
-        sed "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml > Cargo.toml.bak
+        sed "s#version = \"0.1.0\"#version = \"$VERSION\"#g" Cargo.toml > Cargo.toml.bak
+        sed "s#version = \"0.1.0\"#version = \"$VERSION\"#g" pyproject.toml > pyproject.toml.bak
+
         mv Cargo.toml.bak Cargo.toml
-        grep 'version' Cargo.toml
+        mv pyproject.toml.bak pyproject.toml
+
+        echo "version in Cargo.toml: $(grep 'version' Cargo.toml)"
+        echo "version in pyproject.toml: $(grep 'version' pyproject.toml)"
 
     - name: Get Toolchain
       id: toolchain
