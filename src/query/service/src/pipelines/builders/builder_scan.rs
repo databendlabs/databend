@@ -46,6 +46,7 @@ impl PipelineBuilder {
                 self.ctx.clone(),
                 &scan.source,
                 &mut self.main_pipeline,
+                scan.plan_id,
             )? {
                 self.pipelines.push(prune_pipeline);
             }

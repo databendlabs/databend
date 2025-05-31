@@ -196,7 +196,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
-        dry_run: bool,
+        plan_id: u32,
     ) -> Result<Option<Pipeline>> {
         let snapshot = plan.statistics.snapshot.clone();
         let table_schema = self.schema_with_stream();
@@ -238,7 +238,7 @@ impl FuseTable {
 
         if ctx.get_settings().get_enable_prune_cache()? {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
-                ctx.set_pruned_partitions_stats(stat);
+                ctx.set_pruned_partitions_stats(plan_id, stat);
                 let sender = part_info_tx.clone();
                 info!("[FUSE-PARTITIONS] Retrieved pruning result from cache");
                 source_pipeline.set_on_init(move || {
@@ -289,7 +289,7 @@ impl FuseTable {
                     part_info_tx,
                     derterministic_cache_key.clone(),
                     lazy_init_segments.len(),
-                    dry_run,
+                    plan_id,
                 )?;
             }
             FuseSegmentFormat::Column => {
@@ -413,7 +413,7 @@ impl FuseTable {
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
         partitions_total: usize,
-        dry_run: bool,
+        plan_id: u32,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
@@ -509,7 +509,6 @@ impl FuseTable {
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
                 enable_prune_cache,
-                dry_run,
             )
         })?;
 
@@ -517,7 +516,7 @@ impl FuseTable {
             if let Ok(()) = info.res {
                 // only populating cache when the pipeline is finished successfully
                 let pruned_part_stats = send_part_state.get_pruned_stats();
-                ctx.set_pruned_partitions_stats(pruned_part_stats);
+                ctx.set_pruned_partitions_stats(plan_id, pruned_part_stats);
                 if enable_prune_cache {
                     info!("[FUSE-PARTITIONS] Prune cache enabled");
                     send_part_state.populating_cache();

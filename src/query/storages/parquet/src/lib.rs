@@ -23,6 +23,7 @@
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
 #![feature(box_patterns)]
+#![feature(result_flattening)]
 // FIXME: Remove this once the deprecated code is removed
 #![allow(deprecated)]
 
@@ -40,15 +41,20 @@ mod statistics;
 mod transformer;
 
 mod meta;
+mod parquet_variant_table;
 mod schema;
 
 pub use copy_into_table::ParquetTableForCopy;
+pub use parquet_part::DeleteTask;
+pub use parquet_part::DeleteType;
 pub use parquet_part::ParquetFilePart;
 pub use parquet_part::ParquetPart;
+pub use parquet_reader::InmMemoryFile;
 pub use parquet_reader::ParquetFileReader;
 pub use parquet_reader::ParquetReaderBuilder;
 pub use parquet_reader::ParquetWholeFileReader;
 pub use parquet_table::ParquetTable;
+pub use parquet_variant_table::ParquetVariantTable;
 // for it test
 pub use pruning::ParquetPruner;
 pub use source::ParquetSource;

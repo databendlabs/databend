@@ -22,7 +22,7 @@ select [{}] from numbers(3)
 [{}]
 [{}]
 
-query B
+query ?
 select if(number>1, true, false) from numbers(3) order by number
 ----
 0
@@ -51,21 +51,21 @@ zero
 Z+
 Z+
 
-query B
+query ?
 select if(number<1, true, null) from numbers(3) order by number
 ----
 1
 NULL
 NULL
 
-query F
+query ?
 select if(number<4, number, number / 0) from numbers(3) order by number
 ----
 0.0
 1.0
 2.0
 
-query F
+query ?
 select if(number>4, number / 0, number) from numbers(3) order by number
 ----
 0.0
@@ -75,7 +75,7 @@ select if(number>4, number / 0, number) from numbers(3) order by number
 statement error 1006
 select if(number<4, number / 0, number) from numbers(3) order by number
 
-query F
+query ?
 select if (number > 0, 1 / number, null) from numbers(2);
 ----
 NULL
@@ -111,12 +111,12 @@ multi-if
 statement error 1065
 select if(number = 4, 3) from numbers(1)
 
-query F
+query ?
 select if(number = 1, number, number = 0, number, number / 0) from numbers(1)
 ----
 0.0
 
-query F
+query ?
 select if (number > 0, 1 / number, null) from numbers(2);
 ----
 NULL
@@ -160,18 +160,34 @@ select if(true, number, null), if(false, number, null) from numbers(1)
 0 NULL
 
 statement ok
-drop table if exists t
+CREATE or replace TABLE t (a int);
 
 statement ok
-create table t(a int null, b int)
-
-statement ok
-insert into t values(null, 1)
+INSERT INTO t (a) VALUES
+    (1),
+    (2),
+    (NULL),
+    (4);
 
 query II
-select a, b, a*2, if(b=1, a*2, b) from t
+select a, a*2, if(a=1, a*2, a*3) from t
 ----
-NULL 1 NULL NULL
+1 2 2
+2 4 6
+NULL NULL NULL
+4 8 12
+
+query II
+select a, decode(a, 1, 'one',
+	2, 'two',
+	NULL, '-NULL-',
+	'other'
+) AS decode_result from t
+----
+1 one
+2 two
+NULL -NULL-
+4 other
 
 statement ok
 drop table t

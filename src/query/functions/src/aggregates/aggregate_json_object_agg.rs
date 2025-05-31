@@ -184,7 +184,7 @@ where
                 continue;
             }
             let mut val = vec![];
-            cast_scalar_to_variant(v.as_ref(), &tz, &mut val);
+            cast_scalar_to_variant(v.as_ref(), &tz, &mut val, None);
             values.push((key, val));
         }
         let owned_jsonb =

@@ -238,12 +238,15 @@ impl AggregateFunctionFactory {
         }
 
         if arguments.iter().all(|f| !f.is_nullable_or_null()) {
-            let agg = self.get_impl(name, params, arguments, sort_descs.clone(), &mut features)?;
-            return if or_null {
-                AggregateFunctionOrNullAdaptor::create(agg, features)
-            } else {
-                Ok(agg)
-            };
+            let mut agg =
+                self.get_impl(name, params, arguments, sort_descs.clone(), &mut features)?;
+            if !sort_descs.is_empty() {
+                agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
+            }
+            if or_null {
+                agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
+            }
+            return Ok(agg);
         }
 
         let nested = if name.to_lowercase().strip_suffix(STATE_SUFFIX).is_some() {
@@ -273,11 +276,11 @@ impl AggregateFunctionFactory {
             nested,
             features.clone(),
         )?;
-        if or_null {
-            agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
-        }
         if !sort_descs.is_empty() {
             agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
+        }
+        if or_null {
+            agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
         }
         Ok(agg)
     }

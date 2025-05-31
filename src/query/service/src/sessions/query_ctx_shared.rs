@@ -173,7 +173,7 @@ pub struct QueryContextShared {
     // Used by hilbert clustering when do recluster.
     pub(in crate::sessions) selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
 
-    pub(in crate::sessions) pruned_partitions_stats: Arc<RwLock<Option<PartStatistics>>>,
+    pub(in crate::sessions) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
 
     pub(in crate::sessions) next_broadcast_id: AtomicU32,
     pub(in crate::sessions) broadcast_channels: Arc<Mutex<HashMap<u32, BroadcastChannel>>>,
@@ -250,7 +250,7 @@ impl QueryContextShared {
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             selected_segment_locs: Default::default(),
-            pruned_partitions_stats: Arc::new(RwLock::new(None)),
+            pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
             next_broadcast_id: AtomicU32::new(0),
             broadcast_channels: Arc::new(Mutex::new(HashMap::new())),
         }))
@@ -844,13 +844,15 @@ impl QueryContextShared {
         self.table_meta_timestamps.clone()
     }
 
-    pub fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+    pub fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
         self.pruned_partitions_stats.read().clone()
     }
 
-    pub fn set_pruned_partitions_stats(&self, stats: PartStatistics) {
-        let mut guard = self.pruned_partitions_stats.write();
-        *guard = Some(stats);
+    pub fn set_pruned_partitions_stats(&self, plan_id: u32, stats: PartStatistics) {
+        self.pruned_partitions_stats
+            .write()
+            .entry(plan_id)
+            .or_insert(stats);
     }
 }
 

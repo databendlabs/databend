@@ -20,9 +20,11 @@ mod topk;
 mod utils;
 
 pub use read_policy::*;
+pub use reader::InmMemoryFile;
 pub use reader::ParquetFileReader;
 pub use reader::ParquetReaderBuilder;
 pub use reader::ParquetWholeFileReader;
 pub use reader::RowGroupReader;
 pub use row_group::cached_range_full_read;
 pub use row_group::InMemoryRowGroup;
+pub use utils::DataBlockIterator;

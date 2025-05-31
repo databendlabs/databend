@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod projection;
 mod reader;
 mod source;
 mod table;
 
+pub(crate) use projection::CopyProjectionEvaluator;
 pub use table::ParquetTableForCopy;

@@ -9,7 +9,7 @@ select $1 from @data (files=>('csv/it.csv', 'empty.txt'), file_format=>'csv')
 2
 
 query ok
-select $1 from @data (files=>('parquet/ii/f2.parquet', 'empty.txt'), file_format=>'parquet');
+select id from @data (files=>('parquet/ii/f2.parquet', 'empty.txt'), file_format=>'parquet');
 ----
 3
 4

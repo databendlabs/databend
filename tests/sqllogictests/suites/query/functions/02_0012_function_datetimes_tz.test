@@ -36,6 +36,11 @@ select last_day(to_date('2024-02-01'), month);
 ----
 2024-02-29
 
+query B
+select last_day(to_date('2024-02-01'), month)=last_day(to_date('2024-02-01'));
+----
+1
+
 query T
 select last_day(to_date('2024-02-01'), quarter);
 ----

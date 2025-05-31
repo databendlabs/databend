@@ -523,8 +523,12 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
             let want = del_event(&k, 1 + i, &k, Some(KvMeta::new_expire(now_sec + 1)));
+            let want2 = del_event(&k, 1 + i, &k, Some(KvMeta::new_expire(now_sec + 2)));
             let msg = client_stream.message().await?.unwrap();
-            assert_eq!(Some(want), msg.event);
+            assert!(Some(want.clone()) == msg.event || Some(want2.clone()) == msg.event,
+                    "expect {:?} equals {:?} or {:?}; the expire time is not accurate, so we need to check both",
+                msg.event, want, want2
+            );
         }
 
         // Check event generated when applying the txn

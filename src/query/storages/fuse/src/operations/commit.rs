@@ -132,6 +132,7 @@ impl FuseTable {
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn commit_to_meta_server(
+        &self,
         ctx: &dyn TableContext,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
@@ -161,19 +162,20 @@ impl FuseTable {
         let table_statistics_location = snapshot.table_statistics_location.clone();
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
         // 2. update table meta
-        let res = Self::update_table_meta(
-            ctx,
-            catalog,
-            table_info,
-            location_generator,
-            snapshot,
-            snapshot_location,
-            copied_files,
-            &[],
-            operator,
-            None,
-        )
-        .await;
+        let res = self
+            .update_table_meta(
+                ctx,
+                catalog,
+                table_info,
+                location_generator,
+                snapshot,
+                snapshot_location,
+                copied_files,
+                &[],
+                operator,
+                None,
+            )
+            .await;
 
         if need_to_save_statistics {
             let table_statistics_location: String = table_statistics_location.unwrap();
@@ -221,6 +223,7 @@ impl FuseTable {
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn update_table_meta(
+        &self,
         ctx: &dyn TableContext,
         catalog: Arc<dyn Catalog>,
         table_info: &TableInfo,
@@ -258,6 +261,7 @@ impl FuseTable {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: new_table_meta.clone(),
+                base_snapshot_location: self.snapshot_loc(),
             };
             update_table_metas.push((req, table_info.clone()));
             copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
@@ -358,16 +362,17 @@ impl FuseTable {
                 self.get_id(),
             )?;
 
-            match Self::commit_to_meta_server(
-                ctx.as_ref(),
-                latest_table_info,
-                &self.meta_location_generator,
-                snapshot_tobe_committed,
-                None,
-                &None,
-                &self.operator,
-            )
-            .await
+            match self
+                .commit_to_meta_server(
+                    ctx.as_ref(),
+                    latest_table_info,
+                    &self.meta_location_generator,
+                    snapshot_tobe_committed,
+                    None,
+                    &None,
+                    &self.operator,
+                )
+                .await
             {
                 Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
                     match backoff.next_backoff() {

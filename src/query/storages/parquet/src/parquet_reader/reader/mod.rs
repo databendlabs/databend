@@ -15,8 +15,10 @@
 mod builder;
 mod full_reader;
 mod row_group_reader;
+mod streaming_load_reader;
 
 pub use builder::ParquetReaderBuilder;
 pub use full_reader::ParquetFileReader;
 pub use full_reader::ParquetWholeFileReader;
 pub use row_group_reader::RowGroupReader;
+pub use streaming_load_reader::InmMemoryFile;

@@ -35,12 +35,12 @@ use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::plans::CopyIntoTableMode;
 use databend_common_storage::StageFileInfo;
+use databend_common_storages_stage::TransformNullIf;
 use log::debug;
 use log::info;
 
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::transforms::TransformCastSchema;
-use crate::pipelines::processors::transforms::TransformNullIf;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 
@@ -135,7 +135,7 @@ impl PipelineBuilder {
         let source_schema = if let Some(null_if) =
             Self::need_null_if_processor(plan, &source_schema, plan_required_source_schema)
         {
-            let func_ctx = ctx.get_function_context()?;
+            let func_ctx = Arc::new(ctx.get_function_context()?);
             main_pipeline.try_add_transformer(|| {
                 TransformNullIf::try_new(
                     source_schema.clone(),

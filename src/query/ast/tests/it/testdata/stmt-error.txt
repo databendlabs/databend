@@ -560,7 +560,7 @@ error:
   --> SQL:1:41
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS ()
-  | ------                                  ^ unexpected `)`, expecting `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `::`, `POSITION`, `IdentVariable`, `DATE_ADD`, `DATE_DIFF`, `DATEDIFF`, or 39 more ...
+  | ------                                  ^ unexpected `)`, expecting `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `::`, `POSITION`, `IdentVariable`, `DATE_ADD`, `DATE_DIFF`, `DATEDIFF`, or 40 more ...
   | |                                        
   | while parsing `SELECT ...`
 
@@ -982,7 +982,7 @@ error:
   --> SQL:1:65
   |
 1 | CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)
-  | ------                                   --       ----          ^ unexpected end of input, expecting `)`, `(`, `WITHIN`, `IGNORE`, `RESPECT`, `OVER`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `::`, or 45 more ...
+  | ------                                   --       ----          ^ unexpected end of input, expecting `)`, `(`, `WITHIN`, `IGNORE`, `RESPECT`, `OVER`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `::`, or 46 more ...
   | |                                        |        |  |          
   | |                                        |        |  while parsing `(<expr> [, ...])`
   | |                                        |        while parsing expression

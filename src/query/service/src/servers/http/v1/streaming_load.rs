@@ -170,7 +170,7 @@ pub async fn streaming_load_handler_inner(
                     receiver,
                     ..
                 } => {
-                    if !matches!(&**format, FileFormatParams::Csv(_) | FileFormatParams::Tsv(_) | FileFormatParams::NdJson(_))  {
+                    if !format.support_streaming_load() {
                         return Err(poem::Error::from_string( format!( "[HTTP-STREAMING-LOAD] Unsupported file format: {}", format.get_type() ), StatusCode::BAD_REQUEST));
                     }
                     let (tx, rx) = tokio::sync::mpsc::channel(1);
@@ -185,17 +185,22 @@ pub async fn streaming_load_handler_inner(
                             id: http_context.query_id.clone(),
                             stats: query_context.get_write_progress().get_values(),
                         })),
-                        Ok(Err(cause)) => Err(poem::Error::from_string(
+                        Ok(Err(cause)) => {
+                            info!("[HTTP-STREAMING-LOAD] Query execution failed: {:?}", cause);
+                            Err(poem::Error::from_string(
                             format!(
                                 "[HTTP-STREAMING-LOAD] Query execution failed: {}",
                                 cause.display_with_sql(sql).message()
                             ),
                             StatusCode::BAD_REQUEST,
-                        )),
-                        Err(_) => Err(poem::Error::from_string(
-                            "[HTTP-STREAMING-LOAD] Internal server error: execution thread panicked",
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                        )),
+                        ))},
+                        Err(err) => {
+                            info!("[HTTP-STREAMING-LOAD] Internal server error: {:?}", err);
+                            Err(poem::Error::from_string(
+                                "[HTTP-STREAMING-LOAD] Internal server error: execution thread panicked",
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                            ))
+                        },
                     }
                 }
                 _non_supported_source => Err(poem::Error::from_string(

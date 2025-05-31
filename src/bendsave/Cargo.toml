@@ -15,6 +15,7 @@ databend-common-meta-control = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-users = { workspace = true }
+databend-common-version = { workspace = true }
 databend-enterprise-query = { workspace = true }
 databend-meta = { workspace = true }
 databend-query = { workspace = true }

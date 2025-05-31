@@ -39,6 +39,7 @@ use super::utils::transform_record_batch;
 use super::utils::FieldPaths;
 use crate::parquet_reader::utils::compute_output_field_paths;
 
+#[derive(Debug)]
 pub struct ParquetPredicate {
     func_ctx: FunctionContext,
 

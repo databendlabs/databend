@@ -206,8 +206,12 @@ impl Display for StorageParams {
             StorageParams::S3(v) => {
                 write!(
                     f,
-                    "s3 | bucket={},root={},endpoint={}",
-                    v.bucket, v.root, v.endpoint_url
+                    "s3 | bucket={},root={},endpoint={},ak={},iam_role={}",
+                    v.bucket,
+                    v.root,
+                    v.endpoint_url,
+                    &mask_string(&v.access_key_id, 3),
+                    v.role_arn,
                 )
             }
             StorageParams::Webhdfs(v) => {

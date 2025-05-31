@@ -274,16 +274,17 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     snapshot_2
         .write_meta(&operator, &new_snapshot_location)
         .await?;
-    FuseTable::commit_to_meta_server(
-        fixture.new_query_ctx().await?.as_ref(),
-        fuse_table.get_table_info(),
-        location_gen,
-        snapshot_2,
-        None,
-        &None,
-        &operator,
-    )
-    .await
+    fuse_table
+        .commit_to_meta_server(
+            fixture.new_query_ctx().await?.as_ref(),
+            fuse_table.get_table_info(),
+            location_gen,
+            snapshot_2,
+            None,
+            &None,
+            &operator,
+        )
+        .await
 }
 
 async fn write_v2_to_storage<T>(data_accessor: &Operator, location: &str, meta: &T) -> Result<()>

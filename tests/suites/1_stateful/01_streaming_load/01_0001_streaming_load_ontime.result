@@ -13,3 +13,6 @@
 --ontime_200.ndjson
 {"id":"ontime_200.ndjson","stats":{"rows":199,"bytes":190906}}
 199	2020	769
+--ontime_200.parquet
+{"id":"ontime_200.parquet","stats":{"rows":199,"bytes":192109}}
+199	2020	769

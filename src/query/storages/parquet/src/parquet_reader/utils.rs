@@ -29,6 +29,8 @@ use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescriptor;
 
+pub type DataBlockIterator = Box<dyn Iterator<Item = Result<DataBlock>> + Send>;
+
 /// Traverse `batch` by `path_indices` to get output [`Column`].
 fn traverse_column(
     field: &DataField,

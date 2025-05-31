@@ -19,6 +19,7 @@ done
 
 ## Select table
 echo "select * from table_external_location order by a;" | $BENDSQL_CLIENT_CONNECT
+echo "select is_external, storage_param from system.tables where name='table_external_location';" | $BENDSQL_CLIENT_CONNECT
 
 ## Drop table
 echo "drop table if exists table_external_location;" | $BENDSQL_CLIENT_CONNECT

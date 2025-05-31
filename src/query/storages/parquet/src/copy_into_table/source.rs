@@ -22,28 +22,24 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Evaluator;
-use databend_common_expression::FunctionContext;
-use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_expression::Expr;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use opendal::Operator;
 
+use crate::copy_into_table::projection::CopyProjectionEvaluator;
 use crate::copy_into_table::reader::RowGroupReaderForCopy;
 use crate::parquet_reader::policy::ReadPolicyImpl;
 use crate::read_settings::ReadSettings;
 use crate::ParquetPart;
 
-type SchemaIndex = usize;
-
 enum State {
     Init,
-    ReadRowGroup((SchemaIndex, ReadPolicyImpl)),
+    ReadRowGroup((Vec<Expr>, ReadPolicyImpl)),
 }
 
 pub struct ParquetCopySource {
@@ -59,9 +55,7 @@ pub struct ParquetCopySource {
     // Used to read parquet.
     row_group_readers: Arc<HashMap<usize, RowGroupReaderForCopy>>,
     operator: Operator,
-    schema: DataSchemaRef,
-    func_ctx: FunctionContext,
-
+    copy_projection_evaluator: CopyProjectionEvaluator,
     state: State,
     batch_size: usize,
 }
@@ -76,7 +70,8 @@ impl ParquetCopySource {
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let batch_size = ctx.get_settings().get_parquet_max_block_size()? as usize;
-        let func_ctx = ctx.get_function_context()?;
+        let func_ctx = Arc::new(ctx.get_function_context()?);
+        let copy_projection_evaluator = CopyProjectionEvaluator::new(schema, func_ctx);
 
         Ok(ProcessorPtr::create(Box::new(Self {
             output,
@@ -84,12 +79,11 @@ impl ParquetCopySource {
             ctx,
             operator,
             row_group_readers,
-            func_ctx,
             batch_size,
             generated_data: None,
             is_finished: false,
             state: State::Init,
-            schema,
+            copy_projection_evaluator,
         })))
     }
 }
@@ -141,23 +135,13 @@ impl Processor for ParquetCopySource {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Init) {
-            State::ReadRowGroup((schema_index, mut reader)) => {
+            State::ReadRowGroup((projection, mut reader)) => {
                 if let Some(block) = reader.as_mut().read_block()? {
-                    let projection = self
-                        .row_group_readers
-                        .get(&schema_index)
-                        .unwrap()
-                        .output_projection();
-                    let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                    let mut columns = Vec::with_capacity(projection.len());
-                    for (field, expr) in self.schema.fields().iter().zip(projection.iter()) {
-                        let value = evaluator.run(expr)?;
-                        let column = BlockEntry::new(field.data_type().clone(), value);
-                        columns.push(column);
-                    }
-                    let block = DataBlock::new(columns, block.num_rows());
-                    self.generated_data = Some(block);
-                    self.state = State::ReadRowGroup((schema_index, reader));
+                    self.generated_data = Some(
+                        self.copy_projection_evaluator
+                            .project(&block, &projection)?,
+                    );
+                    self.state = State::ReadRowGroup((projection, reader));
                 }
                 // Else: The reader is finished. We should try to build another reader.
             }
@@ -178,6 +162,7 @@ impl Processor for ParquetCopySource {
                                 .row_group_readers
                                 .get(&schema_index)
                                 .expect("schema index must exist");
+                            let projection = builder.output_projection().to_vec();
                             let reader = builder
                                 .build_reader(
                                     part,
@@ -188,7 +173,7 @@ impl Processor for ParquetCopySource {
                                 .await?
                                 .expect("reader must exist");
                             {
-                                self.state = State::ReadRowGroup((schema_index, reader));
+                                self.state = State::ReadRowGroup((projection, reader));
                             }
                             // Else: keep in init state.
                         }

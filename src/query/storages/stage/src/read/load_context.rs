@@ -37,7 +37,8 @@ pub struct LoadContext {
     pub internal_columns: Vec<InternalColumn>,
 
     pub schema: TableSchemaRef,
-    pub default_exprs: Option<Arc<DefaultExprEvaluator>>,
+    pub default_exprs: Option<Vec<RemoteDefaultExpr>>,
+    pub default_expr_evaluator: Option<Arc<DefaultExprEvaluator>>,
     pub pos_projection: Option<Vec<usize>>,
     pub is_copy: bool,
     pub stage_root: String,
@@ -93,10 +94,10 @@ impl LoadContext {
             .cloned()
             .collect::<Vec<_>>();
         let schema = TableSchemaRefExt::create(fields);
-        let default_exprs = if let Some(default_exprs) = default_exprs {
+        let default_expr_evaluator = if let Some(default_exprs) = &default_exprs {
             let func_ctx = ctx.get_function_context()?;
             Some(Arc::new(DefaultExprEvaluator::new(
-                default_exprs,
+                default_exprs.clone(),
                 func_ctx,
                 schema.clone(),
             )))
@@ -109,6 +110,7 @@ impl LoadContext {
             internal_columns,
             block_compact_thresholds,
             schema,
+            default_expr_evaluator,
             default_exprs,
             pos_projection,
             is_copy,
@@ -127,7 +129,7 @@ impl LoadContext {
         column_index: usize,
         required: bool,
     ) -> std::result::Result<(), FileParseError> {
-        match &self.default_exprs {
+        match &self.default_expr_evaluator {
             None => {
                 // not copy or not FieldDefault
                 if !required {

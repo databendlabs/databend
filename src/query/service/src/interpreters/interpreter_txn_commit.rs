@@ -15,12 +15,12 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
 use databend_common_storage::init_stage_operator;
+use databend_common_storages_fuse::commit_with_backoff;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_io::Files;
 use databend_storages_common_session::TxnManagerRef;
@@ -76,57 +76,9 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
     let _guard = ClearTxnManagerGuard(ctx.txn_mgr().clone());
     let is_active = ctx.txn_mgr().lock().is_active();
     if is_active {
-        let catalog = ctx.get_default_catalog()?;
-
+        ctx.txn_mgr().lock().set_auto_commit();
         let req = ctx.txn_mgr().lock().req();
-
-        let update_summary = {
-            let table_descriptions = req
-                .update_table_metas
-                .iter()
-                .map(|(req, _)| (req.table_id, req.seq, req.new_table_meta.engine.clone()))
-                .collect::<Vec<_>>();
-            let stream_descriptions = req
-                .update_stream_metas
-                .iter()
-                .map(|s| (s.stream_id, s.seq, "stream"))
-                .collect::<Vec<_>>();
-            (table_descriptions, stream_descriptions)
-        };
-
-        let mismatched_tids = {
-            ctx.txn_mgr().lock().set_auto_commit();
-            let ret = catalog.retryable_update_multi_table_meta(req).await;
-            if let Err(ref e) = ret {
-                // other errors may occur, especially the version mismatch of streams,
-                // let's log it here for the convenience of diagnostics
-                error!(
-                    "Non-recoverable fault occurred during table metadata update: {}",
-                    e
-                );
-            }
-            ret?
-        };
-
-        match &mismatched_tids {
-            Ok(_) => {
-                info!(
-                    "Transaction committed successfully, updated targets: {:?}",
-                    update_summary
-                );
-            }
-            Err(e) => {
-                let err_msg = format!(
-                    "Due to concurrent transactions, explicit transaction commit failed. Conflicting table IDs: {:?}",
-                    e.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
-                );
-                info!(
-                    "Transaction commit failed due to concurrent modifications. Conflicting table IDs: {:?}",
-                    e
-                );
-                return Err(ErrorCode::TableVersionMismatched(format!("{}", err_msg)));
-            }
-        }
+        commit_with_backoff(ctx.clone(), req).await?;
         let need_purge_files = ctx.txn_mgr().lock().need_purge_files();
         for (stage_info, files) in need_purge_files {
             try_purge_files(ctx.clone(), &stage_info, &files).await;

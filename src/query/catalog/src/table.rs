@@ -240,8 +240,9 @@ pub trait Table: Sync + Send {
         table_ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
+        plan_id: u32,
     ) -> Result<Option<Pipeline>> {
-        let (_, _, _) = (table_ctx, plan, source_pipeline);
+        let (_, _, _, _) = (table_ctx, plan, source_pipeline, plan_id);
 
         Ok(None)
     }

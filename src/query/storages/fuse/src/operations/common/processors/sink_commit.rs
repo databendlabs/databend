@@ -202,8 +202,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
         let code = e.code();
         // When prev_snapshot_id is some, means it is an alter table column modification or truncate.
-        // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
         if self.prev_snapshot_id.is_some() && code == ErrorCode::TABLE_VERSION_MISMATCHED {
+            // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
             return false;
         }
 
@@ -496,19 +496,21 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 self.dal.write(&location, data).await?;
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
-                match FuseTable::update_table_meta(
-                    self.ctx.as_ref(),
-                    catalog.clone(),
-                    &table_info,
-                    &self.location_gen,
-                    snapshot,
-                    location,
-                    &self.copied_files,
-                    &self.update_stream_meta,
-                    &self.dal,
-                    self.deduplicated_label.clone(),
-                )
-                .await
+                let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
+                match fuse_table
+                    .update_table_meta(
+                        self.ctx.as_ref(),
+                        catalog.clone(),
+                        &table_info,
+                        &self.location_gen,
+                        snapshot,
+                        location,
+                        &self.copied_files,
+                        &self.update_stream_meta,
+                        &self.dal,
+                        self.deduplicated_label.clone(),
+                    )
+                    .await
                 {
                     Ok(_) => {
                         if self.need_truncate() {

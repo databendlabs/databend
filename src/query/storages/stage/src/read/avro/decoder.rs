@@ -98,7 +98,7 @@ impl AvroDecoder {
             params,
             schema: ctx.schema.clone(),
             error_handler: ctx.error_handler.clone(),
-            default_expr_evaluator: ctx.default_exprs.clone(),
+            default_expr_evaluator: ctx.default_expr_evaluator.clone(),
             is_select,
         }
     }

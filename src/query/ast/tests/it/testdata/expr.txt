@@ -1843,6 +1843,92 @@ DatePart {
 
 
 ---------- Input ----------
+date_trunc(week, to_timestamp(1630812366))
+---------- Output ---------
+DATE_TRUNC(WEEK, to_timestamp(1630812366))
+---------- AST ------------
+DateTrunc {
+    span: Some(
+        0..42,
+    ),
+    unit: Week,
+    date: FunctionCall {
+        span: Some(
+            17..41,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    17..29,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        30..40,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+trunc(to_timestamp(1630812366), week)
+---------- Output ---------
+DATE_TRUNC(WEEK, to_timestamp(1630812366))
+---------- AST ------------
+DateTrunc {
+    span: Some(
+        0..37,
+    ),
+    unit: Week,
+    date: FunctionCall {
+        span: Some(
+            6..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    6..18,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        19..29,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
 DATEDIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
 ---------- Output ---------
 DATE_DIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
@@ -1903,6 +1989,92 @@ DateDiff {
                     ),
                     value: String(
                         "2023-12-31 09:38:18.165575",
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+last_day(to_date('2024-10-22'), week)
+---------- Output ---------
+LAST_DAY(to_date('2024-10-22'), WEEK)
+---------- AST ------------
+LastDay {
+    span: Some(
+        0..37,
+    ),
+    unit: Week,
+    date: FunctionCall {
+        span: Some(
+            9..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    9..16,
+                ),
+                name: "to_date",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        17..29,
+                    ),
+                    value: String(
+                        "2024-10-22",
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+last_day(to_date('2024-10-22'))
+---------- Output ---------
+LAST_DAY(to_date('2024-10-22'), MONTH)
+---------- AST ------------
+LastDay {
+    span: Some(
+        0..31,
+    ),
+    unit: Month,
+    date: FunctionCall {
+        span: Some(
+            9..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    9..16,
+                ),
+                name: "to_date",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        17..29,
+                    ),
+                    value: String(
+                        "2024-10-22",
                     ),
                 },
             ],

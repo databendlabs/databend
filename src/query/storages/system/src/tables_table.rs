@@ -27,6 +27,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -54,6 +55,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_null::NullTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::is_internal_opt_key;
 use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -252,6 +254,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 ),
                 TableField::new("comment", TableDataType::String),
                 TableField::new("table_type", TableDataType::String),
+                TableField::new("is_external", TableDataType::Boolean),
+                TableField::new("table_option", TableDataType::String),
+                TableField::new("storage_param", TableDataType::String),
             ])
         } else {
             TableSchemaRefExt::create(vec![
@@ -301,7 +306,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut databases_ids = vec![];
 
         let mut database_tables = vec![];
-        let mut owner: Vec<Option<String>> = Vec::new();
+        let mut owners: Vec<Option<String>> = Vec::new();
         let user_api = UserApiProvider::instance();
 
         let mut dbs = Vec::new();
@@ -474,7 +479,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                             &mut databases,
                                             &mut databases_ids,
                                             &mut database_tables,
-                                            &mut owner,
+                                            &mut owners,
                                             ctl_name,
                                             db.name(),
                                             db.get_db_info().database_id.db_id,
@@ -489,7 +494,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                                 &mut databases,
                                                 &mut databases_ids,
                                                 &mut database_tables,
-                                                &mut owner,
+                                                &mut owners,
                                                 ctl_name,
                                                 db.name(),
                                                 db.get_db_info().database_id.db_id,
@@ -758,7 +763,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                 &mut databases,
                                 &mut databases_ids,
                                 &mut database_tables,
-                                &mut owner,
+                                &mut owners,
                                 ctl_name,
                                 db.name(),
                                 db.get_db_info().database_id.db_id,
@@ -774,9 +779,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut number_of_blocks: Vec<Option<u64>> = Vec::new();
         let mut number_of_segments: Vec<Option<u64>> = Vec::new();
         let mut num_rows: Vec<Option<u64>> = Vec::new();
-        let mut data_size: Vec<Option<u64>> = Vec::new();
-        let mut data_compressed_size: Vec<Option<u64>> = Vec::new();
-        let mut index_size: Vec<Option<u64>> = Vec::new();
+        let mut data_sizes: Vec<Option<u64>> = Vec::new();
+        let mut data_compressed_sizes: Vec<Option<u64>> = Vec::new();
+        let mut index_sizes: Vec<Option<u64>> = Vec::new();
 
         if WITHOUT_VIEW {
             for tbl in &database_tables {
@@ -803,9 +808,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
                 number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
                 number_of_segments.push(stats.as_ref().and_then(|v| v.number_of_segments));
-                data_size.push(stats.as_ref().and_then(|v| v.data_size));
-                data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
-                index_size.push(stats.as_ref().and_then(|v| v.index_size));
+                data_sizes.push(stats.as_ref().and_then(|v| v.data_size));
+                data_compressed_sizes.push(stats.as_ref().and_then(|v| v.data_size_compressed));
+                index_sizes.push(stats.as_ref().and_then(|v| v.index_size));
             }
         }
 
@@ -813,7 +818,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .iter()
             .map(|v| v.name().to_string())
             .collect();
-        let table_id: Vec<u64> = database_tables
+        let tables_id: Vec<u64> = database_tables
             .iter()
             .map(|v| v.get_table_info().ident.table_id)
             .collect();
@@ -825,7 +830,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .iter()
             .map(|v| v.engine().to_string())
             .collect();
-        let tables_type: Vec<String> = database_tables
+        let tables_types: Vec<String> = database_tables
             .iter()
             .map(|v| {
                 if v.engine().to_uppercase() == "VIEW" {
@@ -836,11 +841,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             })
             .collect();
         let engines_full: Vec<String> = engines.clone();
-        let created_on: Vec<i64> = database_tables
+        let created_ons: Vec<i64> = database_tables
             .iter()
             .map(|v| v.get_table_info().meta.created_on.timestamp_micros())
             .collect();
-        let dropped_on: Vec<Option<i64>> = database_tables
+        let dropped_ons: Vec<Option<i64>> = database_tables
             .iter()
             .map(|v| {
                 v.get_table_info()
@@ -849,7 +854,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     .map(|v| v.timestamp_micros())
             })
             .collect();
-        let updated_on = database_tables
+        let updated_ons = database_tables
             .iter()
             .map(|v| v.get_table_info().meta.updated_on.timestamp_micros())
             .collect::<Vec<_>>();
@@ -864,7 +869,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     .unwrap_or_else(|| "".to_owned())
             })
             .collect();
-        let is_transient: Vec<String> = database_tables
+        let is_transients: Vec<String> = database_tables
             .iter()
             .map(|v| {
                 if v.options().contains_key("TRANSIENT") {
@@ -874,7 +879,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 }
             })
             .collect();
-        let is_attach: Vec<String> = database_tables
+        let is_attaches: Vec<String> = database_tables
             .iter()
             .map(|v| {
                 if FuseTable::is_table_attached(&v.get_table_info().meta.options) {
@@ -884,10 +889,38 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 }
             })
             .collect();
-        let comment: Vec<String> = database_tables
+        let comments: Vec<String> = database_tables
             .iter()
             .map(|v| v.get_table_info().meta.comment.clone())
             .collect();
+
+        let options: Vec<String> = database_tables
+            .iter()
+            .map(|v| {
+                if v.get_table_info().engine().to_uppercase() == "VIEW" {
+                    "".to_string()
+                } else {
+                    let mut opts = v.get_table_info().options().iter().collect::<Vec<_>>();
+                    opts.sort_by_key(|(k, _)| *k);
+                    opts.iter()
+                        .filter(|(k, _)| !is_internal_opt_key(k))
+                        .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
+                        .collect::<Vec<_>>()
+                        .join("")
+                }
+            })
+            .collect();
+
+        let (is_externals, storage_params): (Vec<bool>, Vec<String>) = database_tables
+            .iter()
+            .map(|v| {
+                let storage_params = &v.get_table_info().meta.storage_params;
+                storage_params
+                    .as_ref()
+                    .map(|sp| (true, sp.to_string()))
+                    .unwrap_or_else(|| (false, "".to_string()))
+            })
+            .unzip();
 
         let view_query: Vec<String> = database_tables
             .iter()
@@ -912,25 +945,28 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 databases,
                 databases_ids,
                 names,
-                table_id,
+                tables_id,
                 total_columns,
                 engines,
                 engines_full,
                 cluster_bys,
-                is_transient,
-                is_attach,
-                created_on,
-                dropped_on,
-                updated_on,
+                is_transients,
+                is_attaches,
+                created_ons,
+                dropped_ons,
+                updated_ons,
                 num_rows,
-                data_size,
-                data_compressed_size,
-                index_size,
+                data_sizes,
+                data_compressed_sizes,
+                index_sizes,
                 number_of_segments,
                 number_of_blocks,
-                owner,
-                comment,
-                tables_type,
+                owners,
+                comments,
+                tables_types,
+                is_externals,
+                options,
+                storage_params,
             )
         } else {
             Ok(DataBlock::new_from_columns(vec![
@@ -938,14 +974,14 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 StringType::from_data(databases),
                 UInt64Type::from_data(databases_ids),
                 StringType::from_data(names),
-                UInt64Type::from_data(table_id),
+                UInt64Type::from_data(tables_id),
                 StringType::from_data(engines),
                 StringType::from_data(engines_full),
-                TimestampType::from_data(created_on),
-                TimestampType::from_opt_data(dropped_on),
-                TimestampType::from_data(updated_on),
-                StringType::from_opt_data(owner),
-                StringType::from_data(comment),
+                TimestampType::from_data(created_ons),
+                TimestampType::from_opt_data(dropped_ons),
+                TimestampType::from_data(updated_ons),
+                StringType::from_opt_data(owners),
+                StringType::from_data(comments),
                 StringType::from_data(view_query),
             ]))
         }
@@ -957,50 +993,56 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         databases: Vec<String>,
         databases_ids: Vec<u64>,
         names: Vec<String>,
-        table_id: Vec<u64>,
+        tables_id: Vec<u64>,
         total_columns: Vec<u64>,
         engines: Vec<String>,
         engines_full: Vec<String>,
         cluster_bys: Vec<String>,
-        is_transient: Vec<String>,
-        is_attach: Vec<String>,
-        created_on: Vec<i64>,
-        dropped_on: Vec<Option<i64>>,
-        updated_on: Vec<i64>,
+        is_transients: Vec<String>,
+        is_attaches: Vec<String>,
+        created_ons: Vec<i64>,
+        dropped_ons: Vec<Option<i64>>,
+        updated_ons: Vec<i64>,
         num_rows: Vec<Option<u64>>,
-        data_size: Vec<Option<u64>>,
-        data_compressed_size: Vec<Option<u64>>,
-        index_size: Vec<Option<u64>>,
+        data_sizes: Vec<Option<u64>>,
+        data_compressed_sizes: Vec<Option<u64>>,
+        index_sizes: Vec<Option<u64>>,
         number_of_segments: Vec<Option<u64>>,
         number_of_blocks: Vec<Option<u64>>,
-        owner: Vec<Option<String>>,
-        comment: Vec<String>,
+        owners: Vec<Option<String>>,
+        comments: Vec<String>,
         tables_type: Vec<String>,
+        is_externals: Vec<bool>,
+        options: Vec<String>,
+        storage_params: Vec<String>,
     ) -> Result<DataBlock> {
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
             StringType::from_data(databases),
             UInt64Type::from_data(databases_ids),
             StringType::from_data(names),
-            UInt64Type::from_data(table_id),
+            UInt64Type::from_data(tables_id),
             UInt64Type::from_data(total_columns),
             StringType::from_data(engines),
             StringType::from_data(engines_full),
             StringType::from_data(cluster_bys),
-            StringType::from_data(is_transient),
-            StringType::from_data(is_attach),
-            TimestampType::from_data(created_on),
-            TimestampType::from_opt_data(dropped_on),
-            TimestampType::from_data(updated_on),
+            StringType::from_data(is_transients),
+            StringType::from_data(is_attaches),
+            TimestampType::from_data(created_ons),
+            TimestampType::from_opt_data(dropped_ons),
+            TimestampType::from_data(updated_ons),
             UInt64Type::from_opt_data(num_rows),
-            UInt64Type::from_opt_data(data_size),
-            UInt64Type::from_opt_data(data_compressed_size),
-            UInt64Type::from_opt_data(index_size),
+            UInt64Type::from_opt_data(data_sizes),
+            UInt64Type::from_opt_data(data_compressed_sizes),
+            UInt64Type::from_opt_data(index_sizes),
             UInt64Type::from_opt_data(number_of_segments),
             UInt64Type::from_opt_data(number_of_blocks),
-            StringType::from_opt_data(owner),
-            StringType::from_data(comment),
+            StringType::from_opt_data(owners),
+            StringType::from_data(comments),
             StringType::from_data(tables_type),
+            BooleanType::from_data(is_externals),
+            StringType::from_data(options),
+            StringType::from_data(storage_params),
         ]))
     }
 
@@ -1103,6 +1145,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             vec![Some("".to_string()); rows],
             vec!["".to_string(); rows],
             vec!["BASE TABLE".to_string(); rows],
+            vec![false; rows],
+            vec!["".to_string(); rows],
+            vec!["".to_string(); rows],
         )
     }
 

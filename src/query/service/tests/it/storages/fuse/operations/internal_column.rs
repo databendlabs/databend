@@ -206,7 +206,7 @@ async fn test_internal_column() -> Result<()> {
 
     let mut dummy_pipeline = Pipeline::create();
     let parts = if let Some(mut prune_pipeline) =
-        table.build_prune_pipeline(ctx.clone(), &data_source_plan, &mut dummy_pipeline)?
+        table.build_prune_pipeline(ctx.clone(), &data_source_plan, &mut dummy_pipeline, 0)?
     {
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let rx = fuse_table.pruned_result_receiver.lock().clone().unwrap();
@@ -258,7 +258,7 @@ async fn test_internal_column() -> Result<()> {
 
     let mut dummy_pipeline = Pipeline::create();
     let parts = if let Some(mut prune_pipeline) =
-        table.build_prune_pipeline(ctx.clone(), &data_source_plan, &mut dummy_pipeline)?
+        table.build_prune_pipeline(ctx.clone(), &data_source_plan, &mut dummy_pipeline, 0)?
     {
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let rx = fuse_table.pruned_result_receiver.lock().clone().unwrap();

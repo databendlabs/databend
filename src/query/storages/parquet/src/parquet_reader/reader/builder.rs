@@ -241,7 +241,8 @@ impl<'a> ParquetReaderBuilder<'a> {
             .unwrap();
 
         let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
-        let transformer = (!matches!(source_type, ParquetSourceType::StageTable))
+        let transformer = source_type
+            .need_transformer()
             .then(|| RecordBatchTransformer::build(output_schema.clone()));
         Ok(ParquetWholeFileReader {
             op_registry: self.op_registry.clone(),
@@ -273,7 +274,8 @@ impl<'a> ParquetReaderBuilder<'a> {
         }
         self.build_output()?;
 
-        let transformer = (!matches!(source_type, ParquetSourceType::StageTable))
+        let transformer = source_type
+            .need_transformer()
             .then(|| {
                 self.built_output.as_ref().map(|(_, _, output_schema, _)| {
                     RecordBatchTransformer::build(output_schema.clone())
@@ -316,9 +318,12 @@ impl<'a> ParquetReaderBuilder<'a> {
             op_registry: self.op_registry.clone(),
             batch_size,
             schema_desc: self.schema_desc.clone(),
+            arrow_schema: self.arrow_schema.clone(),
             policy_builders,
             default_policy,
             transformer,
+            table_schema: self.table_schema.clone(),
+            partition_columns: self.partition_columns.clone(),
         })
     }
 

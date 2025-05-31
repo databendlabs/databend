@@ -229,6 +229,11 @@ impl OnDisk {
 
         drop_sled_db();
 
+        // Sleep a while to make sure the sled db is dropped and released in the underlying file system.
+        // There is an issue without sleep:
+        // Error: std::io::error::Error: std::io::error::Error: Device or resource busy (os error 16); when:(remove dir /var/lib/databend/raft/heap; when remove V003 raft-log store based on sled: '/var/lib/databend/raft')
+        tokio::time::sleep(std::time::Duration::from_millis(1_000)).await;
+
         //</_databend/meta_1/
         // ▸ df_meta/
         // ▸ heap/

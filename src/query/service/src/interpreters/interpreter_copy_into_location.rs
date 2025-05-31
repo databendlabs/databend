@@ -115,6 +115,7 @@ impl CopyIntoLocationInterpreter {
                 copy_into_table_options: Default::default(),
                 stage_root: "".to_string(),
                 copy_into_location_ordered: self.plan.is_ordered,
+                is_variant: false,
             },
         }));
 
