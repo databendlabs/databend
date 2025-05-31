@@ -55,6 +55,7 @@ pub use string::ALL_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     variant::register(registry);
+    databend_functions_scalar_decimal::register_decimal_minus(registry);
     arithmetic::register(registry);
     // register basic arithmetic operation (+ - * / %)
     databend_functions_scalar_decimal::register_decimal_arithmetic(registry);

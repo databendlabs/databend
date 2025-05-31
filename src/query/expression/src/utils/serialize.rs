@@ -47,7 +47,7 @@ pub fn read_decimal_with_size<T: Decimal>(
 
     let n = match scale_diff.cmp(&0) {
         Ordering::Less => {
-            let scale_diff = -scale_diff as u32;
+            let scale_diff = -scale_diff as u8;
             let mut round_val = None;
             if rounding_mode {
                 // Checking whether numbers need to be added or subtracted to calculate rounding
@@ -72,7 +72,7 @@ pub fn read_decimal_with_size<T: Decimal>(
             }
         }
         Ordering::Greater => n
-            .checked_mul(T::e(scale_diff as u32))
+            .checked_mul(T::e(scale_diff as _))
             .ok_or_else(decimal_overflow_error)?,
         Ordering::Equal => n,
     };
@@ -262,7 +262,7 @@ pub fn read_decimal<T: Decimal>(
                         n = n
                             .checked_add(T::from_i128((v - b'0') as u64))
                             .ok_or_else(decimal_overflow_error)?;
-                        digits += zeros + 1;
+                        digits += (zeros as u32) + 1;
                         zeros = 0;
                     }
                 }

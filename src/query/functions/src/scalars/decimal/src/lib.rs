@@ -32,7 +32,7 @@ mod hash;
 mod math;
 mod uuid;
 
-pub use arithmetic::register_decimal_arithmetic;
+pub use arithmetic::*;
 pub use cast::*;
 pub use comparison::register_decimal_compare;
 pub use hash::*;

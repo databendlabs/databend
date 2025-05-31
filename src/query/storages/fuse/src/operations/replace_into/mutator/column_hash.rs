@@ -72,6 +72,9 @@ pub fn row_hash_of_columns(
             ScalarRef::String(v) => sip.write(v.as_bytes()),
             ScalarRef::Bitmap(v) => sip.write(v),
             ScalarRef::Decimal(v) => match v {
+                DecimalScalar::Decimal64(_, _) => {
+                    unreachable!()
+                }
                 DecimalScalar::Decimal128(i, size) => {
                     sip.write_i128(i);
                     sip.write_u8(size.precision());

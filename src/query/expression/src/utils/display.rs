@@ -346,6 +346,15 @@ impl Display for NumberScalar {
 impl Debug for DecimalScalar {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            DecimalScalar::Decimal64(val, size) => {
+                write!(
+                    f,
+                    "{}_d64({},{})",
+                    display_decimal_128(*val as i128, size.scale()),
+                    size.precision(),
+                    size.scale()
+                )
+            }
             DecimalScalar::Decimal128(val, size) => {
                 write!(
                     f,
@@ -371,6 +380,9 @@ impl Debug for DecimalScalar {
 impl Display for DecimalScalar {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            DecimalScalar::Decimal64(val, size) => {
+                write!(f, "{}", display_decimal_128(*val as i128, size.scale()))
+            }
             DecimalScalar::Decimal128(val, size) => {
                 write!(f, "{}", display_decimal_128(*val, size.scale()))
             }
@@ -413,23 +425,32 @@ impl Debug for NumberColumn {
 impl Debug for DecimalColumn {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            DecimalColumn::Decimal64(val, size) => f
+                .debug_tuple("Decimal64")
+                .field_with(|f| {
+                    f.debug_list()
+                        .entries(
+                            val.iter()
+                                .map(|x| display_decimal_128(*x as i128, size.scale())),
+                        )
+                        .finish()
+                })
+                .finish(),
             DecimalColumn::Decimal128(val, size) => f
                 .debug_tuple("Decimal128")
-                .field(&format_args!(
-                    "[{}]",
-                    &val.iter()
-                        .map(|x| display_decimal_128(*x, size.scale()))
-                        .join(", ")
-                ))
+                .field_with(|f| {
+                    f.debug_list()
+                        .entries(val.iter().map(|x| display_decimal_128(*x, size.scale())))
+                        .finish()
+                })
                 .finish(),
             DecimalColumn::Decimal256(val, size) => f
                 .debug_tuple("Decimal256")
-                .field(&format_args!(
-                    "[{}]",
-                    &val.iter()
-                        .map(|x| display_decimal_256(x.0, size.scale()))
-                        .join(", ")
-                ))
+                .field_with(|f| {
+                    f.debug_list()
+                        .entries(val.iter().map(|x| display_decimal_256(x.0, size.scale())))
+                        .finish()
+                })
                 .finish(),
         }
     }
@@ -1110,6 +1131,12 @@ impl Display for NumberDomain {
 impl Display for DecimalDomain {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            DecimalDomain::Decimal64(SimpleDomain { min, max }, size) => {
+                write!(f, "{}", SimpleDomain {
+                    min: display_decimal_128(*min as i128, size.scale()),
+                    max: display_decimal_128(*max as i128, size.scale()),
+                })
+            }
             DecimalDomain::Decimal128(SimpleDomain { min, max }, size) => {
                 write!(f, "{}", SimpleDomain {
                     min: display_decimal_128(*min, size.scale()),

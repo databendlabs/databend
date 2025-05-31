@@ -21,6 +21,8 @@ use databend_common_column::buffer::Buffer;
 
 use super::AccessType;
 use super::DecimalSize;
+use super::GenericMap;
+use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
 use crate::arrow::buffer_into_mut;
@@ -105,18 +107,6 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
         T::downcast_domain(domain)
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        T::upcast_scalar(scalar)
-    }
-
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
-        T::upcast_column(col)
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        T::upcast_domain(domain)
-    }
-
     fn column_len(buffer: &Buffer<Self::Scalar>) -> usize {
         buffer.len()
     }
@@ -188,6 +178,18 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
 impl<T: SimpleType> ValueType for SimpleValueType<T> {
     type ColumnBuilder = Vec<Self::Scalar>;
 
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        T::upcast_scalar(scalar)
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        T::upcast_domain(domain)
+    }
+
+    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
+        T::upcast_column(col)
+    }
+
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {
         T::downcast_builder(builder)
     }
@@ -238,5 +240,11 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
     fn build_scalar(builder: Vec<Self::Scalar>) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
         builder[0]
+    }
+}
+
+impl<T: SimpleType> ReturnType for SimpleValueType<T> {
+    fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
+        Vec::with_capacity(capacity)
     }
 }

@@ -21,7 +21,6 @@ use databend_common_column::buffer::Buffer;
 
 use super::simple_type::SimpleType;
 use super::AccessType;
-use super::Scalar;
 use crate::Column;
 use crate::Domain;
 use crate::ScalarRef;
@@ -36,10 +35,22 @@ where
     fn compute_domain(domain: &F::Domain) -> T::Domain;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComputeView<F, T, C>(PhantomData<(F, T, C)>);
+impl<T> Compute<T, T> for T
+where T: SimpleType
+{
+    fn compute(value: &T::Scalar) -> T::Scalar {
+        *value
+    }
 
-impl<F, T, C> AccessType for ComputeView<F, T, C>
+    fn compute_domain(domain: &T::Domain) -> T::Domain {
+        *domain
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComputeView<C, F, T>(PhantomData<(C, F, T)>);
+
+impl<C, F, T> AccessType for ComputeView<C, F, T>
 where
     F: SimpleType,
     T: SimpleType,
@@ -64,25 +75,12 @@ where
         F::downcast_scalar(scalar).map(|v| C::compute(&v))
     }
 
-    fn upcast_scalar(_: Self::Scalar) -> Scalar {
-        // Consider moving this method to ValueType
-        unimplemented!()
-    }
-
     fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         F::downcast_column(col)
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
-        F::upcast_column(col)
-    }
-
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         F::downcast_domain(domain).map(|domain| C::compute_domain(&domain))
-    }
-
-    fn upcast_domain(_: Self::Domain) -> Domain {
-        unimplemented!()
     }
 
     fn column_len(col: &Self::Column) -> usize {

@@ -35,7 +35,7 @@ use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::i256;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::types::DecimalDataType;
+use crate::types::DecimalDataKind;
 use crate::types::DecimalSize;
 use crate::types::NumberScalar;
 use crate::BlockEntry;
@@ -190,15 +190,11 @@ fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
     }
     precision = precision.clamp(1, MAX_DECIMAL256_PRECISION);
 
-    let size = DecimalSize::new_unchecked(precision, size.scale());
-    let decimal_ty = DecimalDataType::from_size(size).unwrap();
-
-    match decimal_ty {
-        DecimalDataType::Decimal128(size) => {
+    let size = DecimalSize::new(precision, size.scale()).unwrap();
+    match size.data_kind() {
+        DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
             Scalar::Decimal(DecimalScalar::Decimal128(decimal.as_i128(), size))
         }
-        DecimalDataType::Decimal256(size) => {
-            Scalar::Decimal(DecimalScalar::Decimal256(decimal, size))
-        }
+        DecimalDataKind::Decimal256 => Scalar::Decimal(DecimalScalar::Decimal256(decimal, size)),
     }
 }

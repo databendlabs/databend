@@ -14,7 +14,6 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::fmt::Write as _;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
@@ -291,32 +290,39 @@ pub(crate) fn write_space_separated_string_map(
     Ok(())
 }
 
-pub fn display_decimal_256(num: i256, scale: u8) -> String {
-    let mut buf = String::new();
-    if scale == 0 {
-        write!(buf, "{}", num).unwrap();
-    } else {
-        let pow_scale = i256::from(10).pow(scale as u32);
-        // -1/10 = 0
-        if num >= 0 {
-            write!(
-                buf,
-                "{}.{:0>width$}",
-                num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        } else {
-            write!(
-                buf,
-                "-{}.{:0>width$}",
-                -num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
+pub(crate) fn display_decimal_256(num: i256, scale: u8) -> impl Display {
+    struct Decimal256 {
+        num: i256,
+        scale: u8,
+    }
+
+    impl Display for Decimal256 {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            if self.scale == 0 {
+                write!(f, "{}", self.num)
+            } else {
+                let pow_scale = i256::from(10).pow(self.scale as u32);
+                // -1/10 = 0
+                if self.num >= 0 {
+                    write!(
+                        f,
+                        "{}.{:0>width$}",
+                        self.num / pow_scale,
+                        (self.num % pow_scale).abs(),
+                        width = self.scale as usize
+                    )
+                } else {
+                    write!(
+                        f,
+                        "-{}.{:0>width$}",
+                        -self.num / pow_scale,
+                        (self.num % pow_scale).abs(),
+                        width = self.scale as usize
+                    )
+                }
+            }
         }
     }
-    buf
+
+    Decimal256 { num, scale }
 }

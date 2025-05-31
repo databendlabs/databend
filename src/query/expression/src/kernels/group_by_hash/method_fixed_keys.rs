@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_hashtable::FastHash;
 use ethnum::u256;
-use ethnum::U256;
 use micromarshal::Marshal;
 
 use crate::types::boolean::BooleanType;
@@ -40,6 +39,7 @@ use crate::types::Decimal256As128Type;
 use crate::types::Decimal256Type;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
+use crate::types::ValueType;
 use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
@@ -363,7 +363,7 @@ macro_rules! impl_hash_method_fixed_large_keys {
 }
 
 impl_hash_method_fixed_large_keys! {u128, U128}
-impl_hash_method_fixed_large_keys! {U256, U256}
+impl_hash_method_fixed_large_keys! {u256, U256}
 
 // Group by (nullable(u16), nullable(u8)) needs 2 + 1 + 1 + 1 = 5 bytes, then we pad the bytes up to u64 to store the hash value.
 // If the value is null, we write 1 to the null_offset, otherwise we write 0.

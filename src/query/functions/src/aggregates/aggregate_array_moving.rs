@@ -33,6 +33,7 @@ use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int8Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_number_mapped_type;
@@ -211,12 +212,12 @@ where T: Decimal
 {
     #[inline]
     pub fn check_over_flow(&self, value: T) -> Result<()> {
-        if value > T::MAX || value < T::MIN {
+        if value > T::DECIMAL_MAX || value < T::DECIMAL_MIN {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {} not in [{}, {}]",
                 value,
-                T::MIN,
-                T::MAX,
+                T::DECIMAL_MIN,
+                T::DECIMAL_MAX,
             )));
         }
         Ok(())
@@ -355,7 +356,7 @@ where T: Decimal
                 sum -= self.values[i - window_size];
             }
             let avg_val = match sum
-                .checked_mul(T::e(scale_add as u32))
+                .checked_mul(T::e(scale_add))
                 .and_then(|v| v.checked_div(T::from_i128(window_size as u64)))
             {
                 Some(value) => value,
@@ -363,7 +364,7 @@ where T: Decimal
                     return Err(ErrorCode::Overflow(format!(
                         "Decimal overflow: {} mul {}",
                         sum,
-                        T::e(scale_add as u32)
+                        T::e(scale_add)
                     )));
                 }
             };

@@ -90,6 +90,7 @@ pub unsafe fn serialize_column_to_rowformat(
             }
         }),
         Column::Decimal(v) => match v {
+            DecimalColumn::Decimal64(_, _) => unimplemented!(),
             DecimalColumn::Decimal128(buffer, size) => {
                 if size.can_carried_by_128() {
                     for index in select_vector.iter().take(rows).copied() {
@@ -264,6 +265,7 @@ pub unsafe fn row_match_column(
             }
         }),
         Column::Decimal(v) => match v {
+            DecimalColumn::Decimal64(_, _) => unreachable!(),
             DecimalColumn::Decimal128(_, _) => row_match_column_type::<DecimalType<i128>>(
                 col,
                 validity,

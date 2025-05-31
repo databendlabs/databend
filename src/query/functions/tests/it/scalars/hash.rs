@@ -100,17 +100,17 @@ fn test_city64withseed(file: &mut impl Write) {
     let size = DecimalSize::new(10, 0).unwrap();
     run_ast(file, "city64withseed(a,5)", &[(
         "a",
-        Decimal128Type::from_data_with_size([0, 1, 2], size),
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
     )]);
     run_ast(file, "city64withseed(a,5)", &[(
         "a",
-        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], size),
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], Some(size)),
     )]);
     run_ast(file, "city64withseed(a,5)", &[(
         "a",
         Decimal256Type::from_data_with_size(
             [i256::from(0), i256::from(20)],
-            DecimalSize::new(40, 0).unwrap(),
+            Some(DecimalSize::new(40, 0).unwrap()),
         ),
     )]);
 }
@@ -152,17 +152,17 @@ fn test_xxhash64(file: &mut impl Write) {
     let size = DecimalSize::new(10, 0).unwrap();
     run_ast(file, "xxhash64(a)", &[(
         "a",
-        Decimal128Type::from_data_with_size([0, 1, 2], size),
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
     )]);
     run_ast(file, "xxhash64(a)", &[(
         "a",
-        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], size),
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], Some(size)),
     )]);
     run_ast(file, "xxhash64(a)", &[(
         "a",
         Decimal256Type::from_data_with_size(
             [i256::from(0), i256::from(20)],
-            DecimalSize::new(40, 0).unwrap(),
+            Some(DecimalSize::new(40, 0).unwrap()),
         ),
     )]);
 }
@@ -187,17 +187,17 @@ fn test_xxhash32(file: &mut impl Write) {
     let size = DecimalSize::new(10, 0).unwrap();
     run_ast(file, "xxhash32(a)", &[(
         "a",
-        Decimal128Type::from_data_with_size([0, 1, 2], size),
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
     )]);
     run_ast(file, "xxhash32(a)", &[(
         "a",
-        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], size),
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], Some(size)),
     )]);
     run_ast(file, "xxhash32(a)", &[(
         "a",
         Decimal256Type::from_data_with_size(
             [i256::from(0), i256::from(20)],
-            DecimalSize::new(40, 0).unwrap(),
+            Some(DecimalSize::new(40, 0).unwrap()),
         ),
     )]);
 }

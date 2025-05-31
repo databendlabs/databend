@@ -154,7 +154,7 @@ pub enum FunctionEval {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FunctionContext {
     pub tz: TimeZone,
     pub now: Zoned,
@@ -200,7 +200,7 @@ impl Default for FunctionContext {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EvalContext<'a> {
     pub generics: &'a GenericMap,
     pub num_rows: usize,

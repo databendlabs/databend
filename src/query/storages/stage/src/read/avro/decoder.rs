@@ -231,7 +231,7 @@ impl AvroDecoder {
 
     fn read_field(
         &self,
-        column: &mut ColumnBuilder,
+        builder: &mut ColumnBuilder,
         value: Value,
         matched_schema: &MatchedSchema,
     ) -> ReadFieldResult {
@@ -249,7 +249,7 @@ impl AvroDecoder {
             (matched_schema, value)
         };
 
-        match column {
+        match builder {
             ColumnBuilder::Nullable(c) => self.read_nullable(c, value, matched_schema),
             ColumnBuilder::Null { len } => self.read_null(len, value),
             ColumnBuilder::Boolean(c) => self.read_bool(c, value),
@@ -291,7 +291,7 @@ impl AvroDecoder {
             // todo: Bitmap, Geometry, Geography
             _ => Err(Error::new_reason(format!(
                 "loading avro to table with column of type {} not supported yet",
-                column.data_type()
+                builder.data_type()
             ))),
         }
     }
@@ -411,7 +411,7 @@ impl AvroDecoder {
                     let scale_diff = (size.scale() as i64) - v_scale;
                     if scale_diff > 0 {
                         d1 = d1
-                            .checked_mul(D::e(scale_diff as u32))
+                            .checked_mul(D::e(scale_diff as u8))
                             .expect("rescale should not overflow");
                     }
                     column.push(d1);

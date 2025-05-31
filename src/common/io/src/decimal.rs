@@ -12,65 +12,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Write;
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
 
 use ethnum::i256;
 
-pub fn display_decimal_128(num: i128, scale: u8) -> String {
-    let mut buf = String::new();
-    if scale == 0 {
-        write!(buf, "{}", num).unwrap();
-    } else {
-        let pow_scale = 10_i128.pow(scale as u32);
-        if num >= 0 {
-            write!(
-                buf,
-                "{}.{:0>width$}",
-                num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        } else {
-            write!(
-                buf,
-                "-{}.{:0>width$}",
-                -num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
+pub fn display_decimal_128(num: i128, scale: u8) -> impl Display + Debug {
+    struct Decimal {
+        num: i128,
+        scale: u8,
+    }
+
+    impl Display for Decimal {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            if self.scale == 0 {
+                write!(f, "{}", self.num)
+            } else {
+                let pow_scale = 10_i128.pow(self.scale as u32);
+                let sign = if self.num.is_negative() { "-" } else { "" };
+                let num = self.num.abs();
+                write!(
+                    f,
+                    "{sign}{}.{:0>width$}",
+                    num / pow_scale,
+                    num % pow_scale,
+                    width = self.scale as usize
+                )
+            }
         }
     }
-    buf
+
+    impl Debug for Decimal {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            f.write_str(&self.to_string())
+        }
+    }
+
+    Decimal { num, scale }
 }
 
-pub fn display_decimal_256(num: i256, scale: u8) -> String {
-    let mut buf = String::new();
-    if scale == 0 {
-        write!(buf, "{}", num).unwrap();
-    } else {
-        let pow_scale = i256::from(10).pow(scale as u32);
-        // -1/10 = 0
-        if num >= 0 {
-            write!(
-                buf,
-                "{}.{:0>width$}",
-                num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        } else {
-            write!(
-                buf,
-                "-{}.{:0>width$}",
-                -num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
+pub fn display_decimal_256(num: i256, scale: u8) -> impl Display + Debug {
+    struct Decimal256 {
+        num: i256,
+        scale: u8,
+    }
+
+    impl Display for Decimal256 {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            if self.scale == 0 {
+                write!(f, "{}", self.num)
+            } else {
+                let pow_scale = i256::from(10).pow(self.scale as u32);
+                // -1/10 = 0
+                if self.num >= 0 {
+                    write!(
+                        f,
+                        "{}.{:0>width$}",
+                        self.num / pow_scale,
+                        (self.num % pow_scale).abs(),
+                        width = self.scale as usize
+                    )
+                } else {
+                    write!(
+                        f,
+                        "-{}.{:0>width$}",
+                        -self.num / pow_scale,
+                        (self.num % pow_scale).abs(),
+                        width = self.scale as usize
+                    )
+                }
+            }
         }
     }
-    buf
+
+    impl Debug for Decimal256 {
+        fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+            f.write_str(&self.to_string())
+        }
+    }
+
+    Decimal256 { num, scale }
 }

@@ -161,7 +161,7 @@ impl Selector<'_> {
         }
     }
 
-    pub(super) fn select_like_adapt(
+    pub(super) fn select_like(
         &self,
         column: StringColumn,
         like_pattern: &LikePattern,

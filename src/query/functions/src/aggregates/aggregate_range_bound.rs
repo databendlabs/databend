@@ -79,7 +79,7 @@ where
 
 impl<T> UnaryState<T, ArrayType<T>> for RangeBoundState<T>
 where
-    T: ArgType + Sync + Send,
+    T: ReturnType + Sync + Send,
     T::Scalar: Ord + Sync + Send + BorshSerialize + BorshDeserialize,
 {
     fn add(

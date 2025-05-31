@@ -188,8 +188,8 @@ fn test_from_bigint() {
             "1".repeat(26),
             i256::from_str_radix(&"1".repeat(26), 10).unwrap(),
         ),
-        (i256::MIN.to_string(), i256::MIN),
-        (i256::MAX.to_string(), i256::MAX),
+        (i256::DECIMAL_MIN.to_string(), i256::DECIMAL_MIN),
+        (i256::DECIMAL_MAX.to_string(), i256::DECIMAL_MAX),
     ];
 
     for (a, b) in cases {

@@ -85,24 +85,6 @@ impl<T: AccessType> AccessType for NullableType<T> {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        match scalar {
-            Some(scalar) => T::upcast_scalar(scalar),
-            None => Scalar::Null,
-        }
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Nullable(Box::new(col.upcast()))
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Nullable(NullableDomain {
-            has_null: domain.has_null,
-            value: domain.value.map(|value| Box::new(T::upcast_domain(*value))),
-        })
-    }
-
     fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
@@ -177,6 +159,27 @@ impl<T: AccessType> AccessType for NullableType<T> {
 
 impl<T: ValueType> ValueType for NullableType<T> {
     type ColumnBuilder = NullableColumnBuilder<T>;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        match scalar {
+            Some(scalar) => T::upcast_scalar(scalar),
+            None => Scalar::Null,
+        }
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Nullable(NullableDomain {
+            has_null: domain.has_null,
+            value: domain.value.map(|value| Box::new(T::upcast_domain(*value))),
+        })
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Nullable(Box::new(NullableColumn::new(
+            T::upcast_column(col.column),
+            col.validity,
+        )))
+    }
 
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         None
@@ -275,7 +278,7 @@ impl<T: ArgType> ArgType for NullableType<T> {
     }
 }
 
-impl<T: ArgType> ReturnType for NullableType<T> {
+impl<T: ReturnType> ReturnType for NullableType<T> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         NullableColumnBuilder::with_capacity(capacity, generics)
     }
@@ -294,15 +297,8 @@ pub struct NullableColumnVec {
 }
 
 impl<T: AccessType> NullableColumn<T> {
-    // though column and validity are public
-    // we should better use new to create a new instance to ensure the validity and column are consistent
-    // todo: make column and validity private
-    pub fn new(column: T::Column, validity: Bitmap) -> Self {
+    pub fn new_access_type(column: T::Column, validity: Bitmap) -> Self {
         debug_assert_eq!(T::column_len(&column), validity.len());
-        debug_assert!(!matches!(
-            T::upcast_column(column.clone()),
-            Column::Nullable(_)
-        ));
         NullableColumn { column, validity }
     }
 
@@ -359,21 +355,37 @@ impl<T: AccessType> NullableColumn<T> {
         }
     }
 
-    pub fn upcast(self) -> NullableColumn<AnyType> {
-        NullableColumn::new(T::upcast_column(self.column), self.validity)
-    }
-
     pub fn memory_size(&self) -> usize {
         T::column_memory_size(&self.column) + self.validity.as_slice().0.len()
     }
 }
 
+impl<T: ValueType> NullableColumn<T> {
+    // though column and validity are public
+    // we should better use new to create a new instance to ensure the validity and column are consistent
+    // todo: make column and validity private
+    pub fn new(column: T::Column, validity: Bitmap) -> Self {
+        debug_assert_eq!(T::column_len(&column), validity.len());
+        debug_assert!(!matches!(
+            T::upcast_column(column.clone()),
+            Column::Nullable(_)
+        ));
+        NullableColumn { column, validity }
+    }
+
+    pub fn upcast(self) -> NullableColumn<AnyType> {
+        NullableColumn::new(T::upcast_column(self.column), self.validity)
+    }
+}
+
 impl NullableColumn<AnyType> {
     pub fn try_downcast<T: AccessType>(&self) -> Option<NullableColumn<T>> {
-        Some(NullableColumn::new(
-            T::try_downcast_column(&self.column)?,
-            self.validity.clone(),
-        ))
+        let inner = T::try_downcast_column(&self.column)?;
+        debug_assert_eq!(T::column_len(&inner), self.validity.len());
+        Some(NullableColumn {
+            column: inner,
+            validity: self.validity.clone(),
+        })
     }
 
     pub fn new_column(column: Column, validity: Bitmap) -> Column {
@@ -482,7 +494,7 @@ impl<T: ValueType> NullableColumnBuilder<T> {
     }
 }
 
-impl<T: ArgType> NullableColumnBuilder<T> {
+impl<T: ReturnType> NullableColumnBuilder<T> {
     pub fn with_capacity(capacity: usize, generics: &GenericMap) -> Self {
         NullableColumnBuilder {
             builder: T::create_builder(capacity, generics),

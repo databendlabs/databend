@@ -110,7 +110,7 @@ fn test_block_sort() -> Result<()> {
     }
 
     let decimal_block = new_block(&[
-        Decimal128Type::from_data(vec![6i128, 4, 3, 2, 1, 1, 7]),
+        Decimal128Type::from_data_with_size(vec![6i128, 4, 3, 2, 1, 1, 7], None),
         StringType::from_data(vec!["b1", "b2", "b3", "b4", "b5", "b6", "b7"]),
     ]);
 
@@ -127,7 +127,7 @@ fn test_block_sort() -> Result<()> {
             }],
             None,
             vec![
-                Decimal128Type::from_data(vec![1_i128, 1, 2, 3, 4, 6, 7]),
+                Decimal128Type::from_data_with_size(vec![1_i128, 1, 2, 3, 4, 6, 7], None),
                 StringType::from_data(vec!["b5", "b6", "b4", "b3", "b2", "b1", "b7"]),
             ],
         ),
@@ -139,7 +139,7 @@ fn test_block_sort() -> Result<()> {
             }],
             Some(4),
             vec![
-                Decimal128Type::from_data(vec![1_i128, 1, 2, 3]),
+                Decimal128Type::from_data_with_size(vec![1_i128, 1, 2, 3], None),
                 StringType::from_data(vec!["b5", "b6", "b4", "b3"]),
             ],
         ),
@@ -151,7 +151,7 @@ fn test_block_sort() -> Result<()> {
             }],
             None,
             vec![
-                Decimal128Type::from_data(vec![7_i128, 1, 1, 2, 3, 4, 6]),
+                Decimal128Type::from_data_with_size(vec![7_i128, 1, 1, 2, 3, 4, 6], None),
                 StringType::from_data(vec!["b7", "b6", "b5", "b4", "b3", "b2", "b1"]),
             ],
         ),
@@ -170,7 +170,7 @@ fn test_block_sort() -> Result<()> {
             ],
             None,
             vec![
-                Decimal128Type::from_data(vec![1_i128, 1, 2, 3, 4, 6, 7]),
+                Decimal128Type::from_data_with_size(vec![1_i128, 1, 2, 3, 4, 6, 7], None),
                 StringType::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1", "b7"]),
             ],
         ),

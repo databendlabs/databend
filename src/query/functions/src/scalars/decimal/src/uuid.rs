@@ -17,6 +17,7 @@ use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal128Type;
 use databend_common_expression::types::Decimal256As128Type;
+use databend_common_expression::types::Decimal64As128Type;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -55,21 +56,23 @@ pub fn register_decimal_to_uuid(registry: &mut FunctionRegistry) {
                     let arg = args[0].clone();
                     let (decimal_type, _) = DecimalDataType::from_value(&arg).unwrap();
                     match decimal_type {
+                        DecimalDataType::Decimal64(_) => {
+                            type T = Decimal64As128Type;
+                            let arg = arg.try_downcast::<T>().unwrap();
+                            vectorize_with_builder_1_arg::<T, StringType>(to_uuid)(arg, ctx)
+                        }
                         DecimalDataType::Decimal128(_) => {
-                            let arg = arg.try_downcast::<Decimal128Type>().unwrap();
-                            vectorize_with_builder_1_arg::<Decimal128Type, StringType>(to_uuid)(
-                                arg, ctx,
-                            )
-                            .upcast()
+                            type T = Decimal128Type;
+                            let arg = arg.try_downcast::<T>().unwrap();
+                            vectorize_with_builder_1_arg::<T, StringType>(to_uuid)(arg, ctx)
                         }
                         DecimalDataType::Decimal256(_) => {
-                            let arg = arg.try_downcast::<Decimal256As128Type>().unwrap();
-                            vectorize_with_builder_1_arg::<Decimal256As128Type, StringType>(
-                                to_uuid,
-                            )(arg, ctx)
-                            .upcast()
+                            type T = Decimal256As128Type;
+                            let arg = arg.try_downcast::<T>().unwrap();
+                            vectorize_with_builder_1_arg::<T, StringType>(to_uuid)(arg, ctx)
                         }
                     }
+                    .upcast()
                 }),
             },
         })
