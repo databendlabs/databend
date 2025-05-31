@@ -105,6 +105,7 @@ impl Interpreter for CreateTableIndexInterpreter {
                     .do_create_table_index(catalog, create_index_req)
                     .await?;
             }
+            TableIndexType::Vector => todo!(),
         }
 
         Ok(PipelineBuildResult::create())

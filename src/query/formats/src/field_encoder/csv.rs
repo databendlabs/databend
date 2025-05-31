@@ -159,7 +159,7 @@ impl FieldEncoderCSV {
                 self.string_formatter.write_string(wkt.as_bytes(), out_buf);
             }
 
-            Column::Array(..) | Column::Map(..) | Column::Tuple(..) => {
+            Column::Array(..) | Column::Map(..) | Column::Tuple(..) | Column::Vector(..) => {
                 let mut buf = Vec::new();
                 self.nested.write_field(column, row_index, &mut buf, false);
                 self.string_formatter.write_string(&buf, out_buf);

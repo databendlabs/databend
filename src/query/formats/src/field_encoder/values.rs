@@ -28,6 +28,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::types::VectorColumn;
+use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_NUM;
 use databend_common_io::constants::INF_BYTES_LONG;
@@ -165,6 +167,7 @@ impl FieldEncoderValues {
             Column::Array(box c) => self.write_array(c, row_index, out_buf),
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf),
+            Column::Vector(c) => self.write_vector(c, row_index, out_buf),
         }
     }
     fn common_settings(&self) -> &OutputCommonSettings {
@@ -427,5 +430,29 @@ impl FieldEncoderValues {
             self.write_field(inner, row_index, out_buf, true);
         }
         out_buf.push(b')');
+    }
+
+    pub fn write_vector(&self, column: &VectorColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+        let scalar_val = unsafe { column.index_unchecked(row_index) };
+        out_buf.push(b'[');
+        match scalar_val {
+            VectorScalarRef::Int8(values) => {
+                for (i, v) in values.iter().enumerate() {
+                    if i > 0 {
+                        out_buf.push(b',');
+                    }
+                    v.write_field(out_buf, self.common_settings());
+                }
+            }
+            VectorScalarRef::Float32(values) => {
+                for (i, v) in values.iter().enumerate() {
+                    if i > 0 {
+                        out_buf.push(b',');
+                    }
+                    v.0.write_field(out_buf, self.common_settings());
+                }
+            }
+        }
+        out_buf.push(b']');
     }
 }

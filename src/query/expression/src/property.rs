@@ -230,7 +230,8 @@ impl Domain {
             | DataType::Bitmap
             | DataType::Variant
             | DataType::Geometry
-            | DataType::Geography => Domain::Undefined,
+            | DataType::Geography
+            | DataType::Vector(_) => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }

@@ -179,7 +179,9 @@ impl From<Scalar> for LegacyScalar {
             Scalar::Date(date) => LegacyScalar::Date(date),
             Scalar::Interval(interval) => LegacyScalar::Interval(interval),
             Scalar::Boolean(b) => LegacyScalar::Boolean(b),
-            Scalar::Binary(_) | Scalar::Geometry(_) | Scalar::Geography(_) => unreachable!(),
+            Scalar::Binary(_) | Scalar::Geometry(_) | Scalar::Geography(_) | Scalar::Vector(_) => {
+                unreachable!()
+            }
             Scalar::String(string) => LegacyScalar::String(string.as_bytes().to_vec()),
             Scalar::Array(column) => LegacyScalar::Array(column.into()),
             Scalar::Map(column) => LegacyScalar::Map(column.into()),
@@ -199,7 +201,9 @@ impl From<Column> for LegacyColumn {
             Column::Number(num_col) => LegacyColumn::Number(num_col),
             Column::Decimal(dec_col) => LegacyColumn::Decimal(dec_col),
             Column::Boolean(bmp) => LegacyColumn::Boolean(bmp),
-            Column::Binary(_) | Column::Geometry(_) | Column::Geography(_) => unreachable!(),
+            Column::Binary(_) | Column::Geometry(_) | Column::Geography(_) | Column::Vector(_) => {
+                unreachable!()
+            }
             Column::String(str_col) => {
                 LegacyColumn::String(LegacyBinaryColumn::from(BinaryColumn::from(str_col)))
             }

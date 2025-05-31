@@ -17,10 +17,12 @@ use databend_common_base::vec_ext::VecU8Ext;
 
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
+use crate::types::vector::VectorScalarRef;
 use crate::types::BinaryColumn;
 use crate::types::NumberColumn;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
+use crate::with_vector_number_type;
 use crate::Column;
 use crate::InputColumns;
 
@@ -111,6 +113,16 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
             for inner_col in fields.iter() {
                 serialize_column_binary(inner_col, row, row_space);
             }
+        }
+        Column::Vector(col) => {
+            let scalar = col.index_unchecked(row);
+            with_vector_number_type!(|NUM_TYPE| match scalar {
+                VectorScalarRef::NUM_TYPE(vals) => {
+                    for val in vals {
+                        row_space.store_value_uncheckd(val);
+                    }
+                }
+            })
         }
     }
 }

@@ -29,6 +29,7 @@ use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::vector::VectorColumnBuilder;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::Number;
@@ -154,6 +155,7 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, data),
             ColumnBuilder::Geography(c) => self.read_geography(c, data),
+            ColumnBuilder::Vector(c) => self.read_vector(c, data),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
             }
@@ -328,5 +330,10 @@ impl SeparatedTextDecoder {
     fn read_tuple(&self, column: &mut [ColumnBuilder], data: &[u8]) -> Result<()> {
         let mut cursor = Cursor::new(data);
         self.nested_decoder.read_tuple(column, &mut cursor)
+    }
+
+    fn read_vector(&self, column: &mut VectorColumnBuilder, data: &[u8]) -> Result<()> {
+        let mut cursor = Cursor::new(data);
+        self.nested_decoder.read_vector(column, &mut cursor)
     }
 }

@@ -18,6 +18,8 @@ use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayColumn;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::VectorColumn;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
@@ -30,6 +32,8 @@ pub enum Nested {
     Primitive(usize, bool, Option<Bitmap>),
     /// a list
     LargeList(ListNested),
+    /// a fixed list
+    FixedList(FixedListNested),
     /// A struct column
     Struct(usize, bool, Option<Bitmap>),
 }
@@ -51,6 +55,30 @@ impl ListNested {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct FixedListNested {
+    pub is_nullable: bool,
+    pub dimension: usize,
+    pub length: usize,
+    pub validity: Option<Bitmap>,
+}
+
+impl FixedListNested {
+    pub fn new(
+        dimension: usize,
+        length: usize,
+        validity: Option<Bitmap>,
+        is_nullable: bool,
+    ) -> Self {
+        Self {
+            is_nullable,
+            dimension,
+            length,
+            validity,
+        }
+    }
+}
+
 pub type NestedState = Vec<Nested>;
 
 impl Nested {
@@ -58,6 +86,7 @@ impl Nested {
         match self {
             Nested::Primitive(len, _, _) => *len,
             Nested::LargeList(l) => l.offsets.len(),
+            Nested::FixedList(l) => l.length,
             Nested::Struct(len, _, _) => *len,
         }
     }
@@ -66,13 +95,13 @@ impl Nested {
         match self {
             Nested::Primitive(_, b, _) => *b,
             Nested::LargeList(l) => l.is_nullable,
+            Nested::FixedList(l) => l.is_nullable,
             Nested::Struct(_, b, _) => *b,
         }
     }
 
-    pub fn inner(&self) -> (Buffer<u64>, &Option<Bitmap>) {
+    pub fn offsets(&self) -> Option<Buffer<u64>> {
         match self {
-            Nested::Primitive(_, _, v) => (Buffer::new(), v),
             Nested::LargeList(l) => {
                 let start = *l.offsets.first().unwrap();
                 let buffer = if start == 0 {
@@ -80,9 +109,9 @@ impl Nested {
                 } else {
                     l.offsets.iter().map(|x| *x - start).collect()
                 };
-                (buffer, &l.validity)
+                Some(buffer)
             }
-            Nested::Struct(_, _, v) => (Buffer::new(), v),
+            _ => None,
         }
     }
 
@@ -90,12 +119,9 @@ impl Nested {
         match self {
             Nested::Primitive(_, _, v) => v,
             Nested::LargeList(l) => &l.validity,
+            Nested::FixedList(l) => &l.validity,
             Nested::Struct(_, _, v) => v,
         }
-    }
-
-    pub fn is_list(&self) -> bool {
-        matches!(self, Nested::LargeList(_))
     }
 }
 
@@ -110,7 +136,10 @@ pub fn to_nested(column: &Column) -> Result<Vec<Vec<Nested>>> {
 pub fn is_nested_type(t: &TableDataType) -> bool {
     matches!(
         t,
-        TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_)
+        TableDataType::Tuple { .. }
+            | TableDataType::Array(_)
+            | TableDataType::Map(_)
+            | TableDataType::Vector(_)
     )
 }
 
@@ -132,6 +161,13 @@ pub fn slice_nest_column(
                 let r = *l_nested.offsets.last().unwrap() - *l_nested.offsets.first().unwrap();
                 current_length = r as usize;
                 current_offset = *l_nested.offsets.first().unwrap() as usize;
+            }
+            Nested::FixedList(l_nested) => {
+                if let Some(validity) = l_nested.validity.as_mut() {
+                    validity.slice(current_offset, current_length)
+                };
+                current_offset *= l_nested.dimension;
+                current_length *= l_nested.dimension;
             }
             Nested::Struct(length, _, validity) => {
                 *length = current_length;
@@ -176,6 +212,15 @@ fn to_nested_recursive(
             }));
             to_nested_recursive(&inner.underlying_column(), nested, parents)?;
         }
+        Column::Vector(inner) => {
+            parents.push(Nested::FixedList(FixedListNested {
+                is_nullable: nullable,
+                dimension: inner.dimension(),
+                length: inner.len(),
+                validity,
+            }));
+            to_nested_recursive(&inner.underlying_column(), nested, parents)?;
+        }
         Column::Map(inner) => {
             parents.push(Nested::LargeList(ListNested {
                 is_nullable: nullable,
@@ -208,6 +253,9 @@ fn to_leaves_recursive(column: &Column, leaves: &mut Vec<Column>) {
         Column::Array(col) => {
             to_leaves_recursive(&col.underlying_column(), leaves);
         }
+        Column::Vector(col) => {
+            to_leaves_recursive(&col.underlying_column(), leaves);
+        }
         Column::Map(col) => {
             to_leaves_recursive(&col.underlying_column(), leaves);
         }
@@ -219,13 +267,14 @@ fn to_leaves_recursive(column: &Column, leaves: &mut Vec<Column>) {
 }
 
 /// The initial info of nested data types.
-/// The initial info of nested data types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InitNested {
     /// Primitive data types
     Primitive(bool),
     /// List data types
     List(bool),
+    /// Fixed List data types
+    FixedList(bool),
     /// Struct data types
     Struct(bool),
 }
@@ -235,6 +284,7 @@ impl InitNested {
         match self {
             InitNested::Primitive(b) => *b,
             InitNested::List(b) => *b,
+            InitNested::FixedList(b) => *b,
             InitNested::Struct(b) => *b,
         }
     }
@@ -242,8 +292,34 @@ impl InitNested {
 
 pub fn create_list(data_type: TableDataType, nested: &mut NestedState, values: Column) -> Column {
     let n = nested.pop().unwrap();
-    let (offsets, validity) = n.inner();
+    let offsets = n.offsets().unwrap();
+    let validity = n.validity();
     let col = Column::Array(Box::new(ArrayColumn::<AnyType>::new(values, offsets)));
+
+    if data_type.is_nullable() {
+        col.wrap_nullable(validity.clone())
+    } else {
+        col
+    }
+}
+
+pub fn create_fixed_list(
+    data_type: TableDataType,
+    dimension: usize,
+    nested: &mut NestedState,
+    values: Column,
+) -> Column {
+    let n = nested.pop().unwrap();
+    let validity = n.validity();
+    let col = match values {
+        Column::Number(NumberColumn::Int8(vals)) => {
+            Column::Vector(VectorColumn::Int8((vals.clone(), dimension)))
+        }
+        Column::Number(NumberColumn::Float32(vals)) => {
+            Column::Vector(VectorColumn::Float32((vals.clone(), dimension)))
+        }
+        _ => unreachable!(),
+    };
 
     if data_type.is_nullable() {
         col.wrap_nullable(validity.clone())
@@ -255,7 +331,8 @@ pub fn create_list(data_type: TableDataType, nested: &mut NestedState, values: C
 /// Creates a new [`Mapcolumn`].
 pub fn create_map(data_type: TableDataType, nested: &mut NestedState, values: Column) -> Column {
     let n = nested.pop().unwrap();
-    let (offsets, validity) = n.inner();
+    let offsets = n.offsets().unwrap();
+    let validity = n.validity();
     let col = Column::Map(Box::new(ArrayColumn::<AnyType>::new(values, offsets)));
     if data_type.is_nullable() {
         col.wrap_nullable(validity.clone())
@@ -271,7 +348,7 @@ pub fn create_struct(
 ) -> (NestedState, Column) {
     let mut nest = nested.pop().unwrap();
     let n = nest.pop().unwrap();
-    let (_, validity) = n.inner();
+    let validity = n.validity();
 
     let col = Column::Tuple(values);
     if is_nullable {

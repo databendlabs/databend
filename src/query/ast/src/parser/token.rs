@@ -1264,6 +1264,8 @@ pub enum TokenKind {
     VARIANT,
     #[token("VARIABLE", ignore(ascii_case))]
     VARIABLE,
+    #[token("VECTOR", ignore(ascii_case))]
+    VECTOR,
     #[token("VERBOSE", ignore(ascii_case))]
     VERBOSE,
     #[token("GRAPHICAL", ignore(ascii_case))]

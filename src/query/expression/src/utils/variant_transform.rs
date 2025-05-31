@@ -42,6 +42,7 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         | DataType::Bitmap
         | DataType::Geometry
         | DataType::Geography
+        | DataType::Vector(_)
         | DataType::Generic(_) => false,
         DataType::Nullable(ty) => contains_variant(ty.as_ref()),
         DataType::Array(ty) => contains_variant(ty.as_ref()),
@@ -84,7 +85,8 @@ fn transform_scalar(scalar: ScalarRef<'_>, decode: bool) -> Result<Scalar> {
         | ScalarRef::String(_)
         | ScalarRef::Bitmap(_)
         | ScalarRef::Geometry(_)
-        | ScalarRef::Geography(_) => scalar.to_owned(),
+        | ScalarRef::Geography(_)
+        | ScalarRef::Vector(_) => scalar.to_owned(),
         ScalarRef::Array(col) => Scalar::Array(transform_column(&col, decode)?),
         ScalarRef::Map(col) => Scalar::Map(transform_column(&col, decode)?),
         ScalarRef::Tuple(scalars) => {

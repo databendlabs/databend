@@ -96,6 +96,7 @@ impl FieldEncoderJSON {
             Column::Array(box c) => self.write_array(c, row_index, out_buf),
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf),
+            Column::Vector(c) => self.simple.write_vector(c, row_index, out_buf),
 
             Column::Null { .. }
             | Column::EmptyArray { .. }

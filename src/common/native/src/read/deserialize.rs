@@ -199,6 +199,13 @@ where
             let iter = deserialize_nested(readers, inner.as_ref().clone(), init)?;
             DynIter::new(ListIterator::new(iter, data_type.clone()))
         }
+        TableDataType::Vector(vector_ty) => {
+            init.push(InitNested::FixedList(is_nullable));
+            let dimension = vector_ty.dimension() as usize;
+            let inner_ty = vector_ty.inner_data_type();
+            let iter = deserialize_nested(readers, inner_ty, init)?;
+            DynIter::new(FixedListIterator::new(iter, data_type.clone(), dimension))
+        }
         TableDataType::Map(inner) => {
             init.push(InitNested::List(is_nullable));
             let iter = deserialize_nested(readers, inner.as_ref().clone(), init)?;

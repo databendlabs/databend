@@ -36,7 +36,9 @@ use crate::nested::Nested;
 use crate::util::encode_bool;
 use crate::write::binary::write_binary;
 use crate::write::primitive::write_primitive;
+use crate::write::serialize::Nested::LargeList;
 use crate::write::view::write_view;
+
 /// Writes an [`Array`] to the file
 pub fn write<W: Write>(
     w: &mut W,
@@ -181,7 +183,7 @@ fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {
         let nest = nesteds.last().unwrap();
 
         if nest.is_nullable() {
-            let (_, validity) = nest.inner();
+            let validity = nest.validity();
             if let Some(bitmap) = validity {
                 w.write_all(&(bitmap.len() as u32).to_le_bytes())?;
                 let (s, offset, _) = bitmap.as_slice();
@@ -196,7 +198,7 @@ fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {
         }
     } else {
         for nested in nesteds {
-            let (values, validity) = nested.inner();
+            let validity = nested.validity();
 
             if nested.is_nullable() {
                 if let Some(bitmap) = validity {
@@ -212,10 +214,18 @@ fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {
                 }
             }
 
-            if nested.is_list() {
-                w.write_all(&(values.len() as u32).to_le_bytes())?;
-                let input_buf: &[u8] = bytemuck::cast_slice(&values);
-                w.write_all(input_buf)?;
+            match nested {
+                LargeList(_) => {
+                    let offsets = nested.offsets().unwrap();
+                    w.write_all(&(offsets.len() as u32).to_le_bytes())?;
+                    let input_buf: &[u8] = bytemuck::cast_slice(&offsets);
+                    w.write_all(input_buf)?;
+                }
+                Nested::FixedList(fixed_list) => {
+                    w.write_all(&(fixed_list.length as u32).to_le_bytes())?;
+                    w.write_all(&(fixed_list.dimension as u32).to_le_bytes())?;
+                }
+                _ => {}
             }
         }
     }

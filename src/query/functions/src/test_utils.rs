@@ -33,6 +33,7 @@ use databend_common_expression::types::i256;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::VectorDataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
@@ -651,6 +652,9 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         databend_common_ast::ast::TypeName::Variant => DataType::Variant,
         databend_common_ast::ast::TypeName::Geometry => DataType::Geometry,
         databend_common_ast::ast::TypeName::Geography => DataType::Geography,
+        databend_common_ast::ast::TypeName::Vector(d) => {
+            DataType::Vector(VectorDataType::Float32(d))
+        }
         databend_common_ast::ast::TypeName::NotNull(inner_type) => transform_data_type(*inner_type),
     }
 }

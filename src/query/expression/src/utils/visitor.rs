@@ -130,6 +130,10 @@ pub trait ValueVisitor: Sized {
         self.visit_typed_column::<GeographyType>(column)
     }
 
+    fn visit_vector(&mut self, column: VectorColumn) -> Result<Self::U, Self::Error> {
+        self.visit_typed_column::<VectorType>(column)
+    }
+
     fn visit_typed_column<T: ValueType>(
         &mut self,
         column: <T as AccessType>::Column,
@@ -170,6 +174,7 @@ pub trait ValueVisitor: Sized {
             Column::Variant(column) => visitor.visit_variant(column),
             Column::Geometry(column) => visitor.visit_geometry(column),
             Column::Geography(column) => visitor.visit_geography(column),
+            Column::Vector(column) => visitor.visit_vector(column),
         }
     }
 

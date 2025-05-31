@@ -158,6 +158,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (126, "2025-05-11: Add: add iceberg Storage catalog type and add address field in Glue catalog"),
     (127, "2025-05-18: Add: UserOption::workload_group"),
     (128, "2025-05-22: Add: Storage Network config"),
+    (129, "2025-05-30: Add: New DataType Vector"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

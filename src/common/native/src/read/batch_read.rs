@@ -22,6 +22,7 @@ use databend_common_expression::TableDataType;
 use super::array::*;
 use super::NativeReadBuf;
 use crate::error::Result;
+use crate::nested::create_fixed_list;
 use crate::nested::create_list;
 use crate::nested::create_map;
 use crate::nested::create_struct;
@@ -149,6 +150,18 @@ pub fn read_nested_column<R: NativeReadBuf>(
             let mut columns = Vec::with_capacity(results.len());
             for (mut nested, values) in results {
                 let array = create_list(data_type.clone(), &mut nested, values);
+                columns.push((nested, array));
+            }
+            columns
+        }
+        Vector(vector_ty) => {
+            init.push(InitNested::FixedList(is_nullable));
+            let dimension = vector_ty.dimension() as usize;
+            let inner_ty = vector_ty.inner_data_type();
+            let results = read_nested_column(readers, inner_ty, init, page_metas)?;
+            let mut columns = Vec::with_capacity(results.len());
+            for (mut nested, values) in results {
+                let array = create_fixed_list(data_type.clone(), dimension, &mut nested, values);
                 columns.push((nested, array));
             }
             columns

@@ -1104,6 +1104,7 @@ pub enum TypeName {
     Geometry,
     Geography,
     Interval,
+    Vector(u64),
     Nullable(Box<TypeName>),
     NotNull(Box<TypeName>),
 }
@@ -1234,6 +1235,9 @@ impl Display for TypeName {
             }
             TypeName::Interval => {
                 write!(f, "INTERVAL")?;
+            }
+            TypeName::Vector(dimension) => {
+                write!(f, "VECTOR({dimension})")?;
             }
         }
         Ok(())

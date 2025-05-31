@@ -334,6 +334,10 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
             span: None,
             exprs: vec![],
         },
+        TypeName::Vector(_) => Expr::Array {
+            span: None,
+            exprs: vec![],
+        },
         TypeName::Map { .. } => Expr::Map {
             span: None,
             kvs: vec![],

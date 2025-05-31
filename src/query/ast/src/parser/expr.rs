@@ -1692,7 +1692,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_binary = value(
         TypeName::Binary,
-        rule! { ( BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB |  TINYBLOB| BLOB ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB |  TINYBLOB | BLOB ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_string = value(
         TypeName::String,
@@ -1701,6 +1701,10 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     let ty_geometry = value(TypeName::Geometry, rule! { GEOMETRY });
     let ty_geography = value(TypeName::Geography, rule! { GEOGRAPHY });
+    let ty_vector = map(
+        rule! { VECTOR ~ ^"(" ~ ^#literal_u64 ~ ^")" },
+        |(_, _, dimension, _)| TypeName::Vector(dimension),
+    );
     map_res(
         alt((
             rule! {
@@ -1734,6 +1738,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_geometry
             | #ty_geography
             | #ty_nullable
+            | #ty_vector
             ) ~ #nullable? : "type name" },
         )),
         |(ty, opt_nullable)| match opt_nullable {

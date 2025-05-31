@@ -57,7 +57,8 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
         | Scalar::Binary(_)
         | Scalar::Map(_)
         | Scalar::Bitmap(_)
-        | Scalar::Geography(_) => {
+        | Scalar::Geography(_)
+        | Scalar::Vector(_) => {
             unimplemented!()
         }
     }
