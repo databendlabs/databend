@@ -22,6 +22,7 @@ use databend_common_base::base::tokio::io::AsyncWrite;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -50,9 +51,13 @@ use rand::Rng as _;
 use rand::RngCore;
 use uuid::Uuid;
 
+use crate::auth::CredentialType;
 use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::servers::login_history::LoginEventType;
+use crate::servers::login_history::LoginHandler;
+use crate::servers::login_history::LoginHistory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::writers::ProgressReporter;
@@ -115,14 +120,30 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         salt: &[u8],
         auth_data: &[u8],
     ) -> bool {
+        let mut login_history = LoginHistory::new();
+        login_history.handler = LoginHandler::MySQL;
+
         let username = String::from_utf8_lossy(username);
         let client_addr = self.client_addr.clone();
+        login_history.user_name = username.to_string();
+        login_history.auth_type = CredentialType::Password;
+        login_history.client_ip = client_addr.clone();
+        login_history.node_id = GlobalConfig::instance().query.node_id.clone();
+        login_history.session_id = self.base.session.get_id().to_string();
+
         let info = CertifiedInfo::create(&username, auth_data, &client_addr);
 
         let authenticate = self.base.authenticate(salt, info);
         match authenticate.await {
-            Ok(res) => res,
+            Ok(res) => {
+                login_history.event_type = LoginEventType::LoginSuccess;
+                login_history.write_to_log();
+                res
+            }
             Err(failure) => {
+                login_history.event_type = LoginEventType::LoginFailed;
+                login_history.error_message = failure.to_string();
+                login_history.write_to_log();
                 error!(
                     "MySQL handler authenticate failed, \
                         user_name: {}, \

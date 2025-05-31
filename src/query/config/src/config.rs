@@ -46,10 +46,11 @@ use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
+use databend_common_tracing::HistoryConfig as InnerHistoryConfig;
+use databend_common_tracing::HistoryTableConfig as InnerHistoryTableConfig;
 use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
 use databend_common_tracing::OTLPEndpointConfig as InnerOTLPEndpointConfig;
 use databend_common_tracing::OTLPProtocol;
-use databend_common_tracing::PersistentLogConfig as InnerPersistentLogConfig;
 use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
 use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
@@ -2206,7 +2207,7 @@ pub struct LogConfig {
     pub tracing: TracingConfig,
 
     #[clap(flatten)]
-    pub persistentlog: PersistentLogConfig,
+    pub history: HistoryLogConfig,
 }
 
 impl Default for LogConfig {
@@ -2290,10 +2291,10 @@ impl TryInto<InnerLogConfig> for LogConfig {
 
         let tracing: InnerTracingConfig = self.tracing.try_into()?;
 
-        let mut persistentlog: InnerPersistentLogConfig = self.persistentlog.try_into()?;
+        let mut history: InnerHistoryConfig = self.history.try_into()?;
 
-        if persistentlog.on && persistentlog.level.is_empty() && file.on && !file.level.is_empty() {
-            persistentlog.level = file.level.clone();
+        if history.on && history.level.is_empty() && file.on && !file.level.is_empty() {
+            history.level = file.level.clone();
         }
 
         Ok(InnerLogConfig {
@@ -2304,7 +2305,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
             profile,
             structlog,
             tracing,
-            persistentlog,
+            history,
         })
     }
 }
@@ -2321,7 +2322,7 @@ impl From<InnerLogConfig> for LogConfig {
             profile: inner.profile.into(),
             structlog: inner.structlog.into(),
             tracing: inner.tracing.into(),
-            persistentlog: inner.persistentlog.into(),
+            history: inner.history.into(),
 
             // Deprecated fields
             log_dir: None,
@@ -2716,94 +2717,130 @@ impl From<InnerTracingConfig> for TracingConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
-pub struct PersistentLogConfig {
+pub struct HistoryLogConfig {
     #[clap(
-        long = "log-persistentlog-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+        long = "log-history-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
     )]
     #[serde(rename = "on")]
-    pub log_persistentlog_on: bool,
+    pub log_history_on: bool,
 
-    /// Specifies the interval in seconds for how often the persistent log is flushed
+    /// Specifies the interval in seconds for how often the history log is flushed
     #[clap(
-        long = "log-persistentlog-interval",
+        long = "log-history-interval",
         value_name = "VALUE",
         default_value = "2"
     )]
     #[serde(rename = "interval")]
-    pub log_persistentlog_interval: usize,
+    pub log_history_interval: usize,
 
     /// Specifies the name of the staging area that temporarily holds log data before it is finally copied into the table
     ///
     /// Note:
     /// The default value uses an uuid to avoid conflicts with existing stages
     #[clap(
-        long = "log-persistentlog-stage-name",
+        long = "log-history-stage-name",
         value_name = "VALUE",
         default_value = "log_1f93b76af0bd4b1d8e018667865fbc65"
     )]
     #[serde(rename = "stage_name")]
-    pub log_persistentlog_stage_name: String,
+    pub log_history_stage_name: String,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
     #[clap(
-        long = "log-persistentlog-level",
+        long = "log-history-level",
         value_name = "VALUE",
         default_value = "WARN"
     )]
     #[serde(rename = "level")]
-    pub log_persistentlog_level: String,
-
-    /// The retention period (in hours) for persistent logs.
-    /// Data older than this period will be deleted during retention tasks.
-    #[clap(
-        long = "log-persistentlog-retention",
-        value_name = "VALUE",
-        default_value = "72"
-    )]
-    #[serde(rename = "retention")]
-    pub log_persistentlog_retention: usize,
+    pub log_history_level: String,
 
     /// The interval (in hours) at which the retention process is triggered.
     /// Specifies how often the retention task runs to clean up old data.
     #[clap(
-        long = "log-persistentlog-retention-interval",
+        long = "log-history-retention-interval",
         value_name = "VALUE",
         default_value = "24"
     )]
     #[serde(rename = "retention_interval")]
-    pub log_persistentlog_retention_interval: usize,
+    pub log_history_retention_interval: usize,
+
+    /// Specifies which history table to enable
+    #[clap(skip)]
+    #[serde(rename = "tables")]
+    pub log_history_tables: Vec<HistoryLogTableConfig>,
 }
 
-impl Default for PersistentLogConfig {
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HistoryLogTableConfig {
+    /// Specifies the history table name
+    pub table_name: String,
+
+    /// The retention period (in hours) for history logs.
+    /// Data older than this period will be deleted during retention tasks.
+    pub retention: usize,
+}
+
+impl Default for HistoryLogConfig {
     fn default() -> Self {
-        InnerPersistentLogConfig::default().into()
+        InnerHistoryConfig::default().into()
     }
 }
 
-impl TryInto<InnerPersistentLogConfig> for PersistentLogConfig {
+impl Default for HistoryLogTableConfig {
+    fn default() -> Self {
+        InnerHistoryTableConfig::default().into()
+    }
+}
+
+impl TryInto<InnerHistoryTableConfig> for HistoryLogTableConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerPersistentLogConfig> {
-        Ok(InnerPersistentLogConfig {
-            on: self.log_persistentlog_on,
-            interval: self.log_persistentlog_interval,
-            stage_name: self.log_persistentlog_stage_name,
-            level: self.log_persistentlog_level,
-            retention: self.log_persistentlog_retention,
-            retention_interval: self.log_persistentlog_retention_interval,
+    fn try_into(self) -> Result<InnerHistoryTableConfig> {
+        Ok(InnerHistoryTableConfig {
+            table_name: self.table_name,
+            retention: self.retention,
         })
     }
 }
 
-impl From<InnerPersistentLogConfig> for PersistentLogConfig {
-    fn from(inner: InnerPersistentLogConfig) -> Self {
+impl From<InnerHistoryTableConfig> for HistoryLogTableConfig {
+    fn from(inner: InnerHistoryTableConfig) -> Self {
         Self {
-            log_persistentlog_on: inner.on,
-            log_persistentlog_interval: inner.interval,
-            log_persistentlog_stage_name: inner.stage_name,
-            log_persistentlog_level: inner.level,
-            log_persistentlog_retention: inner.retention,
-            log_persistentlog_retention_interval: inner.retention_interval,
+            table_name: inner.table_name,
+            retention: inner.retention,
+        }
+    }
+}
+
+impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerHistoryConfig> {
+        Ok(InnerHistoryConfig {
+            on: self.log_history_on,
+            interval: self.log_history_interval,
+            stage_name: self.log_history_stage_name,
+            level: self.log_history_level,
+            retention_interval: self.log_history_retention_interval,
+            tables: self
+                .log_history_tables
+                .into_iter()
+                .map(|cfg| cfg.try_into())
+                .collect::<Result<Vec<_>>>()?,
+        })
+    }
+}
+
+impl From<InnerHistoryConfig> for HistoryLogConfig {
+    fn from(inner: InnerHistoryConfig) -> Self {
+        Self {
+            log_history_on: inner.on,
+            log_history_interval: inner.interval,
+            log_history_stage_name: inner.stage_name,
+            log_history_level: inner.level,
+            log_history_retention_interval: inner.retention_interval,
+            log_history_tables: inner.tables.into_iter().map(Into::into).collect(),
         }
     }
 }

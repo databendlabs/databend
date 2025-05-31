@@ -12,12 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod global_persistent_log;
-mod session;
-mod table_schemas;
+mod history_tables;
 
-pub use global_persistent_log::GlobalPersistentLog;
-pub use table_schemas::PersistentLogTable;
-pub use table_schemas::QueryDetailsTable;
-pub use table_schemas::QueryLogTable;
-pub use table_schemas::QueryProfileTable;
+pub use history_tables::init_history_tables;
+pub use history_tables::table_to_target;
+pub use history_tables::HistoryTable;
