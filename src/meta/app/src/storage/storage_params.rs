@@ -58,6 +58,28 @@ impl Default for StorageParams {
 }
 
 impl StorageParams {
+    /// Get the storage type as a string.
+    pub fn storage_type(&self) -> String {
+        match self {
+            StorageParams::Azblob(_) => "azblob".to_string(),
+            StorageParams::Fs(_) => "fs".to_string(),
+            StorageParams::Ftp(_) => "ftp".to_string(),
+            StorageParams::Gcs(_) => "gcs".to_string(),
+            StorageParams::Hdfs(_) => "hdfs".to_string(),
+            StorageParams::Http(_) => "http".to_string(),
+            StorageParams::Ipfs(_) => "ipfs".to_string(),
+            StorageParams::Memory => "memory".to_string(),
+            StorageParams::Moka(_) => "moka".to_string(),
+            StorageParams::Obs(_) => "obs".to_string(),
+            StorageParams::Oss(_) => "oss".to_string(),
+            StorageParams::S3(_) => "s3".to_string(),
+            StorageParams::Webhdfs(_) => "webhdfs".to_string(),
+            StorageParams::Cos(_) => "cos".to_string(),
+            StorageParams::Huggingface(_) => "huggingface".to_string(),
+            StorageParams::None => "none".to_string(),
+        }
+    }
+
     /// Whether this storage params is secure.
     ///
     /// Query will forbid this storage config unless `allow_insecure` has been enabled.
@@ -156,6 +178,37 @@ impl StorageParams {
         };
 
         Ok(sp)
+    }
+
+    /// Apply the update from another StorageParams.
+    ///
+    /// Only specific storage params like `credential` can be updated.
+    pub fn apply_update(self, other: Self) -> Result<Self> {
+        match (self, other) {
+            (StorageParams::Azblob(mut s1), StorageParams::Azblob(s2)) => {
+                s1.account_name = s2.account_name;
+                s1.account_key = s2.account_key;
+                s1.network_config = s2.network_config;
+                Ok(Self::Azblob(s1))
+            }
+            (StorageParams::Gcs(mut s1), StorageParams::Gcs(s2)) => {
+                s1.credential = s2.credential;
+                s1.network_config = s2.network_config;
+                Ok(Self::Gcs(s1))
+            }
+            (StorageParams::S3(mut s1), StorageParams::S3(s2)) => {
+                s1.access_key_id = s2.access_key_id;
+                s1.secret_access_key = s2.secret_access_key;
+                s1.security_token = s2.security_token;
+                s1.master_key = s2.master_key;
+                s1.network_config = s2.network_config;
+                Ok(Self::S3(s1))
+            }
+            (s1, s2) => Err(ErrorCode::StorageOther(format!(
+                "Cannot apply update from {:?} to {:?}",
+                &s1, &s2
+            ))),
+        }
     }
 }
 

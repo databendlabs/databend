@@ -247,6 +247,21 @@ impl ModifyTableCommentPlan {
     }
 }
 
+/// Modify table connection.
+#[derive(Clone, Debug)]
+pub struct ModifyTableConnectionPlan {
+    pub new_connection: BTreeMap<String, String>,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl ModifyTableConnectionPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 /// SetOptions
 #[derive(Clone, Debug)]
 pub struct SetOptionsPlan {

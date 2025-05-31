@@ -466,6 +466,9 @@ pub enum AlterTableAction {
         targets: Vec<Identifier>,
     },
     RefreshTableCache,
+    ModifyConnection {
+        new_connection: BTreeMap<String, String>,
+    },
 }
 
 impl Display for AlterTableAction {
@@ -537,6 +540,11 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::RefreshTableCache => {
                 write!(f, "REFRESH CACHE")?;
+            }
+            AlterTableAction::ModifyConnection { new_connection } => {
+                write!(f, "CONNECTION=(")?;
+                write_space_separated_string_map(f, new_connection)?;
+                write!(f, ")")?;
             }
         };
         Ok(())
