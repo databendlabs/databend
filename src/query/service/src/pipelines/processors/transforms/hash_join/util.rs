@@ -14,22 +14,15 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::Column;
-use databend_common_expression::ColumnRef;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::InputColumns;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
 
@@ -53,99 +46,6 @@ pub(crate) fn probe_schema_wrap_nullable(probe_schema: &DataSchemaRef) -> DataSc
         ));
     }
     DataSchemaRefExt::create(nullable_field)
-}
-
-// Construct inlist runtime filter
-pub(crate) fn inlist_filter(
-    probe_key: &Expr<String>,
-    build_column: Value<AnyType>,
-) -> Result<Option<Expr<String>>> {
-    // Currently, only support key is a column, will support more later.
-    // Such as t1.a + 1 = t2.a, or t1.a + t1.b = t2.a (left side is probe side)
-    let Expr::ColumnRef(ColumnRef {
-        span,
-        id,
-        data_type,
-        display_name,
-    }) = probe_key
-    else {
-        return Ok(None);
-    };
-
-    let raw_probe_key = RawExpr::ColumnRef {
-        span: *span,
-        id: id.to_string(),
-        data_type: data_type.clone(),
-        display_name: display_name.clone(),
-    };
-    let array = RawExpr::Constant {
-        span: None,
-        scalar: build_column.as_scalar().unwrap().to_owned(),
-        data_type: None,
-    };
-
-    let args = vec![array, raw_probe_key];
-    // Make contain function
-    let contain_func = RawExpr::FunctionCall {
-        span: None,
-        name: "contains".to_string(),
-        params: vec![],
-        args,
-    };
-    let expr = type_check::check(&contain_func, &BUILTIN_FUNCTIONS)?;
-    Ok(Some(expr))
-}
-
-// Deduplicate build key column
-pub(crate) fn dedup_build_key_column(
-    func_ctx: &FunctionContext,
-    data_blocks: &[DataBlock],
-    build_key: &Expr,
-) -> Result<Option<Value<AnyType>>> {
-    // Dedup build key column
-    let mut columns = Vec::with_capacity(data_blocks.len());
-    for block in data_blocks.iter() {
-        if block.num_columns() == 0 {
-            continue;
-        }
-        let evaluator = Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS);
-        let column = evaluator
-            .run(build_key)?
-            .convert_to_full_column(build_key.data_type(), block.num_rows());
-        columns.push(column);
-    }
-    if columns.is_empty() {
-        return Ok(None);
-    }
-    let build_key_column = Column::concat_columns(columns.into_iter())?;
-    let mut list = Vec::with_capacity(build_key_column.len());
-    for value in build_key_column.iter() {
-        list.push(RawExpr::Constant {
-            span: None,
-            scalar: value.to_owned(),
-            data_type: None,
-        })
-    }
-    let array = RawExpr::FunctionCall {
-        span: None,
-        name: "array".to_string(),
-        params: vec![],
-        args: list,
-    };
-    let distinct_list = RawExpr::FunctionCall {
-        span: None,
-        name: "array_distinct".to_string(),
-        params: vec![],
-        args: vec![array],
-    };
-
-    // Deduplicate build key column
-    let empty_key_block = DataBlock::empty();
-    let evaluator = Evaluator::new(&empty_key_block, func_ctx, &BUILTIN_FUNCTIONS);
-    Ok(Some(evaluator.run(&type_check::check(
-        &distinct_list,
-        &BUILTIN_FUNCTIONS,
-    )?)?))
 }
 
 // Get row hash by HashMethod
@@ -227,27 +127,17 @@ where
     Ok(())
 }
 
-// Generate min max runtime filter
 pub(crate) fn min_max_filter(
     min: Scalar,
     max: Scalar,
     probe_key: &Expr<String>,
-) -> Result<Option<Expr<String>>> {
-    let Some(ColumnRef {
-        span,
-        id,
-        data_type,
-        display_name,
-    }) = probe_key.as_column_ref()
-    else {
-        return Ok(None);
-    };
-
+) -> Result<Expr<String>> {
+    let probe_key = probe_key.as_column_ref().unwrap();
     let raw_probe_key = RawExpr::ColumnRef {
-        span: *span,
-        id: id.to_string(),
-        data_type: data_type.clone(),
-        display_name: display_name.clone(),
+        span: probe_key.span,
+        id: probe_key.id.to_string(),
+        data_type: probe_key.data_type.clone(),
+        display_name: probe_key.display_name.clone(),
     };
     let min = RawExpr::Constant {
         span: None,
@@ -280,5 +170,5 @@ pub(crate) fn min_max_filter(
         args: vec![gte_func, lte_func],
     };
     let expr = type_check::check(&and_filters_func, &BUILTIN_FUNCTIONS)?;
-    Ok(Some(expr))
+    Ok(expr)
 }
